@@ -6,7 +6,9 @@ export const getEnvironment = (): string => {
     return 'production';
   } else if (projectId.includes('latin-app-staging')) {
     return 'staging';
+  } else if (projectId.includes('latin-app-dev')) {
+    return 'dev';
   } else {
-    return 'development';
+    return 'unknown env';
   }
 };

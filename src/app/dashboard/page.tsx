@@ -35,10 +35,12 @@ export default function DashboardPage() {
   const fetchEnvironment = async () => {
     setLoadingEnv(true);
     try {
-      // Using fetch to call the HTTP function
-      const response = await fetch('https://us-central1-latin-app-dev.cloudfunctions.net/environment');
-      const data = await response.json();
-      setEnvironment(data.environment);
+      console.log('functions');
+      const getEnvironment = httpsCallable<unknown, { environment: string }>(functions, 'environment');
+      console.log('got env');
+      const result = await getEnvironment();
+      console.log('result', result);
+      setEnvironment(result.data.environment);
       toast.success('Environment loaded!');
     } catch (error) {
       console.error('Error fetching environment:', error);

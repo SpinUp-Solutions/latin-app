@@ -74,21 +74,33 @@ STRIPE_SECRET_KEY=sk_test_your_key_here
 
 Your configuration is complete!
 
-### 7. Compile the app
+### 7. Environment-specific builds
 
-Run the following to compile:
+You can either run the firebase functions directly from the server or choose to serve them locally (usefull for quick debugging). I will detail both workflows
+First you have to login with the firebase cli and follow the steps
 
-`npm run build`
+```bash
+firebase login
+```
 
-Then
+This project supports **development**, **staging**, and **production** environments.
+Keep in mind that each time you want to switch an environment **you also have to switch the firebase environment with**
 
-`npm run dev`
+```bash
+firebase use [env]
+```
 
-### 8. Environment-specific builds
+The available firebase environments are declared in the `/.firebaserc` file
 
-This project supports development, staging, and production environments. Use the following commands:
+#### Development environment (default)- Remote
 
-#### Development environment (default)
+First you have to switch to the firebase env with:
+
+```bash
+firebase use dev
+```
+
+Then you can use these scripts for the NextJS App:
 
 ```
 npm run dev            # Run the development server with dev environment
@@ -96,7 +108,15 @@ npm run build          # Build for dev environment
 npm run start          # Start the server with dev environment
 ```
 
-#### Staging environment
+#### Staging environment - Remote
+
+First you switch to the staging firebase env
+
+```bash
+firebase use staging
+```
+
+And then :
 
 ```
 npm run dev:staging    # Run the development server with staging environment
@@ -104,7 +124,15 @@ npm run build:staging  # Build for staging environment
 npm run start:staging  # Start the server with staging environment
 ```
 
-#### Production environment
+#### Production environment - Remote
+
+Switch to the firebase prod env
+
+```bash
+firebase use prod
+```
+
+And then :
 
 ```
 npm run dev:prod       # Run the development server with production environment
@@ -112,12 +140,58 @@ npm run build:prod     # Build for production environment
 npm run start:prod     # Start the server with production environment
 ```
 
-#### Build all environments at once
+#### Build all environments at once - Remote
+
+Mainly for the sake of being complete
 
 ```
 npm run build:all      # Build for development, staging, and production environments
 ```
 
-### 9. Let's go!
+#### Development environment - Local
 
-Your app should be visible at `http://localhost:3000`. Time to start building!
+Change `USE_LOCAL_EMULATOR` in `firebase.ts` to `true`. This will connect to port 5001 where the functions communicate through
+
+Change to firebase dev env
+
+```bash
+firebase use dev
+```
+
+Then serve the functions using this script
+
+```bash
+npm run functions:serve
+```
+
+And use the previous node scrips for running the NextJS App
+
+#### Use the same logic for the other environments
+
+### 8. Firebase Functions deployment scripts
+
+These scripts are specific to deploying these functions to each environment. They first switch the firebase env to the one specified and deploy the functions there. After deploying you have to switch back to your desired env
+
+#### Deploy dev functions
+
+```bash
+npm run functions:dev
+```
+
+#### Deploy staging functions
+
+```bash
+npm run functions:staging
+```
+
+#### Deploy prod functions
+
+```bash
+npm run functions:prod
+```
+
+#### Deploy to all env
+
+```bash
+npm run functions:all
+```
