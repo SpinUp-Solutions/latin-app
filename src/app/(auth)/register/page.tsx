@@ -4,10 +4,12 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '@/src/services/firebase';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { auth, db } from '@/src/services/firebase';
 import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
 import { toast } from 'sonner';
+import { User } from '@/src/types/user.d';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -20,10 +22,23 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      const userData: Omit<User, 'createdAt'> = {
+        email: user.email!,
+        uid: user.uid,
+      };
+
+      await setDoc(doc(db, 'users', user.uid), {
+        ...userData,
+        createdAt: serverTimestamp(),
+      });
+
       router.push('/dashboard');
       toast.success('Account created successfully!');
-    } catch {
+    } catch (error) {
+      console.error('Registration error:', error);
       toast.error('Failed to create account. Please try again.');
     } finally {
       setLoading(false);
