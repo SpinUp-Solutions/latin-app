@@ -1,17 +1,20 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSelector } from 'react-redux';
 import { signOut } from 'firebase/auth';
-import { auth } from '@/src/services/firebase';
+import { auth, functions } from '@/src/services/firebase';
 import { RootState } from '@/src/store';
 import { Button } from '@/src/components/ui/button';
 import { toast } from 'sonner';
+import { httpsCallable } from 'firebase/functions';
 
 export default function DashboardPage() {
   const router = useRouter();
   const { user, loading } = useSelector((state: RootState) => state.auth);
+  const [environment, setEnvironment] = useState<string | null>(null);
+  const [loadingEnv, setLoadingEnv] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -26,6 +29,22 @@ export default function DashboardPage() {
       toast.success('Successfully logged out!');
     } catch {
       toast.error('Failed to log out. Please try again.');
+    }
+  };
+
+  const fetchEnvironment = async () => {
+    setLoadingEnv(true);
+    try {
+      // Using fetch to call the HTTP function
+      const response = await fetch('https://us-central1-latin-app-dev.cloudfunctions.net/environment');
+      const data = await response.json();
+      setEnvironment(data.environment);
+      toast.success('Environment loaded!');
+    } catch (error) {
+      console.error('Error fetching environment:', error);
+      toast.error('Failed to fetch environment');
+    } finally {
+      setLoadingEnv(false);
     }
   };
 
@@ -45,10 +64,22 @@ export default function DashboardPage() {
           <Button onClick={handleSignOut}>Sign out</Button>
         </div>
 
-        <div className="bg-card p-6 rounded-lg shadow-sm">
+        <div className="bg-card p-6 rounded-lg shadow-sm mb-6">
           <h2 className="text-xl font-semibold mb-4">Welcome!</h2>
           <p className="text-muted-foreground">You&apos;re signed in as: {user.email}</p>
           <p className="mt-4">This is a barebones dashboard page. Add your content here!</p>
+        </div>
+
+        <div className="bg-card p-6 rounded-lg shadow-sm">
+          <h2 className="text-xl font-semibold mb-4">Environment</h2>
+          <div className="flex items-center space-x-4">
+            <Button onClick={fetchEnvironment} disabled={loadingEnv} variant="outline">
+              {loadingEnv ? 'Loading...' : 'Check Environment'}
+            </Button>
+            {environment && (
+              <div className="px-3 py-1 bg-primary/10 rounded-md text-primary font-medium">{environment}</div>
+            )}
+          </div>
         </div>
       </div>
     </div>

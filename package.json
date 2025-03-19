@@ -21,7 +21,13 @@
     "test:e2e": "playwright test --config=playwright.config.ts",
     "test:e2e:ui": "playwright test --ui --config=playwright.config.ts",
     "test:e2e:debug": "playwright test --debug --config=playwright.config.ts",
-    "test:e2e:report": "playwright show-report"
+    "test:e2e:report": "playwright show-report",
+    "functions": "npm run functions:dev",
+    "functions:dev": "firebase use dev && firebase deploy --only functions",
+    "functions:staging": "firebase use staging && firebase deploy --only functions",
+    "functions:prod": "firebase use prod && firebase deploy --only functions",
+    "functions:all": "npm run functions:dev && npm run functions:staging && npm run functions:prod",
+    "functions:serve": "firebase emulators:start --only functions"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.2",
