@@ -121,7 +121,7 @@ And then :
 ```
 npm run dev:staging    # Run the development server with staging environment
 npm run build:staging  # Build for staging environment
-npm run start:staging  # Start the server with staging environment
+npm run start  # Start the server with staging environment
 ```
 
 #### Production environment - Remote
@@ -137,7 +137,23 @@ And then :
 ```
 npm run dev:prod       # Run the development server with production environment
 npm run build:prod     # Build for production environment
-npm run start:prod     # Start the server with production environment
+npm run start     # Start the server with production environment
+```
+
+#### Important note:
+
+`npm start` runs the last built project. So, for example, if you want to start the dev env:
+
+```bash
+npm run build
+npm start
+```
+
+If you want to build and run the staging env:
+
+```bash
+npm build:staging
+npm start
 ```
 
 #### Build all environments at once - Remote
@@ -145,7 +161,9 @@ npm run start:prod     # Start the server with production environment
 Mainly for the sake of being complete
 
 ```
-npm run build:all      # Build for development, staging, and production environments
+
+npm run build:all # Build for development, staging, and production environments
+
 ```
 
 #### Development environment - Local
@@ -164,9 +182,25 @@ Then serve the functions using this script
 npm run functions:serve
 ```
 
-And use the previous node scrips for running the NextJS App
+For the staging env
 
-#### Use the same logic for the other environments
+```bash
+firebase use staging
+```
+
+```bash
+npm run functions:serve
+```
+
+For the prod env
+
+```bash
+firebase use prod
+```
+
+```bash
+npm run functions:serve
+```
 
 ### 8. Firebase Functions deployment scripts
 

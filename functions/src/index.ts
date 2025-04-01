@@ -18,7 +18,7 @@ import { getEnvironment } from './utils/environment';
 export const environment = onCall(request => {
   const env = getEnvironment();
 
-  logger.info('Environment requested:', { environment: env });
+  logger.info('Environment requested', { environment: env });
   console.log(`Running in ${env} environment`);
 
   return { environment: env };
