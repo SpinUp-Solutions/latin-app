@@ -4,15 +4,17 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '@/src/services/firebase';
+import { auth, db } from '@/src/services/firebase';
 import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
 import { toast } from 'sonner';
+import { doc, setDoc } from 'firebase/firestore';
 
 export default function RegisterPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isTeacher, setIsTeacher] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -20,10 +22,19 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+
+      await setDoc(doc(db, 'users', userCredential.user.uid), {
+        uid: userCredential.user.uid,
+        email,
+        role: isTeacher ? 'teacher' : 'student',
+        createdAt: new Date().toISOString(),
+      });
+
       router.push('/dashboard');
       toast.success('Account created successfully!');
-    } catch {
+    } catch (error) {
+      console.error('Registration error:', error);
       toast.error('Failed to create account. Please try again.');
     } finally {
       setLoading(false);
@@ -57,6 +68,26 @@ export default function RegisterPage() {
                 onChange={e => setPassword(e.target.value)}
                 required
               />
+            </div>
+            <div className="flex flex-col items-center space-y-2">
+              <div className="flex items-center rounded-lg border p-1">
+                <Button
+                  type="button"
+                  variant={!isTeacher ? 'default' : 'ghost'}
+                  onClick={() => setIsTeacher(false)}
+                  className="rounded-r-none"
+                  size="sm">
+                  Student
+                </Button>
+                <Button
+                  type="button"
+                  variant={isTeacher ? 'default' : 'ghost'}
+                  onClick={() => setIsTeacher(true)}
+                  className="rounded-l-none"
+                  size="sm">
+                  Teacher
+                </Button>
+              </div>
             </div>
           </div>
 

@@ -48,7 +48,10 @@ export default function DashboardPage() {
         <div className="bg-card p-6 rounded-lg shadow-sm">
           <h2 className="text-xl font-semibold mb-4">Welcome!</h2>
           <p className="text-muted-foreground">You&apos;re signed in as: {user.email}</p>
-          <p className="mt-4">This is a barebones dashboard page. Add your content here!</p>
+          <p className="text-muted-foreground">
+            Role: {user.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'Not set'}
+          </p>
+          <Button className="w-full md:w-auto">Start Next Lesson</Button>
         </div>
       </div>
     </div>
