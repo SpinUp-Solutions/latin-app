@@ -8,7 +8,8 @@ import { auth } from '@/src/services/firebase';
 import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
 import { toast } from 'sonner';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/src/components/ui/card';
+// import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/src/components/ui/card';
+import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/roman-card';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -35,12 +36,12 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-secondary/20 p-4">
       <div className="relative w-full max-w-md">
         <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-secondary/20 blur-3xl -z-10 transform rotate-45"></div>
-        <Card className="border-muted/50 shadow-xl">
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-bold">Welcome back</CardTitle>
-            <CardDescription>Sign in to access your account</CardDescription>
-          </CardHeader>
-          <CardContent>
+        <RomanCard className="shadow-xl">
+          <RomanCardHeader className="space-y-1 text-center">
+            <h2 className="text-2xl font-bold font-serif">Welcome back</h2>
+            <p className="text-muted-foreground">Sign in to access your account</p>
+          </RomanCardHeader>
+          <RomanCardContent>
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
                 <Input
@@ -73,16 +74,14 @@ export default function LoginPage() {
                 {loading ? 'Signing in...' : 'Sign in'}
               </Button>
             </form>
-          </CardContent>
-          <CardFooter>
-            <p className="text-center text-sm text-muted-foreground w-full">
+            <p className="mt-6 text-center text-sm text-muted-foreground w-full">
               Don&apos;t have an account?{' '}
               <Link href="/register" className="text-primary hover:underline font-medium">
                 Sign up
               </Link>
             </p>
-          </CardFooter>
-        </Card>
+          </RomanCardContent>
+        </RomanCard>
       </div>
     </div>
   );
