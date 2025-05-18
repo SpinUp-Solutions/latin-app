@@ -4,12 +4,20 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
+<<<<<<< HEAD
+=======
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+>>>>>>> feature/firebase-functions
 import { auth, db } from '@/src/services/firebase';
 import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
 import { toast } from 'sonner';
+<<<<<<< HEAD
 import { doc, setDoc } from 'firebase/firestore';
 import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/roman-card';
+=======
+import { User } from '@/src/types/user.d';
+>>>>>>> feature/firebase-functions
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -24,12 +32,25 @@ export default function RegisterPage() {
 
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+<<<<<<< HEAD
 
       await setDoc(doc(db, 'users', userCredential.user.uid), {
         uid: userCredential.user.uid,
         email,
         role: isTeacher ? 'teacher' : 'student',
         createdAt: new Date().toISOString(),
+=======
+      const user = userCredential.user;
+
+      const userData: Omit<User, 'createdAt'> = {
+        email: user.email!,
+        uid: user.uid,
+      };
+
+      await setDoc(doc(db, 'users', user.uid), {
+        ...userData,
+        createdAt: serverTimestamp(),
+>>>>>>> feature/firebase-functions
       });
 
       router.push('/dashboard');
