@@ -7,12 +7,14 @@ import ConjugationTable from '../ConjugationTable';
 import FillExercise from '../FillExercise';
 import TextSelectionExercise from '../TextSelectionExercise';
 import VerbAnalysisExercise from '../VerbAnalysisExercise';
+import VerbConjugationExercise from '../VerbConjugationExercise';
 import { ContentItem, TextContent, EmphasisContent, TableContent } from '@/src/types/lesson';
 import {
   MatchingExercise,
   FillExercise as FillExerciseType,
   TextSelectionExercise as TextSelectionExerciseType,
   VerbAnalysisExercise as VerbAnalysisExerciseType,
+  VerbConjugationExercise as VerbConjugationExerciseType,
 } from '@/src/types/exercise';
 
 interface ContentRendererProps {
@@ -66,6 +68,9 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onCom
 
     case 'verb-analysis':
       return <VerbAnalysisExercise exercise={content as VerbAnalysisExerciseType} onComplete={onComplete} />;
+
+    case 'verb-conjugation':
+      return <VerbConjugationExercise exercise={content as VerbConjugationExerciseType} onComplete={onComplete} />;
 
     default:
       return (

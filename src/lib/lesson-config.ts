@@ -368,6 +368,59 @@ const lessons: Lesson[] = [
           ],
         },
       },
+      {
+        id: 'ex-verb-conjugation-1',
+        type: 'verb-conjugation',
+        title: 'Level 5 Exercise: Advanced Verb Conjugation',
+        instructions: 'Study the passage and complete the conjugation tasks.',
+        data: {
+          passage: {
+            latin: 'Nisi quid mi opis di dant, disperii, neque unde auxilium expetam habeo.',
+            translation:
+              'Unless the gods give something of help to me, I have perished, nor do I have from where I might seek help.',
+            specialVocab: {
+              quid: '(accusative/direct object form) something',
+              mi: 'alternate form of mihi',
+              opis: 'of help',
+            },
+          },
+          conjugationTask: {
+            instructions:
+              'Change the person endings on the verbs to say in Latin (keep the same order of words): "Unless we give something of help, you [pl use the T4 special ending] have died. Therefore you [pl] do not have from where [pl] might seek help."',
+            answer: 'Nisi quid opis damus, disperiistis. Neque unde auxilium expetatis habetis.',
+          },
+          livingLatinPractice: {
+            examples: [
+              {
+                latin: 'Sis felix semper!',
+                translation: 'May you always be happy!',
+              },
+              {
+                latin: 'Latinam bene discit!',
+                translation: 'he/she/it is learning Latin well!',
+              },
+            ],
+            exercises: [
+              {
+                english: 'May she always be happy!',
+                answer: 'Sit felix semper',
+              },
+              {
+                english: 'May I always be happy!',
+                answer: 'Sim felix semper',
+              },
+              {
+                english: 'We are learning Latin well!',
+                answer: 'Latinam bene discimus',
+              },
+              {
+                english: "Y'all are learning Latin well!",
+                answer: 'Latinam bene discitis',
+              },
+            ],
+          },
+        },
+      },
     ],
   },
 ];

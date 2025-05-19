@@ -49,4 +49,34 @@ export interface VerbAnalysisExercise extends BaseExercise {
   };
 }
 
-export type Exercise = MatchingExercise | FillExercise | TextSelectionExercise | VerbAnalysisExercise;
+export interface VerbConjugationExercise extends BaseExercise {
+  type: 'verb-conjugation';
+  data: {
+    passage: {
+      latin: string;
+      translation: string;
+      specialVocab?: Record<string, string>;
+    };
+    conjugationTask?: {
+      instructions: string;
+      answer: string;
+    };
+    livingLatinPractice?: {
+      examples: {
+        latin: string;
+        translation: string;
+      }[];
+      exercises: {
+        english: string;
+        answer: string;
+      }[];
+    };
+  };
+}
+
+export type Exercise =
+  | MatchingExercise
+  | FillExercise
+  | TextSelectionExercise
+  | VerbAnalysisExercise
+  | VerbConjugationExercise;
