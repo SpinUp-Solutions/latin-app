@@ -4,8 +4,16 @@ import React from 'react';
 import IntroComponent from '../IntroComponent';
 import MatchingTable from '../MatchingTable';
 import ConjugationTable from '../ConjugationTable';
+import FillExercise from '../FillExercise';
+import TextSelectionExercise from '../TextSelectionExercise';
+import VerbAnalysisExercise from '../VerbAnalysisExercise';
 import { ContentItem, TextContent, EmphasisContent, TableContent } from '@/src/types/lesson';
-import { MatchingExercise, FillExercise } from '@/src/types/exercise';
+import {
+  MatchingExercise,
+  FillExercise as FillExerciseType,
+  TextSelectionExercise as TextSelectionExerciseType,
+  VerbAnalysisExercise as VerbAnalysisExerciseType,
+} from '@/src/types/exercise';
 
 interface ContentRendererProps {
   content: ContentItem;
@@ -18,7 +26,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onCom
     case 'text':
       return <IntroComponent title={content.title || ''} content={(content as TextContent).content} className="" />;
 
-    case 'emphasis':
+    case 'emphasis': //enum
       return (
         <IntroComponent
           title={content.title || ''}
@@ -51,12 +59,13 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onCom
       );
 
     case 'fill':
-      // Placeholder for fill-in-the-blank exercises
-      return (
-        <div className="p-4 border border-dashed rounded-lg">
-          <p>Fill-in-the-blank exercise (not implemented yet)</p>
-        </div>
-      );
+      return <FillExercise exercise={content as FillExerciseType} onComplete={onComplete} />;
+
+    case 'text-selection':
+      return <TextSelectionExercise exercise={content as TextSelectionExerciseType} onComplete={onComplete} />;
+
+    case 'verb-analysis':
+      return <VerbAnalysisExercise exercise={content as VerbAnalysisExerciseType} onComplete={onComplete} />;
 
     default:
       return (

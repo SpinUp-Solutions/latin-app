@@ -14,6 +14,56 @@ interface LessonPlayerProps {
 
 type LessonMode = 'introduction' | 'exercise';
 
+const ProgressBar: React.FC<{
+  introLength: number;
+  exerciseLength: number;
+  currentIntroIndex: number;
+  currentExerciseIndex: number;
+  mode: LessonMode;
+  introCompleted: boolean;
+}> = ({ introLength, exerciseLength, currentIntroIndex, currentExerciseIndex, mode, introCompleted }) => {
+  return (
+    <div className="w-full mb-6">
+      <div className="flex justify-between text-xs text-roman-stone mb-2">
+        <span>
+          Introduction ({currentIntroIndex + 1}/{introLength})
+        </span>
+        <span>
+          Exercises ({mode === 'exercise' ? currentExerciseIndex + 1 : 0}/{exerciseLength})
+        </span>
+      </div>
+      <div className="flex w-full gap-1">
+        {/* Introduction segments */}
+        <div className="flex-1 flex gap-0.5">
+          {Array.from({ length: introLength }).map((_, index) => (
+            <div
+              key={`intro-${index}`}
+              className={`flex-1 h-2 rounded-sm transition-all duration-300 ${
+                index <= currentIntroIndex ? 'bg-roman-terracotta' : 'bg-roman-marble'
+              }`}
+            />
+          ))}
+        </div>
+
+        {/* Small gap between sections */}
+        <div className="w-1" />
+
+        {/* Exercise segments */}
+        <div className="flex-1 flex gap-0.5">
+          {Array.from({ length: exerciseLength }).map((_, index) => (
+            <div
+              key={`exercise-${index}`}
+              className={`flex-1 h-2 rounded-sm transition-all duration-300 ${
+                introCompleted && index <= currentExerciseIndex ? 'bg-roman-green' : 'bg-roman-marble'
+              }`}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
   const [mode, setMode] = useState<LessonMode>('introduction');
   const [currentIntroIndex, setCurrentIntroIndex] = useState(0);
@@ -129,6 +179,15 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
         </RomanCardHeader>
 
         <RomanCardContent>
+          <ProgressBar
+            introLength={lesson.introduction.length}
+            exerciseLength={lesson.exercises.length}
+            currentIntroIndex={currentIntroIndex}
+            currentExerciseIndex={currentExerciseIndex}
+            mode={mode}
+            introCompleted={introCompleted}
+          />
+
           <div className="mb-6">
             <div className="flex items-center gap-2 mb-4">
               <Button

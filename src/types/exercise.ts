@@ -1,11 +1,9 @@
 import { ContentItem } from './lesson';
 
-// Base exercise structure extending ContentItem
 export interface BaseExercise extends ContentItem {
   instructions: string;
 }
 
-// Matching exercise type
 export interface MatchingExercise extends BaseExercise {
   type: 'matching';
   data: {
@@ -15,14 +13,40 @@ export interface MatchingExercise extends BaseExercise {
   };
 }
 
-// Fill-in-the-blank exercise
 export interface FillExercise extends BaseExercise {
   type: 'fill';
   data: {
-    text: string;
-    blanks: Record<string, string>;
+    items: {
+      text: string;
+      answer: string;
+      hint?: string;
+    }[];
   };
 }
 
-// Union type for all exercises
-export type Exercise = MatchingExercise | FillExercise;
+export interface TextSelectionExercise extends BaseExercise {
+  type: 'text-selection';
+  data: {
+    passage: string;
+    questions: {
+      id: string;
+      text: string;
+      correctWord: string;
+      explanation?: string;
+    }[];
+  };
+}
+
+export interface VerbAnalysisExercise extends BaseExercise {
+  type: 'verb-analysis';
+  data: {
+    passage: string;
+    verbs: {
+      word: string;
+      correctPronoun: string;
+      explanation?: string;
+    }[];
+  };
+}
+
+export type Exercise = MatchingExercise | FillExercise | TextSelectionExercise | VerbAnalysisExercise;

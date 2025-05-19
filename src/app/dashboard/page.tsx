@@ -78,7 +78,6 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-roman-marble">
-      {/* Header */}
       <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="w-10 h-10 rounded-full bg-roman-red flex items-center justify-center text-white font-serif">
@@ -134,9 +133,12 @@ export default function DashboardPage() {
                       style={{ width: `${currentLesson.progress}%` }}></div>
                   </div>
                 </RomanCardContent>
-                <div className="border-t border-border p-4 flex justify-between">
+                <div className="border-t border-border p-4 flex justify-between gap-2">
                   <Button variant="outline">Review Notes</Button>
                   <Button>Continue</Button>
+                  <Button variant="secondary" onClick={() => router.push('/lesson')}>
+                    Go to Lesson
+                  </Button>
                 </div>
               </RomanCard>
             </section>
