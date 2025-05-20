@@ -9,7 +9,7 @@ import {
   RomanTableHead,
   RomanTableCell,
   RomanTableCaption,
-} from './ui/roman-table';
+} from '../core/roman-table';
 
 export interface Column {
   id: string;

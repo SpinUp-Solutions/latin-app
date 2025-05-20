@@ -9,7 +9,7 @@ import { RootState } from '@/src/store';
 import { Button } from '@/src/components/ui/button';
 import { toast } from 'sonner';
 import { BookOpen, MessageCircle, Trophy, User } from 'lucide-react';
-import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/roman-card';
+import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
 
 export default function DashboardPage() {
   const router = useRouter();

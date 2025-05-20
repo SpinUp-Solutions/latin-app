@@ -2,6 +2,8 @@
 
 import React, { useState } from 'react';
 import { VerbConjugationExercise } from '@/src/types/exercise';
+import ExerciseInput from '../feedback/ExerciseInput';
+import ExerciseFeedback from '../feedback/ExerciseFeedback';
 
 interface Props {
   exercise: VerbConjugationExercise;
@@ -9,18 +11,22 @@ interface Props {
 }
 
 const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
-  const [showAnswer, setShowAnswer] = useState(false);
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
   const [userAnswer, setUserAnswer] = useState('');
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
   const [conjugationCompleted, setConjugationCompleted] = useState(false);
+  const [showCompletionFeedback, setShowCompletionFeedback] = useState(false);
 
   const checkAllExercisesComplete = () => {
     const livingLatinComplete =
       !exercise.data.livingLatinPractice || currentExerciseIndex >= exercise.data.livingLatinPractice.exercises.length;
 
-    if (conjugationCompleted && livingLatinComplete && onComplete) {
-      onComplete();
+    if (conjugationCompleted && livingLatinComplete) {
+      setShowCompletionFeedback(true);
+      // Delay the onComplete callback to show the completion feedback
+      if (onComplete) {
+        setTimeout(onComplete, 2000);
+      }
     }
   };
 
@@ -31,7 +37,6 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
       if (correct) {
         setConjugationCompleted(true);
         setUserAnswer('');
-        // Only proceed to Living Latin if it exists
         if (exercise.data.livingLatinPractice) {
           setCurrentExerciseIndex(0);
         } else {
@@ -86,30 +91,13 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
       {exercise.data.conjugationTask && !conjugationCompleted && (
         <div className="bg-white p-6 rounded-lg border border-gray-200">
           <p className="mb-4">{exercise.data.conjugationTask.instructions}</p>
-          <div className="flex gap-4">
-            <input
-              type="text"
-              value={userAnswer}
-              onChange={e => setUserAnswer(e.target.value)}
-              className="flex-1 p-2 border rounded"
-              placeholder="Type your answer in Latin..."
-            />
-            <button onClick={handleAnswerSubmit} className="bg-roman-red text-white px-4 py-2 rounded hover:bg-red-700">
-              Check
-            </button>
-          </div>
-          {isCorrect !== null && (
-            <div className={`mt-4 p-3 rounded ${isCorrect ? 'bg-green-100' : 'bg-red-100'}`}>
-              {isCorrect ? (
-                'Correct! Continue to the next part.'
-              ) : (
-                <div>
-                  <p>Not quite. The correct answer is:</p>
-                  <p className="font-serif italic mt-2">{exercise.data.conjugationTask.answer}</p>
-                </div>
-              )}
-            </div>
-          )}
+          <ExerciseInput
+            value={userAnswer}
+            onChange={setUserAnswer}
+            onSubmit={handleAnswerSubmit}
+            isCorrect={isCorrect}
+            correctAnswer={exercise.data.conjugationTask.answer}
+          />
         </div>
       )}
 
@@ -134,41 +122,20 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
               <p className="mb-4">
                 Write in Latin: "{exercise.data.livingLatinPractice.exercises[currentExerciseIndex].english}"
               </p>
-              <div className="flex gap-4">
-                <input
-                  type="text"
-                  value={userAnswer}
-                  onChange={e => setUserAnswer(e.target.value)}
-                  className="flex-1 p-2 border rounded"
-                  placeholder="Type your answer in Latin..."
-                />
-                <button
-                  onClick={handleLivingLatinSubmit}
-                  className="bg-roman-red text-white px-4 py-2 rounded hover:bg-red-700">
-                  Check
-                </button>
-              </div>
-              {isCorrect !== null && (
-                <div className={`mt-4 p-3 rounded ${isCorrect ? 'bg-green-100' : 'bg-red-100'}`}>
-                  {isCorrect ? (
-                    currentExerciseIndex < exercise.data.livingLatinPractice.exercises.length - 1 ? (
-                      'Correct! Continue to the next exercise.'
-                    ) : (
-                      'Congratulations! You have completed all exercises.'
-                    )
-                  ) : (
-                    <div>
-                      <p>Not quite. The correct answer is:</p>
-                      <p className="font-serif italic mt-2">
-                        {exercise.data.livingLatinPractice.exercises[currentExerciseIndex].answer}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
+              <ExerciseInput
+                value={userAnswer}
+                onChange={setUserAnswer}
+                onSubmit={handleLivingLatinSubmit}
+                isCorrect={isCorrect}
+                correctAnswer={exercise.data.livingLatinPractice.exercises[currentExerciseIndex].answer}
+              />
             </div>
           )}
         </div>
+      )}
+
+      {showCompletionFeedback && (
+        <ExerciseFeedback message="Excellent work! You've mastered both the conjugation and Living Latin practice!" />
       )}
     </div>
   );

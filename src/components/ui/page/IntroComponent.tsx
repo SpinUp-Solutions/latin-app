@@ -1,7 +1,6 @@
 'use client';
 
 import React from 'react';
-import { ComponentNarration } from '@/src/types/lesson';
 
 interface IntroComponentProps {
   title: string;

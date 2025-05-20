@@ -1,5 +1,4 @@
 import { Lesson, TextContent, EmphasisContent, TableContent } from '../types/lesson';
-import { ContentItem } from '../types/lesson';
 
 const TEST_AUDIO = '/assets/audio/test.mp3';
 

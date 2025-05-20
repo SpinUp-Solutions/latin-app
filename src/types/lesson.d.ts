@@ -1,6 +1,6 @@
 import { Exercise } from './exercise';
 import { ReactNode } from 'react';
-import { TableData } from '../components/ConjugationTable';
+import { TableData } from '../components/ui/page/ConjugationTable';
 import { MatchingExercise, FillExercise } from './exercise';
 
 export interface ContentItem {

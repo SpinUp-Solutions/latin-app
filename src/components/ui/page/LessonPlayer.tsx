@@ -4,8 +4,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Lesson, IntroductionPage, ContentItem } from '@/src/types/lesson';
 import { BookOpen, Play, Pause, SkipForward, SkipBack, Check } from 'lucide-react';
 import { Button } from '@/src/components/ui/button';
-import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/roman-card';
-import ContentRenderer from './lesson/ContentRenderer';
+import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
+import ContentRenderer from './content-renderer';
 import useAudio from '@/src/hooks/useAudio';
 
 interface LessonPlayerProps {

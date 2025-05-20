@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Check, X, ArrowRight } from 'lucide-react';
+import FieldSelect from '../core/field-select';
 
 interface MatchingTableProps {
   leftColumn: string[];
@@ -19,17 +20,11 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ leftColumn, rightC
   const [complete, setComplete] = useState(false);
 
   const handleLeftSelect = (item: string) => {
-    // If already matched, don't allow selection
-    if (Object.keys(matches).includes(item)) return;
-
     setSelectedLeft(item);
     setFeedback(null);
   };
 
   const handleRightSelect = (item: string) => {
-    // If already in a match, don't allow selection
-    if (Object.values(matches).includes(item)) return;
-
     setSelectedRight(item);
     setFeedback(null);
   };
@@ -115,28 +110,14 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ leftColumn, rightC
       {/* Matching area */}
       <div className="grid grid-cols-3 gap-4">
         {/* Left column */}
-        <div className="space-y-2">
-          <h4 className="text-sm font-medium text-roman-stone mb-2">Latin</h4>
-          {leftColumn.map((item, index) => {
-            const isMatched = Object.keys(matches).includes(item);
-
-            return (
-              <button
-                key={`left-${index}`}
-                className={`w-full p-3 text-left rounded-md transition-all ${
-                  isMatched
-                    ? 'bg-roman-green/10 border border-roman-green text-roman-green'
-                    : selectedLeft === item
-                      ? 'bg-roman-gold/10 border border-roman-gold'
-                      : 'bg-white border border-gray-200 hover:border-roman-red/50'
-                }`}
-                onClick={() => handleLeftSelect(item)}
-                disabled={isMatched}>
-                {item}
-              </button>
-            );
-          })}
-        </div>
+        <FieldSelect
+          items={leftColumn}
+          selectedItem={selectedLeft}
+          onSelect={handleLeftSelect}
+          matches={matches}
+          matchType="key"
+          label="Latin"
+        />
 
         {/* Middle column with arrows */}
         <div className="flex flex-col items-center justify-center">
@@ -148,28 +129,14 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ leftColumn, rightC
         </div>
 
         {/* Right column */}
-        <div className="space-y-2">
-          <h4 className="text-sm font-medium text-roman-stone mb-2">English</h4>
-          {rightColumn.map((item, index) => {
-            const isMatched = Object.values(matches).includes(item);
-
-            return (
-              <button
-                key={`right-${index}`}
-                className={`w-full p-3 text-left rounded-md transition-all ${
-                  isMatched
-                    ? 'bg-roman-green/10 border border-roman-green text-roman-green'
-                    : selectedRight === item
-                      ? 'bg-roman-gold/10 border border-roman-gold'
-                      : 'bg-white border border-gray-200 hover:border-roman-red/50'
-                }`}
-                onClick={() => handleRightSelect(item)}
-                disabled={isMatched}>
-                {item}
-              </button>
-            );
-          })}
-        </div>
+        <FieldSelect
+          items={rightColumn}
+          selectedItem={selectedRight}
+          onSelect={handleRightSelect}
+          matches={matches}
+          matchType="value"
+          label="English"
+        />
       </div>
     </div>
   );

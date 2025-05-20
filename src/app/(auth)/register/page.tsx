@@ -9,7 +9,7 @@ import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
 import { toast } from 'sonner';
 import { doc, setDoc } from 'firebase/firestore';
-import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/roman-card';
+import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
 
 export default function RegisterPage() {
   const router = useRouter();

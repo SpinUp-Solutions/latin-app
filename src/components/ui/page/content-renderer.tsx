@@ -1,13 +1,13 @@
 'use client';
 
 import React from 'react';
-import IntroComponent from '../IntroComponent';
-import MatchingTable from '../MatchingTable';
-import ConjugationTable from '../ConjugationTable';
-import FillExercise from '../FillExercise';
-import TextSelectionExercise from '../TextSelectionExercise';
-import VerbAnalysisExercise from '../VerbAnalysisExercise';
-import VerbConjugationExercise from '../VerbConjugationExercise';
+import IntroComponent from './IntroComponent';
+import MatchingTable from './MatchingTable';
+import ConjugationTable from './ConjugationTable';
+import FillExercise from './FillExercise';
+import TextSelectionExercise from './TextSelectionExercise';
+import VerbAnalysisExercise from './VerbAnalysisExercise';
+import VerbConjugationExercise from './VerbConjugationExercise';
 import { ContentItem, TextContent, EmphasisContent, TableContent } from '@/src/types/lesson';
 import {
   MatchingExercise,
