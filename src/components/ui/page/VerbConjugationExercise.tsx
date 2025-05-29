@@ -120,7 +120,7 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
               <div key={index} className="p-4 bg-roman-parchment rounded-lg">
                 <p className="font-serif text-lg leading-relaxed whitespace-pre-wrap break-words">{example.latin}</p>
                 <p className="text-gray-700 mt-2 whitespace-pre-wrap break-words">
-                  Translation: "{example.translation}"
+                  Translation: &quot;{example.translation}&quot;
                 </p>
               </div>
             ))}
@@ -130,7 +130,7 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
           {currentExerciseIndex < exercise.data.livingLatinPractice.exercises.length && (
             <div className="p-4 bg-white rounded-lg border border-gray-200">
               <p className="mb-4 leading-relaxed whitespace-pre-wrap break-words">
-                Write in Latin: "{exercise.data.livingLatinPractice.exercises[currentExerciseIndex].english}"
+                Write in Latin: &quot;{exercise.data.livingLatinPractice.exercises[currentExerciseIndex].english}&quot;
               </p>
               <ExerciseInput
                 value={userAnswer}

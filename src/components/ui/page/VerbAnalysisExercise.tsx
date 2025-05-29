@@ -14,7 +14,6 @@ const VerbAnalysisExercise: React.FC<VerbAnalysisExerciseProps> = ({ exercise, o
   const [showInput, setShowInput] = useState<number | null>(null);
 
   const currentVerb = exercise.data.verbs[currentVerbIndex];
-  const isComplete = Object.keys(answers).length === exercise.data.verbs.length;
 
   const handleVerbClick = (index: number) => {
     setShowInput(index);

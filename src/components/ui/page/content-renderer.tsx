@@ -75,7 +75,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onCom
     default:
       return (
         <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-red-500">Unknown content type: {(content as any).type}</p>
+          <p className="text-red-500">Unknown content type: {content.type}</p>
         </div>
       );
   }

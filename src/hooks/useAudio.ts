@@ -42,7 +42,7 @@ export function useAudio(initialAudioPath?: string | null, onAudioEnded?: () => 
       // No source, ensure audio is paused
       audio.pause();
     }
-  }, [audioPath]);
+  }, [audioPath, isPlaying]);
 
   // Handle play/pause state changes
   useEffect(() => {

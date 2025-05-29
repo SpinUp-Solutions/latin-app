@@ -18,8 +18,6 @@ interface ExerciseTemplateProps {
   showFeedback: boolean;
   feedbackMessage?: string;
 
-  isTransitioning: boolean;
-
   onComplete?: () => void;
   onTransitionEnd?: () => void;
 }
@@ -35,7 +33,6 @@ const ExerciseTemplate: React.FC<ExerciseTemplateProps> = ({
   isCorrect,
   showFeedback,
   feedbackMessage,
-  isTransitioning,
   onComplete,
   onTransitionEnd,
 }) => {
@@ -108,7 +105,7 @@ const ExerciseTemplate: React.FC<ExerciseTemplateProps> = ({
               <div className="text-center space-y-4">
                 <div className="text-4xl">🎉</div>
                 <h3 className="text-2xl font-serif text-roman-red">Exercise Complete!</h3>
-                <p className="text-roman-stone">Well done! You've completed all the questions.</p>
+                <p className="text-roman-stone">Well done! You&apos;ve completed all the questions.</p>
               </div>
             </div>
           </motion.div>

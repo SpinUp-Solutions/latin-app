@@ -76,21 +76,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
   const currentExercise = mode === 'exercise' ? lesson.exercises[currentExerciseIndex] : undefined;
   const currentContentForAudio = mode === 'introduction' ? currentIntroPage : currentExercise;
 
-  const handleAudioEnded = useCallback(() => {
-    console.log('Audio ended - advancing to next content');
-    handleNext();
-  }, []);
-
-  const { audioRef, isPlaying, togglePlay } = useAudio(currentContentForAudio?.audioPath, handleAudioEnded);
-
-  useEffect(() => {
-    if (audioRef.current && currentContentForAudio?.audioPath) {
-      console.log(`Updating audio source directly: ${currentContentForAudio.audioPath}`);
-      audioRef.current.src = currentContentForAudio.audioPath;
-    }
-  }, [currentContentForAudio, audioRef]);
-
-  function handleNext() {
+  const handleNext = useCallback(() => {
     if (mode === 'introduction') {
       if (currentIntroIndex < lesson.introduction.length - 1) {
         console.log(`Moving to next intro page: ${currentIntroIndex + 1}`);
@@ -110,7 +96,21 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
         setCurrentExerciseIndex(0);
       }
     }
-  }
+  }, [mode, currentIntroIndex, lesson.introduction.length, currentExerciseIndex, lesson.exercises.length]);
+
+  const handleAudioEnded = useCallback(() => {
+    console.log('Audio ended - advancing to next content');
+    handleNext();
+  }, [handleNext]);
+
+  const { audioRef, isPlaying, togglePlay } = useAudio(currentContentForAudio?.audioPath, handleAudioEnded);
+
+  useEffect(() => {
+    if (audioRef.current && currentContentForAudio?.audioPath) {
+      console.log(`Updating audio source directly: ${currentContentForAudio.audioPath}`);
+      audioRef.current.src = currentContentForAudio.audioPath;
+    }
+  }, [currentContentForAudio, audioRef]);
 
   function handlePrevious() {
     if (mode === 'introduction') {

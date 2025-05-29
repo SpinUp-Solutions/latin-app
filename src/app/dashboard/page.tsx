@@ -8,7 +8,7 @@ import { auth } from '@/src/services/firebase';
 import { RootState } from '@/src/store';
 import { Button } from '@/src/components/ui/button';
 import { toast } from 'sonner';
-import { BookOpen, MessageCircle, Trophy, User } from 'lucide-react';
+import { BookOpen, MessageCircle, Trophy, User, TreePine, FlaskConical, Headphones } from 'lucide-react';
 import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
 
 export default function DashboardPage() {
@@ -144,6 +144,67 @@ export default function DashboardPage() {
             </section>
 
             <section>
+              <h2 className="text-2xl font-serif text-gray-800 mb-4">Extra Practice</h2>
+              <div className="grid grid-cols-2 gap-4">
+                <RomanCard className="cursor-pointer hover:shadow-md transition-shadow">
+                  <RomanCardContent className="p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-full bg-roman-parchment flex items-center justify-center border border-roman-terracotta/20">
+                        <BookOpen className="h-6 w-6 text-roman-terracotta" />
+                      </div>
+                      <div>
+                        <h3 className="font-serif text-lg">Vocabulary</h3>
+                        <p className="text-sm text-roman-stone">Practice word meanings</p>
+                      </div>
+                    </div>
+                  </RomanCardContent>
+                </RomanCard>
+
+                <RomanCard className="cursor-pointer hover:shadow-md transition-shadow">
+                  <RomanCardContent className="p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-full bg-roman-parchment flex items-center justify-center border border-roman-terracotta/20">
+                        <FlaskConical className="h-6 w-6 text-roman-terracotta" />
+                      </div>
+                      <div>
+                        <h3 className="font-serif text-lg">Morphology</h3>
+                        <p className="text-sm text-roman-stone">Word forms & endings</p>
+                      </div>
+                    </div>
+                  </RomanCardContent>
+                </RomanCard>
+
+                <RomanCard className="cursor-pointer hover:shadow-md transition-shadow">
+                  <RomanCardContent className="p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-full bg-roman-parchment flex items-center justify-center border border-roman-terracotta/20">
+                        <TreePine className="h-6 w-6 text-roman-terracotta" />
+                      </div>
+                      <div>
+                        <h3 className="font-serif text-lg">Diagramming</h3>
+                        <p className="text-sm text-roman-stone">Sentence structure</p>
+                      </div>
+                    </div>
+                  </RomanCardContent>
+                </RomanCard>
+
+                <RomanCard className="cursor-pointer hover:shadow-md transition-shadow">
+                  <RomanCardContent className="p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-full bg-roman-parchment flex items-center justify-center border border-roman-terracotta/20">
+                        <Headphones className="h-6 w-6 text-roman-terracotta" />
+                      </div>
+                      <div>
+                        <h3 className="font-serif text-lg">Listening</h3>
+                        <p className="text-sm text-roman-stone">Audio comprehension</p>
+                      </div>
+                    </div>
+                  </RomanCardContent>
+                </RomanCard>
+              </div>
+            </section>
+
+            <section>
               <h2 className="text-2xl font-serif text-gray-800 mb-4">Course Curriculum</h2>
               <div className="w-full">
                 <div className="bg-roman-parchment p-1 rounded-t-lg flex">
@@ -232,7 +293,7 @@ export default function DashboardPage() {
             <RomanCard>
               <RomanCardHeader>
                 <h3 className="text-lg font-serif">Leaderboard</h3>
-                <p className="text-sm text-roman-stone">This week's top Latin scholars</p>
+                <p className="text-sm text-roman-stone">This week&apos;s top Latin scholars</p>
               </RomanCardHeader>
               <RomanCardContent className="space-y-3">
                 {leaderboard.map(userEntry => (

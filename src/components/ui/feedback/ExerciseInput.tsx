@@ -17,7 +17,6 @@ const ExerciseInput: React.FC<ExerciseInputProps> = ({
   onChange,
   onSubmit,
   isCorrect,
-  correctAnswer,
   placeholder = 'Type your answer in Latin...',
   buttonText = 'Check',
   className = '',
