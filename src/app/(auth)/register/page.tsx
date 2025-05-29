@@ -1,26 +1,37 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { useSelector } from 'react-redux';
 import { auth, db } from '@/src/services/firebase';
 import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
 import { toast } from 'sonner';
 import { doc, setDoc } from 'firebase/firestore';
+import { Loader2 } from 'lucide-react';
 import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
+import { RootState } from '@/src/store';
 
 export default function RegisterPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isTeacher, setIsTeacher] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [formLoading, setFormLoading] = useState(false);
+
+  const { user, loading: authLoading } = useSelector((state: RootState) => state.auth);
+
+  useEffect(() => {
+    if (user && !authLoading) {
+      router.replace('/dashboard');
+    }
+  }, [user, authLoading, router]);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    setFormLoading(true);
 
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -32,15 +43,22 @@ export default function RegisterPage() {
         createdAt: new Date().toISOString(),
       });
 
-      router.push('/dashboard');
-      toast.success('Account created successfully!');
-    } catch (error) {
+      toast.success('Account created! Please wait while we redirect you.');
+    } catch (error: any) {
       console.error('Registration error:', error);
-      toast.error('Failed to create account. Please try again.');
+      toast.error(error.message || 'Failed to create account. Please try again.');
     } finally {
-      setLoading(false);
+      setFormLoading(false);
     }
   };
+
+  if (authLoading || user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-roman-marble">
+        <Loader2 className="h-8 w-8 animate-spin text-roman-red" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-secondary/20 p-4">
@@ -93,8 +111,9 @@ export default function RegisterPage() {
                   </Button>
                 </div>
               </div>
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? 'Creating account...' : 'Create account'}
+              <Button type="submit" className="w-full" disabled={formLoading}>
+                {formLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {formLoading ? 'Creating account...' : 'Create account'}
               </Button>
             </form>
             <p className="mt-6 text-center text-sm text-muted-foreground w-full">
