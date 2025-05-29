@@ -1,4 +1,4 @@
-import { Lesson, TextContent, EmphasisContent, TableContent } from '../types/lesson';
+import { Lesson, TextContent, EmphasisContent, TableContent, VocabularyContent } from '../types/lesson';
 
 const TEST_AUDIO = '/assets/audio/test.mp3';
 
@@ -162,6 +162,66 @@ const lessons: Lesson[] = [
               ],
             },
           } as TableContent,
+        ],
+      },
+      {
+        id: 'intro-page-vocab',
+        title: 'Essential Vocabulary',
+        audioPath: null,
+        items: [
+          {
+            id: 'lesson-vocab',
+            type: 'vocabulary',
+            title: 'Key Latin Verbs',
+            studyMode: 'flashcards',
+            vocabularyItems: [
+              {
+                id: 'vocab-1',
+                latin: 'do',
+                english: 'I give',
+                pronunciation: 'doh',
+                partOfSpeech: 'verb',
+                example: 'Ego tibi librum do. (I give you a book.)',
+                notes: 'First conjugation verb, present tense',
+              },
+              {
+                id: 'vocab-2',
+                latin: 'moneo',
+                english: 'I warn, I advise',
+                pronunciation: 'moh-NEH-oh',
+                partOfSpeech: 'verb',
+                example: 'Te moneo. (I warn you.)',
+                notes: 'Second conjugation verb',
+              },
+              {
+                id: 'vocab-3',
+                latin: 'credo',
+                english: 'I believe',
+                pronunciation: 'KREH-doh',
+                partOfSpeech: 'verb',
+                example: 'Credo in te. (I believe in you.)',
+                notes: 'Third conjugation verb',
+              },
+              {
+                id: 'vocab-4',
+                latin: 'laudo',
+                english: 'I praise',
+                pronunciation: 'LAH-oo-doh',
+                partOfSpeech: 'verb',
+                example: 'Magistrum laudo. (I praise the teacher.)',
+                notes: 'First conjugation verb',
+              },
+              {
+                id: 'vocab-5',
+                latin: 'video',
+                english: 'I see',
+                pronunciation: 'WEE-deh-oh',
+                partOfSpeech: 'verb',
+                example: 'Stellas video. (I see the stars.)',
+                notes: 'Second conjugation verb',
+              },
+            ],
+          } as VocabularyContent,
         ],
       },
     ],

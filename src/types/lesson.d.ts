@@ -10,6 +10,17 @@ export interface ContentItem {
   audioPath?: string | null;
 }
 
+export interface VocabularyItem {
+  id: string;
+  latin: string;
+  english: string;
+  pronunciation?: string;
+  audioPath?: string | null;
+  example?: string;
+  partOfSpeech?: string;
+  notes?: string;
+}
+
 export interface TextContent extends ContentItem {
   type: 'text';
   content: string;
@@ -25,7 +36,19 @@ export interface TableContent extends ContentItem {
   tableData: TableData;
 }
 
-export type RenderableContentItem = TextContent | EmphasisContent | TableContent | MatchingExercise | FillExercise;
+export interface VocabularyContent extends ContentItem {
+  type: 'vocabulary';
+  vocabularyItems: VocabularyItem[];
+  studyMode?: 'flashcards' | 'list' | 'quiz';
+}
+
+export type RenderableContentItem =
+  | TextContent
+  | EmphasisContent
+  | TableContent
+  | VocabularyContent
+  | MatchingExercise
+  | FillExercise;
 
 export interface IntroductionPage {
   id: string;

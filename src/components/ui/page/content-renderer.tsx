@@ -8,7 +8,8 @@ import FillExercise from './FillExercise';
 import TextSelectionExercise from './TextSelectionExercise';
 import VerbAnalysisExercise from './VerbAnalysisExercise';
 import VerbConjugationExercise from './VerbConjugationExercise';
-import { ContentItem, TextContent, EmphasisContent, TableContent } from '@/src/types/lesson';
+import { VocabularyViewer } from '@/src/components/lesson/VocabularyViewer';
+import { ContentItem, TextContent, EmphasisContent, TableContent, VocabularyContent } from '@/src/types/lesson';
 import {
   MatchingExercise,
   FillExercise as FillExerciseType,
@@ -40,6 +41,9 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onCom
     case 'table':
       const tableContent = content as TableContent;
       return <ConjugationTable data={tableContent.tableData} className="my-4" />;
+
+    case 'vocabulary':
+      return <VocabularyViewer content={content as VocabularyContent} />;
 
     case 'matching':
       const matchingExercise = content as MatchingExercise;
