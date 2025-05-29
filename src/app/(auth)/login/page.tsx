@@ -23,7 +23,11 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (user && !authLoading) {
-      router.replace('/dashboard');
+      if (user.role === 'admin') {
+        router.replace('/admin');
+      } else {
+        router.replace('/dashboard');
+      }
     }
   }, [user, authLoading, router]);
 
