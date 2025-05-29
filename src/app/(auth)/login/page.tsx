@@ -34,9 +34,10 @@ export default function LoginPage() {
     try {
       await signInWithEmailAndPassword(auth, email, password);
       toast.success('Successfully logged in!');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Login error:', error);
-      toast.error(error.message || 'Failed to log in. Please check your credentials.');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to log in. Please check your credentials.';
+      toast.error(errorMessage);
     } finally {
       setFormLoading(false);
     }

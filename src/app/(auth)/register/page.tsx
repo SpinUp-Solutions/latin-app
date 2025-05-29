@@ -44,9 +44,10 @@ export default function RegisterPage() {
       });
 
       toast.success('Account created! Please wait while we redirect you.');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Registration error:', error);
-      toast.error(error.message || 'Failed to create account. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create account. Please try again.';
+      toast.error(errorMessage);
     } finally {
       setFormLoading(false);
     }
