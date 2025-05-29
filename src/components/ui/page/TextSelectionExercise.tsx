@@ -40,48 +40,56 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
   const currentQuestion = exercise.data.questions[currentQuestionIndex];
 
   return (
-    <div className="space-y-4">
-      {exercise.title && <h3 className="text-lg font-serif text-roman-red mb-2">{exercise.title}</h3>}
+    <div className="space-y-6 max-w-full">
+      {exercise.title && <h3 className="text-xl font-serif text-roman-red mb-4">{exercise.title}</h3>}
       {exercise.instructions && (
-        <div className="p-4 bg-roman-parchment rounded-lg mb-4">
-          <p>{exercise.instructions}</p>
+        <div className="p-6 bg-roman-parchment rounded-lg mb-4">
+          <p className="whitespace-pre-wrap break-words">{exercise.instructions}</p>
         </div>
       )}
-      <div className="p-4 bg-white rounded-lg border border-gray-200">
-        <p className="mb-4">{currentQuestion.text}</p>
-        <p className="font-serif text-lg leading-relaxed">
-          {exercise.data.passage.split(' ').map((word, index) => (
-            <span
-              key={index}
-              onClick={() => handleWordClick(word)}
-              className={`cursor-pointer mx-1 hover:text-roman-red ${
-                selectedWord === word ? (isCorrect ? 'text-green-600' : 'text-red-600') : ''
-              }`}>
-              {word}
-            </span>
-          ))}
-        </p>
+      <div className="p-6 bg-white rounded-lg border border-gray-200">
+        <div className="overflow-x-auto">
+          <p className="mb-6 whitespace-pre-wrap break-words min-w-[300px]">{currentQuestion.text}</p>
+          <div className="font-serif text-lg leading-relaxed min-h-[100px] min-w-[300px]">
+            {exercise.data.passage.split(' ').map((word, index) => (
+              <span
+                key={index}
+                onClick={() => handleWordClick(word)}
+                className={`cursor-pointer inline-block px-1 py-0.5 mx-0.5 rounded hover:bg-roman-parchment hover:text-roman-red transition-colors ${
+                  selectedWord === word ? (isCorrect ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50') : ''
+                }`}>
+                {word}
+              </span>
+            ))}
+          </div>
+        </div>
+
         {isCorrect !== null && (
-          <ExerciseFeedback
-            isCorrect={isCorrect}
-            correctAnswer={currentQuestion.correctWord}
-            customSuccessMessage={
-              currentQuestionIndex < exercise.data.questions.length - 1
-                ? 'Correct! Moving to next question...'
-                : 'Congratulations! You have completed all questions.'
-            }
-            customErrorMessage="Not quite. Try another word."
-          />
+          <div className="mt-6">
+            <ExerciseFeedback
+              isCorrect={isCorrect}
+              correctAnswer={currentQuestion.correctWord}
+              customSuccessMessage={
+                currentQuestionIndex < exercise.data.questions.length - 1
+                  ? 'Correct! Moving to next question...'
+                  : 'Congratulations! You have completed all questions.'
+              }
+              customErrorMessage="Not quite. Try another word."
+            />
+          </div>
         )}
+
         {isCorrect && currentQuestion.explanation && (
-          <div className="mt-4 p-3 bg-blue-50 rounded">
-            <p className="text-blue-800">{currentQuestion.explanation}</p>
+          <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+            <p className="text-blue-800 whitespace-pre-wrap break-words">{currentQuestion.explanation}</p>
           </div>
         )}
       </div>
 
       {showCompletionFeedback && (
-        <ExerciseFeedback message="Outstanding! You've successfully identified all the words in the passage!" />
+        <div className="mt-6">
+          <ExerciseFeedback message="Outstanding! You've successfully identified all the words in the passage!" />
+        </div>
       )}
     </div>
   );

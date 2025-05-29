@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Lesson, IntroductionPage, ContentItem } from '@/src/types/lesson';
 import { BookOpen, Play, Pause, SkipForward, SkipBack, Check } from 'lucide-react';
 import { Button } from '@/src/components/ui/button';
@@ -212,19 +213,33 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
             </div>
 
             <div className="lesson-content space-y-6">
-              {mode === 'introduction' && currentIntroPage && (
-                <>
-                  {currentIntroPage.title && (
-                    <h2 className="text-xl font-serif text-roman-red mb-4">{currentIntroPage.title}</h2>
-                  )}
-                  {currentIntroPage.items.map((item: ContentItem) => (
-                    <ContentRenderer key={item.id} content={item} onComplete={handleNext} />
-                  ))}
-                </>
-              )}
-              {mode === 'exercise' && currentExercise && (
-                <ContentRenderer content={currentExercise} onComplete={handleNext} />
-              )}
+              <AnimatePresence mode="wait">
+                {mode === 'introduction' && currentIntroPage && (
+                  <motion.div
+                    key={`intro-${currentIntroIndex}`}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.3 }}>
+                    {currentIntroPage.title && (
+                      <h2 className="text-xl font-serif text-roman-red mb-4">{currentIntroPage.title}</h2>
+                    )}
+                    {currentIntroPage.items.map((item: ContentItem) => (
+                      <ContentRenderer key={item.id} content={item} onComplete={handleNext} />
+                    ))}
+                  </motion.div>
+                )}
+                {mode === 'exercise' && currentExercise && (
+                  <motion.div
+                    key={`exercise-${currentExerciseIndex}`}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.3 }}>
+                    <ContentRenderer content={currentExercise} onComplete={handleNext} />
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
 

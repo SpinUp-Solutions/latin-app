@@ -65,20 +65,26 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-full">
       {/* Main passage section */}
-      <div className="bg-roman-parchment p-6 rounded-lg">
-        <h3 className="text-xl font-serif mb-4">{exercise.title}</h3>
-        <p className="font-serif italic mb-2">{exercise.data.passage.latin}</p>
-        <p className="text-gray-700">{exercise.data.passage.translation}</p>
+      <div className="p-6 bg-white rounded-lg border border-gray-200">
+        <h3 className="text-xl font-serif text-roman-red mb-4">{exercise.title}</h3>
+        <div className="overflow-x-auto">
+          <p className="font-serif text-lg leading-relaxed mb-4 whitespace-pre-wrap break-words min-w-[300px]">
+            {exercise.data.passage.latin}
+          </p>
+          <p className="text-gray-700 leading-relaxed whitespace-pre-wrap break-words min-w-[300px]">
+            {exercise.data.passage.translation}
+          </p>
+        </div>
 
         {/* Special vocabulary section */}
         {exercise.data.passage.specialVocab && Object.keys(exercise.data.passage.specialVocab).length > 0 && (
-          <div className="mt-4">
+          <div className="mt-6 p-4 bg-roman-parchment rounded-lg">
             <h4 className="font-serif text-roman-red mb-2">Special Vocabulary:</h4>
-            <ul className="list-disc list-inside">
+            <ul className="list-disc list-inside space-y-2">
               {Object.entries(exercise.data.passage.specialVocab).map(([term, definition]) => (
-                <li key={term}>
+                <li key={term} className="break-words">
                   <span className="font-serif italic">{term}</span> = {definition}
                 </li>
               ))}
@@ -89,8 +95,10 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
 
       {/* Conjugation task section */}
       {exercise.data.conjugationTask && !conjugationCompleted && (
-        <div className="bg-white p-6 rounded-lg border border-gray-200">
-          <p className="mb-4">{exercise.data.conjugationTask.instructions}</p>
+        <div className="p-6 bg-white rounded-lg border border-gray-200">
+          <p className="mb-4 leading-relaxed whitespace-pre-wrap break-words">
+            {exercise.data.conjugationTask.instructions}
+          </p>
           <ExerciseInput
             value={userAnswer}
             onChange={setUserAnswer}
@@ -103,23 +111,25 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
 
       {/* Living Latin Practice section */}
       {exercise.data.livingLatinPractice && conjugationCompleted && (
-        <div className="bg-white p-6 rounded-lg border border-gray-200">
-          <h4 className="font-serif text-xl mb-4">Living Latin Practice</h4>
+        <div className="p-6 bg-white rounded-lg border border-gray-200">
+          <h4 className="font-serif text-xl text-roman-red mb-4">Living Latin Practice</h4>
 
           {/* Examples */}
-          <div className="mb-6">
+          <div className="space-y-6 mb-6">
             {exercise.data.livingLatinPractice.examples.map((example, index) => (
-              <div key={index} className="mb-4">
-                <p className="font-serif italic">{example.latin}</p>
-                <p className="text-gray-700">Translation: "{example.translation}"</p>
+              <div key={index} className="p-4 bg-roman-parchment rounded-lg">
+                <p className="font-serif text-lg leading-relaxed whitespace-pre-wrap break-words">{example.latin}</p>
+                <p className="text-gray-700 mt-2 whitespace-pre-wrap break-words">
+                  Translation: "{example.translation}"
+                </p>
               </div>
             ))}
           </div>
 
           {/* Practice exercises */}
           {currentExerciseIndex < exercise.data.livingLatinPractice.exercises.length && (
-            <div>
-              <p className="mb-4">
+            <div className="p-4 bg-white rounded-lg border border-gray-200">
+              <p className="mb-4 leading-relaxed whitespace-pre-wrap break-words">
                 Write in Latin: "{exercise.data.livingLatinPractice.exercises[currentExerciseIndex].english}"
               </p>
               <ExerciseInput

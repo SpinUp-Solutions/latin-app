@@ -107,9 +107,7 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ leftColumn, rightC
         </div>
       )}
 
-      {/* Matching area */}
       <div className="grid grid-cols-3 gap-4">
-        {/* Left column */}
         <FieldSelect
           items={leftColumn}
           selectedItem={selectedLeft}
