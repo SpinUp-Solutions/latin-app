@@ -24,7 +24,6 @@ interface ContentRendererProps {
 }
 
 export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onComplete }) => {
-  // Render different content based on type
   switch (content.type) {
     case 'text':
       return <IntroComponent title={content.title || ''} content={(content as TextContent).content} className="" />;

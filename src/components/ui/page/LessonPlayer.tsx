@@ -8,62 +8,13 @@ import { Button } from '@/src/components/ui/button';
 import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import ContentRenderer from './content-renderer';
 import useAudio from '@/src/hooks/useAudio';
+import LessonProgressBar from '@/src/components/ui/core/lesson-progress-bar';
 
 interface LessonPlayerProps {
   lesson: Lesson;
 }
 
 type LessonMode = 'introduction' | 'exercise';
-
-const ProgressBar: React.FC<{
-  introLength: number;
-  exerciseLength: number;
-  currentIntroIndex: number;
-  currentExerciseIndex: number;
-  mode: LessonMode;
-  introCompleted: boolean;
-}> = ({ introLength, exerciseLength, currentIntroIndex, currentExerciseIndex, mode, introCompleted }) => {
-  return (
-    <div className="w-full mb-6">
-      <div className="flex justify-between text-xs text-roman-stone mb-2">
-        <span>
-          Introduction ({currentIntroIndex + 1}/{introLength})
-        </span>
-        <span>
-          Exercises ({mode === 'exercise' ? currentExerciseIndex + 1 : 0}/{exerciseLength})
-        </span>
-      </div>
-      <div className="flex w-full gap-1">
-        {/* Introduction segments */}
-        <div className="flex-1 flex gap-0.5">
-          {Array.from({ length: introLength }).map((_, index) => (
-            <div
-              key={`intro-${index}`}
-              className={`flex-1 h-2 rounded-sm transition-all duration-300 ${
-                index <= currentIntroIndex ? 'bg-roman-terracotta' : 'bg-roman-marble'
-              }`}
-            />
-          ))}
-        </div>
-
-        {/* Small gap between sections */}
-        <div className="w-1" />
-
-        {/* Exercise segments */}
-        <div className="flex-1 flex gap-0.5">
-          {Array.from({ length: exerciseLength }).map((_, index) => (
-            <div
-              key={`exercise-${index}`}
-              className={`flex-1 h-2 rounded-sm transition-all duration-300 ${
-                introCompleted && index <= currentExerciseIndex ? 'bg-roman-green' : 'bg-roman-marble'
-              }`}
-            />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-};
 
 export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
   const [mode, setMode] = useState<LessonMode>('introduction');
@@ -79,20 +30,16 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
   const handleNext = useCallback(() => {
     if (mode === 'introduction') {
       if (currentIntroIndex < lesson.introduction.length - 1) {
-        console.log(`Moving to next intro page: ${currentIntroIndex + 1}`);
         setCurrentIntroIndex(currentIntroIndex + 1);
       } else {
-        console.log('Introduction completed, moving to exercises');
         setIntroCompleted(true);
         setMode('exercise');
         setCurrentExerciseIndex(0);
       }
     } else {
       if (currentExerciseIndex < lesson.exercises.length - 1) {
-        console.log(`Moving to next exercise: ${currentExerciseIndex + 1}`);
         setCurrentExerciseIndex(currentExerciseIndex + 1);
       } else {
-        console.log('All exercises completed, looping back to first exercise');
         setCurrentExerciseIndex(0);
       }
     }
@@ -180,7 +127,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
         </RomanCardHeader>
 
         <RomanCardContent>
-          <ProgressBar
+          <LessonProgressBar
             introLength={lesson.introduction.length}
             exerciseLength={lesson.exercises.length}
             currentIntroIndex={currentIntroIndex}

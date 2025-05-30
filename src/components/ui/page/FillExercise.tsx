@@ -17,24 +17,29 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
   const [showCompletionFeedback, setShowCompletionFeedback] = useState(false);
 
   const handleSubmit = () => {
+    setIsCorrect(null);
+
     const currentItem = exercise.data.items[currentItemIndex];
     const correct = userAnswer.trim().toLowerCase() === currentItem.answer.trim().toLowerCase();
-    setIsCorrect(correct);
 
-    if (correct) {
-      if (currentItemIndex < exercise.data.items.length - 1) {
-        setTimeout(() => {
-          setCurrentItemIndex(prev => prev + 1);
-          setUserAnswer('');
-          setIsCorrect(null);
-        }, 1500);
-      } else {
-        setShowCompletionFeedback(true);
-        if (onComplete) {
-          setTimeout(onComplete, 2000);
+    setTimeout(() => {
+      setIsCorrect(correct);
+
+      if (correct) {
+        if (currentItemIndex < exercise.data.items.length - 1) {
+          setTimeout(() => {
+            setCurrentItemIndex(prev => prev + 1);
+            setUserAnswer('');
+            setIsCorrect(null);
+          }, 1500);
+        } else {
+          setShowCompletionFeedback(true);
+          if (onComplete) {
+            setTimeout(onComplete, 2000);
+          }
         }
       }
-    }
+    }, 50);
   };
 
   const currentItem = exercise.data.items[currentItemIndex];
