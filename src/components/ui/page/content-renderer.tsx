@@ -21,13 +21,9 @@ import {
 interface ContentRendererProps {
   content: ContentItem;
   onComplete?: () => void;
-  isCompleted?: boolean;
 }
 
-export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onComplete, isCompleted = false }) => {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _isCompleted = isCompleted; // Available for future completion state styling
-
+export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onComplete }) => {
   switch (content.type) {
     case 'text':
       return <IntroComponent title={content.title || ''} content={(content as TextContent).content} className="" />;

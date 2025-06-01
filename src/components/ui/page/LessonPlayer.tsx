@@ -28,32 +28,23 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
     mode === 'exercise' ? lesson.exercises[currentExerciseIndex] : undefined;
   const currentContentForAudio = mode === 'introduction' ? currentIntroPage : currentExercisePage;
 
-  const handleIntroPageComplete = useCallback(() => {
-    if (currentIntroIndex < lesson.introduction.length - 1) {
-      setCurrentIntroIndex(currentIntroIndex + 1);
-    } else {
-      setIntroCompleted(true);
-      setMode('exercise');
-      setCurrentExerciseIndex(0);
-    }
-  }, [currentIntroIndex, lesson.introduction.length]);
-
-  const handleExercisePageComplete = useCallback(() => {
-    if (currentExerciseIndex < lesson.exercises.length - 1) {
-      setCurrentExerciseIndex(currentExerciseIndex + 1);
-    } else {
-      // All exercises completed - could add lesson completion logic here
-      console.log('All exercises completed!');
-    }
-  }, [currentExerciseIndex, lesson.exercises.length]);
-
   const handleNext = useCallback(() => {
     if (mode === 'introduction') {
-      handleIntroPageComplete();
+      if (currentIntroIndex < lesson.introduction.length - 1) {
+        setCurrentIntroIndex(currentIntroIndex + 1);
+      } else {
+        setIntroCompleted(true);
+        setMode('exercise');
+        setCurrentExerciseIndex(0);
+      }
     } else {
-      handleExercisePageComplete();
+      if (currentExerciseIndex < lesson.exercises.length - 1) {
+        setCurrentExerciseIndex(currentExerciseIndex + 1);
+      } else {
+        console.log('All exercises completed!');
+      }
     }
-  }, [mode, handleIntroPageComplete, handleExercisePageComplete]);
+  }, [mode, currentIntroIndex, lesson.introduction.length, currentExerciseIndex, lesson.exercises.length]);
 
   const handleAudioEnded = useCallback(() => {
     console.log('Audio ended - advancing to next content');
