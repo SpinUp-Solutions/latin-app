@@ -2,8 +2,8 @@
 
 import React, { useState } from 'react';
 import { FillExercise } from '@/src/types/exercise';
-import ExerciseInput from '../feedback/ExerciseInput';
-import ExerciseFeedback from '../feedback/ExerciseFeedback';
+import ExerciseInput from '../feedback/exercise-input';
+import ExerciseFeedback from '../feedback/exercise-feedback';
 
 interface Props {
   exercise: FillExercise;

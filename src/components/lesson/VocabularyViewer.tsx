@@ -90,7 +90,9 @@ export function VocabularyViewer({ content }: VocabularyViewerProps) {
                       {currentItem.partOfSpeech}
                     </Badge>
                   )}
-                  {currentItem.example && <p className="text-xs text-roman-stone italic">"{currentItem.example}"</p>}
+                  {currentItem.example && (
+                    <p className="text-xs text-roman-stone italic">&ldquo;{currentItem.example}&rdquo;</p>
+                  )}
                   {currentItem.notes && <p className="text-xs text-roman-stone">{currentItem.notes}</p>}
                   <div className="pt-2">
                     <p className="text-xs text-roman-stone">Click to see Latin word</p>
@@ -124,7 +126,7 @@ export function VocabularyViewer({ content }: VocabularyViewerProps) {
 
   const ListView = () => (
     <div className="space-y-4">
-      {vocabularyItems.map((item, index) => (
+      {vocabularyItems.map(item => (
         <RomanCard key={item.id}>
           <RomanCardContent className="p-4">
             <div className="space-y-3">
@@ -141,7 +143,7 @@ export function VocabularyViewer({ content }: VocabularyViewerProps) {
               <div className="flex items-center gap-2">
                 {item.partOfSpeech && <Badge variant="secondary">{item.partOfSpeech}</Badge>}
               </div>
-              {item.example && <p className="text-sm text-roman-stone italic">"{item.example}"</p>}
+              {item.example && <p className="text-sm text-roman-stone italic">&ldquo;{item.example}&rdquo;</p>}
               {item.notes && <p className="text-xs text-roman-stone">{item.notes}</p>}
             </div>
           </RomanCardContent>

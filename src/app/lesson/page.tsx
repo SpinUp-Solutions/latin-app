@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import LessonPlayer from '@/src/components/ui/page/LessonPlayer';
+import LessonPlayer from '@/src/components/ui/lesson/lesson-player';
 import lessons from '@/src/lib/lesson-config';
 
 export default function LessonPage() {

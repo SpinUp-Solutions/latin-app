@@ -3,12 +3,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { Lesson, IntroductionPage, ExercisePage } from '@/src/types/lesson';
-import { BookOpen, Play, Pause, SkipForward, SkipBack, Check } from 'lucide-react';
+import { BookOpen, Check } from 'lucide-react';
 import { Button } from '@/src/components/ui/button';
 import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
-import PageTemplate from './PageTemplate';
+import PageTemplate from './page-template';
 import useAudio from '@/src/hooks/useAudio';
-import LessonProgressBar from '@/src/components/ui/core/lesson-progress-bar';
+import LessonProgressBar from './lesson-progress-bar';
+import LessonNavigation from './lesson-navigation';
 
 interface LessonPlayerProps {
   lesson: Lesson;
@@ -177,30 +178,14 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
               {mode === 'introduction' ? 'Introduction' : 'Exercise'} • {progress}
             </div>
 
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={handlePrevious}
-                className="rounded-full"
-                disabled={mode === 'introduction' && currentIntroIndex === 0}>
-                <SkipBack className="h-4 w-4" />
-              </Button>
-
-              {hasAudio ? (
-                <Button variant="outline" size="icon" onClick={togglePlay} className="rounded-full">
-                  {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                </Button>
-              ) : (
-                <Button variant="outline" size="icon" disabled className="rounded-full opacity-50 cursor-not-allowed">
-                  <Play className="h-4 w-4" />
-                </Button>
-              )}
-
-              <Button variant="outline" size="icon" onClick={handleNext} className="rounded-full">
-                <SkipForward className="h-4 w-4" />
-              </Button>
-            </div>
+            <LessonNavigation
+              onPrevious={handlePrevious}
+              onNext={handleNext}
+              onTogglePlay={togglePlay}
+              isPlaying={isPlaying}
+              hasAudio={hasAudio}
+              canGoPrevious={!(mode === 'introduction' && currentIntroIndex === 0)}
+            />
           </div>
         </RomanCardContent>
       </RomanCard>

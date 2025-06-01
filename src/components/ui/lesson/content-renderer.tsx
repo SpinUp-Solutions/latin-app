@@ -1,13 +1,13 @@
 'use client';
 
 import React from 'react';
-import IntroComponent from './IntroComponent';
-import MatchingTable from './MatchingTable';
-import ConjugationTable from './ConjugationTable';
-import FillExercise from './FillExercise';
-import TextSelectionExercise from './TextSelectionExercise';
-import VerbAnalysisExercise from './VerbAnalysisExercise';
-import VerbConjugationExercise from './VerbConjugationExercise';
+import IntroComponent from './intro-component';
+import MatchingTable from '../exercises/matching-table';
+import ConjugationTable from './conjugation-table';
+import FillExercise from '../exercises/fill-exercise';
+import TextSelectionExercise from '../exercises/text-selection-exercise';
+import VerbAnalysisExercise from '../exercises/verb-analysis-exercise';
+import VerbConjugationExercise from '../exercises/verb-conjugation-exercise';
 import { VocabularyViewer } from '@/src/components/lesson/VocabularyViewer';
 import { ContentItem, TextContent, EmphasisContent, TableContent, VocabularyContent } from '@/src/types/lesson';
 import {

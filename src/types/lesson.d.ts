@@ -1,4 +1,3 @@
-import { Exercise } from './exercise';
 import { ReactNode } from 'react';
 import { TableData } from '../components/ui/page/ConjugationTable';
 import {

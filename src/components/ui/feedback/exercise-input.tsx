@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import FloatingFeedback from './FloatingFeedback';
+import FloatingFeedback from './floating-feedback';
 
 interface ExerciseInputProps {
   value: string;

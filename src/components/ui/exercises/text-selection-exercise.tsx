@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { TextSelectionExercise } from '@/src/types/exercise';
-import ExerciseFeedback from '../feedback/ExerciseFeedback';
+import ExerciseFeedback from '../feedback/exercise-feedback';
 
 interface Props {
   exercise: TextSelectionExercise;
