@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Lesson, IntroductionPage, ContentItem } from '@/src/types/lesson';
+import { Lesson, IntroductionPage, ExercisePage, ContentItem } from '@/src/types/lesson';
 import { BookOpen, Play, Pause, SkipForward, SkipBack, Check } from 'lucide-react';
 import { Button } from '@/src/components/ui/button';
 import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
@@ -24,8 +24,9 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
 
   const currentIntroPage: IntroductionPage | undefined =
     mode === 'introduction' ? lesson.introduction[currentIntroIndex] : undefined;
-  const currentExercise = mode === 'exercise' ? lesson.exercises[currentExerciseIndex] : undefined;
-  const currentContentForAudio = mode === 'introduction' ? currentIntroPage : currentExercise;
+  const currentExercisePage: ExercisePage | undefined =
+    mode === 'exercise' ? lesson.exercises[currentExerciseIndex] : undefined;
+  const currentContentForAudio = mode === 'introduction' ? currentIntroPage : currentExercisePage;
 
   const handleNext = useCallback(() => {
     if (mode === 'introduction') {
@@ -93,7 +94,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
     }
   }
 
-  if (!lesson || (mode === 'introduction' && !currentIntroPage) || (mode === 'exercise' && !currentExercise)) {
+  if (!lesson || (mode === 'introduction' && !currentIntroPage) || (mode === 'exercise' && !currentExercisePage)) {
     return (
       <div className="min-h-[300px] flex items-center justify-center bg-roman-marble">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>
@@ -101,8 +102,8 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
     );
   }
 
-  const displayContentId = mode === 'introduction' ? currentIntroPage!.id : currentExercise!.id;
-  const displayAudioPath = mode === 'introduction' ? currentIntroPage!.audioPath : currentExercise!.audioPath;
+  const displayContentId = mode === 'introduction' ? currentIntroPage!.id : currentExercisePage!.id;
+  const displayAudioPath = mode === 'introduction' ? currentIntroPage!.audioPath : currentExercisePage!.audioPath;
   const hasAudio = Boolean(displayAudioPath);
 
   const totalItems = mode === 'introduction' ? lesson.introduction.length : lesson.exercises.length;
@@ -176,14 +177,19 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
                     ))}
                   </motion.div>
                 )}
-                {mode === 'exercise' && currentExercise && (
+                {mode === 'exercise' && currentExercisePage && (
                   <motion.div
                     key={`exercise-${currentExerciseIndex}`}
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -20 }}
                     transition={{ duration: 0.3 }}>
-                    <ContentRenderer content={currentExercise} onComplete={handleNext} />
+                    {currentExercisePage.title && (
+                      <h2 className="text-xl font-serif text-roman-red mb-4">{currentExercisePage.title}</h2>
+                    )}
+                    {currentExercisePage.items.map((item: ContentItem) => (
+                      <ContentRenderer key={item.id} content={item} onComplete={handleNext} />
+                    ))}
                   </motion.div>
                 )}
               </AnimatePresence>

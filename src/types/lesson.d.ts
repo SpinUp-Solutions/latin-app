@@ -1,7 +1,13 @@
 import { Exercise } from './exercise';
 import { ReactNode } from 'react';
 import { TableData } from '../components/ui/page/ConjugationTable';
-import { MatchingExercise, FillExercise } from './exercise';
+import {
+  MatchingExercise,
+  FillExercise,
+  TextSelectionExercise,
+  VerbAnalysisExercise,
+  VerbConjugationExercise,
+} from './exercise';
 
 export interface ContentItem {
   id: string;
@@ -48,9 +54,19 @@ export type RenderableContentItem =
   | TableContent
   | VocabularyContent
   | MatchingExercise
-  | FillExercise;
+  | FillExercise
+  | TextSelectionExercise
+  | VerbAnalysisExercise
+  | VerbConjugationExercise;
 
 export interface IntroductionPage {
+  id: string;
+  title?: string;
+  items: RenderableContentItem[];
+  audioPath?: string | null;
+}
+
+export interface ExercisePage {
   id: string;
   title?: string;
   items: RenderableContentItem[];
@@ -62,7 +78,7 @@ export interface Lesson {
   title: string;
   description?: string;
   introduction: IntroductionPage[];
-  exercises: Exercise[];
+  exercises: ExercisePage[];
 }
 
 export interface ComponentNarration {
