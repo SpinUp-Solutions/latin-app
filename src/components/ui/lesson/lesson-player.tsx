@@ -9,7 +9,7 @@ import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/u
 import PageTemplate from './page-template';
 import useAudio from '@/src/hooks/useAudio';
 import LessonProgressBar from './lesson-progress-bar';
-import LessonNavigation from './lesson-navigation';
+import LessonNavigation from '../exercises/lesson-navigation';
 
 interface LessonPlayerProps {
   lesson: Lesson;

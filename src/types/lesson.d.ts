@@ -1,76 +1,4 @@
-import { ReactNode } from 'react';
-import { TableData } from '../components/ui/page/ConjugationTable';
-import {
-  MatchingExercise,
-  FillExercise,
-  TextSelectionExercise,
-  VerbAnalysisExercise,
-  VerbConjugationExercise,
-} from './exercise';
-
-export interface ContentItem {
-  id: string;
-  type: string;
-  title?: string;
-  audioPath?: string | null;
-}
-
-export interface VocabularyItem {
-  id: string;
-  latin: string;
-  english: string;
-  pronunciation?: string;
-  audioPath?: string | null;
-  example?: string;
-  partOfSpeech?: string;
-  notes?: string;
-}
-
-export interface TextContent extends ContentItem {
-  type: 'text';
-  content: string;
-}
-
-export interface EmphasisContent extends ContentItem {
-  type: 'emphasis';
-  content: string;
-}
-
-export interface TableContent extends ContentItem {
-  type: 'table';
-  tableData: TableData;
-}
-
-export interface VocabularyContent extends ContentItem {
-  type: 'vocabulary';
-  vocabularyItems: VocabularyItem[];
-  studyMode?: 'flashcards' | 'list' | 'quiz';
-}
-
-export type RenderableContentItem =
-  | TextContent
-  | EmphasisContent
-  | TableContent
-  | VocabularyContent
-  | MatchingExercise
-  | FillExercise
-  | TextSelectionExercise
-  | VerbAnalysisExercise
-  | VerbConjugationExercise;
-
-export interface IntroductionPage {
-  id: string;
-  title?: string;
-  items: RenderableContentItem[];
-  audioPath?: string | null;
-}
-
-export interface ExercisePage {
-  id: string;
-  title?: string;
-  items: RenderableContentItem[];
-  audioPath?: string | null;
-}
+import { IntroductionPage, ExercisePage } from './page';
 
 export interface Lesson {
   id: string;
@@ -80,7 +8,16 @@ export interface Lesson {
   exercises: ExercisePage[];
 }
 
-export interface ComponentNarration {
-  audioPath?: string | null;
-  component: ReactNode;
-}
+export type { IntroductionPage, ExercisePage } from './page';
+export type { RenderableContentItem } from './page';
+export type { ContentItem, TextContent, EmphasisContent, TableContent, ComponentNarration } from './content';
+export type { VocabularyItem, VocabularyContent } from './vocabulary';
+export type {
+  BaseExercise,
+  MatchingExercise,
+  FillExercise,
+  TextSelectionExercise,
+  VerbAnalysisExercise,
+  VerbConjugationExercise,
+  Exercise,
+} from './exercise';
