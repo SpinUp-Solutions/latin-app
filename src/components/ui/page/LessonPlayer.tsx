@@ -1,12 +1,12 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Lesson, IntroductionPage, ExercisePage, ContentItem } from '@/src/types/lesson';
+import { AnimatePresence } from 'framer-motion';
+import { Lesson, IntroductionPage, ExercisePage } from '@/src/types/lesson';
 import { BookOpen, Play, Pause, SkipForward, SkipBack, Check } from 'lucide-react';
 import { Button } from '@/src/components/ui/button';
 import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
-import ContentRenderer from './content-renderer';
+import PageTemplate from './PageTemplate';
 import useAudio from '@/src/hooks/useAudio';
 import LessonProgressBar from '@/src/components/ui/core/lesson-progress-bar';
 
@@ -28,23 +28,32 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
     mode === 'exercise' ? lesson.exercises[currentExerciseIndex] : undefined;
   const currentContentForAudio = mode === 'introduction' ? currentIntroPage : currentExercisePage;
 
+  const handleIntroPageComplete = useCallback(() => {
+    if (currentIntroIndex < lesson.introduction.length - 1) {
+      setCurrentIntroIndex(currentIntroIndex + 1);
+    } else {
+      setIntroCompleted(true);
+      setMode('exercise');
+      setCurrentExerciseIndex(0);
+    }
+  }, [currentIntroIndex, lesson.introduction.length]);
+
+  const handleExercisePageComplete = useCallback(() => {
+    if (currentExerciseIndex < lesson.exercises.length - 1) {
+      setCurrentExerciseIndex(currentExerciseIndex + 1);
+    } else {
+      // All exercises completed - could add lesson completion logic here
+      console.log('All exercises completed!');
+    }
+  }, [currentExerciseIndex, lesson.exercises.length]);
+
   const handleNext = useCallback(() => {
     if (mode === 'introduction') {
-      if (currentIntroIndex < lesson.introduction.length - 1) {
-        setCurrentIntroIndex(currentIntroIndex + 1);
-      } else {
-        setIntroCompleted(true);
-        setMode('exercise');
-        setCurrentExerciseIndex(0);
-      }
+      handleIntroPageComplete();
     } else {
-      if (currentExerciseIndex < lesson.exercises.length - 1) {
-        setCurrentExerciseIndex(currentExerciseIndex + 1);
-      } else {
-        setCurrentExerciseIndex(0);
-      }
+      handleExercisePageComplete();
     }
-  }, [mode, currentIntroIndex, lesson.introduction.length, currentExerciseIndex, lesson.exercises.length]);
+  }, [mode, handleIntroPageComplete, handleExercisePageComplete]);
 
   const handleAudioEnded = useCallback(() => {
     console.log('Audio ended - advancing to next content');
@@ -160,37 +169,13 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
               <div>Playing: {isPlaying ? 'Yes' : 'No'}</div>
             </div>
 
-            <div className="lesson-content space-y-6">
+            <div className="lesson-content">
               <AnimatePresence mode="wait">
                 {mode === 'introduction' && currentIntroPage && (
-                  <motion.div
-                    key={`intro-${currentIntroIndex}`}
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
-                    transition={{ duration: 0.3 }}>
-                    {currentIntroPage.title && (
-                      <h2 className="text-xl font-serif text-roman-red mb-4">{currentIntroPage.title}</h2>
-                    )}
-                    {currentIntroPage.items.map((item: ContentItem) => (
-                      <ContentRenderer key={item.id} content={item} onComplete={handleNext} />
-                    ))}
-                  </motion.div>
+                  <PageTemplate key={`intro-${currentIntroIndex}`} page={currentIntroPage} />
                 )}
                 {mode === 'exercise' && currentExercisePage && (
-                  <motion.div
-                    key={`exercise-${currentExerciseIndex}`}
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
-                    transition={{ duration: 0.3 }}>
-                    {currentExercisePage.title && (
-                      <h2 className="text-xl font-serif text-roman-red mb-4">{currentExercisePage.title}</h2>
-                    )}
-                    {currentExercisePage.items.map((item: ContentItem) => (
-                      <ContentRenderer key={item.id} content={item} onComplete={handleNext} />
-                    ))}
-                  </motion.div>
+                  <PageTemplate key={`exercise-${currentExerciseIndex}`} page={currentExercisePage} />
                 )}
               </AnimatePresence>
             </div>
