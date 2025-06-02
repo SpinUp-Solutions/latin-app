@@ -8,7 +8,6 @@ import FillExercise from '../exercises/fill-exercise';
 import TextSelectionExercise from '../exercises/text-selection-exercise';
 import VerbAnalysisExercise from '../exercises/verb-analysis-exercise';
 import VerbConjugationExercise from '../exercises/verb-conjugation-exercise';
-import { VocabularyViewer } from '@/src/components/lesson/VocabularyViewer';
 import { ContentItem, TextContent, EmphasisContent, TableContent, VocabularyContent } from '@/src/types/lesson';
 import {
   MatchingExercise,
@@ -17,6 +16,7 @@ import {
   VerbAnalysisExercise as VerbAnalysisExerciseType,
   VerbConjugationExercise as VerbConjugationExerciseType,
 } from '@/src/types/exercise';
+import { VocabularyViewer } from './VocabularyViewer';
 
 interface ContentRendererProps {
   content: ContentItem;

@@ -3,7 +3,7 @@ import { adminDb } from '@/src/services/firebase-admin';
 
 export async function GET() {
   try {
-    const testDoc = await adminDb.collection('_test').doc('connection').get();
+    await adminDb.collection('_test').doc('connection').get();
 
     return NextResponse.json({
       success: true,
