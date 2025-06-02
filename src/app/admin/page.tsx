@@ -1,17 +1,21 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/src/store';
 import { Button } from '@/src/components/ui/button';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
-import { ArrowLeft, Shield } from 'lucide-react';
+import { ArrowLeft, Shield, Plus, BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
+import { LessonBuilder } from '@/src/components/admin/LessonBuilder';
+import { Lesson } from '@/src/types/lesson';
 
 export default function AdminPage() {
   const router = useRouter();
   const { user, loading } = useSelector((state: RootState) => state.auth);
+  const [showLessonBuilder, setShowLessonBuilder] = useState(false);
+  const [editingLesson, setEditingLesson] = useState<Lesson | undefined>(undefined);
 
   useEffect(() => {
     if (!loading && (!user || user.role !== 'admin')) {
@@ -19,6 +23,23 @@ export default function AdminPage() {
       toast.error('Access denied. Admin privileges required.');
     }
   }, [user, loading, router]);
+
+  const handleSaveLesson = async (lesson: Lesson) => {
+    try {
+      console.log('Saving lesson:', lesson);
+      toast.success('Lesson saved successfully!');
+      setShowLessonBuilder(false);
+      setEditingLesson(undefined);
+    } catch (error) {
+      console.error('Error saving lesson:', error);
+      toast.error('Failed to save lesson');
+    }
+  };
+
+  const handleCreateNewLesson = () => {
+    setEditingLesson(undefined);
+    setShowLessonBuilder(true);
+  };
 
   if (loading || !user) {
     return (
@@ -30,6 +51,32 @@ export default function AdminPage() {
 
   if (user.role !== 'admin') {
     return null;
+  }
+
+  if (showLessonBuilder) {
+    return (
+      <div className="min-h-screen bg-roman-marble">
+        <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" onClick={() => setShowLessonBuilder(false)}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Admin
+            </Button>
+            <div className="flex items-center gap-2">
+              <div className="w-10 h-10 rounded-full bg-roman-red flex items-center justify-center text-white font-serif">
+                <BookOpen className="h-5 w-5" />
+              </div>
+              <div>
+                <h1 className="text-xl font-serif tracking-wide">Lesson Builder</h1>
+                <p className="text-sm text-roman-stone">Create and edit lessons</p>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <LessonBuilder initialLesson={editingLesson} onSave={handleSaveLesson} />
+      </div>
+    );
   }
 
   return (
@@ -53,15 +100,57 @@ export default function AdminPage() {
       </header>
 
       <main className="container mx-auto py-8 px-4">
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <RomanCard className="w-full max-w-md">
-            <RomanCardContent className="p-8 text-center">
-              <Shield className="h-16 w-16 text-roman-red mx-auto mb-4" />
-              <h2 className="text-2xl font-serif text-gray-800 mb-2">Admin Page</h2>
-              <p className="text-roman-stone">This is the admin page</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Lesson Management */}
+          <RomanCard className="cursor-pointer hover:shadow-lg transition-shadow">
+            <RomanCardContent className="p-6">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                  <BookOpen className="h-6 w-6 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-serif text-gray-800">Lesson Management</h3>
+                  <p className="text-sm text-roman-stone">Create and edit lessons</p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Button onClick={handleCreateNewLesson} className="w-full justify-start" variant="outline">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create New Lesson
+                </Button>
+                <Button className="w-full justify-start" variant="outline" disabled>
+                  <BookOpen className="h-4 w-4 mr-2" />
+                  Manage Existing Lessons
+                </Button>
+              </div>
+            </RomanCardContent>
+          </RomanCard>
+
+          {/* User Management */}
+          <RomanCard className="cursor-pointer hover:shadow-lg transition-shadow">
+            <RomanCardContent className="p-6">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+                  <Shield className="h-6 w-6 text-green-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-serif text-gray-800">User Management</h3>
+                  <p className="text-sm text-roman-stone">Manage users and roles</p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Button className="w-full justify-start" variant="outline" disabled>
+                  View All Users
+                </Button>
+                <Button className="w-full justify-start" variant="outline" disabled>
+                  Manage Roles
+                </Button>
+              </div>
             </RomanCardContent>
           </RomanCard>
         </div>
+
+        {/* Quick Stats */}
       </main>
     </div>
   );
