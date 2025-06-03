@@ -19,8 +19,26 @@ export function VocabularyViewer({ content }: VocabularyViewerProps) {
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
 
-  const vocabularyItems = content.vocabularyItems;
+  const vocabularyItems = content.vocabularyItems || [];
   const currentItem = vocabularyItems[currentCardIndex];
+
+  // Handle empty vocabulary case
+  if (vocabularyItems.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div className="text-center space-y-2">
+          <h2 className="text-2xl font-serif text-gray-800">{content.title || 'Vocabulary'}</h2>
+          <p className="text-roman-stone">No vocabulary items available</p>
+        </div>
+        <RomanCard>
+          <RomanCardContent className="p-8 text-center">
+            <BookOpen className="h-12 w-12 mx-auto text-gray-300 mb-4" />
+            <p className="text-gray-500">This vocabulary list is empty.</p>
+          </RomanCardContent>
+        </RomanCard>
+      </div>
+    );
+  }
 
   const playAudio = (audioPath?: string | null) => {
     if (audioPath) {
@@ -47,82 +65,93 @@ export function VocabularyViewer({ content }: VocabularyViewerProps) {
     setIsFlipped(!isFlipped);
   };
 
-  const FlashcardView = () => (
-    <div className="space-y-4">
-      <div className="flex items-center justify-center">
-        <span className="text-sm text-roman-stone">
-          {currentCardIndex + 1} of {vocabularyItems.length}
-        </span>
-      </div>
-
-      <div className="flex justify-center">
-        <div className="w-full max-w-md">
-          <RomanCard className="cursor-pointer select-none h-48" onClick={handleCardClick}>
-            <RomanCardContent className="h-full flex flex-col items-center justify-center p-3">
-              {!isFlipped ? (
-                // Front side - Latin word
-                <div className="text-center space-y-2">
-                  <h3 className="text-xl font-serif text-roman-red">{currentItem.latin}</h3>
-                  {currentItem.pronunciation && (
-                    <p className="text-xs text-roman-stone italic">/{currentItem.pronunciation}/</p>
-                  )}
-                  {currentItem.audioPath && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={e => {
-                        e.stopPropagation();
-                        playAudio(currentItem.audioPath);
-                      }}>
-                      <Volume2 className="h-4 w-4" />
-                    </Button>
-                  )}
-                  <div className="pt-2">
-                    <p className="text-xs text-roman-stone">Click to reveal meaning</p>
-                  </div>
-                </div>
-              ) : (
-                // Back side - English translation
-                <div className="text-center space-y-2">
-                  <h3 className="text-lg font-medium text-gray-800">{currentItem.english}</h3>
-                  {currentItem.partOfSpeech && (
-                    <Badge variant="secondary" className="text-xs">
-                      {currentItem.partOfSpeech}
-                    </Badge>
-                  )}
-                  {currentItem.example && (
-                    <p className="text-xs text-roman-stone italic">&ldquo;{currentItem.example}&rdquo;</p>
-                  )}
-                  {currentItem.notes && <p className="text-xs text-roman-stone">{currentItem.notes}</p>}
-                  <div className="pt-2">
-                    <p className="text-xs text-roman-stone">Click to see Latin word</p>
-                  </div>
-                </div>
-              )}
-            </RomanCardContent>
-          </RomanCard>
+  const FlashcardView = () => {
+    // Additional safety check for currentItem
+    if (!currentItem) {
+      return (
+        <div className="text-center p-8">
+          <p className="text-gray-500">No vocabulary item found.</p>
         </div>
-      </div>
+      );
+    }
 
-      <div className="flex items-center justify-between">
-        <Button variant="outline" onClick={prevCard} disabled={currentCardIndex === 0}>
-          <ChevronLeft className="h-4 w-4 mr-2" />
-          Previous
-        </Button>
-
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-roman-stone">
-            Card {currentCardIndex + 1} of {vocabularyItems.length}
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-center">
+          <span className="text-sm text-roman-stone">
+            {currentCardIndex + 1} of {vocabularyItems.length}
           </span>
         </div>
 
-        <Button variant="outline" onClick={nextCard} disabled={currentCardIndex === vocabularyItems.length - 1}>
-          Next
-          <ChevronRight className="h-4 w-4 ml-2" />
-        </Button>
+        <div className="flex justify-center">
+          <div className="w-full max-w-md">
+            <RomanCard className="cursor-pointer select-none h-48" onClick={handleCardClick}>
+              <RomanCardContent className="h-full flex flex-col items-center justify-center p-3">
+                {!isFlipped ? (
+                  // Front side - Latin word
+                  <div className="text-center space-y-2">
+                    <h3 className="text-xl font-serif text-roman-red">{currentItem.latin}</h3>
+                    {currentItem.pronunciation && (
+                      <p className="text-xs text-roman-stone italic">/{currentItem.pronunciation}/</p>
+                    )}
+                    {currentItem.audioPath && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={e => {
+                          e.stopPropagation();
+                          playAudio(currentItem.audioPath);
+                        }}>
+                        <Volume2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                    <div className="pt-2">
+                      <p className="text-xs text-roman-stone">Click to reveal meaning</p>
+                    </div>
+                  </div>
+                ) : (
+                  // Back side - English translation
+                  <div className="text-center space-y-2">
+                    <h3 className="text-lg font-medium text-gray-800">{currentItem.english}</h3>
+                    {currentItem.partOfSpeech && (
+                      <Badge variant="secondary" className="text-xs">
+                        {currentItem.partOfSpeech}
+                      </Badge>
+                    )}
+                    {currentItem.example && (
+                      <p className="text-xs text-roman-stone italic">&ldquo;{currentItem.example}&rdquo;</p>
+                    )}
+                    {currentItem.notes && <p className="text-xs text-roman-stone">{currentItem.notes}</p>}
+                    <div className="pt-2">
+                      <p className="text-xs text-roman-stone">Click to see Latin word</p>
+                    </div>
+                  </div>
+                )}
+              </RomanCardContent>
+            </RomanCard>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <Button variant="outline" onClick={prevCard} disabled={currentCardIndex === 0}>
+            <ChevronLeft className="h-4 w-4 mr-2" />
+            Previous
+          </Button>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-roman-stone">
+              Card {currentCardIndex + 1} of {vocabularyItems.length}
+            </span>
+          </div>
+
+          <Button variant="outline" onClick={nextCard} disabled={currentCardIndex === vocabularyItems.length - 1}>
+            Next
+            <ChevronRight className="h-4 w-4 ml-2" />
+          </Button>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const ListView = () => (
     <div className="space-y-4">

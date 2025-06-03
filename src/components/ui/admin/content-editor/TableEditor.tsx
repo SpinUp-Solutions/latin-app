@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button } from '@/src/components/ui/button';
-import { Plus } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { TableContent } from '@/src/types/lesson';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonSlice';
@@ -53,6 +53,28 @@ export const TableEditor: React.FC = () => {
     updateContent({ tableData: updatedTableData });
   };
 
+  const removeColumn = (columnId: string) => {
+    const updatedTableData = {
+      ...editingContent.tableData,
+      columns: editingContent.tableData.columns.filter((col: Column) => col.id !== columnId),
+      rows: editingContent.tableData.rows.map((row: TableRow) => {
+        const { [columnId]: removed, ...remainingCells } = row.cells;
+        return { ...row, cells: remainingCells };
+      }),
+    };
+
+    updateContent({ tableData: updatedTableData });
+  };
+
+  const removeRow = (rowId: string) => {
+    const updatedTableData = {
+      ...editingContent.tableData,
+      rows: editingContent.tableData.rows.filter((row: TableRow) => row.id !== rowId),
+    };
+
+    updateContent({ tableData: updatedTableData });
+  };
+
   const updateCell = (rowId: string, colId: string, value: string) => {
     const updatedTableData = {
       ...editingContent.tableData,
@@ -90,41 +112,59 @@ export const TableEditor: React.FC = () => {
       </div>
 
       <div>
-        <div className="flex items-center justify-between mb-2">
-          <label className="block text-sm font-medium">Table Data</label>
-          <div className="flex gap-2">
-            <Button onClick={addColumn} size="sm" variant="outline">
-              <Plus className="h-4 w-4 mr-1" />
-              Add Column
-            </Button>
-            <Button onClick={addRow} size="sm" variant="outline">
-              <Plus className="h-4 w-4 mr-1" />
-              Add Row
-            </Button>
-          </div>
-        </div>
+        <label className="block text-sm font-medium mb-2">Table Data</label>
 
         <div className="border rounded-md overflow-hidden">
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
-                <th className="p-2 text-left">Row</th>
+                <th className="p-2 text-left w-16">Row</th>
                 {editingContent.tableData.columns.map((col: Column) => (
-                  <th key={col.id} className="p-2 text-left">
-                    <input
-                      type="text"
-                      value={col.header}
-                      onChange={e => updateColumnHeader(col.id, e.target.value)}
-                      className="w-full p-1 border rounded text-sm"
-                    />
+                  <th key={col.id} className="p-2 text-left relative group">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={col.header}
+                        onChange={e => updateColumnHeader(col.id, e.target.value)}
+                        className="w-full p-1 border rounded text-sm"
+                      />
+                      {editingContent.tableData.columns.length > 1 && (
+                        <button
+                          onClick={() => removeColumn(col.id)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-700"
+                          title="Remove column">
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
                   </th>
                 ))}
+                <th className="p-2 w-12">
+                  <button
+                    onClick={addColumn}
+                    className="w-full h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                    title="Add column">
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </th>
               </tr>
             </thead>
             <tbody>
               {editingContent.tableData.rows.map((row: TableRow) => (
-                <tr key={row.id} className="border-t">
-                  <td className="p-2 text-sm text-gray-500">{row.id}</td>
+                <tr key={row.id} className="border-t group">
+                  <td className="p-2 text-sm text-gray-500 relative">
+                    <div className="flex items-center gap-2">
+                      <span className="flex-1">{row.id}</span>
+                      {editingContent.tableData.rows.length > 1 && (
+                        <button
+                          onClick={() => removeRow(row.id)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-700"
+                          title="Remove row">
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                  </td>
                   {editingContent.tableData.columns.map((col: Column) => (
                     <td key={col.id} className="p-2">
                       <input
@@ -135,8 +175,27 @@ export const TableEditor: React.FC = () => {
                       />
                     </td>
                   ))}
+                  <td className="p-2"></td>
                 </tr>
               ))}
+              <tr className="border-t">
+                <td className="p-2">
+                  <button
+                    onClick={addRow}
+                    className="w-full h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                    title="Add row">
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </td>
+                {editingContent.tableData.columns.map((col: Column) => (
+                  <td key={col.id} className="p-2">
+                    <div className="h-8 border border-dashed border-gray-200 rounded flex items-center justify-center text-gray-400">
+                      <Plus className="h-3 w-3" />
+                    </div>
+                  </td>
+                ))}
+                <td className="p-2"></td>
+              </tr>
             </tbody>
           </table>
         </div>

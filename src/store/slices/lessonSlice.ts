@@ -213,7 +213,7 @@ const lessonSlice = createSlice({
       const { pageType, pageIndex, itemIndex } = action.payload;
       if (state.currentLesson) {
         state.editingContent = {
-          content: structuredClone(state.currentLesson[pageType][pageIndex].items[itemIndex]),
+          content: JSON.parse(JSON.stringify(state.currentLesson[pageType][pageIndex].items[itemIndex])),
           pageType,
           pageIndex,
           itemIndex,
