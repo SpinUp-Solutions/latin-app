@@ -205,7 +205,7 @@ export const TextSelectionEditor: React.FC = () => {
                     {question.correctWord && !isWordInPassage(question.correctWord) && (
                       <div className="flex items-center gap-1 mt-1 text-amber-600 text-xs">
                         <AlertCircle className="h-3 w-3" />
-                        Warning: This word doesn't appear to be in the passage
+                        Warning: This word doesn&apos;t appear to be in the passage
                       </div>
                     )}
                     {question.correctWord && isWordInPassage(question.correctWord) && (
@@ -250,7 +250,7 @@ export const TextSelectionEditor: React.FC = () => {
           {editingContent.data.questions.length === 0 && (
             <div className="text-center py-8 text-gray-500">
               <div className="text-sm">No questions yet</div>
-              <div className="text-xs">Click "Add Question" to create your first text selection question</div>
+              <div className="text-xs">Click &quot;Add Question&quot; to create your first text selection question</div>
             </div>
           )}
         </div>
@@ -282,7 +282,7 @@ export const TextSelectionEditor: React.FC = () => {
                 <div className="text-amber-600">⚠️ Some questions are missing text or correct words</div>
               )}
               {editingContent.data.questions.some(q => q.correctWord && !isWordInPassage(q.correctWord)) && (
-                <div className="text-amber-600">⚠️ Some correct words don't appear in the passage</div>
+                <div className="text-amber-600">⚠️ Some correct words don&apos;t appear in the passage</div>
               )}
             </div>
           </CardContent>

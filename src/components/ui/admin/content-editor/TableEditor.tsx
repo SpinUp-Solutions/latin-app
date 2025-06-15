@@ -1,5 +1,4 @@
 import React from 'react';
-import { Button } from '@/src/components/ui/button';
 import { Plus, Trash2 } from 'lucide-react';
 import { TableContent } from '@/src/types/lesson';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
@@ -58,7 +57,8 @@ export const TableEditor: React.FC = () => {
       ...editingContent.tableData,
       columns: editingContent.tableData.columns.filter((col: Column) => col.id !== columnId),
       rows: editingContent.tableData.rows.map((row: TableRow) => {
-        const { [columnId]: removed, ...remainingCells } = row.cells;
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { [columnId]: _, ...remainingCells } = row.cells;
         return { ...row, cells: remainingCells };
       }),
     };

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
-import { BookOpen, Edit, Trash2, Calendar, User, Eye } from 'lucide-react';
+import { BookOpen, Edit, Trash2, Calendar, Eye } from 'lucide-react';
 import { Lesson } from '@/src/types/lesson';
 import { toast } from 'sonner';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
@@ -203,7 +203,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onBa
                     style={{
                       display: '-webkit-box',
                       WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical' as any,
+                      WebkitBoxOrient: 'vertical' as const,
                     }}>
                     {lesson.description || 'No description provided'}
                   </p>

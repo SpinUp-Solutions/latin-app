@@ -121,8 +121,8 @@ export const FillEditor: React.FC = () => {
                       placeholder="Enter the question or prompt that will be shown to students..."
                     />
                     <p className="text-xs text-gray-500 mt-1">
-                      This is what students will see. For example: "Complete the Latin verb: audi___" or "Translate: I
-                      hear = audi_"
+                      This is what students will see. For example: &quot;Complete the Latin verb: audi___&quot; or
+                      &quot;Translate: I hear = audi_&quot;
                     </p>
                   </div>
 
@@ -150,7 +150,7 @@ export const FillEditor: React.FC = () => {
                       value={item.hint || ''}
                       onChange={e => updateItem(index, 'hint', e.target.value)}
                       className="w-full p-2 border rounded text-sm"
-                      placeholder="Provide a helpful hint for students..."
+                      placeholder='Provide context or help for students... e.g., "Think about verb endings"'
                     />
                     <p className="text-xs text-gray-500 mt-1">
                       This will appear as placeholder text in the input field
@@ -182,7 +182,7 @@ export const FillEditor: React.FC = () => {
           {editingContent.data.items.length === 0 && (
             <div className="text-center py-8 text-gray-500">
               <div className="text-sm">No fill-in-blank items yet</div>
-              <div className="text-xs">Click "Add Item" to create your first question</div>
+              <div className="text-xs">Click &quot;Add Item&quot; to create your first question</div>
             </div>
           )}
         </div>

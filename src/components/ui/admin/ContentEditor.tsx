@@ -56,7 +56,7 @@ export const ContentEditor: React.FC = () => {
       default:
         return (
           <div className="p-8 text-center text-gray-500">
-            Editor not implemented for type: {(editingContent.content as any).type}
+            Editor not implemented for type: {(editingContent.content as { type: string }).type}
           </div>
         );
     }

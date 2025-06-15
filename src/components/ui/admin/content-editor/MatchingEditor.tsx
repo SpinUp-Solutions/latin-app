@@ -262,7 +262,7 @@ export const MatchingEditor: React.FC = () => {
               </div>
               {Object.keys(editingContent.data.answers).length <
                 editingContent.data.leftColumn.filter(item => item.trim() !== '').length && (
-                <div className="text-amber-600">⚠️ Some left items don't have answer mappings</div>
+                <div className="text-amber-600">⚠️ Some left items don&apos;t have answer mappings</div>
               )}
             </div>
           </CardContent>
