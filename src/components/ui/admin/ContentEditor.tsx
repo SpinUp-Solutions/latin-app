@@ -9,6 +9,11 @@ import { TextEditor } from './content-editor/TextEditor';
 import { EmphasisEditor } from './content-editor/EmphasisEditor';
 import { TableEditor } from './content-editor/TableEditor';
 import { VocabularyEditor } from './content-editor/VocabularyEditor';
+import { MatchingEditor } from './content-editor/MatchingEditor';
+import { FillEditor } from './content-editor/FillEditor';
+import { TextSelectionEditor } from './content-editor/TextSelectionEditor';
+import { VerbAnalysisEditor } from './content-editor/VerbAnalysisEditor';
+import { VerbConjugationEditor } from './content-editor/VerbConjugationEditor';
 
 import { getEditorTitle } from '@/src/utils/editorRegistry';
 
@@ -38,10 +43,20 @@ export const ContentEditor: React.FC = () => {
         return <TableEditor />;
       case 'vocabulary':
         return <VocabularyEditor />;
+      case 'matching':
+        return <MatchingEditor />;
+      case 'fill':
+        return <FillEditor />;
+      case 'text-selection':
+        return <TextSelectionEditor />;
+      case 'verb-analysis':
+        return <VerbAnalysisEditor />;
+      case 'verb-conjugation':
+        return <VerbConjugationEditor />;
       default:
         return (
           <div className="p-8 text-center text-gray-500">
-            Editor not implemented for type: {editingContent.content.type}
+            Editor not implemented for type: {(editingContent.content as any).type}
           </div>
         );
     }

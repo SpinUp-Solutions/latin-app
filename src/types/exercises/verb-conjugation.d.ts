@@ -7,6 +7,7 @@ export interface VerbConjugationExercise extends BaseExercise {
       latin: string;
       translation: string;
       specialVocab?: Record<string, string>;
+      boldWords?: string[];
     };
     conjugationTask?: {
       instructions: string;
