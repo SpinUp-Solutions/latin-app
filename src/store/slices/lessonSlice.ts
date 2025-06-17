@@ -225,6 +225,12 @@ const lessonSlice = createSlice({
     updateEditingContent: (state, action: PayloadAction<RenderableContentItem>) => {
       if (state.editingContent) {
         state.editingContent.content = action.payload;
+
+        // Also update the corresponding content in currentLesson for live preview
+        if (state.currentLesson) {
+          const { pageType, pageIndex, itemIndex } = state.editingContent;
+          state.currentLesson[pageType][pageIndex].items[itemIndex] = action.payload;
+        }
       }
     },
 
