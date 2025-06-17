@@ -10,22 +10,22 @@ interface Props {
 }
 
 const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
-  const [selectedWord, setSelectedWord] = useState<string | null>(null);
+  const [selectedWordIndex, setSelectedWordIndex] = useState<number | null>(null);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [showCompletionFeedback, setShowCompletionFeedback] = useState(false);
 
-  const handleWordClick = (word: string) => {
-    setSelectedWord(word);
+  const handleWordClick = (word: string, wordIndex: number) => {
+    setSelectedWordIndex(wordIndex);
     const currentQuestion = exercise.data.questions[currentQuestionIndex];
-    const correct = word.toLowerCase() === currentQuestion.correctWord.toLowerCase();
+    const correct = wordIndex === currentQuestion.correctWordIndex;
     setIsCorrect(correct);
 
     if (correct) {
       if (currentQuestionIndex < exercise.data.questions.length - 1) {
         setTimeout(() => {
           setCurrentQuestionIndex(prev => prev + 1);
-          setSelectedWord(null);
+          setSelectedWordIndex(null);
           setIsCorrect(null);
         }, 1500);
       } else {
@@ -50,13 +50,17 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
       <div className="p-6 bg-white rounded-lg border border-gray-200">
         <div className="overflow-x-auto">
           <p className="mb-6 whitespace-pre-wrap break-words min-w-[300px]">{currentQuestion.text}</p>
-          <div className="font-serif text-lg leading-relaxed min-h-[100px] min-w-[300px]">
+          <div className="font-serif text-lg leading-relaxed min-w-[300px]">
             {exercise.data.passage.split(' ').map((word, index) => (
               <span
                 key={index}
-                onClick={() => handleWordClick(word)}
+                onClick={() => handleWordClick(word, index)}
                 className={`cursor-pointer inline-block px-1 py-0.5 mx-0.5 rounded hover:bg-roman-parchment hover:text-roman-red transition-colors ${
-                  selectedWord === word ? (isCorrect ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50') : ''
+                  selectedWordIndex === index
+                    ? isCorrect
+                      ? 'text-green-600 bg-green-50'
+                      : 'text-red-600 bg-red-50'
+                    : ''
                 }`}>
                 {word}
               </span>
@@ -68,7 +72,6 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
           <div className="mt-6">
             <ExerciseFeedback
               isCorrect={isCorrect}
-              correctAnswer={currentQuestion.correctWord}
               customSuccessMessage={
                 currentQuestionIndex < exercise.data.questions.length - 1
                   ? 'Correct! Moving to next question...'

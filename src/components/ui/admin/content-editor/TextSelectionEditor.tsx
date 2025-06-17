@@ -1,7 +1,7 @@
 import React from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent } from '@/src/components/ui/card';
-import { Plus, Trash2, Search, Eye, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Search, Eye } from 'lucide-react';
 import { TextSelectionExercise } from '@/src/types/exercise';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonSlice';
@@ -31,18 +31,26 @@ export const TextSelectionEditor: React.FC = () => {
     const newQuestion = {
       id: `q${Date.now()}`,
       text: '',
-      correctWord: '',
+      correctWordIndex: 0,
       explanation: '',
     };
     const newQuestions = [...editingContent.data.questions, newQuestion];
     updateData({ questions: newQuestions });
   };
 
-  const updateQuestion = (index: number, field: keyof TextSelectionExercise['data']['questions'][0], value: string) => {
+  const updateQuestion = (
+    index: number,
+    field: keyof TextSelectionExercise['data']['questions'][0],
+    value: string | number
+  ) => {
     const newQuestions = editingContent.data.questions.map((question, i) =>
       i === index ? { ...question, [field]: value } : question
     );
     updateData({ questions: newQuestions });
+  };
+
+  const handleWordClick = (wordIndex: number, questionIndex: number) => {
+    updateQuestion(questionIndex, 'correctWordIndex', wordIndex);
   };
 
   const removeQuestion = (index: number) => {
@@ -50,33 +58,38 @@ export const TextSelectionEditor: React.FC = () => {
     updateData({ questions: newQuestions });
   };
 
-  const getWordsInPassage = () => {
-    if (!editingContent.data.passage) return [];
-    return editingContent.data.passage
-      .toLowerCase()
-      .replace(/[.,;!?…]/g, '')
-      .split(/\s+/)
-      .filter(word => word.length > 0);
-  };
-
-  const isWordInPassage = (word: string) => {
-    const wordsInPassage = getWordsInPassage();
-    return wordsInPassage.includes(word.toLowerCase());
-  };
-
-  const renderPassagePreview = () => {
+  const renderPassagePreview = (questionIndex?: number) => {
     if (!editingContent.data.passage) return null;
 
     return (
       <div className="font-serif text-lg leading-relaxed p-4 bg-gray-50 rounded border">
-        {editingContent.data.passage.split(' ').map((word, index) => (
-          <span
-            key={index}
-            className="inline-block px-1 py-0.5 mx-0.5 rounded hover:bg-blue-100 cursor-pointer transition-colors"
-            title={`Click to select: ${word}`}>
-            {word}
-          </span>
-        ))}
+        {editingContent.data.passage.split(' ').map((word, index) => {
+          const isCurrentQuestionTarget =
+            questionIndex !== undefined && editingContent.data.questions[questionIndex]?.correctWordIndex === index;
+
+          return (
+            <span
+              key={index}
+              onClick={() => questionIndex !== undefined && handleWordClick(index, questionIndex)}
+              className={`inline-block px-1 py-0.5 mx-0.5 rounded transition-colors relative group ${
+                isCurrentQuestionTarget
+                  ? 'bg-green-100 text-green-800 border border-green-300 cursor-pointer'
+                  : questionIndex !== undefined
+                    ? 'hover:bg-blue-100 cursor-pointer'
+                    : 'hover:bg-blue-50'
+              }`}
+              title={
+                questionIndex !== undefined
+                  ? `Click to select word at index ${index}: "${word}"`
+                  : `Index: ${index}, Word: "${word}"`
+              }>
+              {word}
+              <span className="absolute -top-6 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                {index}
+              </span>
+            </span>
+          );
+        })}
       </div>
     );
   };
@@ -193,24 +206,21 @@ export const TextSelectionEditor: React.FC = () => {
                   <div>
                     <label className="block text-xs font-medium mb-1 flex items-center gap-1">
                       <Search className="h-3 w-3" />
-                      Correct Word
+                      Select Target Word
                     </label>
-                    <input
-                      type="text"
-                      value={question.correctWord}
-                      onChange={e => updateQuestion(index, 'correctWord', e.target.value)}
-                      className="w-full p-2 border rounded text-sm"
-                      placeholder="The exact word students need to click (case-insensitive)"
-                    />
-                    {question.correctWord && !isWordInPassage(question.correctWord) && (
-                      <div className="flex items-center gap-1 mt-1 text-amber-600 text-xs">
-                        <AlertCircle className="h-3 w-3" />
-                        Warning: This word doesn&apos;t appear to be in the passage
-                      </div>
-                    )}
-                    {question.correctWord && isWordInPassage(question.correctWord) && (
-                      <div className="flex items-center gap-1 mt-1 text-green-600 text-xs">✓ Word found in passage</div>
-                    )}
+                    <p className="text-xs text-gray-500 mb-2">
+                      Click on a word in the passage below to set it as the correct answer for this question.
+                    </p>
+                    {editingContent.data.passage && renderPassagePreview(index)}
+                    <div className="mt-2 text-sm">
+                      <strong>Selected word:</strong>{' '}
+                      <span className="font-mono bg-blue-100 px-1 rounded">
+                        {editingContent.data.passage
+                          ? editingContent.data.passage.split(' ')[question.correctWordIndex] || 'None'
+                          : 'None'}
+                      </span>{' '}
+                      (index: {question.correctWordIndex})
+                    </div>
                   </div>
 
                   <div>
@@ -233,7 +243,12 @@ export const TextSelectionEditor: React.FC = () => {
                       </div>
                       <div>
                         <strong>Target Word:</strong>{' '}
-                        <span className="font-mono bg-blue-100 px-1 rounded">{question.correctWord || 'word'}</span>
+                        <span className="font-mono bg-blue-100 px-1 rounded">
+                          {editingContent.data.passage
+                            ? editingContent.data.passage.split(' ')[question.correctWordIndex] ||
+                              `Index ${question.correctWordIndex}`
+                            : `Index ${question.correctWordIndex}`}
+                        </span>
                       </div>
                       {question.explanation && (
                         <div>
@@ -275,14 +290,14 @@ export const TextSelectionEditor: React.FC = () => {
               </div>
               <div>
                 <strong>Completed questions:</strong>{' '}
-                {editingContent.data.questions.filter(q => q.text.trim() !== '' && q.correctWord.trim() !== '').length}
+                {
+                  editingContent.data.questions.filter(q => q.text.trim() !== '' && q.correctWordIndex !== undefined)
+                    .length
+                }
               </div>
               {!editingContent.data.passage && <div className="text-amber-600">⚠️ No passage text provided</div>}
-              {editingContent.data.questions.some(q => q.text.trim() === '' || q.correctWord.trim() === '') && (
+              {editingContent.data.questions.some(q => q.text.trim() === '' || q.correctWordIndex === undefined) && (
                 <div className="text-amber-600">⚠️ Some questions are missing text or correct words</div>
-              )}
-              {editingContent.data.questions.some(q => q.correctWord && !isWordInPassage(q.correctWord)) && (
-                <div className="text-amber-600">⚠️ Some correct words don&apos;t appear in the passage</div>
               )}
             </div>
           </CardContent>

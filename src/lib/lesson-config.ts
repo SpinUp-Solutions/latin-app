@@ -412,7 +412,7 @@ const lessons: Lesson[] = [
                 {
                   id: 'q1',
                   text: 'Look at the Latin passage carefully. Click on the unnecessary pronoun.',
-                  correctWord: 'tu',
+                  correctWordIndex: 12,
                   explanation:
                     'The pronoun "tu" is unnecessary here because the verb ending already indicates the subject.',
                 },

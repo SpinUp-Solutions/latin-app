@@ -7,7 +7,7 @@ export interface TextSelectionExercise extends BaseExercise {
     questions: {
       id: string;
       text: string;
-      correctWord: string;
+      correctWordIndex: number;
       explanation?: string;
     }[];
   };

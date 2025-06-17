@@ -93,7 +93,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
             {
               id: 'q1',
               text: 'Select the correct word',
-              correctWord: 'correct',
+              correctWordIndex: 0,
               explanation: 'This is the correct selection.',
             },
           ],
