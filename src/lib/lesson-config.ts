@@ -438,37 +438,37 @@ const lessons: Lesson[] = [
                 'Nam et si ambulavero in valle umbrae mortis, non timebo mala, quoniam tu mecum es … Parasti in conspectu meo mensam adversus eos, qui tribulant me; impinguasti in oleo caput meum, et calix meus redundat.',
               verbs: [
                 {
-                  word: 'ambulavero',
+                  wordIndex: 4,
                   correctPronoun: 'I',
                   explanation: 'First person singular perfect tense',
                 },
                 {
-                  word: 'timebo',
+                  wordIndex: 14,
                   correctPronoun: 'I',
                   explanation: 'First person singular future tense',
                 },
                 {
-                  word: 'es',
+                  wordIndex: 20,
                   correctPronoun: 'you',
                   explanation: 'Second person singular present tense',
                 },
                 {
-                  word: 'Parasti',
+                  wordIndex: 22,
                   correctPronoun: 'you',
                   explanation: 'Second person singular perfect tense',
                 },
                 {
-                  word: 'tribulant',
+                  wordIndex: 30,
                   correctPronoun: 'they',
                   explanation: 'Third person plural present tense',
                 },
                 {
-                  word: 'impinguasti',
+                  wordIndex: 32,
                   correctPronoun: 'you',
                   explanation: 'Second person singular perfect tense',
                 },
                 {
-                  word: 'redundat',
+                  wordIndex: 39,
                   correctPronoun: 'it',
                   explanation: 'Third person singular present tense',
                 },

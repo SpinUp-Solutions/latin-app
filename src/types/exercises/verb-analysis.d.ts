@@ -5,7 +5,7 @@ export interface VerbAnalysisExercise extends BaseExercise {
   data: {
     passage: string;
     verbs: {
-      word: string;
+      wordIndex: number; // Index of the verb in the passage
       correctPronoun: string;
       explanation?: string;
     }[];

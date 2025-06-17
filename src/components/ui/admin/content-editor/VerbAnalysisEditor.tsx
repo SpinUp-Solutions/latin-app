@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent } from '@/src/components/ui/card';
-import { Plus, Trash2, Eye, AlertCircle, Zap } from 'lucide-react';
+import { Trash2, Eye, AlertCircle, Zap, X, Check } from 'lucide-react';
 import { VerbAnalysisExercise } from '@/src/types/exercise';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonSlice';
@@ -9,6 +9,73 @@ import { updateEditingContent } from '@/src/store/slices/lessonSlice';
 export const VerbAnalysisEditor: React.FC = () => {
   const dispatch = useAppDispatch();
   const editingContent = useAppSelector(state => state.lesson.editingContent?.content as VerbAnalysisExercise);
+
+  // New state for word popup
+  const [wordPopup, setWordPopup] = useState<{
+    wordIndex: number;
+    position: { x: number; y: number };
+    correctPronoun: string;
+    explanation: string;
+    isEditing: boolean;
+  } | null>(null);
+  const passageRef = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+
+  // Split passage into words once for reuse
+  const passageWords = editingContent?.data.passage ? editingContent.data.passage.trim().split(/\s+/) : [];
+
+  const handleWordClickInPreview = useCallback(
+    (wordIndex: number, event: React.MouseEvent) => {
+      if (!editingContent) return;
+
+      const rect = (event.target as HTMLElement).getBoundingClientRect();
+      const passageRect = passageRef.current?.getBoundingClientRect();
+
+      if (!passageRect) return;
+
+      // Find existing verb for this word index
+      const existingVerb = editingContent.data.verbs.find(v => v.wordIndex === wordIndex);
+
+      // Simple positioning - just use the word's position
+      const x = rect.left - passageRect.left + rect.width / 2;
+      const y = rect.top - passageRect.top;
+
+      setWordPopup({
+        wordIndex,
+        position: { x, y },
+        correctPronoun: existingVerb?.correctPronoun || '',
+        explanation: existingVerb?.explanation || '',
+        isEditing: !!existingVerb,
+      });
+    },
+    [editingContent]
+  );
+
+  // Close popup when clicking outside
+  const handleClickOutside = useCallback(
+    (event: MouseEvent) => {
+      if (!wordPopup) return;
+
+      const target = event.target as Node;
+
+      // Skip closing when clicking inside the popup or the passage.
+      if (popupRef.current?.contains(target) || passageRef.current?.contains(target)) {
+        return;
+      }
+
+      setWordPopup(null);
+    },
+    [wordPopup]
+  );
+
+  React.useEffect(() => {
+    if (wordPopup) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [wordPopup, handleClickOutside]);
 
   if (!editingContent) {
     return <div>No content selected for editing</div>;
@@ -27,56 +94,70 @@ export const VerbAnalysisEditor: React.FC = () => {
     });
   };
 
-  const addVerb = () => {
-    const newVerb = {
-      word: '',
-      correctPronoun: '',
-      explanation: '',
-    };
-    const newVerbs = [...editingContent.data.verbs, newVerb];
-    updateData({ verbs: newVerbs });
-  };
-
-  const updateVerb = (index: number, field: keyof VerbAnalysisExercise['data']['verbs'][0], value: string) => {
-    const newVerbs = editingContent.data.verbs.map((verb, i) => (i === index ? { ...verb, [field]: value } : verb));
-    updateData({ verbs: newVerbs });
-  };
-
   const removeVerb = (index: number) => {
     const newVerbs = editingContent.data.verbs.filter((_, i) => i !== index);
     updateData({ verbs: newVerbs });
   };
 
-  const getWordsInPassage = () => {
-    if (!editingContent.data.passage) return [];
-    return editingContent.data.passage
-      .toLowerCase()
-      .replace(/[.,;!?…]/g, '')
-      .split(/\s+/)
-      .filter(word => word.length > 0);
+  const closeWordPopup = () => {
+    setWordPopup(null);
   };
 
-  const isWordInPassage = (word: string) => {
-    const wordsInPassage = getWordsInPassage();
-    return wordsInPassage.includes(word.toLowerCase());
+  const saveWordPopup = () => {
+    if (!wordPopup) return;
+
+    const existingVerbIndex = editingContent.data.verbs.findIndex(v => v.wordIndex === wordPopup.wordIndex);
+    let newVerbs;
+
+    if (existingVerbIndex >= 0) {
+      newVerbs = editingContent.data.verbs.map((verb, i) =>
+        i === existingVerbIndex
+          ? {
+              wordIndex: wordPopup.wordIndex,
+              correctPronoun: wordPopup.correctPronoun,
+              explanation: wordPopup.explanation || undefined,
+            }
+          : verb
+      );
+    } else {
+      newVerbs = [
+        ...editingContent.data.verbs,
+        {
+          wordIndex: wordPopup.wordIndex,
+          correctPronoun: wordPopup.correctPronoun,
+          explanation: wordPopup.explanation || undefined,
+        },
+      ];
+    }
+
+    updateData({ verbs: newVerbs });
+    closeWordPopup();
+  };
+
+  const deleteWordVerb = () => {
+    if (!wordPopup) return;
+
+    const newVerbs = editingContent.data.verbs.filter(v => v.wordIndex !== wordPopup.wordIndex);
+    updateData({ verbs: newVerbs });
+    closeWordPopup();
   };
 
   const renderPassagePreview = () => {
     if (!editingContent.data.passage) return null;
 
     return (
-      <div className="font-serif text-lg leading-relaxed p-4 bg-gray-50 rounded border">
-        {editingContent.data.passage.split(' ').map((word, index) => {
-          const cleanWord = word.replace(/[.,;!?…]/g, '').toLowerCase();
-          const isVerb = editingContent.data.verbs.some(v => v.word.toLowerCase() === cleanWord);
+      <div ref={passageRef} className="font-serif text-lg leading-relaxed p-4 bg-gray-50 rounded border">
+        {passageWords.map((word, index) => {
+          const isExistingVerb = editingContent.data.verbs.some(v => v.wordIndex === index);
 
           return (
             <span
               key={index}
-              className={`inline-block px-1 py-0.5 mx-0.5 rounded transition-colors ${
-                isVerb ? 'bg-red-100 font-bold text-red-700 border border-red-200' : 'hover:bg-blue-100 cursor-pointer'
+              onClick={e => handleWordClickInPreview(index, e)}
+              className={`inline-block px-1 py-0.5 mx-0.5 rounded transition-colors relative group cursor-pointer ${
+                isExistingVerb ? 'bg-red-100 font-bold text-red-700 border border-red-200' : 'hover:bg-blue-100'
               }`}
-              title={isVerb ? `Verb: ${word}` : `Click to use: ${word}`}>
+              title={isExistingVerb ? `Click to edit verb: ${word}` : `Click to add verb: ${word} (index: ${index})`}>
               {word}
             </span>
           );
@@ -97,14 +178,11 @@ export const VerbAnalysisEditor: React.FC = () => {
     }
 
     editingContent.data.verbs.forEach((verb, index) => {
-      if (!verb.word?.trim()) {
-        warnings.push(`Verb ${index + 1}: Word is required`);
+      if (verb.wordIndex < 0 || verb.wordIndex >= passageWords.length) {
+        warnings.push(`Verb ${index + 1}: Invalid word index (${verb.wordIndex})`);
       }
       if (!verb.correctPronoun?.trim()) {
         warnings.push(`Verb ${index + 1}: Correct pronoun is required`);
-      }
-      if (verb.word && !isWordInPassage(verb.word)) {
-        warnings.push(`Verb ${index + 1}: "${verb.word}" not found in passage`);
       }
     });
 
@@ -169,8 +247,12 @@ export const VerbAnalysisEditor: React.FC = () => {
           <div className="mt-3">
             <label className="block text-xs font-medium mb-2 flex items-center gap-1">
               <Eye className="h-3 w-3" />
-              Passage Preview (verbs highlighted in red):
+              Passage Preview (click on words to add/edit verbs):
             </label>
+            <p className="text-xs text-gray-500 mb-2">
+              • Click on any word to add it as a verb or edit existing verb answers • Existing verbs are highlighted in
+              red • A popup will appear above the clicked word for editing
+            </p>
             {renderPassagePreview()}
           </div>
         )}
@@ -178,15 +260,12 @@ export const VerbAnalysisEditor: React.FC = () => {
 
       {/* Verbs */}
       <div>
-        <div className="flex items-center justify-between mb-3">
+        <div className="mb-3">
           <label className="block text-sm font-medium flex items-center gap-1">
             <Zap className="h-4 w-4" />
             Verbs to Analyze
           </label>
-          <Button onClick={addVerb} size="sm" variant="outline">
-            <Plus className="h-4 w-4 mr-1" />
-            Add Verb
-          </Button>
+          <p className="text-xs text-gray-500 mt-1">Click on words in the passage above to add or edit verbs.</p>
         </div>
 
         <div className="space-y-4">
@@ -206,43 +285,27 @@ export const VerbAnalysisEditor: React.FC = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-medium mb-1">Verb Word</label>
-                    <input
-                      type="text"
-                      value={verb.word}
-                      onChange={e => updateVerb(index, 'word', e.target.value)}
-                      className={`w-full p-2 border rounded text-sm ${
-                        verb.word && !isWordInPassage(verb.word) ? 'border-orange-300 bg-orange-50' : ''
-                      }`}
-                      placeholder="e.g., ambulavero"
-                    />
-                    {verb.word && !isWordInPassage(verb.word) && (
-                      <p className="text-xs text-orange-600 mt-1">⚠️ This word is not found in the passage</p>
-                    )}
+                    <label className="block text-xs font-medium mb-1">Selected Word</label>
+                    <div className="w-full p-2 border rounded text-sm bg-gray-50">
+                      <span className="font-mono">{passageWords[verb.wordIndex] || 'Invalid index'}</span> (index:{' '}
+                      {verb.wordIndex})
+                    </div>
                   </div>
 
                   <div>
                     <label className="block text-xs font-medium mb-1">Correct Pronoun</label>
-                    <input
-                      type="text"
-                      value={verb.correctPronoun}
-                      onChange={e => updateVerb(index, 'correctPronoun', e.target.value)}
-                      className="w-full p-2 border rounded text-sm"
-                      placeholder="e.g., I, you, he/she/it, we, they"
-                    />
+                    <div className="w-full p-2 border rounded text-sm bg-gray-50">
+                      {verb.correctPronoun || 'Not set'}
+                    </div>
                   </div>
                 </div>
 
-                <div className="mt-3">
-                  <label className="block text-xs font-medium mb-1">Explanation (optional)</label>
-                  <textarea
-                    value={verb.explanation || ''}
-                    onChange={e => updateVerb(index, 'explanation', e.target.value)}
-                    className="w-full p-2 border rounded text-sm"
-                    rows={2}
-                    placeholder="e.g., First person singular perfect tense"
-                  />
-                </div>
+                {verb.explanation && (
+                  <div className="mt-3">
+                    <label className="block text-xs font-medium mb-1">Explanation</label>
+                    <div className="w-full p-2 border rounded text-sm bg-gray-50">{verb.explanation}</div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}
@@ -285,6 +348,77 @@ export const VerbAnalysisEditor: React.FC = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Word Popup Overlay */}
+      {wordPopup && (
+        <div className="fixed inset-0 z-50 pointer-events-none">
+          <div
+            ref={popupRef}
+            className="word-popup fixed bg-white border border-gray-300 rounded-lg shadow-lg p-4 min-w-64 max-w-sm pointer-events-auto -translate-x-1/2 translate-y-8"
+            style={{
+              left: `${wordPopup.position.x + (passageRef.current?.getBoundingClientRect().left || 0)}px`,
+              top: `${wordPopup.position.y + (passageRef.current?.getBoundingClientRect().top || 0)}px`,
+            }}>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="font-medium text-sm">
+                  {wordPopup.isEditing ? 'Edit Verb' : 'Add Verb'}:
+                  <span className="font-mono ml-1 bg-gray-100 px-1 rounded">{passageWords[wordPopup.wordIndex]}</span>
+                </h4>
+                <Button onClick={closeWordPopup} size="sm" variant="ghost" className="p-1 h-6 w-6">
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium mb-1">Correct Pronoun</label>
+                <input
+                  type="text"
+                  value={wordPopup.correctPronoun}
+                  onChange={e => setWordPopup(prev => (prev ? { ...prev, correctPronoun: e.target.value } : null))}
+                  className="w-full p-2 border rounded text-sm"
+                  placeholder="e.g., I, you, he/she/it..."
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium mb-1">Explanation (optional)</label>
+                <textarea
+                  value={wordPopup.explanation}
+                  onChange={e => setWordPopup(prev => (prev ? { ...prev, explanation: e.target.value } : null))}
+                  className="w-full p-2 border rounded text-sm"
+                  rows={2}
+                  placeholder="e.g., First person singular..."
+                />
+              </div>
+
+              <div className="flex gap-2 justify-end">
+                {wordPopup.isEditing && (
+                  <Button onClick={deleteWordVerb} size="sm" variant="destructive" className="text-xs">
+                    <Trash2 className="h-3 w-3 mr-1" />
+                    Delete
+                  </Button>
+                )}
+                <Button onClick={closeWordPopup} size="sm" variant="outline" className="text-xs">
+                  Cancel
+                </Button>
+                <Button
+                  onClick={saveWordPopup}
+                  size="sm"
+                  disabled={!wordPopup.correctPronoun.trim()}
+                  className="text-xs">
+                  <Check className="h-3 w-3 mr-1" />
+                  {wordPopup.isEditing ? 'Update' : 'Add'}
+                </Button>
+              </div>
+            </div>
+
+            {/* Arrow pointing to the word */}
+            <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-gray-300"></div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

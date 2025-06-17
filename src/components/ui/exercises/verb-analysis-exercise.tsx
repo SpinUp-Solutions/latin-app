@@ -16,7 +16,9 @@ const VerbAnalysisExercise: React.FC<VerbAnalysisExerciseProps> = ({ exercise, o
   const currentVerb = exercise.data.verbs[currentVerbIndex];
 
   const handleVerbClick = (index: number) => {
-    setShowInput(index);
+    if (currentVerb && index === currentVerb.wordIndex) {
+      setShowInput(index);
+    }
   };
 
   const handleAnswerSubmit = (answer: string) => {
@@ -49,16 +51,15 @@ const VerbAnalysisExercise: React.FC<VerbAnalysisExerciseProps> = ({ exercise, o
       )}
 
       <div className="p-4 bg-white rounded-lg border border-gray-200 overflow-x-auto">
-        <div className="text-lg font-serif italic leading-relaxed whitespace-pre-wrap break-words min-h-[100px]">
+        <div className="text-lg font-serif italic leading-relaxed whitespace-pre-wrap break-words min-w-[300px]">
           {words.map((word, index) => {
-            const isCurrentVerb = exercise.data.verbs[currentVerbIndex]?.word === word.trim();
-            const isAnsweredVerb =
-              answers[currentVerbIndex] && word.trim() === exercise.data.verbs[currentVerbIndex]?.word;
+            const isCurrentVerb = currentVerb && index === currentVerb.wordIndex;
+            const isAnsweredVerb = answers[currentVerbIndex] && currentVerb && index === currentVerb.wordIndex;
 
             return (
               <span key={index} className="relative inline-block">
                 <span
-                  onClick={() => isCurrentVerb && handleVerbClick(index)}
+                  onClick={() => handleVerbClick(index)}
                   className={`cursor-pointer px-1 rounded inline-block min-h-[1.5em] ${
                     isCurrentVerb
                       ? 'font-bold text-roman-red hover:bg-roman-parchment'

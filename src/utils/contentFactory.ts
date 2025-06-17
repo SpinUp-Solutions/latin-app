@@ -110,7 +110,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
           passage: 'Passage with verbs to analyze.',
           verbs: [
             {
-              word: 'verb',
+              wordIndex: 0,
               correctPronoun: 'he/she/it',
               explanation: 'This verb is third person singular.',
             },
