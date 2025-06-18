@@ -164,10 +164,10 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
             <div className="lesson-content">
               <AnimatePresence mode="wait">
                 {mode === 'introduction' && currentIntroPage && (
-                  <PageTemplate key={`intro-${currentIntroIndex}`} page={currentIntroPage} />
+                  <PageTemplate key={currentIntroPage.id} page={currentIntroPage} />
                 )}
                 {mode === 'exercise' && currentExercisePage && (
-                  <PageTemplate key={`exercise-${currentExerciseIndex}`} page={currentExercisePage} />
+                  <PageTemplate key={currentExercisePage.id} page={currentExercisePage} />
                 )}
               </AnimatePresence>
             </div>

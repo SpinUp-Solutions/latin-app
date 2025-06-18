@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/src/components/ui/button';
-import { Check, X, ArrowRight, Shuffle } from 'lucide-react';
+import { X, ArrowRight, Shuffle } from 'lucide-react';
 import FieldSelect from '../core/field-select';
 
 interface MatchingItem {
@@ -28,6 +28,20 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ leftColumn, rightC
 
   const [shuffledLeftColumn, setShuffledLeftColumn] = useState<MatchingItem[]>(leftColumn);
   const [shuffledRightColumn, setShuffledRightColumn] = useState<MatchingItem[]>(rightColumn);
+
+  // this is for the live preview :/
+  useEffect(() => {
+    setShuffledLeftColumn(leftColumn);
+    setShuffledRightColumn(rightColumn);
+    setSelectedLeft(null);
+    setSelectedRight(null);
+    setMatches({});
+    setMatchedLeftIds(new Set());
+    setMatchedRightIds(new Set());
+    setFeedback(null);
+    setShowIncorrectFlash(false);
+    setComplete(false);
+  }, [leftColumn, rightColumn, finalAnswer]);
 
   const handleLeftSelect = (item: string, index?: number) => {
     const matchingItem = getUnmatchedLeftItems()[index!];
