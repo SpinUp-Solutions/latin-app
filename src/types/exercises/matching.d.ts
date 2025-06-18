@@ -1,10 +1,15 @@
 import { BaseExercise } from './base';
 
+export interface MatchingItem {
+  id: string;
+  value: string;
+}
+
 export interface MatchingExercise extends BaseExercise {
   type: 'matching';
   data: {
-    leftColumn: string[];
-    rightColumn: string[];
-    answers: Record<string, string>;
+    leftColumn: MatchingItem[];
+    rightColumn: MatchingItem[];
+    answers: Record<string, string>; // leftId -> rightId
   };
 }

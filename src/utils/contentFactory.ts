@@ -56,11 +56,17 @@ export const createNewContent = (type: string): RenderableContentItem => {
         instructions: 'Match the items from the left column with the right column.',
         audioPath: null,
         data: {
-          leftColumn: ['Item 1', 'Item 2'],
-          rightColumn: ['Match A', 'Match B'],
+          leftColumn: [
+            { id: `left-${Date.now()}-1`, value: 'Item 1' },
+            { id: `left-${Date.now()}-2`, value: 'Item 2' },
+          ],
+          rightColumn: [
+            { id: `right-${Date.now()}-1`, value: 'Match A' },
+            { id: `right-${Date.now()}-2`, value: 'Match B' },
+          ],
           answers: {
-            'Item 1': 'Match A',
-            'Item 2': 'Match B',
+            [`left-${Date.now()}-1`]: `right-${Date.now()}-1`,
+            [`left-${Date.now()}-2`]: `right-${Date.now()}-2`,
           },
         },
       };

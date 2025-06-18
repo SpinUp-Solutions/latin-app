@@ -33,7 +33,7 @@ const FieldSelect: React.FC<FieldSelectProps> = ({
               : Object.values(matches).includes(item);
 
         const isSelected =
-          matchType === 'value' && selectedIndex !== undefined
+          selectedIndex !== null && selectedIndex !== undefined
             ? selectedIndex === index && selectedItem === item
             : selectedItem === item;
 

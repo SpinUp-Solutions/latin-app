@@ -1,75 +1,109 @@
-'use client';
-
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/src/components/ui/button';
 import { Check, X, ArrowRight, Shuffle } from 'lucide-react';
 import FieldSelect from '../core/field-select';
 
+interface MatchingItem {
+  id: string;
+  value: string;
+}
+
 interface MatchingTableProps {
-  leftColumn: string[];
-  rightColumn: string[];
-  finalAnswer: Record<string, string>;
+  leftColumn: MatchingItem[];
+  rightColumn: MatchingItem[];
+  finalAnswer: Record<string, string>; // leftId -> rightId
   onComplete?: () => void;
 }
 
 export const MatchingTable: React.FC<MatchingTableProps> = ({ leftColumn, rightColumn, finalAnswer, onComplete }) => {
-  const [selectedLeft, setSelectedLeft] = useState<string | null>(null);
-  const [selectedRight, setSelectedRight] = useState<string | null>(null);
-  const [selectedRightIndex, setSelectedRightIndex] = useState<number | null>(null);
-  const [matches, setMatches] = useState<Record<string, string>>({});
-  const [matchedRightIndices, setMatchedRightIndices] = useState<Set<number>>(new Set());
+  const [selectedLeft, setSelectedLeft] = useState<MatchingItem | null>(null);
+  const [selectedRight, setSelectedRight] = useState<MatchingItem | null>(null);
+  const [matches, setMatches] = useState<Record<string, string>>({}); // leftId -> rightId
+  const [matchedLeftIds, setMatchedLeftIds] = useState<Set<string>>(new Set());
+  const [matchedRightIds, setMatchedRightIds] = useState<Set<string>>(new Set());
   const [feedback, setFeedback] = useState<'correct' | 'incorrect' | null>(null);
+  const [showIncorrectFlash, setShowIncorrectFlash] = useState(false);
   const [complete, setComplete] = useState(false);
 
-  // Add state for shuffled arrays
-  const [shuffledLeftColumn, setShuffledLeftColumn] = useState<string[]>(leftColumn);
-  const [shuffledRightColumn, setShuffledRightColumn] = useState<string[]>(rightColumn);
+  const [shuffledLeftColumn, setShuffledLeftColumn] = useState<MatchingItem[]>(leftColumn);
+  const [shuffledRightColumn, setShuffledRightColumn] = useState<MatchingItem[]>(rightColumn);
 
-  const handleLeftSelect = (item: string) => {
-    setSelectedLeft(item);
+  const handleLeftSelect = (item: string, index?: number) => {
+    const matchingItem = getUnmatchedLeftItems()[index!];
+    if (selectedLeft?.id === matchingItem?.id) {
+      setSelectedLeft(null);
+      return;
+    }
+    setSelectedLeft(matchingItem);
+    setSelectedRight(null);
     setFeedback(null);
   };
 
   const handleRightSelect = (item: string, index?: number) => {
-    setSelectedRight(item);
-    setSelectedRightIndex(index ?? null);
-    setFeedback(null);
-  };
-
-  const handleMatch = () => {
-    if (!selectedLeft || !selectedRight || selectedRightIndex === null) return;
-
-    const isCorrect = finalAnswer[selectedLeft] === selectedRight;
-
-    if (isCorrect) {
-      // Add to matches
-      const newMatches = { ...matches, [selectedLeft]: selectedRight };
-      setMatches(newMatches);
-
-      const newMatchedRightIndices = new Set(matchedRightIndices);
-      newMatchedRightIndices.add(selectedRightIndex);
-      setMatchedRightIndices(newMatchedRightIndices);
-
-      setFeedback('correct');
-
-      setSelectedLeft(null);
+    const matchingItem = getUnmatchedRightItems()[index!];
+    if (selectedRight?.id === matchingItem?.id) {
       setSelectedRight(null);
-      setSelectedRightIndex(null);
+      return;
+    }
+    setSelectedRight(matchingItem);
+    setFeedback(null);
 
-      if (Object.keys(newMatches).length === Object.keys(finalAnswer).length) {
-        setComplete(true);
-        onComplete?.();
+    // Auto-match if left item is already selected
+    if (selectedLeft && matchingItem) {
+      // Get the expected right item value for this left item
+      const expectedRightId = finalAnswer[selectedLeft.id];
+      const expectedRightItem = rightColumn.find(item => item.id === expectedRightId);
+      const expectedValue = expectedRightItem?.value;
+
+      // Check if the selected right item's value matches the expected value
+      const isCorrect = expectedValue && matchingItem.value === expectedValue;
+
+      if (isCorrect) {
+        const newMatches = { ...matches, [selectedLeft.id]: matchingItem.id };
+        setMatches(newMatches);
+
+        const newMatchedLeftIds = new Set(matchedLeftIds);
+        newMatchedLeftIds.add(selectedLeft.id);
+        setMatchedLeftIds(newMatchedLeftIds);
+
+        const newMatchedRightIds = new Set(matchedRightIds);
+        newMatchedRightIds.add(matchingItem.id);
+        setMatchedRightIds(newMatchedRightIds);
+
+        setFeedback('correct');
+        setSelectedLeft(null);
+        setSelectedRight(null);
+
+        if (Object.keys(newMatches).length === Object.keys(finalAnswer).length) {
+          setComplete(true);
+          onComplete?.();
+        }
+      } else {
+        setFeedback('incorrect');
+        setShowIncorrectFlash(true);
+
+        // Clear selections after showing red flash
+        setTimeout(() => {
+          setSelectedLeft(null);
+          setSelectedRight(null);
+          setFeedback(null);
+          setShowIncorrectFlash(false);
+        }, 1000);
       }
-    } else {
-      setFeedback('incorrect');
     }
   };
 
-  const handleClearSelection = () => {
+  const handleClearAll = () => {
     setSelectedLeft(null);
     setSelectedRight(null);
-    setSelectedRightIndex(null);
     setFeedback(null);
+    setMatches({});
+    setMatchedLeftIds(new Set());
+    setMatchedRightIds(new Set());
+    setComplete(false);
+    setShuffledLeftColumn(leftColumn);
+    setShuffledRightColumn(rightColumn);
   };
 
   const shuffleArray = <T,>(array: T[]): T[] => {
@@ -84,66 +118,48 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ leftColumn, rightC
   const handleShuffle = () => {
     setSelectedLeft(null);
     setSelectedRight(null);
-    setSelectedRightIndex(null);
     setFeedback(null);
 
-    // Get unmatched items from left column
-    const unmatchedLeftItems = shuffledLeftColumn.filter(item => !Object.keys(matches).includes(item));
+    // Only shuffle unmatched items
+    const unmatchedLeft = shuffledLeftColumn.filter(item => !matchedLeftIds.has(item.id));
+    const unmatchedRight = shuffledRightColumn.filter(item => !matchedRightIds.has(item.id));
 
-    const unmatchedRightItems = shuffledRightColumn.filter((item, index) => !matchedRightIndices.has(index));
+    const shuffledUnmatchedLeft = shuffleArray(unmatchedLeft);
+    const shuffledUnmatchedRight = shuffleArray(unmatchedRight);
 
-    const shuffledUnmatchedLeft = shuffleArray(unmatchedLeftItems);
-    const shuffledUnmatchedRight = shuffleArray(unmatchedRightItems);
-
-    const newLeftColumn = [...shuffledLeftColumn];
-    const newRightColumn = [...shuffledRightColumn];
-
-    // Replace unmatched items with shuffled versions
-    let unmatchedLeftIndex = 0;
-    let unmatchedRightIndex = 0;
-
-    for (let i = 0; i < newLeftColumn.length; i++) {
-      if (!Object.keys(matches).includes(newLeftColumn[i])) {
-        newLeftColumn[i] = shuffledUnmatchedLeft[unmatchedLeftIndex];
-        unmatchedLeftIndex++;
-      }
-    }
-
-    for (let i = 0; i < newRightColumn.length; i++) {
-      if (!matchedRightIndices.has(i)) {
-        newRightColumn[i] = shuffledUnmatchedRight[unmatchedRightIndex];
-        unmatchedRightIndex++;
-      }
-    }
+    // Rebuild arrays with matched items in their positions and unmatched items shuffled
+    const newLeftColumn = shuffledLeftColumn.map(item =>
+      matchedLeftIds.has(item.id) ? item : shuffledUnmatchedLeft.shift()!
+    );
+    const newRightColumn = shuffledRightColumn.map(item =>
+      matchedRightIds.has(item.id) ? item : shuffledUnmatchedRight.shift()!
+    );
 
     setShuffledLeftColumn(newLeftColumn);
     setShuffledRightColumn(newRightColumn);
   };
 
-  const renderFeedback = () => {
-    if (!feedback) return null;
+  const getUnmatchedLeftItems = (): MatchingItem[] => shuffledLeftColumn.filter(item => !matchedLeftIds.has(item.id));
 
-    if (feedback === 'correct') {
-      return (
-        <div className="flex items-center text-roman-green mb-4">
-          <Check className="h-5 w-5 mr-1" />
-          <span>Correct match!</span>
-        </div>
-      );
-    } else {
-      return (
-        <div className="flex items-center text-roman-red mb-4">
-          <X className="h-5 w-5 mr-1" />
-          <span>That&apos;s not correct. Try again.</span>
-        </div>
-      );
-    }
+  const getUnmatchedRightItems = (): MatchingItem[] =>
+    shuffledRightColumn.filter(item => !matchedRightIds.has(item.id));
+
+  const renderFeedback = () => {
+    // No text feedback anymore - using visual feedback instead
+    return null;
+  };
+
+  const getMatchedPairs = () => {
+    return Object.entries(matches).map(([leftId, rightId]) => {
+      const leftItem = shuffledLeftColumn.find(item => item.id === leftId);
+      const rightItem = shuffledRightColumn.find(item => item.id === rightId);
+      return { leftItem, rightItem, key: `${leftId}-${rightId}` };
+    });
   };
 
   return (
     <div className="matching-exercise bg-white p-4 rounded-lg border border-border">
       {renderFeedback()}
-
       {complete ? (
         <div className="p-4 bg-roman-green/10 rounded-lg border border-roman-green text-center mb-4">
           <p className="text-roman-green font-medium">Great job! All matches are correct.</p>
@@ -154,58 +170,105 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ leftColumn, rightC
             Matched: {Object.keys(matches).length}/{Object.keys(finalAnswer).length}
           </span>
           <div className="flex items-center gap-2">
-            {!complete && (
-              <Button size="sm" variant="outline" onClick={handleShuffle}>
-                <Shuffle className="h-4 w-4 mr-2" />
-                Shuffle
-              </Button>
-            )}
-            {selectedLeft && selectedRight && (
-              <>
-                <Button size="sm" variant="outline" onClick={handleClearSelection}>
-                  Clear
-                </Button>
-                <Button size="sm" onClick={handleMatch}>
-                  Match
-                </Button>
-              </>
-            )}
+            <Button size="sm" variant="outline" onClick={handleShuffle}>
+              <Shuffle className="h-4 w-4 mr-2" />
+              Shuffle
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleClearAll}>
+              <X className="h-4 w-4 mr-2" />
+              Clear All
+            </Button>
           </div>
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-4">
-        <FieldSelect
-          items={shuffledLeftColumn}
-          selectedItem={selectedLeft}
-          onSelect={handleLeftSelect}
-          matches={matches}
-          matchType="key"
-          label="Latin"
-        />
-
-        {/* Middle column with arrows */}
-        <div className="flex flex-col items-center justify-center">
-          {shuffledLeftColumn.map((_, index) => (
-            <div key={`arrow-${index}`} className="h-12 flex items-center">
-              {Object.keys(matches).includes(shuffledLeftColumn[index]) && (
-                <ArrowRight className="text-roman-green h-5 w-5" />
-              )}
-            </div>
-          ))}
+      <div className="grid grid-cols-12 gap-4">
+        <div className="col-span-4">
+          <FieldSelect
+            items={getUnmatchedLeftItems().map(item => item.value)}
+            selectedItem={selectedLeft?.value || null}
+            selectedIndex={selectedLeft ? getUnmatchedLeftItems().findIndex(item => item.id === selectedLeft.id) : null}
+            onSelect={handleLeftSelect}
+            matches={{}}
+            matchType="key"
+            label="Latin"
+          />
         </div>
 
-        {/* Right column */}
-        <FieldSelect
-          items={shuffledRightColumn}
-          selectedItem={selectedRight}
-          selectedIndex={selectedRightIndex}
-          onSelect={handleRightSelect}
-          matches={matches}
-          matchType="value"
-          label="English"
-          matchedIndices={matchedRightIndices}
-        />
+        <div className="col-span-4 flex flex-col items-center justify-start min-h-[200px] p-4">
+          <AnimatePresence initial={false}>
+            {getMatchedPairs().map(({ leftItem, rightItem, key }) => (
+              <motion.div
+                key={key}
+                initial={{ opacity: 0, scale: 0.8, y: -20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.8, y: 20 }}
+                transition={{ duration: 0.3 }}
+                className="w-full mb-3 last:mb-0"
+                layout>
+                <motion.div
+                  layout
+                  className="flex items-center justify-between p-4 rounded-lg bg-roman-green/10 border border-roman-green text-roman-green shadow-sm">
+                  <div
+                    className="flex-1 text-left font-medium pr-2 overflow-hidden whitespace-nowrap"
+                    style={{ maskImage: 'linear-gradient(to right, black 70%, transparent 100%)' }}>
+                    {leftItem?.value}
+                  </div>
+                  <ArrowRight className="mx-2 h-5 w-5 flex-shrink-0" />
+                  <div
+                    className="flex-1 text-right font-medium pl-2 overflow-hidden whitespace-nowrap"
+                    style={{ maskImage: 'linear-gradient(to right, black 70%, transparent 100%)' }}>
+                    {rightItem?.value}
+                  </div>
+                </motion.div>
+              </motion.div>
+            ))}
+
+            {/* Show incorrect match temporarily */}
+            {showIncorrectFlash && selectedLeft && selectedRight && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8, y: -20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.8, y: 20 }}
+                transition={{ duration: 0.2 }}
+                className="w-full mb-3">
+                <motion.div
+                  animate={{
+                    backgroundColor: ['rgb(239 68 68 / 0.1)', 'rgb(239 68 68 / 0.2)', 'rgb(239 68 68 / 0.1)'],
+                    borderColor: ['rgb(239 68 68)', 'rgb(220 38 38)', 'rgb(239 68 68)'],
+                  }}
+                  transition={{ duration: 0.5, repeat: 1 }}
+                  className="flex items-center justify-between p-4 rounded-lg border text-red-600 shadow-sm">
+                  <div
+                    className="flex-1 text-left font-medium pr-2 overflow-hidden whitespace-nowrap"
+                    style={{ maskImage: 'linear-gradient(to right, black 70%, transparent 100%)' }}>
+                    {selectedLeft.value}
+                  </div>
+                  <ArrowRight className="mx-2 h-5 w-5 flex-shrink-0" />
+                  <div
+                    className="flex-1 text-right font-medium pl-2 overflow-hidden whitespace-nowrap"
+                    style={{ maskImage: 'linear-gradient(to left, black 70%, transparent 100%)' }}>
+                    {selectedRight.value}
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        <div className="col-span-4">
+          <FieldSelect
+            items={getUnmatchedRightItems().map(item => item.value)}
+            selectedItem={selectedRight?.value || null}
+            selectedIndex={
+              selectedRight ? getUnmatchedRightItems().findIndex(item => item.id === selectedRight.id) : null
+            }
+            onSelect={handleRightSelect}
+            matches={{}}
+            matchType="value"
+            label="English"
+          />
+        </div>
       </div>
     </div>
   );

@@ -27,47 +27,36 @@ export const MatchingEditor: React.FC = () => {
     });
   };
 
+  const generateId = (prefix: string) => {
+    return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  };
+
   const addLeftItem = () => {
-    const newLeftColumn = [...editingContent.data.leftColumn, ''];
+    const newItem = { id: generateId('left'), value: '' };
+    const newLeftColumn = [...editingContent.data.leftColumn, newItem];
     updateData({ leftColumn: newLeftColumn });
   };
 
   const addRightItem = () => {
-    const newRightColumn = [...editingContent.data.rightColumn, ''];
+    const newItem = { id: generateId('right'), value: '' };
+    const newRightColumn = [...editingContent.data.rightColumn, newItem];
     updateData({ rightColumn: newRightColumn });
   };
 
   const updateLeftItem = (index: number, value: string) => {
-    const oldValue = editingContent.data.leftColumn[index];
-    const newLeftColumn = editingContent.data.leftColumn.map((item, i) => (i === index ? value : item));
+    const item = editingContent.data.leftColumn[index];
+    const newLeftColumn = editingContent.data.leftColumn.map((item, i) => (i === index ? { ...item, value } : item));
 
-    // Update answers mapping if the left item changed
+    // Update answers mapping if needed - answers use IDs now
     const newAnswers = { ...editingContent.data.answers };
-    if (oldValue && oldValue !== value) {
-      if (newAnswers[oldValue]) {
-        newAnswers[value] = newAnswers[oldValue];
-        delete newAnswers[oldValue];
-      }
-    }
 
     updateData({ leftColumn: newLeftColumn, answers: newAnswers });
   };
 
   const updateRightItem = (index: number, value: string) => {
-    const oldValue = editingContent.data.rightColumn[index];
-    const newRightColumn = editingContent.data.rightColumn.map((item, i) => (i === index ? value : item));
+    const newRightColumn = editingContent.data.rightColumn.map((item, i) => (i === index ? { ...item, value } : item));
 
-    // Update answers mapping if the right item changed
-    const newAnswers = { ...editingContent.data.answers };
-    if (oldValue && oldValue !== value) {
-      Object.keys(newAnswers).forEach(leftKey => {
-        if (newAnswers[leftKey] === oldValue) {
-          newAnswers[leftKey] = value;
-        }
-      });
-    }
-
-    updateData({ rightColumn: newRightColumn, answers: newAnswers });
+    updateData({ rightColumn: newRightColumn });
   };
 
   const removeLeftItem = (index: number) => {
@@ -76,7 +65,7 @@ export const MatchingEditor: React.FC = () => {
 
     // Remove from answers mapping
     const newAnswers = { ...editingContent.data.answers };
-    delete newAnswers[itemToRemove];
+    delete newAnswers[itemToRemove.id];
 
     updateData({ leftColumn: newLeftColumn, answers: newAnswers });
   };
@@ -87,27 +76,30 @@ export const MatchingEditor: React.FC = () => {
 
     // Remove from answers mapping
     const newAnswers = { ...editingContent.data.answers };
-    Object.keys(newAnswers).forEach(leftKey => {
-      if (newAnswers[leftKey] === itemToRemove) {
-        delete newAnswers[leftKey];
+    Object.keys(newAnswers).forEach(leftId => {
+      if (newAnswers[leftId] === itemToRemove.id) {
+        delete newAnswers[leftId];
       }
     });
 
     updateData({ rightColumn: newRightColumn, answers: newAnswers });
   };
 
-  const updateAnswer = (leftItem: string, rightItem: string) => {
+  const updateAnswer = (leftId: string, rightId: string) => {
     const newAnswers = { ...editingContent.data.answers };
-    if (rightItem === '') {
-      delete newAnswers[leftItem];
+    if (rightId === '') {
+      delete newAnswers[leftId];
     } else {
-      newAnswers[leftItem] = rightItem;
+      newAnswers[leftId] = rightId;
     }
     updateData({ answers: newAnswers });
   };
 
   const getAvailableRightItems = () => {
-    return ['', ...editingContent.data.rightColumn.filter(item => item.trim() !== '')];
+    return [
+      { id: '', value: '-- Select match --' },
+      ...editingContent.data.rightColumn.filter(item => item.value.trim() !== ''),
+    ];
   };
 
   return (
@@ -159,10 +151,10 @@ export const MatchingEditor: React.FC = () => {
         </div>
         <div className="space-y-2">
           {editingContent.data.leftColumn.map((item, index) => (
-            <div key={index} className="flex items-center gap-2">
+            <div key={item.id} className="flex items-center gap-2">
               <input
                 type="text"
-                value={item}
+                value={item.value}
                 onChange={e => updateLeftItem(index, e.target.value)}
                 className="flex-1 p-2 border rounded-md text-sm"
                 placeholder={`Left item ${index + 1}...`}
@@ -190,10 +182,10 @@ export const MatchingEditor: React.FC = () => {
         </div>
         <div className="space-y-2">
           {editingContent.data.rightColumn.map((item, index) => (
-            <div key={index} className="flex items-center gap-2">
+            <div key={item.id} className="flex items-center gap-2">
               <input
                 type="text"
-                value={item}
+                value={item.value}
                 onChange={e => updateRightItem(index, e.target.value)}
                 className="flex-1 p-2 border rounded-md text-sm"
                 placeholder={`Right item ${index + 1}...`}
@@ -217,24 +209,24 @@ export const MatchingEditor: React.FC = () => {
           <CardContent className="p-4">
             <div className="space-y-3">
               {editingContent.data.leftColumn
-                .filter(item => item.trim() !== '')
+                .filter(item => item.value.trim() !== '')
                 .map((leftItem, index) => (
-                  <div key={index} className="flex items-center gap-3">
-                    <div className="flex-1 p-2 bg-gray-50 rounded border text-sm">{leftItem}</div>
+                  <div key={leftItem.id} className="flex items-center gap-3">
+                    <div className="flex-1 p-2 bg-gray-50 rounded border text-sm">{leftItem.value}</div>
                     <ArrowRight className="h-4 w-4 text-gray-400" />
                     <select
-                      value={editingContent.data.answers[leftItem] || ''}
-                      onChange={e => updateAnswer(leftItem, e.target.value)}
+                      value={editingContent.data.answers[leftItem.id] || ''}
+                      onChange={e => updateAnswer(leftItem.id, e.target.value)}
                       className="flex-1 p-2 border rounded-md text-sm">
-                      {getAvailableRightItems().map((rightItem, rightIndex) => (
-                        <option key={rightIndex} value={rightItem}>
-                          {rightItem === '' ? '-- Select match --' : rightItem}
+                      {getAvailableRightItems().map(rightItem => (
+                        <option key={rightItem.id} value={rightItem.id}>
+                          {rightItem.id === '' ? rightItem.value : rightItem.value}
                         </option>
                       ))}
                     </select>
                   </div>
                 ))}
-              {editingContent.data.leftColumn.filter(item => item.trim() !== '').length === 0 && (
+              {editingContent.data.leftColumn.filter(item => item.value.trim() !== '').length === 0 && (
                 <div className="text-sm text-gray-500 text-center py-4">
                   Add items to the left column to create answer mappings
                 </div>
@@ -251,17 +243,18 @@ export const MatchingEditor: React.FC = () => {
           <CardContent className="p-4">
             <div className="text-sm space-y-2">
               <div>
-                <strong>Left items:</strong> {editingContent.data.leftColumn.filter(item => item.trim() !== '').length}
+                <strong>Left items:</strong>{' '}
+                {editingContent.data.leftColumn.filter(item => item.value.trim() !== '').length}
               </div>
               <div>
                 <strong>Right items:</strong>{' '}
-                {editingContent.data.rightColumn.filter(item => item.trim() !== '').length}
+                {editingContent.data.rightColumn.filter(item => item.value.trim() !== '').length}
               </div>
               <div>
                 <strong>Mapped answers:</strong> {Object.keys(editingContent.data.answers).length}
               </div>
               {Object.keys(editingContent.data.answers).length <
-                editingContent.data.leftColumn.filter(item => item.trim() !== '').length && (
+                editingContent.data.leftColumn.filter(item => item.value.trim() !== '').length && (
                 <div className="text-amber-600">⚠️ Some left items don&apos;t have answer mappings</div>
               )}
             </div>
