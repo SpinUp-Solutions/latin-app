@@ -17,6 +17,13 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
   const [conjugationCompleted, setConjugationCompleted] = useState(false);
   const [showCompletionFeedback, setShowCompletionFeedback] = useState(false);
 
+  const handleAnswerChange = (value: string) => {
+    setUserAnswer(value);
+    if (isCorrect !== null) {
+      setIsCorrect(null);
+    }
+  };
+
   const checkAllExercisesComplete = () => {
     const livingLatinComplete =
       !exercise.data.livingLatinPractice || currentExerciseIndex >= exercise.data.livingLatinPractice.exercises.length;
@@ -37,6 +44,7 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
       if (correct) {
         setConjugationCompleted(true);
         setUserAnswer('');
+        setTimeout(() => setIsCorrect(null), 2000);
         if (exercise.data.livingLatinPractice) {
           setCurrentExerciseIndex(0);
         } else {
@@ -56,7 +64,7 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
         if (currentExerciseIndex < exercise.data.livingLatinPractice.exercises.length - 1) {
           setCurrentExerciseIndex(prev => prev + 1);
           setUserAnswer('');
-          setIsCorrect(null);
+          setTimeout(() => setIsCorrect(null), 2000);
         } else {
           checkAllExercisesComplete();
         }
@@ -70,7 +78,7 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
       <div className="p-6 bg-white rounded-lg border border-gray-200">
         <h3 className="text-xl font-serif text-roman-red mb-4">{exercise.title}</h3>
         <div className="overflow-x-auto">
-          <p className="font-serif text-lg leading-relaxed mb-4 whitespace-pre-wrap break-words min-w-[300px]">
+          <p className="font-serif text-lg leading-relaxed mb-4 whitespace-pre-wrap break-words min-w-[300px] italic">
             {exercise.data.passage.latin}
           </p>
           <p className="text-gray-700 leading-relaxed whitespace-pre-wrap break-words min-w-[300px]">
@@ -101,7 +109,7 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
           </p>
           <ExerciseInput
             value={userAnswer}
-            onChange={setUserAnswer}
+            onChange={handleAnswerChange}
             onSubmit={handleAnswerSubmit}
             isCorrect={isCorrect}
             correctAnswer={exercise.data.conjugationTask.answer}
@@ -134,7 +142,7 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
               </p>
               <ExerciseInput
                 value={userAnswer}
-                onChange={setUserAnswer}
+                onChange={handleAnswerChange}
                 onSubmit={handleLivingLatinSubmit}
                 isCorrect={isCorrect}
                 correctAnswer={exercise.data.livingLatinPractice.exercises[currentExerciseIndex].answer}

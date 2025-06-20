@@ -51,7 +51,9 @@ const VerbAnalysisExercise: React.FC<VerbAnalysisExerciseProps> = ({ exercise, o
       )}
 
       <div className="p-4 bg-white rounded-lg border border-gray-200 overflow-x-auto">
-        <div className="text-lg font-serif italic leading-relaxed whitespace-pre-wrap break-words min-w-[300px]">
+        <div
+          className="text-lg font-serif italic leading-relaxed whitespace-pre-wrap break-words min-w-[300px]"
+          style={{ fontStyle: 'italic' }}>
           {words.map((word, index) => {
             const isCurrentVerb = currentVerb && index === currentVerb.wordIndex;
             const isAnsweredVerb = answers[currentVerbIndex] && currentVerb && index === currentVerb.wordIndex;
