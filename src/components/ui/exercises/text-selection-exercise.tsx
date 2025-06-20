@@ -13,7 +13,6 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
   const [selectedWordIndex, setSelectedWordIndex] = useState<number | null>(null);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [showCompletionFeedback, setShowCompletionFeedback] = useState(false);
 
   const handleWordClick = (word: string, wordIndex: number) => {
     setSelectedWordIndex(wordIndex);
@@ -29,7 +28,6 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
           setIsCorrect(null);
         }, 1500);
       } else {
-        setShowCompletionFeedback(true);
         if (onComplete) {
           setTimeout(onComplete, 2000);
         }
@@ -88,12 +86,6 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
           </div>
         )}
       </div>
-
-      {showCompletionFeedback && (
-        <div className="mt-6">
-          <ExerciseFeedback message="Outstanding! You've successfully identified all the words in the passage!" />
-        </div>
-      )}
     </div>
   );
 };

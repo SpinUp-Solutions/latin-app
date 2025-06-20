@@ -15,7 +15,6 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
   const [userAnswer, setUserAnswer] = useState('');
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
   const [conjugationCompleted, setConjugationCompleted] = useState(false);
-  const [showCompletionFeedback, setShowCompletionFeedback] = useState(false);
 
   const handleAnswerChange = (value: string) => {
     setUserAnswer(value);
@@ -29,8 +28,6 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
       !exercise.data.livingLatinPractice || currentExerciseIndex >= exercise.data.livingLatinPractice.exercises.length;
 
     if (conjugationCompleted && livingLatinComplete) {
-      setShowCompletionFeedback(true);
-      // Delay the onComplete callback to show the completion feedback
       if (onComplete) {
         setTimeout(onComplete, 2000);
       }
@@ -150,10 +147,6 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
             </div>
           )}
         </div>
-      )}
-
-      {showCompletionFeedback && (
-        <ExerciseFeedback message="Excellent work! You've mastered both the conjugation and Living Latin practice!" />
       )}
     </div>
   );

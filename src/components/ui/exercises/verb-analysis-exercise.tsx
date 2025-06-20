@@ -9,33 +9,39 @@ interface VerbAnalysisExerciseProps {
 
 const VerbAnalysisExercise: React.FC<VerbAnalysisExerciseProps> = ({ exercise, onComplete }) => {
   const [currentVerbIndex, setCurrentVerbIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<number, string>>({});
-  const [feedback, setFeedback] = useState<Record<number, { isCorrect: boolean; message: string }>>({});
-  const [showInput, setShowInput] = useState<number | null>(null);
+  const [userAnswer, setUserAnswer] = useState('');
+  const [feedback, setFeedback] = useState<{ isCorrect: boolean; message: string } | null>(null);
 
   const currentVerb = exercise.data.verbs[currentVerbIndex];
 
-  const handleVerbClick = (index: number) => {
-    if (currentVerb && index === currentVerb.wordIndex) {
-      setShowInput(index);
+  const handleAnswerSubmit = () => {
+    if (!userAnswer.trim()) return; // Don't submit empty answers
+
+    const isCorrect = userAnswer.toLowerCase().trim() === currentVerb.correctPronoun.toLowerCase().trim();
+
+    setFeedback({
+      isCorrect,
+      message: isCorrect ? 'Correct!' : `Incorrect. The correct answer is "${currentVerb.correctPronoun}"`,
+    });
+
+    if (isCorrect) {
+      // Move to next verb after showing feedback
+      setTimeout(() => {
+        setUserAnswer('');
+        setFeedback(null);
+        if (currentVerbIndex < exercise.data.verbs.length - 1) {
+          setCurrentVerbIndex(prev => prev + 1);
+        } else {
+          onComplete?.();
+        }
+      }, 1500);
+    } else {
+      // Clear input for retry
+      setTimeout(() => {
+        setUserAnswer('');
+        setFeedback(null);
+      }, 2000);
     }
-  };
-
-  const handleAnswerSubmit = (answer: string) => {
-    const isCorrect = answer.toLowerCase().trim() === currentVerb.correctPronoun.toLowerCase().trim();
-
-    setAnswers(prev => ({
-      ...prev,
-      [currentVerbIndex]: answer,
-    }));
-
-    setFeedback(prev => ({
-      ...prev,
-      [currentVerbIndex]: {
-        isCorrect,
-        message: isCorrect ? 'Correct!' : `Incorrect. The correct answer is "${currentVerb.correctPronoun}"`,
-      },
-    }));
   };
 
   const words = exercise.data.passage.split(/(\s+)/).filter(word => word.trim());
@@ -51,83 +57,70 @@ const VerbAnalysisExercise: React.FC<VerbAnalysisExerciseProps> = ({ exercise, o
       )}
 
       <div className="p-4 bg-white rounded-lg border border-gray-200 overflow-x-auto">
-        <div
-          className="text-lg font-serif italic leading-relaxed whitespace-pre-wrap break-words min-w-[300px]"
-          style={{ fontStyle: 'italic' }}>
+        <div className="text-lg font-serif italic leading-relaxed whitespace-pre-wrap break-words min-w-[300px] mb-6">
           {words.map((word, index) => {
             const isCurrentVerb = currentVerb && index === currentVerb.wordIndex;
-            const isAnsweredVerb = answers[currentVerbIndex] && currentVerb && index === currentVerb.wordIndex;
 
             return (
-              <span key={index} className="relative inline-block">
-                <span
-                  onClick={() => handleVerbClick(index)}
-                  className={`cursor-pointer px-1 rounded inline-block min-h-[1.5em] ${
-                    isCurrentVerb
-                      ? 'font-bold text-roman-red hover:bg-roman-parchment'
-                      : isAnsweredVerb
-                        ? feedback[currentVerbIndex]?.isCorrect
-                          ? 'text-green-600'
-                          : 'text-red-600'
-                        : ''
-                  }`}>
-                  {word}
-                </span>
-
-                {showInput === index && (
-                  <div className="fixed transform -translate-y-full mt-[-8px] z-50">
-                    <div className="w-64">
-                      {feedback[currentVerbIndex] && (
-                        <div
-                          className={`mb-2 p-3 rounded-lg shadow-md border ${
-                            feedback[currentVerbIndex].isCorrect
-                              ? 'bg-green-50 border-green-200 text-green-700'
-                              : 'bg-red-50 border-red-200 text-red-700'
-                          }`}>
-                          <div className="flex items-center gap-2 mb-1">
-                            {feedback[currentVerbIndex].isCorrect ? (
-                              <Check className="h-5 w-5 text-green-500" />
-                            ) : (
-                              <X className="h-5 w-5 text-red-500" />
-                            )}
-                            <span className="font-medium">
-                              {feedback[currentVerbIndex].isCorrect ? 'Correct!' : 'Incorrect'}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                      <div className="bg-white p-2 rounded-lg shadow-lg border border-gray-200">
-                        <input
-                          type="text"
-                          autoFocus
-                          className="w-full px-2 py-1 border rounded"
-                          placeholder="Enter pronoun..."
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') {
-                              handleAnswerSubmit(e.currentTarget.value);
-                            }
-                          }}
-                          onBlur={e => {
-                            handleAnswerSubmit(e.target.value);
-                            setShowInput(null);
-                            const isCorrect =
-                              e.target.value.toLowerCase().trim() === currentVerb.correctPronoun.toLowerCase().trim();
-                            if (isCorrect) {
-                              if (currentVerbIndex < exercise.data.verbs.length - 1) {
-                                setCurrentVerbIndex(prev => prev + 1);
-                              } else if (currentVerbIndex === exercise.data.verbs.length - 1) {
-                                onComplete?.();
-                              }
-                            }
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
+              <span
+                key={index}
+                className={`px-1 rounded inline-block min-h-[1.5em] ${
+                  isCurrentVerb ? 'font-bold text-roman-red bg-roman-parchment' : ''
+                }`}>
+                {word}
               </span>
             );
           })}
+        </div>
+
+        {/* Current verb instruction */}
+        {currentVerb && (
+          <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <p className="text-blue-800 font-medium">
+              Enter the pronoun for the highlighted verb:{' '}
+              <span className="font-bold italic">{words[currentVerb.wordIndex]}</span>
+            </p>
+          </div>
+        )}
+
+        {/* Feedback */}
+        {feedback && (
+          <div
+            className={`mb-4 p-3 rounded-lg shadow-md border ${
+              feedback.isCorrect
+                ? 'bg-green-50 border-green-200 text-green-700'
+                : 'bg-red-50 border-red-200 text-red-700'
+            }`}>
+            <div className="flex items-center gap-2">
+              {feedback.isCorrect ? (
+                <Check className="h-5 w-5 text-green-500" />
+              ) : (
+                <X className="h-5 w-5 text-red-500" />
+              )}
+              <span className="font-medium">{feedback.message}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Input field - always visible */}
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={userAnswer}
+            onChange={e => setUserAnswer(e.target.value)}
+            className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-roman-red"
+            placeholder="Enter pronoun..."
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                handleAnswerSubmit();
+              }
+            }}
+          />
+          <button
+            onClick={handleAnswerSubmit}
+            className="px-4 py-2 bg-roman-red text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-roman-red">
+            Submit
+          </button>
         </div>
       </div>
     </div>

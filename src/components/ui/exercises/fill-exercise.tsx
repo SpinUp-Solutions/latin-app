@@ -14,7 +14,6 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
   const [currentItemIndex, setCurrentItemIndex] = useState(0);
   const [userAnswer, setUserAnswer] = useState('');
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
-  const [showCompletionFeedback, setShowCompletionFeedback] = useState(false);
 
   const handleSubmit = () => {
     setIsCorrect(null);
@@ -33,7 +32,6 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
             setIsCorrect(null);
           }, 1500);
         } else {
-          setShowCompletionFeedback(true);
           if (onComplete) {
             setTimeout(onComplete, 2000);
           }
@@ -63,8 +61,6 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
           placeholder={currentItem.hint || 'Type your answer in Latin...'}
         />
       </div>
-
-      {showCompletionFeedback && <ExerciseFeedback message="Well done! You've completed all the fill-in exercises!" />}
     </div>
   );
 };
