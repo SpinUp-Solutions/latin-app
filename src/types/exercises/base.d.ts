@@ -7,10 +7,6 @@ export interface FeedbackLevel {
   showAnswer?: boolean;
   /** When true the component should use the per-item `hint` field. */
   showHint?: boolean;
-  /** Custom delay before showing this level's content (in ms) */
-  delay?: number;
-  /** Custom styling for this level */
-  variant?: 'default' | 'warning' | 'error' | 'info';
 }
 
 export interface SuccessMessageConfig {
@@ -20,8 +16,6 @@ export interface SuccessMessageConfig {
   completion?: string;
   /** Message when advancing to next item */
   advance?: string;
-  /** Custom delay before auto-advancing (in ms) */
-  advanceDelay?: number;
 }
 
 export interface ProgressionRules {
