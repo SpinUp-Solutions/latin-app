@@ -4,6 +4,11 @@ import React, { useState } from 'react';
 import { VerbConjugationExercise } from '@/src/types/exercise';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { ExerciseInput, FeedbackDisplay } from '../feedback';
+import {
+  validateVerbConjugationTask,
+  validateVerbConjugationLivingLatin,
+} from '@/src/utils/exercises/verbConjugationExercise';
+import { ExerciseProgress } from './exercise-progress';
 
 interface Props {
   exercise: VerbConjugationExercise;
@@ -24,10 +29,9 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
     if (!exercise.data.conjugationTask || isProcessing) return;
 
     setIsProcessing(true);
-    const conjugationTask = exercise.data.conjugationTask;
-    const correct = userAnswer.trim().toLowerCase() === conjugationTask.answer.trim().toLowerCase();
+    const validation = validateVerbConjugationTask(userAnswer, exercise);
 
-    if (correct) {
+    if (validation.isCorrect) {
       handleCorrect(false); // Not the final completion yet
 
       // Move to living latin if it exists, otherwise complete
@@ -44,7 +48,7 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
         }, progressionDelay);
       }
     } else {
-      handleIncorrect(undefined, conjugationTask.answer);
+      handleIncorrect(undefined, validation.correctAnswer);
       setIsProcessing(false);
     }
   };
@@ -53,10 +57,9 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
     if (!exercise.data.livingLatinPractice || isProcessing) return;
 
     setIsProcessing(true);
-    const currentExercise = exercise.data.livingLatinPractice.exercises[currentLivingLatinIndex];
-    const correct = userAnswer.trim().toLowerCase() === currentExercise.answer.trim().toLowerCase();
+    const validation = validateVerbConjugationLivingLatin(userAnswer, exercise, currentLivingLatinIndex);
 
-    if (correct) {
+    if (validation.isCorrect) {
       const isLastExercise = currentLivingLatinIndex >= exercise.data.livingLatinPractice!.exercises.length - 1;
       handleCorrect(isLastExercise);
 
@@ -79,7 +82,7 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
         }, progressionDelay);
       }
     } else {
-      handleIncorrect(undefined, currentExercise.answer);
+      handleIncorrect(undefined, validation.correctAnswer);
       setIsProcessing(false);
     }
   };
@@ -117,12 +120,12 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
           </div>
 
           {exercise.data.passage.specialVocab && (
-            <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-              <h5 className="font-medium text-blue-800 mb-2">Special Vocabulary:</h5>
-              <ul className="text-blue-700 text-sm space-y-1">
+            <div className="mt-4 p-3 bg-roman-parchment rounded-lg">
+              <h5 className="font-medium text-gray-700 mb-2">Special Vocabulary:</h5>
+              <ul className="text-gray-700 text-sm space-y-1">
                 {Object.entries(exercise.data.passage.specialVocab).map(([latin, definition]) => (
                   <li key={latin}>
-                    <span className="font-italic">{latin}</span> = {definition}
+                    <span className="italic">{latin}</span> = {definition}
                   </li>
                 ))}
               </ul>
@@ -135,7 +138,7 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
           <>
             <div className="mb-6">
               <h4 className="text-lg font-serif text-roman-red mb-2">Your Task</h4>
-              <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+              <div className="p-4 bg-roman-parchment rounded-lg border border-gray-200">
                 <p className="text-gray-800">{exercise.data.conjugationTask.instructions}</p>
               </div>
             </div>
@@ -156,12 +159,12 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
 
         {/* Living Latin practice - interactive progression */}
         {exercise.data.livingLatinPractice && conjugationCompleted && (
-          <div className="mt-8 p-6 bg-green-50 rounded-lg border border-green-200">
-            <h4 className="text-lg font-serif text-green-800 mb-4">Living Latin Practice</h4>
+          <div className="mt-8 p-6 bg-roman-parchment rounded-lg border border-gray-200">
+            <h4 className="text-lg font-serif text-roman-red mb-4">Living Latin Practice</h4>
 
             {/* Examples (always visible) */}
             <div className="mb-6">
-              <h5 className="font-medium text-green-700 mb-2">Examples:</h5>
+              <h5 className="font-medium text-gray-700 mb-2">Examples:</h5>
               <div className="space-y-2">
                 {exercise.data.livingLatinPractice.examples.map((example, index) => (
                   <div key={index} className="bg-white p-3 rounded border">
@@ -174,30 +177,14 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
 
             {/* Current exercise */}
             {currentLivingLatinExercise && (
-              <div className="bg-white p-4 rounded-lg border border-green-200">
-                <div className="mb-4">
-                  <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
-                    <span>
-                      Exercise {currentLivingLatinIndex + 1} of {exercise.data.livingLatinPractice.exercises.length}
-                    </span>
-                    <span>
-                      {Math.round(
-                        ((currentLivingLatinIndex + 1) / exercise.data.livingLatinPractice.exercises.length) * 100
-                      )}
-                      % Complete
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-green-600 h-2 rounded-full transition-all duration-300"
-                      style={{
-                        width: `${((currentLivingLatinIndex + 1) / exercise.data.livingLatinPractice.exercises.length) * 100}%`,
-                      }}
-                    />
-                  </div>
-                </div>
+              <div className="bg-white p-4 rounded-lg border border-gray-200">
+                <ExerciseProgress
+                  current={currentLivingLatinIndex}
+                  total={exercise.data.livingLatinPractice.exercises.length}
+                  label="Exercise"
+                />
 
-                <p className="mb-4 text-gray-800">Write in Latin: "{currentLivingLatinExercise.english}"</p>
+                <p className="mb-4 text-gray-800">Write in Latin: &quot;{currentLivingLatinExercise.english}&quot;</p>
 
                 <ExerciseInput
                   value={userAnswer}

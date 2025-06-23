@@ -44,7 +44,6 @@ export const MatchingEditor: React.FC = () => {
   };
 
   const updateLeftItem = (index: number, value: string) => {
-    const item = editingContent.data.leftColumn[index];
     const newLeftColumn = editingContent.data.leftColumn.map((item, i) => (i === index ? { ...item, value } : item));
 
     // Update answers mapping if needed - answers use IDs now
@@ -210,7 +209,7 @@ export const MatchingEditor: React.FC = () => {
             <div className="space-y-3">
               {editingContent.data.leftColumn
                 .filter(item => item.value.trim() !== '')
-                .map((leftItem, index) => (
+                .map(leftItem => (
                   <div key={leftItem.id} className="flex items-center gap-3">
                     <div className="flex-1 p-2 bg-gray-50 rounded border text-sm">{leftItem.value}</div>
                     <ArrowRight className="h-4 w-4 text-gray-400" />

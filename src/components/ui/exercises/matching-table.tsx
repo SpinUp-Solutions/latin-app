@@ -6,6 +6,8 @@ import { MatchingExercise } from '@/src/types/exercise';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { FeedbackDisplay } from '../feedback';
 import FieldSelect from '../core/field-select';
+import { validateMatchingExercise } from '@/src/utils/exercises/matchingExercise';
+import { ExerciseProgress } from './exercise-progress';
 
 interface MatchingItem {
   id: string;
@@ -26,7 +28,6 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
   const [matchedLeftIds, setMatchedLeftIds] = useState<Set<string>>(new Set());
   const [matchedRightIds, setMatchedRightIds] = useState<Set<string>>(new Set());
   const [showIncorrectFlash, setShowIncorrectFlash] = useState(false);
-  const [complete, setComplete] = useState(false);
 
   const [shuffledLeftColumn, setShuffledLeftColumn] = useState<MatchingItem[]>(leftColumn);
   const [shuffledRightColumn, setShuffledRightColumn] = useState<MatchingItem[]>(rightColumn);
@@ -45,7 +46,6 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
     setMatchedLeftIds(new Set());
     setMatchedRightIds(new Set());
     setShowIncorrectFlash(false);
-    setComplete(false);
     reset();
   }, [leftColumn, rightColumn, finalAnswer, reset]);
 
@@ -71,15 +71,9 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
 
     // Auto-match if left item is already selected
     if (selectedLeft && matchingItem) {
-      // Get the expected right item value for this left item
-      const expectedRightId = finalAnswer[selectedLeft.id];
-      const expectedRightItem = rightColumn.find(item => item.id === expectedRightId);
-      const expectedValue = expectedRightItem?.value;
+      const validation = validateMatchingExercise(selectedLeft, matchingItem, exercise);
 
-      // Check if the selected right item's value matches the expected value
-      const isCorrect = expectedValue && matchingItem.value === expectedValue;
-
-      if (isCorrect) {
+      if (validation.isCorrect) {
         const newMatches = { ...matches, [selectedLeft.id]: matchingItem.id };
         setMatches(newMatches);
 
@@ -97,7 +91,6 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
         setSelectedRight(null);
 
         if (isLastMatch) {
-          setComplete(true);
           // Auto-advance logic based on configuration
           if (exercise.feedbackConfig.progressionRules?.autoAdvance !== false) {
             setTimeout(() => {
@@ -106,9 +99,7 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
           }
         }
       } else {
-        const correctRightItem = rightColumn.find(item => item.id === expectedRightId);
-        const correctAnswer = `"${selectedLeft.value}" matches with "${correctRightItem?.value}"`;
-        handleIncorrect(undefined, correctAnswer);
+        handleIncorrect(undefined, validation.expectedMatch);
 
         setShowIncorrectFlash(true);
 
@@ -129,7 +120,6 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
     setMatches({});
     setMatchedLeftIds(new Set());
     setMatchedRightIds(new Set());
-    setComplete(false);
     setShuffledLeftColumn(leftColumn);
     setShuffledRightColumn(rightColumn);
     reset();
@@ -191,20 +181,7 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
       )}
 
       {/* Progress indicator */}
-      <div className="mb-4">
-        <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
-          <span>
-            Matches: {Object.keys(matches).length} of {Object.keys(finalAnswer).length}
-          </span>
-          <span>{Math.round((Object.keys(matches).length / Object.keys(finalAnswer).length) * 100)}% Complete</span>
-        </div>
-        <div className="w-full bg-gray-200 rounded-full h-2">
-          <div
-            className="bg-roman-red h-2 rounded-full transition-all duration-300"
-            style={{ width: `${(Object.keys(matches).length / Object.keys(finalAnswer).length) * 100}%` }}
-          />
-        </div>
-      </div>
+      <ExerciseProgress current={Object.keys(matches).length} total={Object.keys(finalAnswer).length} label="Match" />
 
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         {/* Controls */}

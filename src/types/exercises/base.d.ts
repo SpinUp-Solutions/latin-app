@@ -51,20 +51,6 @@ export interface FeedbackConfig {
 
   /** Timing configuration for delays */
   timingConfig?: TimingConfig;
-
-  /** Custom sound effects for feedback states */
-  sounds?: {
-    correct?: string;
-    incorrect?: string;
-    complete?: string;
-  };
-
-  /** Accessibility settings */
-  accessibility?: {
-    announceCorrect?: boolean;
-    announceIncorrect?: boolean;
-    announceHints?: boolean;
-  };
 }
 
 /** Base for every exercise type. */

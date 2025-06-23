@@ -5,6 +5,8 @@ import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { VerbAnalysisExercise } from '@/src/types/exercise';
 import { ExerciseInput, FeedbackDisplay } from '../feedback';
+import { validateVerbAnalysisExercise } from '@/src/utils/exercises/verbAnalysisExercise';
+import { ExerciseProgress } from './exercise-progress';
 
 interface Props {
   exercise: VerbAnalysisExercise;
@@ -36,12 +38,10 @@ const VerbAnalysisExerciseComponent: React.FC<Props> = ({ exercise, onComplete }
   const handleSubmit = () => {
     if (isProcessing) return; // Prevent multiple submissions
 
-    const currentVerb = exercise.data.verbs[currentIndex];
-    const correct = userAnswer.trim().toLowerCase() === currentVerb.correctPronoun.toLowerCase();
-
+    const validation = validateVerbAnalysisExercise(userAnswer, exercise, currentIndex);
     setIsProcessing(true);
 
-    if (correct) {
+    if (validation.isCorrect) {
       handleCorrect(isLastItem);
 
       // Auto-advance logic based on configuration
@@ -58,7 +58,7 @@ const VerbAnalysisExerciseComponent: React.FC<Props> = ({ exercise, onComplete }
         setIsProcessing(false);
       }
     } else {
-      handleIncorrect(currentVerb.hint, currentVerb.correctPronoun);
+      handleIncorrect(validation.hint, validation.correctAnswer);
       setIsProcessing(false);
     }
   };
@@ -83,22 +83,12 @@ const VerbAnalysisExerciseComponent: React.FC<Props> = ({ exercise, onComplete }
       )}
 
       {/* Progress indicator */}
-      {exercise.feedbackConfig.progressionRules?.showProgress !== false && (
-        <div className="mb-4">
-          <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
-            <span>
-              Verb {currentIndex + 1} of {exercise.data.verbs.length}
-            </span>
-            <span>{Math.round(((currentIndex + 1) / exercise.data.verbs.length) * 100)}% Complete</span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div
-              className="bg-roman-red h-2 rounded-full transition-all duration-300"
-              style={{ width: `${((currentIndex + 1) / exercise.data.verbs.length) * 100}%` }}
-            />
-          </div>
-        </div>
-      )}
+      <ExerciseProgress
+        current={currentIndex}
+        total={exercise.data.verbs.length}
+        label="Verb"
+        showProgress={exercise.feedbackConfig.progressionRules?.showProgress !== false}
+      />
 
       <div className="p-6 bg-white rounded-lg border border-gray-200">
         <div className="overflow-x-auto">
@@ -122,7 +112,7 @@ const VerbAnalysisExerciseComponent: React.FC<Props> = ({ exercise, onComplete }
 
         {selectedWordIndex === currentVerb.wordIndex && (
           <div className="mb-4">
-            <p className="mb-4 text-gray-700">Enter the English pronoun that applies to this verb's ending:</p>
+            <p className="mb-4 text-gray-700">Enter the English pronoun that applies to this verb&apos;s ending:</p>
             <ExerciseInput
               value={userAnswer}
               onChange={handleAnswerChange}

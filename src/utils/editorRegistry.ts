@@ -1,6 +1,6 @@
 import { ComponentType } from 'react';
 import { RenderableContentItem } from '@/src/types/page';
-import { TextContent, EmphasisContent, TableContent, VocabularyContent } from '@/src/types/lesson';
+// Import removed - types are not used directly in this file
 
 export interface EditorProps<T extends RenderableContentItem = RenderableContentItem> {
   content: T;
@@ -35,13 +35,3 @@ export const getEditorTitle = (contentType: string): string => {
       return `Edit ${contentType} Content`;
   }
 };
-
-export const isTextContent = (content: RenderableContentItem): content is TextContent => content.type === 'text';
-
-export const isEmphasisContent = (content: RenderableContentItem): content is EmphasisContent =>
-  content.type === 'emphasis';
-
-export const isTableContent = (content: RenderableContentItem): content is TableContent => content.type === 'table';
-
-export const isVocabularyContent = (content: RenderableContentItem): content is VocabularyContent =>
-  content.type === 'vocabulary';

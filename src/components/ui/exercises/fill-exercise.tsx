@@ -5,6 +5,8 @@ import { FillExercise } from '@/src/types/exercise';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { ExerciseInput, FeedbackDisplay } from '../feedback';
+import { validateFillExercise } from '@/src/utils/exercises/fillExercise';
+import { ExerciseProgress } from './exercise-progress';
 
 interface Props {
   exercise: FillExercise;
@@ -28,12 +30,10 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
   const handleSubmit = () => {
     if (isProcessing) return; // Prevent multiple submissions
 
-    const currentItem = exercise.data.items[currentIndex];
-    const correct = userAnswer.trim().toLowerCase() === currentItem.answer.trim().toLowerCase();
-
+    const validation = validateFillExercise(userAnswer, exercise, currentIndex);
     setIsProcessing(true);
 
-    if (correct) {
+    if (validation.isCorrect) {
       handleCorrect(isLastItem);
       // Auto-advance logic based on configuration
       if (exercise.feedbackConfig.progressionRules?.autoAdvance !== false) {
@@ -48,7 +48,7 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
         setIsProcessing(false);
       }
     } else {
-      handleIncorrect(currentItem.hint, currentItem.answer);
+      handleIncorrect(validation.hint, validation.correctAnswer);
       setIsProcessing(false);
     }
   };
@@ -73,22 +73,11 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
       )}
 
       {/* Progress indicator */}
-      {exercise.feedbackConfig.progressionRules?.showProgress !== false && (
-        <div className="mb-4">
-          <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
-            <span>
-              Question {currentIndex + 1} of {exercise.data.items.length}
-            </span>
-            <span>{Math.round(((currentIndex + 1) / exercise.data.items.length) * 100)}% Complete</span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div
-              className="bg-roman-red h-2 rounded-full transition-all duration-300"
-              style={{ width: `${((currentIndex + 1) / exercise.data.items.length) * 100}%` }}
-            />
-          </div>
-        </div>
-      )}
+      <ExerciseProgress
+        current={currentIndex}
+        total={exercise.data.items.length}
+        showProgress={exercise.feedbackConfig.progressionRules?.showProgress !== false}
+      />
 
       <div className="p-4 bg-white rounded-lg border border-gray-200">
         <p className="mb-4">{currentItem.text}</p>
