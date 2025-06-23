@@ -2,8 +2,9 @@
 
 import React, { useState } from 'react';
 import { FillExercise } from '@/src/types/exercise';
-import ExerciseInput from '../feedback/exercise-input';
-import ExerciseFeedback from '../feedback/exercise-feedback';
+import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
+import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
+import { ExerciseInput, FeedbackDisplay } from '../feedback';
 
 interface Props {
   exercise: FillExercise;
@@ -11,36 +12,40 @@ interface Props {
 }
 
 const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
-  const [currentItemIndex, setCurrentItemIndex] = useState(0);
   const [userAnswer, setUserAnswer] = useState('');
-  const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
+
+  const { currentIndex, isLastItem, nextItem } = useExerciseProgression({
+    totalItems: exercise.data.items.length,
+    feedbackConfig: exercise.feedbackConfig,
+    onComplete,
+  });
+
+  const { isCorrect, message, level, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
+    exercise.feedbackConfig
+  );
 
   const handleSubmit = () => {
-    setIsCorrect(null);
-
-    const currentItem = exercise.data.items[currentItemIndex];
+    const currentItem = exercise.data.items[currentIndex];
     const correct = userAnswer.trim().toLowerCase() === currentItem.answer.trim().toLowerCase();
 
     setTimeout(() => {
-      setIsCorrect(correct);
-
       if (correct) {
-        if (currentItemIndex < exercise.data.items.length - 1) {
+        handleCorrect(isLastItem);
+        // Auto-advance logic based on configuration
+        if (exercise.feedbackConfig.progressionRules?.autoAdvance !== false) {
           setTimeout(() => {
-            setCurrentItemIndex(prev => prev + 1);
+            nextItem();
             setUserAnswer('');
-            setIsCorrect(null);
+            reset();
           }, 1500);
-        } else {
-          if (onComplete) {
-            setTimeout(onComplete, 2000);
-          }
         }
+      } else {
+        handleIncorrect(currentItem.hint, currentItem.answer);
       }
     }, 50);
   };
 
-  const currentItem = exercise.data.items[currentItemIndex];
+  const currentItem = exercise.data.items[currentIndex];
 
   return (
     <div className="space-y-4">
@@ -50,16 +55,35 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
           <p>{exercise.instructions}</p>
         </div>
       )}
+
+      {/* Progress indicator */}
+      {exercise.feedbackConfig.progressionRules?.showProgress !== false && (
+        <div className="mb-4">
+          <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
+            <span>
+              Question {currentIndex + 1} of {exercise.data.items.length}
+            </span>
+            <span>{Math.round(((currentIndex + 1) / exercise.data.items.length) * 100)}% Complete</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div
+              className="bg-roman-red h-2 rounded-full transition-all duration-300"
+              style={{ width: `${((currentIndex + 1) / exercise.data.items.length) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       <div className="p-4 bg-white rounded-lg border border-gray-200">
         <p className="mb-4">{currentItem.text}</p>
         <ExerciseInput
           value={userAnswer}
           onChange={setUserAnswer}
           onSubmit={handleSubmit}
-          isCorrect={isCorrect}
-          correctAnswer={currentItem.answer}
           placeholder={currentItem.hint || 'Type your answer in Latin...'}
         />
+
+        <FeedbackDisplay isCorrect={isCorrect} message={message} level={level} hint={currentItem.hint} />
       </div>
     </div>
   );

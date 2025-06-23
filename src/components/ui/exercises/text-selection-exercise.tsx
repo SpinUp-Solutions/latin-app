@@ -2,7 +2,9 @@
 
 import React, { useState } from 'react';
 import { TextSelectionExercise } from '@/src/types/exercise';
-import ExerciseFeedback from '../feedback/exercise-feedback';
+import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
+import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
+import { FeedbackDisplay } from '../feedback';
 
 interface Props {
   exercise: TextSelectionExercise;
@@ -11,31 +13,40 @@ interface Props {
 
 const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
   const [selectedWordIndex, setSelectedWordIndex] = useState<number | null>(null);
-  const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+
+  const { currentIndex, isLastItem, nextItem } = useExerciseProgression({
+    totalItems: exercise.data.questions.length,
+    feedbackConfig: exercise.feedbackConfig,
+    onComplete,
+  });
+
+  const { isCorrect, message, level, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
+    exercise.feedbackConfig
+  );
 
   const handleWordClick = (word: string, wordIndex: number) => {
     setSelectedWordIndex(wordIndex);
-    const currentQuestion = exercise.data.questions[currentQuestionIndex];
+    const currentQuestion = exercise.data.questions[currentIndex];
     const correct = wordIndex === currentQuestion.correctWordIndex;
-    setIsCorrect(correct);
 
     if (correct) {
-      if (currentQuestionIndex < exercise.data.questions.length - 1) {
+      handleCorrect(isLastItem);
+
+      // Auto-advance logic based on configuration
+      if (exercise.feedbackConfig.progressionRules?.autoAdvance !== false) {
         setTimeout(() => {
-          setCurrentQuestionIndex(prev => prev + 1);
+          nextItem();
           setSelectedWordIndex(null);
-          setIsCorrect(null);
+          reset();
         }, 1500);
-      } else {
-        if (onComplete) {
-          setTimeout(onComplete, 2000);
-        }
       }
+    } else {
+      const correctWord = exercise.data.passage.split(' ')[currentQuestion.correctWordIndex];
+      handleIncorrect(currentQuestion.hint, correctWord);
     }
   };
 
-  const currentQuestion = exercise.data.questions[currentQuestionIndex];
+  const currentQuestion = exercise.data.questions[currentIndex];
 
   return (
     <div className="space-y-6 max-w-full">
@@ -45,6 +56,25 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
           <p className="whitespace-pre-wrap break-words">{exercise.instructions}</p>
         </div>
       )}
+
+      {/* Progress indicator */}
+      {exercise.feedbackConfig.progressionRules?.showProgress !== false && (
+        <div className="mb-4">
+          <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
+            <span>
+              Question {currentIndex + 1} of {exercise.data.questions.length}
+            </span>
+            <span>{Math.round(((currentIndex + 1) / exercise.data.questions.length) * 100)}% Complete</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div
+              className="bg-roman-red h-2 rounded-full transition-all duration-300"
+              style={{ width: `${((currentIndex + 1) / exercise.data.questions.length) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       <div className="p-6 bg-white rounded-lg border border-gray-200">
         <div className="overflow-x-auto">
           <p className="mb-6 whitespace-pre-wrap break-words min-w-[300px]">{currentQuestion.text}</p>
@@ -66,25 +96,14 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
           </div>
         </div>
 
-        {isCorrect !== null && (
-          <div className="mt-6">
-            <ExerciseFeedback
-              isCorrect={isCorrect}
-              customSuccessMessage={
-                currentQuestionIndex < exercise.data.questions.length - 1
-                  ? 'Correct! Moving to next question...'
-                  : 'Congratulations! You have completed all questions.'
-              }
-              customErrorMessage="Not quite. Try another word."
-            />
-          </div>
-        )}
-
-        {isCorrect && currentQuestion.explanation && (
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-            <p className="text-blue-800 whitespace-pre-wrap break-words">{currentQuestion.explanation}</p>
-          </div>
-        )}
+        <FeedbackDisplay
+          isCorrect={isCorrect}
+          message={message}
+          level={level}
+          hint={currentQuestion.hint}
+          explanation={currentQuestion.explanation}
+          showExplanation={isCorrect === true}
+        />
       </div>
     </div>
   );

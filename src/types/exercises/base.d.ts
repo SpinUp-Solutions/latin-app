@@ -1,5 +1,71 @@
 import { ContentItem } from '../content';
 
+export interface FeedbackLevel {
+  /** Custom message shown at this level (optional). */
+  message?: string;
+  /** Reveal the correct answer (optional). */
+  showAnswer?: boolean;
+  /** When true the component should use the per-item `hint` field. */
+  showHint?: boolean;
+  /** Custom delay before showing this level's content (in ms) */
+  delay?: number;
+  /** Custom styling for this level */
+  variant?: 'default' | 'warning' | 'error' | 'info';
+}
+
+export interface SuccessMessageConfig {
+  /** Default success message */
+  default?: string;
+  /** Message when completing the final item/question */
+  completion?: string;
+  /** Message when advancing to next item */
+  advance?: string;
+  /** Custom delay before auto-advancing (in ms) */
+  advanceDelay?: number;
+}
+
+export interface ProgressionRules {
+  /** Auto-advance after a correct answer (default: true). */
+  autoAdvance?: boolean;
+  /** Reset escalation counter after a correct answer (default: true). */
+  resetOnCorrect?: boolean;
+  /** Show progress indicator (default: true) */
+  showProgress?: boolean;
+  /** Allow manual advancement (default: true) */
+  allowManualAdvance?: boolean;
+}
+
+export interface FeedbackConfig {
+  /**
+   * Ordered list of escalation levels. The component decides WHEN to move
+   * from one level to the next; this config decides WHAT to show.
+   */
+  escalationLevels: FeedbackLevel[];
+
+  /** Success message configuration */
+  successMessage?: SuccessMessageConfig;
+
+  /** Generic behaviour flags (work for every exercise). */
+  progressionRules?: ProgressionRules;
+
+  /** Custom sound effects for feedback states */
+  sounds?: {
+    correct?: string;
+    incorrect?: string;
+    complete?: string;
+  };
+
+  /** Accessibility settings */
+  accessibility?: {
+    announceCorrect?: boolean;
+    announceIncorrect?: boolean;
+    announceHints?: boolean;
+  };
+}
+
+/** Base for every exercise type. */
 export interface BaseExercise extends ContentItem {
   instructions: string;
+  /** Per-exercise feedback behaviour. */
+  feedbackConfig: FeedbackConfig;
 }

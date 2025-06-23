@@ -46,22 +46,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onCom
 
     case 'matching':
       const matchingExercise = content as MatchingExercise;
-      return (
-        <div className="space-y-4">
-          {content.title && <h3 className="text-lg font-serif text-roman-red mb-2">{content.title}</h3>}
-          {matchingExercise.instructions && (
-            <div className="p-4 bg-roman-parchment rounded-lg mb-4">
-              <p>{matchingExercise.instructions}</p>
-            </div>
-          )}
-          <MatchingTable
-            leftColumn={matchingExercise.data.leftColumn}
-            rightColumn={matchingExercise.data.rightColumn}
-            finalAnswer={matchingExercise.data.answers}
-            onComplete={onComplete}
-          />
-        </div>
-      );
+      return <MatchingTable exercise={matchingExercise} onComplete={onComplete} />;
 
     case 'fill':
       return <FillExercise exercise={content as FillExerciseType} onComplete={onComplete} />;
