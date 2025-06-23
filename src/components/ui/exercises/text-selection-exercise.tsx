@@ -13,6 +13,7 @@ interface Props {
 
 const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
   const [selectedWordIndex, setSelectedWordIndex] = useState<number | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const { currentIndex, isLastItem, nextItem } = useExerciseProgression({
     totalItems: exercise.data.questions.length,
@@ -25,24 +26,33 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
   );
 
   const handleWordClick = (word: string, wordIndex: number) => {
+    if (isProcessing) return; // Prevent multiple rapid clicks
+
     setSelectedWordIndex(wordIndex);
     const currentQuestion = exercise.data.questions[currentIndex];
     const correct = wordIndex === currentQuestion.correctWordIndex;
+
+    setIsProcessing(true);
 
     if (correct) {
       handleCorrect(isLastItem);
 
       // Auto-advance logic based on configuration
       if (exercise.feedbackConfig.progressionRules?.autoAdvance !== false) {
+        const progressionDelay = exercise.feedbackConfig.timingConfig?.progressionDelay || 1500;
         setTimeout(() => {
           nextItem();
           setSelectedWordIndex(null);
           reset();
-        }, 1500);
+          setIsProcessing(false);
+        }, progressionDelay);
+      } else {
+        setIsProcessing(false);
       }
     } else {
       const correctWord = exercise.data.passage.split(' ')[currentQuestion.correctWordIndex];
       handleIncorrect(currentQuestion.hint, correctWord);
+      setIsProcessing(false);
     }
   };
 

@@ -24,24 +24,27 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
     if (!exercise.data.conjugationTask || isProcessing) return;
 
     setIsProcessing(true);
-    const correct = userAnswer.trim().toLowerCase() === exercise.data.conjugationTask.answer.trim().toLowerCase();
+    const conjugationTask = exercise.data.conjugationTask;
+    const correct = userAnswer.trim().toLowerCase() === conjugationTask.answer.trim().toLowerCase();
 
     if (correct) {
       handleCorrect(false); // Not the final completion yet
 
       // Move to living latin if it exists, otherwise complete
       if (!exercise.data.livingLatinPractice) {
-        setTimeout(() => onComplete?.(), 1500);
+        const nextExerciseDelay = exercise.feedbackConfig.timingConfig?.nextExerciseDelay || 2500;
+        setTimeout(() => onComplete?.(), nextExerciseDelay);
       } else {
+        const progressionDelay = exercise.feedbackConfig.timingConfig?.progressionDelay || 1500;
         setTimeout(() => {
           reset();
           setConjugationCompleted(true);
           setUserAnswer('');
           setIsProcessing(false);
-        }, 1500);
+        }, progressionDelay);
       }
     } else {
-      handleIncorrect(undefined, exercise.data.conjugationTask.answer);
+      handleIncorrect(undefined, conjugationTask.answer);
       setIsProcessing(false);
     }
   };
@@ -54,24 +57,26 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
     const correct = userAnswer.trim().toLowerCase() === currentExercise.answer.trim().toLowerCase();
 
     if (correct) {
-      const isLastExercise = currentLivingLatinIndex >= exercise.data.livingLatinPractice.exercises.length - 1;
+      const isLastExercise = currentLivingLatinIndex >= exercise.data.livingLatinPractice!.exercises.length - 1;
       handleCorrect(isLastExercise);
 
       if (isLastExercise) {
         // Auto-advance logic based on configuration
         if (exercise.feedbackConfig.progressionRules?.autoAdvance !== false) {
+          const nextExerciseDelay = exercise.feedbackConfig.timingConfig?.nextExerciseDelay || 2500;
           setTimeout(() => {
             onComplete?.();
-          }, 2000);
+          }, nextExerciseDelay);
         }
       } else {
         // Move to next living latin exercise
+        const progressionDelay = exercise.feedbackConfig.timingConfig?.progressionDelay || 1500;
         setTimeout(() => {
           reset(); // Reset feedback first
           setCurrentLivingLatinIndex(prev => prev + 1);
           setUserAnswer('');
           setIsProcessing(false);
-        }, 1500);
+        }, progressionDelay);
       }
     } else {
       handleIncorrect(undefined, currentExercise.answer);
@@ -84,7 +89,8 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
     if (isCorrect !== null) {
       reset();
     }
-    // Reset processing state when user starts typing again
+    // Only reset processing state when user starts typing after an incorrect answer
+    // Don't reset it after a correct answer to prevent rapid submissions
     if (isProcessing && isCorrect === false) {
       setIsProcessing(false);
     }

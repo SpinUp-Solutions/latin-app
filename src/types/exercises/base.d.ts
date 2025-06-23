@@ -35,6 +35,13 @@ export interface ProgressionRules {
   allowManualAdvance?: boolean;
 }
 
+export interface TimingConfig {
+  /** Delay before moving to next question/item within exercise (in ms) */
+  progressionDelay?: number;
+  /** Delay before moving to next exercise or completing (in ms) */
+  nextExerciseDelay?: number;
+}
+
 export interface FeedbackConfig {
   /**
    * Ordered list of escalation levels. The component decides WHEN to move
@@ -47,6 +54,9 @@ export interface FeedbackConfig {
 
   /** Generic behaviour flags (work for every exercise). */
   progressionRules?: ProgressionRules;
+
+  /** Timing configuration for delays */
+  timingConfig?: TimingConfig;
 
   /** Custom sound effects for feedback states */
   sounds?: {

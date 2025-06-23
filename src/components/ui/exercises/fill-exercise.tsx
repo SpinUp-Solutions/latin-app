@@ -13,6 +13,7 @@ interface Props {
 
 const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
   const [userAnswer, setUserAnswer] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const { currentIndex, isLastItem, nextItem } = useExerciseProgression({
     totalItems: exercise.data.items.length,
@@ -25,24 +26,39 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
   );
 
   const handleSubmit = () => {
+    if (isProcessing) return; // Prevent multiple submissions
+
     const currentItem = exercise.data.items[currentIndex];
     const correct = userAnswer.trim().toLowerCase() === currentItem.answer.trim().toLowerCase();
 
-    setTimeout(() => {
-      if (correct) {
-        handleCorrect(isLastItem);
-        // Auto-advance logic based on configuration
-        if (exercise.feedbackConfig.progressionRules?.autoAdvance !== false) {
-          setTimeout(() => {
-            nextItem();
-            setUserAnswer('');
-            reset();
-          }, 1500);
-        }
+    setIsProcessing(true);
+
+    if (correct) {
+      handleCorrect(isLastItem);
+      // Auto-advance logic based on configuration
+      if (exercise.feedbackConfig.progressionRules?.autoAdvance !== false) {
+        const progressionDelay = exercise.feedbackConfig.timingConfig?.progressionDelay || 1500;
+        setTimeout(() => {
+          nextItem();
+          setUserAnswer('');
+          reset();
+          setIsProcessing(false);
+        }, progressionDelay);
       } else {
-        handleIncorrect(currentItem.hint, currentItem.answer);
+        setIsProcessing(false);
       }
-    }, 50);
+    } else {
+      handleIncorrect(currentItem.hint, currentItem.answer);
+      setIsProcessing(false);
+    }
+  };
+
+  const handleAnswerChange = (value: string) => {
+    setUserAnswer(value);
+    // Reset feedback when user types
+    if (isCorrect !== null) {
+      reset();
+    }
   };
 
   const currentItem = exercise.data.items[currentIndex];
@@ -78,7 +94,7 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
         <p className="mb-4">{currentItem.text}</p>
         <ExerciseInput
           value={userAnswer}
-          onChange={setUserAnswer}
+          onChange={handleAnswerChange}
           onSubmit={handleSubmit}
           placeholder={currentItem.hint || 'Type your answer in Latin...'}
         />

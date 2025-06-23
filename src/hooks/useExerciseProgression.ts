@@ -33,10 +33,17 @@ export function useExerciseProgression({
     } else if (onComplete) {
       // Auto-advance logic based on configuration
       if (feedbackConfig.progressionRules?.autoAdvance !== false) {
-        setTimeout(onComplete, 1500);
+        const delay = feedbackConfig.timingConfig?.nextExerciseDelay || 2500;
+        setTimeout(onComplete, delay);
       }
     }
-  }, [currentIndex, totalItems, onComplete, feedbackConfig.progressionRules?.autoAdvance]);
+  }, [
+    currentIndex,
+    totalItems,
+    onComplete,
+    feedbackConfig.progressionRules?.autoAdvance,
+    feedbackConfig.timingConfig?.nextExerciseDelay,
+  ]);
 
   const reset = useCallback(() => {
     setCurrentIndex(0);

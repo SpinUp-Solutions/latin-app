@@ -247,6 +247,10 @@ const lessons: Lesson[] = [
                 autoAdvance: true,
                 resetOnCorrect: true,
               },
+              timingConfig: {
+                progressionDelay: 1500,
+                nextExerciseDelay: 2000,
+              },
             },
             data: {
               leftColumn: [
@@ -325,6 +329,10 @@ const lessons: Lesson[] = [
                 autoAdvance: true,
                 resetOnCorrect: true,
               },
+              timingConfig: {
+                progressionDelay: 1800,
+                nextExerciseDelay: 2500,
+              },
             },
             data: {
               leftColumn: [
@@ -395,6 +403,10 @@ const lessons: Lesson[] = [
               progressionRules: {
                 autoAdvance: true,
                 resetOnCorrect: true,
+              },
+              timingConfig: {
+                progressionDelay: 600,
+                nextExerciseDelay: 2000,
               },
             },
             data: {
@@ -479,7 +491,7 @@ const lessons: Lesson[] = [
                 {
                   message:
                     'Look for a pronoun that could be removed because the verb ending already shows the subject.',
-                  showHint: true,
+                  showHint: false,
                 },
                 { showAnswer: true },
               ],
@@ -489,6 +501,10 @@ const lessons: Lesson[] = [
               progressionRules: {
                 autoAdvance: true,
                 resetOnCorrect: true,
+              },
+              timingConfig: {
+                progressionDelay: 2000,
+                nextExerciseDelay: 2500,
               },
             },
             data: {
@@ -500,8 +516,7 @@ const lessons: Lesson[] = [
                   text: 'Look at the Latin passage carefully. Click on the unnecessary pronoun.',
                   correctWordIndex: 12,
                   hint: 'The pronoun "tu" is unnecessary because the verb "es" already indicates "you" through its ending.',
-                  explanation:
-                    'The pronoun "tu" is unnecessary here because the verb ending already indicates the subject.',
+                  explanation: '',
                 },
               ],
             },
@@ -536,6 +551,10 @@ const lessons: Lesson[] = [
               progressionRules: {
                 autoAdvance: true,
                 resetOnCorrect: true,
+              },
+              timingConfig: {
+                progressionDelay: 1700,
+                nextExerciseDelay: 3000,
               },
             },
             data: {
@@ -622,6 +641,10 @@ const lessons: Lesson[] = [
               progressionRules: {
                 autoAdvance: true,
                 resetOnCorrect: true,
+              },
+              timingConfig: {
+                progressionDelay: 2200,
+                nextExerciseDelay: 3500,
               },
             },
             data: {

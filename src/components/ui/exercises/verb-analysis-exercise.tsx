@@ -14,6 +14,7 @@ interface Props {
 const VerbAnalysisExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
   const [userAnswer, setUserAnswer] = useState('');
   const [selectedWordIndex, setSelectedWordIndex] = useState<number | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const { currentIndex, isLastItem, nextItem } = useExerciseProgression({
     totalItems: exercise.data.verbs.length,
@@ -33,23 +34,40 @@ const VerbAnalysisExerciseComponent: React.FC<Props> = ({ exercise, onComplete }
   };
 
   const handleSubmit = () => {
+    if (isProcessing) return; // Prevent multiple submissions
+
     const currentVerb = exercise.data.verbs[currentIndex];
     const correct = userAnswer.trim().toLowerCase() === currentVerb.correctPronoun.toLowerCase();
+
+    setIsProcessing(true);
 
     if (correct) {
       handleCorrect(isLastItem);
 
       // Auto-advance logic based on configuration
       if (exercise.feedbackConfig.progressionRules?.autoAdvance !== false) {
+        const progressionDelay = exercise.feedbackConfig.timingConfig?.progressionDelay || 1500;
         setTimeout(() => {
           nextItem();
           setUserAnswer('');
           setSelectedWordIndex(null);
           reset();
-        }, 1500);
+          setIsProcessing(false);
+        }, progressionDelay);
+      } else {
+        setIsProcessing(false);
       }
     } else {
       handleIncorrect(currentVerb.hint, currentVerb.correctPronoun);
+      setIsProcessing(false);
+    }
+  };
+
+  const handleAnswerChange = (value: string) => {
+    setUserAnswer(value);
+    // Reset feedback when user types
+    if (isCorrect !== null) {
+      reset();
     }
   };
 
@@ -107,7 +125,7 @@ const VerbAnalysisExerciseComponent: React.FC<Props> = ({ exercise, onComplete }
             <p className="mb-4 text-gray-700">Enter the English pronoun that applies to this verb's ending:</p>
             <ExerciseInput
               value={userAnswer}
-              onChange={setUserAnswer}
+              onChange={handleAnswerChange}
               onSubmit={handleSubmit}
               placeholder="Enter pronoun (e.g., I, you, he, she, it, we, they)..."
             />
