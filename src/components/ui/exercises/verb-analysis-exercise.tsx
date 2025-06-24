@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { VerbAnalysisExercise } from '@/src/types/exercise';
@@ -28,8 +28,13 @@ const VerbAnalysisExerciseComponent: React.FC<Props> = ({ exercise, onComplete }
     exercise.feedbackConfig
   );
 
+  const currentVerb = exercise.data.verbs[currentIndex];
+
+  useEffect(() => {
+    setSelectedWordIndex(currentVerb.wordIndex);
+  }, [currentVerb.wordIndex]);
+
   const handleWordClick = (wordIndex: number) => {
-    const currentVerb = exercise.data.verbs[currentIndex];
     if (wordIndex === currentVerb.wordIndex) {
       setSelectedWordIndex(wordIndex);
     }
@@ -71,8 +76,6 @@ const VerbAnalysisExerciseComponent: React.FC<Props> = ({ exercise, onComplete }
     }
   };
 
-  const currentVerb = exercise.data.verbs[currentIndex];
-
   return (
     <div className="space-y-6 max-w-full">
       {exercise.title && <h3 className="text-xl font-serif text-roman-red mb-4">{exercise.title}</h3>}
@@ -110,17 +113,16 @@ const VerbAnalysisExerciseComponent: React.FC<Props> = ({ exercise, onComplete }
           </div>
         </div>
 
-        {selectedWordIndex === currentVerb.wordIndex && (
-          <div className="mb-4">
-            <p className="mb-4 text-gray-700">Enter the English pronoun that applies to this verb&apos;s ending:</p>
-            <ExerciseInput
-              value={userAnswer}
-              onChange={handleAnswerChange}
-              onSubmit={handleSubmit}
-              placeholder="Enter pronoun (e.g., I, you, he, she, it, we, they)..."
-            />
-          </div>
-        )}
+        {/* Always show input field for the current verb */}
+        <div className="mb-4">
+          <p className="mb-4 text-gray-700">Enter the English pronoun that applies to this verb&apos;s ending:</p>
+          <ExerciseInput
+            value={userAnswer}
+            onChange={handleAnswerChange}
+            onSubmit={handleSubmit}
+            placeholder="Enter pronoun (e.g., I, you, he, she, it, we, they)..."
+          />
+        </div>
 
         <FeedbackDisplay
           isCorrect={isCorrect}
