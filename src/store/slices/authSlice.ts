@@ -1,8 +1,15 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { User } from 'firebase/auth';
 
+export type UserRole = 'student' | 'teacher' | 'admin';
+
+export interface CustomUser extends Omit<User, 'uid'> {
+  uid: string;
+  role?: UserRole;
+}
+
 interface AuthState {
-  user: User | null;
+  user: CustomUser | null;
   loading: boolean;
 }
 
@@ -15,9 +22,14 @@ const authSlice = createSlice({
   name: 'auth',
   initialState,
   reducers: {
-    setUser: (state, action: PayloadAction<User | null>) => {
+    setUser: (state, action: PayloadAction<CustomUser | null>) => {
       state.user = action.payload;
       state.loading = false;
+    },
+    setUserRole: (state, action: PayloadAction<UserRole>) => {
+      if (state.user) {
+        state.user.role = action.payload;
+      }
     },
     setLoading: (state, action: PayloadAction<boolean>) => {
       state.loading = action.payload;
@@ -25,5 +37,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { setUser, setLoading } = authSlice.actions;
+export const { setUser, setUserRole, setLoading } = authSlice.actions;
 export default authSlice.reducer;

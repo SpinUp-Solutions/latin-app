@@ -46,6 +46,15 @@ const config: Config = {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
+        roman: {
+          red: '#8B2635',
+          gold: '#D4AF37',
+          green: '#556B2F',
+          terracotta: '#C67C53',
+          marble: '#F5F5F5',
+          parchment: '#F8F3E6',
+          stone: '#707070',
+        },
       },
       borderRadius: {
         lg: 'var(--radius)',
@@ -65,6 +74,10 @@ const config: Config = {
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
+      },
+      fontFamily: {
+        serif: ['Trajan Pro', 'Georgia', 'serif'],
+        sans: ['Open Sans', 'Roboto', 'sans-serif'],
       },
     },
   },

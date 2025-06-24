@@ -1,0 +1,60 @@
+import React from 'react';
+
+interface FieldSelectProps {
+  items: string[];
+  selectedItem: string | null;
+  selectedIndex?: number | null;
+  onSelect: (item: string, index?: number) => void;
+  matches: Record<string, string>;
+  matchType: 'key' | 'value';
+  label: string;
+  matchedIndices?: Set<number>;
+}
+
+const FieldSelect: React.FC<FieldSelectProps> = ({
+  items,
+  selectedItem,
+  selectedIndex,
+  onSelect,
+  matches,
+  matchType,
+  label,
+  matchedIndices,
+}) => {
+  return (
+    <div className="space-y-2">
+      <h4 className="text-sm font-medium text-roman-stone mb-2">{label}</h4>
+      {items.map((item, index) => {
+        const isMatched =
+          matchType === 'key'
+            ? Object.keys(matches).includes(item)
+            : matchedIndices
+              ? matchedIndices.has(index)
+              : Object.values(matches).includes(item);
+
+        const isSelected =
+          matchType === 'value' && selectedIndex !== undefined
+            ? selectedIndex === index && selectedItem === item
+            : selectedItem === item;
+
+        return (
+          <button
+            key={`${matchType}-${index}`}
+            className={`w-full p-3 text-left rounded-md transition-all ${
+              isMatched
+                ? 'bg-roman-green/10 border border-roman-green text-roman-green'
+                : isSelected
+                  ? 'bg-roman-gold/10 border border-roman-gold'
+                  : 'bg-white border border-gray-200 hover:border-roman-red/50'
+            }`}
+            onClick={() => onSelect(item, index)}
+            disabled={isMatched}>
+            {item}
+          </button>
+        );
+      })}
+    </div>
+  );
+};
+
+export default FieldSelect;

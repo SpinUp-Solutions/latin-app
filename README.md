@@ -1,21 +1,3 @@
-# Web app template
-
-This template is configured to be a complete starter kit for the modern web developer. The stack includes:
-
-- Typescript 💙
-- NextJS ⚫️
-- React ✅
-- Redux 🟪
-- Firebase 🔥
-- Stripe 💰
-- Tailwind 💨
-- Remix UI 💿
-- Jest 😉
-- Playwright 🎪
-- ESLint + Prettier 💻
-
-It's designed to scale to multiple development environments with the scaffolding to handle many use cases. To get up and running:
-
 ### 1. Node
 
 Make sure you have [NodeJS version 22](https://nodejs.org/en/download) installed. Follow the instructions at that link to install if you haven't already.
@@ -121,3 +103,126 @@ npm run build:all      # Build for development, staging, and production environm
 ### 9. Let's go!
 
 Your app should be visible at `http://localhost:3000`. Time to start building!
+
+# Code Structure
+
+## Interfaces / Types
+
+This app uses TypeScript interfaces to define the structure of lessons, exercises, and content. Here's what each type does:
+
+### Core Content Types
+
+**`ContentItem`** - The base building block for all content in lessons
+
+- Every piece of content has an `id`, `type`, and optional `title` and `audioPath`
+
+**`VocabularyItem`** - Represents a single Latin word to learn
+
+- Contains the Latin word, English translation, pronunciation, and example usage
+- Used in flashcards and vocabulary lists
+
+### Content Types for Lessons
+
+**`TextContent`** - Simple text paragraphs
+
+- Used for explanations, instructions, and general information
+
+**`EmphasisContent`** - Important text that needs to stand out
+
+- Used for tips, warnings, or key concepts
+
+**`TableContent`** - Data displayed in rows and columns
+
+- Used for verb conjugation tables and grammar charts
+
+**`VocabularyContent`** - Collections of Latin words to study
+
+- Can be displayed as flashcards, lists, or quizzes
+- Contains multiple `VocabularyItem` objects
+
+### Exercise Types
+
+**`MatchingExercise`** - Match items from two columns
+
+- Students connect Latin endings with pronouns, or verbs with meanings
+
+**`FillExercise`** - Fill in the blank questions
+
+- Students type the correct answer in text inputs
+
+**`TextSelectionExercise`** - Click on words in a passage
+
+- Students identify specific words by clicking
+
+**`VerbAnalysisExercise`** - Analyze verbs in context
+
+- Students click on verbs and identify their grammatical properties
+
+**`VerbConjugationExercise`** - Advanced grammar practice
+
+- Complex exercises with passages, conjugation tasks, and translation work
+
+### Lesson Structure
+
+**`Lesson`** - A complete lesson with introduction and exercises
+
+- Has a title, description, introduction pages, and exercise pages
+
+**`IntroductionPage`** - Pages that teach concepts before exercises
+
+- Contains multiple content items (text, tables, vocabulary, etc.)
+
+**`ExercisePage`** - Pages with interactive practice activities
+
+- Contains exercises and instructional content
+
+### How They Work Together
+
+1. A `Lesson` contains multiple `IntroductionPages` and `ExercisePages`
+2. Each page contains an array of content items or exercises
+3. Content can be text, emphasis, tables, vocabulary, or any type of exercise
+4. The app renders different components based on the `type` property of each item
+
+This structure makes it easy to create new lessons by mixing and matching different types of content and exercises.
+
+## How Content is Rendered
+
+The app uses a smart rendering system that turns lesson data into interactive UI components. Here's how it works:
+
+### The Rendering Flow
+
+1. **Lesson Data** → The app loads lesson content from `src/lib/lesson-config.ts` (for now)
+2. **LessonPlayer** → Main component that manages the lesson flow and navigation
+3. **PageTemplate** → Handles individual pages (introduction or exercise pages)
+4. **ContentRenderer** → The core component that decides which UI component to show
+5. **Specific Components** → Renders the actual content (text, tables, exercises, etc.)
+
+### ContentRenderer: The Smart Switch
+
+The `ContentRenderer` component is like a traffic controller. It looks at each content item's `type` property and decides which component to render:
+
+```typescript
+'text' → IntroComponent (regular paragraphs)
+'emphasis' → IntroComponent with red styling (important info)
+'table' → ConjugationTable (grammar tables)
+'vocabulary' → VocabularyViewer (flashcards/word lists)
+'matching' → MatchingTable (drag & drop exercises)
+'fill' → FillExercise (fill-in-the-blank questions)
+```
+
+### Key Features
+
+- **Type-Based Rendering**: Each content type automatically gets the right component
+- **Smooth Animations**: Page transitions and content appear with motion effects
+- **Audio Integration**: Components can play audio when content has `audioPath`
+- **Progress Tracking**: The system knows which pages are completed
+- **Responsive Design**: All components adapt to different screen sizes
+
+### Adding New Content Types
+
+To add a new content type:
+
+1. Define the interface in `src/types/lesson.d.ts` or `src/types/exercise.ts`
+2. Create a new UI component for that type
+3. Add a case for it in `ContentRenderer`'s switch statement
+4. The new type will automatically work in any lesson!
