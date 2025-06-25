@@ -9,6 +9,11 @@ import {
   ProgressionRules,
   TimingConfig,
 } from '@/src/types/exercises/base';
+import {
+  getSuccessMessageWithDefaults,
+  getProgressionRulesWithDefaults,
+  getTimingConfigWithDefaults,
+} from '@/src/utils/feedbackDefaults';
 
 interface FeedbackConfigEditorProps {
   feedbackConfig: FeedbackConfig;
@@ -31,16 +36,19 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({ feed
     onChange({ ...feedbackConfig, escalationLevels: levels });
   };
 
-  const updateSuccessMessage = (successMessage: SuccessMessageConfig) => {
-    onChange({ ...feedbackConfig, successMessage });
+  const updateSuccessMessage = (updates: Partial<SuccessMessageConfig>) => {
+    const current = getSuccessMessageWithDefaults(feedbackConfig.successMessage);
+    onChange({ ...feedbackConfig, successMessage: { ...current, ...updates } });
   };
 
-  const updateProgressionRules = (progressionRules: ProgressionRules) => {
-    onChange({ ...feedbackConfig, progressionRules: { ...feedbackConfig.progressionRules, ...progressionRules } });
+  const updateProgressionRules = (updates: Partial<ProgressionRules>) => {
+    const current = getProgressionRulesWithDefaults(feedbackConfig.progressionRules);
+    onChange({ ...feedbackConfig, progressionRules: { ...current, ...updates } });
   };
 
-  const updateTimingConfig = (timingConfig: TimingConfig) => {
-    onChange({ ...feedbackConfig, timingConfig: { ...feedbackConfig.timingConfig, ...timingConfig } });
+  const updateTimingConfig = (updates: Partial<TimingConfig>) => {
+    const current = getTimingConfigWithDefaults(feedbackConfig.timingConfig);
+    onChange({ ...feedbackConfig, timingConfig: { ...current, ...updates } });
   };
 
   const addEscalationLevel = () => {
@@ -57,6 +65,11 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({ feed
     const newLevels = feedbackConfig.escalationLevels.filter((_, i) => i !== index);
     updateEscalationLevels(newLevels);
   };
+
+  // Get current values with defaults applied for display
+  const successMessageWithDefaults = getSuccessMessageWithDefaults(feedbackConfig.successMessage);
+  const progressionRulesWithDefaults = getProgressionRulesWithDefaults(feedbackConfig.progressionRules);
+  const timingConfigWithDefaults = getTimingConfigWithDefaults(feedbackConfig.timingConfig);
 
   return (
     <div className="space-y-6">
@@ -173,14 +186,8 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({ feed
                 <label className="block text-sm font-medium mb-1">Default Success Message</label>
                 <input
                   type="text"
-                  value={feedbackConfig.successMessage?.default || ''}
-                  onChange={e =>
-                    updateSuccessMessage({
-                      ...feedbackConfig.successMessage,
-                      default: e.target.value,
-                      showExplanation: feedbackConfig.successMessage?.showExplanation ?? true,
-                    })
-                  }
+                  value={successMessageWithDefaults.default || ''}
+                  onChange={e => updateSuccessMessage({ default: e.target.value })}
                   className="w-full p-2 border rounded-md"
                   placeholder="e.g., 'Correct!' or 'Well done!'"
                 />
@@ -190,14 +197,8 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({ feed
                 <label className="block text-sm font-medium mb-1">Completion Message</label>
                 <input
                   type="text"
-                  value={feedbackConfig.successMessage?.completion || ''}
-                  onChange={e =>
-                    updateSuccessMessage({
-                      ...feedbackConfig.successMessage,
-                      completion: e.target.value,
-                      showExplanation: feedbackConfig.successMessage?.showExplanation ?? true,
-                    })
-                  }
+                  value={successMessageWithDefaults.completion || ''}
+                  onChange={e => updateSuccessMessage({ completion: e.target.value })}
                   className="w-full p-2 border rounded-md"
                   placeholder="e.g., 'Excellent! You've completed the exercise!'"
                 />
@@ -207,14 +208,8 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({ feed
                 <label className="block text-sm font-medium mb-1">Advance Message</label>
                 <input
                   type="text"
-                  value={feedbackConfig.successMessage?.advance || ''}
-                  onChange={e =>
-                    updateSuccessMessage({
-                      ...feedbackConfig.successMessage,
-                      advance: e.target.value,
-                      showExplanation: feedbackConfig.successMessage?.showExplanation ?? true,
-                    })
-                  }
+                  value={successMessageWithDefaults.advance || ''}
+                  onChange={e => updateSuccessMessage({ advance: e.target.value })}
                   className="w-full p-2 border rounded-md"
                   placeholder="e.g., 'Correct! Moving to the next question...'"
                 />
@@ -224,13 +219,8 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({ feed
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
-                    checked={feedbackConfig.successMessage?.showExplanation ?? true}
-                    onChange={e =>
-                      updateSuccessMessage({
-                        ...feedbackConfig.successMessage,
-                        showExplanation: e.target.checked,
-                      })
-                    }
+                    checked={successMessageWithDefaults.showExplanation}
+                    onChange={e => updateSuccessMessage({ showExplanation: e.target.checked })}
                   />
                   Show explanations for correct answers
                 </label>
@@ -264,7 +254,7 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({ feed
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
-                  checked={feedbackConfig.progressionRules?.autoAdvance !== false}
+                  checked={progressionRulesWithDefaults.autoAdvance}
                   onChange={e => updateProgressionRules({ autoAdvance: e.target.checked })}
                 />
                 Auto-advance after correct answer
@@ -273,7 +263,7 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({ feed
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
-                  checked={feedbackConfig.progressionRules?.resetOnCorrect !== false}
+                  checked={progressionRulesWithDefaults.resetOnCorrect}
                   onChange={e => updateProgressionRules({ resetOnCorrect: e.target.checked })}
                 />
                 Reset error count on correct answer
@@ -282,7 +272,7 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({ feed
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
-                  checked={feedbackConfig.progressionRules?.showProgress !== false}
+                  checked={progressionRulesWithDefaults.showProgress}
                   onChange={e => updateProgressionRules({ showProgress: e.target.checked })}
                 />
                 Show progress indicator
@@ -291,7 +281,7 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({ feed
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
-                  checked={feedbackConfig.progressionRules?.allowManualAdvance !== false}
+                  checked={progressionRulesWithDefaults.allowManualAdvance}
                   onChange={e => updateProgressionRules({ allowManualAdvance: e.target.checked })}
                 />
                 Allow manual "Next" button
@@ -323,12 +313,8 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({ feed
                 <label className="block text-sm font-medium mb-1">Progression Delay</label>
                 <input
                   type="number"
-                  value={feedbackConfig.timingConfig?.progressionDelay || 1500}
-                  onChange={e =>
-                    updateTimingConfig({
-                      progressionDelay: parseInt(e.target.value) || 1500,
-                    })
-                  }
+                  value={timingConfigWithDefaults.progressionDelay}
+                  onChange={e => updateTimingConfig({ progressionDelay: parseInt(e.target.value) || 1500 })}
                   className="w-full p-2 border rounded-md"
                   placeholder="1500"
                   min="0"
@@ -341,12 +327,8 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({ feed
                 <label className="block text-sm font-medium mb-1">Next Exercise Delay</label>
                 <input
                   type="number"
-                  value={feedbackConfig.timingConfig?.nextExerciseDelay || 2500}
-                  onChange={e =>
-                    updateTimingConfig({
-                      nextExerciseDelay: parseInt(e.target.value) || 2500,
-                    })
-                  }
+                  value={timingConfigWithDefaults.nextExerciseDelay}
+                  onChange={e => updateTimingConfig({ nextExerciseDelay: parseInt(e.target.value) || 2500 })}
                   className="w-full p-2 border rounded-md"
                   placeholder="2500"
                   min="0"

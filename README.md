@@ -229,143 +229,224 @@ To add a new content type:
 
 ## The Exercise Feedback System
 
-The app includes a unified feedback system that handles student responses and progression through exercises. It supports escalating hints, customizable success messages, and automatic advancement between questions.
+The app includes a comprehensive, unified feedback system that provides consistent student interactions across all exercise types. The system features escalating hints, customizable success messages, automatic progression, and a powerful admin interface for configuration.
+
+### System Architecture
+
+The feedback system follows a clean three-layer architecture:
+
+**Data Layer** - Handles configuration creation and editing
+
+- `feedbackDefaults.ts` - Centralized default values and utilities
+- `contentFactory.ts` - Ensures new exercises get proper defaults
+- `ExerciseFeedbackSection` - Reusable admin configuration component
+
+**Business Logic** - Core feedback behavior and progression
+
+- `useExerciseFeedback` - Answer validation and message management
+- `useExerciseProgression` - Multi-question navigation and timing
+
+**Presentation** - Student-facing UI components
+
+- `FeedbackDisplay` - Styled feedback messages with animations
+- `ExerciseInput` - Smart input handling with submission logic
+- `ExerciseProgress` - Progress indicators for multi-question exercises
+
+### Configuration Structure
+
+Every exercise includes a comprehensive `feedbackConfig` that defines all feedback behavior:
+
+```typescript
+feedbackConfig: {
+  // Progressive help system - escalates through levels on wrong answers
+  escalationLevels: [
+    { message: "Try again!" },                           // Level 1: Basic encouragement
+    { message: "Look at the verb ending...", showHint: true }, // Level 2: Show hints
+    { message: "The answer is:", showAnswer: true }      // Level 3: Reveal answer
+  ],
+
+  // Success messages for positive reinforcement
+  successMessage: {
+    default: "Correct!",                    // Basic success message
+    advance: "Good! Moving to next...",     // When progressing to next question
+    completion: "Exercise complete! 🎉",    // When finishing entire exercise
+    showExplanation: true                   // Whether to show detailed explanations
+  },
+
+  // Exercise flow and behavior
+  progressionRules: {
+    autoAdvance: true,         // Automatically move to next question
+    resetOnCorrect: true,      // Reset error count when student gets one right
+    showProgress: true,        // Display "Question 2 of 5" progress bar
+    allowManualAdvance: true   // Show "Next" button for manual control
+  },
+
+  // Timing for optimal learning pace
+  timingConfig: {
+    progressionDelay: 1500,    // Wait 1.5s before next question (processing time)
+    nextExerciseDelay: 2500    // Wait 2.5s before next exercise (transition time)
+  }
+}
+```
 
 ### How It Works
 
-Every exercise includes a `feedbackConfig` that defines:
+**Escalation System**: When students make incorrect answers, the system automatically escalates through different assistance levels:
 
-- Messages to display for incorrect answers
-- Success messages for correct answers
-- Progression behavior (auto-advance vs manual)
-- Timing delays between questions
+1. **First attempt**: Basic encouragement message
+2. **Second attempt**: May show contextual hints
+3. **Third attempt**: Can reveal the correct answer
+4. **Each level is configurable** with custom messages and behavior
 
-The system uses two main hooks:
+**Smart Progression**: The system handles multi-question exercises intelligently:
 
-- `useExerciseFeedback` - manages answer validation and feedback messages
-- `useExerciseProgression` - handles navigation between questions in multi-part exercises
+- Tracks current question index and total questions
+- Applies appropriate delays for cognitive processing
+- Handles exercise completion and transitions automatically
+- Supports both automatic and manual advancement modes
 
-### Basic Setup
+### Implementation Guide
+
+**Basic Exercise Setup**:
 
 ```typescript
 const { isCorrect, message, level, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
   exercise.feedbackConfig
 );
 
-// When they submit an answer:
-if (answerIsRight) {
-  handleCorrect(isLastQuestion);
-} else {
-  handleIncorrect(hintText, correctAnswer);
-}
-```
-
-### Feedback Config Structure
-
-Here's what a typical `feedbackConfig` looks like:
-
-```typescript
-feedbackConfig: {
-  escalationLevels: [
-    { message: "Try again!" },                    // First wrong attempt
-    { message: "Here's a hint:", showHint: true }, // Second attempt
-    { message: "The answer is:", showAnswer: true } // Third attempt
-  ],
-  successMessage: {
-    default: "Nice work!",
-    completion: "Exercise complete! 🎉",
-    advance: "Correct! Moving to the next question..."
-  },
-  progressionRules: {
-    autoAdvance: true,      // Auto-move to next question
-    resetOnCorrect: true,   // Reset hint level when they get one right
-    showProgress: true      // Show "Question 2 of 5" progress bar
-  },
-  timingConfig: {
-    progressionDelay: 1500,     // Wait 1.5s before next question
-    nextExerciseDelay: 2500     // Wait 2.5s before next exercise
-  }
-}
-```
-
-### Escalation Levels
-
-The system automatically escalates through different feedback levels as students make mistakes:
-
-1. **First wrong answer**: Shows basic "try again" message
-2. **Second wrong answer**: May show a hint
-3. **Third wrong answer**: Shows the correct answer
-
-Each level can control:
-
-- `message` - Custom text to show
-- `showHint` - Whether to display the exercise's hint text
-- `showAnswer` - Whether to reveal the correct answer
-
-### Multi-Question Exercises
-
-For exercises with multiple questions (like verb analysis), use `useExerciseProgression`:
-
-```typescript
 const { currentIndex, isLastItem, nextItem } = useExerciseProgression({
-  totalItems: exercise.data.verbs.length,
+  totalItems: exercise.data.items.length,
   feedbackConfig: exercise.feedbackConfig,
-  onComplete: () => console.log('All done!'),
+  onComplete: () => moveToNextExercise(),
 });
 
-// The hook automatically handles timing and auto-advancement
+// Handle answer submission
+const handleSubmit = () => {
+  const validation = validateAnswer(userInput, currentItem);
+
+  if (validation.isCorrect) {
+    handleCorrect(isLastItem);
+    // Auto-progression handled by hooks based on config
+  } else {
+    handleIncorrect(validation.hint, validation.correctAnswer);
+  }
+};
 ```
 
-### Components You'll Use
-
-**`ExerciseInput`** - Smart input field that handles submission
+**UI Components**:
 
 ```typescript
+// Smart input field with submission handling
 <ExerciseInput
   value={userAnswer}
   onChange={setUserAnswer}
   onSubmit={handleSubmit}
-  placeholder="Type your answer..."
+  placeholder="Type your answer in Latin..."
 />
-```
 
-**`FeedbackDisplay`** - Shows success/error messages with styled presentation
-
-```typescript
+// Comprehensive feedback display
 <FeedbackDisplay
   isCorrect={isCorrect}
   message={message}
   level={level}
   hint={currentItem.hint}
   explanation={currentItem.explanation}
-  showExplanation={isCorrect === true}
+  showExplanation={isCorrect && exercise.feedbackConfig.successMessage?.showExplanation}
 />
-```
 
-**`ExerciseProgress`** - Progress bar for multi-question exercises
-
-```typescript
+// Progress indicator for multi-question exercises
 <ExerciseProgress
   current={currentIndex}
   total={totalQuestions}
-  label="Question"  // or "Match", "Verb", etc.
   showProgress={exercise.feedbackConfig.progressionRules?.showProgress !== false}
 />
 ```
 
+### Admin Configuration
+
+**Unified Editor Interface**: All exercise types use the `ExerciseFeedbackSection` component, providing consistent configuration across:
+
+- Matching exercises
+- Fill-in-the-blank exercises
+- Text selection exercises
+- Verb analysis exercises
+- Verb conjugation exercises
+
+**Default Value Management**: The system uses centralized defaults from `feedbackDefaults.ts`:
+
+- New exercises automatically get sensible defaults
+- Editors show current values with fallbacks applied
+- Consistent behavior across all exercise types
+
+**Configuration Features**:
+
+- **Escalation Levels**: Add/remove/edit progressive help levels
+- **Success Messages**: Customize positive reinforcement for different contexts
+- **Progression Rules**: Control automatic vs manual advancement behavior
+- **Timing Configuration**: Set optimal delays for learning pace
+- **Visual Validation**: Real-time feedback on configuration completeness
+
 ### Benefits
 
-- **Consistent UX**: All exercises provide the same user experience
-- **Configurable**: Each exercise can have different feedback behavior
-- **Escalating Help**: Students receive more assistance as they struggle
-- **Smooth Flow**: Auto-advancement maintains lesson momentum
-- **Developer Friendly**: Simple configuration with automatic behavior
+**For Students**:
+
+- Consistent, predictable interaction patterns across all exercises
+- Progressive assistance that adapts to their struggle level
+- Smooth, professionally-timed transitions between questions
+- Positive reinforcement with customizable success messages
+
+**For Educators**:
+
+- Fine-grained control over student assistance and progression
+- Ability to customize feedback for different learning objectives
+- Consistent configuration interface across all exercise types
+- Data-driven insights into student struggle patterns
+
+**For Developers**:
+
+- Clean, reusable architecture with minimal boilerplate
+- Automatic handling of complex timing and progression logic
+- Type-safe configuration with comprehensive defaults
+- Easy integration into new exercise types
 
 ### Adding Feedback to New Exercises
 
-1. Add `feedbackConfig` to your exercise type definition
-2. Use the hooks in your component
-3. Call `handleCorrect`/`handleIncorrect` based on validation
-4. Include the UI components for input and feedback display
+1. **Include the feedback config** in your exercise type definition:
 
-The system handles all timing, escalation, and message logic automatically.
+   ```typescript
+   interface MyNewExercise extends BaseExercise {
+     feedbackConfig: FeedbackConfig;
+     data: {
+       // your exercise-specific data
+     };
+   }
+   ```
+
+2. **Use the hooks** in your component:
+
+   ```typescript
+   const feedback = useExerciseFeedback(exercise.feedbackConfig);
+   const progression = useExerciseProgression({
+     totalItems: exercise.data.items.length,
+     feedbackConfig: exercise.feedbackConfig,
+     onComplete,
+   });
+   ```
+
+3. **Add admin configuration** using the reusable section:
+
+   ```typescript
+   <ExerciseFeedbackSection
+     feedbackConfig={editingContent.feedbackConfig}
+     onChange={feedbackConfig => updateContent({ feedbackConfig })}
+   />
+   ```
+
+4. **Include UI components** for student interaction:
+   ```typescript
+   <ExerciseInput onSubmit={handleSubmit} />
+   <FeedbackDisplay {...feedback} />
+   <ExerciseProgress {...progression} />
+   ```
+
+The system automatically handles all escalation logic, timing, progression, and message management based on your configuration.

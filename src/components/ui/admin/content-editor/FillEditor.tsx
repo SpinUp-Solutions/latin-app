@@ -5,7 +5,7 @@ import { Plus, Trash2, HelpCircle } from 'lucide-react';
 import { FillExercise } from '@/src/types/exercise';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonSlice';
-import { FeedbackConfigEditor } from './FeedbackConfigEditor';
+import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 
 export const FillEditor: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -234,13 +234,10 @@ export const FillEditor: React.FC = () => {
       </div>
 
       {/* Feedback Configuration */}
-      <div>
-        <h3 className="text-lg font-medium mb-4">Feedback Configuration</h3>
-        <FeedbackConfigEditor
-          feedbackConfig={editingContent.feedbackConfig}
-          onChange={feedbackConfig => updateContent({ feedbackConfig })}
-        />
-      </div>
+      <ExerciseFeedbackSection
+        feedbackConfig={editingContent.feedbackConfig}
+        onChange={feedbackConfig => updateContent({ feedbackConfig })}
+      />
     </div>
   );
 };

@@ -1,9 +1,10 @@
 import { RenderableContentItem } from '@/src/types/page';
+import { createDefaultFeedbackConfig } from './feedbackDefaults';
 
 const generateId = (prefix?: string): string => {
-  const timestamp = Date.now().toString(36);
-  const randomNum = Math.random().toString(36).substr(2, 5);
-  return prefix ? `${prefix}-${timestamp}-${randomNum}` : `${timestamp}-${randomNum}`;
+  const timestamp = Date.now();
+  const random = Math.random().toString(36).substr(2, 9);
+  return prefix ? `${prefix}-${timestamp}-${random}` : `${timestamp}-${random}`;
 };
 
 export const createNewContent = (type: string): RenderableContentItem => {
@@ -61,14 +62,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
         title: 'Matching Exercise',
         instructions: 'Match the items from the left column with the right column.',
         audioPath: null,
-        feedbackConfig: {
-          escalationLevels: [],
-          progressionRules: {},
-          successMessage: {
-            showExplanation: true,
-          },
-          timingConfig: {},
-        },
+        feedbackConfig: createDefaultFeedbackConfig(),
         data: {
           leftColumn: [
             { id: `left-${Date.now()}-1`, value: 'Item 1' },
@@ -91,14 +85,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
         title: 'Fill in the Blanks',
         instructions: 'Complete the sentences by filling in the blanks.',
         audioPath: null,
-        feedbackConfig: {
-          escalationLevels: [],
-          progressionRules: {},
-          successMessage: {
-            showExplanation: true,
-          },
-          timingConfig: {},
-        },
+        feedbackConfig: createDefaultFeedbackConfig(),
         data: {
           items: [
             {
@@ -115,14 +102,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
         title: 'Text Selection Exercise',
         instructions: 'Select the correct words in the passage.',
         audioPath: null,
-        feedbackConfig: {
-          escalationLevels: [],
-          progressionRules: {},
-          successMessage: {
-            showExplanation: true,
-          },
-          timingConfig: {},
-        },
+        feedbackConfig: createDefaultFeedbackConfig(),
         data: {
           passage: 'Sample passage with selectable words.',
           questions: [
@@ -142,14 +122,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
         title: 'Verb Analysis Exercise',
         instructions: 'Analyze the verbs in the passage.',
         audioPath: null,
-        feedbackConfig: {
-          escalationLevels: [],
-          progressionRules: {},
-          successMessage: {
-            showExplanation: true,
-          },
-          timingConfig: {},
-        },
+        feedbackConfig: createDefaultFeedbackConfig(),
         data: {
           passage: 'Passage with verbs to analyze.',
           verbs: [
@@ -168,14 +141,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
         title: 'Verb Conjugation Exercise',
         instructions: 'Practice verb conjugations.',
         audioPath: null,
-        feedbackConfig: {
-          escalationLevels: [],
-          progressionRules: {},
-          successMessage: {
-            showExplanation: true,
-          },
-          timingConfig: {},
-        },
+        feedbackConfig: createDefaultFeedbackConfig(),
         data: {
           passage: {
             latin: 'Latin passage',
