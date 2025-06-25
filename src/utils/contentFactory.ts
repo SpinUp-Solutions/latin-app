@@ -64,7 +64,9 @@ export const createNewContent = (type: string): RenderableContentItem => {
         feedbackConfig: {
           escalationLevels: [],
           progressionRules: {},
-          successMessage: {},
+          successMessage: {
+            showExplanation: true,
+          },
           timingConfig: {},
         },
         data: {
@@ -92,7 +94,9 @@ export const createNewContent = (type: string): RenderableContentItem => {
         feedbackConfig: {
           escalationLevels: [],
           progressionRules: {},
-          successMessage: {},
+          successMessage: {
+            showExplanation: true,
+          },
           timingConfig: {},
         },
         data: {
@@ -114,7 +118,9 @@ export const createNewContent = (type: string): RenderableContentItem => {
         feedbackConfig: {
           escalationLevels: [],
           progressionRules: {},
-          successMessage: {},
+          successMessage: {
+            showExplanation: true,
+          },
           timingConfig: {},
         },
         data: {
@@ -139,7 +145,9 @@ export const createNewContent = (type: string): RenderableContentItem => {
         feedbackConfig: {
           escalationLevels: [],
           progressionRules: {},
-          successMessage: {},
+          successMessage: {
+            showExplanation: true,
+          },
           timingConfig: {},
         },
         data: {
@@ -163,7 +171,9 @@ export const createNewContent = (type: string): RenderableContentItem => {
         feedbackConfig: {
           escalationLevels: [],
           progressionRules: {},
-          successMessage: {},
+          successMessage: {
+            showExplanation: true,
+          },
           timingConfig: {},
         },
         data: {

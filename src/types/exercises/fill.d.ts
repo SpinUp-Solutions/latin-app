@@ -7,6 +7,7 @@ export interface FillExercise extends BaseExercise {
       text: string;
       answer: string;
       hint?: string;
+      explanation?: string;
     }[];
   };
 }

@@ -5,6 +5,7 @@ import { Plus, Trash2, HelpCircle } from 'lucide-react';
 import { FillExercise } from '@/src/types/exercise';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonSlice';
+import { FeedbackConfigEditor } from './FeedbackConfigEditor';
 
 export const FillEditor: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -32,6 +33,7 @@ export const FillEditor: React.FC = () => {
       text: '',
       answer: '',
       hint: '',
+      explanation: '',
     };
     const newItems = [...editingContent.data.items, newItem];
     updateData({ items: newItems });
@@ -145,15 +147,29 @@ export const FillEditor: React.FC = () => {
                       <HelpCircle className="h-3 w-3" />
                       Hint (optional)
                     </label>
-                    <input
-                      type="text"
+                    <textarea
                       value={item.hint || ''}
                       onChange={e => updateItem(index, 'hint', e.target.value)}
                       className="w-full p-2 border rounded text-sm"
-                      placeholder='Provide context or help for students... e.g., "Think about verb endings"'
+                      rows={2}
+                      placeholder="Enter a helpful hint for students..."
                     />
                     <p className="text-xs text-gray-500 mt-1">
-                      This will appear as placeholder text in the input field
+                      Shown when students make incorrect attempts (if enabled in feedback config)
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium mb-1">Explanation (optional)</label>
+                    <textarea
+                      value={item.explanation || ''}
+                      onChange={e => updateItem(index, 'explanation', e.target.value)}
+                      className="w-full p-2 border rounded text-sm"
+                      rows={2}
+                      placeholder="Enter a detailed explanation for the correct answer..."
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Shown after correct answers (if enabled in feedback config)
                     </p>
                   </div>
 
@@ -202,6 +218,10 @@ export const FillEditor: React.FC = () => {
                 {editingContent.data.items.filter(item => item.hint && item.hint.trim() !== '').length}
               </div>
               <div>
+                <strong>Items with explanations:</strong>{' '}
+                {editingContent.data.items.filter(item => item.explanation && item.explanation.trim() !== '').length}
+              </div>
+              <div>
                 <strong>Completed items:</strong>{' '}
                 {editingContent.data.items.filter(item => item.text.trim() !== '' && item.answer.trim() !== '').length}
               </div>
@@ -211,6 +231,15 @@ export const FillEditor: React.FC = () => {
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Feedback Configuration */}
+      <div>
+        <h3 className="text-lg font-medium mb-4">Feedback Configuration</h3>
+        <FeedbackConfigEditor
+          feedbackConfig={editingContent.feedbackConfig}
+          onChange={feedbackConfig => updateContent({ feedbackConfig })}
+        />
       </div>
     </div>
   );

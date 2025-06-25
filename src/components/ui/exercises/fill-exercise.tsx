@@ -88,7 +88,14 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
           placeholder={currentItem.hint || 'Type your answer in Latin...'}
         />
 
-        <FeedbackDisplay isCorrect={isCorrect} message={message} level={level} hint={currentItem.hint} />
+        <FeedbackDisplay
+          isCorrect={isCorrect}
+          message={message}
+          level={level}
+          hint={currentItem.hint}
+          explanation={currentItem.explanation}
+          showExplanation={isCorrect === true && (exercise.feedbackConfig.successMessage?.showExplanation ?? true)}
+        />
       </div>
     </div>
   );

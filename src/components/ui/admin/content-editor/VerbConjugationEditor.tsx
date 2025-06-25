@@ -5,6 +5,7 @@ import { Plus, Trash2, Eye, AlertCircle, Users, BookOpen, Zap, Check, X } from '
 import { VerbConjugationExercise } from '@/src/types/exercise';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonSlice';
+import { FeedbackConfigEditor } from './FeedbackConfigEditor';
 
 export const VerbConjugationEditor: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -558,6 +559,15 @@ export const VerbConjugationEditor: React.FC = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Feedback Configuration */}
+      <div>
+        <h3 className="text-lg font-medium mb-4">Feedback Configuration</h3>
+        <FeedbackConfigEditor
+          feedbackConfig={editingContent.feedbackConfig}
+          onChange={feedbackConfig => updateContent({ feedbackConfig })}
+        />
+      </div>
 
       {/* Summary and Validation */}
       <Card>

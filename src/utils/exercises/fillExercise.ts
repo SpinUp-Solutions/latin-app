@@ -14,5 +14,6 @@ export const validateFillExercise = (
     isCorrect,
     correctAnswer: currentItem.answer,
     hint: currentItem.hint,
+    explanation: currentItem.explanation,
   };
 };

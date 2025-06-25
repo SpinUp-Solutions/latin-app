@@ -242,6 +242,7 @@ const lessons: Lesson[] = [
               escalationLevels: [],
               successMessage: {
                 completion: "Excellent! You've mastered verb endings!",
+                showExplanation: true,
               },
               progressionRules: {
                 autoAdvance: true,
@@ -399,6 +400,7 @@ const lessons: Lesson[] = [
                 default: 'Correct!',
                 advance: 'Well done! Moving to the next one.',
                 completion: 'Perfect! You understand Latin verb endings!',
+                showExplanation: true,
               },
               progressionRules: {
                 autoAdvance: true,
@@ -415,51 +417,61 @@ const lessons: Lesson[] = [
                   text: 'audimus',
                   answer: 'we / nos',
                   hint: 'The ending -mus indicates first person plural',
+                  explanation: 'First person plural present tense: "we hear"',
                 },
                 {
                   text: 'laudatis',
                   answer: "you (y'all) / vos",
                   hint: 'The ending -tis indicates second person plural',
+                  explanation: 'Second person plural present tense: "you all praise"',
                 },
                 {
                   text: 'moneo',
                   answer: 'I / ego',
                   hint: 'The ending -o indicates first person singular',
+                  explanation: 'First person singular present tense: "I warn"',
                 },
                 {
                   text: 'credit',
                   answer: 'he, she, it / is, ea, id',
                   hint: 'The ending -t indicates third person singular',
+                  explanation: 'Third person singular present tense: "he/she/it believes"',
                 },
                 {
                   text: 'fecerunt',
                   answer: 'they / ei (ii), eae, ea',
                   hint: 'The ending -erunt indicates third person plural',
+                  explanation: 'Third person plural perfect tense: "they have done/made"',
                 },
                 {
                   text: 'monui',
                   answer: 'I / ego',
                   hint: 'The ending -i indicates first person singular (perfect tense)',
+                  explanation: 'First person singular perfect tense: "I have warned"',
                 },
                 {
                   text: 'das',
                   answer: 'you / tu',
                   hint: 'The ending -s indicates second person singular',
+                  explanation: 'Second person singular present tense: "you give"',
                 },
                 {
                   text: 'laudavisti',
                   answer: 'you / tu',
                   hint: 'The ending -sti indicates second person singular (perfect tense)',
+                  explanation: 'Second person singular perfect tense: "you have praised"',
                 },
                 {
                   text: 'amavistis',
                   answer: "you (y'all) / vos",
                   hint: 'The ending -stis indicates second person plural (perfect tense)',
+                  explanation: 'Second person plural perfect tense: "you all have loved"',
                 },
                 {
                   text: 'audiunt',
                   answer: 'they / ei (ii), eae, ea',
                   hint: 'The ending -nt indicates third person plural',
+                  explanation: 'Third person plural present tense: "they hear"',
                 },
               ],
             },
@@ -497,6 +509,7 @@ const lessons: Lesson[] = [
               ],
               successMessage: {
                 default: 'Correct!',
+                showExplanation: true,
               },
               progressionRules: {
                 autoAdvance: true,
@@ -547,6 +560,7 @@ const lessons: Lesson[] = [
               successMessage: {
                 default: 'Correct',
                 completion: 'Congratulations! You have completed the exercise.',
+                showExplanation: true,
               },
               progressionRules: {
                 autoAdvance: true,
@@ -637,6 +651,7 @@ const lessons: Lesson[] = [
               ],
               successMessage: {
                 advance: 'Well done! Moving to the next one.',
+                showExplanation: true,
               },
               progressionRules: {
                 autoAdvance: true,

@@ -130,7 +130,7 @@ const VerbAnalysisExerciseComponent: React.FC<Props> = ({ exercise, onComplete }
           level={level}
           hint={currentVerb.hint}
           explanation={currentVerb.explanation}
-          showExplanation={isCorrect === true}
+          showExplanation={isCorrect === true && (exercise.feedbackConfig.successMessage?.showExplanation ?? true)}
         />
       </div>
     </div>
