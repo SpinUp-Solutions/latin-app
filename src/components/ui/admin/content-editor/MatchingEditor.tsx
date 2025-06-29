@@ -5,6 +5,7 @@ import { Plus, Trash2, ArrowRight } from 'lucide-react';
 import { MatchingExercise } from '@/src/types/exercise';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonSlice';
+import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 
 export const MatchingEditor: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -234,6 +235,12 @@ export const MatchingEditor: React.FC = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Feedback Configuration */}
+      <ExerciseFeedbackSection
+        feedbackConfig={editingContent.feedbackConfig}
+        onChange={feedbackConfig => updateContent({ feedbackConfig })}
+      />
 
       {/* Preview Summary */}
       <div>

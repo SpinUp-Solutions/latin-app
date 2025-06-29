@@ -16,6 +16,8 @@ export interface SuccessMessageConfig {
   completion?: string;
   /** Message when advancing to next item */
   advance?: string;
+  /** Show explanation after correct answer (when available) */
+  showExplanation: boolean;
 }
 
 export interface ProgressionRules {

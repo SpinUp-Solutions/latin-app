@@ -5,6 +5,7 @@ import { Plus, Trash2, Search, Eye } from 'lucide-react';
 import { TextSelectionExercise } from '@/src/types/exercise';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonSlice';
+import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 
 export const TextSelectionEditor: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -303,6 +304,12 @@ export const TextSelectionEditor: React.FC = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Feedback Configuration */}
+      <ExerciseFeedbackSection
+        feedbackConfig={editingContent.feedbackConfig}
+        onChange={feedbackConfig => updateContent({ feedbackConfig })}
+      />
     </div>
   );
 };

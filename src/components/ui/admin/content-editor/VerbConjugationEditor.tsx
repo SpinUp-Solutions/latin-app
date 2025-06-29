@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { Button } from '@/src/components/ui/button';
-import { Card, CardContent } from '@/src/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
 import { Plus, Trash2, Eye, AlertCircle, Users, BookOpen, Zap, Check, X } from 'lucide-react';
 import { VerbConjugationExercise } from '@/src/types/exercise';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonSlice';
+import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 
 export const VerbConjugationEditor: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -558,6 +559,12 @@ export const VerbConjugationEditor: React.FC = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Feedback Configuration */}
+      <ExerciseFeedbackSection
+        feedbackConfig={editingContent.feedbackConfig}
+        onChange={feedbackConfig => updateContent({ feedbackConfig })}
+      />
 
       {/* Summary and Validation */}
       <Card>

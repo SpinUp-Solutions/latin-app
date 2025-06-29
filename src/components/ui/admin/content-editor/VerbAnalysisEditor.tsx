@@ -5,6 +5,7 @@ import { Trash2, Eye, AlertCircle, Zap, X, Check } from 'lucide-react';
 import { VerbAnalysisExercise } from '@/src/types/exercise';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonSlice';
+import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 
 export const VerbAnalysisEditor: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -311,6 +312,12 @@ export const VerbAnalysisEditor: React.FC = () => {
           ))}
         </div>
       </div>
+
+      {/* Feedback Configuration */}
+      <ExerciseFeedbackSection
+        feedbackConfig={editingContent.feedbackConfig}
+        onChange={feedbackConfig => updateContent({ feedbackConfig })}
+      />
 
       {/* Summary and Validation */}
       <Card>

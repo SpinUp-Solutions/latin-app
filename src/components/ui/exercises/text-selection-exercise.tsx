@@ -100,7 +100,7 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
           level={level}
           hint={currentQuestion.hint}
           explanation={currentQuestion.explanation}
-          showExplanation={isCorrect === true}
+          showExplanation={isCorrect === true && (exercise.feedbackConfig.successMessage?.showExplanation ?? true)}
         />
       </div>
     </div>
