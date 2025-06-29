@@ -2,8 +2,11 @@
 
 import React, { useState } from 'react';
 import { FillExercise } from '@/src/types/exercise';
-import ExerciseInput from '../feedback/exercise-input';
-import ExerciseFeedback from '../feedback/exercise-feedback';
+import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
+import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
+import { ExerciseInput, FeedbackDisplay } from '../feedback';
+import { validateFillExercise } from '@/src/utils/exercises/fillExercise';
+import { ExerciseProgress } from './exercise-progress';
 
 interface Props {
   exercise: FillExercise;
@@ -11,38 +14,54 @@ interface Props {
 }
 
 const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
-  const [currentItemIndex, setCurrentItemIndex] = useState(0);
   const [userAnswer, setUserAnswer] = useState('');
-  const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
-  const [showCompletionFeedback, setShowCompletionFeedback] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const { currentIndex, isLastItem, nextItem } = useExerciseProgression({
+    totalItems: exercise.data.items.length,
+    feedbackConfig: exercise.feedbackConfig,
+    onComplete,
+  });
+
+  const { isCorrect, message, level, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
+    exercise.feedbackConfig
+  );
 
   const handleSubmit = () => {
-    setIsCorrect(null);
+    if (isProcessing) return; // Prevent multiple submissions
 
-    const currentItem = exercise.data.items[currentItemIndex];
-    const correct = userAnswer.trim().toLowerCase() === currentItem.answer.trim().toLowerCase();
+    const validation = validateFillExercise(userAnswer, exercise, currentIndex);
+    setIsProcessing(true);
 
-    setTimeout(() => {
-      setIsCorrect(correct);
-
-      if (correct) {
-        if (currentItemIndex < exercise.data.items.length - 1) {
-          setTimeout(() => {
-            setCurrentItemIndex(prev => prev + 1);
-            setUserAnswer('');
-            setIsCorrect(null);
-          }, 1500);
-        } else {
-          setShowCompletionFeedback(true);
-          if (onComplete) {
-            setTimeout(onComplete, 2000);
-          }
-        }
+    if (validation.isCorrect) {
+      handleCorrect(isLastItem);
+      // Auto-advance logic based on configuration
+      if (exercise.feedbackConfig.progressionRules?.autoAdvance !== false) {
+        const progressionDelay = exercise.feedbackConfig.timingConfig?.progressionDelay || 1500;
+        setTimeout(() => {
+          nextItem();
+          setUserAnswer('');
+          reset();
+          setIsProcessing(false);
+        }, progressionDelay);
+      } else {
+        setIsProcessing(false);
       }
-    }, 50);
+    } else {
+      handleIncorrect(validation.hint, validation.correctAnswer);
+      setIsProcessing(false);
+    }
   };
 
-  const currentItem = exercise.data.items[currentItemIndex];
+  const handleAnswerChange = (value: string) => {
+    setUserAnswer(value);
+    // Reset feedback when user types
+    if (isCorrect !== null) {
+      reset();
+    }
+  };
+
+  const currentItem = exercise.data.items[currentIndex];
 
   return (
     <div className="space-y-4">
@@ -52,19 +71,25 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
           <p>{exercise.instructions}</p>
         </div>
       )}
+
+      {/* Progress indicator */}
+      <ExerciseProgress
+        current={currentIndex}
+        total={exercise.data.items.length}
+        showProgress={exercise.feedbackConfig.progressionRules?.showProgress !== false}
+      />
+
       <div className="p-4 bg-white rounded-lg border border-gray-200">
         <p className="mb-4">{currentItem.text}</p>
         <ExerciseInput
           value={userAnswer}
-          onChange={setUserAnswer}
+          onChange={handleAnswerChange}
           onSubmit={handleSubmit}
-          isCorrect={isCorrect}
-          correctAnswer={currentItem.answer}
           placeholder={currentItem.hint || 'Type your answer in Latin...'}
         />
-      </div>
 
-      {showCompletionFeedback && <ExerciseFeedback message="Well done! You've completed all the fill-in exercises!" />}
+        <FeedbackDisplay isCorrect={isCorrect} message={message} level={level} hint={currentItem.hint} />
+      </div>
     </div>
   );
 };

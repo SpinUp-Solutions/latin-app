@@ -1,135 +1,140 @@
-import React, { useState } from 'react';
-import { VerbAnalysisExercise as VerbAnalysisExerciseType } from '@/src/types/exercise';
-import { Check, X } from 'lucide-react';
+'use client';
 
-interface VerbAnalysisExerciseProps {
-  exercise: VerbAnalysisExerciseType;
+import React, { useState, useEffect } from 'react';
+import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
+import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
+import { VerbAnalysisExercise } from '@/src/types/exercise';
+import { ExerciseInput, FeedbackDisplay } from '../feedback';
+import { validateVerbAnalysisExercise } from '@/src/utils/exercises/verbAnalysisExercise';
+import { ExerciseProgress } from './exercise-progress';
+
+interface Props {
+  exercise: VerbAnalysisExercise;
   onComplete?: () => void;
 }
 
-const VerbAnalysisExercise: React.FC<VerbAnalysisExerciseProps> = ({ exercise, onComplete }) => {
-  const [currentVerbIndex, setCurrentVerbIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<number, string>>({});
-  const [feedback, setFeedback] = useState<Record<number, { isCorrect: boolean; message: string }>>({});
-  const [showInput, setShowInput] = useState<number | null>(null);
+const VerbAnalysisExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
+  const [userAnswer, setUserAnswer] = useState('');
+  const [selectedWordIndex, setSelectedWordIndex] = useState<number | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const currentVerb = exercise.data.verbs[currentVerbIndex];
+  const { currentIndex, isLastItem, nextItem } = useExerciseProgression({
+    totalItems: exercise.data.verbs.length,
+    feedbackConfig: exercise.feedbackConfig,
+    onComplete,
+  });
 
-  const handleVerbClick = (index: number) => {
-    if (currentVerb && index === currentVerb.wordIndex) {
-      setShowInput(index);
+  const { isCorrect, message, level, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
+    exercise.feedbackConfig
+  );
+
+  const currentVerb = exercise.data.verbs[currentIndex];
+
+  useEffect(() => {
+    setSelectedWordIndex(currentVerb.wordIndex);
+  }, [currentVerb.wordIndex]);
+
+  const handleWordClick = (wordIndex: number) => {
+    if (wordIndex === currentVerb.wordIndex) {
+      setSelectedWordIndex(wordIndex);
     }
   };
 
-  const handleAnswerSubmit = (answer: string) => {
-    const isCorrect = answer.toLowerCase().trim() === currentVerb.correctPronoun.toLowerCase().trim();
+  const handleSubmit = () => {
+    if (isProcessing) return; // Prevent multiple submissions
 
-    setAnswers(prev => ({
-      ...prev,
-      [currentVerbIndex]: answer,
-    }));
+    const validation = validateVerbAnalysisExercise(userAnswer, exercise, currentIndex);
+    setIsProcessing(true);
 
-    setFeedback(prev => ({
-      ...prev,
-      [currentVerbIndex]: {
-        isCorrect,
-        message: isCorrect ? 'Correct!' : `Incorrect. The correct answer is "${currentVerb.correctPronoun}"`,
-      },
-    }));
+    if (validation.isCorrect) {
+      handleCorrect(isLastItem);
+
+      // Auto-advance logic based on configuration
+      if (exercise.feedbackConfig.progressionRules?.autoAdvance !== false) {
+        const progressionDelay = exercise.feedbackConfig.timingConfig?.progressionDelay || 1500;
+        setTimeout(() => {
+          nextItem();
+          setUserAnswer('');
+          setSelectedWordIndex(null);
+          reset();
+          setIsProcessing(false);
+        }, progressionDelay);
+      } else {
+        setIsProcessing(false);
+      }
+    } else {
+      handleIncorrect(validation.hint, validation.correctAnswer);
+      setIsProcessing(false);
+    }
   };
 
-  const words = exercise.data.passage.split(/(\s+)/).filter(word => word.trim());
+  const handleAnswerChange = (value: string) => {
+    setUserAnswer(value);
+    // Reset feedback when user types
+    if (isCorrect !== null) {
+      reset();
+    }
+  };
 
   return (
     <div className="space-y-6 max-w-full">
-      {exercise.title && <h3 className="text-lg font-serif text-roman-red mb-2">{exercise.title}</h3>}
-
+      {exercise.title && <h3 className="text-xl font-serif text-roman-red mb-4">{exercise.title}</h3>}
       {exercise.instructions && (
-        <div className="p-4 bg-roman-parchment rounded-lg mb-4">
-          <p>{exercise.instructions}</p>
+        <div className="p-6 bg-roman-parchment rounded-lg mb-4">
+          <p className="whitespace-pre-wrap break-words">{exercise.instructions}</p>
         </div>
       )}
 
-      <div className="p-4 bg-white rounded-lg border border-gray-200 overflow-x-auto">
-        <div className="text-lg font-serif italic leading-relaxed whitespace-pre-wrap break-words min-w-[300px]">
-          {words.map((word, index) => {
-            const isCurrentVerb = currentVerb && index === currentVerb.wordIndex;
-            const isAnsweredVerb = answers[currentVerbIndex] && currentVerb && index === currentVerb.wordIndex;
+      {/* Progress indicator */}
+      <ExerciseProgress
+        current={currentIndex}
+        total={exercise.data.verbs.length}
+        label="Verb"
+        showProgress={exercise.feedbackConfig.progressionRules?.showProgress !== false}
+      />
 
-            return (
-              <span key={index} className="relative inline-block">
-                <span
-                  onClick={() => handleVerbClick(index)}
-                  className={`cursor-pointer px-1 rounded inline-block min-h-[1.5em] ${
-                    isCurrentVerb
-                      ? 'font-bold text-roman-red hover:bg-roman-parchment'
-                      : isAnsweredVerb
-                        ? feedback[currentVerbIndex]?.isCorrect
-                          ? 'text-green-600'
-                          : 'text-red-600'
-                        : ''
-                  }`}>
-                  {word}
-                </span>
-
-                {showInput === index && (
-                  <div className="fixed transform -translate-y-full mt-[-8px] z-50">
-                    <div className="w-64">
-                      {feedback[currentVerbIndex] && (
-                        <div
-                          className={`mb-2 p-3 rounded-lg shadow-md border ${
-                            feedback[currentVerbIndex].isCorrect
-                              ? 'bg-green-50 border-green-200 text-green-700'
-                              : 'bg-red-50 border-red-200 text-red-700'
-                          }`}>
-                          <div className="flex items-center gap-2 mb-1">
-                            {feedback[currentVerbIndex].isCorrect ? (
-                              <Check className="h-5 w-5 text-green-500" />
-                            ) : (
-                              <X className="h-5 w-5 text-red-500" />
-                            )}
-                            <span className="font-medium">
-                              {feedback[currentVerbIndex].isCorrect ? 'Correct!' : 'Incorrect'}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                      <div className="bg-white p-2 rounded-lg shadow-lg border border-gray-200">
-                        <input
-                          type="text"
-                          autoFocus
-                          className="w-full px-2 py-1 border rounded"
-                          placeholder="Enter pronoun..."
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') {
-                              handleAnswerSubmit(e.currentTarget.value);
-                            }
-                          }}
-                          onBlur={e => {
-                            handleAnswerSubmit(e.target.value);
-                            setShowInput(null);
-                            const isCorrect =
-                              e.target.value.toLowerCase().trim() === currentVerb.correctPronoun.toLowerCase().trim();
-                            if (isCorrect) {
-                              if (currentVerbIndex < exercise.data.verbs.length - 1) {
-                                setCurrentVerbIndex(prev => prev + 1);
-                              } else if (currentVerbIndex === exercise.data.verbs.length - 1) {
-                                onComplete?.();
-                              }
-                            }
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
+      <div className="p-6 bg-white rounded-lg border border-gray-200">
+        <div className="overflow-x-auto">
+          <div className="font-serif text-lg leading-relaxed min-w-[300px] mb-6">
+            {exercise.data.passage.split(' ').map((word, index) => (
+              <span
+                key={index}
+                onClick={() => handleWordClick(index)}
+                className={`cursor-pointer inline-block px-1 py-0.5 mx-0.5 rounded transition-colors ${
+                  index === currentVerb.wordIndex
+                    ? 'bg-roman-red text-white font-bold'
+                    : selectedWordIndex === index
+                      ? 'bg-roman-parchment text-roman-red'
+                      : 'hover:bg-roman-parchment hover:text-roman-red'
+                }`}>
+                {word}
               </span>
-            );
-          })}
+            ))}
+          </div>
         </div>
+
+        {/* Always show input field for the current verb */}
+        <div className="mb-4">
+          <p className="mb-4 text-gray-700">Enter the English pronoun that applies to this verb&apos;s ending:</p>
+          <ExerciseInput
+            value={userAnswer}
+            onChange={handleAnswerChange}
+            onSubmit={handleSubmit}
+            placeholder="Enter pronoun (e.g., I, you, he, she, it, we, they)..."
+          />
+        </div>
+
+        <FeedbackDisplay
+          isCorrect={isCorrect}
+          message={message}
+          level={level}
+          hint={currentVerb.hint}
+          explanation={currentVerb.explanation}
+          showExplanation={isCorrect === true}
+        />
       </div>
     </div>
   );
 };
 
-export default VerbAnalysisExercise;
+export default VerbAnalysisExerciseComponent;

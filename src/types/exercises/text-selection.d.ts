@@ -9,6 +9,7 @@ export interface TextSelectionExercise extends BaseExercise {
       text: string;
       correctWordIndex: number;
       explanation?: string;
+      hint?: string;
     }[];
   };
 }

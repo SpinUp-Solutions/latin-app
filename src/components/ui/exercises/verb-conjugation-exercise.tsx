@@ -2,8 +2,13 @@
 
 import React, { useState } from 'react';
 import { VerbConjugationExercise } from '@/src/types/exercise';
-import ExerciseInput from '../feedback/exercise-input';
-import ExerciseFeedback from '../feedback/exercise-feedback';
+import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
+import { ExerciseInput, FeedbackDisplay } from '../feedback';
+import {
+  validateVerbConjugationTask,
+  validateVerbConjugationLivingLatin,
+} from '@/src/utils/exercises/verbConjugationExercise';
+import { ExerciseProgress } from './exercise-progress';
 
 interface Props {
   exercise: VerbConjugationExercise;
@@ -11,142 +16,190 @@ interface Props {
 }
 
 const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
-  const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
   const [userAnswer, setUserAnswer] = useState('');
-  const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
   const [conjugationCompleted, setConjugationCompleted] = useState(false);
-  const [showCompletionFeedback, setShowCompletionFeedback] = useState(false);
+  const [currentLivingLatinIndex, setCurrentLivingLatinIndex] = useState(0);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const checkAllExercisesComplete = () => {
-    const livingLatinComplete =
-      !exercise.data.livingLatinPractice || currentExerciseIndex >= exercise.data.livingLatinPractice.exercises.length;
+  const { isCorrect, message, level, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
+    exercise.feedbackConfig
+  );
 
-    if (conjugationCompleted && livingLatinComplete) {
-      setShowCompletionFeedback(true);
-      // Delay the onComplete callback to show the completion feedback
-      if (onComplete) {
-        setTimeout(onComplete, 2000);
+  const handleConjugationSubmit = () => {
+    if (!exercise.data.conjugationTask || isProcessing) return;
+
+    setIsProcessing(true);
+    const validation = validateVerbConjugationTask(userAnswer, exercise);
+
+    if (validation.isCorrect) {
+      handleCorrect(false); // Not the final completion yet
+
+      // Move to living latin if it exists, otherwise complete
+      if (!exercise.data.livingLatinPractice) {
+        const nextExerciseDelay = exercise.feedbackConfig.timingConfig?.nextExerciseDelay || 2500;
+        setTimeout(() => onComplete?.(), nextExerciseDelay);
+      } else {
+        const progressionDelay = exercise.feedbackConfig.timingConfig?.progressionDelay || 1500;
+        setTimeout(() => {
+          reset();
+          setConjugationCompleted(true);
+          setUserAnswer('');
+          setIsProcessing(false);
+        }, progressionDelay);
       }
-    }
-  };
-
-  const handleAnswerSubmit = () => {
-    if (exercise.data.conjugationTask) {
-      const correct = userAnswer.trim().toLowerCase() === exercise.data.conjugationTask.answer.trim().toLowerCase();
-      setIsCorrect(correct);
-      if (correct) {
-        setConjugationCompleted(true);
-        setUserAnswer('');
-        if (exercise.data.livingLatinPractice) {
-          setCurrentExerciseIndex(0);
-        } else {
-          checkAllExercisesComplete();
-        }
-      }
+    } else {
+      handleIncorrect(undefined, validation.correctAnswer);
+      setIsProcessing(false);
     }
   };
 
   const handleLivingLatinSubmit = () => {
-    if (exercise.data.livingLatinPractice?.exercises[currentExerciseIndex]) {
-      const correct =
-        userAnswer.trim().toLowerCase() ===
-        exercise.data.livingLatinPractice.exercises[currentExerciseIndex].answer.trim().toLowerCase();
-      setIsCorrect(correct);
-      if (correct) {
-        if (currentExerciseIndex < exercise.data.livingLatinPractice.exercises.length - 1) {
-          setCurrentExerciseIndex(prev => prev + 1);
-          setUserAnswer('');
-          setIsCorrect(null);
-        } else {
-          checkAllExercisesComplete();
+    if (!exercise.data.livingLatinPractice || isProcessing) return;
+
+    setIsProcessing(true);
+    const validation = validateVerbConjugationLivingLatin(userAnswer, exercise, currentLivingLatinIndex);
+
+    if (validation.isCorrect) {
+      const isLastExercise = currentLivingLatinIndex >= exercise.data.livingLatinPractice!.exercises.length - 1;
+      handleCorrect(isLastExercise);
+
+      if (isLastExercise) {
+        // Auto-advance logic based on configuration
+        if (exercise.feedbackConfig.progressionRules?.autoAdvance !== false) {
+          const nextExerciseDelay = exercise.feedbackConfig.timingConfig?.nextExerciseDelay || 2500;
+          setTimeout(() => {
+            onComplete?.();
+          }, nextExerciseDelay);
         }
+      } else {
+        // Move to next living latin exercise
+        const progressionDelay = exercise.feedbackConfig.timingConfig?.progressionDelay || 1500;
+        setTimeout(() => {
+          reset(); // Reset feedback first
+          setCurrentLivingLatinIndex(prev => prev + 1);
+          setUserAnswer('');
+          setIsProcessing(false);
+        }, progressionDelay);
       }
+    } else {
+      handleIncorrect(undefined, validation.correctAnswer);
+      setIsProcessing(false);
     }
   };
 
+  const handleAnswerChange = (value: string) => {
+    setUserAnswer(value);
+    if (isCorrect !== null) {
+      reset();
+    }
+    // Only reset processing state when user starts typing after an incorrect answer
+    // Don't reset it after a correct answer to prevent rapid submissions
+    if (isProcessing && isCorrect === false) {
+      setIsProcessing(false);
+    }
+  };
+
+  const currentLivingLatinExercise = exercise.data.livingLatinPractice?.exercises[currentLivingLatinIndex];
+
   return (
     <div className="space-y-6 max-w-full">
-      {/* Main passage section */}
-      <div className="p-6 bg-white rounded-lg border border-gray-200">
-        <h3 className="text-xl font-serif text-roman-red mb-4">{exercise.title}</h3>
-        <div className="overflow-x-auto">
-          <p className="font-serif text-lg leading-relaxed mb-4 whitespace-pre-wrap break-words min-w-[300px]">
-            {exercise.data.passage.latin}
-          </p>
-          <p className="text-gray-700 leading-relaxed whitespace-pre-wrap break-words min-w-[300px]">
-            {exercise.data.passage.translation}
-          </p>
-        </div>
-
-        {/* Special vocabulary section */}
-        {exercise.data.passage.specialVocab && Object.keys(exercise.data.passage.specialVocab).length > 0 && (
-          <div className="mt-6 p-4 bg-roman-parchment rounded-lg">
-            <h4 className="font-serif text-roman-red mb-2">Special Vocabulary:</h4>
-            <ul className="list-disc list-inside space-y-2">
-              {Object.entries(exercise.data.passage.specialVocab).map(([term, definition]) => (
-                <li key={term} className="break-words">
-                  <span className="font-serif italic">{term}</span> = {definition}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
-
-      {/* Conjugation task section */}
-      {exercise.data.conjugationTask && !conjugationCompleted && (
-        <div className="p-6 bg-white rounded-lg border border-gray-200">
-          <p className="mb-4 leading-relaxed whitespace-pre-wrap break-words">
-            {exercise.data.conjugationTask.instructions}
-          </p>
-          <ExerciseInput
-            value={userAnswer}
-            onChange={setUserAnswer}
-            onSubmit={handleAnswerSubmit}
-            isCorrect={isCorrect}
-            correctAnswer={exercise.data.conjugationTask.answer}
-          />
+      {exercise.title && <h3 className="text-xl font-serif text-roman-red mb-4">{exercise.title}</h3>}
+      {exercise.instructions && (
+        <div className="p-6 bg-roman-parchment rounded-lg mb-4">
+          <p className="whitespace-pre-wrap break-words">{exercise.instructions}</p>
         </div>
       )}
 
-      {/* Living Latin Practice section */}
-      {exercise.data.livingLatinPractice && conjugationCompleted && (
-        <div className="p-6 bg-white rounded-lg border border-gray-200">
-          <h4 className="font-serif text-xl text-roman-red mb-4">Living Latin Practice</h4>
-
-          {/* Examples */}
-          <div className="space-y-6 mb-6">
-            {exercise.data.livingLatinPractice.examples.map((example, index) => (
-              <div key={index} className="p-4 bg-roman-parchment rounded-lg">
-                <p className="font-serif text-lg leading-relaxed whitespace-pre-wrap break-words">{example.latin}</p>
-                <p className="text-gray-700 mt-2 whitespace-pre-wrap break-words">
-                  Translation: &quot;{example.translation}&quot;
-                </p>
-              </div>
-            ))}
+      <div className="p-6 bg-white rounded-lg border border-gray-200">
+        {/* Original passage */}
+        <div className="mb-6">
+          <h4 className="text-lg font-serif text-roman-red mb-2">Original Passage</h4>
+          <div className="p-4 bg-gray-50 rounded-lg border">
+            <p className="font-serif italic text-lg mb-2">{exercise.data.passage.latin}</p>
+            <p className="text-gray-700">{exercise.data.passage.translation}</p>
           </div>
 
-          {/* Practice exercises */}
-          {currentExerciseIndex < exercise.data.livingLatinPractice.exercises.length && (
-            <div className="p-4 bg-white rounded-lg border border-gray-200">
-              <p className="mb-4 leading-relaxed whitespace-pre-wrap break-words">
-                Write in Latin: &quot;{exercise.data.livingLatinPractice.exercises[currentExerciseIndex].english}&quot;
-              </p>
-              <ExerciseInput
-                value={userAnswer}
-                onChange={setUserAnswer}
-                onSubmit={handleLivingLatinSubmit}
-                isCorrect={isCorrect}
-                correctAnswer={exercise.data.livingLatinPractice.exercises[currentExerciseIndex].answer}
-              />
+          {exercise.data.passage.specialVocab && (
+            <div className="mt-4 p-3 bg-roman-parchment rounded-lg">
+              <h5 className="font-medium text-gray-700 mb-2">Special Vocabulary:</h5>
+              <ul className="text-gray-700 text-sm space-y-1">
+                {Object.entries(exercise.data.passage.specialVocab).map(([latin, definition]) => (
+                  <li key={latin}>
+                    <span className="italic">{latin}</span> = {definition}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </div>
-      )}
 
-      {showCompletionFeedback && (
-        <ExerciseFeedback message="Excellent work! You've mastered both the conjugation and Living Latin practice!" />
-      )}
+        {/* Conjugation task - only show if not completed */}
+        {exercise.data.conjugationTask && !conjugationCompleted && (
+          <>
+            <div className="mb-6">
+              <h4 className="text-lg font-serif text-roman-red mb-2">Your Task</h4>
+              <div className="p-4 bg-roman-parchment rounded-lg border border-gray-200">
+                <p className="text-gray-800">{exercise.data.conjugationTask.instructions}</p>
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <ExerciseInput
+                value={userAnswer}
+                onChange={handleAnswerChange}
+                onSubmit={handleConjugationSubmit}
+                placeholder="Type your conjugated Latin passage..."
+                buttonText="Submit Translation"
+              />
+            </div>
+
+            <FeedbackDisplay isCorrect={isCorrect} message={message} level={level} />
+          </>
+        )}
+
+        {/* Living Latin practice - interactive progression */}
+        {exercise.data.livingLatinPractice && conjugationCompleted && (
+          <div className="mt-8 p-6 bg-roman-parchment rounded-lg border border-gray-200">
+            <h4 className="text-lg font-serif text-roman-red mb-4">Living Latin Practice</h4>
+
+            {/* Examples (always visible) */}
+            <div className="mb-6">
+              <h5 className="font-medium text-gray-700 mb-2">Examples:</h5>
+              <div className="space-y-2">
+                {exercise.data.livingLatinPractice.examples.map((example, index) => (
+                  <div key={index} className="bg-white p-3 rounded border">
+                    <p className="font-serif italic text-lg">{example.latin}</p>
+                    <p className="text-gray-600 text-sm">{example.translation}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Current exercise */}
+            {currentLivingLatinExercise && (
+              <div className="bg-white p-4 rounded-lg border border-gray-200">
+                <ExerciseProgress
+                  current={currentLivingLatinIndex}
+                  total={exercise.data.livingLatinPractice.exercises.length}
+                  label="Exercise"
+                />
+
+                <p className="mb-4 text-gray-800">Write in Latin: &quot;{currentLivingLatinExercise.english}&quot;</p>
+
+                <ExerciseInput
+                  value={userAnswer}
+                  onChange={handleAnswerChange}
+                  onSubmit={handleLivingLatinSubmit}
+                  placeholder="Type your Latin translation..."
+                  buttonText="Submit"
+                />
+
+                <FeedbackDisplay isCorrect={isCorrect} message={message} level={level} />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 };

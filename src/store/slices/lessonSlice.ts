@@ -229,6 +229,7 @@ const lessonSlice = createSlice({
         // Also update the corresponding content in currentLesson for live preview
         if (state.currentLesson) {
           const { pageType, pageIndex, itemIndex } = state.editingContent;
+          // Immer handles immutability - we can directly mutate the nested state
           state.currentLesson[pageType][pageIndex].items[itemIndex] = action.payload;
         }
       }

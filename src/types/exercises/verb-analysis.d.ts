@@ -8,6 +8,7 @@ export interface VerbAnalysisExercise extends BaseExercise {
       wordIndex: number; // Index of the verb in the passage
       correctPronoun: string;
       explanation?: string;
+      hint?: string;
     }[];
   };
 }
