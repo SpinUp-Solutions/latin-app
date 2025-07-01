@@ -35,7 +35,7 @@ danger; flare-up
 26. forma, -ae, f: form, shape figure; beauty , good looks; image; mold, stamp; shoemakers
 last vision, apparition, phantom; species, form, nature, sort, kind; outline, design, sketch,
 plan; map
-27. fortuna -ae:f. chance, luck, fate, fortune; good luck, prosperity; bad luck, misfortune; lot;
+27. fortuna, -ae:f. chance, luck, fate, fortune; good luck, prosperity; bad luck, misfortune; lot;
 opportunity; circumstances; state, rank, position; property, goods, fortune; (plural) riches,
 fortune
 28. fuga, -ae f: flight, escape; avoidance; exile; speed, swift passage; disappearance; (w.
@@ -49,7 +49,7 @@ love, friendship; service; favor, kindness; thanks, gratitude; cause, reason, mo
 33. inopia, -ae, f: lack, need, poverty, destitution, dearth, want, scarcity
 
 34. insidia, -ae, f: plot, treachery, snare
-35. insidiae (~arum) f: ambush (pl.);
+35. insidiae, (~arum) f: ambush (pl.);
 36. insula, -ae f: island, apartment house
 37. invidia, -ae, f: hate/hatred/dislike; envy/jealousy/spite/ill will
 38. ira, -ae, f: anger, resentment, rage, wrath
@@ -73,7 +73,7 @@ past event, history; historical account
 50. mora, -ae, f: delay, pause, spell, period of time, stop-off
 51. natura, -ae, f: nature, natural, constitution, character, temperament, ability, distinctive
 feature, characteristic, order of the world, course of things, element, sex organs
-52. opera -ae, f: effort, pains, exertion, work, care, attention
+52. opera, -ae, f: effort, pains, exertion, work, care, attention
 53. ora, -ae, f: boundary, border, edge, coastline, coast, region, district
 54. patria, -ae f: fatherland
 55. pecunia, -ae f: money; property

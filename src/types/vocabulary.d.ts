@@ -72,6 +72,33 @@ export interface ScrapedResult {
   error?: string;
 }
 
+export interface WordResponse {
+  word: string;
+  grammaticalInfo: string;
+  gender?: string;
+  translation: string;
+  type: string;
+  declensionClass?: number;
+  etymology?: string;
+  pronunciation?: string;
+  declensionTable?: DeclensionData[];
+  conjugationTable?: any; // To be defined when conjugation tables are implemented
+  // Additional fields from parsed data
+  id: number;
+  section: string;
+  subsection: string;
+  conjugationClass?: string;
+  isDeponent?: boolean;
+  originalText: string;
+  // Wiktionary additional data
+  definitions?: string[];
+  partOfSpeech?: string;
+  declension?: string;
+  // Scraping metadata
+  scrapingError?: string;
+  hasWiktionaryData: boolean;
+}
+
 export interface ApiResponse {
   success: boolean;
   message: string;
@@ -89,12 +116,5 @@ export interface ApiResponse {
     successful: number;
     failed: number;
   };
-  firstDeclensionNouns: Array<{
-    id: number;
-    wordForm: string;
-    grammaticalInfo: string;
-    translation: string;
-    gender?: string;
-  }>;
-  scrapedResults: ScrapedResult[];
+  words: WordResponse[];
 }

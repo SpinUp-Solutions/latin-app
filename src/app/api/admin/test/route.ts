@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 
-import { ApiResponse, ParsedEntry, ScrapedResult } from '@/src/types/vocabulary';
+import { ApiResponse, ParsedEntry, ScrapedResult, WordResponse } from '@/src/types/vocabulary';
 import { VocabularyParserService } from '@/src/services/vocabularyParserService';
 import { WiktionaryScraperService } from '@/src/services/wiktionaryScraperService';
 
@@ -32,8 +32,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         successful: scrapedResults.filter(r => r.wiktionaryData !== null).length,
         failed: scrapedResults.filter(r => r.wiktionaryData === null).length,
       },
-      firstDeclensionNouns: firstDeclensionNouns.slice(0, 10).map(formatEntryForResponse),
-      scrapedResults,
+      words: scrapedResults.map(formatWordForResponse),
     } as ApiResponse);
   } catch (error) {
     console.error('Parser + Scraper test failed:', error);
@@ -69,12 +68,40 @@ function calculatePerformanceMetrics(results: ScrapedResult[], totalDuration: nu
   };
 }
 
-function formatEntryForResponse(entry: ParsedEntry) {
+function formatWordForResponse(scrapedResult: ScrapedResult): WordResponse {
+  const { parsedData, wiktionaryData } = scrapedResult;
+
+  // Helper function to map declension class numbers
+  const mapDeclensionClass = (declensionClass?: string): number | undefined => {
+    if (!declensionClass) return undefined;
+    const match = declensionClass.match(/(\d+)/);
+    return match ? parseInt(match[1]) : undefined;
+  };
+
   return {
-    id: entry.id,
-    wordForm: entry.wordForm,
-    grammaticalInfo: entry.grammaticalInfo,
-    translation: entry.translation,
-    gender: entry.gender,
+    word: parsedData.wordForm,
+    grammaticalInfo: parsedData.grammaticalInfo,
+    gender: parsedData.gender || wiktionaryData?.gender,
+    translation: parsedData.translation,
+    type: parsedData.wordType,
+    declensionClass: mapDeclensionClass(parsedData.declensionClass),
+    etymology: wiktionaryData?.etymology,
+    pronunciation: wiktionaryData?.pronunciation,
+    declensionTable: wiktionaryData?.declensionTable,
+    conjugationTable: undefined, // Not implemented yet for verbs
+    // Additional fields from parsed data
+    id: parsedData.id,
+    section: parsedData.section,
+    subsection: parsedData.subsection,
+    conjugationClass: parsedData.conjugationClass,
+    isDeponent: parsedData.isDeponent,
+    originalText: parsedData.originalText,
+    // Wiktionary additional data
+    definitions: wiktionaryData?.definitions,
+    partOfSpeech: wiktionaryData?.partOfSpeech,
+    declension: wiktionaryData?.declension,
+    // Scraping metadata
+    scrapingError: scrapedResult.error,
+    hasWiktionaryData: wiktionaryData !== null,
   };
 }

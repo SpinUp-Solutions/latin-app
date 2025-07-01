@@ -116,6 +116,9 @@ export class WiktionaryScraperService {
       .map(result => (result as PromiseFulfilledResult<ScrapedResult>).value);
   }
 
+  /**
+   * Scrape Wiktionary data for a single word
+   */
   private static async scrapeWiktionary(word: string, context: BrowserContext): Promise<WiktionaryData | null> {
     const page = await context.newPage();
 
