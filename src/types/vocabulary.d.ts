@@ -56,7 +56,6 @@ export interface DeclensionData {
 
 export interface WiktionaryData {
   word: string;
-  partOfSpeech: string;
   gender?: string;
   declension?: string;
   definitions: string[];
@@ -99,6 +98,14 @@ export interface WordResponse {
   hasWiktionaryData: boolean;
 }
 
+export interface FailedWord {
+  word: string;
+  grammaticalInfo: string;
+  translation: string;
+  error: string;
+  originalText: string;
+}
+
 export interface ApiResponse {
   success: boolean;
   message: string;
@@ -111,10 +118,11 @@ export interface ApiResponse {
   };
   stats: {
     totalParsedEntries: number;
-    firstDeclensionNounsFound: number;
+    secondDeclensionNounsFound: number;
     scraped: number;
     successful: number;
     failed: number;
   };
   words: WordResponse[];
+  failedWords: FailedWord[];
 }

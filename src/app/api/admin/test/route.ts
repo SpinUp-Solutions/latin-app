@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 
-import { ApiResponse, ParsedEntry, ScrapedResult, WordResponse } from '@/src/types/vocabulary';
+import { ApiResponse, ScrapedResult, WordResponse, FailedWord } from '@/src/types/vocabulary';
 import { VocabularyParserService } from '@/src/services/vocabularyParserService';
 import { WiktionaryScraperService } from '@/src/services/wiktionaryScraperService';
 
@@ -13,26 +13,34 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     const parseResult = await VocabularyParserService.parseVocabularyFile();
 
-    // Scrape first declension nouns specifically
-    const scrapedResults = await WiktionaryScraperService.scrapeFirstDeclensionNouns(parseResult);
-    const firstDeclensionNouns = VocabularyParserService.filterFirstDeclensionNouns(parseResult);
+    // Scrape second declension nouns specifically
+    const scrapedResults = await WiktionaryScraperService.scrapeSecondDeclensionNouns(parseResult);
 
     const totalDuration = Date.now() - startTime;
     const performance = calculatePerformanceMetrics(scrapedResults, totalDuration);
 
+    const failedResults = scrapedResults.filter(r => r.wiktionaryData === null);
+
     return NextResponse.json({
       success: true,
-      message: 'Parser + Scraper test completed',
+      message: 'Parser + Scraper test completed (2nd declension nouns)',
       timestamp: new Date().toISOString(),
       performance,
       stats: {
         totalParsedEntries: parseResult.totalEntries,
-        firstDeclensionNounsFound: firstDeclensionNouns.length,
+        secondDeclensionNounsFound: VocabularyParserService.filterSecondDeclensionNouns(parseResult).length,
         scraped: scrapedResults.length,
         successful: scrapedResults.filter(r => r.wiktionaryData !== null).length,
-        failed: scrapedResults.filter(r => r.wiktionaryData === null).length,
+        failed: failedResults.length,
       },
       words: scrapedResults.map(formatWordForResponse),
+      failedWords: failedResults.map(result => ({
+        word: result.parsedData.wordForm,
+        grammaticalInfo: result.parsedData.grammaticalInfo,
+        translation: result.parsedData.translation,
+        error: result.error || 'No Wiktionary data found',
+        originalText: result.parsedData.originalText,
+      })),
     } as ApiResponse);
   } catch (error) {
     console.error('Parser + Scraper test failed:', error);
@@ -58,20 +66,20 @@ async function testDatabaseConnection(): Promise<void> {
 }
 
 function calculatePerformanceMetrics(results: ScrapedResult[], totalDuration: number) {
-  const avgTimePerWord = totalDuration / results.length;
+  const totalSeconds = totalDuration / 1000;
 
   return {
     totalDurationMs: totalDuration,
-    totalDurationSeconds: +(totalDuration / 1000).toFixed(1),
-    averageTimePerWordMs: +avgTimePerWord.toFixed(1),
-    wordsPerSecond: +(results.length / (totalDuration / 1000)).toFixed(1),
+    totalDurationSeconds: +totalSeconds.toFixed(1),
+    averageTimePerWordMs: +(totalDuration / results.length).toFixed(1),
+    wordsPerSecond: +(results.length / totalSeconds).toFixed(1),
   };
 }
 
 function formatWordForResponse(scrapedResult: ScrapedResult): WordResponse {
   const { parsedData, wiktionaryData } = scrapedResult;
 
-  // Helper function to map declension class numbers
+  // Helper function to map declension class from string to number (e.g., "1st" -> 1)
   const mapDeclensionClass = (declensionClass?: string): number | undefined => {
     if (!declensionClass) return undefined;
     const match = declensionClass.match(/(\d+)/);
@@ -79,28 +87,28 @@ function formatWordForResponse(scrapedResult: ScrapedResult): WordResponse {
   };
 
   return {
+    // Core word data
     word: parsedData.wordForm,
     grammaticalInfo: parsedData.grammaticalInfo,
     gender: parsedData.gender || wiktionaryData?.gender,
     translation: parsedData.translation,
     type: parsedData.wordType,
     declensionClass: mapDeclensionClass(parsedData.declensionClass),
+
     etymology: wiktionaryData?.etymology,
     pronunciation: wiktionaryData?.pronunciation,
     declensionTable: wiktionaryData?.declensionTable,
-    conjugationTable: undefined, // Not implemented yet for verbs
-    // Additional fields from parsed data
+    definitions: wiktionaryData?.definitions,
+    partOfSpeech: parsedData.wordType,
+    declension: wiktionaryData?.declension,
+
     id: parsedData.id,
     section: parsedData.section,
     subsection: parsedData.subsection,
     conjugationClass: parsedData.conjugationClass,
     isDeponent: parsedData.isDeponent,
     originalText: parsedData.originalText,
-    // Wiktionary additional data
-    definitions: wiktionaryData?.definitions,
-    partOfSpeech: wiktionaryData?.partOfSpeech,
-    declension: wiktionaryData?.declension,
-    // Scraping metadata
+
     scrapingError: scrapedResult.error,
     hasWiktionaryData: wiktionaryData !== null,
   };

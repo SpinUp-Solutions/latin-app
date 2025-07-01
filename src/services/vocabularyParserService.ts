@@ -20,6 +20,11 @@ export class VocabularyParserService {
     return allEntries.filter(entry => entry.wordType === 'noun' && entry.declensionClass === '1st');
   }
 
+  static filterSecondDeclensionNouns(parseResult: ParseResult): ParsedEntry[] {
+    const allEntries = Object.values(parseResult.sections).flat();
+    return allEntries.filter(entry => entry.wordType === 'noun' && entry.declensionClass === '2nd');
+  }
+
   private static combineMultiLineEntries(content: string): string {
     const lines = content.split('\n');
     const combinedLines: string[] = [];
@@ -62,13 +67,22 @@ export class VocabularyParserService {
   private static isHeaderLine(line: string): boolean {
     return (
       !line ||
-      line.match(
-        /^(Nouns:|Verbs:|Irregular Verbs|Adverbs|Prepositions|Pronouns|Conjunctions|Interjections|Enclitic|Numbers)/
-      ) !== null ||
-      line.match(/^\d+(st|nd|rd|th)\s+(Declension|Conjugation)/) !== null ||
-      line.match(/^(1st\/2nd Declension|3rd Declension).*Adjectives/) !== null ||
+      this.isSectionHeader(line) ||
+      this.isDeclensionSubsection(line) ||
       line.includes('(Deponents italicized)')
     );
+  }
+
+  private static isSectionHeader(line: string): boolean {
+    return (
+      /^(Nouns:|Verbs:|Irregular Verbs|Adverbs|Prepositions|Pronouns|Conjunctions|Interjections|Enclitic|Numbers)/.test(
+        line
+      ) || line.includes('Adjectives')
+    );
+  }
+
+  private static isDeclensionSubsection(line: string): boolean {
+    return /^\d+(st|nd|rd|th)\s+Declension(\s+Nouns)?\s*\(\d+\)$/.test(line);
   }
 
   private static isEntryStart(line: string): boolean {
@@ -88,19 +102,21 @@ export class VocabularyParserService {
       const trimmedLine = line.trim();
       if (!trimmedLine) continue;
 
-      if (trimmedLine.startsWith('Nouns:')) {
+      // Check for section headers (Nouns, Verbs, Adjectives, etc.)
+      if (this.isSectionHeader(trimmedLine)) {
         currentSection = trimmedLine;
         currentSubsection = '';
         continue;
       }
 
-      // Handle subsection headers like "2nd Declension (110)", "3rd Declension (144)", etc.
-      if (trimmedLine.match(/^\d+(st|nd|rd|th)\s+Declension\s*\(\d+\)$/)) {
+      // Handle declension subsection headers (only within Nouns sections)
+      if (currentSection.startsWith('Nouns:') && this.isDeclensionSubsection(trimmedLine)) {
         currentSubsection = trimmedLine;
         continue;
       }
 
-      if (trimmedLine.match(/^\d+\./)) {
+      // Only parse numbered entries if we're in a Nouns section
+      if (currentSection.startsWith('Nouns:') && trimmedLine.match(/^\d+\./)) {
         const entry = this.parseEntry(trimmedLine, currentSection, currentSubsection);
 
         if (entry) {
@@ -156,31 +172,11 @@ export class VocabularyParserService {
   }
 
   private static getDeclensionClass(grammaticalInfo: string, section: string, subsection: string): string | undefined {
-    // Check subsection first (more specific) - for entries after the first section
-    if (subsection) {
-      const declensionPatterns = [
-        { pattern: /1st Declension/, class: '1st' },
-        { pattern: /2nd Declension/, class: '2nd' },
-        { pattern: /3rd Declension/, class: '3rd' },
-        { pattern: /4th Declension/, class: '4th' },
-        { pattern: /5th Declension/, class: '5th' },
-      ];
+    // Check subsection first (more specific), then section
+    const textToCheck = subsection || section;
 
-      for (const { pattern, class: declClass } of declensionPatterns) {
-        if (pattern.test(subsection)) {
-          return declClass;
-        }
-      }
-    }
-
-    // Check section for the initial declension (e.g., "Nouns: 1st Declension (82)")
-    if (section.includes('1st Declension')) return '1st';
-    if (section.includes('2nd Declension')) return '2nd';
-    if (section.includes('3rd Declension')) return '3rd';
-    if (section.includes('4th Declension')) return '4th';
-    if (section.includes('5th Declension')) return '5th';
-
-    return undefined;
+    const declensionMatch = textToCheck.match(/(\d+)(st|nd|rd|th)\s+Declension/);
+    return declensionMatch ? `${declensionMatch[1]}${declensionMatch[2]}` : undefined;
   }
 
   private static extractGender(grammaticalInfo: string): string | undefined {

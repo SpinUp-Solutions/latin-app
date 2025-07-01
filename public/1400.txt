@@ -157,16 +157,16 @@ model
 wood); dictum factum (no sooner said than done) pattern (of conduct), object lesson,
 warning, copy, transcript, portrait
 27. falsum, -i n: error; lying; lie, falsehood; perjury
-28. fatum -i n: divine utterance, oracle; fate, destiny, doom; calamity; ruin; death; (fig) cause
+28. fatum, -i n: divine utterance, oracle; fate, destiny, doom; calamity; ruin; death; (fig) cause
 of death, cause of ruin; ad fata novissima (to the last); fato functus (dead); fato obire( to
 meet death); fatum est (it is fated); fatum proferre (to put off fate, prolong life): pl. what
 fate has in store, the future.
-29. ferrum -i n: iron; tool, implement; iron object; sword, dart, arrowhead, ax, plowshare,
+29. ferrum, -i n: iron; tool, implement; iron object; sword, dart, arrowhead, ax, plowshare,
 crowbar, spade, scissors, stylus, curling iron, knife; gladiatorial fight
-30. filius -i m: son
-31. flagitium -i n: shame, disgrace, scandal; good-for-nothing
+30. filius, -i m: son
+31. flagitium, -i n: shame, disgrace, scandal; good-for-nothing
 32. frumentum, -i n: grain; wheat; (pl.) grain fields; crops
-33. forum -i n: forum, civic center; shopping center, mall, marketplace; market town; trade,
+33. forum, -i n: forum, civic center; shopping center, mall, marketplace; market town; trade,
 commerce; public life, public affairs; jurisdiction; popular assembly; the bar, the courts;
 game board
 34. furtum, -i n: theft, robbery; trick; secret action, intrigue; secret love; furtem facere to
@@ -213,11 +213,11 @@ difficulty, trouble, banking, money lending, trade, commerce
 61. nihil, nihilo n: nothing; npl intrigues; secret love affair; stolen goods
 62. numerus, -i m: number, class, category, rank, position, estimation
 63. oculus, -i m: eye, eyeball, eye, bud, sight, vision
-64. odium -i n: dislike, aversion, hated, object of hatred
+64. odium, -i n: dislike, aversion, hated, object of hatred
 65. officium, -i n: service, favor, kindness, courtesy, obligation
 66. oppidum, -i n: town
 67. ornamentum, -i n: decoration, equipment, dress, ornament, distinction
-68. otium -i n: leisure, idleness; peace, quiet
+68. otium, -i n: leisure, idleness; peace, quiet
 69. periculum, -i n: danger
 70. pius, -ii m: conscientious; upright; faithful; patriotic/dutiful, respectful; righteous/good,
 affectionate, tender, devoted, loyal; pious, devout; holy, godly

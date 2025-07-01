@@ -132,7 +132,6 @@ export class WiktionaryScraperService {
 
       const result: WiktionaryData = {
         word,
-        partOfSpeech: '',
         definitions: [],
       };
 
@@ -195,7 +194,6 @@ export class WiktionaryScraperService {
         if (genderMatch) result.gender = genderMatch[1];
         if (declensionMatch) {
           result.declension = declensionMatch[0];
-          result.partOfSpeech = 'noun';
         }
       }
     } catch (error) {}
@@ -203,18 +201,31 @@ export class WiktionaryScraperService {
 
   private static async extractDefinitions(latinDiv: Locator, result: WiktionaryData): Promise<void> {
     try {
+      // Try to find noun definitions first (since we're primarily scraping nouns)
       const nounDiv = latinDiv
         .locator(
           'xpath=following-sibling::div[contains(@class,"mw-heading")][.//*[@id and starts-with(@id,"Noun")]][1]'
         )
         .first();
 
-      const definitionList = await nounDiv.locator('xpath=following-sibling::ol[1]/li').all();
+      if ((await nounDiv.count()) > 0) {
+        const definitionList = await nounDiv.locator('xpath=following-sibling::ol[1]/li').all();
 
-      for (const li of definitionList) {
-        const text = await li.textContent();
-        if (text?.trim()) {
-          result.definitions.push(text.trim());
+        for (const li of definitionList) {
+          const text = await li.textContent();
+          if (text?.trim()) {
+            result.definitions.push(text.trim());
+          }
+        }
+      } else {
+        // Fallback: try to find any definition list after the Latin section
+        const definitionList = await latinDiv.locator('xpath=following-sibling::ol[1]/li').all();
+
+        for (const li of definitionList) {
+          const text = await li.textContent();
+          if (text?.trim()) {
+            result.definitions.push(text.trim());
+          }
         }
       }
     } catch (error) {}
@@ -293,14 +304,20 @@ export class WiktionaryScraperService {
 
   /**
    * Scrape Wiktionary data for second declension nouns specifically
-   * TODO: Implement when needed
    */
   static async scrapeSecondDeclensionNouns(
     parseResult: ParseResult,
     concurrency: number = this.DEFAULT_CONCURRENCY
   ): Promise<ScrapedResult[]> {
-    // Implementation coming soon
-    throw new Error('Second declension noun scraping not yet implemented');
+    const secondDeclensionNouns = this.filterSecondDeclensionNouns(parseResult);
+    console.log(`Found ${secondDeclensionNouns.length} second declension nouns to scrape`);
+
+    if (secondDeclensionNouns.length === 0) {
+      console.log('No second declension nouns found to scrape');
+      return [];
+    }
+
+    return await this.scrapeWords(secondDeclensionNouns, concurrency);
   }
 
   /**
@@ -321,5 +338,13 @@ export class WiktionaryScraperService {
   private static filterFirstDeclensionNouns(parseResult: ParseResult): ParsedEntry[] {
     const allEntries: ParsedEntry[] = Object.values(parseResult.sections).flat();
     return allEntries.filter((entry: ParsedEntry) => entry.wordType === 'noun' && entry.declensionClass === '1st');
+  }
+
+  /**
+   * Filter entries to get only second declension nouns
+   */
+  private static filterSecondDeclensionNouns(parseResult: ParseResult): ParsedEntry[] {
+    const allEntries: ParsedEntry[] = Object.values(parseResult.sections).flat();
+    return allEntries.filter((entry: ParsedEntry) => entry.wordType === 'noun' && entry.declensionClass === '2nd');
   }
 }
