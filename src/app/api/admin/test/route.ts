@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 
-import { ApiResponse, ScrapedResult, WordResponse, FailedWord } from '@/src/types/vocabulary';
+import { ApiResponse, ScrapedResult, WordResponse } from '@/src/types/vocabulary';
 import { VocabularyParserService } from '@/src/services/vocabularyParserService';
 import { WiktionaryScraperService } from '@/src/services/wiktionaryScraperService';
 
