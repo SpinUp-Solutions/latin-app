@@ -293,22 +293,59 @@ export class WiktionaryScraperService {
       if (cells.length < 3) continue;
 
       const [caseCell, singularCell, pluralCell] = cells.slice(0, 3);
-      const [caseText, singularText, pluralText] = await Promise.all([
-        caseCell.textContent(),
-        singularCell.textContent(),
-        pluralCell.textContent(),
-      ]);
 
-      if (caseText && singularText && pluralText) {
+      // Extract case name
+      const caseText = await caseCell.textContent();
+      if (!caseText) continue;
+
+      // Extract multiple forms from singular cell
+      const singularForms = await this.extractMultipleForms(singularCell);
+
+      // Extract multiple forms from plural cell
+      const pluralForms = await this.extractMultipleForms(pluralCell);
+
+      if (singularForms.length > 0 && pluralForms.length > 0) {
         data.push({
           case: caseText.trim(),
-          singular: singularText.trim(),
-          plural: pluralText.trim(),
+          singular: singularForms,
+          plural: pluralForms,
         });
       }
     }
 
     return data;
+  }
+
+  /**
+   * Extract multiple forms from a table cell that may contain multiple spans
+   */
+  private static async extractMultipleForms(cell: Locator): Promise<string[]> {
+    const forms: string[] = [];
+
+    // First, try to find spans within the cell
+    const spans = await cell.locator('span.Latn').all();
+
+    if (spans.length > 0) {
+      // Extract text from each span
+      for (const span of spans) {
+        const text = await span.textContent();
+        if (text && text.trim()) {
+          forms.push(text.trim());
+        }
+      }
+    } else {
+      // Fallback: get the entire cell content and split if needed
+      const cellText = await cell.textContent();
+      if (cellText && cellText.trim()) {
+        // Sometimes multiple forms are separated by commas or spaces
+        const cleanText = cellText.trim();
+        // Only add as single form if it doesn't look like multiple concatenated forms
+        forms.push(cleanText);
+      }
+    }
+
+    // Filter out any empty strings and return unique forms
+    return Array.from(new Set(forms.filter(form => form && form.length > 0)));
   }
 
   private static delay(ms: number): Promise<void> {

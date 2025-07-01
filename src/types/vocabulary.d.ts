@@ -50,8 +50,8 @@ export interface ParseResult {
 
 export interface DeclensionData {
   case: string;
-  singular: string;
-  plural: string;
+  singular: string[];
+  plural: string[];
 }
 
 export interface WiktionaryData {
