@@ -182,6 +182,33 @@ export class WiktionaryScraperService {
   }
   private static async extractHeadingInfo(latinDiv: Locator, result: WiktionaryData): Promise<void> {
     try {
+      // First try to find noun-specific heading info
+      const nounDiv = latinDiv
+        .locator(
+          'xpath=following-sibling::div[contains(@class,"mw-heading")][.//*[@id and starts-with(@id,"Noun")]][1]'
+        )
+        .first();
+
+      if ((await nounDiv.count()) > 0) {
+        // Look for the paragraph immediately following the noun heading
+        const nounHeadPara = nounDiv.locator('xpath=following-sibling::p[1]').first();
+
+        if (await nounHeadPara.isVisible()) {
+          const text = await nounHeadPara.textContent();
+          if (text) {
+            const genderMatch = text.match(/\b([mfn])\b/);
+            const declensionMatch = text.match(/(first|second|third|fourth|fifth)\s+declension/i);
+
+            if (genderMatch) result.gender = genderMatch[1];
+            if (declensionMatch) {
+              result.declension = declensionMatch[0];
+            }
+            return;
+          }
+        }
+      }
+
+      // Fallback: use the first paragraph after Latin section if no noun section found
       const headPara = latinDiv.locator('xpath=following-sibling::p[1]').first();
 
       if (await headPara.isVisible()) {
@@ -233,6 +260,48 @@ export class WiktionaryScraperService {
 
   private static async extractDeclensionTable(latinDiv: Locator, result: WiktionaryData): Promise<void> {
     try {
+      // First, try to find the noun section specifically
+      const nounDiv = latinDiv
+        .locator(
+          'xpath=following-sibling::div[contains(@class,"mw-heading")][.//*[@id and starts-with(@id,"Noun")]][1]'
+        )
+        .first();
+
+      if ((await nounDiv.count()) > 0) {
+        // Look for declension section that comes after the noun section
+        const declensionDiv = nounDiv
+          .locator(
+            'xpath=following-sibling::div[contains(@class,"mw-heading")][.//*[@id and starts-with(@id,"Declension")]][1]'
+          )
+          .first();
+
+        if ((await declensionDiv.count()) > 0) {
+          const table = declensionDiv
+            .locator(
+              'xpath=following-sibling::div[contains(@class,"inflection-table-wrapper")]//table[contains(@class,"inflection-table")]'
+            )
+            .first();
+
+          if (await table.count()) {
+            result.declensionTable = await this.extractTableData(table);
+            return;
+          }
+        }
+
+        // If no declension section found after noun, look for inflection table directly after noun
+        const directTable = nounDiv
+          .locator(
+            'xpath=following-sibling::div[contains(@class,"inflection-table-wrapper")]//table[contains(@class,"inflection-table")][1]'
+          )
+          .first();
+
+        if (await directTable.count()) {
+          result.declensionTable = await this.extractTableData(directTable);
+          return;
+        }
+      }
+
+      // Fallback: use the original approach if no noun section found
       const declensionDiv = latinDiv
         .locator(
           'xpath=following-sibling::div[contains(@class,"mw-heading")][.//*[@id and starts-with(@id,"Declension")]][1]'
