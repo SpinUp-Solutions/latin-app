@@ -1,5 +1,6 @@
 import { chromium, Browser, BrowserContext, Locator } from 'playwright';
 import { ParsedEntry, WiktionaryData, ScrapedResult, DeclensionData, ParseResult } from '@/src/types/vocabulary';
+import { VocabularyParserService } from './vocabularyParserService';
 
 export class WiktionaryScraperService {
   private static readonly DEFAULT_CONCURRENCY = 45;
@@ -117,6 +118,15 @@ export class WiktionaryScraperService {
   }
 
   /**
+   * Helper to find the noun section under Latin
+   */
+  private static findNounSection(latinDiv: Locator): Locator {
+    return latinDiv
+      .locator('xpath=following-sibling::div[contains(@class,"mw-heading")][.//*[@id and starts-with(@id,"Noun")]][1]')
+      .first();
+  }
+
+  /**
    * Scrape Wiktionary data for a single word
    */
   private static async scrapeWiktionary(word: string, context: BrowserContext): Promise<WiktionaryData | null> {
@@ -182,34 +192,13 @@ export class WiktionaryScraperService {
   }
   private static async extractHeadingInfo(latinDiv: Locator, result: WiktionaryData): Promise<void> {
     try {
-      // First try to find noun-specific heading info
-      const nounDiv = latinDiv
-        .locator(
-          'xpath=following-sibling::div[contains(@class,"mw-heading")][.//*[@id and starts-with(@id,"Noun")]][1]'
-        )
-        .first();
+      // Look for noun section first, fallback to first paragraph after Latin
+      const nounDiv = this.findNounSection(latinDiv);
 
-      if ((await nounDiv.count()) > 0) {
-        // Look for the paragraph immediately following the noun heading
-        const nounHeadPara = nounDiv.locator('xpath=following-sibling::p[1]').first();
-
-        if (await nounHeadPara.isVisible()) {
-          const text = await nounHeadPara.textContent();
-          if (text) {
-            const genderMatch = text.match(/\b([mfn])\b/);
-            const declensionMatch = text.match(/(first|second|third|fourth|fifth)\s+declension/i);
-
-            if (genderMatch) result.gender = genderMatch[1];
-            if (declensionMatch) {
-              result.declension = declensionMatch[0];
-            }
-            return;
-          }
-        }
-      }
-
-      // Fallback: use the first paragraph after Latin section if no noun section found
-      const headPara = latinDiv.locator('xpath=following-sibling::p[1]').first();
+      const headPara =
+        (await nounDiv.count()) > 0
+          ? nounDiv.locator('xpath=following-sibling::p[1]').first()
+          : latinDiv.locator('xpath=following-sibling::p[1]').first();
 
       if (await headPara.isVisible()) {
         const text = await headPara.textContent();
@@ -219,40 +208,27 @@ export class WiktionaryScraperService {
         const declensionMatch = text.match(/(first|second|third|fourth|fifth)\s+declension/i);
 
         if (genderMatch) result.gender = genderMatch[1];
-        if (declensionMatch) {
-          result.declension = declensionMatch[0];
-        }
+        if (declensionMatch) result.declension = declensionMatch[0];
       }
     } catch (error) {}
   }
 
   private static async extractDefinitions(latinDiv: Locator, result: WiktionaryData): Promise<void> {
     try {
-      // Try to find noun definitions first (since we're primarily scraping nouns)
-      const nounDiv = latinDiv
-        .locator(
-          'xpath=following-sibling::div[contains(@class,"mw-heading")][.//*[@id and starts-with(@id,"Noun")]][1]'
-        )
-        .first();
+      // Look for noun definitions first, fallback to first definition list after Latin
+      const nounDiv = this.findNounSection(latinDiv);
 
-      if ((await nounDiv.count()) > 0) {
-        const definitionList = await nounDiv.locator('xpath=following-sibling::ol[1]/li').all();
+      const definitionLocator =
+        (await nounDiv.count()) > 0
+          ? nounDiv.locator('xpath=following-sibling::ol[1]/li')
+          : latinDiv.locator('xpath=following-sibling::ol[1]/li');
 
-        for (const li of definitionList) {
-          const text = await li.textContent();
-          if (text?.trim()) {
-            result.definitions.push(text.trim());
-          }
-        }
-      } else {
-        // Fallback: try to find any definition list after the Latin section
-        const definitionList = await latinDiv.locator('xpath=following-sibling::ol[1]/li').all();
+      const definitionList = await definitionLocator.all();
 
-        for (const li of definitionList) {
-          const text = await li.textContent();
-          if (text?.trim()) {
-            result.definitions.push(text.trim());
-          }
+      for (const li of definitionList) {
+        const text = await li.textContent();
+        if (text?.trim()) {
+          result.definitions.push(text.trim());
         }
       }
     } catch (error) {}
@@ -260,59 +236,45 @@ export class WiktionaryScraperService {
 
   private static async extractDeclensionTable(latinDiv: Locator, result: WiktionaryData): Promise<void> {
     try {
-      // First, try to find the noun section specifically
-      const nounDiv = latinDiv
-        .locator(
-          'xpath=following-sibling::div[contains(@class,"mw-heading")][.//*[@id and starts-with(@id,"Noun")]][1]'
-        )
-        .first();
+      // Find noun section first for more accurate targeting
+      const nounDiv = this.findNounSection(latinDiv);
+
+      let table: Locator;
 
       if ((await nounDiv.count()) > 0) {
-        // Look for declension section that comes after the noun section
+        // Try declension section after noun, then direct table after noun
         const declensionDiv = nounDiv
           .locator(
             'xpath=following-sibling::div[contains(@class,"mw-heading")][.//*[@id and starts-with(@id,"Declension")]][1]'
           )
           .first();
 
-        if ((await declensionDiv.count()) > 0) {
-          const table = declensionDiv
-            .locator(
-              'xpath=following-sibling::div[contains(@class,"inflection-table-wrapper")]//table[contains(@class,"inflection-table")]'
-            )
-            .first();
-
-          if (await table.count()) {
-            result.declensionTable = await this.extractTableData(table);
-            return;
-          }
-        }
-
-        // If no declension section found after noun, look for inflection table directly after noun
-        const directTable = nounDiv
+        table =
+          (await declensionDiv.count()) > 0
+            ? declensionDiv
+                .locator(
+                  'xpath=following-sibling::div[contains(@class,"inflection-table-wrapper")]//table[contains(@class,"inflection-table")]'
+                )
+                .first()
+            : nounDiv
+                .locator(
+                  'xpath=following-sibling::div[contains(@class,"inflection-table-wrapper")]//table[contains(@class,"inflection-table")][1]'
+                )
+                .first();
+      } else {
+        // Fallback: first declension section after Latin
+        const declensionDiv = latinDiv
           .locator(
-            'xpath=following-sibling::div[contains(@class,"inflection-table-wrapper")]//table[contains(@class,"inflection-table")][1]'
+            'xpath=following-sibling::div[contains(@class,"mw-heading")][.//*[@id and starts-with(@id,"Declension")]][1]'
           )
           .first();
 
-        if (await directTable.count()) {
-          result.declensionTable = await this.extractTableData(directTable);
-          return;
-        }
+        table = declensionDiv
+          .locator(
+            'xpath=following-sibling::div[contains(@class,"inflection-table-wrapper")]//table[contains(@class,"inflection-table")]'
+          )
+          .first();
       }
-
-      // Fallback: use the original approach if no noun section found
-      const declensionDiv = latinDiv
-        .locator(
-          'xpath=following-sibling::div[contains(@class,"mw-heading")][.//*[@id and starts-with(@id,"Declension")]][1]'
-        )
-        .first();
-
-      const table = declensionDiv
-        .locator(
-          'xpath=following-sibling::div[contains(@class,"inflection-table-wrapper")]//table[contains(@class,"inflection-table")]'
-        )
-        .first();
 
       if (await table.count()) {
         result.declensionTable = await this.extractTableData(table);
@@ -391,14 +353,56 @@ export class WiktionaryScraperService {
 
   /**
    * Scrape Wiktionary data for verbs specifically
-   * TODO: Implement when needed
    */
   static async scrapeVerbs(
     parseResult: ParseResult,
     concurrency: number = this.DEFAULT_CONCURRENCY
   ): Promise<ScrapedResult[]> {
-    // Implementation coming soon
-    throw new Error('Verb scraping not yet implemented');
+    const verbs = this.filterVerbs(parseResult);
+    console.log(`Found ${verbs.length} verbs to scrape`);
+
+    if (verbs.length === 0) {
+      console.log('No verbs found to scrape');
+      return [];
+    }
+
+    return await this.scrapeWords(verbs, concurrency);
+  }
+
+  /**
+   * Scrape Wiktionary data for adjectives specifically
+   */
+  static async scrapeAdjectives(
+    parseResult: ParseResult,
+    concurrency: number = this.DEFAULT_CONCURRENCY
+  ): Promise<ScrapedResult[]> {
+    const adjectives = this.filterAdjectives(parseResult);
+    console.log(`Found ${adjectives.length} adjectives to scrape`);
+
+    if (adjectives.length === 0) {
+      console.log('No adjectives found to scrape');
+      return [];
+    }
+
+    return await this.scrapeWords(adjectives, concurrency);
+  }
+
+  /**
+   * Scrape Wiktionary data for all entries
+   */
+  static async scrapeAllEntries(
+    parseResult: ParseResult,
+    concurrency: number = this.DEFAULT_CONCURRENCY
+  ): Promise<ScrapedResult[]> {
+    const allEntries = this.getAllEntries(parseResult);
+    console.log(`Found ${allEntries.length} total entries to scrape`);
+
+    if (allEntries.length === 0) {
+      console.log('No entries found to scrape');
+      return [];
+    }
+
+    return await this.scrapeWords(allEntries, concurrency);
   }
 
   /**
@@ -415,5 +419,28 @@ export class WiktionaryScraperService {
   private static filterSecondDeclensionNouns(parseResult: ParseResult): ParsedEntry[] {
     const allEntries: ParsedEntry[] = Object.values(parseResult.sections).flat();
     return allEntries.filter((entry: ParsedEntry) => entry.wordType === 'noun' && entry.declensionClass === '2nd');
+  }
+
+  /**
+   * Filter entries to get verbs
+   */
+  private static filterVerbs(parseResult: ParseResult): ParsedEntry[] {
+    const allEntries: ParsedEntry[] = Object.values(parseResult.sections).flat();
+    return allEntries.filter((entry: ParsedEntry) => entry.wordType === 'verb');
+  }
+
+  /**
+   * Filter entries to get adjectives
+   */
+  private static filterAdjectives(parseResult: ParseResult): ParsedEntry[] {
+    const allEntries: ParsedEntry[] = Object.values(parseResult.sections).flat();
+    return allEntries.filter((entry: ParsedEntry) => entry.wordType === 'adjective');
+  }
+
+  /**
+   * Get all entries flattened from all sections
+   */
+  private static getAllEntries(parseResult: ParseResult): ParsedEntry[] {
+    return Object.values(parseResult.sections).flat();
   }
 }

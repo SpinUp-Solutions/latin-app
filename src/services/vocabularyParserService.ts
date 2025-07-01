@@ -25,6 +25,45 @@ export class VocabularyParserService {
     return allEntries.filter(entry => entry.wordType === 'noun' && entry.declensionClass === '2nd');
   }
 
+  /**
+   * Filter entries to get all nouns (any declension)
+   */
+  static filterAllNouns(parseResult: ParseResult): ParsedEntry[] {
+    const allEntries = Object.values(parseResult.sections).flat();
+    return allEntries.filter(entry => entry.wordType === 'noun');
+  }
+
+  /**
+   * Filter entries to get all verbs
+   */
+  static filterVerbs(parseResult: ParseResult): ParsedEntry[] {
+    const allEntries = Object.values(parseResult.sections).flat();
+    return allEntries.filter(entry => entry.wordType === 'verb');
+  }
+
+  /**
+   * Filter entries to get all adjectives
+   */
+  static filterAdjectives(parseResult: ParseResult): ParsedEntry[] {
+    const allEntries = Object.values(parseResult.sections).flat();
+    return allEntries.filter(entry => entry.wordType === 'adjective');
+  }
+
+  /**
+   * Filter entries by word type
+   */
+  static filterByWordType(parseResult: ParseResult, wordType: ParsedEntry['wordType']): ParsedEntry[] {
+    const allEntries = Object.values(parseResult.sections).flat();
+    return allEntries.filter(entry => entry.wordType === wordType);
+  }
+
+  /**
+   * Get all entries flattened from all sections
+   */
+  static getAllEntries(parseResult: ParseResult): ParsedEntry[] {
+    return Object.values(parseResult.sections).flat();
+  }
+
   private static combineMultiLineEntries(content: string): string {
     const lines = content.split('\n');
     const combinedLines: string[] = [];
@@ -33,7 +72,16 @@ export class VocabularyParserService {
     for (const line of lines) {
       const trimmedLine = line.trim();
 
-      if (this.isHeaderLine(trimmedLine)) {
+      // If this is a section header or empty line, end current entry
+      if (
+        !trimmedLine ||
+        trimmedLine.match(
+          /^(Nouns:|Verbs:|Irregular Verbs|Adverbs|Prepositions|Pronouns|Conjunctions|Interjections|Enclitic|Numbers)/
+        ) ||
+        trimmedLine.match(/^\d+(st|nd|rd|th)\s+(Declension|Conjugation)/) ||
+        trimmedLine.match(/^(1st\/2nd Declension|3rd Declension).*Adjectives/) ||
+        trimmedLine.includes('(Deponents italicized)')
+      ) {
         if (currentEntry) {
           combinedLines.push(currentEntry);
           currentEntry = '';
@@ -45,18 +93,22 @@ export class VocabularyParserService {
         continue;
       }
 
-      if (this.isEntryStart(trimmedLine)) {
+      // If this starts a new numbered entry, save previous and start new
+      if (trimmedLine.match(/^\d+\./)) {
         if (currentEntry) {
           combinedLines.push(currentEntry);
         }
         currentEntry = trimmedLine;
       } else if (currentEntry) {
+        // Continue building current entry
         currentEntry += ' ' + trimmedLine;
       } else {
+        // Line that doesn't belong to an entry
         combinedLines.push(trimmedLine);
       }
     }
 
+    // Don't forget the last entry
     if (currentEntry) {
       combinedLines.push(currentEntry);
     }
@@ -90,34 +142,103 @@ export class VocabularyParserService {
   }
 
   private static parseContent(content: string): ParseResult {
-    const lines = content.split('\n');
+    // First, combine multi-line entries
+    const combinedContent = this.combineMultiLineEntries(content);
+    const lines = combinedContent.split('\n');
+
     const sections: Record<string, ParsedEntry[]> = {};
     const summary: Record<string, number> = {};
 
     let currentSection = '';
     let currentSubsection = '';
     let totalEntries = 0;
+    let isInDeponentSection = false;
 
     for (const line of lines) {
       const trimmedLine = line.trim();
       if (!trimmedLine) continue;
 
-      // Check for section headers (Nouns, Verbs, Adjectives, etc.)
-      if (this.isSectionHeader(trimmedLine)) {
+      // Check for main section headers
+      if (trimmedLine.startsWith('Nouns:')) {
+        currentSection = trimmedLine;
+        currentSubsection = '';
+        isInDeponentSection = false;
+        continue;
+      }
+      if (trimmedLine.startsWith('Verbs:')) {
+        currentSection = trimmedLine;
+        currentSubsection = '';
+        isInDeponentSection = false;
+        continue;
+      }
+      if (
+        trimmedLine.match(
+          /^(Irregular Verbs|Adverbs|Prepositions|Pronouns|Conjunctions|Interjections|Enclitic|Numbers)/
+        )
+      ) {
+        currentSection = trimmedLine;
+        currentSubsection = '';
+        isInDeponentSection = false;
+        continue;
+      }
+
+      // Check for subsection headers (like "2nd Declension (110)")
+      if (trimmedLine.match(/^\d+(st|nd|rd|th)\s+Declension\s*\(\d+\)$/)) {
+        currentSubsection = trimmedLine;
+        continue;
+      }
+
+      // Check for specific noun declension headers (like "3rd Declension Nouns (181)")
+      if (trimmedLine.match(/^\d+(st|nd|rd|th)\s+Declension\s+Nouns\s*\(\d+\)$/)) {
+        currentSubsection = trimmedLine;
+        continue;
+      }
+
+      // Check for conjugation headers (like "2nd Conjugation (51)")
+      if (trimmedLine.match(/^\d+(st|nd|rd|th)\s+Conjugation\s*\(\d+\)$/)) {
+        currentSubsection = trimmedLine;
+        continue;
+      }
+
+      // Check for adjective subsection headers
+      if (trimmedLine.match(/^(1st\/2nd Declension|3rd Declension).*Adjectives/)) {
         currentSection = trimmedLine;
         currentSubsection = '';
         continue;
       }
 
-      // Handle declension subsection headers (only within Nouns sections)
-      if (currentSection.startsWith('Nouns:') && this.isDeclensionSubsection(trimmedLine)) {
-        currentSubsection = trimmedLine;
+      // Check for deponent indicator
+      if (trimmedLine.includes('(Deponents italicized)')) {
+        isInDeponentSection = true;
         continue;
       }
 
-      // Only parse numbered entries if we're in a Nouns section
-      if (currentSection.startsWith('Nouns:') && trimmedLine.match(/^\d+\./)) {
-        const entry = this.parseEntry(trimmedLine, currentSection, currentSubsection);
+      // Parse numbered entries
+      if (trimmedLine.match(/^\d+\./)) {
+        let entry: ParsedEntry | null = null;
+
+        // Determine entry type based on current section
+        if (currentSection.startsWith('Nouns')) {
+          entry = this.parseNounEntry(trimmedLine, currentSection, currentSubsection);
+        } else if (currentSection.startsWith('Verbs') || currentSection.startsWith('Irregular Verbs')) {
+          entry = this.parseVerbEntry(trimmedLine, currentSection, currentSubsection, isInDeponentSection);
+        } else if (currentSection.includes('Adjectives')) {
+          entry = this.parseAdjectiveEntry(trimmedLine, currentSection, currentSubsection);
+        } else if (currentSection.startsWith('Adverbs')) {
+          entry = this.parseSimpleEntry(trimmedLine, currentSection, currentSubsection, 'adverb');
+        } else if (currentSection.startsWith('Prepositions')) {
+          entry = this.parseSimpleEntry(trimmedLine, currentSection, currentSubsection, 'preposition');
+        } else if (currentSection.startsWith('Pronouns')) {
+          entry = this.parseSimpleEntry(trimmedLine, currentSection, currentSubsection, 'pronoun');
+        } else if (currentSection.startsWith('Conjunctions')) {
+          entry = this.parseSimpleEntry(trimmedLine, currentSection, currentSubsection, 'conjunction');
+        } else if (currentSection.startsWith('Interjections')) {
+          entry = this.parseSimpleEntry(trimmedLine, currentSection, currentSubsection, 'interjection');
+        } else if (currentSection.startsWith('Enclitic')) {
+          entry = this.parseSimpleEntry(trimmedLine, currentSection, currentSubsection, 'enclitic');
+        } else if (currentSection.startsWith('Numbers')) {
+          entry = this.parseSimpleEntry(trimmedLine, currentSection, currentSubsection, 'number');
+        }
 
         if (entry) {
           const sectionKey = currentSubsection || currentSection;
@@ -127,6 +248,7 @@ export class VocabularyParserService {
           sections[sectionKey].push(entry);
           totalEntries++;
 
+          // Update summary
           const summaryKey = `${currentSection} - ${currentSubsection || 'General'}`;
           summary[summaryKey] = (summary[summaryKey] || 0) + 1;
         }
@@ -146,6 +268,107 @@ export class VocabularyParserService {
     }
     // Add other entry types as needed
     return null;
+  }
+
+  /**
+   * Parse verb entries like "1. admiror, admirari, admiratus sum: to admire, wonder at, be surprised at"
+   */
+  private static parseVerbEntry(
+    line: string,
+    section: string,
+    subsection: string,
+    isDeponent: boolean = false
+  ): ParsedEntry | null {
+    const match = line.match(/^(\d+)\.\s*([^:]+):\s*(.+)$/);
+    if (!match) return null;
+
+    const [, id, leftPart, translation] = match;
+
+    // Extract principal parts
+    const parts = leftPart.split(',').map(part => part.trim());
+    const wordForm = parts[0]; // First principal part
+    const grammaticalInfo = leftPart; // All principal parts
+
+    return {
+      id: parseInt(id),
+      originalText: line,
+      wordForm,
+      grammaticalInfo,
+      translation: translation.trim(),
+      section,
+      subsection,
+      wordType: 'verb',
+      conjugationClass: this.getConjugationClass(subsection),
+      isDeponent,
+    };
+  }
+
+  /**
+   * Parse adjective entries like "1. acerbus, -a, -um: bitter, harsh, sour, unripe, cruel, premature, rough"
+   */
+  private static parseAdjectiveEntry(line: string, section: string, subsection: string): ParsedEntry | null {
+    const match = line.match(/^(\d+)\.\s*([^:]+):\s*(.+)$/);
+    if (!match) return null;
+
+    const [, id, leftPart, translation] = match;
+
+    // Extract word form and grammatical info
+    const parts = leftPart.split(',').map(part => part.trim());
+    const wordForm = parts[0];
+    const grammaticalInfo = leftPart;
+
+    return {
+      id: parseInt(id),
+      originalText: line,
+      wordForm,
+      grammaticalInfo,
+      translation: translation.trim(),
+      section,
+      subsection,
+      wordType: 'adjective',
+      declensionClass: subsection.includes('3rd Declension') ? '3rd' : '1st/2nd',
+    };
+  }
+
+  /**
+   * Parse simple entries like adverbs, prepositions, etc.
+   */
+  private static parseSimpleEntry(
+    line: string,
+    section: string,
+    subsection: string,
+    wordType: ParsedEntry['wordType']
+  ): ParsedEntry | null {
+    const match = line.match(/^(\d+)\.\s*([^:]+):\s*(.+)$/);
+    if (!match) return null;
+
+    const [, id, leftPart, translation] = match;
+
+    // For simple entries, the word form is usually the first word
+    const wordForm = leftPart.split(/[,\s]+/)[0];
+    const grammaticalInfo = leftPart;
+
+    return {
+      id: parseInt(id),
+      originalText: line,
+      wordForm,
+      grammaticalInfo,
+      translation: translation.trim(),
+      section,
+      subsection,
+      wordType,
+    };
+  }
+
+  /**
+   * Helper function to determine conjugation class for verbs
+   */
+  private static getConjugationClass(section: string): string | undefined {
+    if (section.includes('1st Conjugation')) return '1st';
+    if (section.includes('2nd Conjugation')) return '2nd';
+    if (section.includes('3rd Conjugation')) return '3rd';
+    if (section.includes('4th Conjugation')) return '4th';
+    return undefined;
   }
 
   private static parseNounEntry(line: string, section: string, subsection: string): ParsedEntry | null {
@@ -171,28 +394,24 @@ export class VocabularyParserService {
     };
   }
 
-  private static getDeclensionClass(grammaticalInfo: string, section: string, subsection: string): string | undefined {
+  private static getDeclensionClass(grammaticalInfo: string, section: string, subsection?: string): string | undefined {
     // Check subsection first (more specific), then section
     const textToCheck = subsection || section;
 
-    const declensionMatch = textToCheck.match(/(\d+)(st|nd|rd|th)\s+Declension/);
-    return declensionMatch ? `${declensionMatch[1]}${declensionMatch[2]}` : undefined;
+    if (textToCheck.includes('1st Declension')) return '1st';
+    if (textToCheck.includes('2nd Declension')) return '2nd';
+    if (textToCheck.includes('3rd Declension')) return '3rd';
+    if (textToCheck.includes('4th Declension')) return '4th';
+    if (textToCheck.includes('5th Declension')) return '5th';
+    return undefined;
   }
 
   private static extractGender(grammaticalInfo: string): string | undefined {
-    const genderPatterns = [
-      { pattern: /\s+f[:)\s]|\sf$/, gender: 'f' },
-      { pattern: /\s+m[:)\s]|\sm$/, gender: 'm' },
-      { pattern: /\s+n[:)\s]|\sn$/, gender: 'n' },
-      { pattern: /\s+m\/f[:)\s]|\sm\/f$/, gender: 'm/f' },
-    ];
-
-    for (const { pattern, gender } of genderPatterns) {
-      if (pattern.test(grammaticalInfo)) {
-        return gender;
-      }
-    }
-
+    if (grammaticalInfo.includes(' f:') || grammaticalInfo.includes(' f') || grammaticalInfo.endsWith(' f')) return 'f';
+    if (grammaticalInfo.includes(' m:') || grammaticalInfo.includes(' m') || grammaticalInfo.endsWith(' m')) return 'm';
+    if (grammaticalInfo.includes(' n:') || grammaticalInfo.includes(' n') || grammaticalInfo.endsWith(' n')) return 'n';
+    if (grammaticalInfo.includes(' m/f:') || grammaticalInfo.includes(' m/f') || grammaticalInfo.endsWith(' m/f'))
+      return 'm/f';
     return undefined;
   }
 }
