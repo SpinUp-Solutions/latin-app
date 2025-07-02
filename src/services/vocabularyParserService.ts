@@ -392,10 +392,23 @@ export class VocabularyParserService {
 
     const [, id, leftPart, translation] = match;
     const parts = leftPart.split(',').map(part => part.trim());
-    const wordForm = parts[0];
+
+    // Handle alternative forms separated by "/" in the first part
+    const firstPart = parts[0];
+    let wordForm: string;
+    let alternateForm: string | undefined;
+
+    if (firstPart.includes('/')) {
+      const wordParts = firstPart.split('/').map(part => part.trim());
+      wordForm = wordParts[0]; // First form is the main word
+      alternateForm = wordParts[1]; // Second form is the alternate
+    } else {
+      wordForm = firstPart;
+    }
+
     const grammaticalInfo = parts.slice(1).join(', ');
 
-    return {
+    const entry: ParsedEntry = {
       id: parseInt(id),
       originalText: line,
       wordForm,
@@ -407,6 +420,13 @@ export class VocabularyParserService {
       declensionClass: this.getDeclensionClass(grammaticalInfo, section, subsection),
       gender: this.extractGender(grammaticalInfo),
     };
+
+    // Only add alternateForm if it exists
+    if (alternateForm) {
+      entry.alternateForm = alternateForm;
+    }
+
+    return entry;
   }
 
   private static getDeclensionClass(grammaticalInfo: string, section: string, subsection?: string): string | undefined {

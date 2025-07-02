@@ -93,6 +93,7 @@ function formatWordForResponse(scrapedResult: ScrapedResult): WordResponse {
   return {
     // Core word data
     word: parsedData.wordForm,
+    alternateForm: parsedData.alternateForm,
     grammaticalInfo: parsedData.grammaticalInfo,
     gender: parsedData.gender || wiktionaryData?.gender,
     translation: parsedData.translation,

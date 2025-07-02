@@ -21,6 +21,7 @@ export interface ParsedEntry {
   id: number;
   originalText: string;
   wordForm: string;
+  alternateForm?: string;
   grammaticalInfo: string;
   translation: string;
   section: string;
@@ -73,6 +74,7 @@ export interface ScrapedResult {
 
 export interface WordResponse {
   word: string;
+  alternateForm?: string;
   grammaticalInfo: string;
   gender?: string;
   translation: string;

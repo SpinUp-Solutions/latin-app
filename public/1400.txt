@@ -500,7 +500,7 @@ ordo, ordinis m: line, row, series; rank
 122.
 origo, originis f: beginning, source; ancestry, founder
 123.
-os oris n: mouth; face; entrance
+os, oris n: mouth; face; entrance
 124.
 pecus, pecudis f: sheep; animal; flock, herd
 125.
