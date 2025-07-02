@@ -389,6 +389,60 @@ export class WiktionaryScraperService {
   }
 
   /**
+   * Scrape Wiktionary data for third declension nouns specifically
+   */
+  static async scrapeThirdDeclensionNouns(
+    parseResult: ParseResult,
+    concurrency: number = this.DEFAULT_CONCURRENCY
+  ): Promise<ScrapedResult[]> {
+    const thirdDeclensionNouns = this.filterThirdDeclensionNouns(parseResult);
+    console.log(`Found ${thirdDeclensionNouns.length} third declension nouns to scrape`);
+
+    if (thirdDeclensionNouns.length === 0) {
+      console.log('No third declension nouns found to scrape');
+      return [];
+    }
+
+    return await this.scrapeWords(thirdDeclensionNouns, concurrency);
+  }
+
+  /**
+   * Scrape Wiktionary data for fourth declension nouns specifically
+   */
+  static async scrapeFourthDeclensionNouns(
+    parseResult: ParseResult,
+    concurrency: number = this.DEFAULT_CONCURRENCY
+  ): Promise<ScrapedResult[]> {
+    const fourthDeclensionNouns = this.filterFourthDeclensionNouns(parseResult);
+    console.log(`Found ${fourthDeclensionNouns.length} fourth declension nouns to scrape`);
+
+    if (fourthDeclensionNouns.length === 0) {
+      console.log('No fourth declension nouns found to scrape');
+      return [];
+    }
+
+    return await this.scrapeWords(fourthDeclensionNouns, concurrency);
+  }
+
+  /**
+   * Scrape Wiktionary data for fifth declension nouns specifically
+   */
+  static async scrapeFifthDeclensionNouns(
+    parseResult: ParseResult,
+    concurrency: number = this.DEFAULT_CONCURRENCY
+  ): Promise<ScrapedResult[]> {
+    const fifthDeclensionNouns = this.filterFifthDeclensionNouns(parseResult);
+    console.log(`Found ${fifthDeclensionNouns.length} fifth declension nouns to scrape`);
+
+    if (fifthDeclensionNouns.length === 0) {
+      console.log('No fifth declension nouns found to scrape');
+      return [];
+    }
+
+    return await this.scrapeWords(fifthDeclensionNouns, concurrency);
+  }
+
+  /**
    * Scrape Wiktionary data for verbs specifically
    */
   static async scrapeVerbs(
@@ -456,6 +510,30 @@ export class WiktionaryScraperService {
   private static filterSecondDeclensionNouns(parseResult: ParseResult): ParsedEntry[] {
     const allEntries: ParsedEntry[] = Object.values(parseResult.sections).flat();
     return allEntries.filter((entry: ParsedEntry) => entry.wordType === 'noun' && entry.declensionClass === '2nd');
+  }
+
+  /**
+   * Filter entries to get only third declension nouns
+   */
+  private static filterThirdDeclensionNouns(parseResult: ParseResult): ParsedEntry[] {
+    const allEntries: ParsedEntry[] = Object.values(parseResult.sections).flat();
+    return allEntries.filter((entry: ParsedEntry) => entry.wordType === 'noun' && entry.declensionClass === '3rd');
+  }
+
+  /**
+   * Filter entries to get only fourth declension nouns
+   */
+  private static filterFourthDeclensionNouns(parseResult: ParseResult): ParsedEntry[] {
+    const allEntries: ParsedEntry[] = Object.values(parseResult.sections).flat();
+    return allEntries.filter((entry: ParsedEntry) => entry.wordType === 'noun' && entry.declensionClass === '4th');
+  }
+
+  /**
+   * Filter entries to get only fifth declension nouns
+   */
+  private static filterFifthDeclensionNouns(parseResult: ParseResult): ParsedEntry[] {
+    const allEntries: ParsedEntry[] = Object.values(parseResult.sections).flat();
+    return allEntries.filter((entry: ParsedEntry) => entry.wordType === 'noun' && entry.declensionClass === '5th');
   }
 
   /**

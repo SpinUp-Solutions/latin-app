@@ -13,8 +13,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     const parseResult = await VocabularyParserService.parseVocabularyFile();
 
-    // Scrape second declension nouns specifically
-    const scrapedResults = await WiktionaryScraperService.scrapeSecondDeclensionNouns(parseResult);
+    // Scrape third declension nouns specifically (you can change this to any declension)
+    const scrapedResults = await WiktionaryScraperService.scrapeThirdDeclensionNouns(parseResult);
 
     const totalDuration = Date.now() - startTime;
     const performance = calculatePerformanceMetrics(scrapedResults, totalDuration);
@@ -23,12 +23,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json({
       success: true,
-      message: 'Parser + Scraper test completed (2nd declension nouns)',
+      message: 'Parser + Scraper test completed (3rd declension nouns)',
       timestamp: new Date().toISOString(),
       performance,
       stats: {
         totalParsedEntries: parseResult.totalEntries,
+        firstDeclensionNounsFound: VocabularyParserService.filterFirstDeclensionNouns(parseResult).length,
         secondDeclensionNounsFound: VocabularyParserService.filterSecondDeclensionNouns(parseResult).length,
+        thirdDeclensionNounsFound: VocabularyParserService.filterThirdDeclensionNouns(parseResult).length,
+        fourthDeclensionNounsFound: VocabularyParserService.filterFourthDeclensionNouns(parseResult).length,
+        fifthDeclensionNounsFound: VocabularyParserService.filterFifthDeclensionNouns(parseResult).length,
         scraped: scrapedResults.length,
         successful: scrapedResults.filter(r => r.wiktionaryData !== null).length,
         failed: failedResults.length,

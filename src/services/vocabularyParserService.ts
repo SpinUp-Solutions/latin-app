@@ -25,6 +25,21 @@ export class VocabularyParserService {
     return allEntries.filter(entry => entry.wordType === 'noun' && entry.declensionClass === '2nd');
   }
 
+  static filterThirdDeclensionNouns(parseResult: ParseResult): ParsedEntry[] {
+    const allEntries = Object.values(parseResult.sections).flat();
+    return allEntries.filter(entry => entry.wordType === 'noun' && entry.declensionClass === '3rd');
+  }
+
+  static filterFourthDeclensionNouns(parseResult: ParseResult): ParsedEntry[] {
+    const allEntries = Object.values(parseResult.sections).flat();
+    return allEntries.filter(entry => entry.wordType === 'noun' && entry.declensionClass === '4th');
+  }
+
+  static filterFifthDeclensionNouns(parseResult: ParseResult): ParsedEntry[] {
+    const allEntries = Object.values(parseResult.sections).flat();
+    return allEntries.filter(entry => entry.wordType === 'noun' && entry.declensionClass === '5th');
+  }
+
   /**
    * Filter entries to get all nouns (any declension)
    */

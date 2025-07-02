@@ -296,16 +296,13 @@ defect, technicality; (med) lesion
 vulgus, -i n: masses, public, people, crowd; herd, flock; rabble, populace
 
 3rd Declension Nouns (181)
-1.
-2.
-3.
-4.
+1. adulescens, -ntis, m/f: young man, young lady
 
-adulescens, -ntis, m/f: young man, young lady
-aedes, aedis, f: room, apartment, shrine, temple (pl): house
-aer, aeris, m: air, atmosphere, climate, weather, mist
-aes, aeris, n: copper, bronze, statue, utensil, armor, trumpet, money, cash, bronze coin,
-a copper, bronze inscribed tablet
+2. aedes, aedis, f: room, apartment, shrine, temple (pl): house
+
+3. aer, aeris, m: air, atmosphere, climate, weather, mist
+
+4. aes, aeris, n: copper, bronze, statue, utensil, armor, trumpet, money, cash, bronze coin, a copper, bronze inscribed tablet
 5. aestas, aestatis, f: summer, summer heat, summer weather
 6. aetas, aetatis, f: lifetime, age, generation, period of life, passage of time, era, age group
 7. agmen, agminis, n: herd, flock, troop, crowd, body, mass, army column, progression,
@@ -377,7 +374,7 @@ destruction; sub funus on the brink of the grave
 inspiration; passionate love
 58. gens, gentis f: (Roman) clan, extended family (sharing the same nomen and
 theoretically, the same ancestor); stock; tribe; species, breed; descendant, offspring
-59. genus generis n: race, descent, lineage, breed, stock, family; noble birth; tribe; nation,
+59. genus, generis n: race, descent, lineage, breed, stock, family; noble birth; tribe; nation,
 people; descendant, offspring, posterity; kind, sort, species, class
 60. gravitas, -atis f: weight; severity, harshness; seriousness; importance; dignity,
 influence, authority; pregnancy; violence, vehemence; offensiveness (of smell);
@@ -431,7 +428,7 @@ light of hope, encouragement; glory; elucidation
 84. magnitudo, -inis f: magnitude; size; large quantity, large number; vastness, extent;
 greatness; importance; power, might; high station, dignity, high rank; dignity of character;
 length (of time); intensity (of storm, etc); strength, loudness
-85. mane n: (indecl.). morning
+85. mane, n: (indecl.). morning
 86. mare, -is n: sea, saltwater
 87. mater, -tris f: mother, matron; foster mother; (in addressing an old woman) ma’am; ( of
 animals) dam; cause , origin, source; motherland, native land; native city
@@ -463,7 +460,7 @@ navis, -is f: ship
 necessitas, -atis f: necessity, inevitability, compulsion, urgency, requirement,
 privation, want, relationship, connection, friendship
 104.
-nefas n: (indecl.) crime (nefas est: it is a crime)
+nefas, n: (indecl.) crime (nefas est: it is a crime)
 105.
 nemo, -inis m/f: no one, nobody, a person of no consequence, a nobody
 106.
@@ -578,7 +575,7 @@ salus, -utis f: health, welfare, prosperity, safety, greeting, best regards
 sanguis, -inis m: blood, descent, parentage,family, descendant, murder,
 bloodshed, lifeblood, source of vitality, life, strength, forcefulness, life, vigor
 150.
-satis n: (indecl.) enough, sufficient, adequate, satisfaction, security, guarantee
+satis, n: (indecl.) enough, sufficient, adequate, satisfaction, security, guarantee
 151.
 scelus, -eris n: wicked deed, crime, wickedness, calamity
 152.
@@ -641,7 +638,7 @@ virtus, -utis f: manliness, manhood, virility; strength; valor; gallantry; excel
 worth; special property; moral excellence, goodness, virtue; good quality, high quality (of
 people, animal, things); potency, effectiveness (drugs, medications)
 177.
-vis f: (gen not in use; dat & abl: vi; acc: vim; pl. vires, ium) power, strength, force;
+vis, f: (gen not in use; dat & abl: vi; acc: vim; pl. vires, ium) power, strength, force;
 influence, energy, hostile force, violence, attack; amount, quantity; meaning, force (of
 words); binding force (of law); value, amount; vires: fpl strength; resources; potency,
 power, control; influence; financial resources; assets; powers of intellect; capability;
