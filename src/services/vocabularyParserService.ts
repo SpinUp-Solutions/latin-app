@@ -222,9 +222,8 @@ export class VocabularyParserService {
         continue;
       }
 
-      // Check for deponent indicator
+      // Skip deponent indicator line (deponent info will come from Wiktionary)
       if (trimmedLine.includes('(Deponents italicized)')) {
-        isInDeponentSection = true;
         continue;
       }
 
@@ -236,7 +235,7 @@ export class VocabularyParserService {
         if (currentSection.startsWith('Nouns')) {
           entry = this.parseNounEntry(trimmedLine, currentSection, currentSubsection);
         } else if (currentSection.startsWith('Verbs') || currentSection.startsWith('Irregular Verbs')) {
-          entry = this.parseVerbEntry(trimmedLine, currentSection, currentSubsection, isInDeponentSection);
+          entry = this.parseVerbEntry(trimmedLine, currentSection, currentSubsection);
         } else if (currentSection.includes('Adjectives')) {
           entry = this.parseAdjectiveEntry(trimmedLine, currentSection, currentSubsection);
         } else if (currentSection.startsWith('Adverbs')) {
@@ -287,35 +286,35 @@ export class VocabularyParserService {
 
   /**
    * Parse verb entries like "1. admiror, admirari, admiratus sum: to admire, wonder at, be surprised at"
+   * or "2. accuso, -are, -avi, -atus: to accuse, prosecute, reproach, blame"
    */
-  private static parseVerbEntry(
-    line: string,
-    section: string,
-    subsection: string,
-    isDeponent: boolean = false
-  ): ParsedEntry | null {
+  private static parseVerbEntry(line: string, section: string, subsection: string): ParsedEntry | null {
     const match = line.match(/^(\d+)\.\s*([^:]+):\s*(.+)$/);
     if (!match) return null;
 
     const [, id, leftPart, translation] = match;
 
-    // Extract principal parts
-    const parts = leftPart.split(',').map(part => part.trim());
-    const wordForm = parts[0]; // First principal part
-    const grammaticalInfo = leftPart; // All principal parts
+    // Extract and process principal parts
+    const rawParts = leftPart.split(',').map(part => part.trim());
+    const wordForm = rawParts[0]; // First principal part
 
-    return {
+    // Process principal parts (no deponent detection - will be determined via Wiktionary)
+    const principalParts = this.processPrincipalParts(rawParts);
+
+    const entry: ParsedEntry = {
       id: parseInt(id),
       originalText: line,
       wordForm,
-      grammaticalInfo,
+      grammaticalInfo: leftPart,
       translation: translation.trim(),
       section,
       subsection,
       wordType: 'verb',
       conjugationClass: this.getConjugationClass(subsection),
-      isDeponent,
+      principalParts,
     };
+
+    return entry;
   }
 
   /**
@@ -373,6 +372,55 @@ export class VocabularyParserService {
       subsection,
       wordType,
     };
+  }
+
+  /**
+   * Process principal parts of verbs, handling abbreviated forms
+   */
+  private static processPrincipalParts(rawParts: string[]): string[] {
+    if (rawParts.length === 0) {
+      return [];
+    }
+
+    const principalParts: string[] = [];
+    const stem = this.getVerbStem(rawParts[0]);
+
+    // First part is always the full form
+    principalParts.push(rawParts[0]);
+
+    // Process remaining parts
+    for (let i = 1; i < rawParts.length; i++) {
+      const part = rawParts[i].trim();
+
+      // Handle abbreviated forms (starting with -)
+      if (part.startsWith('-')) {
+        const fullForm = stem + part.substring(1);
+        principalParts.push(fullForm);
+      } else {
+        // Full form already provided
+        principalParts.push(part);
+      }
+    }
+
+    return principalParts;
+  }
+
+  /**
+   * Extract the stem from the first principal part of a verb
+   */
+  private static getVerbStem(firstPart: string): string {
+    // For most verbs, remove the ending to get the stem
+    // This is a simplified approach - could be enhanced for irregular verbs
+    if (firstPart.endsWith('or')) {
+      // Deponent verbs ending in -or
+      return firstPart.slice(0, -2);
+    } else if (firstPart.endsWith('o')) {
+      // Regular verbs ending in -o
+      return firstPart.slice(0, -1);
+    } else {
+      // Irregular or other forms - return as is for now
+      return firstPart;
+    }
   }
 
   /**

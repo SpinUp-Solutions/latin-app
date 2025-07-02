@@ -1,5 +1,13 @@
 import { chromium, Browser, BrowserContext, Locator } from 'playwright';
-import { ParsedEntry, WiktionaryData, ScrapedResult, DeclensionData, ParseResult } from '@/src/types/vocabulary';
+import {
+  ParsedEntry,
+  WiktionaryData,
+  ScrapedResult,
+  DeclensionData,
+  ParseResult,
+  ConjugationTable,
+  PersonForms,
+} from '@/src/types/vocabulary';
 import { VocabularyParserService } from './vocabularyParserService';
 
 export class WiktionaryScraperService {
@@ -127,6 +135,15 @@ export class WiktionaryScraperService {
   }
 
   /**
+   * Helper to find the verb section under Latin
+   */
+  private static findVerbSection(latinDiv: Locator): Locator {
+    return latinDiv
+      .locator('xpath=following-sibling::div[contains(@class,"mw-heading")][.//*[@id and starts-with(@id,"Verb")]][1]')
+      .first();
+  }
+
+  /**
    * Scrape Wiktionary data for a single word
    */
   private static async scrapeWiktionary(word: string, context: BrowserContext): Promise<WiktionaryData | null> {
@@ -136,7 +153,11 @@ export class WiktionaryScraperService {
       await page.goto(`https://en.wiktionary.org/wiki/${word}`, { waitUntil: 'networkidle' });
 
       const latinDiv = page.locator('div.mw-heading.mw-heading2:has(> h2#Latin)').first();
-      if (!(await latinDiv.count())) {
+      const latinDivCount = await latinDiv.count();
+      console.log(`[DEBUG] Word: ${word} - Found ${latinDivCount} Latin sections`);
+
+      if (latinDivCount === 0) {
+        console.log(`[DEBUG] No Latin section found for word: ${word}`);
         return null;
       }
 
@@ -145,12 +166,19 @@ export class WiktionaryScraperService {
         definitions: [],
       };
 
+      // Determine if this is a verb or noun to extract appropriate data
+      const verbSection = this.findVerbSection(latinDiv);
+      const nounSection = this.findNounSection(latinDiv);
+
+      const isVerb = (await verbSection.count()) > 0;
+      const isNoun = (await nounSection.count()) > 0;
+
       await Promise.all([
         this.extractEtymology(latinDiv, result),
         this.extractPronunciation(latinDiv, result),
-        this.extractHeadingInfo(latinDiv, result),
-        this.extractDefinitions(latinDiv, result),
-        this.extractDeclensionTable(latinDiv, result),
+        isVerb ? this.extractVerbHeadingInfo(verbSection, result) : this.extractHeadingInfo(latinDiv, result),
+        isVerb ? this.extractVerbDefinitions(verbSection, result) : this.extractDefinitions(latinDiv, result),
+        isVerb ? this.extractConjugationTable(verbSection, result) : this.extractDeclensionTable(latinDiv, result),
       ]);
 
       return result;
@@ -213,6 +241,28 @@ export class WiktionaryScraperService {
     } catch (error) {}
   }
 
+  private static async extractVerbHeadingInfo(verbDiv: Locator, result: WiktionaryData): Promise<void> {
+    try {
+      // Look for the paragraph immediately after the verb heading
+      const headPara = verbDiv.locator('xpath=following-sibling::p[1]').first();
+
+      if (await headPara.isVisible()) {
+        const text = await headPara.textContent();
+        if (!text) return;
+
+        // Extract conjugation info (first, second, third, fourth conjugation)
+        const conjugationMatch = text.match(/(first|second|third|fourth)\s+conjugation/i);
+        if (conjugationMatch) {
+          result.conjugation = conjugationMatch[0];
+        }
+
+        // Extract deponent info
+        const isDeponent = text.toLowerCase().includes('deponent');
+        result.isDeponent = isDeponent;
+      }
+    } catch (error) {}
+  }
+
   private static async extractDefinitions(latinDiv: Locator, result: WiktionaryData): Promise<void> {
     try {
       // Look for noun definitions first, fallback to first definition list after Latin
@@ -223,6 +273,21 @@ export class WiktionaryScraperService {
           ? nounDiv.locator('xpath=following-sibling::ol[1]/li')
           : latinDiv.locator('xpath=following-sibling::ol[1]/li');
 
+      const definitionList = await definitionLocator.all();
+
+      for (const li of definitionList) {
+        const text = await li.textContent();
+        if (text?.trim()) {
+          result.definitions.push(text.trim());
+        }
+      }
+    } catch (error) {}
+  }
+
+  private static async extractVerbDefinitions(verbDiv: Locator, result: WiktionaryData): Promise<void> {
+    try {
+      // Look for definition list after verb section
+      const definitionLocator = verbDiv.locator('xpath=following-sibling::ol[1]/li');
       const definitionList = await definitionLocator.all();
 
       for (const li of definitionList) {
@@ -278,6 +343,42 @@ export class WiktionaryScraperService {
 
       if (await table.count()) {
         result.declensionTable = await this.extractTableData(table);
+      }
+    } catch (error) {
+      // Silently fail for optional data
+    }
+  }
+
+  private static async extractConjugationTable(verbDiv: Locator, result: WiktionaryData): Promise<void> {
+    try {
+      // Strategy: Look for tables with inflection classes, but bound the search to stop at the next language section
+      // This prevents picking up conjugation tables from other languages
+
+      // First, try to find the table within reasonable bounds (before next h2 language section)
+      let table = verbDiv
+        .locator(
+          'xpath=following-sibling::*[not(self::div[contains(@class,"mw-heading2")])]//table[contains(@class,"inflection")]'
+        )
+        .first();
+
+      if (!(await table.count())) {
+        // Fallback: look for any table with conjugation-related classes (but still bounded)
+        table = verbDiv
+          .locator(
+            'xpath=following-sibling::*[not(self::div[contains(@class,"mw-heading2")])]//table[contains(@class,"wikitable") or contains(@class,"prettytable") or contains(@class,"verb")]'
+          )
+          .first();
+      }
+
+      if (!(await table.count())) {
+        // Final fallback: look for the first table after verb section (bounded by next language)
+        table = verbDiv
+          .locator('xpath=following-sibling::*[not(self::div[contains(@class,"mw-heading2")])]//table')
+          .first();
+      }
+
+      if (await table.count()) {
+        result.conjugationTable = await this.extractConjugationData(table);
       }
     } catch (error) {
       // Silently fail for optional data
@@ -346,6 +447,132 @@ export class WiktionaryScraperService {
 
     // Filter out any empty strings and return unique forms
     return Array.from(new Set(forms.filter(form => form && form.length > 0)));
+  }
+
+  private static async extractConjugationData(table: Locator): Promise<ConjugationTable> {
+    const conjugationTable: ConjugationTable = {};
+
+    try {
+      const rows = await table.locator('tr').all();
+
+      let currentMood = '';
+      let currentVoice = '';
+      let currentTense = '';
+
+      for (const row of rows) {
+        const cells = await row.locator('th, td').all();
+        if (cells.length === 0) continue;
+
+        const firstCellText = await cells[0].textContent();
+        if (!firstCellText) continue;
+
+        const cleanText = firstCellText.trim().toLowerCase();
+
+        // Detect mood sections
+        if (cleanText.includes('indicative')) {
+          currentMood = 'indicative';
+          continue;
+        } else if (cleanText.includes('subjunctive')) {
+          currentMood = 'subjunctive';
+          continue;
+        } else if (cleanText.includes('imperative')) {
+          currentMood = 'imperative';
+          continue;
+        } else if (cleanText.includes('non-finite')) {
+          currentMood = 'nonFinite';
+          continue;
+        } else if (cleanText.includes('verbal nouns')) {
+          currentMood = 'verbalNouns';
+          continue;
+        }
+
+        // Detect voice (only for indicative/subjunctive)
+        if (cleanText.includes('active') && (currentMood === 'indicative' || currentMood === 'subjunctive')) {
+          currentVoice = 'active';
+          continue;
+        } else if (cleanText.includes('passive') && (currentMood === 'indicative' || currentMood === 'subjunctive')) {
+          currentVoice = 'passive';
+          continue;
+        }
+
+        // Detect tense
+        if (cleanText.includes('present')) {
+          currentTense = 'present';
+        } else if (cleanText.includes('imperfect')) {
+          currentTense = 'imperfect';
+        } else if (cleanText.includes('future') && !cleanText.includes('perfect')) {
+          currentTense = 'future';
+        } else if (
+          cleanText.includes('perfect') &&
+          !cleanText.includes('pluperfect') &&
+          !cleanText.includes('future')
+        ) {
+          currentTense = 'perfect';
+        } else if (cleanText.includes('pluperfect')) {
+          currentTense = 'pluperfect';
+        } else if (cleanText.includes('future perfect')) {
+          currentTense = 'futurePerfect';
+        }
+
+        // Extract verb forms if this row has person/number data
+        if (
+          cells.length >= 7 &&
+          currentMood &&
+          (currentMood === 'indicative' || currentMood === 'subjunctive') &&
+          currentVoice &&
+          currentTense
+        ) {
+          const personForms = await this.extractPersonFormsFromRow(cells);
+          this.setPersonForms(conjugationTable, currentMood, currentVoice, currentTense, personForms);
+        }
+      }
+    } catch (error) {
+      console.error('Error extracting conjugation data:', error);
+    }
+
+    return conjugationTable;
+  }
+
+  private static async extractPersonFormsFromRow(cells: Locator[]): Promise<PersonForms> {
+    // Expecting: [mood/tense cell, 1st sing, 2nd sing, 3rd sing, 1st plur, 2nd plur, 3rd plur]
+    const personForms: PersonForms = {
+      singular: {},
+      plural: {},
+    };
+
+    if (cells.length >= 7) {
+      const forms = await Promise.all(cells.slice(1, 7).map(cell => this.extractMultipleForms(cell)));
+
+      personForms.singular.first = forms[0];
+      personForms.singular.second = forms[1];
+      personForms.singular.third = forms[2];
+      personForms.plural.first = forms[3];
+      personForms.plural.second = forms[4];
+      personForms.plural.third = forms[5];
+    }
+
+    return personForms;
+  }
+
+  private static setPersonForms(
+    conjugationTable: ConjugationTable,
+    mood: string,
+    voice: string,
+    tense: string,
+    personForms: PersonForms
+  ): void {
+    // Initialize nested structure if needed
+    if (!conjugationTable[mood as keyof ConjugationTable]) {
+      (conjugationTable as any)[mood] = {};
+    }
+
+    const moodSection = (conjugationTable as any)[mood];
+    if (!moodSection[voice]) {
+      moodSection[voice] = {};
+    }
+
+    const voiceSection = moodSection[voice];
+    voiceSection[tense] = personForms;
   }
 
   private static delay(ms: number): Promise<void> {

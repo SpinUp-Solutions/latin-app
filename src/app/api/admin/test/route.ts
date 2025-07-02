@@ -13,39 +13,58 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     const parseResult = await VocabularyParserService.parseVocabularyFile();
 
-    // Scrape third declension nouns specifically (you can change this to any declension)
-    const scrapedResults = await WiktionaryScraperService.scrapeThirdDeclensionNouns(parseResult);
+    // Test verb scraping with enhanced principal parts and conjugation tables
+    const verbs = VocabularyParserService.filterVerbs(parseResult);
+
+    // Take first 3 verbs for testing (fewer because scraping takes longer)
+    const testVerbs = verbs.slice(0, 3);
+
+    // Scrape the test verbs to get conjugation data
+    const scrapedResults = await WiktionaryScraperService.scrapeWords(testVerbs);
 
     const totalDuration = Date.now() - startTime;
-    const performance = calculatePerformanceMetrics(scrapedResults, totalDuration);
-
-    const failedResults = scrapedResults.filter(r => r.wiktionaryData === null);
 
     return NextResponse.json({
       success: true,
-      message: 'Parser + Scraper test completed (3rd declension nouns)',
+      message: 'Verb scraping test completed (enhanced principal parts + conjugation tables)',
       timestamp: new Date().toISOString(),
-      performance,
+      performance: {
+        totalDurationMs: totalDuration,
+        totalDurationSeconds: +(totalDuration / 1000).toFixed(1),
+        averageTimePerWordMs: +(totalDuration / scrapedResults.length).toFixed(1),
+        wordsPerSecond: +(scrapedResults.length / (totalDuration / 1000)).toFixed(1),
+      },
       stats: {
         totalParsedEntries: parseResult.totalEntries,
-        firstDeclensionNounsFound: VocabularyParserService.filterFirstDeclensionNouns(parseResult).length,
-        secondDeclensionNounsFound: VocabularyParserService.filterSecondDeclensionNouns(parseResult).length,
-        thirdDeclensionNounsFound: VocabularyParserService.filterThirdDeclensionNouns(parseResult).length,
-        fourthDeclensionNounsFound: VocabularyParserService.filterFourthDeclensionNouns(parseResult).length,
-        fifthDeclensionNounsFound: VocabularyParserService.filterFifthDeclensionNouns(parseResult).length,
-        scraped: scrapedResults.length,
-        successful: scrapedResults.filter(r => r.wiktionaryData !== null).length,
-        failed: failedResults.length,
+        verbsFound: verbs.length,
+        verbsScraped: scrapedResults.length,
+        successfulScrapes: scrapedResults.filter(r => r.wiktionaryData !== null).length,
+        failedScrapes: scrapedResults.filter(r => r.wiktionaryData === null).length,
+        deponentFromWiktionary: scrapedResults.filter(r => r.wiktionaryData?.isDeponent).length,
       },
-      words: scrapedResults.map(formatWordForResponse),
-      failedWords: failedResults.map(result => ({
-        word: result.parsedData.wordForm,
+      verbs: scrapedResults.map(result => ({
+        // Parsed data
+        id: result.parsedData.id,
+        wordForm: result.parsedData.wordForm,
+        alternateForm: result.parsedData.alternateForm,
         grammaticalInfo: result.parsedData.grammaticalInfo,
+        principalParts: result.parsedData.principalParts,
         translation: result.parsedData.translation,
-        error: result.error || 'No Wiktionary data found',
+        conjugationClass: result.parsedData.conjugationClass,
+        section: result.parsedData.section,
+        subsection: result.parsedData.subsection,
         originalText: result.parsedData.originalText,
+        // Wiktionary data
+        etymology: result.wiktionaryData?.etymology,
+        pronunciation: result.wiktionaryData?.pronunciation,
+        conjugation: result.wiktionaryData?.conjugation,
+        isDeponent: result.wiktionaryData?.isDeponent,
+        definitions: result.wiktionaryData?.definitions,
+        conjugationTable: result.wiktionaryData?.conjugationTable,
+        hasWiktionaryData: result.wiktionaryData !== null,
+        scrapingError: result.error,
       })),
-    } as ApiResponse);
+    });
   } catch (error) {
     console.error('Parser + Scraper test failed:', error);
 
@@ -112,6 +131,7 @@ function formatWordForResponse(scrapedResult: ScrapedResult): WordResponse {
     subsection: parsedData.subsection,
     conjugationClass: parsedData.conjugationClass,
     isDeponent: parsedData.isDeponent,
+    principalParts: parsedData.principalParts,
     originalText: parsedData.originalText,
 
     scrapingError: scrapedResult.error,

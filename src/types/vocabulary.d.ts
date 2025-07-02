@@ -41,6 +41,7 @@ export interface ParsedEntry {
   conjugationClass?: string;
   isDeponent?: boolean;
   gender?: string;
+  principalParts?: string[];
 }
 
 export interface ParseResult {
@@ -55,14 +56,134 @@ export interface DeclensionData {
   plural: string[];
 }
 
+export interface PersonForms {
+  singular: {
+    first?: string[];
+    second?: string[];
+    third?: string[];
+  };
+  plural: {
+    first?: string[];
+    second?: string[];
+    third?: string[];
+  };
+}
+
+export interface CompoundForms {
+  // For perfect tenses that use participle + auxiliary (e.g., "admiratus sum")
+  participle?: string[];
+  auxiliary?: string; // "sum", "eram", etc.
+  // Or as a combined form for simpler handling
+  combined?: string[];
+}
+
+export interface ImperativeForms {
+  singular: {
+    second?: string[];
+    third?: string[];
+  };
+  plural: {
+    second?: string[];
+    third?: string[];
+  };
+}
+
+export interface ConjugationTable {
+  indicative?: {
+    active?: {
+      present?: PersonForms;
+      imperfect?: PersonForms;
+      future?: PersonForms;
+      perfect?: CompoundForms;
+      pluperfect?: CompoundForms;
+      futurePerfect?: CompoundForms;
+    };
+    passive?: {
+      present?: PersonForms;
+      imperfect?: PersonForms;
+      future?: PersonForms;
+      perfect?: CompoundForms;
+      pluperfect?: CompoundForms;
+      futurePerfect?: CompoundForms;
+    };
+  };
+  subjunctive?: {
+    active?: {
+      present?: PersonForms;
+      imperfect?: PersonForms;
+      perfect?: CompoundForms;
+      pluperfect?: CompoundForms;
+    };
+    passive?: {
+      present?: PersonForms;
+      imperfect?: PersonForms;
+      perfect?: CompoundForms;
+      pluperfect?: CompoundForms;
+    };
+  };
+  imperative?: {
+    active?: {
+      present?: ImperativeForms;
+      future?: ImperativeForms;
+    };
+    passive?: {
+      present?: ImperativeForms;
+      future?: ImperativeForms;
+    };
+  };
+  nonFinite?: {
+    infinitive?: {
+      active?: {
+        present?: string[];
+        future?: string[];
+        perfect?: string[];
+        futurePerfect?: string[];
+        perfectPotential?: string[];
+      };
+      passive?: {
+        present?: string[];
+        future?: string[];
+        perfect?: string[];
+        futurePerfect?: string[];
+        perfectPotential?: string[];
+      };
+    };
+    participle?: {
+      active?: {
+        present?: string[];
+        future?: string[];
+      };
+      passive?: {
+        perfect?: string[];
+        future?: string[];
+      };
+    };
+  };
+  verbalNouns?: {
+    gerund?: {
+      genitive?: string[];
+      dative?: string[];
+      accusative?: string[];
+      ablative?: string[];
+    };
+    supine?: {
+      accusative?: string[];
+      ablative?: string[];
+    };
+  };
+}
+
 export interface WiktionaryData {
   word: string;
   gender?: string;
   declension?: string;
+  conjugation?: string;
   definitions: string[];
   declensionTable?: DeclensionData[];
+  conjugationTable?: ConjugationTable;
   etymology?: string;
   pronunciation?: string;
+  isDeponent?: boolean;
 }
 
 export interface ScrapedResult {
@@ -83,18 +204,22 @@ export interface WordResponse {
   etymology?: string;
   pronunciation?: string;
   declensionTable?: DeclensionData[];
-  conjugationTable?: any; // To be defined when conjugation tables are implemented
+  conjugationTable?: ConjugationTable;
   // Additional fields from parsed data
   id: number;
   section: string;
   subsection: string;
   conjugationClass?: string;
   isDeponent?: boolean;
+  principalParts?: string[];
   originalText: string;
+  // Wiktionary deponent info (overrides parsed data if available)
+  isDeponentFromWiktionary?: boolean;
   // Wiktionary additional data
   definitions?: string[];
   partOfSpeech?: string;
   declension?: string;
+  conjugation?: string;
   // Scraping metadata
   scrapingError?: string;
   hasWiktionaryData: boolean;
