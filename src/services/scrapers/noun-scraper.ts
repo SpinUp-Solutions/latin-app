@@ -1,0 +1,79 @@
+import { BrowserContext, Locator } from 'playwright';
+import { WiktionaryData, DeclensionData } from '@/src/types/vocabulary';
+import { BaseScraper } from './base-scraper';
+
+export class NounScraper extends BaseScraper {
+  /**
+   * Scrape noun-specific data including declension table
+   */
+  static async scrapeNoun(word: string, context: BrowserContext): Promise<WiktionaryData | null> {
+    const result = await this.scrapeWiktionary(word, context);
+    if (!result) return null;
+
+    // Find Latin section and noun section
+    const page = await context.newPage();
+    try {
+      await page.goto(`https://en.wiktionary.org/wiki/${word}`, { waitUntil: 'networkidle' });
+
+      const latinDiv = page.locator('div.mw-heading.mw-heading2:has(> h2#Latin)').first();
+      if (await latinDiv.count()) {
+        await this.extractDeclensionTable(latinDiv, result);
+      }
+
+      return result;
+    } finally {
+      await page.close();
+    }
+  }
+
+  /**
+   * Extract declension table for nouns
+   */
+  private static async extractDeclensionTable(latinDiv: Locator, result: WiktionaryData): Promise<void> {
+    try {
+      // Look for declension table after Latin section
+      const table = latinDiv.locator('xpath=following-sibling::*//table[contains(@class,"inflection")]').first();
+
+      if (await table.count()) {
+        result.declensionTable = await this.extractTableData(table);
+      }
+    } catch (error) {
+      // Silently fail for optional data
+    }
+  }
+
+  /**
+   * Extract declension data from table
+   */
+  private static async extractTableData(table: Locator): Promise<DeclensionData[]> {
+    const rows = await table.locator('tr').all();
+    const data: DeclensionData[] = [];
+
+    for (let i = 1; i < rows.length; i++) {
+      const cells = await rows[i].locator('th, td').all();
+      if (cells.length < 3) continue;
+
+      const [caseCell, singularCell, pluralCell] = cells.slice(0, 3);
+
+      // Extract case name
+      const caseText = await caseCell.textContent();
+      if (!caseText) continue;
+
+      // Extract multiple forms from singular cell
+      const singularForms = await this.extractMultipleForms(singularCell);
+
+      // Extract multiple forms from plural cell
+      const pluralForms = await this.extractMultipleForms(pluralCell);
+
+      if (singularForms.length > 0 && pluralForms.length > 0) {
+        data.push({
+          case: caseText.trim(),
+          singular: singularForms,
+          plural: pluralForms,
+        });
+      }
+    }
+
+    return data;
+  }
+}
