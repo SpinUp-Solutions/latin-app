@@ -4,15 +4,9 @@ import { WordFilters } from './core/word-filters';
 import { EntryParser } from './vocabulary/entry-parser';
 
 export class VocabularyParserService {
-  /**
-   * Main entry point to parse the vocabulary file
-   */
   static async parseVocabularyFile(): Promise<ParseResult> {
     return await VocabularyParser.parseVocabularyFile();
   }
-
-  // === FILTERING METHODS ===
-  // Delegate to WordFilters for consistency
 
   static filterFirstDeclensionNouns(parseResult: ParseResult): ParsedEntry[] {
     return WordFilters.filterFirstDeclensionNouns(parseResult);
@@ -42,6 +36,26 @@ export class VocabularyParserService {
     return WordFilters.filterVerbs(parseResult);
   }
 
+  static filterVerbsByConjugation(parseResult: ParseResult, conjugation: string): ParsedEntry[] {
+    return WordFilters.filterVerbsByConjugation(parseResult, conjugation);
+  }
+
+  static filterFirstConjugationVerbs(parseResult: ParseResult): ParsedEntry[] {
+    return WordFilters.filterVerbsByConjugation(parseResult, '1st');
+  }
+
+  static filterSecondConjugationVerbs(parseResult: ParseResult): ParsedEntry[] {
+    return WordFilters.filterVerbsByConjugation(parseResult, '2nd');
+  }
+
+  static filterThirdConjugationVerbs(parseResult: ParseResult): ParsedEntry[] {
+    return WordFilters.filterVerbsByConjugation(parseResult, '3rd');
+  }
+
+  static filterFourthConjugationVerbs(parseResult: ParseResult): ParsedEntry[] {
+    return WordFilters.filterVerbsByConjugation(parseResult, '4th');
+  }
+
   static filterAdjectives(parseResult: ParseResult): ParsedEntry[] {
     return WordFilters.filterAdjectives(parseResult);
   }
@@ -54,26 +68,14 @@ export class VocabularyParserService {
     return WordFilters.getAllEntries(parseResult);
   }
 
-  // === PARSING UTILITIES ===
-  // Expose entry parsing functionality
-
-  /**
-   * Parse a single entry line
-   */
   static parseEntry(line: string, section: string, subsection: string): ParsedEntry | null {
     return EntryParser.parseEntry(line, section, subsection);
   }
 
-  /**
-   * Check if a line is a valid entry
-   */
   static isValidEntry(line: string): boolean {
     return EntryParser.isValidEntry(line);
   }
 
-  /**
-   * Extract entry ID from line
-   */
   static extractEntryId(line: string): number | null {
     return EntryParser.extractEntryId(line);
   }

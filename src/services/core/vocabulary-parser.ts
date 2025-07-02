@@ -6,9 +6,6 @@ import { EntryParser } from '../vocabulary/entry-parser';
 export class VocabularyParser {
   private static readonly VOCABULARY_FILE_PATH = path.join(process.cwd(), 'public', '1400.txt');
 
-  /**
-   * Main entry point to parse the vocabulary file
-   */
   static async parseVocabularyFile(): Promise<ParseResult> {
     try {
       const content = fs.readFileSync(this.VOCABULARY_FILE_PATH, 'utf-8');
@@ -19,9 +16,6 @@ export class VocabularyParser {
     }
   }
 
-  /**
-   * Combine multi-line entries into single lines for easier parsing
-   */
   private static combineMultiLineEntries(content: string): string {
     const lines = content.split('\n');
     const combinedLines: string[] = [];
@@ -30,7 +24,6 @@ export class VocabularyParser {
     for (const line of lines) {
       const trimmedLine = line.trim();
 
-      // If this is a section header or empty line, end current entry
       if (
         !trimmedLine ||
         trimmedLine.match(
@@ -51,22 +44,18 @@ export class VocabularyParser {
         continue;
       }
 
-      // If this starts a new numbered entry, save previous and start new
       if (trimmedLine.match(/^\d+\./)) {
         if (currentEntry) {
           combinedLines.push(currentEntry);
         }
         currentEntry = trimmedLine;
       } else if (currentEntry) {
-        // Continue building current entry
         currentEntry += ' ' + trimmedLine;
       } else {
-        // Line that doesn't belong to an entry
         combinedLines.push(trimmedLine);
       }
     }
 
-    // Don't forget the last entry
     if (currentEntry) {
       combinedLines.push(currentEntry);
     }
@@ -74,9 +63,6 @@ export class VocabularyParser {
     return combinedLines.join('\n');
   }
 
-  /**
-   * Parse the combined content into structured data
-   */
   private static parseContent(content: string): ParseResult {
     const lines = content.split('\n');
     const sections: Record<string, ParsedEntry[]> = {};
@@ -91,7 +77,6 @@ export class VocabularyParser {
       const trimmedLine = line.trim();
       if (!trimmedLine) continue;
 
-      // Check for main section headers
       if (this.isSectionHeader(trimmedLine)) {
         currentSection = trimmedLine;
         currentSubsection = '';
@@ -99,19 +84,16 @@ export class VocabularyParser {
         continue;
       }
 
-      // Check for subsection headers (like "2nd Declension (110)")
-      if (this.isDeclensionSubsection(trimmedLine)) {
+      if (this.isSubsectionHeader(trimmedLine)) {
         currentSubsection = trimmedLine;
         continue;
       }
 
-      // Check for deponent marker
       if (trimmedLine.includes('(Deponents italicized)')) {
         isInDeponentSection = true;
         continue;
       }
 
-      // Parse individual entries
       if (this.isEntryStart(trimmedLine)) {
         const entry = EntryParser.parseEntry(trimmedLine, currentSection, currentSubsection);
         if (entry) {
@@ -119,7 +101,6 @@ export class VocabularyParser {
             sections[currentSection] = [];
           }
 
-          // Set deponent flag if in deponent section
           if (isInDeponentSection && entry.wordType === 'verb') {
             entry.isDeponent = true;
           }
@@ -127,7 +108,6 @@ export class VocabularyParser {
           sections[currentSection].push(entry);
           totalEntries++;
 
-          // Update summary
           const key = `${entry.wordType}s`;
           summary[key] = (summary[key] || 0) + 1;
         }
@@ -141,18 +121,28 @@ export class VocabularyParser {
     };
   }
 
-  // === UTILITY METHODS ===
-
   private static isSectionHeader(line: string): boolean {
     return (
       /^(Nouns:|Verbs:|Irregular Verbs|Adverbs|Prepositions|Pronouns|Conjunctions|Interjections|Enclitic|Numbers)/.test(
         line
-      ) || line.includes('Adjectives')
+      ) ||
+      line.includes('Adjectives') ||
+      /^\d+(st|nd|rd|th)\s+Conjugation\s*\(\d+\)$/.test(line)
     );
   }
 
-  private static isDeclensionSubsection(line: string): boolean {
-    return /^\d+(st|nd|rd|th)\s+Declension(\s+Nouns)?\s*\(\d+\)$/.test(line);
+  private static isSubsectionHeader(line: string): boolean {
+    // Handle declension subsections for nouns: "1st Declension (50)"
+    if (/^\d+(st|nd|rd|th)\s+Declension(\s+Nouns)?\s*\(\d+\)$/.test(line)) {
+      return true;
+    }
+
+    // Handle "General" subsection (though this may not be used in current structure)
+    if (line.trim() === 'General') {
+      return true;
+    }
+
+    return false;
   }
 
   private static isEntryStart(line: string): boolean {

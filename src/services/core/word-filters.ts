@@ -44,7 +44,6 @@ export class WordFilters {
     return allEntries.filter(entry => entry.wordType === 'noun' && entry.declensionClass === declension);
   }
 
-  // === VERB FILTERS ===
   static filterVerbs(parseResult: ParseResult): ParsedEntry[] {
     return this.filterByWordType(parseResult, 'verb');
   }
@@ -54,7 +53,6 @@ export class WordFilters {
     return allEntries.filter(entry => entry.wordType === 'verb' && entry.conjugationClass === conjugation);
   }
 
-  // === OTHER WORD TYPE FILTERS ===
   static filterAdjectives(parseResult: ParseResult): ParsedEntry[] {
     return this.filterByWordType(parseResult, 'adjective');
   }

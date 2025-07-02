@@ -4,17 +4,12 @@ import { ScraperOrchestrator } from './scrapers';
 export class WiktionaryScraperService {
   private static readonly DEFAULT_CONCURRENCY = 45;
 
-  /**
-   * Scrape words with automatic word type detection
-   */
   static async scrapeWords(
     words: ParsedEntry[],
     concurrency: number = this.DEFAULT_CONCURRENCY
   ): Promise<ScrapedResult[]> {
     return await ScraperOrchestrator.scrapeWords(words, concurrency);
   }
-
-  // === DECLENSION-SPECIFIC METHODS ===
 
   static async scrapeFirstDeclensionNouns(
     parseResult: ParseResult,
@@ -51,16 +46,12 @@ export class WiktionaryScraperService {
     return await ScraperOrchestrator.scrapeFifthDeclensionNouns(parseResult, concurrency);
   }
 
-  // === VERB METHODS ===
-
   static async scrapeVerbs(
     parseResult: ParseResult,
     concurrency: number = this.DEFAULT_CONCURRENCY
   ): Promise<ScrapedResult[]> {
     return await ScraperOrchestrator.scrapeVerbs(parseResult, concurrency);
   }
-
-  // === OTHER WORD TYPE METHODS ===
 
   static async scrapeAdjectives(
     parseResult: ParseResult,

@@ -7,9 +7,6 @@ import { VerbScraper } from './verb-scraper';
 export class ScraperOrchestrator {
   private static readonly DEFAULT_CONCURRENCY = 45;
 
-  /**
-   * Scrape words with automatic word type detection
-   */
   static async scrapeWords(
     words: ParsedEntry[],
     concurrency: number = this.DEFAULT_CONCURRENCY
@@ -24,9 +21,6 @@ export class ScraperOrchestrator {
     }
   }
 
-  /**
-   * Scrape words in parallel batches
-   */
   private static async scrapeWordsInParallel(
     words: ParsedEntry[],
     browser: any,
@@ -45,7 +39,6 @@ export class ScraperOrchestrator {
         const batchResults = await this.processBatch(batch, contexts);
         results.push(...batchResults);
 
-        // Add delay between batches to avoid overwhelming the server
         if (i + concurrency < words.length) {
           await BrowserManager.delay();
         }
@@ -57,9 +50,6 @@ export class ScraperOrchestrator {
     return results;
   }
 
-  /**
-   * Process a batch of words
-   */
   private static async processBatch(batch: ParsedEntry[], contexts: any[]): Promise<ScrapedResult[]> {
     const batchPromises = batch.map(async (entry, index) => {
       const contextIndex = index % contexts.length;
@@ -89,9 +79,6 @@ export class ScraperOrchestrator {
       .map(result => (result as PromiseFulfilledResult<ScrapedResult>).value);
   }
 
-  /**
-   * Scrape word using appropriate specialized scraper
-   */
   private static async scrapeByWordType(entry: ParsedEntry, context: any) {
     switch (entry.wordType) {
       case 'noun':
@@ -99,16 +86,10 @@ export class ScraperOrchestrator {
       case 'verb':
         return await VerbScraper.scrapeVerb(entry.wordForm, context);
       default:
-        // For other word types, use noun scraper as default (no specialized table extraction)
         return await NounScraper.scrapeNoun(entry.wordForm, context);
     }
   }
 
-  // === CONVENIENT METHODS FOR SPECIFIC WORD TYPES ===
-
-  /**
-   * Scrape first declension nouns
-   */
   static async scrapeFirstDeclensionNouns(
     parseResult: ParseResult,
     concurrency: number = this.DEFAULT_CONCURRENCY
@@ -117,9 +98,6 @@ export class ScraperOrchestrator {
     return await this.scrapeWords(nouns, concurrency);
   }
 
-  /**
-   * Scrape second declension nouns
-   */
   static async scrapeSecondDeclensionNouns(
     parseResult: ParseResult,
     concurrency: number = this.DEFAULT_CONCURRENCY
@@ -128,9 +106,6 @@ export class ScraperOrchestrator {
     return await this.scrapeWords(nouns, concurrency);
   }
 
-  /**
-   * Scrape third declension nouns
-   */
   static async scrapeThirdDeclensionNouns(
     parseResult: ParseResult,
     concurrency: number = this.DEFAULT_CONCURRENCY
@@ -139,9 +114,6 @@ export class ScraperOrchestrator {
     return await this.scrapeWords(nouns, concurrency);
   }
 
-  /**
-   * Scrape fourth declension nouns
-   */
   static async scrapeFourthDeclensionNouns(
     parseResult: ParseResult,
     concurrency: number = this.DEFAULT_CONCURRENCY
@@ -150,9 +122,6 @@ export class ScraperOrchestrator {
     return await this.scrapeWords(nouns, concurrency);
   }
 
-  /**
-   * Scrape fifth declension nouns
-   */
   static async scrapeFifthDeclensionNouns(
     parseResult: ParseResult,
     concurrency: number = this.DEFAULT_CONCURRENCY
@@ -161,9 +130,6 @@ export class ScraperOrchestrator {
     return await this.scrapeWords(nouns, concurrency);
   }
 
-  /**
-   * Scrape all verbs
-   */
   static async scrapeVerbs(
     parseResult: ParseResult,
     concurrency: number = this.DEFAULT_CONCURRENCY
@@ -172,9 +138,6 @@ export class ScraperOrchestrator {
     return await this.scrapeWords(verbs, concurrency);
   }
 
-  /**
-   * Scrape all adjectives
-   */
   static async scrapeAdjectives(
     parseResult: ParseResult,
     concurrency: number = this.DEFAULT_CONCURRENCY
@@ -183,9 +146,6 @@ export class ScraperOrchestrator {
     return await this.scrapeWords(adjectives, concurrency);
   }
 
-  /**
-   * Scrape all entries
-   */
   static async scrapeAllEntries(
     parseResult: ParseResult,
     concurrency: number = this.DEFAULT_CONCURRENCY

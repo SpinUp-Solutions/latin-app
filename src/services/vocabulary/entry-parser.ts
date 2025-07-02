@@ -3,16 +3,10 @@ import { NounParser } from './noun-parser';
 import { VerbParser } from './verb-parser';
 
 export class EntryParser {
-  /**
-   * Parse a single entry line into structured data
-   * Delegates to specialized parsers based on word type
-   */
   static parseEntry(line: string, section: string, subsection: string): ParsedEntry | null {
-    // Determine word type based on section
     const wordType = this.determineWordType(section);
     if (!wordType) return null;
 
-    // Delegate to specialized parsers
     switch (wordType) {
       case 'noun':
         return NounParser.parseNounEntry(line, section, subsection);
@@ -33,13 +27,10 @@ export class EntryParser {
     }
   }
 
-  /**
-   * Determine word type from section name
-   */
   private static determineWordType(section: string): ParsedEntry['wordType'] | null {
+    if (section.includes('Adjectives')) return 'adjective';
     if (section.includes('Nouns') || section.includes('Declension')) return 'noun';
     if (section.includes('Verbs') || section.includes('Conjugation')) return 'verb';
-    if (section.includes('Adjectives')) return 'adjective';
     if (section.includes('Adverbs')) return 'adverb';
     if (section.includes('Prepositions')) return 'preposition';
     if (section.includes('Pronouns')) return 'pronoun';
@@ -48,9 +39,6 @@ export class EntryParser {
     return null;
   }
 
-  /**
-   * Parse simple entries (adverbs, prepositions, etc.)
-   */
   private static parseSimpleEntry(
     line: string,
     section: string,
@@ -70,12 +58,12 @@ export class EntryParser {
     const wordInfo = content.substring(0, colonIndex).trim();
     const translation = content.substring(colonIndex + 1).trim();
 
-    // Extract word form (first part before comma or space)
-    const wordForm = this.extractWordForm(wordInfo);
+    const { wordForm, alternateForm } = this.extractWordAndAlternateForm(wordInfo);
 
     return {
       id,
       wordForm,
+      alternateForm,
       grammaticalInfo: wordInfo,
       translation,
       wordType,
@@ -85,9 +73,22 @@ export class EntryParser {
     };
   }
 
-  /**
-   * Parse generic entry when word type is unknown
-   */
+  private static extractWordAndAlternateForm(wordInfo: string): { wordForm: string; alternateForm?: string } {
+    // Handle alternative forms separated by "/" - take the first word before comma/space
+    if (wordInfo.includes('/')) {
+      const [mainForm, altForm] = wordInfo.split('/').map(w => w.trim());
+      return {
+        wordForm: mainForm.split(/[,\s]/)[0].trim(),
+        alternateForm: altForm.split(/[,\s]/)[0].trim(),
+      };
+    }
+
+    return {
+      wordForm: this.extractWordForm(wordInfo),
+      alternateForm: undefined,
+    };
+  }
+
   private static parseGenericEntry(line: string, section: string, subsection: string): ParsedEntry | null {
     const match = line.match(/^(\d+)\.\s+(.+)$/);
     if (!match) return null;
@@ -104,37 +105,29 @@ export class EntryParser {
 
     const wordForm = this.extractWordForm(wordInfo);
 
-    // Return null for unknown word types instead of using invalid type
     return null;
   }
 
-  /**
-   * Extract the main word form from grammatical info
-   */
   private static extractWordForm(wordInfo: string): string {
-    // Extract first word (before comma or space)
+    // Handle alternative forms separated by "/" - take only the first form
+    if (wordInfo.includes('/')) {
+      const mainForm = wordInfo.split('/')[0].trim();
+      return mainForm.split(/[,\s]/)[0].trim();
+    }
+
     const parts = wordInfo.split(/[,\s]/);
     return parts[0].trim();
   }
 
-  /**
-   * Check if a line represents a valid entry
-   */
   static isValidEntry(line: string): boolean {
     return line.match(/^\d+\./) !== null;
   }
 
-  /**
-   * Extract entry ID from line
-   */
   static extractEntryId(line: string): number | null {
     const match = line.match(/^(\d+)\./);
     return match ? parseInt(match[1]) : null;
   }
 
-  /**
-   * Split entry content into word info and translation
-   */
   static splitEntryContent(content: string): { wordInfo: string; translation: string } | null {
     const colonIndex = content.lastIndexOf(':');
     if (colonIndex === -1) return null;

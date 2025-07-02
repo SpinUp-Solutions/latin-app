@@ -1,9 +1,6 @@
 import { ParsedEntry } from '@/src/types/vocabulary';
 
 export class NounParser {
-  /**
-   * Parse a noun entry from the vocabulary file
-   */
   static parseNounEntry(line: string, section: string, subsection: string): ParsedEntry | null {
     const match = line.match(/^(\d+)\.\s+(.+)$/);
     if (!match) return null;
@@ -11,24 +8,20 @@ export class NounParser {
     const [, idStr, content] = match;
     const id = parseInt(idStr);
 
-    // Split by colon to separate word info from translation
     const colonIndex = content.lastIndexOf(':');
     if (colonIndex === -1) return null;
 
     const wordInfo = content.substring(0, colonIndex).trim();
     const translation = content.substring(colonIndex + 1).trim();
 
-    // Extract word form (first part before comma)
     const firstCommaIndex = wordInfo.indexOf(',');
-    const wordForm = firstCommaIndex > 0 ? wordInfo.substring(0, firstCommaIndex).trim() : wordInfo.trim();
+    const wordPart = firstCommaIndex > 0 ? wordInfo.substring(0, firstCommaIndex).trim() : wordInfo.trim();
 
-    // Extract alternate form (handle different noun patterns)
-    const alternateForm = this.extractAlternateForm(wordInfo);
+    // Handle alternative forms separated by "/"
+    const { wordForm, alternateForm } = this.extractWordAndAlternateForm(wordPart);
 
-    // Extract gender
     const gender = this.extractGender(wordInfo);
 
-    // Determine declension class
     const declensionClass = this.getDeclensionClass(wordInfo, section, subsection);
 
     return {
@@ -46,31 +39,39 @@ export class NounParser {
     };
   }
 
-  /**
-   * Extract alternate form from noun grammatical info
-   */
+  private static extractWordAndAlternateForm(wordPart: string): { wordForm: string; alternateForm?: string } {
+    // Check for "/" pattern first (e.g., "conjunx/conjux")
+    if (wordPart.includes('/')) {
+      const [mainForm, altForm] = wordPart.split('/').map(w => w.trim());
+      return {
+        wordForm: mainForm,
+        alternateForm: altForm,
+      };
+    }
+
+    // Fallback to existing alternative form patterns
+    const alternateForm = this.extractAlternateForm(wordPart);
+    return {
+      wordForm: wordPart,
+      alternateForm,
+    };
+  }
+
   private static extractAlternateForm(grammaticalInfo: string): string | undefined {
-    // Pattern: "forma, -ae f" or "forma, -ae OR formae f"
     const orMatch = grammaticalInfo.match(/,\s*([^,\s]+)\s+OR\s+([^,\s]+)/);
     if (orMatch) {
-      // Handle "OR" pattern - return the alternative after OR
       return orMatch[2];
     }
 
-    // Pattern for parenthetical alternatives: "domus, -i (also 4th declension: domus, -us)"
     const parentheticalMatch = grammaticalInfo.match(/\(also[^:]*:\s*([^,\s]+),\s*([^)]+)\)/);
     if (parentheticalMatch) {
-      return parentheticalMatch[1]; // Return the alternate word form
+      return parentheticalMatch[1];
     }
 
     return undefined;
   }
 
-  /**
-   * Extract gender from grammatical info
-   */
   private static extractGender(grammaticalInfo: string): string | undefined {
-    // Look for gender markers: m, f, n at the end
     const genderMatch = grammaticalInfo.match(/\b([mfn])\s*$/);
     if (genderMatch) {
       const genderCode = genderMatch[1];
@@ -87,11 +88,7 @@ export class NounParser {
     return undefined;
   }
 
-  /**
-   * Determine declension class from grammatical info and section
-   */
   private static getDeclensionClass(grammaticalInfo: string, section: string, subsection?: string): string | undefined {
-    // First check if subsection explicitly mentions declension
     if (subsection) {
       const declensionMatch = subsection.match(/(\d+)(st|nd|rd|th)\s+Declension/);
       if (declensionMatch) {
@@ -99,13 +96,11 @@ export class NounParser {
       }
     }
 
-    // Check section header
     const sectionDeclensionMatch = section.match(/(\d+)(st|nd|rd|th)\s+Declension/);
     if (sectionDeclensionMatch) {
       return `${sectionDeclensionMatch[1]}${sectionDeclensionMatch[2]}`;
     }
 
-    // Infer from grammatical patterns
     if (grammaticalInfo.includes('-ae')) return '1st';
     if (grammaticalInfo.includes('-i') && !grammaticalInfo.includes('-us')) return '2nd';
     if (grammaticalInfo.includes('-us') && grammaticalInfo.includes('-i')) return '2nd';
@@ -116,16 +111,10 @@ export class NounParser {
     return undefined;
   }
 
-  /**
-   * Check if a line represents a noun entry
-   */
   static isNounEntry(section: string): boolean {
     return section.includes('Nouns') || section.includes('Declension');
   }
 
-  /**
-   * Extract all noun-specific information from grammatical info
-   */
   static extractNounInfo(grammaticalInfo: string) {
     return {
       gender: this.extractGender(grammaticalInfo),

@@ -3,14 +3,10 @@ import { WiktionaryData, ConjugationTable, PersonForms } from '@/src/types/vocab
 import { BaseScraper } from './base-scraper';
 
 export class VerbScraper extends BaseScraper {
-  /**
-   * Scrape verb-specific data including conjugation table
-   */
   static async scrapeVerb(word: string, context: BrowserContext): Promise<WiktionaryData | null> {
     const result = await this.scrapeWiktionary(word, context);
     if (!result) return null;
 
-    // Find Latin section and verb section
     const page = await context.newPage();
     try {
       await page.goto(`https://en.wiktionary.org/wiki/${word}`, { waitUntil: 'networkidle' });
@@ -29,15 +25,8 @@ export class VerbScraper extends BaseScraper {
     }
   }
 
-  /**
-   * Extract conjugation table for verbs
-   */
   private static async extractConjugationTable(verbDiv: Locator, result: WiktionaryData): Promise<void> {
     try {
-      // Strategy: Look for tables with inflection classes, but bound the search to stop at the next language section
-      // This prevents picking up conjugation tables from other languages
-
-      // First, try to find the table within reasonable bounds (before next h2 language section)
       let table = verbDiv
         .locator(
           'xpath=following-sibling::*[not(self::div[contains(@class,"mw-heading2")])]//table[contains(@class,"inflection")]'
@@ -45,7 +34,6 @@ export class VerbScraper extends BaseScraper {
         .first();
 
       if (!(await table.count())) {
-        // Fallback: look for any table with conjugation-related classes (but still bounded)
         table = verbDiv
           .locator(
             'xpath=following-sibling::*[not(self::div[contains(@class,"mw-heading2")])]//table[contains(@class,"wikitable") or contains(@class,"prettytable") or contains(@class,"verb")]'
@@ -54,7 +42,6 @@ export class VerbScraper extends BaseScraper {
       }
 
       if (!(await table.count())) {
-        // Final fallback: look for the first table after verb section (bounded by next language)
         table = verbDiv
           .locator('xpath=following-sibling::*[not(self::div[contains(@class,"mw-heading2")])]//table')
           .first();
@@ -63,14 +50,9 @@ export class VerbScraper extends BaseScraper {
       if (await table.count()) {
         result.conjugationTable = await this.extractConjugationData(table);
       }
-    } catch (error) {
-      // Silently fail for optional data
-    }
+    } catch (error) {}
   }
 
-  /**
-   * Extract conjugation data from table
-   */
   private static async extractConjugationData(table: Locator): Promise<ConjugationTable> {
     const conjugationTable: ConjugationTable = {};
 
@@ -90,7 +72,6 @@ export class VerbScraper extends BaseScraper {
 
         const cleanText = firstCellText.trim().toLowerCase();
 
-        // Detect mood sections
         if (cleanText.includes('indicative')) {
           currentMood = 'indicative';
           continue;
@@ -108,7 +89,6 @@ export class VerbScraper extends BaseScraper {
           continue;
         }
 
-        // Detect voice (only for indicative/subjunctive)
         if (cleanText.includes('active') && (currentMood === 'indicative' || currentMood === 'subjunctive')) {
           currentVoice = 'active';
           continue;
@@ -117,7 +97,6 @@ export class VerbScraper extends BaseScraper {
           continue;
         }
 
-        // Detect tense
         if (cleanText.includes('present')) {
           currentTense = 'present';
         } else if (cleanText.includes('imperfect')) {
@@ -136,7 +115,6 @@ export class VerbScraper extends BaseScraper {
           currentTense = 'futurePerfect';
         }
 
-        // Extract verb forms if this row has person/number data
         if (
           cells.length >= 7 &&
           currentMood &&
@@ -155,11 +133,7 @@ export class VerbScraper extends BaseScraper {
     return conjugationTable;
   }
 
-  /**
-   * Extract person forms from a table row
-   */
   private static async extractPersonFormsFromRow(cells: Locator[]): Promise<PersonForms> {
-    // Expecting: [mood/tense cell, 1st sing, 2nd sing, 3rd sing, 1st plur, 2nd plur, 3rd plur]
     const personForms: PersonForms = {
       singular: {},
       plural: {},
@@ -179,9 +153,6 @@ export class VerbScraper extends BaseScraper {
     return personForms;
   }
 
-  /**
-   * Set person forms in conjugation table structure
-   */
   private static setPersonForms(
     conjugationTable: ConjugationTable,
     mood: string,
