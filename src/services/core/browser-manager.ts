@@ -1,7 +1,7 @@
 import { chromium, Browser, BrowserContext } from 'playwright';
 
 export class BrowserManager {
-  private static readonly DEFAULT_CONTEXTS = 4;
+  private static readonly DEFAULT_CONTEXTS = 10;
   private static readonly BATCH_DELAY = 75;
 
   private static readonly BROWSER_ARGS = [

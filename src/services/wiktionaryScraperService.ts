@@ -2,7 +2,7 @@ import { ParsedEntry, ScrapedResult, ParseResult } from '@/src/types/vocabulary'
 import { ScraperOrchestrator } from './scrapers';
 
 export class WiktionaryScraperService {
-  private static readonly DEFAULT_CONCURRENCY = 45;
+  private static readonly DEFAULT_CONCURRENCY = 30;
 
   static async scrapeWords(
     words: ParsedEntry[],

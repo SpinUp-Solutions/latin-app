@@ -820,7 +820,7 @@ fortify; to put on a firm footing, establish; to guarantee; to assert, affirm; t
 vouch for /refl.-to brace oneself
 46. habito, -are, -avi: to live in, inhabit
 
-47. hortor hortari hortatus sum: to encourage, cheer, incite, instigate; to give a pep talk to
+47. hortor, hortari, hortatus sum: to encourage, cheer, incite, instigate; to give a pep talk to
 48. ignoro, -are, -avi, -atus: to not know, be ignorant of, be unfamiliar with; to be unaware
 of, know nothing about; to fail to recognize; to mistake , misunderstand; to ignore,
 disregard, take no notice of
@@ -884,9 +884,9 @@ turn down
 81. opto, -are, avi, atus: to choose, select, pray for, wish for
 82. orno, -are, -avi, -atus: to fit out, equip, dress; to adorn, embellish, honor
 83. oro, -are, -avi, -atus: to pray, speak, plead, beg, entreat
-84. paro (1): to prepare, furnish; produce; obtain/get; buy; raise; plan
+84. paro, (1): to prepare, furnish; produce; obtain/get; buy; raise; plan
 
-85. perturbo (1): to confuse, throw into confusion; disturb, perturb, trouble; alarm
+85. perturbo, (1): to confuse, throw into confusion; disturb, perturb, trouble; alarm
 86. postulo, -are, -avi, -atus: to demand, claim; to look for as due, expect; (of things) to
 require; (leg) to arraign, prosecute; (leg) to apply for (a writ from the praetor to
 prosecute)
@@ -951,11 +951,11 @@ in operation, obtain (w adverbs) to behave; to revolve; to spin around; to toss;
 to be involved in, be engaged in, be busy with; to stay in, live in, pass one’s time in; to be
 concerned with; to be subject to; to constantly present in; to dwell on
 109.
-voco (1): to call, summon; name; call upon
+voco, (1): to call, summon; name; call upon
 110.
-vulnero (1): to wound/injure/harm, pain/distress; inflict wound on; damage
+vulnero, (1): to wound/injure/harm, pain/distress; inflict wound on; damage
 111.
-vito (1): to avoid, shun, evade
+vito, (1): to avoid, shun, evade
 
 2nd Conjugation (51)
 1. abstineo, abstinere, abstinui, abstentus: to withhold, keep away, hold back, restrain
@@ -1665,7 +1665,7 @@ back, carry back, to retake, recover, regain, to take in, make (money), to take 
 assume, undertake, to guarantee, pledge, to retake, recapture, seize, take, occupy
 25. reficio, reficere, refeci, refectus: to rebuild, repair, restore, to revive, to refresh,
 invigorate, to get back again, to reappoint, re-elect
-26. subiicio, subiicere, subicui: (intr) to lie nearby, (w/ dat) to lie under, lie close to
+26. subicio, subiicere, subicui: (intr) to lie nearby, (w/ dat) to lie under, lie close to
 27. suscipio, suscipere, suscepi, susceptus: to catch; to support; to pick up, resume; to
 bear; to accept, receive, to take up, undertake; to acknowledge, recognize as one’s own
 28. suspicio, suspicere, suspexi, suspectus: to look up at; to look up to, admire; to
