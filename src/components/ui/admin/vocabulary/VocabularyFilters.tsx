@@ -4,7 +4,7 @@ import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { Label } from '@/src/components/ui/label';
-import { Filter, Search, X } from 'lucide-react';
+import { Filter, Search, X, RotateCcw } from 'lucide-react';
 import { VocabularyFilters } from '@/src/types/admin-vocabulary';
 
 interface VocabularyFiltersProps {
@@ -16,7 +16,7 @@ interface VocabularyFiltersProps {
   onReset: () => void;
 }
 
-const wordTypeOptions = [
+const WORD_TYPE_OPTIONS = [
   { value: 'all', label: 'All Types' },
   { value: 'noun', label: 'Nouns' },
   { value: 'verb', label: 'Verbs' },
@@ -28,16 +28,16 @@ const wordTypeOptions = [
   { value: 'interjection', label: 'Interjections' },
   { value: 'enclitic', label: 'Enclitics' },
   { value: 'number', label: 'Numbers' },
-];
+] as const;
 
-const sectionOptions = [
+const SECTION_OPTIONS = [
   { value: 'all', label: 'All Sections' },
   { value: 'unit1', label: 'Unit 1' },
   { value: 'unit2', label: 'Unit 2' },
   { value: 'unit3', label: 'Unit 3' },
   { value: 'unit4', label: 'Unit 4' },
   { value: 'unit5', label: 'Unit 5' },
-];
+] as const;
 
 export const VocabularyFiltersComponent: React.FC<VocabularyFiltersProps> = ({
   filters,
@@ -50,43 +50,53 @@ export const VocabularyFiltersComponent: React.FC<VocabularyFiltersProps> = ({
   const hasActiveFilters = filters.wordType !== 'all' || filters.section !== 'all' || filters.search !== '';
 
   return (
-    <Card className="mb-6 bg-white !bg-opacity-100">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Filter className="h-5 w-5" />
-          Filters
+    <Card className="mb-6 bg-white shadow-sm border-gray-200">
+      <CardHeader className="pb-4">
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <Filter className="h-5 w-5 text-blue-600" />
+          Vocabulary Filters
         </CardTitle>
       </CardHeader>
-      <CardContent className="bg-white">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div>
-            <Label htmlFor="wordType">Word Type</Label>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Word Type Filter */}
+          <div className="space-y-2">
+            <Label htmlFor="wordType" className="text-sm font-medium text-gray-700">
+              Word Type
+            </Label>
             <Select value={filters.wordType} onValueChange={value => onFiltersChange({ wordType: value })}>
-              <SelectTrigger>
+              <SelectTrigger id="wordType" className="bg-white">
                 <SelectValue placeholder="Select word type" />
               </SelectTrigger>
-              <SelectContent className="bg-white !bg-opacity-100">
-                {wordTypeOptions.map(option => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                    {option.value !== 'all' && !countsLoading && wordTypeCounts[option.value] && (
-                      <span className="ml-2 text-sm text-muted-foreground">({wordTypeCounts[option.value]})</span>
-                    )}
+              <SelectContent className="bg-white max-h-60">
+                {WORD_TYPE_OPTIONS.map(option => (
+                  <SelectItem key={option.value} value={option.value} className="cursor-pointer">
+                    <div className="flex items-center justify-between w-full">
+                      <span>{option.label}</span>
+                      {option.value !== 'all' && !countsLoading && wordTypeCounts[option.value] && (
+                        <span className="ml-2 text-xs text-muted-foreground bg-gray-100 px-2 py-0.5 rounded-full">
+                          {wordTypeCounts[option.value]}
+                        </span>
+                      )}
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
 
-          <div>
-            <Label htmlFor="section">Section</Label>
+          {/* Section Filter */}
+          <div className="space-y-2">
+            <Label htmlFor="section" className="text-sm font-medium text-gray-700">
+              Section
+            </Label>
             <Select value={filters.section} onValueChange={value => onFiltersChange({ section: value })}>
-              <SelectTrigger>
+              <SelectTrigger id="section" className="bg-white">
                 <SelectValue placeholder="Select section" />
               </SelectTrigger>
-              <SelectContent className="bg-white !bg-opacity-100">
-                {sectionOptions.map(option => (
-                  <SelectItem key={option.value} value={option.value}>
+              <SelectContent className="bg-white">
+                {SECTION_OPTIONS.map(option => (
+                  <SelectItem key={option.value} value={option.value} className="cursor-pointer">
                     {option.label}
                   </SelectItem>
                 ))}
@@ -94,30 +104,85 @@ export const VocabularyFiltersComponent: React.FC<VocabularyFiltersProps> = ({
             </Select>
           </div>
 
-          <div>
-            <Label htmlFor="search">Search</Label>
+          {/* Search Filter */}
+          <div className="space-y-2">
+            <Label htmlFor="search" className="text-sm font-medium text-gray-700">
+              Search Words
+            </Label>
             <form onSubmit={onSearch} className="flex gap-2">
               <Input
                 id="search"
                 placeholder="Search words..."
                 value={filters.search}
                 onChange={e => onFiltersChange({ search: e.target.value })}
+                className="flex-1 bg-white"
               />
-              <Button type="submit" size="sm" variant="outline">
+              <Button type="submit" size="sm" variant="outline" className="px-3" title="Search">
                 <Search className="h-4 w-4" />
               </Button>
             </form>
           </div>
 
+          {/* Reset Button */}
           <div className="flex items-end">
-            {hasActiveFilters && (
-              <Button variant="outline" size="sm" onClick={onReset} className="flex items-center gap-2">
-                <X className="h-4 w-4" />
-                Reset
-              </Button>
-            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onReset}
+              className={`flex items-center gap-2 transition-all ${
+                hasActiveFilters
+                  ? 'opacity-100 hover:bg-red-50 hover:border-red-200 hover:text-red-600'
+                  : 'opacity-50 cursor-not-allowed'
+              }`}
+              disabled={!hasActiveFilters}
+              title={hasActiveFilters ? 'Reset all filters' : 'No active filters to reset'}>
+              <RotateCcw className="h-4 w-4" />
+              Reset Filters
+            </Button>
           </div>
         </div>
+
+        {/* Active Filters Summary */}
+        {hasActiveFilters && (
+          <div className="pt-3 border-t border-gray-100">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-gray-600">Active filters:</span>
+              {filters.wordType !== 'all' && (
+                <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                  Type: {WORD_TYPE_OPTIONS.find(opt => opt.value === filters.wordType)?.label}
+                  <button
+                    onClick={() => onFiltersChange({ wordType: 'all' })}
+                    className="ml-1 hover:bg-blue-200 rounded-full p-0.5"
+                    title="Remove filter">
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+              {filters.section !== 'all' && (
+                <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full">
+                  Section: {SECTION_OPTIONS.find(opt => opt.value === filters.section)?.label}
+                  <button
+                    onClick={() => onFiltersChange({ section: 'all' })}
+                    className="ml-1 hover:bg-purple-200 rounded-full p-0.5"
+                    title="Remove filter">
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+              {filters.search && (
+                <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                  Search: &ldquo;{filters.search}&rdquo;
+                  <button
+                    onClick={() => onFiltersChange({ search: '' })}
+                    className="ml-1 hover:bg-green-200 rounded-full p-0.5"
+                    title="Remove search">
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

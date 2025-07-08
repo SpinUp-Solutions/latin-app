@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/src/store';
 import { toast } from 'sonner';
 import { Word, WordsResponse, VocabularyFilters } from '@/src/types/admin-vocabulary';
 
 const ITEMS_PER_PAGE = 20;
+const SEARCH_DEBOUNCE_MS = 300;
 
 export const useVocabularyData = () => {
   const { user } = useSelector((state: RootState) => state.auth);
@@ -22,6 +23,27 @@ export const useVocabularyData = () => {
     section: 'all',
     search: '',
   });
+
+  const [debouncedSearch, setDebouncedSearch] = useState(filters.search);
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(filters.search);
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => clearTimeout(timer);
+  }, [filters.search]);
+
+  // Memoize filter params to prevent unnecessary API calls
+  const filterParams = useMemo(
+    () => ({
+      wordType: filters.wordType,
+      section: filters.section,
+      search: debouncedSearch,
+    }),
+    [filters.wordType, filters.section, debouncedSearch]
+  );
 
   const loadWordTypeCounts = async () => {
     try {
@@ -54,14 +76,14 @@ export const useVocabularyData = () => {
           limit: ITEMS_PER_PAGE.toString(),
         });
 
-        if (filters.wordType && filters.wordType !== 'all') {
-          params.append('wordType', filters.wordType);
+        if (filterParams.wordType && filterParams.wordType !== 'all') {
+          params.append('wordType', filterParams.wordType);
         }
-        if (filters.section && filters.section !== 'all') {
-          params.append('section', filters.section);
+        if (filterParams.section && filterParams.section !== 'all') {
+          params.append('section', filterParams.section);
         }
-        if (filters.search) {
-          params.append('search', filters.search);
+        if (filterParams.search) {
+          params.append('search', filterParams.search);
         }
         if (!reset && lastWordId) {
           params.append('lastWordId', lastWordId);
@@ -89,7 +111,7 @@ export const useVocabularyData = () => {
         setLoadingMore(false);
       }
     },
-    [filters.wordType, filters.section, filters.search, lastWordId]
+    [filterParams, lastWordId]
   );
 
   const updateWord = async (wordId: string, updates: Partial<Word>) => {
@@ -157,7 +179,8 @@ export const useVocabularyData = () => {
     if (user && user.role === 'admin') {
       loadWords(true);
     }
-  }, [user, filters.wordType, filters.section, filters.search]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, filterParams]);
 
   return {
     words,

@@ -130,3 +130,16 @@ export interface EditingCell {
   cellKey: string;
   tableType: string;
 }
+
+export interface BaseTableProps {
+  word: Word;
+  isExpanded: boolean;
+  onToggle: () => void;
+  isEditMode?: boolean;
+  editingCell?: EditingCell | null;
+  editingCellValue?: string;
+  onCellDoubleClick?: (rowIndex: number, cellKey: string, tableType: string, currentValue: string) => void;
+  onCellEditSave?: () => void;
+  onCellEditCancel?: () => void;
+  onEditingCellValueChange?: (value: string) => void;
+}
