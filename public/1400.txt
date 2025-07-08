@@ -959,8 +959,7 @@ vito, (1): to avoid, shun, evade
 
 2nd Conjugation (51)
 1. abstineo, abstinere, abstinui, abstentus: to withhold, keep away, hold back, restrain
-2. adhibeo, -ere, -ui, -itus: to stretch out, administer, apply, to call in, cite, supply, behave,
-to conduct oneself
+2. adhibeo, -ere, -ui, -itus: to stretch out, administer, apply, to call in, cite, supply, behave,to conduct oneself
 3. admoneo, -ere, -ui, -itus: to admonish, remind, suggest, warn, recall
 4. appareo, apparere, apparui, apparitus: to appear, be visible/found, to show up, to
 occur
@@ -969,13 +968,8 @@ occur
 7. augeo, augere, auxi, auctus: increase, enlarge, augment, spread
 8. careo, -ere, -ui, -itus: be without, miss, lack, lose
 9. caveo, cavere, cavi, cautus: beware, avoid, take precaution
-10. censeo, -ere, -ui, -us: to think, believe, suppose, imagine, expect, esteem, appreciate,
-value, (of senator) propose, move, vote, recommend, suggest, advise, decide, resolve,
-(of censor) estimate, rate, assess, tax, register (possessions) (w/ abl.) measure by
-(pass. w/ abl.) be valued for, have one’s reputation based on (as deponent) reckon,
-count as
-11. coerceo, -ere, -ui, -itus: to enclose, confine, hem in, limit, restrain, check, control, keep
-in order
+10. censeo, -ere, -ui, -us: to think, believe, suppose, imagine, expect, esteem, appreciate,value, (of senator) propose, move, vote, recommend, suggest, advise, decide, resolve,(of censor) estimate, rate, assess, tax, register (possessions) (w/ abl.) measure by (pass. w/ abl.) be valued for, have one’s reputation based on (as deponent) reckon, count as
+11. coerceo, -ere, -ui, -itus: to enclose, confine, hem in, limit, restrain, check, control, keep in order
 12. commoveo, commovere, commovi, commotus: stir up, shake, disturb, upset, excite,
 shake up, arouse, provoke, generate, produce, (fig) touch, move, influence, impress,
 cause, start (a war, battle), dislodge (an enemy), call in (a debt)
@@ -987,7 +981,7 @@ to, abolish
 16. dissuadeo, -ere, dissuasi, dissuasus: dissuade, advise against, object to, oppose
 17. doceo, -ere, docui, doctus: teach, show
 
-18. doleo, -ere, dolui, dolitus: grieve, hurt, suffer, be afflicted
+18. doleo, -ere, dolui, dolitus: grieve, hurt, suffer, be afflicted
 19. egeo, egere, egui: lack, want, need, require, be without
 20. exerceo, -ere, -ui, -itus: to exercise, train, to keep busy, keep going, to work (soil), to
 occupy (the mind), to practice (medicine, patience, skills…), to carry into effect, to
@@ -1038,7 +1032,7 @@ waste
 44. persuadeo, persuadere, persuasi, persuasus: to persuade, convince (with dat.)
 45. perterreo, perterrere, perterrui, perterritus: to frighten greatly, terrify
 
-46. pertineo, pertinere, pertinui, pertentus: to reach; extend; relate to; concerns, pertain
+46. pertineo, pertinere, pertinui, pertentus: to reach; extend; relate to; concerns, pertain
 to
 47. placeo, placere, placui, placitus: to please, satisfy, give pleasure to (w/DAT)
 48. polliceor, polliceri, pollitus sum: to promise
@@ -1058,10 +1052,8 @@ remove, to shroud, veil, to put out of sight, set aside, abolish
 refutation, to answer, reply, to give an official or formal reply, to echo, to satisfy the
 claim, to answer a summons to appear in court, to give an opinion, give legal advice, to
 match, balance, correspond to, be equal to, to resemble, to measure up to
-55. retineo, retinere, retinui, retentus: to hold back, keep back, to restrain, to keep, retain,
-to hold in, reserve, to preserve, maintain, uphold, to hold, engross, to detain, delay
-56. rideo, ridere, risi, risus: to laugh at, ridicule, to smile upon, to laugh, to smile, grin, to
-smile at, laugh at
+55. retineo, retinere, retinui, retentus: to hold back, keep back, to restrain, to keep, retain, to hold in, reserve, to preserve, maintain, uphold, to hold, engross, to detain, delay
+56. rideo, ridere, risi, risus: to laugh at, ridicule, to smile upon, to laugh, to smile, grin, to smile at, laugh at
 57. sedeo, sedere, sedi, sessus: to sit, remain seated, preside, hold court, be a judge, to
 remain encamped, to keep the field, to settle down to a blockade, to be idle, be inactive,
 to fit, to be located, to be low-lying, to sink, settle, to be firm, be fixed, be established, to
@@ -1753,7 +1745,7 @@ assistance,
 convene, share, participate, to standby
 5. affero, afferre, attuli, allatus: to bring to, carry, report, convey, announce, introduce,
 quote, apply, exert, employ, exercise, produce, cause, allege, assign
-6. aio (ajo): say, assert, affirm, prescribe
+6. aio, (ajo): say, assert, affirm, prescribe
 7. confero, -ferre, -tuli, collatus: to bring together, contribute, condense, compress,
 assemble, discuss, talk over, bear, convey, direct, devote, apply, confer, bestow, give,
 lend, grant, ascribe, impute, assign, postpone, (w/ in+acc) change someone/thing into,

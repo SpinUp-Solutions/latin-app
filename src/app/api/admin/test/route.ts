@@ -17,113 +17,131 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const parseResult = await VocabularyParserService.parseVocabularyFile();
     console.log(`Parsed ${parseResult.totalEntries} total entries`);
 
-    // Filter verbs by conjugation class
-    const firstConjugationVerbs = VocabularyParserService.filterFirstConjugationVerbs(parseResult);
-    const secondConjugationVerbs = VocabularyParserService.filterSecondConjugationVerbs(parseResult);
-    const thirdConjugationVerbs = VocabularyParserService.filterThirdConjugationVerbs(parseResult);
-    const fourthConjugationVerbs = VocabularyParserService.filterFourthConjugationVerbs(parseResult);
+    // Get all adjectives
+    const allAdjectives = VocabularyParserService.filterAdjectives(parseResult);
 
-    // Validate parsing results against expected statistics
-    const expectedStats: Record<string, number> = {
-      '1st Conjugation': 111,
-      '2nd Conjugation': 67,
-      '3rd Conjugation': 215,
-      '4th Conjugation': 19,
-    };
+    console.log(`Found ${allAdjectives.length} adjectives`);
 
-    const actualStats: Record<string, number> = {
-      '1st Conjugation': firstConjugationVerbs.length,
-      '2nd Conjugation': secondConjugationVerbs.length,
-      '3rd Conjugation': thirdConjugationVerbs.length,
-      '4th Conjugation': fourthConjugationVerbs.length,
-    };
+    // Analyze adjective sections
+    const adjectiveSections = new Map<string, number>();
+    const adjectiveSubsections = new Map<string, number>();
 
-    const statsMatch = Object.keys(expectedStats).every(key => expectedStats[key] === actualStats[key]);
+    allAdjectives.forEach(adj => {
+      adjectiveSections.set(adj.section, (adjectiveSections.get(adj.section) || 0) + 1);
+      if (adj.subsection) {
+        adjectiveSubsections.set(adj.subsection, (adjectiveSubsections.get(adj.subsection) || 0) + 1);
+      }
+    });
 
-    console.log(`Conjugation counts: ${JSON.stringify(actualStats)}`);
-    if (!statsMatch) {
-      console.warn('⚠️  Counts differ from expected:', expectedStats);
-    } else {
-      console.log('✅ Counts match expected statistics');
-    }
+    console.log('Adjectives by section:');
+    Array.from(adjectiveSections.entries()).forEach(([section, count]) => {
+      console.log(`  ${section}: ${count}`);
+    });
 
-    const wordsToScrape = [
-      ...firstConjugationVerbs,
-      ...secondConjugationVerbs,
-      ...thirdConjugationVerbs,
-      ...fourthConjugationVerbs,
-    ];
+    console.log('Adjectives by subsection:');
+    Array.from(adjectiveSubsections.entries()).forEach(([subsection, count]) => {
+      console.log(`  ${subsection}: ${count}`);
+    });
 
-    console.log(`Scraping ${wordsToScrape.length} verbs across all conjugations`);
+    // Show sample adjectives for inspection
+    console.log('\nSample adjectives:');
+    allAdjectives.slice(0, 5).forEach(adj => {
+      console.log(`  ${adj.wordForm} (${adj.grammaticalInfo}): ${adj.translation}`);
+      console.log(`    Section: ${adj.section}, Subsection: ${adj.subsection || 'none'}`);
+    });
 
-    const scrapingResults = await WiktionaryScraperService.scrapeWords(wordsToScrape);
+    // Scrape adjectives with Wiktionary data
+    console.log(`\nStarting scraping for ${allAdjectives.length} adjectives...`);
+    const adjectiveScrapingResults = await WiktionaryScraperService.scrapeWords(allAdjectives, 40);
+
+    const adjectiveSuccessCount = adjectiveScrapingResults.filter(result => result.wiktionaryData !== null).length;
+    const adjectiveFailureCount = adjectiveScrapingResults.filter(result => result.wiktionaryData === null).length;
+
+    console.log(`Adjective scraping completed. Success: ${adjectiveSuccessCount}, Failures: ${adjectiveFailureCount}`);
+
+    // Analyze failures by section and subsection
+    const failuresBySection = new Map<string, number>();
+    const failuresBySubsection = new Map<string, number>();
+    const failuresByErrorType = new Map<string, number>();
+
+    adjectiveScrapingResults
+      .filter(result => result.wiktionaryData === null)
+      .forEach(result => {
+        const section = result.parsedData.section;
+        const subsection = result.parsedData.subsection || 'none';
+        const errorType = result.error || 'Unknown error';
+
+        failuresBySection.set(section, (failuresBySection.get(section) || 0) + 1);
+        failuresBySubsection.set(subsection, (failuresBySubsection.get(subsection) || 0) + 1);
+        failuresByErrorType.set(errorType, (failuresByErrorType.get(errorType) || 0) + 1);
+      });
+
+    console.log('\nFailure analysis:');
+    console.log('Failures by section:');
+    Array.from(failuresBySection.entries()).forEach(([section, count]) => {
+      console.log(`  ${section}: ${count}`);
+    });
+
+    console.log('Failures by subsection:');
+    Array.from(failuresBySubsection.entries()).forEach(([subsection, count]) => {
+      console.log(`  ${subsection}: ${count}`);
+    });
+
+    console.log('Failures by error type:');
+    Array.from(failuresByErrorType.entries()).forEach(([errorType, count]) => {
+      console.log(`  ${errorType}: ${count}`);
+    });
+
+    // Format the adjective data for output
+    const formattedAdjectives = adjectiveScrapingResults.map(result => formatAdjectiveForOutput(result));
 
     const endTime = Date.now();
     const totalDuration = endTime - startTime;
 
-    // Categorize results more accurately
-    const successfulResults = scrapingResults.filter(r => !r.error && r.wiktionaryData !== null);
-    const failedResults = scrapingResults.filter(r => r.error || r.wiktionaryData === null);
-
-    // Separate different types of failures for better reporting
-    const errorFailures = scrapingResults.filter(r => r.error);
-    const wiktionaryFailures = scrapingResults.filter(r => !r.error && r.wiktionaryData === null);
-
-    // Format words according to user requirements
-    const formattedWords = successfulResults.map(formatWordForUserResponse);
-
     const responseData = {
       success: true,
-      message: `Successfully scraped ${wordsToScrape.length} verbs (1st-4th conjugation)`,
+      message: 'Adjective scraping and analysis completed successfully',
       timestamp: new Date().toISOString(),
-      statsValidation: {
-        expectedStats,
-        actualStats,
-        statsMatch,
-      },
       results: {
-        totalScraped: scrapingResults.length,
-        successful: successfulResults.length,
-        failed: failedResults.length,
-        failureBreakdown: {
-          withErrors: errorFailures.length,
-          wiktionaryFailed: wiktionaryFailures.length,
+        totalEntries: parseResult.totalEntries,
+        totalAdjectives: allAdjectives.length,
+        adjectivesSuccessfullyScraped: adjectiveSuccessCount,
+        adjectivesFailed: adjectiveFailureCount,
+        adjectiveBreakdown: {
+          sections: Object.fromEntries(adjectiveSections),
+          subsections: Object.fromEntries(adjectiveSubsections),
         },
-        conjugationBreakdown: {
-          '1st': firstConjugationVerbs.length,
-          '2nd': secondConjugationVerbs.length,
-          '3rd': thirdConjugationVerbs.length,
-          '4th': fourthConjugationVerbs.length,
-          total: wordsToScrape.length,
+        failedAdjectives: adjectiveScrapingResults
+          .filter(result => result.wiktionaryData === null)
+          .map(result => ({
+            word: result.parsedData.wordForm,
+            section: result.parsedData.section,
+            subsection: result.parsedData.subsection,
+            error: result.error || 'Failed to scrape data',
+          })),
+        failureAnalysis: {
+          bySection: Object.fromEntries(failuresBySection),
+          bySubsection: Object.fromEntries(failuresBySubsection),
+          byErrorType: Object.fromEntries(failuresByErrorType),
         },
-        failedWords: [
-          ...errorFailures.map(r => ({
-            word: r.word,
-            error: r.error,
-            failureType: 'scraping_error',
-          })),
-          ...wiktionaryFailures.map(r => ({
-            word: r.word,
-            error: 'Failed to retrieve Wiktionary data',
-            failureType: 'wiktionary_failed',
-          })),
-        ].slice(0, 20),
+        successRate: {
+          percentage: +((adjectiveSuccessCount / allAdjectives.length) * 100).toFixed(1),
+          successCount: adjectiveSuccessCount,
+          totalCount: allAdjectives.length,
+        },
+        sampleScrapedAdjectives: formattedAdjectives.slice(0, 10),
       },
-      words: formattedWords,
       performance: {
         totalDurationMs: totalDuration,
-        totalDurationSeconds: Math.round((totalDuration / 1000) * 100) / 100,
-        averageTimePerWordMs: Math.round(totalDuration / wordsToScrape.length),
-        wordsPerSecond: Math.round((wordsToScrape.length / (totalDuration / 1000)) * 100) / 100,
+        totalDurationSeconds: +(totalDuration / 1000).toFixed(1),
+        averageTimePerAdjectiveMs: +(totalDuration / allAdjectives.length).toFixed(1),
+        adjectivesPerSecond: +(allAdjectives.length / (totalDuration / 1000)).toFixed(1),
       },
     };
 
-    // Commented out JSON file saving as requested
-    // await saveResultsToFile(responseData, scrapingResults);
-
     return NextResponse.json(responseData);
   } catch (error) {
-    console.error('Error in test API:', error);
+    console.error('Error in verb scraping API:', error);
     return NextResponse.json(
       {
         success: false,
@@ -135,34 +153,66 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 }
 
-async function saveResultsToFile(responseData: any, rawScrapingResults: ScrapedResult[]): Promise<void> {
-  try {
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const fileName = `scraping-results-${timestamp}.json`;
-    const filePath = path.join(process.cwd(), 'public', fileName);
+function formatVerbForOutput(scrapedResult: ScrapedResult) {
+  const { parsedData, wiktionaryData } = scrapedResult;
 
-    // Create comprehensive data to save
-    const dataToSave = {
-      metadata: {
-        timestamp: responseData.timestamp,
-        totalWords: responseData.results.totalScraped,
-        successful: responseData.results.successful,
-        failed: responseData.results.failed,
-        performance: responseData.performance,
-        conjugationBreakdown: responseData.results.conjugationBreakdown,
-        failureBreakdown: responseData.results.failureBreakdown,
-      },
-      formattedWords: responseData.words,
-      rawScrapingResults: rawScrapingResults,
-      failedWords: responseData.results.failedWords,
-    };
+  return {
+    word: parsedData.wordForm,
+    alternateForm: parsedData.alternateForm || null,
+    grammaticalInfo: parsedData.grammaticalInfo,
+    translation: parsedData.translation,
+    wordType: parsedData.wordType,
+    conjugationClass: parsedData.conjugationClass || null,
+    conjugation: wiktionaryData?.conjugation || null,
+    isDeponent: parsedData.isDeponent || wiktionaryData?.isDeponent || false,
+    principalParts: parsedData.principalParts || [],
+    conjugationTable: wiktionaryData?.conjugationTable || null,
+    definitions: wiktionaryData?.definitions || [],
+    etymology: wiktionaryData?.etymology || null,
+    pronunciation: wiktionaryData?.pronunciation || null,
+    originalText: parsedData.originalText,
+    section: parsedData.section,
+  };
+}
 
-    await fs.promises.writeFile(filePath, JSON.stringify(dataToSave, null, 2), 'utf8');
-    console.log(`Results saved to: ${filePath}`);
-    console.log(`File size: ${JSON.stringify(dataToSave).length} characters`);
-  } catch (error) {
-    console.error('Error saving results to file:', error);
-  }
+function formatAdjectiveForOutput(scrapedResult: ScrapedResult) {
+  const { parsedData, wiktionaryData } = scrapedResult;
+
+  return {
+    word: parsedData.wordForm,
+    alternateForm: parsedData.alternateForm || null,
+    grammaticalInfo: parsedData.grammaticalInfo,
+    translation: parsedData.translation,
+    wordType: parsedData.wordType,
+    declensionType: parsedData.declensionClass || null,
+    declension: wiktionaryData?.declension || null,
+    adjectiveDeclensionTable: wiktionaryData?.adjectiveDeclensionTable || null,
+    definitions: wiktionaryData?.definitions || [],
+    etymology: wiktionaryData?.etymology || null,
+    pronunciation: wiktionaryData?.pronunciation || null,
+    originalText: parsedData.originalText,
+    section: parsedData.section,
+    subsection: parsedData.subsection || null,
+  };
+}
+
+function formatAdjectiveFromParsedData(parsedData: any) {
+  return {
+    word: parsedData.wordForm,
+    alternateForm: parsedData.alternateForm || null,
+    grammaticalInfo: parsedData.grammaticalInfo,
+    translation: parsedData.translation,
+    wordType: parsedData.wordType,
+    declensionType: parsedData.declensionClass || null,
+    declension: null, // Will be filled when scraped
+    adjectiveDeclensionTable: null, // Will be filled when scraped
+    definitions: [], // Will be filled when scraped
+    etymology: null, // Will be filled when scraped
+    pronunciation: null, // Will be filled when scraped
+    originalText: parsedData.originalText,
+    section: parsedData.section,
+    subsection: parsedData.subsection || null,
+  };
 }
 
 async function testDatabaseConnection(): Promise<void> {
@@ -181,29 +231,5 @@ function calculatePerformanceMetrics(results: ScrapedResult[], totalDuration: nu
     totalDurationSeconds: +totalSeconds.toFixed(1),
     averageTimePerWordMs: +(totalDuration / results.length).toFixed(1),
     wordsPerSecond: +(results.length / totalSeconds).toFixed(1),
-  };
-}
-
-function formatWordForUserResponse(scrapedResult: ScrapedResult) {
-  const { parsedData, wiktionaryData } = scrapedResult;
-
-  return {
-    word: parsedData.wordForm,
-    alternateForm: parsedData.alternateForm,
-    grammaticalInfo: parsedData.grammaticalInfo,
-    translation: parsedData.translation,
-    wordType: parsedData.wordType,
-    gender: parsedData.gender || wiktionaryData?.gender,
-    declensionClass: parsedData.declensionClass,
-    originalText: parsedData.originalText,
-    wiktionaryDefinitions: wiktionaryData?.definitions || [],
-    etymology: wiktionaryData?.etymology,
-    pronounciation: wiktionaryData?.pronunciation,
-    declensionTable: wiktionaryData?.declensionTable || [],
-    conjugationTable: wiktionaryData?.conjugationTable,
-    conjugationClass: parsedData.conjugationClass,
-    conjugation: wiktionaryData?.conjugation,
-    isDeponent: parsedData.isDeponent || wiktionaryData?.isDeponent,
-    principalParts: parsedData.principalParts || [],
   };
 }

@@ -3,6 +3,7 @@ import { BrowserManager } from '../core/browser-manager';
 import { WordFilters } from '../core/word-filters';
 import { NounScraper } from './noun-scraper';
 import { VerbScraper } from './verb-scraper';
+import { AdjectiveScraper } from './adjective-scraper';
 
 export class ScraperOrchestrator {
   private static readonly DEFAULT_CONCURRENCY = 45;
@@ -85,6 +86,8 @@ export class ScraperOrchestrator {
         return await NounScraper.scrapeNoun(entry.wordForm, context);
       case 'verb':
         return await VerbScraper.scrapeVerb(entry.wordForm, context);
+      case 'adjective':
+        return await AdjectiveScraper.scrapeAdjective(entry.wordForm, context);
       default:
         return await NounScraper.scrapeNoun(entry.wordForm, context);
     }

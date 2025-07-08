@@ -59,7 +59,11 @@ export abstract class BaseScraper {
     return Array.from(new Set(forms.filter(form => form && form.length > 0)));
   }
 
-  protected static async scrapeWiktionary(word: string, context: BrowserContext): Promise<WiktionaryData | null> {
+  protected static async scrapeWiktionary(
+    word: string,
+    context: BrowserContext,
+    intendedWordType?: 'noun' | 'verb' | 'adjective'
+  ): Promise<WiktionaryData | null> {
     const page = await context.newPage();
 
     try {
@@ -77,15 +81,52 @@ export abstract class BaseScraper {
 
       const verbSection = this.findVerbSection(latinDiv);
       const nounSection = this.findNounSection(latinDiv);
+      const adjectiveSection = this.findAdjectiveSection(latinDiv);
 
-      const isVerb = (await verbSection.count()) > 0;
-      const isNoun = (await nounSection.count()) > 0;
+      // Determine which section to use based on intended word type
+      let targetSection: Locator;
+      let useVerbExtraction = false;
+
+      if (intendedWordType) {
+        if (intendedWordType === 'verb') {
+          targetSection = verbSection;
+          useVerbExtraction = true;
+        } else if (intendedWordType === 'adjective') {
+          targetSection = adjectiveSection;
+          useVerbExtraction = false;
+        } else {
+          targetSection = nounSection;
+          useVerbExtraction = false;
+        }
+      } else {
+        // Fallback to original detection logic
+        const isVerb = (await verbSection.count()) > 0;
+        const isAdjective = (await adjectiveSection.count()) > 0;
+        const isNoun = (await nounSection.count()) > 0;
+
+        if (isVerb) {
+          targetSection = verbSection;
+          useVerbExtraction = true;
+        } else if (isAdjective) {
+          targetSection = adjectiveSection;
+          useVerbExtraction = false;
+        } else {
+          targetSection = nounSection;
+          useVerbExtraction = false;
+        }
+      }
 
       await Promise.all([
         this.extractEtymology(latinDiv, result),
         this.extractPronunciation(latinDiv, result),
-        isVerb ? this.extractVerbHeadingInfo(verbSection, result) : this.extractHeadingInfo(latinDiv, result),
-        isVerb ? this.extractVerbDefinitions(verbSection, result) : this.extractDefinitions(latinDiv, result),
+        useVerbExtraction
+          ? this.extractVerbHeadingInfo(targetSection, result)
+          : this.extractHeadingInfo(latinDiv, result),
+        useVerbExtraction
+          ? this.extractVerbDefinitions(targetSection, result)
+          : intendedWordType === 'adjective'
+            ? this.extractAdjectiveDefinitions(targetSection, result)
+            : this.extractDefinitions(latinDiv, result),
       ]);
 
       return result;
@@ -103,6 +144,14 @@ export abstract class BaseScraper {
   protected static findVerbSection(latinDiv: Locator): Locator {
     return latinDiv
       .locator('xpath=following-sibling::div[contains(@class,"mw-heading")][.//*[@id and starts-with(@id,"Verb")]][1]')
+      .first();
+  }
+
+  protected static findAdjectiveSection(latinDiv: Locator): Locator {
+    return latinDiv
+      .locator(
+        'xpath=following-sibling::div[contains(@class,"mw-heading")][.//*[@id and starts-with(@id,"Adjective")]][1]'
+      )
       .first();
   }
 
@@ -158,6 +207,22 @@ export abstract class BaseScraper {
   protected static async extractVerbDefinitions(verbDiv: Locator, result: WiktionaryData): Promise<void> {
     try {
       const definitionsList = verbDiv.locator('xpath=following-sibling::ol[1]').first();
+
+      if (await definitionsList.isVisible()) {
+        const listItems = await definitionsList.locator('li').all();
+        for (const item of listItems) {
+          const text = await item.textContent();
+          if (text) result.definitions.push(text.trim());
+        }
+      }
+    } catch (error) {
+      // Silently fail for optional data
+    }
+  }
+
+  protected static async extractAdjectiveDefinitions(adjectiveDiv: Locator, result: WiktionaryData): Promise<void> {
+    try {
+      const definitionsList = adjectiveDiv.locator('xpath=following-sibling::ol[1]').first();
 
       if (await definitionsList.isVisible()) {
         const listItems = await definitionsList.locator('li').all();

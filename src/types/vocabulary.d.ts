@@ -56,6 +56,22 @@ export interface DeclensionData {
   plural: string[];
 }
 
+export interface AdjectiveDeclensionData {
+  case: string;
+  masculine: {
+    singular: string[];
+    plural: string[];
+  };
+  feminine: {
+    singular: string[];
+    plural: string[];
+  };
+  neuter: {
+    singular: string[];
+    plural: string[];
+  };
+}
+
 export interface PersonForms {
   singular: {
     first?: string[];
@@ -180,6 +196,7 @@ export interface WiktionaryData {
   conjugation?: string;
   definitions: string[];
   declensionTable?: DeclensionData[];
+  adjectiveDeclensionTable?: AdjectiveDeclensionData[];
   conjugationTable?: ConjugationTable;
   etymology?: string;
   pronunciation?: string;
@@ -204,6 +221,7 @@ export interface WordResponse {
   etymology?: string;
   pronunciation?: string;
   declensionTable?: DeclensionData[];
+  adjectiveDeclensionTable?: AdjectiveDeclensionData[];
   conjugationTable?: ConjugationTable;
   // Additional fields from parsed data
   id: number;

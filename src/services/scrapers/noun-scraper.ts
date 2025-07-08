@@ -4,7 +4,7 @@ import { BaseScraper } from './base-scraper';
 
 export class NounScraper extends BaseScraper {
   static async scrapeNoun(word: string, context: BrowserContext): Promise<WiktionaryData | null> {
-    const result = await this.scrapeWiktionary(word, context);
+    const result = await this.scrapeWiktionary(word, context, 'noun');
     if (!result) return null;
 
     const page = await context.newPage();
