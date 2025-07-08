@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Button } from '@/src/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
+import { Card, CardContent } from '@/src/components/ui/card';
 import { Plus, Trash2, Eye, AlertCircle, Users, BookOpen, Zap, Check, X } from 'lucide-react';
 import { VerbConjugationExercise } from '@/src/types/exercise';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
@@ -11,7 +11,6 @@ export const VerbConjugationEditor: React.FC = () => {
   const dispatch = useAppDispatch();
   const editingContent = useAppSelector(state => state.lesson.editingContent?.content as VerbConjugationExercise);
 
-  // State for adding new vocabulary
   const [showAddVocab, setShowAddVocab] = useState(false);
   const [newVocabTerm, setNewVocabTerm] = useState('');
   const [newVocabDefinition, setNewVocabDefinition] = useState('');

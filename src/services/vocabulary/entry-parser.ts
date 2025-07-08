@@ -23,7 +23,7 @@ export class EntryParser {
         return this.parseSimpleEntry(line, section, subsection, wordType);
 
       default:
-        return this.parseGenericEntry(line, section, subsection);
+        return this.parseGenericEntry(line);
     }
   }
 
@@ -89,21 +89,21 @@ export class EntryParser {
     };
   }
 
-  private static parseGenericEntry(line: string, section: string, subsection: string): ParsedEntry | null {
+  private static parseGenericEntry(line: string): ParsedEntry | null {
     const match = line.match(/^(\d+)\.\s+(.+)$/);
     if (!match) return null;
 
     const [, idStr, content] = match;
-    const id = parseInt(idStr);
+    parseInt(idStr);
 
     // Split by colon to separate word info from translation
     const colonIndex = content.lastIndexOf(':');
     if (colonIndex === -1) return null;
 
     const wordInfo = content.substring(0, colonIndex).trim();
-    const translation = content.substring(colonIndex + 1).trim();
+    content.substring(colonIndex + 1).trim();
 
-    const wordForm = this.extractWordForm(wordInfo);
+    this.extractWordForm(wordInfo);
 
     return null;
   }

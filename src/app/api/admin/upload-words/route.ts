@@ -1,9 +1,20 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import fs from 'fs';
 import path from 'path';
 
-export async function POST(request: NextRequest): Promise<NextResponse> {
+interface WordData {
+  word: string;
+  wordType: string;
+  translation: string;
+  [key: string]: unknown;
+}
+
+interface FileData {
+  words: WordData[];
+}
+
+export async function POST(): Promise<NextResponse> {
   const startTime = Date.now();
   console.log('=== FIREBASE UPLOAD PROCESS STARTED ===');
   console.log(`Start time: ${new Date().toISOString()}`);
@@ -33,17 +44,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Debug: Show sample words
     if (words.length > 0) {
       console.log('Sample words structure:');
-      words.slice(0, 3).forEach((word: any, index: number) => {
+      words.slice(0, 3).forEach((word: WordData, index: number) => {
         console.log(`  ${index + 1}. ${word.word} (${word.wordType}) - ${word.translation?.substring(0, 50)}...`);
       });
     }
 
     console.log('Step 3: Analyzing word types...');
     const wordTypeBreakdown = {
-      nouns: words.filter((word: any) => word.wordType === 'noun').length,
-      verbs: words.filter((word: any) => word.wordType === 'verb').length,
-      adjectives: words.filter((word: any) => word.wordType === 'adjective').length,
-      other: words.filter((word: any) => !['noun', 'verb', 'adjective'].includes(word.wordType)).length,
+      nouns: words.filter((word: WordData) => word.wordType === 'noun').length,
+      verbs: words.filter((word: WordData) => word.wordType === 'verb').length,
+      adjectives: words.filter((word: WordData) => word.wordType === 'adjective').length,
+      other: words.filter((word: WordData) => !['noun', 'verb', 'adjective'].includes(word.wordType)).length,
     };
 
     console.log('✓ Word type breakdown:', wordTypeBreakdown);
@@ -109,7 +120,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 }
 
-async function loadFinalJsonFile(): Promise<any> {
+async function loadFinalJsonFile(): Promise<FileData | null> {
   try {
     const publicDir = path.join(process.cwd(), 'public');
     const filePath = path.join(publicDir, 'final2.json');
@@ -159,7 +170,7 @@ async function loadFinalJsonFile(): Promise<any> {
   }
 }
 
-async function uploadWordsToFirebase(words: any[]): Promise<{ batchesCreated: number; uploadDuration: number }> {
+async function uploadWordsToFirebase(words: WordData[]): Promise<{ batchesCreated: number; uploadDuration: number }> {
   const BATCH_SIZE = 500; // Firebase batch limit
   const uploadStartTime = Date.now();
 

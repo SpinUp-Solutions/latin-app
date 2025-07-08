@@ -1,5 +1,5 @@
 import { BrowserContext, Locator } from 'playwright';
-import { ParsedEntry, WiktionaryData } from '@/src/types/vocabulary';
+import { WiktionaryData } from '@/src/types/vocabulary';
 
 export abstract class BaseScraper {
   protected static async extractEtymology(latinDiv: Locator, result: WiktionaryData): Promise<void> {
@@ -102,7 +102,6 @@ export abstract class BaseScraper {
         // Fallback to original detection logic
         const isVerb = (await verbSection.count()) > 0;
         const isAdjective = (await adjectiveSection.count()) > 0;
-        const isNoun = (await nounSection.count()) > 0;
 
         if (isVerb) {
           targetSection = verbSection;

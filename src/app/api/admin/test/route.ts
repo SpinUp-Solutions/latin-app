@@ -1,18 +1,22 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
-import fs from 'fs';
-import path from 'path';
 
-import { ApiResponse, ScrapedResult, WordResponse } from '@/src/types/vocabulary';
-import { VocabularyParserService } from '@/src/services/vocabularyParserService';
-import { WiktionaryScraperService } from '@/src/services/wiktionaryScraperService';
-import { WordFilters } from '@/src/services/core/word-filters';
+import type { ScrapedResult } from '@/src/types/vocabulary';
 
-export async function GET(request: NextRequest): Promise<NextResponse> {
+// Tell Next.js this route is dynamic and should not be statically generated
+export const dynamic = 'force-dynamic';
+
+export async function GET(): Promise<NextResponse> {
   const startTime = Date.now();
 
   try {
     await testDatabaseConnection();
+
+    // Dynamic imports to prevent loading during build
+    const [{ VocabularyParserService }, { WiktionaryScraperService }] = await Promise.all([
+      import('@/src/services/vocabularyParserService'),
+      import('@/src/services/wiktionaryScraperService'),
+    ]);
 
     const parseResult = await VocabularyParserService.parseVocabularyFile();
     console.log(`Parsed ${parseResult.totalEntries} total entries`);
@@ -153,28 +157,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 }
 
-function formatVerbForOutput(scrapedResult: ScrapedResult) {
-  const { parsedData, wiktionaryData } = scrapedResult;
-
-  return {
-    word: parsedData.wordForm,
-    alternateForm: parsedData.alternateForm || null,
-    grammaticalInfo: parsedData.grammaticalInfo,
-    translation: parsedData.translation,
-    wordType: parsedData.wordType,
-    conjugationClass: parsedData.conjugationClass || null,
-    conjugation: wiktionaryData?.conjugation || null,
-    isDeponent: parsedData.isDeponent || wiktionaryData?.isDeponent || false,
-    principalParts: parsedData.principalParts || [],
-    conjugationTable: wiktionaryData?.conjugationTable || null,
-    definitions: wiktionaryData?.definitions || [],
-    etymology: wiktionaryData?.etymology || null,
-    pronunciation: wiktionaryData?.pronunciation || null,
-    originalText: parsedData.originalText,
-    section: parsedData.section,
-  };
-}
-
 function formatAdjectiveForOutput(scrapedResult: ScrapedResult) {
   const { parsedData, wiktionaryData } = scrapedResult;
 
@@ -196,40 +178,10 @@ function formatAdjectiveForOutput(scrapedResult: ScrapedResult) {
   };
 }
 
-function formatAdjectiveFromParsedData(parsedData: any) {
-  return {
-    word: parsedData.wordForm,
-    alternateForm: parsedData.alternateForm || null,
-    grammaticalInfo: parsedData.grammaticalInfo,
-    translation: parsedData.translation,
-    wordType: parsedData.wordType,
-    declensionType: parsedData.declensionClass || null,
-    declension: null, // Will be filled when scraped
-    adjectiveDeclensionTable: null, // Will be filled when scraped
-    definitions: [], // Will be filled when scraped
-    etymology: null, // Will be filled when scraped
-    pronunciation: null, // Will be filled when scraped
-    originalText: parsedData.originalText,
-    section: parsedData.section,
-    subsection: parsedData.subsection || null,
-  };
-}
-
 async function testDatabaseConnection(): Promise<void> {
   try {
     await adminDb.collection('_test').doc('connection').get();
   } catch (error) {
     throw new Error(`Database connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
-}
-
-function calculatePerformanceMetrics(results: ScrapedResult[], totalDuration: number) {
-  const totalSeconds = totalDuration / 1000;
-
-  return {
-    totalDurationMs: totalDuration,
-    totalDurationSeconds: +totalSeconds.toFixed(1),
-    averageTimePerWordMs: +(totalDuration / results.length).toFixed(1),
-    wordsPerSecond: +(results.length / totalSeconds).toFixed(1),
-  };
 }

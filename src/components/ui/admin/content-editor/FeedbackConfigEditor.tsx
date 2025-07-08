@@ -225,8 +225,8 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({ feed
                   Show explanations for correct answers
                 </label>
                 <div className="text-xs text-gray-500 mt-1">
-                  Controls whether to display detailed explanations for correct answers (e.g., "Second person singular
-                  present tense")
+                  Controls whether to display detailed explanations for correct answers (e.g., &quot;Second person
+                  singular present tense&quot;)
                 </div>
               </div>
             </div>
@@ -284,7 +284,7 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({ feed
                   checked={progressionRulesWithDefaults.allowManualAdvance}
                   onChange={e => updateProgressionRules({ allowManualAdvance: e.target.checked })}
                 />
-                Allow manual "Next" button
+                Allow manual &quot;Next&quot; button
               </label>
             </div>
           </CardContent>

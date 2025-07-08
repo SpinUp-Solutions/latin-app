@@ -160,12 +160,13 @@ export class VerbScraper extends BaseScraper {
     tense: string,
     personForms: PersonForms
   ): void {
-    if (!(conjugationTable as any)[mood]) {
-      (conjugationTable as any)[mood] = {};
+    const table = conjugationTable as Record<string, Record<string, Record<string, PersonForms>>>;
+    if (!table[mood]) {
+      table[mood] = {};
     }
-    if (!(conjugationTable as any)[mood][voice]) {
-      (conjugationTable as any)[mood][voice] = {};
+    if (!table[mood][voice]) {
+      table[mood][voice] = {};
     }
-    (conjugationTable as any)[mood][voice][tense] = personForms;
+    table[mood][voice][tense] = personForms;
   }
 }

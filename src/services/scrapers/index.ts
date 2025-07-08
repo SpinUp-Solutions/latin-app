@@ -24,7 +24,7 @@ export class ScraperOrchestrator {
 
   private static async scrapeWordsInParallel(
     words: ParsedEntry[],
-    browser: any,
+    browser: import('playwright').Browser,
     concurrency: number
   ): Promise<ScrapedResult[]> {
     const results: ScrapedResult[] = [];
@@ -51,7 +51,10 @@ export class ScraperOrchestrator {
     return results;
   }
 
-  private static async processBatch(batch: ParsedEntry[], contexts: any[]): Promise<ScrapedResult[]> {
+  private static async processBatch(
+    batch: ParsedEntry[],
+    contexts: import('playwright').BrowserContext[]
+  ): Promise<ScrapedResult[]> {
     const batchPromises = batch.map(async (entry, index) => {
       const contextIndex = index % contexts.length;
       const context = contexts[contextIndex];
@@ -80,7 +83,7 @@ export class ScraperOrchestrator {
       .map(result => (result as PromiseFulfilledResult<ScrapedResult>).value);
   }
 
-  private static async scrapeByWordType(entry: ParsedEntry, context: any) {
+  private static async scrapeByWordType(entry: ParsedEntry, context: import('playwright').BrowserContext) {
     switch (entry.wordType) {
       case 'noun':
         return await NounScraper.scrapeNoun(entry.wordForm, context);
