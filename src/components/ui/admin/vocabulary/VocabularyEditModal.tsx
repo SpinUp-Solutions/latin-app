@@ -7,7 +7,9 @@ import { Textarea } from '@/src/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { Word, EditingCell } from '@/src/types/admin-vocabulary';
 import { parseEditingCellValue } from '@/src/utils/vocabUtils';
-import { DeclensionTable, AdjectiveDeclensionTable, ConjugationTable } from './tables';
+import { DeclensionTable } from './tables/DeclensionTable';
+import { AdjectiveDeclensionTable } from './tables/AdjectiveDeclensionTable';
+import { ConjugationTable } from './tables/ConjugationTable';
 
 interface VocabularyEditModalProps {
   word: Word | null;
