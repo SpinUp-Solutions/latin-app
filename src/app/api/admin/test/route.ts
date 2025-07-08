@@ -10,6 +10,7 @@ export async function GET(): Promise<NextResponse> {
   const startTime = Date.now();
 
   try {
+    // testing
     await testDatabaseConnection();
 
     // Dynamic imports to prevent loading during build
