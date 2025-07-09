@@ -26,7 +26,15 @@ interface ContentRendererProps {
 export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onComplete }) => {
   switch (content.type) {
     case 'text':
-      return <TextComponent title={content.title || ''} content={(content as TextContent).content} className="" />;
+      const textContent = content as TextContent;
+      return (
+        <TextComponent
+          title={textContent.title || ''}
+          content={textContent.content}
+          className=""
+          audioPath={textContent.audioPath}
+        />
+      );
 
     case 'emphasis': //enum
       return <TextComponent title={content.title || ''} content={(content as TextContent).content} className="" />;

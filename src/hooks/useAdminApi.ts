@@ -10,19 +10,23 @@ export const useAdminApi = () => {
       throw new Error('Admin access required');
     }
 
-    // Get current user token
     const token = await auth.currentUser?.getIdToken();
     if (!token) {
       throw new Error('Authentication token not available');
     }
 
+    const isFormData = options.body instanceof FormData;
+
+    const headers = new Headers(options.headers);
+    headers.set('Authorization', `Bearer ${token}`);
+
+    if (!isFormData) {
+      headers.set('Content-Type', 'application/json');
+    }
+
     const response = await fetch(`/api/admin/${endpoint}`, {
       ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        ...options.headers,
-      },
+      headers,
     });
 
     if (!response.ok) {

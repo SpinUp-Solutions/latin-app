@@ -24,8 +24,9 @@ export const LessonInfoForm: React.FC<LessonInfoFormProps> = ({ lesson, onUpdate
             type="text"
             value={lesson.id}
             onChange={e => onUpdateInfo({ id: e.target.value })}
-            className="w-full p-2 border rounded-md"
+            className="w-full p-2 border rounded-md bg-gray-100 cursor-not-allowed"
             placeholder="lesson-1"
+            disabled
           />
         </div>
         <div>
