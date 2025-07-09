@@ -1,0 +1,34 @@
+/* Latin e-course specific styles */
+.roman-border {
+  @apply border-l-4 border-roman-red;
+}
+
+.parchment-bg {
+  @apply bg-roman-parchment;
+}
+
+.marble-bg {
+  @apply bg-roman-marble;
+}
+
+.roman-card {
+  @apply bg-white border border-border shadow-sm rounded-lg overflow-hidden;
+}
+
+.roman-card-header {
+  @apply bg-roman-parchment border-b border-border p-4;
+}
+
+.roman-progress {
+  @apply h-2 bg-gray-200 rounded-full overflow-hidden;
+}
+
+.roman-progress-bar {
+  @apply h-full bg-roman-red rounded-full;
+}
+
+/* Rich Text Editor */
+.rich-text-editor-content {
+  @apply prose dark:prose-invert prose-sm sm:prose-base lg:prose-lg xl:prose-2xl m-5 min-h-[150px] focus:outline-none;
+  @apply prose-p:my-2 prose-p:leading-snug prose-headings:my-4 prose-ul:my-2 prose-ol:my-2;
+} 

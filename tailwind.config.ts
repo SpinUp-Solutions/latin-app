@@ -79,10 +79,19 @@ const config: Config = {
         serif: ['Trajan Pro', 'Georgia', 'serif'],
         sans: ['Open Sans', 'Roboto', 'sans-serif'],
       },
+      typography: (theme: (path: string) => any) => ({
+        DEFAULT: {
+          css: {
+            'h1, h2, h3, h4, h5, h6': {
+              fontFamily: theme('fontFamily.sans').toString(),
+            },
+          },
+        },
+      }),
     },
   },
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  plugins: [require('tailwindcss-animate')],
+  plugins: [require('tailwindcss-animate'), require('@tailwindcss/typography')],
 };
 
 export default config;
