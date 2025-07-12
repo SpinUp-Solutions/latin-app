@@ -2,6 +2,7 @@ import React from 'react';
 import { TextContent } from '@/src/types/lesson';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonSlice';
+import RichTextEditor from '../../core/rich-text-editor';
 
 export const TextEditor: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -13,6 +14,10 @@ export const TextEditor: React.FC = () => {
 
   const handleChange = (updates: Partial<TextContent>) => {
     dispatch(updateEditingContent({ ...editingContent, ...updates }));
+  };
+
+  const handleContentChange = (content: string) => {
+    handleChange({ content });
   };
 
   return (
@@ -29,12 +34,10 @@ export const TextEditor: React.FC = () => {
       </div>
       <div>
         <label className="block text-sm font-medium mb-1">Content</label>
-        <textarea
-          value={editingContent.content}
-          onChange={e => handleChange({ content: e.target.value })}
+        <RichTextEditor
+          content={editingContent.content}
+          onChange={handleContentChange}
           className="w-full p-2 border rounded-md"
-          rows={6}
-          placeholder="Enter your text content..."
         />
       </div>
       <div>

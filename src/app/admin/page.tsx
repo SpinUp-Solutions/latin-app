@@ -206,12 +206,36 @@ export default function AdminPage() {
             </RomanCardContent>
           </RomanCard>
 
-          {/* User Management */}
+          {/* Vocabulary Management */}
           <RomanCard className="cursor-pointer hover:shadow-lg transition-shadow">
             <RomanCardContent className="p-6">
               <div className="flex items-center gap-4 mb-4">
                 <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
-                  <Shield className="h-6 w-6 text-green-600" />
+                  <BookOpen className="h-6 w-6 text-green-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-serif text-gray-800">Vocabulary Management</h3>
+                  <p className="text-sm text-roman-stone">View and edit Latin words</p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Button
+                  onClick={() => router.push('/admin/vocabulary')}
+                  className="w-full justify-start"
+                  variant="outline">
+                  <BookOpen className="h-4 w-4 mr-2" />
+                  View All Words
+                </Button>
+              </div>
+            </RomanCardContent>
+          </RomanCard>
+
+          {/* User Management */}
+          <RomanCard className="cursor-pointer hover:shadow-lg transition-shadow">
+            <RomanCardContent className="p-6">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center">
+                  <Shield className="h-6 w-6 text-purple-600" />
                 </div>
                 <div>
                   <h3 className="text-lg font-serif text-gray-800">User Management</h3>

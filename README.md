@@ -202,10 +202,10 @@ The app uses a smart rendering system that turns lesson data into interactive UI
 The `ContentRenderer` component is like a traffic controller. It looks at each content item's `type` property and decides which component to render:
 
 ```typescript
-'text' → IntroComponent (regular paragraphs)
-'emphasis' → IntroComponent with red styling (important info)
-'table' → ConjugationTable (grammar tables)
-'vocabulary' → VocabularyViewer (flashcards/word lists)
+'text' → TextComponent (regular paragraphs)
+'emphasis' → TextComponent with red styling (important info)
+'table' → TableComponent (a generic table)
+'vocabulary' → Vocabulary (a list of vocabulary words)
 'matching' → MatchingTable (drag & drop exercises)
 'fill' → FillExercise (fill-in-the-blank questions)
 ```
@@ -450,3 +450,54 @@ const handleSubmit = () => {
    ```
 
 The system automatically handles all escalation logic, timing, progression, and message management based on your configuration.
+
+## Admin Vocabulary Management (Developer Guide)
+
+The admin vocabulary section is powered by a custom React hook: `useVocabularyData` (`src/hooks/useVocabularyData.ts`). This hook handles all state, API calls, and logic for the admin vocab UI. Here’s how it works and how you can use or extend it:
+
+### What the Hook Manages
+
+- **words**: The current list of vocabulary words (with support for infinite scroll/pagination)
+- **loading / loadingMore**: Loading states for initial and paginated fetches
+- **hasMore**: Whether there are more words to load (for infinite scroll)
+- **lastWordId**: Used for pagination (fetches the next batch)
+- **wordTypeCounts**: Counts of words by type (noun, verb, etc.) for analytics
+- **countsLoading**: Loading state for word type counts
+- **filters**: Current filter state (word type, section, search)
+- **debouncedSearch**: Debounced search value for efficient API calls
+
+### Main Functions Provided
+
+- **loadWords(reset = false)**: Fetches words from the API, with support for resetting or loading more
+- **updateWord(wordId, updates)**: Updates a word in the backend and updates local state
+- **updateFilters(newFilters)**: Updates the filter state (triggers new fetch)
+- **resetFilters()**: Resets all filters to default values
+
+### How It Works
+
+- State is managed with React’s `useState` and `useEffect`.
+- Filters and search are debounced and memoized to avoid unnecessary API calls.
+- Pagination is handled with `lastWordId` and `hasMore`.
+- All API calls go through `/api/admin/words` (GET for fetching, PUT for updating, POST for bulk uploads).
+- When a word is updated, the local state is updated immediately for a fast UI.
+
+### Example Usage in a Component
+
+```typescript
+const { words, loading, hasMore, filters, loadWords, updateWord, updateFilters, resetFilters } = useVocabularyData();
+
+// Use these in your admin UI for listing, filtering, editing, and paginating vocabulary entries.
+```
+
+### Related Files
+
+- `src/hooks/useVocabularyData.ts` — Main hook for admin vocab state and logic
+- `src/types/admin-vocabulary.d.ts` — Type definitions for words, filters, and API responses
+- `src/services/` — API service logic for Firebase and vocabulary parsing
+- `src/app/api/admin/words/` — Consolidated API route for fetching, updating, and bulk uploading vocabulary data
+
+### Extending or Customizing
+
+- Add new filters by extending the `VocabularyFilters` type and updating the hook logic
+- Add new fields to the `Word` type as needed
+- Use the provided state and functions to build custom admin UI features

@@ -1,14 +1,13 @@
 'use client';
 
 import React from 'react';
-import IntroComponent from './intro-component';
 import MatchingTable from '../exercises/matching-table';
 import ConjugationTable from './conjugation-table';
 import FillExercise from '../exercises/fill-exercise';
 import TextSelectionExercise from '../exercises/text-selection-exercise';
 import VerbAnalysisExercise from '../exercises/verb-analysis-exercise';
 import VerbConjugationExercise from '../exercises/verb-conjugation-exercise';
-import { ContentItem, TextContent, EmphasisContent, TableContent, VocabularyContent } from '@/src/types/lesson';
+import { ContentItem, TextContent, TableContent, VocabularyContent } from '@/src/types/lesson';
 import {
   MatchingExercise,
   FillExercise as FillExerciseType,
@@ -17,6 +16,7 @@ import {
   VerbConjugationExercise as VerbConjugationExerciseType,
 } from '@/src/types/exercise';
 import { VocabularyViewer } from './VocabularyViewer';
+import TextComponent from './text-component';
 
 interface ContentRendererProps {
   content: ContentItem;
@@ -26,16 +26,10 @@ interface ContentRendererProps {
 export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onComplete }) => {
   switch (content.type) {
     case 'text':
-      return <IntroComponent title={content.title || ''} content={(content as TextContent).content} className="" />;
+      return <TextComponent title={content.title || ''} content={(content as TextContent).content} className="" />;
 
     case 'emphasis': //enum
-      return (
-        <IntroComponent
-          title={content.title || ''}
-          content={(content as EmphasisContent).content}
-          className="text-roman-red"
-        />
-      );
+      return <TextComponent title={content.title || ''} content={(content as TextContent).content} className="" />;
 
     case 'table':
       const tableContent = content as TableContent;
@@ -62,8 +56,14 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onCom
 
     default:
       return (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-red-500">Unknown content type: {content.type}</p>
+        <div className="text-center p-4 bg-gray-100">
+          <p>Unknown content type: {content.type}</p>
+          {content.type === 'intro' && (
+            <p>
+              You might be trying to render an old intro content type. Please update to text instead. Preview:
+              <TextComponent title="" content="" className="" />
+            </p>
+          )}
         </div>
       );
   }
