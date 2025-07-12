@@ -14,6 +14,10 @@ interface LessonWithMetadata extends Lesson {
 
 interface LessonEditState {
   currentLesson: Lesson | null;
+  draft: {
+    lesson: Lesson;
+    lastModified: string;
+  } | null;
   editingContent: {
     content: RenderableContentItem;
     pageType: 'introduction' | 'exercises';
@@ -31,6 +35,7 @@ interface LessonEditState {
 
 const initialState: LessonEditState = {
   currentLesson: null,
+  draft: null,
   editingContent: null,
   isModalOpen: false,
 
@@ -40,6 +45,9 @@ const initialState: LessonEditState = {
   error: null,
   lastSavedLesson: null,
 };
+
+const DRAFT_KEY = 'lesson_draft';
+const DRAFT_TIMESTAMP_KEY = 'lesson_draft_timestamp';
 
 export const saveLesson = createAsyncThunk(
   'lesson/saveLesson',
@@ -84,6 +92,33 @@ export const deleteLesson = createAsyncThunk('lesson/deleteLesson', async (lesso
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to delete lesson';
     return rejectWithValue(errorMessage);
+  }
+});
+
+export const loadDraft = createAsyncThunk('lesson/loadDraft', (_, { rejectWithValue }) => {
+  try {
+    const draftData = sessionStorage.getItem(DRAFT_KEY);
+    const timestamp = sessionStorage.getItem(DRAFT_TIMESTAMP_KEY);
+    if (draftData && timestamp) {
+      return {
+        lesson: JSON.parse(draftData) as Lesson,
+        lastModified: timestamp,
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error('Error loading draft from storage:', error);
+    return rejectWithValue('Failed to load draft');
+  }
+});
+
+export const clearDraft = createAsyncThunk('lesson/clearDraft', (_, { rejectWithValue }) => {
+  try {
+    sessionStorage.removeItem(DRAFT_KEY);
+    sessionStorage.removeItem(DRAFT_TIMESTAMP_KEY);
+  } catch (error) {
+    console.error('Error clearing draft from storage:', error);
+    return rejectWithValue('Failed to clear draft');
   }
 });
 
@@ -255,8 +290,8 @@ const lessonSlice = createSlice({
 
     resetLessonState: state => {
       state.currentLesson = null;
+      state.draft = null;
       state.editingContent = null;
-      state.isModalOpen = false;
       state.error = null;
       state.lastSavedLesson = null;
     },
@@ -272,6 +307,7 @@ const lessonSlice = createSlice({
         state.saving = false;
         state.error = null;
         state.lastSavedLesson = action.payload.lesson as LessonWithMetadata;
+        state.draft = null; // Clear draft from state
 
         // Update the current lesson with the saved data (includes metadata)
         if (state.currentLesson && state.currentLesson.id === action.payload.lesson.id) {
@@ -321,6 +357,15 @@ const lessonSlice = createSlice({
       .addCase(loadLessonById.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
+      });
+
+    // Draft handling
+    builder
+      .addCase(loadDraft.fulfilled, (state, action) => {
+        state.draft = action.payload;
+      })
+      .addCase(clearDraft.fulfilled, state => {
+        state.draft = null;
       });
 
     // Delete Lesson
