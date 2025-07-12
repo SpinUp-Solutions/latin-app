@@ -202,10 +202,10 @@ The app uses a smart rendering system that turns lesson data into interactive UI
 The `ContentRenderer` component is like a traffic controller. It looks at each content item's `type` property and decides which component to render:
 
 ```typescript
-'text' → IntroComponent (regular paragraphs)
-'emphasis' → IntroComponent with red styling (important info)
-'table' → ConjugationTable (grammar tables)
-'vocabulary' → VocabularyViewer (flashcards/word lists)
+'text' → TextComponent (regular paragraphs)
+'emphasis' → TextComponent with red styling (important info)
+'table' → TableComponent (a generic table)
+'vocabulary' → Vocabulary (a list of vocabulary words)
 'matching' → MatchingTable (drag & drop exercises)
 'fill' → FillExercise (fill-in-the-blank questions)
 ```
