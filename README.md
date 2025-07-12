@@ -478,7 +478,7 @@ The admin vocabulary section is powered by a custom React hook: `useVocabularyDa
 - State is managed with React’s `useState` and `useEffect`.
 - Filters and search are debounced and memoized to avoid unnecessary API calls.
 - Pagination is handled with `lastWordId` and `hasMore`.
-- All API calls go through `/api/admin/words`.
+- All API calls go through `/api/admin/words` (GET for fetching, PUT for updating, POST for bulk uploads).
 - When a word is updated, the local state is updated immediately for a fast UI.
 
 ### Example Usage in a Component
@@ -494,7 +494,7 @@ const { words, loading, hasMore, filters, loadWords, updateWord, updateFilters, 
 - `src/hooks/useVocabularyData.ts` — Main hook for admin vocab state and logic
 - `src/types/admin-vocabulary.d.ts` — Type definitions for words, filters, and API responses
 - `src/services/` — API service logic for Firebase and vocabulary parsing
-- `src/app/api/admin/words/` — API route for fetching and updating vocabulary data
+- `src/app/api/admin/words/` — Consolidated API route for fetching, updating, and bulk uploading vocabulary data
 
 ### Extending or Customizing
 
