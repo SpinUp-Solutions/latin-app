@@ -4,6 +4,7 @@ import { TableContent } from '@/src/types/lesson';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonSlice';
 import type { Column, TableRow } from '@/src/components/ui/lesson/conjugation-table';
+import { AudioUploadSection } from './AudioUploadSection';
 
 export const TableEditor: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -110,6 +111,12 @@ export const TableEditor: React.FC = () => {
           placeholder="Enter table title..."
         />
       </div>
+
+      <AudioUploadSection
+        audioPath={editingContent.audioPath}
+        onAudioPathChange={audioPath => updateContent({ audioPath })}
+        contentItemId={editingContent.id}
+      />
 
       <div>
         <label className="block text-sm font-medium mb-2">Table Data</label>

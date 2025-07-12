@@ -19,15 +19,16 @@ export function useAudio(initialAudioPath?: string | null, onAudioEnded?: () => 
   const [isLoading, setIsLoading] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // When the source path changes, clear the old signed URL
   useEffect(() => {
     setSignedUrl(null);
   }, [audioPath]);
 
   const getSignedUrl = useCallback(async () => {
-    if (!audioPath) return null;
+    if (!audioPath) {
+      console.log('No audioPath provided');
+      return null;
+    }
 
-    setIsLoading(true);
     try {
       const token = await auth.currentUser?.getIdToken();
       if (!token) throw new Error('Not authenticated');
@@ -42,6 +43,7 @@ export function useAudio(initialAudioPath?: string | null, onAudioEnded?: () => 
       });
 
       if (!response.ok) {
+        console.error('Failed to fetch signed URL:', response.status, response.statusText);
         throw new Error('Failed to fetch signed URL');
       }
 
@@ -50,37 +52,76 @@ export function useAudio(initialAudioPath?: string | null, onAudioEnded?: () => 
     } catch (error) {
       console.error('Error getting signed URL:', error);
       return null;
-    } finally {
-      setIsLoading(false);
     }
   }, [audioPath]);
 
   const playAudio = useCallback(async () => {
     const audio = audioRef.current;
-    if (!audio) return;
+    if (!audio) {
+      console.log('No audio element found');
+      return;
+    }
+
+    // Start loading state
+    setIsLoading(true);
 
     let url = signedUrl;
+    console.log('Current signed URL:', url);
     if (!url) {
+      console.log('Getting new signed URL...');
       const newSignedUrl = await getSignedUrl();
       if (newSignedUrl) {
         setSignedUrl(newSignedUrl);
         url = newSignedUrl;
+        console.log('New signed URL set:', url);
+      } else {
+        console.log('Failed to get signed URL');
+        setIsLoading(false);
+        return;
       }
     }
 
     if (url) {
+      console.log('Setting audio source and playing:', url);
       if (audio.src !== url) {
         audio.src = url;
+        console.log('Audio source updated');
       }
+
+      const handleCanPlay = () => {
+        console.log('Audio can play, stopping loading');
+        setIsLoading(false);
+        audio.removeEventListener('canplay', handleCanPlay);
+        audio.removeEventListener('error', handleLoadError);
+      };
+
+      const handleLoadError = (e: Event) => {
+        console.error('Audio load error:', e);
+        setIsLoading(false);
+        setIsPlaying(false);
+        audio.removeEventListener('canplay', handleCanPlay);
+        audio.removeEventListener('error', handleLoadError);
+      };
+
+      audio.addEventListener('canplay', handleCanPlay);
+      audio.addEventListener('error', handleLoadError);
+
       const playPromise = audio.play();
       if (playPromise !== undefined) {
         playPromise
-          .then(() => setIsPlaying(true))
+          .then(() => {
+            console.log('Audio playing successfully');
+            setIsPlaying(true);
+          })
           .catch(error => {
             console.error('Audio play error:', error);
             setIsPlaying(false);
+            setIsLoading(false);
           });
       }
+    } else {
+      console.log('No URL available to play');
+      setIsLoading(false);
     }
   }, [signedUrl, getSignedUrl]);
 
@@ -128,7 +169,7 @@ export function useAudio(initialAudioPath?: string | null, onAudioEnded?: () => 
 
   const setAudioSource = (src: string | null | undefined) => {
     setAudioPath(src);
-    setIsPlaying(false); // Stop playing when source changes
+    setIsPlaying(false);
   };
 
   return {

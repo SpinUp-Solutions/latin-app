@@ -10,6 +10,7 @@ import {
   RomanTableCell,
   RomanTableCaption,
 } from '../core/roman-table';
+import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 
 export interface Column {
   id: string;
@@ -33,12 +34,23 @@ export interface TableData {
 interface ConjugationTableProps {
   data: TableData;
   className?: string;
+  audioPath?: string | null;
 }
 
-const ConjugationTable: React.FC<ConjugationTableProps> = ({ data, className }) => {
+const ConjugationTable: React.FC<ConjugationTableProps> = ({ data, className, audioPath }) => {
   return (
     <div className={className}>
-      {data.title && <h3 className="text-lg font-serif text-roman-red mb-2">{data.title}</h3>}
+      <div className="flex justify-between items-start mb-2">
+        {data.title && <h3 className="text-lg font-serif text-roman-red">{data.title}</h3>}
+        {audioPath && (
+          <AudioPlayButton
+            audioPath={audioPath}
+            variant="default"
+            size="sm"
+            className="ml-2 rounded-full border-roman-terracotta/20 hover:border-roman-terracotta hover:bg-roman-parchment"
+          />
+        )}
+      </div>
 
       <RomanTable>
         <RomanTableHeader>

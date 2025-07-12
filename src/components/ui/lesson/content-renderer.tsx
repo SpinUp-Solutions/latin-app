@@ -37,11 +37,19 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onCom
       );
 
     case 'emphasis': //enum
-      return <TextComponent title={content.title || ''} content={(content as TextContent).content} className="" />;
+      const emphasisContent = content as TextContent;
+      return (
+        <TextComponent
+          title={emphasisContent.title || ''}
+          content={emphasisContent.content}
+          className=""
+          audioPath={emphasisContent.audioPath}
+        />
+      );
 
     case 'table':
       const tableContent = content as TableContent;
-      return <ConjugationTable data={tableContent.tableData} className="my-4" />;
+      return <ConjugationTable data={tableContent.tableData} className="my-4" audioPath={tableContent.audioPath} />;
 
     case 'vocabulary':
       return <VocabularyViewer content={content as VocabularyContent} />;
