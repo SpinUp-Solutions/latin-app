@@ -9,12 +9,9 @@ import { ArrowLeft, BookOpen, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { LessonManager } from '@/src/components/ui/admin/LessonManager';
 import { Lesson } from '@/src/types/lesson';
-import { useAppDispatch } from '@/src/store/hooks';
-import { clearError } from '@/src/store/slices/lessonSlice';
 
 export default function ManageLessonsPage() {
   const router = useRouter();
-  const dispatch = useAppDispatch();
   const { user, loading: authLoading } = useSelector((state: RootState) => state.auth);
 
   useEffect(() => {

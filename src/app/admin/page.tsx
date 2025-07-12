@@ -8,6 +8,7 @@ import { Button } from '@/src/components/ui/button';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { ArrowLeft, Shield, Plus, BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
+import Link from 'next/link';
 
 export default function AdminPage() {
   const router = useRouter();
@@ -19,14 +20,6 @@ export default function AdminPage() {
       toast.error('Access denied. Admin privileges required.');
     }
   }, [user, authLoading, router]);
-
-  const handleCreateNewLesson = () => {
-    router.push('/admin/lessons/create');
-  };
-
-  const handleManageExistingLessons = () => {
-    router.push('/admin/lessons/manage');
-  };
 
   if (authLoading || !user) {
     return (
@@ -44,9 +37,11 @@ export default function AdminPage() {
     <div className="min-h-screen bg-roman-marble">
       <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={() => router.push('/dashboard')}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Dashboard
+          <Button asChild variant="ghost">
+            <Link href="/dashboard">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Dashboard
+            </Link>
           </Button>
           <div className="flex items-center gap-2">
             <div className="w-10 h-10 rounded-full bg-roman-red flex items-center justify-center text-white font-serif">
@@ -75,13 +70,17 @@ export default function AdminPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Button onClick={handleCreateNewLesson} className="w-full justify-start" variant="outline">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create New Lesson
+                <Button asChild className="w-full justify-start" variant="outline">
+                  <Link href="/admin/lessons/create">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create New Lesson
+                  </Link>
                 </Button>
-                <Button onClick={handleManageExistingLessons} className="w-full justify-start" variant="outline">
-                  <BookOpen className="h-4 w-4 mr-2" />
-                  Manage Existing Lessons
+                <Button asChild className="w-full justify-start" variant="outline">
+                  <Link href="/admin/lessons/manage">
+                    <BookOpen className="h-4 w-4 mr-2" />
+                    Manage Existing Lessons
+                  </Link>
                 </Button>
               </div>
             </RomanCardContent>
@@ -100,12 +99,11 @@ export default function AdminPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Button
-                  onClick={() => router.push('/admin/vocabulary')}
-                  className="w-full justify-start"
-                  variant="outline">
-                  <BookOpen className="h-4 w-4 mr-2" />
-                  View All Words
+                <Button asChild className="w-full justify-start" variant="outline">
+                  <Link href="/admin/vocabulary">
+                    <BookOpen className="h-4 w-4 mr-2" />
+                    View All Words
+                  </Link>
                 </Button>
               </div>
             </RomanCardContent>

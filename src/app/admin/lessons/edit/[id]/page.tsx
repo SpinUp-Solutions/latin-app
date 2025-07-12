@@ -37,6 +37,7 @@ export default function EditLessonPage({ params }: EditLessonPageProps) {
     if (user?.role === 'admin' && params.id) {
       loadLesson();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, authLoading, router, params.id]);
 
   const loadLesson = async () => {
@@ -58,7 +59,6 @@ export default function EditLessonPage({ params }: EditLessonPageProps) {
     }
   };
 
-  // Handle save success
   useEffect(() => {
     if (lastSavedLesson && !saving && !error) {
       toast.success('Lesson updated successfully!');
