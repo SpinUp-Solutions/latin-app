@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/src/components/ui/dialog';
 import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
@@ -6,6 +6,7 @@ import { Label } from '@/src/components/ui/label';
 import { Textarea } from '@/src/components/ui/textarea';
 import { Badge } from '@/src/components/ui/badge';
 import { X, Plus } from 'lucide-react';
+import { TooltipData } from '@/src/store/slices/lessonSlice';
 
 interface TooltipFormData {
   word: string;
@@ -22,7 +23,8 @@ interface TooltipEditorDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (data: TooltipFormData) => void;
-  initialData?: Partial<TooltipFormData>;
+  onRemove?: () => void;
+  initialData?: TooltipData | null;
   selectedText?: string;
 }
 
@@ -30,21 +32,36 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
   isOpen,
   onClose,
   onSave,
-  initialData = {},
+  onRemove,
+  initialData = null,
   selectedText = '',
 }) => {
   const [formData, setFormData] = useState<TooltipFormData>({
-    word: initialData.word || selectedText,
-    translation: initialData.translation || '',
-    pronunciation: initialData.pronunciation || '',
-    partOfSpeech: initialData.partOfSpeech || '',
-    wordType: initialData.wordType || '',
-    definition: initialData.definition || '',
-    examples: initialData.examples || [],
-    etymology: initialData.etymology || '',
+    word: initialData?.word || selectedText,
+    translation: initialData?.translation || '',
+    pronunciation: initialData?.pronunciation || '',
+    partOfSpeech: initialData?.partOfSpeech || '',
+    wordType: initialData?.wordType || '',
+    definition: initialData?.definition || '',
+    examples: initialData?.examples || [],
+    etymology: initialData?.etymology || '',
   });
 
   const [newExample, setNewExample] = useState('');
+
+  // Update form data when initialData changes
+  useEffect(() => {
+    setFormData({
+      word: initialData?.word || selectedText,
+      translation: initialData?.translation || '',
+      pronunciation: initialData?.pronunciation || '',
+      partOfSpeech: initialData?.partOfSpeech || '',
+      wordType: initialData?.wordType || '',
+      definition: initialData?.definition || '',
+      examples: initialData?.examples || [],
+      etymology: initialData?.etymology || '',
+    });
+  }, [initialData, selectedText]);
 
   const handleInputChange = (field: keyof TooltipFormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -128,9 +145,11 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Add Tooltip Information</DialogTitle>
+          <DialogTitle>{initialData ? 'Edit Tooltip Information' : 'Add Tooltip Information'}</DialogTitle>
           <DialogDescription>
-            Add detailed information for the selected word to create an interactive tooltip.
+            {initialData
+              ? 'Edit the tooltip information for this word.'
+              : 'Add detailed information for the selected word to create an interactive tooltip.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -253,13 +272,22 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 pt-4 border-t">
-          <Button variant="outline" onClick={handleClose}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={!formData.word.trim()}>
-            Save Tooltip
-          </Button>
+        <div className="flex justify-between pt-4 border-t">
+          <div>
+            {initialData && onRemove && (
+              <Button variant="destructive" onClick={onRemove}>
+                Remove Tooltip
+              </Button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleClose}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave} disabled={!formData.word.trim()}>
+              {initialData ? 'Update Tooltip' : 'Save Tooltip'}
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

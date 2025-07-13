@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Bold, Italic, Strikethrough, Heading1, Heading2, Heading3, List, MessageSquare } from 'lucide-react';
 import { Tooltip } from './tooltip-extension';
 import { TooltipEditorDialog } from './tooltip-editor-dialog';
-import { addTooltip, TooltipData } from '@/src/store/slices/lessonSlice';
+import { addTooltip, removeTooltip, TooltipData } from '@/src/store/slices/lessonSlice';
+import { RootState } from '@/src/store';
 
 interface RichTextEditorProps {
   content: string;
@@ -16,7 +17,9 @@ interface RichTextEditorProps {
 const RichTextEditor: React.FC<RichTextEditorProps> = ({ content, onChange, className }) => {
   const [isTooltipDialogOpen, setIsTooltipDialogOpen] = useState(false);
   const [selectedText, setSelectedText] = useState('');
+  const [existingTooltipData, setExistingTooltipData] = useState<TooltipData | null>(null);
   const dispatch = useDispatch();
+  const tooltips = useSelector((state: RootState) => state.lesson.tooltips);
 
   const editor = useEditor({
     extensions: [StarterKit, Tooltip],
@@ -48,19 +51,40 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ content, onChange, clas
       return;
     }
 
-    setSelectedText(selectedText);
+    const marks = editor.state.doc.resolve(from).marks();
+    const tooltipMark = marks.find(mark => mark.type.name === 'tooltip');
+    if (tooltipMark) {
+      // Get existing tooltip data
+      const tooltipId = tooltipMark.attrs.tooltipId;
+      const existingData = tooltips[tooltipId];
+      if (existingData) {
+        setExistingTooltipData(existingData);
+        setSelectedText(tooltipMark.attrs.word || selectedText);
+      }
+    } else {
+      setExistingTooltipData(null);
+      setSelectedText(selectedText);
+    }
+
     setIsTooltipDialogOpen(true);
   };
 
   const handleSaveTooltip = (tooltipData: Omit<TooltipData, 'id'>) => {
     if (!editor) return;
 
-    const tooltipId = `${tooltipData.word}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    let tooltipId: string;
 
-    // Store tooltip data in Redux
-    dispatch(addTooltip({ id: tooltipId, data: tooltipData }));
+    if (existingTooltipData) {
+      // Update existing tooltip
+      tooltipId = existingTooltipData.id;
+      dispatch(addTooltip({ id: tooltipId, data: tooltipData }));
+    } else {
+      // Create new tooltip
+      tooltipId = `${tooltipData.word}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+      dispatch(addTooltip({ id: tooltipId, data: tooltipData }));
+    }
 
-    // Add tooltip mark to editor with the ID
+    // Add/update tooltip mark to editor with the ID
     editor
       .chain()
       .focus()
@@ -68,6 +92,20 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ content, onChange, clas
       .run();
 
     setIsTooltipDialogOpen(false);
+    setExistingTooltipData(null);
+  };
+
+  const handleRemoveTooltip = () => {
+    if (!editor || !existingTooltipData) return;
+
+    // Remove tooltip from Redux
+    dispatch(removeTooltip(existingTooltipData.id));
+
+    // Remove tooltip mark from editor
+    editor.chain().focus().unsetTooltip().run();
+
+    setIsTooltipDialogOpen(false);
+    setExistingTooltipData(null);
   };
 
   return (
@@ -76,9 +114,14 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ content, onChange, clas
       <EditorContent editor={editor} />
       <TooltipEditorDialog
         isOpen={isTooltipDialogOpen}
-        onClose={() => setIsTooltipDialogOpen(false)}
+        onClose={() => {
+          setIsTooltipDialogOpen(false);
+          setExistingTooltipData(null);
+        }}
         onSave={handleSaveTooltip}
+        onRemove={handleRemoveTooltip}
         selectedText={selectedText}
+        initialData={existingTooltipData}
       />
     </div>
   );
