@@ -43,7 +43,7 @@ interface LessonEditState {
   saving: boolean;
   error: string | null;
   lastSavedLesson: LessonWithMetadata | null;
-  
+
   tooltips: Record<string, TooltipData>;
 }
 
@@ -58,7 +58,7 @@ const initialState: LessonEditState = {
   saving: false,
   error: null,
   lastSavedLesson: null,
-  
+
   tooltips: {},
 };
 

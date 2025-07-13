@@ -5,7 +5,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { Bold, Italic, Strikethrough, Heading1, Heading2, Heading3, List, MessageSquare } from 'lucide-react';
 import { Tooltip } from './tooltip-extension';
 import { TooltipEditorDialog } from './tooltip-editor-dialog';
-import { addTooltip } from '@/src/store/slices/lessonSlice';
+import { addTooltip, TooltipData } from '@/src/store/slices/lessonSlice';
 
 interface RichTextEditorProps {
   content: string;
@@ -52,7 +52,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ content, onChange, clas
     setIsTooltipDialogOpen(true);
   };
 
-  const handleSaveTooltip = (tooltipData: any) => {
+  const handleSaveTooltip = (tooltipData: Omit<TooltipData, 'id'>) => {
     if (!editor) return;
 
     const tooltipId = `${tooltipData.word}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;

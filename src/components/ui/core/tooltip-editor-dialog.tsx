@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/src/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/src/components/ui/dialog';
 import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
 import { Label } from '@/src/components/ui/label';
@@ -69,21 +69,43 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
 
   const handleSave = () => {
     // Filter out empty fields
-    const cleanedData = Object.entries(formData).reduce((acc, [key, value]) => {
+    const cleanedData: Partial<TooltipFormData> = {};
+    Object.entries(formData).forEach(([key, value]) => {
       if (value && (typeof value === 'string' ? value.trim() : true)) {
         if (key === 'examples' && Array.isArray(value)) {
           const filteredExamples = value.filter(ex => ex.trim());
           if (filteredExamples.length > 0) {
-            acc[key as keyof TooltipFormData] = filteredExamples as any;
+            cleanedData.examples = filteredExamples;
           }
-        } else {
-          acc[key as keyof TooltipFormData] = value as any;
+        } else if (typeof value === 'string' && value.trim()) {
+          switch (key) {
+            case 'word':
+              cleanedData.word = value;
+              break;
+            case 'translation':
+              cleanedData.translation = value;
+              break;
+            case 'pronunciation':
+              cleanedData.pronunciation = value;
+              break;
+            case 'partOfSpeech':
+              cleanedData.partOfSpeech = value;
+              break;
+            case 'wordType':
+              cleanedData.wordType = value;
+              break;
+            case 'definition':
+              cleanedData.definition = value;
+              break;
+            case 'etymology':
+              cleanedData.etymology = value;
+              break;
+          }
         }
       }
-      return acc;
-    }, {} as TooltipFormData);
+    });
 
-    onSave(cleanedData);
+    onSave(cleanedData as TooltipFormData);
     onClose();
   };
 
@@ -107,6 +129,9 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add Tooltip Information</DialogTitle>
+          <DialogDescription>
+            Add detailed information for the selected word to create an interactive tooltip.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">

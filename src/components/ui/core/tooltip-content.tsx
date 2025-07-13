@@ -36,11 +36,7 @@ export const TooltipContent: React.FC<TooltipContentProps> = ({
     <Card className={`w-72 max-w-sm shadow-lg border ${className || ''}`}>
       <CardHeader className="pb-1 pt-3 px-3">
         <CardTitle className="text-sm font-semibold">{word}</CardTitle>
-        {pronunciation && (
-          <div className="text-xs text-muted-foreground font-mono">
-            /{pronunciation}/
-          </div>
-        )}
+        {pronunciation && <div className="text-xs text-muted-foreground font-mono">/{pronunciation}/</div>}
         <div className="flex gap-1 flex-wrap">
           {partOfSpeech && (
             <Badge variant="secondary" className="text-xs py-0 px-1 h-4">
@@ -58,31 +54,25 @@ export const TooltipContent: React.FC<TooltipContentProps> = ({
       <CardContent className="space-y-1.5 pt-0 px-3 pb-3">
         {translation && (
           <div>
-            <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
-              Translation
-            </h4>
+            <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">Translation</h4>
             <p className="text-xs">{translation}</p>
           </div>
         )}
 
         {definition && (
           <div>
-            <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
-              Definition
-            </h4>
+            <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">Definition</h4>
             <p className="text-xs">{definition}</p>
           </div>
         )}
 
         {examples.length > 0 && (
           <div>
-            <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
-              Examples
-            </h4>
+            <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">Examples</h4>
             <ul className="text-xs space-y-0.5">
               {examples.slice(0, 2).map((example: string, index: number) => (
                 <li key={index} className="italic text-muted-foreground">
-                  "{example}"
+                  &ldquo;{example}&rdquo;
                 </li>
               ))}
             </ul>
@@ -91,20 +81,14 @@ export const TooltipContent: React.FC<TooltipContentProps> = ({
 
         {etymology && (
           <div>
-            <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
-              Etymology
-            </h4>
+            <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">Etymology</h4>
             <p className="text-xs text-muted-foreground">{etymology}</p>
           </div>
         )}
 
         {showMoreDetails && (
           <div className="pt-2 border-t">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleMoreDetails}
-              className="w-full text-xs h-6 py-0">
+            <Button variant="outline" size="sm" onClick={handleMoreDetails} className="w-full text-xs h-6 py-0">
               <ExternalLink className="w-2.5 h-2.5 mr-1" />
               More Details
             </Button>
