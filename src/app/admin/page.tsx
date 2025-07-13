@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/src/store';
@@ -8,20 +8,11 @@ import { Button } from '@/src/components/ui/button';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { ArrowLeft, Shield, Plus, BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
-import { LessonBuilder } from '@/src/components/ui/admin';
-import { LessonManager } from '@/src/components/ui/admin/LessonManager';
-import { Lesson } from '@/src/types/lesson';
-import { useAppDispatch } from '@/src/store/hooks';
-import { saveLesson, resetLessonState, clearError } from '@/src/store/slices/lessonSlice';
+import Link from 'next/link';
 
 export default function AdminPage() {
   const router = useRouter();
-  const dispatch = useAppDispatch();
   const { user, loading: authLoading } = useSelector((state: RootState) => state.auth);
-  const { saving, error, lastSavedLesson } = useSelector((state: RootState) => state.lesson);
-  const [showLessonBuilder, setShowLessonBuilder] = useState(false);
-  const [showLessonManager, setShowLessonManager] = useState(false);
-  const [editingLesson, setEditingLesson] = useState<Lesson | undefined>(undefined);
 
   useEffect(() => {
     if (!authLoading && (!user || user.role !== 'admin')) {
@@ -29,61 +20,6 @@ export default function AdminPage() {
       toast.error('Access denied. Admin privileges required.');
     }
   }, [user, authLoading, router]);
-
-  // Handle save success
-  useEffect(() => {
-    if (lastSavedLesson && !saving && !error) {
-      toast.success('Lesson saved successfully!');
-      setShowLessonBuilder(false);
-      setEditingLesson(undefined);
-      dispatch(resetLessonState());
-    }
-  }, [lastSavedLesson, saving, error, dispatch]);
-
-  // Handle save error
-  useEffect(() => {
-    if (error && !saving) {
-      toast.error(error);
-      dispatch(clearError());
-    }
-  }, [error, saving, dispatch]);
-
-  const handleSaveLesson = async (lesson: Lesson) => {
-    try {
-      const isUpdate = lesson.hasOwnProperty('createdAt') || lesson.hasOwnProperty('version');
-
-      dispatch(saveLesson({ lesson, isUpdate }));
-    } catch (error) {
-      console.error('Error dispatching save lesson:', error);
-    }
-  };
-
-  const handleCreateNewLesson = () => {
-    setEditingLesson(undefined);
-    setShowLessonBuilder(true);
-    setShowLessonManager(false);
-    dispatch(clearError());
-  };
-
-  const handleManageExistingLessons = () => {
-    setShowLessonManager(true);
-    setShowLessonBuilder(false);
-    dispatch(clearError());
-  };
-
-  const handleEditLesson = (lesson: Lesson) => {
-    setEditingLesson(lesson);
-    setShowLessonBuilder(true);
-    setShowLessonManager(false);
-    dispatch(clearError());
-  };
-
-  const handleBackToAdmin = () => {
-    setShowLessonBuilder(false);
-    setShowLessonManager(false);
-    setEditingLesson(undefined);
-    dispatch(resetLessonState());
-  };
 
   if (authLoading || !user) {
     return (
@@ -97,75 +33,15 @@ export default function AdminPage() {
     return null;
   }
 
-  if (showLessonManager) {
-    return (
-      <div className="min-h-screen bg-roman-marble">
-        <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" onClick={handleBackToAdmin}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Admin
-            </Button>
-            <div className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-full bg-roman-red flex items-center justify-center text-white font-serif">
-                <BookOpen className="h-5 w-5" />
-              </div>
-              <div>
-                <h1 className="text-xl font-serif tracking-wide">Lesson Manager</h1>
-                <p className="text-sm text-roman-stone">Manage existing lessons</p>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        <main className="container mx-auto py-8 px-4">
-          <LessonManager onEditLesson={handleEditLesson} onBackToAdmin={handleBackToAdmin} />
-        </main>
-      </div>
-    );
-  }
-
-  if (showLessonBuilder) {
-    return (
-      <div className="min-h-screen bg-roman-marble">
-        <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" onClick={handleBackToAdmin} disabled={saving}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Admin
-            </Button>
-            <div className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-full bg-roman-red flex items-center justify-center text-white font-serif">
-                <BookOpen className="h-5 w-5" />
-              </div>
-              <div>
-                <h1 className="text-xl font-serif tracking-wide">{editingLesson ? 'Edit Lesson' : 'Lesson Builder'}</h1>
-                <p className="text-sm text-roman-stone">
-                  {editingLesson ? 'Edit existing lesson' : 'Create and edit lessons'}
-                </p>
-              </div>
-            </div>
-          </div>
-          {saving && (
-            <div className="flex items-center gap-2 text-sm text-roman-stone">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-roman-red"></div>
-              Saving lesson...
-            </div>
-          )}
-        </header>
-
-        <LessonBuilder initialLesson={editingLesson} onSave={handleSaveLesson} />
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-roman-marble">
       <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={() => router.push('/dashboard')}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Dashboard
+          <Button asChild variant="ghost">
+            <Link href="/dashboard">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Dashboard
+            </Link>
           </Button>
           <div className="flex items-center gap-2">
             <div className="w-10 h-10 rounded-full bg-roman-red flex items-center justify-center text-white font-serif">
@@ -194,13 +70,17 @@ export default function AdminPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Button onClick={handleCreateNewLesson} className="w-full justify-start" variant="outline">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create New Lesson
+                <Button asChild className="w-full justify-start" variant="outline">
+                  <Link href="/admin/lessons/create">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create New Lesson
+                  </Link>
                 </Button>
-                <Button onClick={handleManageExistingLessons} className="w-full justify-start" variant="outline">
-                  <BookOpen className="h-4 w-4 mr-2" />
-                  Manage Existing Lessons
+                <Button asChild className="w-full justify-start" variant="outline">
+                  <Link href="/admin/lessons/manage">
+                    <BookOpen className="h-4 w-4 mr-2" />
+                    Manage Existing Lessons
+                  </Link>
                 </Button>
               </div>
             </RomanCardContent>
@@ -219,12 +99,11 @@ export default function AdminPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Button
-                  onClick={() => router.push('/admin/vocabulary')}
-                  className="w-full justify-start"
-                  variant="outline">
-                  <BookOpen className="h-4 w-4 mr-2" />
-                  View All Words
+                <Button asChild className="w-full justify-start" variant="outline">
+                  <Link href="/admin/vocabulary">
+                    <BookOpen className="h-4 w-4 mr-2" />
+                    View All Words
+                  </Link>
                 </Button>
               </div>
             </RomanCardContent>

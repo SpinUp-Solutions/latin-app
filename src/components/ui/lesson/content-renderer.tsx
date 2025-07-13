@@ -26,14 +26,30 @@ interface ContentRendererProps {
 export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onComplete }) => {
   switch (content.type) {
     case 'text':
-      return <TextComponent title={content.title || ''} content={(content as TextContent).content} className="" />;
+      const textContent = content as TextContent;
+      return (
+        <TextComponent
+          title={textContent.title || ''}
+          content={textContent.content}
+          className=""
+          audioPath={textContent.audioPath}
+        />
+      );
 
     case 'emphasis': //enum
-      return <TextComponent title={content.title || ''} content={(content as TextContent).content} className="" />;
+      const emphasisContent = content as TextContent;
+      return (
+        <TextComponent
+          title={emphasisContent.title || ''}
+          content={emphasisContent.content}
+          className=""
+          audioPath={emphasisContent.audioPath}
+        />
+      );
 
     case 'table':
       const tableContent = content as TableContent;
-      return <ConjugationTable data={tableContent.tableData} className="my-4" />;
+      return <ConjugationTable data={tableContent.tableData} className="my-4" audioPath={tableContent.audioPath} />;
 
     case 'vocabulary':
       return <VocabularyViewer content={content as VocabularyContent} />;

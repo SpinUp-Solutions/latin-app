@@ -3,6 +3,7 @@ import { TextContent } from '@/src/types/lesson';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonSlice';
 import RichTextEditor from '../../core/rich-text-editor';
+import { AudioUploadSection } from './AudioUploadSection';
 
 export const TextEditor: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -40,16 +41,11 @@ export const TextEditor: React.FC = () => {
           className="w-full p-2 border rounded-md"
         />
       </div>
-      <div>
-        <label className="block text-sm font-medium mb-1">Audio Path (optional)</label>
-        <input
-          type="text"
-          value={editingContent.audioPath || ''}
-          onChange={e => handleChange({ audioPath: e.target.value || null })}
-          className="w-full p-2 border rounded-md"
-          placeholder="/assets/audio/example.mp3"
-        />
-      </div>
+      <AudioUploadSection
+        audioPath={editingContent.audioPath}
+        onAudioPathChange={audioPath => handleChange({ audioPath })}
+        contentItemId={editingContent.id}
+      />
     </div>
   );
 };

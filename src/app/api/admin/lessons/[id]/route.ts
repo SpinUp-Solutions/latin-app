@@ -1,31 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminDb, adminAuth } from '@/src/services/firebase-admin';
-
-// Verify admin access (reused from parent route)
-async function verifyAdminAccess(request: NextRequest) {
-  try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return null;
-    }
-
-    const token = authHeader.split('Bearer ')[1];
-    const decodedToken = await adminAuth.verifyIdToken(token);
-
-    // Check if user has admin role
-    const userDoc = await adminDb.collection('users').doc(decodedToken.uid).get();
-    const userData = userDoc.data();
-
-    if (!userData || userData.role !== 'admin') {
-      return null;
-    }
-
-    return decodedToken;
-  } catch (error) {
-    console.error('Error verifying admin access:', error);
-    return null;
-  }
-}
+import { adminDb } from '@/src/services/firebase-admin';
+import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {

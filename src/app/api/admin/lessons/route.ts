@@ -1,36 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminDb, adminAuth } from '@/src/services/firebase-admin';
+import { adminDb } from '@/src/services/firebase-admin';
 import { Lesson } from '@/src/types/lesson';
-
-async function verifyAdminAccess(request: NextRequest) {
-  try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return null;
-    }
-
-    const token = authHeader.split('Bearer ')[1];
-    const decodedToken = await adminAuth.verifyIdToken(token);
-
-    // Check if user has admin role
-    const userDoc = await adminDb.collection('users').doc(decodedToken.uid).get();
-    const userData = userDoc.data();
-
-    if (!userData || userData.role !== 'admin') {
-      return null;
-    }
-
-    return decodedToken;
-  } catch (error) {
-    console.error('Error verifying admin access:', error);
-    return null;
-  }
-}
+import { verifyAdminAccess } from '../../../../lib/verifyAdminAccess';
 
 export async function GET(request: NextRequest) {
   try {
     const user = await verifyAdminAccess(request);
     if (!user) {
+      // This path should not be hit if verifyAdminAccess throws an error,
+      // but it's here for type safety and as a fallback.
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -43,6 +21,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ lessons });
   } catch (error) {
     console.error('Error fetching lessons:', error);
+    if (error instanceof Error) {
+      if (error.message === 'Unauthorized' || error.message === 'Forbidden') {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+    }
     return NextResponse.json({ error: 'Failed to fetch lessons' }, { status: 500 });
   }
 }
@@ -90,6 +73,11 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error creating lesson:', error);
+    if (error instanceof Error) {
+      if (error.message === 'Unauthorized' || error.message === 'Forbidden') {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+    }
     return NextResponse.json({ error: 'Failed to create lesson' }, { status: 500 });
   }
 }
@@ -137,6 +125,11 @@ export async function PUT(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error updating lesson:', error);
+    if (error instanceof Error) {
+      if (error.message === 'Unauthorized' || error.message === 'Forbidden') {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+    }
     return NextResponse.json({ error: 'Failed to update lesson' }, { status: 500 });
   }
 }

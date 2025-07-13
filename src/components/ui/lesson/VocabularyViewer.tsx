@@ -5,8 +5,9 @@ import { VocabularyContent } from '@/src/types/lesson';
 import { Button } from '@/src/components/ui/button';
 import { Badge } from '@/src/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/src/components/ui/tabs';
-import { Volume2, ChevronLeft, ChevronRight, BookOpen, Grid3X3 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, BookOpen, Grid3X3 } from 'lucide-react';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
+import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 
 interface VocabularyViewerProps {
   content: VocabularyContent;
@@ -39,13 +40,6 @@ export function VocabularyViewer({ content }: VocabularyViewerProps) {
       </div>
     );
   }
-
-  const playAudio = (audioPath?: string | null) => {
-    if (audioPath) {
-      const audio = new Audio(audioPath);
-      audio.play().catch(console.error);
-    }
-  };
 
   const nextCard = () => {
     if (currentCardIndex < vocabularyItems.length - 1) {
@@ -95,15 +89,7 @@ export function VocabularyViewer({ content }: VocabularyViewerProps) {
                       <p className="text-xs text-roman-stone italic">/{currentItem.pronunciation}/</p>
                     )}
                     {currentItem.audioPath && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={e => {
-                          e.stopPropagation();
-                          playAudio(currentItem.audioPath);
-                        }}>
-                        <Volume2 className="h-4 w-4" />
-                      </Button>
+                      <AudioPlayButton audioPath={currentItem.audioPath} variant="vocabulary" size="sm" />
                     )}
                     <div className="pt-2">
                       <p className="text-xs text-roman-stone">Click to reveal meaning</p>
@@ -162,11 +148,7 @@ export function VocabularyViewer({ content }: VocabularyViewerProps) {
               <div className="flex items-center gap-3">
                 <h3 className="text-xl font-serif text-roman-red">{item.latin}</h3>
                 {item.pronunciation && <span className="text-sm text-roman-stone italic">/{item.pronunciation}/</span>}
-                {item.audioPath && (
-                  <Button variant="ghost" size="sm" onClick={() => playAudio(item.audioPath)}>
-                    <Volume2 className="h-4 w-4" />
-                  </Button>
-                )}
+                {item.audioPath && <AudioPlayButton audioPath={item.audioPath} variant="vocabulary" size="sm" />}
               </div>
               <p className="text-lg text-gray-800">{item.english}</p>
               <div className="flex items-center gap-2">
@@ -184,8 +166,20 @@ export function VocabularyViewer({ content }: VocabularyViewerProps) {
   return (
     <div className="space-y-6">
       <div className="text-center space-y-2">
-        <h2 className="text-2xl font-serif text-gray-800">{content.title || 'Vocabulary'}</h2>
-        <p className="text-roman-stone">Study these {vocabularyItems.length} words</p>
+        <div className="flex justify-center items-center gap-4">
+          <div>
+            <h2 className="text-2xl font-serif text-gray-800">{content.title || 'Vocabulary'}</h2>
+            <p className="text-roman-stone">Study these {vocabularyItems.length} words</p>
+          </div>
+          {content.audioPath && (
+            <AudioPlayButton
+              audioPath={content.audioPath}
+              variant="default"
+              size="sm"
+              className="rounded-full border-roman-terracotta/20 hover:border-roman-terracotta hover:bg-roman-parchment"
+            />
+          )}
+        </div>
       </div>
 
       <Tabs value={currentMode} onValueChange={value => setCurrentMode(value as 'flashcards' | 'list')}>

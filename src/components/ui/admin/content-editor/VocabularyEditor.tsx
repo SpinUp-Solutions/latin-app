@@ -5,6 +5,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { VocabularyContent } from '@/src/types/lesson';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonSlice';
+import { AudioUploadSection } from './AudioUploadSection';
 
 export const VocabularyEditor: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -71,6 +72,12 @@ export const VocabularyEditor: React.FC = () => {
           <option value="quiz">Quiz</option>
         </select>
       </div>
+
+      <AudioUploadSection
+        audioPath={editingContent.audioPath}
+        onAudioPathChange={audioPath => updateContent({ audioPath })}
+        contentItemId={editingContent.id}
+      />
 
       <div>
         <div className="flex items-center justify-between mb-2">
@@ -151,6 +158,14 @@ export const VocabularyEditor: React.FC = () => {
                       className="w-full p-2 border rounded text-sm"
                       rows={2}
                       placeholder="Additional notes..."
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <AudioUploadSection
+                      audioPath={item.audioPath}
+                      onAudioPathChange={audioPath => updateVocabularyItem(index, 'audioPath', audioPath || '')}
+                      contentItemId={`${editingContent.id}-vocab-${item.id}`}
+                      className="mt-2"
                     />
                   </div>
                 </div>

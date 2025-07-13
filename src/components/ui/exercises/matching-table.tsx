@@ -8,6 +8,7 @@ import { FeedbackDisplay } from '../feedback';
 import FieldSelect from '../core/field-select';
 import { validateMatchingExercise } from '@/src/utils/exercises/matchingExercise';
 import { ExerciseProgress } from './exercise-progress';
+import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 
 interface MatchingItem {
   id: string;
@@ -114,54 +115,34 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
     }
   };
 
-  const handleClearAll = () => {
-    setSelectedLeft(null);
-    setSelectedRight(null);
-    setMatches({});
-    setMatchedLeftIds(new Set());
-    setMatchedRightIds(new Set());
-    setShuffledLeftColumn(leftColumn);
-    setShuffledRightColumn(rightColumn);
-    reset();
+  const getUnmatchedLeftItems = () => {
+    return shuffledLeftColumn.filter(item => !matchedLeftIds.has(item.id));
+  };
+
+  const getUnmatchedRightItems = () => {
+    return shuffledRightColumn.filter(item => !matchedRightIds.has(item.id));
   };
 
   const shuffleArray = <T,>(array: T[]): T[] => {
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
+    const newArray = [...array];
+    for (let i = newArray.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
     }
-    return shuffled;
+    return newArray;
   };
 
   const handleShuffle = () => {
+    setShuffledLeftColumn(shuffleArray(leftColumn));
+    setShuffledRightColumn(shuffleArray(rightColumn));
     setSelectedLeft(null);
     setSelectedRight(null);
-    reset();
-
-    // Only shuffle unmatched items
-    const unmatchedLeft = shuffledLeftColumn.filter(item => !matchedLeftIds.has(item.id));
-    const unmatchedRight = shuffledRightColumn.filter(item => !matchedRightIds.has(item.id));
-
-    const shuffledUnmatchedLeft = shuffleArray(unmatchedLeft);
-    const shuffledUnmatchedRight = shuffleArray(unmatchedRight);
-
-    // Rebuild arrays with matched items in their positions and unmatched items shuffled
-    const newLeftColumn = shuffledLeftColumn.map(item =>
-      matchedLeftIds.has(item.id) ? item : shuffledUnmatchedLeft.shift()!
-    );
-    const newRightColumn = shuffledRightColumn.map(item =>
-      matchedRightIds.has(item.id) ? item : shuffledUnmatchedRight.shift()!
-    );
-
-    setShuffledLeftColumn(newLeftColumn);
-    setShuffledRightColumn(newRightColumn);
   };
 
-  const getUnmatchedLeftItems = (): MatchingItem[] => shuffledLeftColumn.filter(item => !matchedLeftIds.has(item.id));
-
-  const getUnmatchedRightItems = (): MatchingItem[] =>
-    shuffledRightColumn.filter(item => !matchedRightIds.has(item.id));
+  const clearSelection = () => {
+    setSelectedLeft(null);
+    setSelectedRight(null);
+  };
 
   const getMatchedPairs = () => {
     return Object.entries(matches).map(([leftId, rightId]) => {
@@ -173,7 +154,17 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
 
   return (
     <div className="space-y-6">
-      {exercise.title && <h3 className="text-xl font-serif text-roman-red mb-4">{exercise.title}</h3>}
+      <div className="flex justify-between items-start">
+        {exercise.title && <h3 className="text-xl font-serif text-roman-red mb-4">{exercise.title}</h3>}
+        {exercise.audioPath && (
+          <AudioPlayButton
+            audioPath={exercise.audioPath}
+            variant="default"
+            size="sm"
+            className="ml-2 rounded-full border-roman-terracotta/20 hover:border-roman-terracotta hover:bg-roman-parchment"
+          />
+        )}
+      </div>
       {exercise.instructions && (
         <div className="p-6 bg-roman-parchment rounded-lg mb-4">
           <p className="whitespace-pre-wrap break-words">{exercise.instructions}</p>
@@ -183,23 +174,29 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
       {/* Progress indicator */}
       <ExerciseProgress current={Object.keys(matches).length} total={Object.keys(finalAnswer).length} label="Match" />
 
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
+      <div className="p-6 bg-white rounded-lg border border-gray-200">
         {/* Controls */}
-        <div className="flex gap-2 mb-6">
-          <Button onClick={handleClearAll} variant="outline" size="sm" className="flex items-center gap-1">
-            <X className="h-4 w-4" />
-            Clear All
-          </Button>
-          <Button onClick={handleShuffle} variant="outline" size="sm" className="flex items-center gap-1">
-            <Shuffle className="h-4 w-4" />
-            Shuffle
-          </Button>
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={handleShuffle}>
+              <Shuffle className="h-4 w-4 mr-2" />
+              Shuffle
+            </Button>
+            <Button variant="outline" size="sm" onClick={clearSelection}>
+              <X className="h-4 w-4 mr-2" />
+              Clear Selection
+            </Button>
+          </div>
+          <div className="text-sm text-gray-600">
+            {Object.keys(matches).length} of {Object.keys(finalAnswer).length} matches completed
+          </div>
         </div>
 
         {/* Matching interface */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Left column */}
           <div className="space-y-2">
+            <h4 className="font-medium text-gray-700 mb-3">Select from left column:</h4>
             <FieldSelect
               items={getUnmatchedLeftItems().map(item => item.value)}
               selectedItem={selectedLeft?.value || null}
@@ -209,18 +206,14 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
               onSelect={handleLeftSelect}
               matches={{}}
               matchType="key"
-              label="Match these:"
-              showIncorrect={showIncorrectFlash}
+              label=""
+              className={showIncorrectFlash ? 'animate-pulse bg-red-50 border-red-300' : ''}
             />
-          </div>
-
-          {/* Center arrow */}
-          <div className="flex items-center justify-center">
-            <ArrowRight className="h-6 w-6 text-gray-400" />
           </div>
 
           {/* Right column */}
           <div className="space-y-2">
+            <h4 className="font-medium text-gray-700 mb-3">Match with right column:</h4>
             <FieldSelect
               items={getUnmatchedRightItems().map(item => item.value)}
               selectedItem={selectedRight?.value || null}
@@ -230,11 +223,32 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
               onSelect={handleRightSelect}
               matches={{}}
               matchType="value"
-              label="With these:"
-              showIncorrect={showIncorrectFlash}
+              label=""
+              className={showIncorrectFlash ? 'animate-pulse bg-red-50 border-red-300' : ''}
             />
           </div>
         </div>
+
+        {/* Selection status */}
+        {(selectedLeft || selectedRight) && (
+          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="text-sm">
+              {selectedLeft && (
+                <div>
+                  <span className="font-medium">Selected from left:</span> {selectedLeft.value}
+                </div>
+              )}
+              {selectedRight && (
+                <div>
+                  <span className="font-medium">Selected from right:</span> {selectedRight.value}
+                </div>
+              )}
+              {selectedLeft && !selectedRight && (
+                <div className="text-blue-600 mt-1">Now select an item from the right column to match.</div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Feedback Display */}
         <FeedbackDisplay isCorrect={isCorrect} message={message} level={level} showExplanation={false} />

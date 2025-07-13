@@ -6,6 +6,7 @@ import { FillExercise } from '@/src/types/exercise';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonSlice';
 import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
+import { AudioUploadSection } from './AudioUploadSection';
 
 export const FillEditor: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -75,16 +76,11 @@ export const FillEditor: React.FC = () => {
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium mb-1">Audio Path (optional)</label>
-          <input
-            type="text"
-            value={editingContent.audioPath || ''}
-            onChange={e => updateContent({ audioPath: e.target.value || null })}
-            className="w-full p-2 border rounded-md"
-            placeholder="/assets/audio/example.mp3"
-          />
-        </div>
+        <AudioUploadSection
+          audioPath={editingContent.audioPath}
+          onAudioPathChange={audioPath => updateContent({ audioPath })}
+          contentItemId={editingContent.id}
+        />
       </div>
 
       {/* Fill Items */}

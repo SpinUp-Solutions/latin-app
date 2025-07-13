@@ -7,6 +7,7 @@ import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { ExerciseInput, FeedbackDisplay } from '../feedback';
 import { validateFillExercise } from '@/src/utils/exercises/fillExercise';
 import { ExerciseProgress } from './exercise-progress';
+import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 
 interface Props {
   exercise: FillExercise;
@@ -65,7 +66,17 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
 
   return (
     <div className="space-y-4">
-      {exercise.title && <h3 className="text-lg font-serif text-roman-red mb-2">{exercise.title}</h3>}
+      <div className="flex justify-between items-start">
+        {exercise.title && <h3 className="text-lg font-serif text-roman-red mb-2">{exercise.title}</h3>}
+        {exercise.audioPath && (
+          <AudioPlayButton
+            audioPath={exercise.audioPath}
+            variant="default"
+            size="sm"
+            className="ml-2 rounded-full border-roman-terracotta/20 hover:border-roman-terracotta hover:bg-roman-parchment"
+          />
+        )}
+      </div>
       {exercise.instructions && (
         <div className="p-4 bg-roman-parchment rounded-lg mb-4">
           <p>{exercise.instructions}</p>
