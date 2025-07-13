@@ -1,6 +1,8 @@
 import React, { useRef, useEffect, useState } from 'react';
+import { useSelector } from 'react-redux';
 import { TooltipContent } from './tooltip-content';
-import { TooltipData } from './tooltip-context';
+import { TooltipData } from '@/src/store/slices/lessonSlice';
+import { RootState } from '@/src/store';
 
 interface MousePosition {
   x: number;
@@ -23,39 +25,30 @@ interface TooltipOverlayProps {
 }
 
 const TooltipOverlay: React.FC<TooltipOverlayProps> = ({ mousePosition, data }) => {
-  // Calculate fixed position once, don't follow mouse
-  const [fixedPosition, setFixedPosition] = useState({ x: 0, y: 0 });
+  const tooltipWidth = 288;
+  const tooltipHeight = 180;
+  const offset = 2;
+  const margin = 16;
 
-  useEffect(() => {
-    // Calculate position once when component mounts
-    const tooltipWidth = 288; // w-72 = 288px
-    const tooltipHeight = 180; // Reduced due to compact design
-    const offset = 2; // Increased to appear higher above cursor
+  let x = mousePosition.x;
+  let y = mousePosition.y - tooltipHeight - offset;
 
-    let x = mousePosition.x;
-    let y = mousePosition.y - tooltipHeight - offset; // Position above cursor
-
-    // Adjust for viewport boundaries
-    const margin = 16;
-    if (x + tooltipWidth / 2 > window.innerWidth - margin) {
-      x = window.innerWidth - tooltipWidth / 2 - margin;
-    }
-    if (x - tooltipWidth / 2 < margin) {
-      x = tooltipWidth / 2 + margin;
-    }
-    if (y < margin) {
-      y = mousePosition.y + offset; // Show below if no space above
-    }
-
-    setFixedPosition({ x, y });
-  }, []); // Empty dependency array - calculate once only
+  if (x + tooltipWidth / 2 > window.innerWidth - margin) {
+    x = window.innerWidth - tooltipWidth / 2 - margin;
+  }
+  if (x - tooltipWidth / 2 < margin) {
+    x = tooltipWidth / 2 + margin;
+  }
+  if (y < margin) {
+    y = mousePosition.y + offset;
+  }
 
   return (
     <div
       className="tooltip-overlay fixed z-50 animate-in fade-in-0 zoom-in-95 duration-200 pointer-events-auto"
       style={{
-        left: `${fixedPosition.x}px`,
-        top: `${fixedPosition.y}px`,
+        left: `${x}px`,
+        top: `${y}px`,
         transform: 'translateX(-50%)',
       }}>
       <TooltipContent {...data} className="bg-white" />
@@ -70,6 +63,7 @@ export const TooltipRenderer: React.FC<TooltipRendererProps> = ({ content, class
   const [activeTooltip, setActiveTooltip] = useState<ActiveTooltip | null>(null);
   const [fixedMousePos, setFixedMousePos] = useState<MousePosition>({ x: 0, y: 0 });
   const hideTimeoutRef = useRef<NodeJS.Timeout>();
+  const tooltips = useSelector((state: RootState) => state.lesson.tooltips);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -78,50 +72,26 @@ export const TooltipRenderer: React.FC<TooltipRendererProps> = ({ content, class
     const handleMouseEnter = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
 
-      // Clear any pending hide timeout
       if (hideTimeoutRef.current) {
         clearTimeout(hideTimeoutRef.current);
         hideTimeoutRef.current = undefined;
       }
 
-      // Store fixed mouse position for positioning
-      const mousePos = { x: event.clientX, y: event.clientY };
-      setFixedMousePos(mousePos);
-
-      // Check if the target or any parent has the tooltip data attributes
       const tooltipElement = target.closest('[data-tooltip="true"]') as HTMLElement;
       if (!tooltipElement) return;
 
       const tooltipId = tooltipElement.getAttribute('data-tooltip-id');
       if (!tooltipId) return;
 
-      // Prevent showing the same tooltip multiple times
       if (activeTooltip && activeTooltip.id === tooltipId) {
         return;
       }
 
-      // Read tooltip data from HTML attributes
-      const examples = (() => {
-        try {
-          const examplesStr = tooltipElement.getAttribute('data-tooltip-examples');
-          return examplesStr ? JSON.parse(examplesStr) : [];
-        } catch (e) {
-          return [];
-        }
-      })();
+      const mousePos = { x: event.clientX, y: event.clientY };
+      setFixedMousePos(mousePos);
 
-      const tooltipData: Omit<TooltipData, 'id'> = {
-        word: tooltipElement.getAttribute('data-tooltip-word') || '',
-        translation: tooltipElement.getAttribute('data-tooltip-translation') || '',
-        pronunciation: tooltipElement.getAttribute('data-tooltip-pronunciation') || '',
-        partOfSpeech: tooltipElement.getAttribute('data-tooltip-part-of-speech') || '',
-        wordType: tooltipElement.getAttribute('data-tooltip-word-type') || '',
-        definition: tooltipElement.getAttribute('data-tooltip-definition') || '',
-        examples,
-        etymology: tooltipElement.getAttribute('data-tooltip-etymology') || '',
-      };
-
-      if (!tooltipData.word) return;
+      const tooltipData = tooltips[tooltipId];
+      if (!tooltipData) return;
 
       setActiveTooltip({ id: tooltipId, data: tooltipData });
     };
@@ -160,7 +130,7 @@ export const TooltipRenderer: React.FC<TooltipRendererProps> = ({ content, class
       container.removeEventListener('mouseenter', handleMouseEnter, true);
       document.removeEventListener('mousemove', handleMouseMove);
     };
-  }, [activeTooltip]);
+  }, [activeTooltip, tooltips]);
 
   return (
     <>

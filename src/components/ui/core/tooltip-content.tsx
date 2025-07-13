@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/ca
 import { Badge } from '@/src/components/ui/badge';
 import { Button } from '@/src/components/ui/button';
 import { ExternalLink } from 'lucide-react';
-import { TooltipData } from './tooltip-context';
+import { TooltipData } from '@/src/store/slices/lessonSlice';
 
 interface TooltipContentProps extends Omit<TooltipData, 'id'> {
   className?: string;
@@ -80,7 +80,7 @@ export const TooltipContent: React.FC<TooltipContentProps> = ({
               Examples
             </h4>
             <ul className="text-xs space-y-0.5">
-              {examples.slice(0, 2).map((example, index) => (
+              {examples.slice(0, 2).map((example: string, index: number) => (
                 <li key={index} className="italic text-muted-foreground">
                   "{example}"
                 </li>

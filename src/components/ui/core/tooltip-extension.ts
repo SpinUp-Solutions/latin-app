@@ -100,14 +100,6 @@ export const Tooltip = Mark.create<TooltipOptions>({
       mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, {
         'data-tooltip': 'true',
         'data-tooltip-id': tooltipId,
-        'data-tooltip-word': HTMLAttributes.word || '',
-        'data-tooltip-translation': HTMLAttributes.translation || '',
-        'data-tooltip-pronunciation': HTMLAttributes.pronunciation || '',
-        'data-tooltip-part-of-speech': HTMLAttributes.partOfSpeech || '',
-        'data-tooltip-word-type': HTMLAttributes.wordType || '',
-        'data-tooltip-definition': HTMLAttributes.definition || '',
-        'data-tooltip-examples': HTMLAttributes.examples ? JSON.stringify(HTMLAttributes.examples) : '',
-        'data-tooltip-etymology': HTMLAttributes.etymology || '',
         class:
           'tooltip-text cursor-help underline decoration-dotted decoration-blue-500/60 hover:decoration-blue-500 transition-colors',
       }),

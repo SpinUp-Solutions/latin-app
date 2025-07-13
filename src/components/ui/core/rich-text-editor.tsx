@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
+import { useDispatch } from 'react-redux';
 import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Bold, Italic, Strikethrough, Heading1, Heading2, Heading3, List, MessageSquare } from 'lucide-react';
 import { Tooltip } from './tooltip-extension';
 import { TooltipEditorDialog } from './tooltip-editor-dialog';
-import { useTooltips } from './tooltip-context';
+import { addTooltip } from '@/src/store/slices/lessonSlice';
 
 interface RichTextEditorProps {
   content: string;
@@ -15,7 +16,7 @@ interface RichTextEditorProps {
 const RichTextEditor: React.FC<RichTextEditorProps> = ({ content, onChange, className }) => {
   const [isTooltipDialogOpen, setIsTooltipDialogOpen] = useState(false);
   const [selectedText, setSelectedText] = useState('');
-  const { addTooltip } = useTooltips();
+  const dispatch = useDispatch();
 
   const editor = useEditor({
     extensions: [StarterKit, Tooltip],
@@ -54,10 +55,10 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ content, onChange, clas
   const handleSaveTooltip = (tooltipData: any) => {
     if (!editor) return;
 
-    const tooltipId = Math.random().toString(36).substr(2, 9);
+    const tooltipId = `${tooltipData.word}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
 
-    // Store tooltip data in context
-    addTooltip(tooltipId, tooltipData);
+    // Store tooltip data in Redux
+    dispatch(addTooltip({ id: tooltipId, data: tooltipData }));
 
     // Add tooltip mark to editor with the ID
     editor
@@ -65,6 +66,8 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ content, onChange, clas
       .focus()
       .setTooltip({ ...tooltipData, tooltipId })
       .run();
+
+    setIsTooltipDialogOpen(false);
   };
 
   return (
