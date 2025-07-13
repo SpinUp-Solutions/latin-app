@@ -20,6 +20,11 @@ export const TooltipContent: React.FC<TooltipContentProps> = ({
   definition,
   examples = [],
   etymology,
+  gender,
+  declensionClass,
+  conjugationClass,
+  grammaticalInfo,
+  principalParts = [],
   className,
   showMoreDetails = true,
   onMoreDetails,
@@ -43,6 +48,21 @@ export const TooltipContent: React.FC<TooltipContentProps> = ({
               {partOfSpeech}
             </Badge>
           )}
+          {gender && (
+            <Badge variant="outline" className="text-xs py-0 px-1 h-4">
+              {gender}
+            </Badge>
+          )}
+          {declensionClass && (
+            <Badge variant="outline" className="text-xs py-0 px-1 h-4">
+              {declensionClass}
+            </Badge>
+          )}
+          {conjugationClass && (
+            <Badge variant="outline" className="text-xs py-0 px-1 h-4">
+              {conjugationClass}
+            </Badge>
+          )}
           {wordType && (
             <Badge variant="outline" className="text-xs py-0 px-1 h-4">
               {wordType}
@@ -63,6 +83,20 @@ export const TooltipContent: React.FC<TooltipContentProps> = ({
           <div>
             <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">Definition</h4>
             <p className="text-xs">{definition}</p>
+          </div>
+        )}
+
+        {grammaticalInfo && (
+          <div>
+            <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">Grammar</h4>
+            <p className="text-xs font-mono">{grammaticalInfo}</p>
+          </div>
+        )}
+
+        {principalParts.length > 0 && (
+          <div>
+            <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">Principal Parts</h4>
+            <p className="text-xs font-mono">{principalParts.join(', ')}</p>
           </div>
         )}
 

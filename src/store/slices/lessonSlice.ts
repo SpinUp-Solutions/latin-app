@@ -13,6 +13,12 @@ export interface TooltipData {
   definition?: string;
   examples?: string[];
   etymology?: string;
+  // Extended fields from Firebase
+  gender?: string;
+  declensionClass?: string;
+  conjugationClass?: string;
+  grammaticalInfo?: string;
+  principalParts?: string[];
 }
 
 interface LessonWithMetadata extends Lesson {

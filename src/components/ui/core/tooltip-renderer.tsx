@@ -25,35 +25,58 @@ interface TooltipOverlayProps {
 }
 
 const TooltipOverlay: React.FC<TooltipOverlayProps> = ({ mousePosition, data }) => {
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ x: mousePosition.x, y: mousePosition.y });
+  const [isBelow, setIsBelow] = useState(false);
+
   const tooltipWidth = 288;
-  const tooltipHeight = 180;
-  const offset = 2;
+  const offset = 18; // Increased offset for better spacing
   const margin = 16;
 
-  let x = mousePosition.x;
-  let y = mousePosition.y - tooltipHeight - offset;
+  useEffect(() => {
+    if (tooltipRef.current) {
+      const tooltipRect = tooltipRef.current.getBoundingClientRect();
+      const tooltipHeight = tooltipRect.height;
 
-  if (x + tooltipWidth / 2 > window.innerWidth - margin) {
-    x = window.innerWidth - tooltipWidth / 2 - margin;
-  }
-  if (x - tooltipWidth / 2 < margin) {
-    x = tooltipWidth / 2 + margin;
-  }
-  if (y < margin) {
-    y = mousePosition.y + offset;
-  }
+      let x = mousePosition.x;
+      let y = mousePosition.y - tooltipHeight - offset;
+      let showBelow = false;
+
+      // Horizontal boundary checks
+      if (x + tooltipWidth / 2 > window.innerWidth - margin) {
+        x = window.innerWidth - tooltipWidth / 2 - margin;
+      }
+      if (x - tooltipWidth / 2 < margin) {
+        x = tooltipWidth / 2 + margin;
+      }
+
+      // Vertical boundary check - if tooltip would go above viewport, show below cursor
+      if (y < margin) {
+        y = mousePosition.y + offset + 10;
+        showBelow = true;
+      }
+
+      setPosition({ x, y });
+      setIsBelow(showBelow);
+    }
+  }, [mousePosition, data]);
 
   return (
     <div
+      ref={tooltipRef}
       className="tooltip-overlay fixed z-50 animate-in fade-in-0 zoom-in-95 duration-200 pointer-events-auto"
       style={{
-        left: `${x}px`,
-        top: `${y}px`,
+        left: `${position.x}px`,
+        top: `${position.y}px`,
         transform: 'translateX(-50%)',
       }}>
-      <TooltipContent {...data} className="bg-white" />
+      <TooltipContent {...data} className="bg-white shadow-lg" />
 
-      <div className="absolute w-2 h-2 bg-white border rotate-45 shadow top-full left-1/2 transform -translate-x-1/2 -translate-y-1/2 border-b border-r" />
+      <div
+        className={`absolute w-2 h-2 bg-white border rotate-45 shadow left-1/2 transform -translate-x-1/2 ${
+          isBelow ? 'top-0 -translate-y-1/2 border-l border-t' : 'top-full -translate-y-1/2 border-b border-r'
+        }`}
+      />
     </div>
   );
 };
@@ -112,7 +135,7 @@ export const TooltipRenderer: React.FC<TooltipRendererProps> = ({ content, class
         if (!hideTimeoutRef.current) {
           hideTimeoutRef.current = setTimeout(() => {
             setActiveTooltip(null);
-          }, 1000);
+          }, 400);
         }
       }
     };

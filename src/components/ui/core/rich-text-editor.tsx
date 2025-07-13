@@ -51,8 +51,20 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ content, onChange, clas
       return;
     }
 
-    const marks = editor.state.doc.resolve(from).marks();
-    const tooltipMark = marks.find(mark => mark.type.name === 'tooltip');
+    let tooltipMark = null;
+    editor.state.doc.nodesBetween(from, to, (node, pos) => {
+      if (node.isText && node.marks.length > 0) {
+        const foundTooltipMark = node.marks.find(mark => mark.type.name === 'tooltip');
+        if (foundTooltipMark && !tooltipMark) {
+          const markStart = pos;
+          const markEnd = pos + node.nodeSize;
+          if (from >= markStart && from < markEnd) {
+            tooltipMark = foundTooltipMark;
+          }
+        }
+      }
+    });
+
     if (tooltipMark) {
       // Get existing tooltip data
       const tooltipId = tooltipMark.attrs.tooltipId;
