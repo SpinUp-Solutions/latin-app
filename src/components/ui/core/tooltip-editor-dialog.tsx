@@ -1,0 +1,242 @@
+import React, { useState } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/src/components/ui/dialog';
+import { Button } from '@/src/components/ui/button';
+import { Input } from '@/src/components/ui/input';
+import { Label } from '@/src/components/ui/label';
+import { Textarea } from '@/src/components/ui/textarea';
+import { Badge } from '@/src/components/ui/badge';
+import { X, Plus } from 'lucide-react';
+
+interface TooltipFormData {
+  word: string;
+  translation?: string;
+  pronunciation?: string;
+  partOfSpeech?: string;
+  wordType?: string;
+  definition?: string;
+  examples?: string[];
+  etymology?: string;
+}
+
+interface TooltipEditorDialogProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (data: TooltipFormData) => void;
+  initialData?: Partial<TooltipFormData>;
+  selectedText?: string;
+}
+
+export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
+  isOpen,
+  onClose,
+  onSave,
+  initialData = {},
+  selectedText = '',
+}) => {
+  const [formData, setFormData] = useState<TooltipFormData>({
+    word: initialData.word || selectedText,
+    translation: initialData.translation || '',
+    pronunciation: initialData.pronunciation || '',
+    partOfSpeech: initialData.partOfSpeech || '',
+    wordType: initialData.wordType || '',
+    definition: initialData.definition || '',
+    examples: initialData.examples || [],
+    etymology: initialData.etymology || '',
+  });
+
+  const [newExample, setNewExample] = useState('');
+
+  const handleInputChange = (field: keyof TooltipFormData, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const addExample = () => {
+    if (newExample.trim()) {
+      setFormData(prev => ({
+        ...prev,
+        examples: [...(prev.examples || []), newExample.trim()],
+      }));
+      setNewExample('');
+    }
+  };
+
+  const removeExample = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      examples: prev.examples?.filter((_, i) => i !== index) || [],
+    }));
+  };
+
+  const handleSave = () => {
+    // Filter out empty fields
+    const cleanedData = Object.entries(formData).reduce((acc, [key, value]) => {
+      if (value && (typeof value === 'string' ? value.trim() : true)) {
+        if (key === 'examples' && Array.isArray(value)) {
+          const filteredExamples = value.filter(ex => ex.trim());
+          if (filteredExamples.length > 0) {
+            acc[key as keyof TooltipFormData] = filteredExamples as any;
+          }
+        } else {
+          acc[key as keyof TooltipFormData] = value as any;
+        }
+      }
+      return acc;
+    }, {} as TooltipFormData);
+
+    onSave(cleanedData);
+    onClose();
+  };
+
+  const handleClose = () => {
+    setFormData({
+      word: '',
+      translation: '',
+      pronunciation: '',
+      partOfSpeech: '',
+      wordType: '',
+      definition: '',
+      examples: [],
+      etymology: '',
+    });
+    setNewExample('');
+    onClose();
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={handleClose}>
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Add Tooltip Information</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="word">Word *</Label>
+              <Input
+                id="word"
+                value={formData.word}
+                onChange={e => handleInputChange('word', e.target.value)}
+                placeholder="Enter the word"
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="translation">Translation</Label>
+              <Input
+                id="translation"
+                value={formData.translation}
+                onChange={e => handleInputChange('translation', e.target.value)}
+                placeholder="English translation"
+                className="mt-1"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="pronunciation">Pronunciation</Label>
+              <Input
+                id="pronunciation"
+                value={formData.pronunciation}
+                onChange={e => handleInputChange('pronunciation', e.target.value)}
+                placeholder="IPA pronunciation"
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="partOfSpeech">Part of Speech</Label>
+              <Input
+                id="partOfSpeech"
+                value={formData.partOfSpeech}
+                onChange={e => handleInputChange('partOfSpeech', e.target.value)}
+                placeholder="noun, verb, adjective..."
+                className="mt-1"
+              />
+            </div>
+          </div>
+
+          <div>
+            <Label htmlFor="wordType">Word Type</Label>
+            <Input
+              id="wordType"
+              value={formData.wordType}
+              onChange={e => handleInputChange('wordType', e.target.value)}
+              placeholder="declension, conjugation..."
+              className="mt-1"
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="definition">Definition</Label>
+            <Textarea
+              id="definition"
+              value={formData.definition}
+              onChange={e => handleInputChange('definition', e.target.value)}
+              placeholder="Detailed definition"
+              className="mt-1"
+              rows={3}
+            />
+          </div>
+
+          <div>
+            <Label>Examples</Label>
+            <div className="mt-1 space-y-2">
+              <div className="flex gap-2">
+                <Input
+                  value={newExample}
+                  onChange={e => setNewExample(e.target.value)}
+                  placeholder="Add an example sentence"
+                  onKeyPress={e => e.key === 'Enter' && addExample()}
+                />
+                <Button type="button" onClick={addExample} size="sm">
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+              {formData.examples && formData.examples.length > 0 && (
+                <div className="space-y-1">
+                  {formData.examples.map((example, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <Badge variant="secondary" className="flex-1 justify-between">
+                        <span className="text-sm">{example}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeExample(index)}
+                          className="h-4 w-4 p-0 hover:bg-transparent">
+                          <X className="w-3 h-3" />
+                        </Button>
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <Label htmlFor="etymology">Etymology</Label>
+            <Textarea
+              id="etymology"
+              value={formData.etymology}
+              onChange={e => handleInputChange('etymology', e.target.value)}
+              placeholder="Word origin and history"
+              className="mt-1"
+              rows={2}
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 pt-4 border-t">
+          <Button variant="outline" onClick={handleClose}>
+            Cancel
+          </Button>
+          <Button onClick={handleSave} disabled={!formData.word.trim()}>
+            Save Tooltip
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};

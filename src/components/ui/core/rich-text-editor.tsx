@@ -1,7 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { Bold, Italic, Strikethrough, Heading1, Heading2, Heading3, List } from 'lucide-react';
+import { Bold, Italic, Strikethrough, Heading1, Heading2, Heading3, List, MessageSquare } from 'lucide-react';
+import { Tooltip } from './tooltip-extension';
+import { TooltipEditorDialog } from './tooltip-editor-dialog';
+import { useTooltips } from './tooltip-context';
 
 interface RichTextEditorProps {
   content: string;
@@ -10,11 +13,21 @@ interface RichTextEditorProps {
 }
 
 const RichTextEditor: React.FC<RichTextEditorProps> = ({ content, onChange, className }) => {
+  const [isTooltipDialogOpen, setIsTooltipDialogOpen] = useState(false);
+  const [selectedText, setSelectedText] = useState('');
+  const { addTooltip } = useTooltips();
+
   const editor = useEditor({
-    extensions: [StarterKit],
+    extensions: [StarterKit, Tooltip],
     content: content,
+    immediatelyRender: false,
     onUpdate: ({ editor }) => {
       onChange(editor.getHTML());
+    },
+    onSelectionUpdate: ({ editor }) => {
+      const { from, to } = editor.state.selection;
+      const text = editor.state.doc.textBetween(from, to);
+      setSelectedText(text);
     },
     editorProps: {
       attributes: {
@@ -23,15 +36,52 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ content, onChange, clas
     },
   });
 
+  const handleAddTooltip = () => {
+    if (!editor) return;
+
+    const { from, to } = editor.state.selection;
+    const selectedText = editor.state.doc.textBetween(from, to);
+
+    if (!selectedText.trim()) {
+      alert('Please select text to add a tooltip');
+      return;
+    }
+
+    setSelectedText(selectedText);
+    setIsTooltipDialogOpen(true);
+  };
+
+  const handleSaveTooltip = (tooltipData: any) => {
+    if (!editor) return;
+
+    const tooltipId = Math.random().toString(36).substr(2, 9);
+
+    // Store tooltip data in context
+    addTooltip(tooltipId, tooltipData);
+
+    // Add tooltip mark to editor with the ID
+    editor
+      .chain()
+      .focus()
+      .setTooltip({ ...tooltipData, tooltipId })
+      .run();
+  };
+
   return (
     <div className={`border border-gray-300 rounded-md ${className}`}>
-      <EditorToolbar editor={editor} />
+      <EditorToolbar editor={editor} onAddTooltip={handleAddTooltip} />
       <EditorContent editor={editor} />
+      <TooltipEditorDialog
+        isOpen={isTooltipDialogOpen}
+        onClose={() => setIsTooltipDialogOpen(false)}
+        onSave={handleSaveTooltip}
+        selectedText={selectedText}
+      />
     </div>
   );
 };
 
-const EditorToolbar: React.FC<{ editor: Editor | null }> = ({ editor }) => {
+const EditorToolbar: React.FC<{ editor: Editor | null; onAddTooltip: () => void }> = ({ editor, onAddTooltip }) => {
   if (!editor) {
     return null;
   }
@@ -94,6 +144,16 @@ const EditorToolbar: React.FC<{ editor: Editor | null }> = ({ editor }) => {
         className={buttonClass(editor.isActive('bulletList'))}
         title="Bullet List">
         <List className="w-4 h-4" />
+      </button>
+
+      <div className="h-5 border-l border-gray-300 mx-1"></div>
+
+      <button
+        type="button"
+        onClick={onAddTooltip}
+        className={buttonClass(editor.isActive('tooltip'))}
+        title="Add Tooltip">
+        <MessageSquare className="w-4 h-4" />
       </button>
     </div>
   );
