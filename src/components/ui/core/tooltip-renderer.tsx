@@ -1,13 +1,10 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { TooltipContent } from './tooltip-content';
-import { TooltipData } from '@/src/store/slices/lessonSlice';
+import { TooltipData, MousePosition } from '@/src/types/tooltip';
+import { calculateTooltipPosition } from '@/src/utils/tooltipUtils';
 import { RootState } from '@/src/store';
 
-interface MousePosition {
-  x: number;
-  y: number;
-}
 
 interface TooltipRendererProps {
   content: string;
@@ -29,35 +26,14 @@ const TooltipOverlay: React.FC<TooltipOverlayProps> = ({ mousePosition, data }) 
   const [position, setPosition] = useState({ x: mousePosition.x, y: mousePosition.y });
   const [isBelow, setIsBelow] = useState(false);
 
-  const tooltipWidth = 288;
-  const offset = 18; // Increased offset for better spacing
-  const margin = 16;
-
   useEffect(() => {
     if (tooltipRef.current) {
       const tooltipRect = tooltipRef.current.getBoundingClientRect();
       const tooltipHeight = tooltipRect.height;
 
-      let x = mousePosition.x;
-      let y = mousePosition.y - tooltipHeight - offset;
-      let showBelow = false;
-
-      // Horizontal boundary checks
-      if (x + tooltipWidth / 2 > window.innerWidth - margin) {
-        x = window.innerWidth - tooltipWidth / 2 - margin;
-      }
-      if (x - tooltipWidth / 2 < margin) {
-        x = tooltipWidth / 2 + margin;
-      }
-
-      // Vertical boundary check - if tooltip would go above viewport, show below cursor
-      if (y < margin) {
-        y = mousePosition.y + offset + 10;
-        showBelow = true;
-      }
-
-      setPosition({ x, y });
-      setIsBelow(showBelow);
+      const calculatedPosition = calculateTooltipPosition(mousePosition, tooltipHeight);
+      setPosition(calculatedPosition);
+      setIsBelow(calculatedPosition.isBelow);
     }
   }, [mousePosition, data]);
 

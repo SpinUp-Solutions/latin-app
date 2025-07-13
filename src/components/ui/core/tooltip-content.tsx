@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/ca
 import { Badge } from '@/src/components/ui/badge';
 import { Button } from '@/src/components/ui/button';
 import { ExternalLink } from 'lucide-react';
-import { TooltipData } from '@/src/store/slices/lessonSlice';
+import { TooltipData } from '@/src/types/tooltip';
 
 interface TooltipContentProps extends Omit<TooltipData, 'id'> {
   className?: string;
@@ -11,7 +11,7 @@ interface TooltipContentProps extends Omit<TooltipData, 'id'> {
   onMoreDetails?: () => void;
 }
 
-export const TooltipContent: React.FC<TooltipContentProps> = ({
+export const TooltipContent: React.FC<TooltipContentProps> = React.memo(({
   word,
   translation,
   pronunciation,
@@ -131,6 +131,6 @@ export const TooltipContent: React.FC<TooltipContentProps> = ({
       </CardContent>
     </Card>
   );
-};
+});
 
 export default TooltipContent;

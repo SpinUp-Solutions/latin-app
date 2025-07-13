@@ -6,6 +6,7 @@ import { Bold, Italic, Strikethrough, Heading1, Heading2, Heading3, List, Messag
 import { Tooltip } from './tooltip-extension';
 import { TooltipEditorDialog } from './tooltip-editor-dialog';
 import { addTooltip, removeTooltip, TooltipData } from '@/src/store/slices/lessonSlice';
+import { findTooltipMark, generateTooltipId } from '@/src/utils/tooltipUtils';
 import { RootState } from '@/src/store';
 
 interface RichTextEditorProps {
@@ -51,19 +52,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ content, onChange, clas
       return;
     }
 
-    let tooltipMark = null;
-    editor.state.doc.nodesBetween(from, to, (node, pos) => {
-      if (node.isText && node.marks.length > 0) {
-        const foundTooltipMark = node.marks.find(mark => mark.type.name === 'tooltip');
-        if (foundTooltipMark && !tooltipMark) {
-          const markStart = pos;
-          const markEnd = pos + node.nodeSize;
-          if (from >= markStart && from < markEnd) {
-            tooltipMark = foundTooltipMark;
-          }
-        }
-      }
-    });
+    const tooltipMark = findTooltipMark(editor, from, to);
 
     if (tooltipMark) {
       // Get existing tooltip data
@@ -92,7 +81,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ content, onChange, clas
       dispatch(addTooltip({ id: tooltipId, data: tooltipData }));
     } else {
       // Create new tooltip
-      tooltipId = `${tooltipData.word}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+      tooltipId = generateTooltipId(tooltipData.word);
       dispatch(addTooltip({ id: tooltipId, data: tooltipData }));
     }
 

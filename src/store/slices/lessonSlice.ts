@@ -3,23 +3,7 @@ import { Lesson, IntroductionPage, ExercisePage } from '@/src/types/lesson';
 import { RenderableContentItem } from '@/src/types/page';
 import { lessonService } from '@/src/services/lessonService';
 
-export interface TooltipData {
-  id: string;
-  word: string;
-  translation?: string;
-  pronunciation?: string;
-  partOfSpeech?: string;
-  wordType?: string;
-  definition?: string;
-  examples?: string[];
-  etymology?: string;
-  // Extended fields from Firebase
-  gender?: string;
-  declensionClass?: string;
-  conjugationClass?: string;
-  grammaticalInfo?: string;
-  principalParts?: string[];
-}
+export { TooltipData } from '@/src/types/tooltip';
 
 interface LessonWithMetadata extends Lesson {
   createdAt?: string;

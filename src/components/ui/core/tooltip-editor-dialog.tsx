@@ -8,25 +8,10 @@ import { Badge } from '@/src/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/src/components/ui/tabs';
 import { Alert, AlertDescription } from '@/src/components/ui/alert';
 import { X, Plus, Search, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
-import { TooltipData } from '@/src/store/slices/lessonSlice';
+import { TooltipData, TooltipFormData } from '@/src/types/tooltip';
 import { WordLookupService, WordLookupResult } from '@/src/services/wordLookupService';
+import { transformToFormData, cleanFormData, getEmptyFormData } from '@/src/utils/tooltipUtils';
 
-interface TooltipFormData {
-  word: string;
-  translation?: string;
-  pronunciation?: string;
-  partOfSpeech?: string;
-  wordType?: string;
-  definition?: string;
-  examples?: string[];
-  etymology?: string;
-  // Extended fields from Firebase
-  gender?: string;
-  declensionClass?: string;
-  conjugationClass?: string;
-  grammaticalInfo?: string;
-  principalParts?: string[];
-}
 
 interface SearchState {
   isSearching: boolean;
@@ -51,21 +36,9 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
   initialData = null,
   selectedText = '',
 }) => {
-  const [formData, setFormData] = useState<TooltipFormData>({
-    word: initialData?.word || selectedText,
-    translation: initialData?.translation || '',
-    pronunciation: initialData?.pronunciation || '',
-    partOfSpeech: initialData?.partOfSpeech || '',
-    wordType: initialData?.wordType || '',
-    definition: initialData?.definition || '',
-    examples: initialData?.examples || [],
-    etymology: initialData?.etymology || '',
-    gender: '',
-    declensionClass: '',
-    conjugationClass: '',
-    grammaticalInfo: '',
-    principalParts: [],
-  });
+  const [formData, setFormData] = useState<TooltipFormData>(
+    transformToFormData(initialData, selectedText)
+  );
 
   const [newExample, setNewExample] = useState('');
   const [searchState, setSearchState] = useState<SearchState>({
@@ -77,22 +50,7 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
 
   // Update form data when initialData changes
   useEffect(() => {
-    const newFormData = {
-      word: initialData?.word || selectedText,
-      translation: initialData?.translation || '',
-      pronunciation: initialData?.pronunciation || '',
-      partOfSpeech: initialData?.partOfSpeech || '',
-      wordType: initialData?.wordType || '',
-      definition: initialData?.definition || '',
-      examples: initialData?.examples || [],
-      etymology: initialData?.etymology || '',
-      gender: (initialData as TooltipData & { gender?: string })?.gender || '',
-      declensionClass: (initialData as TooltipData & { declensionClass?: string })?.declensionClass || '',
-      conjugationClass: (initialData as TooltipData & { conjugationClass?: string })?.conjugationClass || '',
-      grammaticalInfo: (initialData as TooltipData & { grammaticalInfo?: string })?.grammaticalInfo || '',
-      principalParts: (initialData as TooltipData & { principalParts?: string[] })?.principalParts || [],
-    };
-    setFormData(newFormData);
+    setFormData(transformToFormData(initialData, selectedText));
 
     // Reset search state when dialog opens
     setSearchState({
@@ -178,80 +136,13 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
   };
 
   const handleSave = () => {
-    // Filter out empty fields
-    const cleanedData: Partial<TooltipFormData> = {};
-    Object.entries(formData).forEach(([key, value]) => {
-      if (value && (typeof value === 'string' ? value.trim() : true)) {
-        if (key === 'examples' && Array.isArray(value)) {
-          const filteredExamples = value.filter(ex => ex.trim());
-          if (filteredExamples.length > 0) {
-            cleanedData.examples = filteredExamples;
-          }
-        } else if (key === 'principalParts' && Array.isArray(value)) {
-          const filteredParts = value.filter(part => part.trim());
-          if (filteredParts.length > 0) {
-            cleanedData.principalParts = filteredParts;
-          }
-        } else if (typeof value === 'string' && value.trim()) {
-          switch (key) {
-            case 'word':
-              cleanedData.word = value;
-              break;
-            case 'translation':
-              cleanedData.translation = value;
-              break;
-            case 'pronunciation':
-              cleanedData.pronunciation = value;
-              break;
-            case 'partOfSpeech':
-              cleanedData.partOfSpeech = value;
-              break;
-            case 'wordType':
-              cleanedData.wordType = value;
-              break;
-            case 'definition':
-              cleanedData.definition = value;
-              break;
-            case 'etymology':
-              cleanedData.etymology = value;
-              break;
-            case 'gender':
-              cleanedData.gender = value;
-              break;
-            case 'declensionClass':
-              cleanedData.declensionClass = value;
-              break;
-            case 'conjugationClass':
-              cleanedData.conjugationClass = value;
-              break;
-            case 'grammaticalInfo':
-              cleanedData.grammaticalInfo = value;
-              break;
-          }
-        }
-      }
-    });
-
+    const cleanedData = cleanFormData(formData);
     onSave(cleanedData as TooltipFormData);
     onClose();
   };
 
   const handleClose = () => {
-    setFormData({
-      word: '',
-      translation: '',
-      pronunciation: '',
-      partOfSpeech: '',
-      wordType: '',
-      definition: '',
-      examples: [],
-      etymology: '',
-      gender: '',
-      declensionClass: '',
-      conjugationClass: '',
-      grammaticalInfo: '',
-      principalParts: [],
-    });
+    setFormData(getEmptyFormData());
     setNewExample('');
     setSearchState({
       isSearching: false,

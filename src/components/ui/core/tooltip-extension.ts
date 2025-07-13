@@ -1,4 +1,5 @@
 import { Mark, mergeAttributes } from '@tiptap/core';
+import { generateTooltipId } from '@/src/utils/tooltipUtils';
 
 export interface TooltipOptions {
   HTMLAttributes: Record<string, unknown>;
@@ -93,7 +94,7 @@ export const Tooltip = Mark.create<TooltipOptions>({
   },
 
   renderHTML({ HTMLAttributes }) {
-    const tooltipId = HTMLAttributes.tooltipId || Math.random().toString(36).substr(2, 9);
+    const tooltipId = HTMLAttributes.tooltipId || generateTooltipId();
 
     return [
       'span',
@@ -112,13 +113,13 @@ export const Tooltip = Mark.create<TooltipOptions>({
       setTooltip:
         attributes =>
         ({ commands }) => {
-          const tooltipId = attributes.tooltipId || Math.random().toString(36).substr(2, 9);
+          const tooltipId = attributes.tooltipId || generateTooltipId(attributes.word);
           return commands.setMark(this.name, { ...attributes, tooltipId });
         },
       toggleTooltip:
         attributes =>
         ({ commands }) => {
-          const tooltipId = attributes.tooltipId || Math.random().toString(36).substr(2, 9);
+          const tooltipId = attributes.tooltipId || generateTooltipId(attributes.word);
           return commands.toggleMark(this.name, { ...attributes, tooltipId });
         },
       unsetTooltip:
