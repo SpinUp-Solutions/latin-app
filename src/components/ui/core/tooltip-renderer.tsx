@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { useSelector } from 'react-redux';
 import { TooltipContent } from './tooltip-content';
 import { TooltipData, MousePosition } from '@/src/types/tooltip';
@@ -16,25 +16,45 @@ interface ActiveTooltip {
 }
 
 interface TooltipOverlayProps {
-  mousePosition: MousePosition;
+  elementPosition: MousePosition;
   data: Omit<TooltipData, 'id'>;
 }
 
-const TooltipOverlay: React.FC<TooltipOverlayProps> = ({ mousePosition, data }) => {
+const TooltipOverlay: React.FC<TooltipOverlayProps> = ({ elementPosition, data }) => {
   const tooltipRef = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState({ x: mousePosition.x, y: mousePosition.y });
+  const [tooltipHeight, setTooltipHeight] = useState(180); // Start with estimated height
   const [isBelow, setIsBelow] = useState(false);
 
-  useEffect(() => {
-    if (tooltipRef.current) {
-      const tooltipRect = tooltipRef.current.getBoundingClientRect();
-      const tooltipHeight = tooltipRect.height;
+  // Calculate position whenever elementPosition or tooltipHeight changes
+  const position = useMemo(() => {
+    const calculatedPosition = calculateTooltipPosition(elementPosition, tooltipHeight);
+    setIsBelow(calculatedPosition.isBelow);
+    return calculatedPosition;
+  }, [elementPosition, tooltipHeight]);
 
-      const calculatedPosition = calculateTooltipPosition(mousePosition, tooltipHeight);
-      setPosition(calculatedPosition);
-      setIsBelow(calculatedPosition.isBelow);
-    }
-  }, [mousePosition, data]);
+  useEffect(() => {
+    if (!tooltipRef.current) return;
+
+    const updateHeight = () => {
+      if (tooltipRef.current) {
+        const rect = tooltipRef.current.getBoundingClientRect();
+        if (rect.height > 0 && rect.height !== tooltipHeight) {
+          setTooltipHeight(rect.height);
+        }
+      }
+    };
+
+    // Set up ResizeObserver to track height changes
+    const resizeObserver = new ResizeObserver(updateHeight);
+    resizeObserver.observe(tooltipRef.current);
+
+    // Initial height check
+    updateHeight();
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [tooltipHeight]);
 
   return (
     <div
@@ -43,7 +63,7 @@ const TooltipOverlay: React.FC<TooltipOverlayProps> = ({ mousePosition, data }) 
       style={{
         left: `${position.x}px`,
         top: `${position.y}px`,
-        transform: 'translateX(-50%)',
+        transform: isBelow ? 'translateX(-50%)' : 'translateX(-50%) translateY(-100%)',
       }}>
       <TooltipContent {...data} className="bg-white shadow-lg" />
 
@@ -59,7 +79,7 @@ const TooltipOverlay: React.FC<TooltipOverlayProps> = ({ mousePosition, data }) 
 export const TooltipRenderer: React.FC<TooltipRendererProps> = ({ content, className }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeTooltip, setActiveTooltip] = useState<ActiveTooltip | null>(null);
-  const [fixedMousePos, setFixedMousePos] = useState<MousePosition>({ x: 0, y: 0 });
+  const [fixedElementPos, setFixedElementPos] = useState<MousePosition>({ x: 0, y: 0 });
   const hideTimeoutRef = useRef<NodeJS.Timeout>();
   const tooltips = useSelector((state: RootState) => state.lesson.tooltips);
 
@@ -85,8 +105,12 @@ export const TooltipRenderer: React.FC<TooltipRendererProps> = ({ content, class
         return;
       }
 
-      const mousePos = { x: event.clientX, y: event.clientY };
-      setFixedMousePos(mousePos);
+      const elementRect = tooltipElement.getBoundingClientRect();
+      const elementPos = {
+        x: elementRect.left + elementRect.width / 2,
+        y: elementRect.top,
+      };
+      setFixedElementPos(elementPos);
 
       const tooltipData = tooltips[tooltipId];
       if (!tooltipData) return;
@@ -134,7 +158,7 @@ export const TooltipRenderer: React.FC<TooltipRendererProps> = ({ content, class
     <>
       <div ref={containerRef} className={className} dangerouslySetInnerHTML={{ __html: content }} />
 
-      {activeTooltip && <TooltipOverlay mousePosition={fixedMousePos} data={activeTooltip.data} />}
+      {activeTooltip && <TooltipOverlay elementPosition={fixedElementPos} data={activeTooltip.data} />}
     </>
   );
 };

@@ -186,14 +186,20 @@ export const mergeTooltipData = (
 };
 
 export const calculateTooltipPosition = (
-  mousePosition: MousePosition,
+  elementPosition: MousePosition,
   tooltipHeight: number,
   tooltipWidth = 288,
-  offset = 18,
+  offset = 12,
   margin = 16
 ): TooltipPosition => {
-  let x = mousePosition.x;
-  let y = mousePosition.y - tooltipHeight - offset;
+  let x = elementPosition.x;
+
+  // Use a minimum height if tooltip height is 0 or very small
+  const effectiveHeight = tooltipHeight > 50 ? tooltipHeight : 180;
+
+  // Position the tooltip so its bottom edge is `offset` pixels above the word
+  // This keeps consistent spacing regardless of tooltip height
+  let y = elementPosition.y - offset;
   let isBelow = false;
 
   // Horizontal boundary checks
@@ -204,8 +210,10 @@ export const calculateTooltipPosition = (
     x = tooltipWidth / 2 + margin;
   }
 
-  if (y < margin) {
-    y = mousePosition.y + offset + 10;
+  // Check if there's enough space above for the entire tooltip
+  if (y - effectiveHeight < margin) {
+    // Not enough space above, show below instead
+    y = elementPosition.y + offset + 10;
     isBelow = true;
   }
 
