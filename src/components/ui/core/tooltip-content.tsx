@@ -11,7 +11,7 @@ interface TooltipContentProps extends Omit<TooltipData, 'id'> {
   onMoreDetails?: () => void;
 }
 
-export const TooltipContent: React.FC<TooltipContentProps> = React.memo(({
+const TooltipContentComponent: React.FC<TooltipContentProps> = ({
   word,
   translation,
   pronunciation,
@@ -95,7 +95,9 @@ export const TooltipContent: React.FC<TooltipContentProps> = React.memo(({
 
         {principalParts.length > 0 && (
           <div>
-            <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">Principal Parts</h4>
+            <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
+              Principal Parts
+            </h4>
             <p className="text-xs font-mono">{principalParts.join(', ')}</p>
           </div>
         )}
@@ -131,6 +133,10 @@ export const TooltipContent: React.FC<TooltipContentProps> = React.memo(({
       </CardContent>
     </Card>
   );
-});
+};
+
+TooltipContentComponent.displayName = 'TooltipContent';
+
+export const TooltipContent = React.memo(TooltipContentComponent);
 
 export default TooltipContent;

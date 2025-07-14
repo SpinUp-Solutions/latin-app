@@ -5,7 +5,6 @@ import { TooltipData, MousePosition } from '@/src/types/tooltip';
 import { calculateTooltipPosition } from '@/src/utils/tooltipUtils';
 import { RootState } from '@/src/store';
 
-
 interface TooltipRendererProps {
   content: string;
   className?: string;

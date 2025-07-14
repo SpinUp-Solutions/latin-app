@@ -2,8 +2,7 @@ import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { Lesson, IntroductionPage, ExercisePage } from '@/src/types/lesson';
 import { RenderableContentItem } from '@/src/types/page';
 import { lessonService } from '@/src/services/lessonService';
-
-export { TooltipData } from '@/src/types/tooltip';
+import { TooltipData } from '@/src/types/tooltip';
 
 interface LessonWithMetadata extends Lesson {
   createdAt?: string;

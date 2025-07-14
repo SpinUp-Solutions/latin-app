@@ -1,5 +1,6 @@
 import { Mark, mergeAttributes } from '@tiptap/core';
 import { generateTooltipId } from '@/src/utils/tooltipUtils';
+import { TooltipMarkAttrs } from '@/src/types/tooltip';
 
 export interface TooltipOptions {
   HTMLAttributes: Record<string, unknown>;
@@ -11,31 +12,11 @@ declare module '@tiptap/core' {
       /**
        * Set a tooltip
        */
-      setTooltip: (attributes: {
-        tooltipId?: string;
-        word: string;
-        translation?: string;
-        pronunciation?: string;
-        partOfSpeech?: string;
-        wordType?: string;
-        definition?: string;
-        examples?: string[];
-        etymology?: string;
-      }) => ReturnType;
+      setTooltip: (attributes: Partial<TooltipMarkAttrs>) => ReturnType;
       /**
        * Toggle a tooltip
        */
-      toggleTooltip: (attributes: {
-        tooltipId?: string;
-        word: string;
-        translation?: string;
-        pronunciation?: string;
-        partOfSpeech?: string;
-        wordType?: string;
-        definition?: string;
-        examples?: string[];
-        etymology?: string;
-      }) => ReturnType;
+      toggleTooltip: (attributes: Partial<TooltipMarkAttrs>) => ReturnType;
       /**
        * Unset a tooltip
        */
@@ -82,6 +63,21 @@ export const Tooltip = Mark.create<TooltipOptions>({
       etymology: {
         default: null,
       },
+      gender: {
+        default: null,
+      },
+      declensionClass: {
+        default: null,
+      },
+      conjugationClass: {
+        default: null,
+      },
+      grammaticalInfo: {
+        default: null,
+      },
+      principalParts: {
+        default: null,
+      },
     };
   },
 
@@ -111,13 +107,13 @@ export const Tooltip = Mark.create<TooltipOptions>({
   addCommands() {
     return {
       setTooltip:
-        attributes =>
+        (attributes: Partial<TooltipMarkAttrs>) =>
         ({ commands }) => {
           const tooltipId = attributes.tooltipId || generateTooltipId(attributes.word);
           return commands.setMark(this.name, { ...attributes, tooltipId });
         },
       toggleTooltip:
-        attributes =>
+        (attributes: Partial<TooltipMarkAttrs>) =>
         ({ commands }) => {
           const tooltipId = attributes.tooltipId || generateTooltipId(attributes.word);
           return commands.toggleMark(this.name, { ...attributes, tooltipId });

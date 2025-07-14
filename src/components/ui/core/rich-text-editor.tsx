@@ -5,7 +5,8 @@ import StarterKit from '@tiptap/starter-kit';
 import { Bold, Italic, Strikethrough, Heading1, Heading2, Heading3, List, MessageSquare } from 'lucide-react';
 import { Tooltip } from './tooltip-extension';
 import { TooltipEditorDialog } from './tooltip-editor-dialog';
-import { addTooltip, removeTooltip, TooltipData } from '@/src/store/slices/lessonSlice';
+import { addTooltip, removeTooltip } from '@/src/store/slices/lessonSlice';
+import { TooltipData } from '@/src/types/tooltip';
 import { findTooltipMark, generateTooltipId } from '@/src/utils/tooltipUtils';
 import { RootState } from '@/src/store';
 
@@ -54,7 +55,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ content, onChange, clas
 
     const tooltipMark = findTooltipMark(editor, from, to);
 
-    if (tooltipMark) {
+    if (tooltipMark && tooltipMark.attrs) {
       // Get existing tooltip data
       const tooltipId = tooltipMark.attrs.tooltipId;
       const existingData = tooltips[tooltipId];

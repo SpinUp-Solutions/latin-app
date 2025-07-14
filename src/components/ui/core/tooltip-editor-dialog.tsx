@@ -12,7 +12,6 @@ import { TooltipData, TooltipFormData } from '@/src/types/tooltip';
 import { WordLookupService, WordLookupResult } from '@/src/services/wordLookupService';
 import { transformToFormData, cleanFormData, getEmptyFormData } from '@/src/utils/tooltipUtils';
 
-
 interface SearchState {
   isSearching: boolean;
   searchResult: WordLookupResult | null;
@@ -36,9 +35,7 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
   initialData = null,
   selectedText = '',
 }) => {
-  const [formData, setFormData] = useState<TooltipFormData>(
-    transformToFormData(initialData, selectedText)
-  );
+  const [formData, setFormData] = useState<TooltipFormData>(transformToFormData(initialData, selectedText));
 
   const [newExample, setNewExample] = useState('');
   const [searchState, setSearchState] = useState<SearchState>({
@@ -137,7 +134,23 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
 
   const handleSave = () => {
     const cleanedData = cleanFormData(formData);
-    onSave(cleanedData as TooltipFormData);
+    // Ensure required fields are present
+    const completeData: TooltipFormData = {
+      word: cleanedData.word || formData.word,
+      translation: cleanedData.translation,
+      pronunciation: cleanedData.pronunciation,
+      partOfSpeech: cleanedData.partOfSpeech,
+      wordType: cleanedData.wordType,
+      definition: cleanedData.definition,
+      examples: cleanedData.examples,
+      etymology: cleanedData.etymology,
+      gender: cleanedData.gender,
+      declensionClass: cleanedData.declensionClass,
+      conjugationClass: cleanedData.conjugationClass,
+      grammaticalInfo: cleanedData.grammaticalInfo,
+      principalParts: cleanedData.principalParts,
+    };
+    onSave(completeData);
     onClose();
   };
 
@@ -217,17 +230,16 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
             )}
           </div>
 
-          <Tabs 
-            value={activeTab} 
-            onValueChange={(tab) => {
+          <Tabs
+            value={activeTab}
+            onValueChange={tab => {
               setActiveTab(tab);
               // Auto-set part of speech based on active tab
               if (tab === 'noun' || tab === 'verb' || tab === 'adjective') {
                 handleInputChange('partOfSpeech', tab);
               }
-            }} 
-            className="w-full"
-          >
+            }}
+            className="w-full">
             <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="basic">Basic Info</TabsTrigger>
               <TabsTrigger value="noun">
