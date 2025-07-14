@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const lessonsSnapshot = await adminDb.collection('lessons').orderBy('createdAt', 'desc').get();
+    const lessonsSnapshot = await adminDb.collection('lessons').orderBy('updatedAt', 'desc').get();
     const lessons = lessonsSnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),

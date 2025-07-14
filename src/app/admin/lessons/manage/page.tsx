@@ -33,8 +33,8 @@ export default function ManageLessonsPage() {
     router.push('/admin/lessons/create');
   };
 
-  const handleContinueDraft = () => {
-    router.push('/admin/lessons/create');
+  const handleContinueDraft = (lessonId: string) => {
+    router.push(`/admin/lessons/create?continue=true&lessonId=${lessonId}`);
   };
 
   if (authLoading || !user) {

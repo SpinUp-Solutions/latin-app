@@ -7,12 +7,12 @@ import { BookOpen, Edit, Trash2, Calendar, Eye, FileText, Clock } from 'lucide-r
 import { Lesson } from '@/src/types/lesson';
 import { toast } from 'sonner';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
-import { loadLessons, deleteLesson, clearDraft, loadDraft } from '@/src/store/slices/lessonSlice';
+import { loadLessons, deleteLesson, clearDraft, loadDrafts } from '@/src/store/slices/lessonSlice';
 import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
 
 interface LessonManagerProps {
   onEditLesson: (lesson: Lesson) => void;
-  onContinueDraft: () => void;
+  onContinueDraft: (lessonId: string) => void;
 }
 
 interface LessonWithMetadata extends Lesson {
@@ -26,7 +26,7 @@ interface LessonWithMetadata extends Lesson {
 
 export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onContinueDraft }) => {
   const dispatch = useAppDispatch();
-  const { lessons, loading, error, draft } = useAppSelector(state => state.lesson);
+  const { lessons, loading, error, drafts } = useAppSelector(state => state.lesson);
   const [selectedLesson, setSelectedLesson] = useState<LessonWithMetadata | null>(null);
   const [dialogState, setDialogState] = useState<{
     isOpen: boolean;
@@ -37,7 +37,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
 
   useEffect(() => {
     dispatch(loadLessons());
-    dispatch(loadDraft());
+    dispatch(loadDrafts());
   }, [dispatch]);
 
   useEffect(() => {
@@ -62,14 +62,13 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
     });
   };
 
-  const handleDeleteDraft = () => {
-    if (!draft) return;
+  const handleDeleteDraft = (lessonId: string, lessonTitle: string) => {
     setDialogState({
       isOpen: true,
-      title: `Delete Draft: "${draft.lesson.title}"?`,
+      title: `Delete Draft: "${lessonTitle}"?`,
       description: 'This will permanently discard your unsaved draft. This action cannot be undone.',
       onConfirm: () => {
-        dispatch(clearDraft());
+        dispatch(clearDraft(lessonId));
         toast.success('Draft deleted successfully');
       },
     });
@@ -178,58 +177,67 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
   return (
     <div className="space-y-8">
       {/* Drafts Section */}
-      {draft && (
+      {Object.keys(drafts).length > 0 && (
         <section>
           <h2 className="text-xl font-serif text-gray-800 border-b pb-2 mb-4 flex items-center gap-2">
             <FileText className="h-5 w-5 text-amber-600" />
-            <span>Draft</span>
+            <span>Drafts ({Object.keys(drafts).length})</span>
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <Card className="hover:shadow-lg transition-shadow border-amber-300 bg-amber-50/50">
-              <CardHeader>
-                <CardTitle className="flex items-start justify-between">
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-5 w-5 text-amber-600" />
-                    <span className="truncate">{draft.lesson.title}</span>
-                  </div>
-                  <span className="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded-full">Draft</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p
-                  className="text-sm text-gray-600 overflow-hidden text-ellipsis"
-                  style={{
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical' as const,
-                  }}>
-                  {draft.lesson.description || 'No description provided'}
-                </p>
+            {Object.entries(drafts)
+              .sort(([, a], [, b]) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime())
+              .map(([lessonId, draft]) => (
+                <Card key={lessonId} className="hover:shadow-lg transition-shadow border-amber-300 bg-amber-50/50">
+                  <CardHeader>
+                    <CardTitle className="flex items-start justify-between">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-5 w-5 text-amber-600" />
+                        <span className="truncate">{draft.lesson.title}</span>
+                      </div>
+                      <span className="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded-full">Draft</span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <p
+                      className="text-sm text-gray-600 overflow-hidden text-ellipsis"
+                      style={{
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical' as const,
+                      }}>
+                      {draft.lesson.description || 'No description provided'}
+                    </p>
 
-                <div className="text-xs text-gray-500 space-y-1">
-                  <div className="flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    Last saved: {formatDate(draft.lastModified)}
-                  </div>
-                </div>
+                    <div className="text-xs text-gray-500 space-y-1">
+                      <div className="flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        Last saved: {formatDate(draft.lastModified)}
+                      </div>
+                    </div>
 
-                <div className="flex justify-between text-xs text-gray-600">
-                  <span>{draft.lesson.introduction.length} intro pages</span>
-                  <span>{draft.lesson.exercises.length} exercise pages</span>
-                  <span>{getContentCount(draft.lesson).total} items</span>
-                </div>
+                    <div className="flex justify-between text-xs text-gray-600">
+                      <span>{draft.lesson.introduction.length} intro pages</span>
+                      <span>{draft.lesson.exercises.length} exercise pages</span>
+                      <span>{getContentCount(draft.lesson).total} items</span>
+                    </div>
 
-                <div className="flex gap-2 pt-2">
-                  <Button onClick={onContinueDraft} className="flex-1 bg-amber-600 hover:bg-amber-700 text-white">
-                    <Edit className="h-4 w-4 mr-1" />
-                    Continue
-                  </Button>
-                  <Button size="sm" variant="destructive" onClick={handleDeleteDraft}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+                    <div className="flex gap-2 pt-2">
+                      <Button
+                        onClick={() => onContinueDraft(lessonId)}
+                        className="flex-1 bg-amber-600 hover:bg-amber-700 text-white">
+                        <Edit className="h-4 w-4 mr-1" />
+                        Continue
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => handleDeleteDraft(lessonId, draft.lesson.title)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
           </div>
         </section>
       )}
@@ -237,7 +245,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
       {/* Saved Lessons Section */}
       <section>
         <h2 className="text-xl font-serif text-gray-800 border-b pb-2 mb-4">Saved Lessons ({lessons.length})</h2>
-        {lessons.length === 0 && !draft ? (
+        {lessons.length === 0 && Object.keys(drafts).length === 0 ? (
           <Card>
             <CardContent className="p-12 text-center">
               <BookOpen className="h-16 w-16 text-gray-300 mx-auto mb-4" />
@@ -245,9 +253,9 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
               <p className="text-gray-600 mb-4">Create your first lesson to get started.</p>
             </CardContent>
           </Card>
-        ) : lessons.length === 0 && draft ? (
+        ) : lessons.length === 0 && Object.keys(drafts).length > 0 ? (
           <div className="text-center text-gray-500 py-8">
-            No saved lessons yet. Continue with your draft or create a new lesson.
+            No saved lessons yet. Continue with your drafts or create a new lesson.
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
