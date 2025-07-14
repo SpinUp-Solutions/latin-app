@@ -71,44 +71,50 @@ export const TooltipRenderer: React.FC<TooltipRendererProps> = ({ content, class
   const hideTimeoutRef = useRef<NodeJS.Timeout>();
   const tooltips = useSelector((state: RootState) => state.lesson.tooltips);
 
-  const handleMouseEnter = useCallback((event: MouseEvent) => {
-    const tooltipElement = (event.target as HTMLElement).closest('[data-tooltip="true"]') as HTMLElement;
-    if (!tooltipElement) return;
+  const handleMouseEnter = useCallback(
+    (event: MouseEvent) => {
+      const tooltipElement = (event.target as HTMLElement).closest('[data-tooltip="true"]') as HTMLElement;
+      if (!tooltipElement) return;
 
-    const tooltipId = tooltipElement.getAttribute('data-tooltip-id');
-    if (!tooltipId || (activeTooltip?.id === tooltipId)) return;
+      const tooltipId = tooltipElement.getAttribute('data-tooltip-id');
+      if (!tooltipId || activeTooltip?.id === tooltipId) return;
 
-    if (hideTimeoutRef.current) {
-      clearTimeout(hideTimeoutRef.current);
-      hideTimeoutRef.current = undefined;
-    }
-
-    const tooltipData = tooltips[tooltipId];
-    if (!tooltipData) return;
-
-    const rect = tooltipElement.getBoundingClientRect();
-    setFixedElementPos({
-      x: rect.left + rect.width / 2,
-      y: rect.top
-    });
-    setActiveTooltip({ id: tooltipId, data: tooltipData });
-  }, [activeTooltip?.id, tooltips]);
-
-  const handleMouseMove = useCallback((event: MouseEvent) => {
-    if (!activeTooltip) return;
-
-    const target = event.target as HTMLElement;
-    const isOverTooltip = target.closest('[data-tooltip="true"], .tooltip-overlay');
-
-    if (isOverTooltip) {
       if (hideTimeoutRef.current) {
         clearTimeout(hideTimeoutRef.current);
         hideTimeoutRef.current = undefined;
       }
-    } else if (!hideTimeoutRef.current) {
-      hideTimeoutRef.current = setTimeout(() => setActiveTooltip(null), 400);
-    }
-  }, [activeTooltip]);
+
+      const tooltipData = tooltips[tooltipId];
+      if (!tooltipData) return;
+
+      const rect = tooltipElement.getBoundingClientRect();
+      setFixedElementPos({
+        x: rect.left + rect.width / 2,
+        y: rect.top,
+      });
+      setActiveTooltip({ id: tooltipId, data: tooltipData });
+    },
+    [activeTooltip?.id, tooltips]
+  );
+
+  const handleMouseMove = useCallback(
+    (event: MouseEvent) => {
+      if (!activeTooltip) return;
+
+      const target = event.target as HTMLElement;
+      const isOverTooltip = target.closest('[data-tooltip="true"], .tooltip-overlay');
+
+      if (isOverTooltip) {
+        if (hideTimeoutRef.current) {
+          clearTimeout(hideTimeoutRef.current);
+          hideTimeoutRef.current = undefined;
+        }
+      } else if (!hideTimeoutRef.current) {
+        hideTimeoutRef.current = setTimeout(() => setActiveTooltip(null), 400);
+      }
+    },
+    [activeTooltip]
+  );
 
   useEffect(() => {
     const container = containerRef.current;
