@@ -180,7 +180,7 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
         <div className="space-y-4 py-4">
           {/* Search Section */}
           <div className="space-y-3">
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-end">
               <div className="flex-1">
                 <Label htmlFor="word">Word *</Label>
                 <Input
@@ -191,13 +191,13 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
                   className="mt-1"
                 />
               </div>
-              <div className="pt-6">
+              <div>
                 <Button
                   type="button"
                   onClick={handleWordSearch}
                   disabled={!formData.word.trim() || searchState.isSearching}
                   variant="outline"
-                  size="sm">
+                  className="h-10">
                   {searchState.isSearching ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (

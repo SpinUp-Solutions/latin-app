@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useMemo } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useSelector } from 'react-redux';
 import { TooltipContent } from './tooltip-content';
 import { TooltipData, MousePosition } from '@/src/types/tooltip';
@@ -22,39 +22,27 @@ interface TooltipOverlayProps {
 
 const TooltipOverlay: React.FC<TooltipOverlayProps> = ({ elementPosition, data }) => {
   const tooltipRef = useRef<HTMLDivElement>(null);
-  const [tooltipHeight, setTooltipHeight] = useState(180); // Start with estimated height
+  const [position, setPosition] = useState(() => calculateTooltipPosition(elementPosition, 180));
   const [isBelow, setIsBelow] = useState(false);
-
-  // Calculate position whenever elementPosition or tooltipHeight changes
-  const position = useMemo(() => {
-    const calculatedPosition = calculateTooltipPosition(elementPosition, tooltipHeight);
-    setIsBelow(calculatedPosition.isBelow);
-    return calculatedPosition;
-  }, [elementPosition, tooltipHeight]);
 
   useEffect(() => {
     if (!tooltipRef.current) return;
 
-    const updateHeight = () => {
-      if (tooltipRef.current) {
-        const rect = tooltipRef.current.getBoundingClientRect();
-        if (rect.height > 0 && rect.height !== tooltipHeight) {
-          setTooltipHeight(rect.height);
-        }
+    const updatePosition = () => {
+      const rect = tooltipRef.current?.getBoundingClientRect();
+      if (rect?.height) {
+        const newPosition = calculateTooltipPosition(elementPosition, rect.height);
+        setPosition(newPosition);
+        setIsBelow(newPosition.isBelow);
       }
     };
 
-    // Set up ResizeObserver to track height changes
-    const resizeObserver = new ResizeObserver(updateHeight);
+    const resizeObserver = new ResizeObserver(updatePosition);
     resizeObserver.observe(tooltipRef.current);
+    updatePosition();
 
-    // Initial height check
-    updateHeight();
-
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, [tooltipHeight]);
+    return () => resizeObserver.disconnect();
+  }, [elementPosition]);
 
   return (
     <div
@@ -83,76 +71,58 @@ export const TooltipRenderer: React.FC<TooltipRendererProps> = ({ content, class
   const hideTimeoutRef = useRef<NodeJS.Timeout>();
   const tooltips = useSelector((state: RootState) => state.lesson.tooltips);
 
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
+  const handleMouseEnter = useCallback((event: MouseEvent) => {
+    const tooltipElement = (event.target as HTMLElement).closest('[data-tooltip="true"]') as HTMLElement;
+    if (!tooltipElement) return;
 
-    const handleMouseEnter = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
+    const tooltipId = tooltipElement.getAttribute('data-tooltip-id');
+    if (!tooltipId || (activeTooltip?.id === tooltipId)) return;
 
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = undefined;
+    }
+
+    const tooltipData = tooltips[tooltipId];
+    if (!tooltipData) return;
+
+    const rect = tooltipElement.getBoundingClientRect();
+    setFixedElementPos({
+      x: rect.left + rect.width / 2,
+      y: rect.top
+    });
+    setActiveTooltip({ id: tooltipId, data: tooltipData });
+  }, [activeTooltip?.id, tooltips]);
+
+  const handleMouseMove = useCallback((event: MouseEvent) => {
+    if (!activeTooltip) return;
+
+    const target = event.target as HTMLElement;
+    const isOverTooltip = target.closest('[data-tooltip="true"], .tooltip-overlay');
+
+    if (isOverTooltip) {
       if (hideTimeoutRef.current) {
         clearTimeout(hideTimeoutRef.current);
         hideTimeoutRef.current = undefined;
       }
+    } else if (!hideTimeoutRef.current) {
+      hideTimeoutRef.current = setTimeout(() => setActiveTooltip(null), 400);
+    }
+  }, [activeTooltip]);
 
-      const tooltipElement = target.closest('[data-tooltip="true"]') as HTMLElement;
-      if (!tooltipElement) return;
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
 
-      const tooltipId = tooltipElement.getAttribute('data-tooltip-id');
-      if (!tooltipId) return;
-
-      if (activeTooltip && activeTooltip.id === tooltipId) {
-        return;
-      }
-
-      const elementRect = tooltipElement.getBoundingClientRect();
-      const elementPos = {
-        x: elementRect.left + elementRect.width / 2,
-        y: elementRect.top,
-      };
-      setFixedElementPos(elementPos);
-
-      const tooltipData = tooltips[tooltipId];
-      if (!tooltipData) return;
-
-      setActiveTooltip({ id: tooltipId, data: tooltipData });
-    };
-
-    const handleMouseMove = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      const tooltipElement = target.closest('[data-tooltip="true"]') as HTMLElement;
-      const tooltipOverlay = target.closest('.tooltip-overlay') as HTMLElement;
-
-      if ((tooltipElement || tooltipOverlay) && activeTooltip) {
-        // Clear any pending hide timeout since we're still over a tooltip element or overlay
-        if (hideTimeoutRef.current) {
-          clearTimeout(hideTimeoutRef.current);
-          hideTimeoutRef.current = undefined;
-        }
-      } else if (activeTooltip && !tooltipElement && !tooltipOverlay) {
-        // We're no longer over a tooltip element or overlay, start hide timer
-        if (!hideTimeoutRef.current) {
-          hideTimeoutRef.current = setTimeout(() => {
-            setActiveTooltip(null);
-          }, 400);
-        }
-      }
-    };
-
-    // Use event delegation on container for mouseenter
     container.addEventListener('mouseenter', handleMouseEnter, true);
-
-    // Use global mousemove to detect when we leave tooltip areas
     document.addEventListener('mousemove', handleMouseMove);
 
     return () => {
-      if (hideTimeoutRef.current) {
-        clearTimeout(hideTimeoutRef.current);
-      }
+      if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
       container.removeEventListener('mouseenter', handleMouseEnter, true);
       document.removeEventListener('mousemove', handleMouseMove);
     };
-  }, [activeTooltip, tooltips]);
+  }, [handleMouseEnter, handleMouseMove]);
 
   return (
     <>
