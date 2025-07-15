@@ -8,7 +8,7 @@ interface UseAudioReturn {
   togglePlay: () => void;
   play: () => void;
   pause: () => void;
-  onEnded: () => void;
+  onEnded: () => void; // might be useful later ()
   setAudioSource: (src: string | null | undefined) => void;
 }
 
