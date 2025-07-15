@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { Lesson, IntroductionPage, ExercisePage } from '@/src/types/lesson';
 import { BookOpen, Check } from 'lucide-react';
@@ -53,13 +53,6 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
   }, [handleNext]);
 
   const { audioRef, isPlaying, togglePlay } = useAudio(currentContentForAudio?.audioPath, handleAudioEnded);
-
-  useEffect(() => {
-    if (audioRef.current && currentContentForAudio?.audioPath) {
-      console.log(`Updating audio source directly: ${currentContentForAudio.audioPath}`);
-      audioRef.current.src = currentContentForAudio.audioPath;
-    }
-  }, [currentContentForAudio, audioRef]);
 
   function handlePrevious() {
     if (mode === 'introduction') {
