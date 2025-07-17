@@ -7,6 +7,7 @@ import FillExercise from '../exercises/fill-exercise';
 import TextSelectionExercise from '../exercises/text-selection-exercise';
 import VerbAnalysisExercise from '../exercises/verb-analysis-exercise';
 import VerbConjugationExercise from '../exercises/verb-conjugation-exercise';
+import { SentenceDiagrammingExercise } from '../exercises/sentence-diagramming-exercise';
 import { ContentItem, TextContent, TableContent, VocabularyContent } from '@/src/types/lesson';
 import {
   MatchingExercise,
@@ -14,6 +15,7 @@ import {
   TextSelectionExercise as TextSelectionExerciseType,
   VerbAnalysisExercise as VerbAnalysisExerciseType,
   VerbConjugationExercise as VerbConjugationExerciseType,
+  SentenceDiagrammingExercise as SentenceDiagrammingExerciseType,
 } from '@/src/types/exercise';
 import { VocabularyViewer } from './VocabularyViewer';
 import TextComponent from './text-component';
@@ -69,6 +71,9 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onCom
 
     case 'verb-conjugation':
       return <VerbConjugationExercise exercise={content as VerbConjugationExerciseType} onComplete={onComplete} />;
+
+    case 'sentence-diagramming':
+      return <SentenceDiagrammingExercise exercise={content as SentenceDiagrammingExerciseType} onComplete={onComplete} />;
 
     default:
       return (

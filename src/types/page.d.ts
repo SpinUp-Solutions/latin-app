@@ -6,6 +6,7 @@ import {
   TextSelectionExercise,
   VerbAnalysisExercise,
   VerbConjugationExercise,
+  SentenceDiagrammingExercise,
 } from './exercises';
 
 export type RenderableContentItem =
@@ -17,7 +18,8 @@ export type RenderableContentItem =
   | FillExercise
   | TextSelectionExercise
   | VerbAnalysisExercise
-  | VerbConjugationExercise;
+  | VerbConjugationExercise
+  | SentenceDiagrammingExercise;
 
 export interface BasePage {
   id: string;

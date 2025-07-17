@@ -1,4 +1,4 @@
-import { Type, Lightbulb, Table, Book, Target, Search, Zap, Users, FileText } from 'lucide-react';
+import { Type, Lightbulb, Table, Book, Target, Search, Zap, Users, FileText, Pencil } from 'lucide-react';
 
 export const CONTENT_TYPES = [
   { type: 'text', icon: Type, label: 'Text Block' },
@@ -14,6 +14,7 @@ export const EXERCISE_TYPES = [
   { type: 'text-selection', icon: Search, label: 'Text Selection' },
   { type: 'verb-analysis', icon: Zap, label: 'Verb Analysis' },
   { type: 'verb-conjugation', icon: Users, label: 'Verb Conjugation' },
+  { type: 'sentence-diagramming', icon: Pencil, label: 'Sentence Diagramming' },
   // Content types also available in exercises
   { type: 'text', icon: FileText, label: 'Text Block' },
   { type: 'emphasis', icon: Lightbulb, label: 'Emphasis' },
