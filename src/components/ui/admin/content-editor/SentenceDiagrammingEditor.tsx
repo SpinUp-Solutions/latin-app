@@ -28,20 +28,12 @@ export const SentenceDiagrammingEditor: React.FC = () => {
     return <div>No content selected for editing</div>;
   }
 
-  const handleChange = (updates: Partial<SentenceDiagrammingExercise>) => {
-    console.log('=== HANDLE CHANGE (DISPATCH) ===');
-    console.log('Updates:', updates);
-    const updatedContent = { ...editingContent, ...updates };
-    console.log('Final content being dispatched:', updatedContent);
-    console.log('Solution annotations in dispatched content:', updatedContent.data?.solution?.annotations);
-    dispatch(updateEditingContent(updatedContent));
+  const updateContent = (updates: Partial<SentenceDiagrammingExercise>) => {
+    dispatch(updateEditingContent({ ...editingContent, ...updates }));
   };
 
-  const handleDataChange = (dataUpdates: Partial<SentenceDiagrammingExercise['data']>) => {
-    console.log('=== HANDLE DATA CHANGE ===');
-    console.log('Data updates:', dataUpdates);
-    
-    handleChange({
+  const updateData = (dataUpdates: Partial<SentenceDiagrammingExercise['data']>) => {
+    updateContent({
       data: {
         ...editingContent.data,
         ...dataUpdates,
@@ -50,15 +42,8 @@ export const SentenceDiagrammingEditor: React.FC = () => {
   };
 
   const handleSentenceChange = (sentenceUpdates: Partial<SentenceDiagrammingExercise['data']['sentence']>) => {
-    console.log('=== HANDLE SENTENCE CHANGE ===');
-    console.log('Sentence updates:', sentenceUpdates);
-    
-    // Only update sentence data, preserve the existing solution and other data
-    handleChange({
-      data: {
-        ...editingContent.data,
-        sentence: { ...editingContent.data.sentence, ...sentenceUpdates },
-      },
+    updateData({
+      sentence: { ...editingContent.data.sentence, ...sentenceUpdates },
     });
   };
 
@@ -67,19 +52,16 @@ export const SentenceDiagrammingEditor: React.FC = () => {
     handleSentenceChange({ latin, words });
   };
 
-  const handleAnnotationsChange = (annotations: Record<string, AnnotationType>) => {
-    console.log('=== HANDLE ANNOTATIONS CHANGE ===');
-    console.log('New annotations:', annotations);
-    
-    const updatedSolution = {
-      ...editingContent.data.solution,
-      annotations: annotations,
-    };
-
-    console.log('Updated solution:', updatedSolution);
-
-    handleDataChange({
-      solution: updatedSolution,
+  const handleAnnotationsAndContentChange = (annotations: Record<string, AnnotationType>, htmlContent: string) => {
+    updateData({
+      solution: {
+        ...editingContent.data.solution,
+        annotations: annotations,
+      },
+      sentence: {
+        ...editingContent.data.sentence,
+        content: htmlContent,
+      },
     });
   };
 
@@ -117,7 +99,7 @@ export const SentenceDiagrammingEditor: React.FC = () => {
         <input
           type="text"
           value={editingContent.title || ''}
-          onChange={e => handleChange({ title: e.target.value })}
+          onChange={e => updateContent({ title: e.target.value })}
           className="w-full p-2 border rounded-md"
           placeholder="Enter exercise title..."
         />
@@ -127,7 +109,7 @@ export const SentenceDiagrammingEditor: React.FC = () => {
         <label className="block text-sm font-medium mb-1">Instructions</label>
         <textarea
           value={editingContent.instructions || ''}
-          onChange={e => handleChange({ instructions: e.target.value })}
+          onChange={e => updateContent({ instructions: e.target.value })}
           className="w-full p-2 border rounded-md h-24"
           placeholder="Enter instructions for students..."
         />
@@ -159,7 +141,7 @@ export const SentenceDiagrammingEditor: React.FC = () => {
         <label className="block text-sm font-medium mb-1">Difficulty</label>
         <select
           value={editingContent.data.difficulty}
-          onChange={e => handleDataChange({ difficulty: e.target.value as 'beginner' | 'intermediate' | 'advanced' })}
+          onChange={e => updateData({ difficulty: e.target.value as 'beginner' | 'intermediate' | 'advanced' })}
           className="w-full p-2 border rounded-md">
           <option value="beginner">Beginner</option>
           <option value="intermediate">Intermediate</option>
@@ -177,10 +159,8 @@ export const SentenceDiagrammingEditor: React.FC = () => {
           sentence={editingContent.data.sentence.latin}
           words={editingContent.data.sentence.words}
           initialContent={editingContent.data.sentence.content}
-          onChange={handleAnnotationsChange}
-          onContentChange={handleSentenceChange}
+          onAnnotationsAndContentChange={handleAnnotationsAndContentChange}
           onAddTooltip={handleAddTooltip}
-          onCombinedChange={handleChange}
           editingContent={editingContent}
         />
       </div>
@@ -189,7 +169,7 @@ export const SentenceDiagrammingEditor: React.FC = () => {
         <label className="block text-sm font-medium mb-1">Hints</label>
         <textarea
           value={editingContent.data.hints?.join('\n') || ''}
-          onChange={e => handleDataChange({ hints: e.target.value.split('\n').filter(h => h.trim()) })}
+          onChange={e => updateData({ hints: e.target.value.split('\n').filter(h => h.trim()) })}
           className="w-full p-2 border rounded-md h-24"
           placeholder="Enter hints (one per line)..."
         />
@@ -198,12 +178,12 @@ export const SentenceDiagrammingEditor: React.FC = () => {
       <AudioUploadSection
         contentItemId={editingContent.id}
         audioPath={editingContent.audioPath}
-        onAudioPathChange={audioPath => handleChange({ audioPath })}
+        onAudioPathChange={audioPath => updateContent({ audioPath })}
       />
 
       <ExerciseFeedbackSection
         feedbackConfig={editingContent.feedbackConfig}
-        onChange={feedbackConfig => handleChange({ feedbackConfig })}
+        onChange={feedbackConfig => updateContent({ feedbackConfig })}
       />
 
       <TooltipEditorDialog
@@ -222,10 +202,8 @@ interface SentenceDiagrammingCanvasProps {
   sentence: string;
   words: SentenceWord[];
   initialContent?: string;
-  onChange: (annotations: Record<string, AnnotationType>) => void;
-  onContentChange: (updates: Partial<SentenceDiagrammingExercise['data']['sentence']>) => void;
+  onAnnotationsAndContentChange: (annotations: Record<string, AnnotationType>, htmlContent: string) => void;
   onAddTooltip: () => void;
-  onCombinedChange: (updates: Partial<SentenceDiagrammingExercise>) => void;
   editingContent: SentenceDiagrammingExercise;
 }
 
@@ -233,10 +211,8 @@ const SentenceDiagrammingCanvas: React.FC<SentenceDiagrammingCanvasProps> = ({
   sentence,
   words,
   initialContent,
-  onChange,
-  onContentChange,
+  onAnnotationsAndContentChange,
   onAddTooltip,
-  onCombinedChange,
   editingContent,
 }) => {
 
@@ -259,26 +235,10 @@ const SentenceDiagrammingCanvas: React.FC<SentenceDiagrammingCanvasProps> = ({
     immediatelyRender: false,
     onUpdate: ({ editor }) => {
       const annotations = extractAnnotationsFromEditor(editor);
-      console.log('=== ADMIN EDITOR DEBUG ===');
-      console.log('Extracted annotations:', annotations);
-      
-      // Get HTML content
       const htmlContent = editor.getHTML();
       
-      // Combine both updates in a single dispatch to avoid race conditions
-      onCombinedChange({
-        data: {
-          ...editingContent.data,
-          solution: {
-            ...editingContent.data.solution,
-            annotations: annotations,
-          },
-          sentence: {
-            ...editingContent.data.sentence,
-            content: htmlContent,
-          },
-        },
-      });
+      // Single atomic update to prevent race conditions
+      onAnnotationsAndContentChange(annotations, htmlContent);
     },
     editorProps: {
       attributes: {

@@ -285,22 +285,14 @@ const lessonSlice = createSlice({
 
     updateEditingContent: (state, action: PayloadAction<RenderableContentItem>) => {
       if (state.editingContent) {
-        console.log('=== REDUX updateEditingContent ===');
-        console.log('Previous content:', state.editingContent.content);
-        console.log('New content payload:', action.payload);
-        if (action.payload.type === 'sentence-diagramming') {
-          console.log('📝 DIAGRAMMING: New annotations being stored:', action.payload.data?.solution?.annotations);
-        }
         
         state.editingContent.content = action.payload;
 
         // Also update the corresponding content in currentLesson for live preview
         if (state.currentLesson) {
           const { pageType, pageIndex, itemIndex } = state.editingContent;
-          console.log('Updating currentLesson item at:', { pageType, pageIndex, itemIndex });
           // Immer handles immutability - we can directly mutate the nested state
           state.currentLesson[pageType][pageIndex].items[itemIndex] = action.payload;
-          console.log('Updated currentLesson item:', state.currentLesson[pageType][pageIndex].items[itemIndex]);
         }
       }
     },
