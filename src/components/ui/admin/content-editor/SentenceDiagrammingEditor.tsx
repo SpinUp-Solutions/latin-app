@@ -4,11 +4,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { Tooltip } from '../../core/tooltip-extension';
 import { DiagrammingExtensions } from '../../core/diagramming-extensions';
 import { DiagrammingToolbar } from '../../exercises/sentence-diagramming/diagramming-toolbar';
-import {
-  SentenceWord,
-  AnnotationType,
-  SentenceDiagrammingExercise,
-} from '@/src/types/exercises/sentence-diagramming';
+import { SentenceWord, AnnotationType, SentenceDiagrammingExercise } from '@/src/types/exercises/sentence-diagramming';
 import { TooltipEditorDialog } from '../../core/tooltip-editor-dialog';
 import { TooltipData } from '@/src/types/tooltip';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
@@ -215,7 +211,6 @@ const SentenceDiagrammingCanvas: React.FC<SentenceDiagrammingCanvasProps> = ({
   onAddTooltip,
   editingContent,
 }) => {
-
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -236,7 +231,7 @@ const SentenceDiagrammingCanvas: React.FC<SentenceDiagrammingCanvasProps> = ({
     onUpdate: ({ editor }) => {
       const annotations = extractAnnotationsFromEditor(editor);
       const htmlContent = editor.getHTML();
-      
+
       // Single atomic update to prevent race conditions
       onAnnotationsAndContentChange(annotations, htmlContent);
     },
@@ -263,8 +258,8 @@ const SentenceDiagrammingCanvas: React.FC<SentenceDiagrammingCanvasProps> = ({
           if (annotationType) {
             // Map annotation type to TipTap extension
             const extensionMap: Record<AnnotationType, string> = {
-              'preposition': 'preposition',
-              'subordination': 'subordination',
+              preposition: 'preposition',
+              subordination: 'subordination',
               'verb-circle': 'verbCircle',
               'subject-underline': 'subjectUnderline',
               'direct-object-underline': 'directObjectUnderline',
@@ -428,7 +423,6 @@ const SentenceDiagrammingCanvas: React.FC<SentenceDiagrammingCanvasProps> = ({
   const handleClearAnnotations = () => {
     if (!editor) return;
 
-    // Clear all diagramming annotations explicitly
     editor
       .chain()
       .focus()

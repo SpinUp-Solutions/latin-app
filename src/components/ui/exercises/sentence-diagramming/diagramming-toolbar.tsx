@@ -1,18 +1,18 @@
 import React from 'react';
 import { Editor } from '@tiptap/react';
-import { 
-  Parentheses, 
-  Brackets, 
-  Circle, 
-  Underline, 
-  Equal, 
+import {
+  Parentheses,
+  Brackets,
+  Circle,
+  Underline,
+  Equal,
   CornerDownRight,
   ArrowRight,
   Highlighter,
   Eraser,
   MessageSquare,
   Undo,
-  Redo
+  Redo,
 } from 'lucide-react';
 import { AnnotationType } from '@/src/types/exercises/sentence-diagramming';
 
@@ -40,7 +40,7 @@ export const DiagrammingToolbar: React.FC<DiagrammingToolbarProps> = ({
 
   const toolbarSections = [
     {
-      title: 'Step 2: Prepositions',
+      title: 'Prepositions',
       items: [
         {
           type: 'preposition' as AnnotationType,
@@ -51,7 +51,7 @@ export const DiagrammingToolbar: React.FC<DiagrammingToolbarProps> = ({
       ],
     },
     {
-      title: 'Step 3: Subordination',
+      title: 'Subordination',
       items: [
         {
           type: 'subordination' as AnnotationType,
@@ -62,7 +62,7 @@ export const DiagrammingToolbar: React.FC<DiagrammingToolbarProps> = ({
       ],
     },
     {
-      title: 'Step 4: Verbs',
+      title: 'Verbs',
       items: [
         {
           type: 'verb-circle' as AnnotationType,
@@ -73,7 +73,7 @@ export const DiagrammingToolbar: React.FC<DiagrammingToolbarProps> = ({
       ],
     },
     {
-      title: 'Step 5-6: Objects',
+      title: 'Objects',
       items: [
         {
           type: 'subject-underline' as AnnotationType,
@@ -96,7 +96,7 @@ export const DiagrammingToolbar: React.FC<DiagrammingToolbarProps> = ({
       ],
     },
     {
-      title: 'Step 7-8: Modifiers',
+      title: 'Modifiers',
       items: [
         {
           type: 'genitive-arrow' as AnnotationType,
@@ -123,9 +123,7 @@ export const DiagrammingToolbar: React.FC<DiagrammingToolbarProps> = ({
     <div className="border-b border-gray-300 p-2 bg-gray-50 space-y-2">
       {toolbarSections.map((section, sectionIndex) => (
         <div key={sectionIndex} className="flex items-center gap-2">
-          <span className="text-xs font-medium text-gray-600 min-w-[120px]">
-            {section.title}:
-          </span>
+          <span className="text-xs font-medium text-gray-600 min-w-[120px]">{section.title}:</span>
           <div className="flex items-center gap-1">
             {section.items.map((item, itemIndex) => (
               <button
@@ -134,57 +132,50 @@ export const DiagrammingToolbar: React.FC<DiagrammingToolbarProps> = ({
                 onClick={() => handleClick(item.type)}
                 className={buttonClass(item.isActive)}
                 title={item.title}
-                disabled={disabled}
-              >
+                disabled={disabled}>
                 <item.icon className="w-4 h-4" />
               </button>
             ))}
           </div>
         </div>
       ))}
-      
+
       <div className="flex items-center gap-2 pt-2 border-t border-gray-200">
-        <span className="text-xs font-medium text-gray-600 min-w-[120px]">
-          Tools:
-        </span>
+        <span className="text-xs font-medium text-gray-600 min-w-[120px]">Tools:</span>
         <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={onAddTooltip}
             className={buttonClass(editor.isActive('tooltip'))}
             title="Add Tooltip"
-            disabled={disabled}
-          >
+            disabled={disabled}>
             <MessageSquare className="w-4 h-4" />
           </button>
-          
+
           <button
             type="button"
             onClick={() => editor.chain().focus().undo().run()}
             className={buttonClass(false)}
             title="Undo"
-            disabled={disabled || !editor.can().undo()}
-          >
+            disabled={disabled || !editor.can().undo()}>
             <Undo className="w-4 h-4" />
           </button>
-          
+
           <button
             type="button"
             onClick={() => editor.chain().focus().redo().run()}
             className={buttonClass(false)}
             title="Redo"
-            disabled={disabled || !editor.can().redo()}
-          >
+            disabled={disabled || !editor.can().redo()}>
             <Redo className="w-4 h-4" />
           </button>
-          
+
           <button
             type="button"
             onClick={onClearAnnotations}
             className={`${buttonClass(false)} text-red-600 hover:bg-red-50`}
             title="Clear All Annotations"
-            disabled={disabled}
-          >
+            disabled={disabled}>
             <Eraser className="w-4 h-4" />
           </button>
         </div>
