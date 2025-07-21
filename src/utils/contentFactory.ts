@@ -228,16 +228,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
                 endPosition: 20,
               },
             ],
-            annotations: {
-              prepositions: [],
-              subordinations: [],
-              verbs: [],
-              subjects: [],
-              directObjects: [],
-              indirectObjects: [],
-              genitives: [],
-              ablatives: [],
-            },
+            annotations: {},
             explanations: {},
           },
           hints: [

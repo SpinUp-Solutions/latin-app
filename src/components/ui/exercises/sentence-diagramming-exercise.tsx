@@ -6,7 +6,6 @@ import { DiagrammingExtensions } from '../core/diagramming-extensions';
 import { DiagrammingToolbar } from './sentence-diagramming/diagramming-toolbar';
 import {
   SentenceDiagrammingExercise as SentenceDiagrammingExerciseType,
-  UserAnnotation,
   AnnotationType,
 } from '@/src/types/exercises/sentence-diagramming';
 import { Button } from '../button';
@@ -20,7 +19,11 @@ interface SentenceDiagrammingExerciseProps {
 }
 
 export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExerciseProps> = ({ exercise, onComplete }) => {
-  const [userAnnotations, setUserAnnotations] = useState<UserAnnotation[]>([]);
+  console.log('=== EXERCISE COMPONENT RECEIVED ===');
+  console.log('Exercise data:', exercise);
+  console.log('Solution annotations:', exercise.data.solution.annotations);
+  
+  const [userAnnotations, setUserAnnotations] = useState<Record<string, AnnotationType>>({});
   const [showHint, setShowHint] = useState(false);
   const [currentHintIndex, setCurrentHintIndex] = useState(0);
 
@@ -56,8 +59,8 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
     },
   });
 
-  const extractAnnotationsFromEditor = useCallback((editor: any): UserAnnotation[] => {
-    const annotations: UserAnnotation[] = [];
+  const extractAnnotationsFromEditor = useCallback((editor: any): Record<string, AnnotationType> => {
+    const annotations: Record<string, AnnotationType> = {};
     const doc = editor.getJSON();
 
     const traverseNode = (node: any) => {
@@ -76,16 +79,11 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
           };
 
           const annotationType = typeMap[mark.type];
-          if (annotationType) {
-            const annotation: UserAnnotation = {
-              id: `${annotationType}-${Date.now()}-${Math.random()}`,
-              type: annotationType,
-              wordIds: mark.attrs?.wordIds || [],
-              timestamp: Date.now(),
-              ...mark.attrs,
-            } as UserAnnotation;
-
-            annotations.push(annotation);
+          if (annotationType && mark.attrs?.wordIds) {
+            // For each word in the annotation, map wordId -> annotationType
+            mark.attrs.wordIds.forEach((wordId: string) => {
+              annotations[wordId] = annotationType;
+            });
           }
         });
       }
@@ -183,7 +181,7 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
       }
     });
 
-    setUserAnnotations([]);
+    setUserAnnotations({});
   };
 
   const handleSubmit = () => {
@@ -218,79 +216,30 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
     }
   };
 
-  const validateAnnotations = (userAnnotations: UserAnnotation[], solution: any) => {
+  const validateAnnotations = (userAnnotations: Record<string, AnnotationType>, solution: any) => {
     console.log('=== VALIDATION DEBUG ===');
     console.log('User annotations:', userAnnotations);
-    console.log('Solution:', solution);
     console.log('Solution annotations:', solution.annotations);
 
-    const userByType = groupAnnotationsByType(userAnnotations);
-    const solutionByType = solution.annotations;
-
-    console.log('User by type:', userByType);
-    console.log('Solution by type:', solutionByType);
-
-    const results: any = {};
+    const solutionAnnotations = solution.annotations;
     let totalCorrect = 0;
-    let totalExpected = 0;
+    let totalExpected = Object.keys(solutionAnnotations).length;
 
-    Object.keys(solutionByType).forEach(type => {
-      const expected = solutionByType[type as keyof typeof solutionByType];
-      const actual = userByType[type as keyof typeof userByType] || [];
-
-      console.log(`Type ${type}: expected=${expected.length}, actual=${actual.length}`);
-
-      totalExpected += expected.length;
-
-      const correct = expected.filter((expectedAnnotation: any) =>
-        actual.some(
-          (actualAnnotation: any) =>
-            JSON.stringify(actualAnnotation.wordIds.sort()) === JSON.stringify(expectedAnnotation.wordIds.sort())
-        )
-      );
-
-      totalCorrect += correct.length;
-
-      results[type] = {
-        expected: expected.length,
-        correct: correct.length,
-        missing: expected.length - correct.length,
-        extra: actual.length - correct.length,
-      };
+    // Count matches between user annotations and solution
+    Object.keys(solutionAnnotations).forEach(wordId => {
+      if (userAnnotations[wordId] === solutionAnnotations[wordId]) {
+        totalCorrect++;
+      }
     });
 
-    console.log('Final totals: correct=' + totalCorrect + ', expected=' + totalExpected);
+    console.log(`Final totals: correct=${totalCorrect}, expected=${totalExpected}`);
 
     return {
       isComplete: totalCorrect === totalExpected,
       accuracy: totalExpected > 0 ? (totalCorrect / totalExpected) * 100 : 0,
-      results,
       totalCorrect,
       totalExpected,
     };
-  };
-
-  const groupAnnotationsByType = (annotations: UserAnnotation[]) => {
-    return annotations.reduce((acc: any, annotation) => {
-      // Map annotation types to solution structure keys
-      const typeMap: Record<string, string> = {
-        preposition: 'prepositions',
-        subordination: 'subordinations',
-        'verb-circle': 'verbs',
-        'subject-underline': 'subjects',
-        'direct-object-underline': 'directObjects',
-        'indirect-object-bracket': 'indirectObjects',
-        'genitive-arrow': 'genitives',
-        'ablative-phrase': 'ablatives',
-      };
-
-      const solutionKey = typeMap[annotation.type];
-      if (solutionKey) {
-        if (!acc[solutionKey]) acc[solutionKey] = [];
-        acc[solutionKey].push(annotation);
-      }
-      return acc;
-    }, {});
   };
 
   if (!editor) {
@@ -352,7 +301,7 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
       <div className="flex gap-2">
         <Button
           onClick={handleSubmit}
-          disabled={isCorrect === true || userAnnotations.length === 0}
+          disabled={isCorrect === true || Object.keys(userAnnotations).length === 0}
           className="flex items-center gap-2">
           <CheckCircle className="w-4 h-4" />
           Check Answer

@@ -90,16 +90,7 @@ export type UserAnnotation =
 
 export interface SentenceDiagrammingSolution {
   words: SentenceWord[];
-  annotations: {
-    prepositions: PrepositionAnnotation[];
-    subordinations: SubordinationAnnotation[];
-    verbs: VerbCircleAnnotation[];
-    subjects: SubjectUnderlineAnnotation[];
-    directObjects: DirectObjectUnderlineAnnotation[];
-    indirectObjects: IndirectObjectBracketAnnotation[];
-    genitives: GenitiveArrowAnnotation[];
-    ablatives: AblativePhraseAnnotation[];
-  };
+  annotations: Record<string, AnnotationType>;
   explanations: {
     [wordId: string]: string;
   };
@@ -147,7 +138,7 @@ export interface SentenceDiagrammingExercise extends BaseExercise {
       latin: string;
       translation: string;
       words: SentenceWord[];
-      content?: string; // Rich text content with annotations
+      content?: string;
     };
     solution: SentenceDiagrammingSolution;
     hints: string[];

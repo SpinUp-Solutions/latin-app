@@ -6,7 +6,6 @@ import { DiagrammingExtensions } from '../../core/diagramming-extensions';
 import { DiagrammingToolbar } from '../../exercises/sentence-diagramming/diagramming-toolbar';
 import {
   SentenceWord,
-  UserAnnotation,
   AnnotationType,
   SentenceDiagrammingExercise,
 } from '@/src/types/exercises/sentence-diagramming';
@@ -30,18 +29,36 @@ export const SentenceDiagrammingEditor: React.FC = () => {
   }
 
   const handleChange = (updates: Partial<SentenceDiagrammingExercise>) => {
-    dispatch(updateEditingContent({ ...editingContent, ...updates }));
+    console.log('=== HANDLE CHANGE (DISPATCH) ===');
+    console.log('Updates:', updates);
+    const updatedContent = { ...editingContent, ...updates };
+    console.log('Final content being dispatched:', updatedContent);
+    console.log('Solution annotations in dispatched content:', updatedContent.data?.solution?.annotations);
+    dispatch(updateEditingContent(updatedContent));
   };
 
   const handleDataChange = (dataUpdates: Partial<SentenceDiagrammingExercise['data']>) => {
+    console.log('=== HANDLE DATA CHANGE ===');
+    console.log('Data updates:', dataUpdates);
+    
     handleChange({
-      data: { ...editingContent.data, ...dataUpdates },
+      data: {
+        ...editingContent.data,
+        ...dataUpdates,
+      },
     });
   };
 
   const handleSentenceChange = (sentenceUpdates: Partial<SentenceDiagrammingExercise['data']['sentence']>) => {
-    handleDataChange({
-      sentence: { ...editingContent.data.sentence, ...sentenceUpdates },
+    console.log('=== HANDLE SENTENCE CHANGE ===');
+    console.log('Sentence updates:', sentenceUpdates);
+    
+    // Only update sentence data, preserve the existing solution and other data
+    handleChange({
+      data: {
+        ...editingContent.data,
+        sentence: { ...editingContent.data.sentence, ...sentenceUpdates },
+      },
     });
   };
 
@@ -50,22 +67,16 @@ export const SentenceDiagrammingEditor: React.FC = () => {
     handleSentenceChange({ latin, words });
   };
 
-  const handleAnnotationsChange = (annotations: UserAnnotation[]) => {
-    const solutionAnnotations = {
-      prepositions: annotations.filter(a => a.type === 'preposition'),
-      subordinations: annotations.filter(a => a.type === 'subordination'),
-      verbs: annotations.filter(a => a.type === 'verb-circle'),
-      subjects: annotations.filter(a => a.type === 'subject-underline'),
-      directObjects: annotations.filter(a => a.type === 'direct-object-underline'),
-      indirectObjects: annotations.filter(a => a.type === 'indirect-object-bracket'),
-      genitives: annotations.filter(a => a.type === 'genitive-arrow'),
-      ablatives: annotations.filter(a => a.type === 'ablative-phrase'),
-    };
-
+  const handleAnnotationsChange = (annotations: Record<string, AnnotationType>) => {
+    console.log('=== HANDLE ANNOTATIONS CHANGE ===');
+    console.log('New annotations:', annotations);
+    
     const updatedSolution = {
       ...editingContent.data.solution,
-      annotations: solutionAnnotations,
+      annotations: annotations,
     };
+
+    console.log('Updated solution:', updatedSolution);
 
     handleDataChange({
       solution: updatedSolution,
@@ -169,6 +180,8 @@ export const SentenceDiagrammingEditor: React.FC = () => {
           onChange={handleAnnotationsChange}
           onContentChange={handleSentenceChange}
           onAddTooltip={handleAddTooltip}
+          onCombinedChange={handleChange}
+          editingContent={editingContent}
         />
       </div>
 
@@ -209,9 +222,11 @@ interface SentenceDiagrammingCanvasProps {
   sentence: string;
   words: SentenceWord[];
   initialContent?: string;
-  onChange: (annotations: UserAnnotation[]) => void;
+  onChange: (annotations: Record<string, AnnotationType>) => void;
   onContentChange: (updates: Partial<SentenceDiagrammingExercise['data']['sentence']>) => void;
   onAddTooltip: () => void;
+  onCombinedChange: (updates: Partial<SentenceDiagrammingExercise>) => void;
+  editingContent: SentenceDiagrammingExercise;
 }
 
 const SentenceDiagrammingCanvas: React.FC<SentenceDiagrammingCanvasProps> = ({
@@ -221,8 +236,9 @@ const SentenceDiagrammingCanvas: React.FC<SentenceDiagrammingCanvasProps> = ({
   onChange,
   onContentChange,
   onAddTooltip,
+  onCombinedChange,
+  editingContent,
 }) => {
-  const editingContent = useAppSelector(state => state.lesson.editingContent?.content as SentenceDiagrammingExercise);
 
   const editor = useEditor({
     extensions: [
@@ -243,11 +259,26 @@ const SentenceDiagrammingCanvas: React.FC<SentenceDiagrammingCanvasProps> = ({
     immediatelyRender: false,
     onUpdate: ({ editor }) => {
       const annotations = extractAnnotationsFromEditor(editor);
-      onChange(annotations);
-
-      // Save the HTML content with annotations to Redux
+      console.log('=== ADMIN EDITOR DEBUG ===');
+      console.log('Extracted annotations:', annotations);
+      
+      // Get HTML content
       const htmlContent = editor.getHTML();
-      onContentChange({ content: htmlContent });
+      
+      // Combine both updates in a single dispatch to avoid race conditions
+      onCombinedChange({
+        data: {
+          ...editingContent.data,
+          solution: {
+            ...editingContent.data.solution,
+            annotations: annotations,
+          },
+          sentence: {
+            ...editingContent.data.sentence,
+            content: htmlContent,
+          },
+        },
+      });
     },
     editorProps: {
       attributes: {
@@ -265,56 +296,31 @@ const SentenceDiagrammingCanvas: React.FC<SentenceDiagrammingCanvasProps> = ({
         const htmlParts: string[] = [];
 
         words.forEach((word, index) => {
-          // Check which annotations apply to this word
-          const annotations = [];
-
-          // Check each annotation type
-          if (solutionAnnotations.verbs?.some(a => a.wordIds.includes(word.id))) {
-            const verbAnnotation = solutionAnnotations.verbs.find(a => a.wordIds.includes(word.id));
-            annotations.push({
-              type: 'verbCircle',
-              attrs: {
-                wordIds: verbAnnotation?.wordIds || [word.id],
-                voice: verbAnnotation?.voice || 'active',
-                expectsDirectObject: verbAnnotation?.expectsDirectObject || true,
-                expectsAgent: verbAnnotation?.expectsAgent || false,
-              },
-            });
-          }
-
-          if (solutionAnnotations.subjects?.some(a => a.wordIds.includes(word.id))) {
-            const subjectAnnotation = solutionAnnotations.subjects.find(a => a.wordIds.includes(word.id));
-            annotations.push({
-              type: 'subjectUnderline',
-              attrs: {
-                wordIds: subjectAnnotation?.wordIds || [word.id],
-                person: subjectAnnotation?.person || '3rd',
-                number: subjectAnnotation?.number || 'singular',
-              },
-            });
-          }
-
-          if (solutionAnnotations.directObjects?.some(a => a.wordIds.includes(word.id))) {
-            const directObjectAnnotation = solutionAnnotations.directObjects.find(a => a.wordIds.includes(word.id));
-            annotations.push({
-              type: 'directObjectUnderline',
-              attrs: {
-                wordIds: directObjectAnnotation?.wordIds || [word.id],
-              },
-            });
-          }
-
-          // Create the word HTML
+          // Check if this word has an annotation in the new simple format
+          const annotationType = solutionAnnotations[word.id];
           let wordHtml = word.text;
 
-          // Apply annotations by wrapping the word
-          if (annotations.length > 0) {
-            annotations.forEach(annotation => {
-              const attrsString = Object.entries(annotation.attrs)
+          if (annotationType) {
+            // Map annotation type to TipTap extension
+            const extensionMap: Record<AnnotationType, string> = {
+              'preposition': 'preposition',
+              'subordination': 'subordination',
+              'verb-circle': 'verbCircle',
+              'subject-underline': 'subjectUnderline',
+              'direct-object-underline': 'directObjectUnderline',
+              'indirect-object-bracket': 'indirectObjectBracket',
+              'genitive-arrow': 'genitiveArrow',
+              'ablative-phrase': 'ablativePhrase',
+            };
+
+            const extensionName = extensionMap[annotationType];
+            if (extensionName) {
+              const attributes = getAttributesForAnnotationType(annotationType, [word.id]);
+              const attrsString = Object.entries(attributes)
                 .map(([key, value]) => `${key}="${Array.isArray(value) ? value.join(',') : value}"`)
                 .join(' ');
-              wordHtml = `<span data-${annotation.type.replace(/([A-Z])/g, '-$1').toLowerCase()}="true" ${attrsString}>${wordHtml}</span>`;
-            });
+              wordHtml = `<span data-${extensionName.replace(/([A-Z])/g, '-$1').toLowerCase()}="true" ${attrsString}>${wordHtml}</span>`;
+            }
           }
 
           htmlParts.push(wordHtml);
@@ -329,8 +335,8 @@ const SentenceDiagrammingCanvas: React.FC<SentenceDiagrammingCanvasProps> = ({
     }
   }, [editor, editingContent, initialContent, words]);
 
-  const extractAnnotationsFromEditor = useCallback((editor: any): UserAnnotation[] => {
-    const annotations: UserAnnotation[] = [];
+  const extractAnnotationsFromEditor = useCallback((editor: any): Record<string, AnnotationType> => {
+    const annotations: Record<string, AnnotationType> = {};
     const doc = editor.getJSON();
 
     const traverseNode = (node: any) => {
@@ -349,16 +355,11 @@ const SentenceDiagrammingCanvas: React.FC<SentenceDiagrammingCanvasProps> = ({
           };
 
           const annotationType = typeMap[mark.type];
-          if (annotationType) {
-            const annotation: UserAnnotation = {
-              id: `${annotationType}-${Date.now()}-${Math.random()}`,
-              type: annotationType,
-              wordIds: mark.attrs?.wordIds || [],
-              timestamp: Date.now(),
-              ...mark.attrs,
-            } as UserAnnotation;
-
-            annotations.push(annotation);
+          if (annotationType && mark.attrs?.wordIds) {
+            // For each word in the annotation, map wordId -> annotationType
+            mark.attrs.wordIds.forEach((wordId: string) => {
+              annotations[wordId] = annotationType;
+            });
           }
         });
       }
