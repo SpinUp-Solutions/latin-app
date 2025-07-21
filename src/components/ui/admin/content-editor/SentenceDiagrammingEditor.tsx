@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Tooltip } from '../../core/tooltip-extension';
@@ -11,6 +11,12 @@ import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonSlice';
 import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
+import { 
+  extractAnnotationsFromEditor, 
+  handleAnnotationClick, 
+  handleClearAnnotations,
+  getAttributesForAnnotationType 
+} from '@/src/utils/sentenceDiagramming';
 
 export const SentenceDiagrammingEditor: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -290,152 +296,7 @@ const SentenceDiagrammingCanvas: React.FC<SentenceDiagrammingCanvasProps> = ({
     }
   }, [editor, editingContent, initialContent, words]);
 
-  const extractAnnotationsFromEditor = useCallback((editor: any): Record<string, AnnotationType> => {
-    const annotations: Record<string, AnnotationType> = {};
-    const doc = editor.getJSON();
 
-    const traverseNode = (node: any) => {
-      if (node.marks) {
-        node.marks.forEach((mark: any) => {
-          // Map TipTap extension names to annotation types
-          const typeMap: Record<string, AnnotationType> = {
-            preposition: 'preposition',
-            subordination: 'subordination',
-            verbCircle: 'verb-circle',
-            subjectUnderline: 'subject-underline',
-            directObjectUnderline: 'direct-object-underline',
-            indirectObjectBracket: 'indirect-object-bracket',
-            genitiveArrow: 'genitive-arrow',
-            ablativePhrase: 'ablative-phrase',
-          };
-
-          const annotationType = typeMap[mark.type];
-          if (annotationType && mark.attrs?.wordIds) {
-            // For each word in the annotation, map wordId -> annotationType
-            mark.attrs.wordIds.forEach((wordId: string) => {
-              annotations[wordId] = annotationType;
-            });
-          }
-        });
-      }
-
-      if (node.content) {
-        node.content.forEach(traverseNode);
-      }
-    };
-
-    traverseNode(doc);
-    return annotations;
-  }, []);
-
-  const handleAnnotationClick = (annotationType: AnnotationType) => {
-    if (!editor) return;
-
-    const { from, to } = editor.state.selection;
-    const selectedText = editor.state.doc.textBetween(from, to);
-
-    if (!selectedText.trim()) {
-      alert('Please select text to annotate');
-      return;
-    }
-
-    const selectedWordIds = getWordIdsFromSelection(from, to);
-    const attributes = getAttributesForAnnotationType(annotationType, selectedWordIds);
-
-    switch (annotationType) {
-      case 'preposition':
-        editor.chain().focus().setPreposition(attributes).run();
-        break;
-      case 'subordination':
-        editor.chain().focus().setSubordination(attributes).run();
-        break;
-      case 'verb-circle':
-        editor.chain().focus().setVerbCircle(attributes).run();
-        break;
-      case 'subject-underline':
-        editor.chain().focus().setSubjectUnderline(attributes).run();
-        break;
-      case 'direct-object-underline':
-        editor.chain().focus().setDirectObjectUnderline(attributes).run();
-        break;
-      case 'indirect-object-bracket':
-        editor.chain().focus().setIndirectObjectBracket(attributes).run();
-        break;
-      case 'genitive-arrow':
-        editor.chain().focus().setGenitiveArrow(attributes).run();
-        break;
-      case 'ablative-phrase':
-        editor.chain().focus().setAblativePhrase(attributes).run();
-        break;
-    }
-  };
-
-  const getWordIdsFromSelection = (from: number, to: number): string[] => {
-    const selectedText = editor?.state.doc.textBetween(from, to) || '';
-
-    // Simple approach: find words that match the selected text
-    const matchingWords = words.filter(word => {
-      // Check if the word text is contained in the selection
-      return selectedText.trim().split(/\s+/).includes(word.text);
-    });
-
-    // If no exact matches, try to find the word by index
-    if (matchingWords.length === 0) {
-      const allText = sentence.split(/\s+/);
-      const selectedWords = selectedText.trim().split(/\s+/);
-
-      selectedWords.forEach(selectedWord => {
-        const wordIndex = allText.findIndex(w => w === selectedWord);
-        if (wordIndex >= 0) {
-          const word = words.find(w => w.index === wordIndex);
-          if (word) matchingWords.push(word);
-        }
-      });
-    }
-
-    return matchingWords.map(word => word.id);
-  };
-
-  const getAttributesForAnnotationType = (type: AnnotationType, wordIds: string[]) => {
-    const baseAttributes = { wordIds };
-
-    switch (type) {
-      case 'verb-circle':
-        return { ...baseAttributes, voice: 'active', expectsDirectObject: true, expectsAgent: false };
-      case 'subordination':
-        return { ...baseAttributes, clauseType: 'relative' };
-      case 'subject-underline':
-        return { ...baseAttributes, person: '3rd', number: 'singular' };
-      case 'genitive-arrow':
-        return {
-          ...baseAttributes,
-          relationshipType: 'possession',
-          genitiveWordId: wordIds[0],
-          modifiedWordId: wordIds[1],
-        };
-      case 'ablative-phrase':
-        return { ...baseAttributes, ablativeType: 'means', hasPreposition: false };
-      default:
-        return baseAttributes;
-    }
-  };
-
-  const handleClearAnnotations = () => {
-    if (!editor) return;
-
-    editor
-      .chain()
-      .focus()
-      .unsetPreposition()
-      .unsetSubordination()
-      .unsetVerbCircle()
-      .unsetSubjectUnderline()
-      .unsetDirectObjectUnderline()
-      .unsetIndirectObjectBracket()
-      .unsetGenitiveArrow()
-      .unsetAblativePhrase()
-      .run();
-  };
 
   if (!editor) {
     return <div>Loading editor...</div>;
@@ -445,8 +306,8 @@ const SentenceDiagrammingCanvas: React.FC<SentenceDiagrammingCanvasProps> = ({
     <div className="sentence-diagramming-canvas border border-gray-300 rounded-md">
       <DiagrammingToolbar
         editor={editor}
-        onAnnotationClick={handleAnnotationClick}
-        onClearAnnotations={handleClearAnnotations}
+        onAnnotationClick={(type) => handleAnnotationClick(editor, type, words, sentence)}
+        onClearAnnotations={() => handleClearAnnotations(editor)}
         onAddTooltip={onAddTooltip}
         disabled={false}
       />

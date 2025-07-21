@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Tooltip } from '../core/tooltip-extension';
@@ -12,6 +12,11 @@ import { Button } from '../button';
 import { CheckCircle, HelpCircle, RotateCcw } from 'lucide-react';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { FeedbackDisplay } from '../feedback';
+import { 
+  extractAnnotationsFromEditor, 
+  handleAnnotationClick, 
+  handleClearAnnotations 
+} from '@/src/utils/sentenceDiagramming';
 
 interface SentenceDiagrammingExerciseProps {
   exercise: SentenceDiagrammingExerciseType;
@@ -59,128 +64,11 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
     },
   });
 
-  const extractAnnotationsFromEditor = useCallback((editor: any): Record<string, AnnotationType> => {
-    const annotations: Record<string, AnnotationType> = {};
-    const doc = editor.getJSON();
 
-    const traverseNode = (node: any) => {
-      if (node.marks) {
-        node.marks.forEach((mark: any) => {
-          // Map TipTap extension names to annotation types
-          const typeMap: Record<string, AnnotationType> = {
-            preposition: 'preposition',
-            subordination: 'subordination',
-            verbCircle: 'verb-circle',
-            subjectUnderline: 'subject-underline',
-            directObjectUnderline: 'direct-object-underline',
-            indirectObjectBracket: 'indirect-object-bracket',
-            genitiveArrow: 'genitive-arrow',
-            ablativePhrase: 'ablative-phrase',
-          };
-
-          const annotationType = typeMap[mark.type];
-          if (annotationType && mark.attrs?.wordIds) {
-            // For each word in the annotation, map wordId -> annotationType
-            mark.attrs.wordIds.forEach((wordId: string) => {
-              annotations[wordId] = annotationType;
-            });
-          }
-        });
-      }
-
-      if (node.content) {
-        node.content.forEach(traverseNode);
-      }
-    };
-
-    traverseNode(doc);
-    return annotations;
-  }, []);
-
-  const handleAnnotationClick = (annotationType: AnnotationType) => {
-    if (!editor || isCorrect === true) return;
-
-    const { from, to } = editor.state.selection;
-    const selectedText = editor.state.doc.textBetween(from, to);
-
-    if (!selectedText.trim()) {
-      alert('Please select text to annotate');
-      return;
-    }
-
-    const selectedWordIds = getWordIdsFromSelection(from, to);
-    const attributes = getAttributesForAnnotationType(annotationType, selectedWordIds);
-
-    switch (annotationType) {
-      case 'preposition':
-        editor.chain().focus().setPreposition(attributes).run();
-        break;
-      case 'subordination':
-        editor.chain().focus().setSubordination(attributes).run();
-        break;
-      case 'verb-circle':
-        editor.chain().focus().setVerbCircle(attributes).run();
-        break;
-      case 'subject-underline':
-        editor.chain().focus().setSubjectUnderline(attributes).run();
-        break;
-      case 'direct-object-underline':
-        editor.chain().focus().setDirectObjectUnderline(attributes).run();
-        break;
-      case 'indirect-object-bracket':
-        editor.chain().focus().setIndirectObjectBracket(attributes).run();
-        break;
-      case 'genitive-arrow':
-        editor.chain().focus().setGenitiveArrow(attributes).run();
-        break;
-      case 'ablative-phrase':
-        editor.chain().focus().setAblativePhrase(attributes).run();
-        break;
-    }
-  };
-
-  const getWordIdsFromSelection = (from: number, to: number): string[] => {
-    const selectedText = editor?.state.doc.textBetween(from, to) || '';
-    const selectedWords = exercise.data.sentence.words.filter(
-      word => selectedText.includes(word.text) || (word.startPosition <= from && word.endPosition >= to)
-    );
-    return selectedWords.map(word => word.id);
-  };
-
-  const getAttributesForAnnotationType = (type: AnnotationType, wordIds: string[]) => {
-    const baseAttributes = { wordIds };
-
-    switch (type) {
-      case 'verb-circle':
-        return { ...baseAttributes, voice: 'active', expectsDirectObject: true, expectsAgent: false };
-      case 'subordination':
-        return { ...baseAttributes, clauseType: 'relative' };
-      case 'subject-underline':
-        return { ...baseAttributes, person: '3rd', number: 'singular' };
-      case 'genitive-arrow':
-        return {
-          ...baseAttributes,
-          relationshipType: 'possession',
-          genitiveWordId: wordIds[0],
-          modifiedWordId: wordIds[1],
-        };
-      case 'ablative-phrase':
-        return { ...baseAttributes, ablativeType: 'means', hasPreposition: false };
-      default:
-        return baseAttributes;
-    }
-  };
-
-  const handleClearAnnotations = () => {
-    if (!editor || isCorrect === true) return;
-
-    DiagrammingExtensions.forEach(extension => {
-      const commandName = `unset${extension.name.charAt(0).toUpperCase() + extension.name.slice(1)}`;
-      if (editor.commands[commandName]) {
-        editor.commands[commandName]();
-      }
-    });
-
+  const clearAnnotations = () => {
+    if (isCorrect === true) return;
+    
+    handleClearAnnotations(editor);
     setUserAnnotations({});
   };
 
@@ -200,7 +88,7 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
   const handleReset = () => {
     setShowHint(false);
     setCurrentHintIndex(0);
-    handleClearAnnotations();
+    clearAnnotations();
     reset();
   };
 
@@ -260,8 +148,8 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
         <div className="sentence-diagramming-editor border border-gray-300 rounded-md">
           <DiagrammingToolbar
             editor={editor}
-            onAnnotationClick={handleAnnotationClick}
-            onClearAnnotations={handleClearAnnotations}
+            onAnnotationClick={(type) => handleAnnotationClick(editor, type, exercise.data.sentence.words, exercise.data.sentence.latin, isCorrect === true)}
+            onClearAnnotations={clearAnnotations}
             onAddTooltip={() => {}}
             disabled={isCorrect === true}
           />
