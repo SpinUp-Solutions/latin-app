@@ -176,26 +176,18 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
   const handleClearAnnotations = () => {
     if (!editor || isCorrect === true) return;
 
-    // Clear all diagramming annotations explicitly
-    editor
-      .chain()
-      .focus()
-      .unsetPreposition()
-      .unsetSubordination()
-      .unsetVerbCircle()
-      .unsetSubjectUnderline()
-      .unsetDirectObjectUnderline()
-      .unsetIndirectObjectBracket()
-      .unsetGenitiveArrow()
-      .unsetAblativePhrase()
-      .run();
+    DiagrammingExtensions.forEach(extension => {
+      const commandName = `unset${extension.name.charAt(0).toUpperCase() + extension.name.slice(1)}`;
+      if (editor.commands[commandName]) {
+        editor.commands[commandName]();
+      }
+    });
 
     setUserAnnotations([]);
   };
 
   const handleSubmit = () => {
     const result = validateAnnotations(userAnnotations, exercise.data.solution);
-
     if (result.isComplete) {
       handleCorrect(true); // Always complete since there's only one step
       if (onComplete) {
@@ -241,7 +233,6 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
     const results: any = {};
     let totalCorrect = 0;
     let totalExpected = 0;
-    let totalExtra = 0;
 
     Object.keys(solutionByType).forEach(type => {
       const expected = solutionByType[type as keyof typeof solutionByType];
@@ -259,7 +250,6 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
       );
 
       totalCorrect += correct.length;
-      totalExtra += actual.length - correct.length;
 
       results[type] = {
         expected: expected.length,
@@ -272,12 +262,11 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
     console.log('Final totals: correct=' + totalCorrect + ', expected=' + totalExpected);
 
     return {
-      isComplete: totalCorrect === totalExpected && totalExtra === 0,
-      accuracy: totalExpected > 0 ? (totalCorrect / (totalExpected + totalExtra)) * 100 : 0,
+      isComplete: totalCorrect === totalExpected,
+      accuracy: totalExpected > 0 ? (totalCorrect / totalExpected) * 100 : 0,
       results,
       totalCorrect,
       totalExpected,
-      totalExtra,
     };
   };
 

@@ -51,8 +51,6 @@ export const SentenceDiagrammingEditor: React.FC = () => {
   };
 
   const handleAnnotationsChange = (annotations: UserAnnotation[]) => {
-    console.log('handleAnnotationsChange called with:', annotations);
-
     const solutionAnnotations = {
       prepositions: annotations.filter(a => a.type === 'preposition'),
       subordinations: annotations.filter(a => a.type === 'subordination'),
@@ -64,15 +62,10 @@ export const SentenceDiagrammingEditor: React.FC = () => {
       ablatives: annotations.filter(a => a.type === 'ablative-phrase'),
     };
 
-    console.log('Solution annotations:', solutionAnnotations);
-    console.log('Verb annotations:', solutionAnnotations.verbs);
-
     const updatedSolution = {
       ...editingContent.data.solution,
       annotations: solutionAnnotations,
     };
-
-    console.log('Updated solution:', updatedSolution);
 
     handleDataChange({
       solution: updatedSolution,
@@ -89,7 +82,7 @@ export const SentenceDiagrammingEditor: React.FC = () => {
       currentPosition = endPosition + 1;
 
       return {
-        id: `word-${index + 1}`,
+        id: `word-${index}`,
         text: word,
         index,
         startPosition,
@@ -106,6 +99,131 @@ export const SentenceDiagrammingEditor: React.FC = () => {
     setIsTooltipDialogOpen(false);
   };
 
+  return (
+    <div className="space-y-6">
+      <div>
+        <label className="block text-sm font-medium mb-1">Title</label>
+        <input
+          type="text"
+          value={editingContent.title || ''}
+          onChange={e => handleChange({ title: e.target.value })}
+          className="w-full p-2 border rounded-md"
+          placeholder="Enter exercise title..."
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">Instructions</label>
+        <textarea
+          value={editingContent.instructions || ''}
+          onChange={e => handleChange({ instructions: e.target.value })}
+          className="w-full p-2 border rounded-md h-24"
+          placeholder="Enter instructions for students..."
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">Latin Sentence</label>
+        <input
+          type="text"
+          value={editingContent.data.sentence.latin}
+          onChange={e => handleLatinChange(e.target.value)}
+          className="w-full p-2 border rounded-md"
+          placeholder="Enter Latin sentence..."
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">English Translation</label>
+        <input
+          type="text"
+          value={editingContent.data.sentence.translation}
+          onChange={e => handleSentenceChange({ translation: e.target.value })}
+          className="w-full p-2 border rounded-md"
+          placeholder="Enter English translation..."
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">Difficulty</label>
+        <select
+          value={editingContent.data.difficulty}
+          onChange={e => handleDataChange({ difficulty: e.target.value as 'beginner' | 'intermediate' | 'advanced' })}
+          className="w-full p-2 border rounded-md">
+          <option value="beginner">Beginner</option>
+          <option value="intermediate">Intermediate</option>
+          <option value="advanced">Advanced</option>
+        </select>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-2">Solution Diagram</label>
+        <div className="text-sm text-gray-600 mb-2">
+          Create the correct annotation solution by selecting text and using the toolbar below:
+        </div>
+
+        <SentenceDiagrammingCanvas
+          sentence={editingContent.data.sentence.latin}
+          words={editingContent.data.sentence.words}
+          initialContent={editingContent.data.sentence.content}
+          onChange={handleAnnotationsChange}
+          onContentChange={handleSentenceChange}
+          onAddTooltip={handleAddTooltip}
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">Hints</label>
+        <textarea
+          value={editingContent.data.hints?.join('\n') || ''}
+          onChange={e => handleDataChange({ hints: e.target.value.split('\n').filter(h => h.trim()) })}
+          className="w-full p-2 border rounded-md h-24"
+          placeholder="Enter hints (one per line)..."
+        />
+      </div>
+
+      <AudioUploadSection
+        contentItemId={editingContent.id}
+        audioPath={editingContent.audioPath}
+        onAudioPathChange={audioPath => handleChange({ audioPath })}
+      />
+
+      <ExerciseFeedbackSection
+        feedbackConfig={editingContent.feedbackConfig}
+        onChange={feedbackConfig => handleChange({ feedbackConfig })}
+      />
+
+      <TooltipEditorDialog
+        isOpen={isTooltipDialogOpen}
+        onClose={() => setIsTooltipDialogOpen(false)}
+        onSave={handleSaveTooltip}
+        onRemove={() => {}}
+        selectedText={selectedText}
+        initialData={null}
+      />
+    </div>
+  );
+};
+
+interface SentenceDiagrammingCanvasProps {
+  sentence: string;
+  words: SentenceWord[];
+  initialContent?: string;
+  onChange: (annotations: UserAnnotation[]) => void;
+  onContentChange: (updates: Partial<SentenceDiagrammingExercise['data']['sentence']>) => void;
+  onAddTooltip: () => void;
+}
+
+const SentenceDiagrammingCanvas: React.FC<SentenceDiagrammingCanvasProps> = ({
+  sentence,
+  words,
+  initialContent,
+  onChange,
+  onContentChange,
+  onAddTooltip,
+}) => {
+  const editingContent = useAppSelector(state => state.lesson.editingContent?.content as SentenceDiagrammingExercise);
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -121,11 +239,15 @@ export const SentenceDiagrammingEditor: React.FC = () => {
       Tooltip,
       ...DiagrammingExtensions,
     ],
-    content: `<p>${editingContent.data.sentence.latin}</p>`,
+    content: initialContent || sentence,
     immediatelyRender: false,
     onUpdate: ({ editor }) => {
       const annotations = extractAnnotationsFromEditor(editor);
-      handleAnnotationsChange(annotations);
+      onChange(annotations);
+
+      // Save the HTML content with annotations to Redux
+      const htmlContent = editor.getHTML();
+      onContentChange({ content: htmlContent });
     },
     editorProps: {
       attributes: {
@@ -134,69 +256,78 @@ export const SentenceDiagrammingEditor: React.FC = () => {
     },
   });
 
-  const handleClearAnnotations = () => {
-    if (!editor) return;
-    editor
-      .chain()
-      .focus()
-      .unsetPreposition()
-      .unsetSubordination()
-      .unsetVerbCircle()
-      .unsetSubjectUnderline()
-      .unsetDirectObjectUnderline()
-      .unsetIndirectObjectBracket()
-      .unsetGenitiveArrow()
-      .unsetAblativePhrase()
-      .run();
-  };
-
+  // Generate initial content with annotations if no saved content exists
   useEffect(() => {
-    if (editor && editingContent) {
-      handleClearAnnotations();
-      editor.commands.setContent(`<p>${editingContent.data.sentence.latin}</p>`);
+    if (editor && editingContent && !initialContent) {
+      // Create HTML with embedded annotations
+      const generateAnnotatedHTML = () => {
+        const solutionAnnotations = editingContent.data.solution.annotations;
+        const htmlParts: string[] = [];
 
-      const annotations = Object.values(editingContent.data.solution.annotations).flat();
-      annotations.forEach(annotation => {
-        const { wordIds, type, ...attrs } = annotation;
-        const positions = wordIds
-          .map(id => {
-            const word = editingContent.data.sentence.words.find(w => w.id === id);
-            return word ? { from: word.startPosition + 1, to: word.endPosition + 1 } : null;
-          })
-          .filter(pos => pos !== null);
-        if (positions.length > 0) {
-          const { from, to } = positions[0];
-          editor.chain().setTextSelection({ from, to }).focus();
-          switch (type) {
-            case 'preposition':
-              editor.commands.setPreposition(attrs);
-              break;
-            case 'subordination':
-              editor.commands.setSubordination(attrs);
-              break;
-            case 'verb-circle':
-              editor.commands.setVerbCircle(attrs);
-              break;
-            case 'subject-underline':
-              editor.commands.setSubjectUnderline(attrs);
-              break;
-            case 'direct-object-underline':
-              editor.commands.setDirectObjectUnderline(attrs);
-              break;
-            case 'indirect-object-bracket':
-              editor.commands.setIndirectObjectBracket(attrs);
-              break;
-            case 'genitive-arrow':
-              editor.commands.setGenitiveArrow(attrs);
-              break;
-            case 'ablative-phrase':
-              editor.commands.setAblativePhrase(attrs);
-              break;
+        words.forEach((word, index) => {
+          // Check which annotations apply to this word
+          const annotations = [];
+
+          // Check each annotation type
+          if (solutionAnnotations.verbs?.some(a => a.wordIds.includes(word.id))) {
+            const verbAnnotation = solutionAnnotations.verbs.find(a => a.wordIds.includes(word.id));
+            annotations.push({
+              type: 'verbCircle',
+              attrs: {
+                wordIds: verbAnnotation?.wordIds || [word.id],
+                voice: verbAnnotation?.voice || 'active',
+                expectsDirectObject: verbAnnotation?.expectsDirectObject || true,
+                expectsAgent: verbAnnotation?.expectsAgent || false,
+              },
+            });
           }
-        }
-      });
+
+          if (solutionAnnotations.subjects?.some(a => a.wordIds.includes(word.id))) {
+            const subjectAnnotation = solutionAnnotations.subjects.find(a => a.wordIds.includes(word.id));
+            annotations.push({
+              type: 'subjectUnderline',
+              attrs: {
+                wordIds: subjectAnnotation?.wordIds || [word.id],
+                person: subjectAnnotation?.person || '3rd',
+                number: subjectAnnotation?.number || 'singular',
+              },
+            });
+          }
+
+          if (solutionAnnotations.directObjects?.some(a => a.wordIds.includes(word.id))) {
+            const directObjectAnnotation = solutionAnnotations.directObjects.find(a => a.wordIds.includes(word.id));
+            annotations.push({
+              type: 'directObjectUnderline',
+              attrs: {
+                wordIds: directObjectAnnotation?.wordIds || [word.id],
+              },
+            });
+          }
+
+          // Create the word HTML
+          let wordHtml = word.text;
+
+          // Apply annotations by wrapping the word
+          if (annotations.length > 0) {
+            annotations.forEach(annotation => {
+              const attrsString = Object.entries(annotation.attrs)
+                .map(([key, value]) => `${key}="${Array.isArray(value) ? value.join(',') : value}"`)
+                .join(' ');
+              wordHtml = `<span data-${annotation.type.replace(/([A-Z])/g, '-$1').toLowerCase()}="true" ${attrsString}>${wordHtml}</span>`;
+            });
+          }
+
+          htmlParts.push(wordHtml);
+        });
+
+        // Join with spaces and wrap in paragraph
+        return `<p>${htmlParts.join(' ')}</p>`;
+      };
+
+      const annotatedHTML = generateAnnotatedHTML();
+      editor.commands.setContent(annotatedHTML);
     }
-  }, [editor, editingContent]);
+  }, [editor, editingContent, initialContent, words]);
 
   const extractAnnotationsFromEditor = useCallback((editor: any): UserAnnotation[] => {
     const annotations: UserAnnotation[] = [];
@@ -205,8 +336,6 @@ export const SentenceDiagrammingEditor: React.FC = () => {
     const traverseNode = (node: any) => {
       if (node.marks) {
         node.marks.forEach((mark: any) => {
-          console.log('Found mark:', mark.type, mark.attrs);
-
           // Map TipTap extension names to annotation types
           const typeMap: Record<string, AnnotationType> = {
             preposition: 'preposition',
@@ -240,7 +369,6 @@ export const SentenceDiagrammingEditor: React.FC = () => {
     };
 
     traverseNode(doc);
-    console.log('Extracted annotations:', annotations);
     return annotations;
   }, []);
 
@@ -257,10 +385,6 @@ export const SentenceDiagrammingEditor: React.FC = () => {
 
     const selectedWordIds = getWordIdsFromSelection(from, to);
     const attributes = getAttributesForAnnotationType(annotationType, selectedWordIds);
-
-    console.log('Selected text:', selectedText);
-    console.log('Selected word IDs:', selectedWordIds);
-    console.log('Attributes:', attributes);
 
     switch (annotationType) {
       case 'preposition':
@@ -294,20 +418,20 @@ export const SentenceDiagrammingEditor: React.FC = () => {
     const selectedText = editor?.state.doc.textBetween(from, to) || '';
 
     // Simple approach: find words that match the selected text
-    const matchingWords = editingContent.data.sentence.words.filter(word => {
+    const matchingWords = words.filter(word => {
       // Check if the word text is contained in the selection
       return selectedText.trim().split(/\s+/).includes(word.text);
     });
 
     // If no exact matches, try to find the word by index
     if (matchingWords.length === 0) {
-      const allText = editingContent.data.sentence.latin.split(/\s+/);
+      const allText = sentence.split(/\s+/);
       const selectedWords = selectedText.trim().split(/\s+/);
 
       selectedWords.forEach(selectedWord => {
         const wordIndex = allText.findIndex(w => w === selectedWord);
         if (wordIndex >= 0) {
-          const word = editingContent.data.sentence.words.find(w => w.index === wordIndex);
+          const word = words.find(w => w.index === wordIndex);
           if (word) matchingWords.push(word);
         }
       });
@@ -340,6 +464,24 @@ export const SentenceDiagrammingEditor: React.FC = () => {
     }
   };
 
+  const handleClearAnnotations = () => {
+    if (!editor) return;
+
+    // Clear all diagramming annotations explicitly
+    editor
+      .chain()
+      .focus()
+      .unsetPreposition()
+      .unsetSubordination()
+      .unsetVerbCircle()
+      .unsetSubjectUnderline()
+      .unsetDirectObjectUnderline()
+      .unsetIndirectObjectBracket()
+      .unsetGenitiveArrow()
+      .unsetAblativePhrase()
+      .run();
+  };
+
   if (!editor) {
     return <div>Loading editor...</div>;
   }
@@ -350,7 +492,7 @@ export const SentenceDiagrammingEditor: React.FC = () => {
         editor={editor}
         onAnnotationClick={handleAnnotationClick}
         onClearAnnotations={handleClearAnnotations}
-        onAddTooltip={handleAddTooltip}
+        onAddTooltip={onAddTooltip}
         disabled={false}
       />
 
