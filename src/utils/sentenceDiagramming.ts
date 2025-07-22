@@ -1,8 +1,5 @@
 import { AnnotationType, SentenceWord } from '@/src/types/exercises/sentence-diagramming';
 
-/**
- * Extracts annotations from TipTap editor JSON structure
- */
 export const extractAnnotationsFromEditor = (editor: any): Record<string, AnnotationType> => {
   const annotations: Record<string, AnnotationType> = {};
   const doc = editor.getJSON();
@@ -41,9 +38,6 @@ export const extractAnnotationsFromEditor = (editor: any): Record<string, Annota
   return annotations;
 };
 
-/**
- * Gets TipTap attributes for a specific annotation type
- */
 export const getAttributesForAnnotationType = (type: AnnotationType, wordIds: string[]) => {
   const baseAttributes = { wordIds };
 
