@@ -259,7 +259,6 @@ export const extensionConfigs: DiagrammingExtensionConfig[] = [
   },
 ];
 
-// Create all extensions using the factory
 export const PrepositionExtension = createDiagrammingExtension(extensionConfigs[0]);
 export const SubordinationExtension = createDiagrammingExtension(extensionConfigs[1]);
 export const VerbCircleExtension = createDiagrammingExtension(extensionConfigs[2]);

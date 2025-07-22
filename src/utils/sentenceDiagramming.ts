@@ -90,13 +90,11 @@ export const getWordIdsFromSelection = (
 ): string[] => {
   const selectedText = editor?.state.doc.textBetween(from, to) || '';
 
-  // Simple approach: find words that match the selected text
   const matchingWords = words.filter(word => {
     // Check if the word text is contained in the selection
     return selectedText.trim().split(/\s+/).includes(word.text);
   });
 
-  // If no exact matches, try to find the word by index
   if (matchingWords.length === 0) {
     const allText = sentence.split(/\s+/);
     const selectedWords = selectedText.trim().split(/\s+/);
