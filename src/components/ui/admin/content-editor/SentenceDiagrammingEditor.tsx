@@ -11,11 +11,11 @@ import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonSlice';
 import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
-import { 
-  extractAnnotationsFromEditor, 
-  handleAnnotationClick, 
+import {
+  extractAnnotationsFromEditor,
+  handleAnnotationClick,
   handleClearAnnotations,
-  getAttributesForAnnotationType 
+  getAttributesForAnnotationType,
 } from '@/src/utils/sentenceDiagramming';
 
 export const SentenceDiagrammingEditor: React.FC = () => {
@@ -23,8 +23,8 @@ export const SentenceDiagrammingEditor: React.FC = () => {
   const editingContent = useAppSelector(state => state.lesson.editingContent?.content as SentenceDiagrammingExercise);
 
   const [isTooltipDialogOpen, setIsTooltipDialogOpen] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [selectedText, setSelectedText] = useState('');
-  const [existingTooltipData, setExistingTooltipData] = useState<TooltipData | null>(null);
 
   if (!editingContent) {
     return <div>No content selected for editing</div>;
@@ -90,6 +90,7 @@ export const SentenceDiagrammingEditor: React.FC = () => {
     setIsTooltipDialogOpen(true);
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleSaveTooltip = (tooltipData: Omit<TooltipData, 'id'>) => {
     setIsTooltipDialogOpen(false);
   };
@@ -256,8 +257,7 @@ const SentenceDiagrammingCanvas: React.FC<SentenceDiagrammingCanvasProps> = ({
         const solutionAnnotations = editingContent.data.solution.annotations;
         const htmlParts: string[] = [];
 
-        words.forEach((word, index) => {
-          // Check if this word has an annotation in the new simple format
+        words.forEach(word => {
           const annotationType = solutionAnnotations[word.id];
           let wordHtml = word.text;
 
@@ -296,8 +296,6 @@ const SentenceDiagrammingCanvas: React.FC<SentenceDiagrammingCanvasProps> = ({
     }
   }, [editor, editingContent, initialContent, words]);
 
-
-
   if (!editor) {
     return <div>Loading editor...</div>;
   }
@@ -306,7 +304,7 @@ const SentenceDiagrammingCanvas: React.FC<SentenceDiagrammingCanvasProps> = ({
     <div className="sentence-diagramming-canvas border border-gray-300 rounded-md">
       <DiagrammingToolbar
         editor={editor}
-        onAnnotationClick={(type) => handleAnnotationClick(editor, type, words, sentence)}
+        onAnnotationClick={type => handleAnnotationClick(editor, type, words, sentence)}
         onClearAnnotations={() => handleClearAnnotations(editor)}
         onAddTooltip={onAddTooltip}
         disabled={false}

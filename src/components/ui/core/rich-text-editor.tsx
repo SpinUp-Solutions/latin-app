@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useEditor, EditorContent, Editor } from '@tiptap/react';
+import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Tooltip } from './tooltip-extension';
 import { TooltipEditorDialog } from './tooltip-editor-dialog';
@@ -119,7 +119,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ content, onChange, clas
 
   return (
     <div className={`border border-gray-300 rounded-md ${className}`}>
-      {toolbarConfig && <ToolbarFactory config={toolbarConfig} editor={editor} />}
+      {toolbarConfig && editor && <ToolbarFactory config={toolbarConfig} editor={editor} />}
       <EditorContent editor={editor} />
       <TooltipEditorDialog
         isOpen={isTooltipDialogOpen}
@@ -135,6 +135,5 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ content, onChange, clas
     </div>
   );
 };
-
 
 export default RichTextEditor;

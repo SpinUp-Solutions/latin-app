@@ -1,10 +1,12 @@
 import React from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent } from '@/src/components/ui/card';
-import { Plus, Trash2, HelpCircle } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { FillExercise } from '@/src/types/exercise';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonSlice';
+import { SimpleInput, SimpleTextarea } from '@/src/components/ui/form-components';
+import { FillItemCard } from '@/src/components/ui/form-components/FillItemCard';
 import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
 
@@ -54,27 +56,20 @@ export const FillEditor: React.FC = () => {
     <div className="space-y-6">
       {/* Basic Fields */}
       <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium mb-1">Exercise Title</label>
-          <input
-            type="text"
-            value={editingContent.title || ''}
-            onChange={e => updateContent({ title: e.target.value })}
-            className="w-full p-2 border rounded-md"
-            placeholder="Enter exercise title..."
-          />
-        </div>
+        <SimpleInput
+          label="Exercise Title"
+          value={editingContent.title || ''}
+          onChange={value => updateContent({ title: value })}
+          placeholder="Enter exercise title..."
+        />
 
-        <div>
-          <label className="block text-sm font-medium mb-1">Instructions</label>
-          <textarea
-            value={editingContent.instructions || ''}
-            onChange={e => updateContent({ instructions: e.target.value })}
-            className="w-full p-2 border rounded-md"
-            rows={3}
-            placeholder="Provide instructions for students..."
-          />
-        </div>
+        <SimpleTextarea
+          label="Instructions"
+          value={editingContent.instructions || ''}
+          onChange={value => updateContent({ instructions: value })}
+          placeholder="Provide instructions for students..."
+          rows={3}
+        />
 
         <AudioUploadSection
           audioPath={editingContent.audioPath}
@@ -95,100 +90,14 @@ export const FillEditor: React.FC = () => {
 
         <div className="space-y-4">
           {editingContent.data.items.map((item, index) => (
-            <Card key={index}>
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <h4 className="font-medium">Item {index + 1}</h4>
-                  <Button
-                    onClick={() => removeItem(index)}
-                    size="sm"
-                    variant="ghost"
-                    disabled={editingContent.data.items.length <= 1}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-medium mb-1">Question/Prompt Text</label>
-                    <textarea
-                      value={item.text}
-                      onChange={e => updateItem(index, 'text', e.target.value)}
-                      className="w-full p-2 border rounded text-sm"
-                      rows={2}
-                      placeholder="Enter the question or prompt that will be shown to students..."
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      This is what students will see. For example: &quot;Complete the Latin verb: audi___&quot; or
-                      &quot;Translate: I hear = audi_&quot;
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium mb-1">Correct Answer</label>
-                    <input
-                      type="text"
-                      value={item.answer}
-                      onChange={e => updateItem(index, 'answer', e.target.value)}
-                      className="w-full p-2 border rounded text-sm"
-                      placeholder="Enter the correct answer..."
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Students must type this exact answer (case-insensitive)
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium mb-1 flex items-center gap-1">
-                      <HelpCircle className="h-3 w-3" />
-                      Hint (optional)
-                    </label>
-                    <textarea
-                      value={item.hint || ''}
-                      onChange={e => updateItem(index, 'hint', e.target.value)}
-                      className="w-full p-2 border rounded text-sm"
-                      rows={2}
-                      placeholder="Enter a helpful hint for students..."
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Shown when students make incorrect attempts (if enabled in feedback config)
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium mb-1">Explanation (optional)</label>
-                    <textarea
-                      value={item.explanation || ''}
-                      onChange={e => updateItem(index, 'explanation', e.target.value)}
-                      className="w-full p-2 border rounded text-sm"
-                      rows={2}
-                      placeholder="Enter a detailed explanation for the correct answer..."
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Shown after correct answers (if enabled in feedback config)
-                    </p>
-                  </div>
-
-                  {/* Preview */}
-                  <div className="mt-3 p-3 bg-gray-50 rounded border">
-                    <label className="block text-xs font-medium mb-2">Preview:</label>
-                    <div className="text-sm">
-                      <div className="mb-2">{item.text || 'Question/prompt will appear here'}</div>
-                      <input
-                        type="text"
-                        placeholder={item.hint || 'Type your answer in Latin...'}
-                        className="w-full p-2 border rounded text-sm bg-white"
-                        disabled
-                        value=""
-                      />
-                      <div className="text-xs text-gray-500 mt-1">
-                        Expected answer: <span className="font-mono">{item.answer || 'answer'}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <FillItemCard
+              key={index}
+              item={item}
+              index={index}
+              onUpdate={(field, value) => updateItem(index, field, value)}
+              onRemove={() => removeItem(index)}
+              canRemove={editingContent.data.items.length > 1}
+            />
           ))}
 
           {editingContent.data.items.length === 0 && (

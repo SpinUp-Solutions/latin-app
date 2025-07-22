@@ -205,31 +205,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
             ],
           },
           solution: {
-            words: [
-              {
-                id: 'word-1',
-                text: 'Marcus',
-                index: 0,
-                startPosition: 0,
-                endPosition: 6,
-              },
-              {
-                id: 'word-2',
-                text: 'puellam',
-                index: 1,
-                startPosition: 7,
-                endPosition: 14,
-              },
-              {
-                id: 'word-3',
-                text: 'videt',
-                index: 2,
-                startPosition: 15,
-                endPosition: 20,
-              },
-            ],
             annotations: {},
-            explanations: {},
           },
           hints: [
             'Start by identifying the verb in the sentence.',

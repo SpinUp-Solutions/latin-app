@@ -6,35 +6,35 @@ export interface DiagrammingExtensionConfig {
   className: string;
   style: string;
   title: string;
-  attributes?: Record<string, { default: any }>;
-  customRender?: (HTMLAttributes: any) => [string, any, number];
+  attributes?: Record<string, { default: unknown }>;
+  customRender?: (HTMLAttributes: Record<string, unknown>) => [string, Record<string, unknown>, number];
 }
 
 export interface DiagrammingCommands {
   [key: string]: {
-    set: (attributes?: Record<string, any>) => any;
-    unset: () => any;
+    set: (attributes?: Record<string, unknown>) => boolean;
+    unset: () => boolean;
   };
 }
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
     diagramming: {
-      setPreposition: (attributes?: Record<string, any>) => ReturnType;
+      setPreposition: (attributes?: Record<string, unknown>) => ReturnType;
       unsetPreposition: () => ReturnType;
-      setSubordination: (attributes?: Record<string, any>) => ReturnType;
+      setSubordination: (attributes?: Record<string, unknown>) => ReturnType;
       unsetSubordination: () => ReturnType;
-      setVerbCircle: (attributes?: Record<string, any>) => ReturnType;
+      setVerbCircle: (attributes?: Record<string, unknown>) => ReturnType;
       unsetVerbCircle: () => ReturnType;
-      setSubjectUnderline: (attributes?: Record<string, any>) => ReturnType;
+      setSubjectUnderline: (attributes?: Record<string, unknown>) => ReturnType;
       unsetSubjectUnderline: () => ReturnType;
-      setDirectObjectUnderline: (attributes?: Record<string, any>) => ReturnType;
+      setDirectObjectUnderline: (attributes?: Record<string, unknown>) => ReturnType;
       unsetDirectObjectUnderline: () => ReturnType;
-      setIndirectObjectBracket: (attributes?: Record<string, any>) => ReturnType;
+      setIndirectObjectBracket: (attributes?: Record<string, unknown>) => ReturnType;
       unsetIndirectObjectBracket: () => ReturnType;
-      setGenitiveArrow: (attributes?: Record<string, any>) => ReturnType;
+      setGenitiveArrow: (attributes?: Record<string, unknown>) => ReturnType;
       unsetGenitiveArrow: () => ReturnType;
-      setAblativePhrase: (attributes?: Record<string, any>) => ReturnType;
+      setAblativePhrase: (attributes?: Record<string, unknown>) => ReturnType;
       unsetAblativePhrase: () => ReturnType;
     };
   }
@@ -87,15 +87,28 @@ export const createDiagrammingExtension = (config: DiagrammingExtensionConfig) =
       const unsetCommandName = `unset${config.name.charAt(0).toUpperCase()}${config.name.slice(1)}`;
 
       return {
-        [setCommandName]: (attributes = {}) => ({ commands, editor }) => {
-          if (editor.isActive(this.name)) {
+        [setCommandName]:
+          (attributes = {}) =>
+          ({
+            commands,
+            editor,
+          }: {
+            commands: {
+              setMark: (name: string, attrs?: Record<string, unknown>) => boolean;
+              unsetMark: (name: string) => boolean;
+            };
+            editor: { isActive: (name: string) => boolean };
+          }) => {
+            if (editor.isActive(this.name)) {
+              return commands.unsetMark(this.name);
+            }
+            return commands.setMark(this.name, attributes);
+          },
+        [unsetCommandName]:
+          () =>
+          ({ commands }: { commands: { unsetMark: (name: string) => boolean } }) => {
             return commands.unsetMark(this.name);
-          }
-          return commands.setMark(this.name, attributes);
-        },
-        [unsetCommandName]: () => ({ commands }) => {
-          return commands.unsetMark(this.name);
-        },
+          },
       };
     },
   });
@@ -106,14 +119,16 @@ export const extensionConfigs: DiagrammingExtensionConfig[] = [
     name: 'preposition',
     dataAttribute: 'data-preposition',
     className: 'preposition-annotation',
-    style: 'background-color: #fef3c7; border: 1px solid #f59e0b; padding: 1px 2px; border-radius: 3px; position: relative;',
+    style:
+      'background-color: #fef3c7; border: 1px solid #f59e0b; padding: 1px 2px; border-radius: 3px; position: relative;',
     title: 'Preposition',
   },
   {
     name: 'subordination',
     dataAttribute: 'data-subordination',
     className: 'subordination-annotation',
-    style: 'background-color: #dbeafe; border: 2px dashed #3b82f6; padding: 1px 2px; border-radius: 3px; position: relative;',
+    style:
+      'background-color: #dbeafe; border: 2px dashed #3b82f6; padding: 1px 2px; border-radius: 3px; position: relative;',
     title: 'Subordinate Clause',
     attributes: {
       clauseType: {
@@ -138,10 +153,10 @@ export const extensionConfigs: DiagrammingExtensionConfig[] = [
         default: false,
       },
     },
-    customRender: (HTMLAttributes) => {
+    customRender: HTMLAttributes => {
       const voice = HTMLAttributes.voice || 'active';
       const isActive = voice === 'active';
-      
+
       return [
         'span',
         mergeAttributes(HTMLAttributes, {
@@ -187,7 +202,8 @@ export const extensionConfigs: DiagrammingExtensionConfig[] = [
     name: 'genitiveArrow',
     dataAttribute: 'data-genitive-arrow',
     className: 'genitive-arrow-annotation',
-    style: 'background-color: #fdf4ff; border: 1px solid #a855f7; padding: 1px 2px; border-radius: 3px; position: relative;',
+    style:
+      'background-color: #fdf4ff; border: 1px solid #a855f7; padding: 1px 2px; border-radius: 3px; position: relative;',
     title: 'Genitive (shows possession/relationship)',
     attributes: {
       genitiveWordId: {
@@ -215,7 +231,7 @@ export const extensionConfigs: DiagrammingExtensionConfig[] = [
         default: false,
       },
     },
-    customRender: (HTMLAttributes) => {
+    customRender: HTMLAttributes => {
       const ablativeType = HTMLAttributes.ablativeType || 'means';
       const typeColors = {
         agent: '#ef4444',
@@ -226,9 +242,9 @@ export const extensionConfigs: DiagrammingExtensionConfig[] = [
         accompaniment: '#ec4899',
         separation: '#6b7280',
       };
-      
+
       const color = typeColors[ablativeType as keyof typeof typeColors] || '#06b6d4';
-      
+
       return [
         'span',
         mergeAttributes(HTMLAttributes, {

@@ -12,10 +12,10 @@ import { Button } from '../button';
 import { CheckCircle, HelpCircle, RotateCcw } from 'lucide-react';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { FeedbackDisplay } from '../feedback';
-import { 
-  extractAnnotationsFromEditor, 
-  handleAnnotationClick, 
-  handleClearAnnotations 
+import {
+  extractAnnotationsFromEditor,
+  handleAnnotationClick,
+  handleClearAnnotations,
 } from '@/src/utils/sentenceDiagramming';
 
 interface SentenceDiagrammingExerciseProps {
@@ -27,7 +27,7 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
   console.log('=== EXERCISE COMPONENT RECEIVED ===');
   console.log('Exercise data:', exercise);
   console.log('Solution annotations:', exercise.data.solution.annotations);
-  
+
   const [userAnnotations, setUserAnnotations] = useState<Record<string, AnnotationType>>({});
   const [showHint, setShowHint] = useState(false);
   const [currentHintIndex, setCurrentHintIndex] = useState(0);
@@ -64,16 +64,17 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
     },
   });
 
-
   const clearAnnotations = () => {
     if (isCorrect === true) return;
-    
-    handleClearAnnotations(editor);
+
+    if (editor) {
+      handleClearAnnotations(editor);
+    }
     setUserAnnotations({});
   };
 
   const handleSubmit = () => {
-    const result = validateAnnotations(userAnnotations, exercise.data.solution);
+    const result = validateAnnotations(userAnnotations, exercise.data.solution.annotations);
     if (result.isComplete) {
       handleCorrect(true); // Always complete since there's only one step
       if (onComplete) {
@@ -104,14 +105,15 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
     }
   };
 
-  const validateAnnotations = (userAnnotations: Record<string, AnnotationType>, solution: any) => {
+  const validateAnnotations = (
+    userAnnotations: Record<string, AnnotationType>,
+    solutionAnnotations: Record<string, AnnotationType>
+  ) => {
     console.log('=== VALIDATION DEBUG ===');
     console.log('User annotations:', userAnnotations);
-    console.log('Solution annotations:', solution.annotations);
-
-    const solutionAnnotations = solution.annotations;
+    console.log('Solution annotations:', solutionAnnotations);
     let totalCorrect = 0;
-    let totalExpected = Object.keys(solutionAnnotations).length;
+    const totalExpected = Object.keys(solutionAnnotations).length;
 
     // Count matches between user annotations and solution
     Object.keys(solutionAnnotations).forEach(wordId => {
@@ -148,7 +150,15 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
         <div className="sentence-diagramming-editor border border-gray-300 rounded-md">
           <DiagrammingToolbar
             editor={editor}
-            onAnnotationClick={(type) => handleAnnotationClick(editor, type, exercise.data.sentence.words, exercise.data.sentence.latin, isCorrect === true)}
+            onAnnotationClick={type =>
+              handleAnnotationClick(
+                editor,
+                type,
+                exercise.data.sentence.words,
+                exercise.data.sentence.latin,
+                isCorrect === true
+              )
+            }
             onClearAnnotations={clearAnnotations}
             onAddTooltip={() => {}}
             disabled={isCorrect === true}

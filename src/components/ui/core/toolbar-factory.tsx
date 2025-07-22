@@ -29,11 +29,7 @@ interface ToolbarFactoryProps {
   onButtonClick?: (type: string, button: ToolbarButton) => void;
 }
 
-export const ToolbarFactory: React.FC<ToolbarFactoryProps> = ({
-  config,
-  editor,
-  onButtonClick,
-}) => {
+export const ToolbarFactory: React.FC<ToolbarFactoryProps> = ({ config, editor, onButtonClick }) => {
   const getButtonClass = (isActive: boolean, customClass?: string) => {
     const baseClass = `
       p-2 rounded hover:bg-gray-200 transition-colors
@@ -46,7 +42,7 @@ export const ToolbarFactory: React.FC<ToolbarFactoryProps> = ({
 
   const handleButtonClick = (button: ToolbarButton) => {
     if (config.disabled) return;
-    
+
     if (button.action) {
       button.action();
     } else if (onButtonClick) {
@@ -64,14 +60,12 @@ export const ToolbarFactory: React.FC<ToolbarFactoryProps> = ({
     <div className={`border-b border-gray-300 p-2 bg-gray-50 space-y-2 ${config.className || ''}`}>
       {config.sections.map((section, sectionIndex) => (
         <div key={sectionIndex} className="flex items-center gap-2">
-          <span className="text-xs font-medium text-gray-600 min-w-[120px]">
-            {section.title}:
-          </span>
+          <span className="text-xs font-medium text-gray-600 min-w-[120px]">{section.title}:</span>
           <div className="flex items-center gap-1">
             {section.items.map((button, buttonIndex) => {
               const isActive = button.isActive ?? editor.isActive(button.type);
               const disabled = isButtonDisabled(button);
-              
+
               return (
                 <button
                   key={buttonIndex}
@@ -79,8 +73,7 @@ export const ToolbarFactory: React.FC<ToolbarFactoryProps> = ({
                   onClick={() => handleButtonClick(button)}
                   className={getButtonClass(isActive, button.className)}
                   title={button.title}
-                  disabled={disabled}
-                >
+                  disabled={disabled}>
                   <button.icon className="w-4 h-4" />
                 </button>
               );
@@ -110,10 +103,7 @@ export const useToolbarFactory = () => {
     items,
   });
 
-  const createConfig = (
-    sections: ToolbarSection[],
-    options: Partial<ToolbarConfig> = {}
-  ): ToolbarConfig => ({
+  const createConfig = (sections: ToolbarSection[], options: Partial<ToolbarConfig> = {}): ToolbarConfig => ({
     sections,
     ...options,
   });

@@ -73,7 +73,9 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onCom
       return <VerbConjugationExercise exercise={content as VerbConjugationExerciseType} onComplete={onComplete} />;
 
     case 'sentence-diagramming':
-      return <SentenceDiagrammingExercise exercise={content as SentenceDiagrammingExerciseType} onComplete={onComplete} />;
+      return (
+        <SentenceDiagrammingExercise exercise={content as SentenceDiagrammingExerciseType} onComplete={onComplete} />
+      );
 
     default:
       return (

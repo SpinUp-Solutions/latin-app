@@ -1,12 +1,28 @@
 import { AnnotationType, SentenceWord } from '@/src/types/exercises/sentence-diagramming';
+import { Editor } from '@tiptap/react';
 
-export const extractAnnotationsFromEditor = (editor: any): Record<string, AnnotationType> => {
+interface TipTapMark {
+  type: string;
+  attrs?: {
+    wordIds?: string[];
+    [key: string]: unknown;
+  };
+}
+
+interface TipTapNode {
+  type?: string;
+  text?: string;
+  marks?: TipTapMark[];
+  content?: TipTapNode[];
+}
+
+export const extractAnnotationsFromEditor = (editor: Editor): Record<string, AnnotationType> => {
   const annotations: Record<string, AnnotationType> = {};
   const doc = editor.getJSON();
 
-  const traverseNode = (node: any) => {
-    if (node.marks) {
-      node.marks.forEach((mark: any) => {
+  const traverseNode = (node: unknown) => {
+    if (node && typeof node === 'object' && 'marks' in node && Array.isArray((node as TipTapNode).marks)) {
+      (node as TipTapNode).marks!.forEach(mark => {
         // Map TipTap extension names to annotation types
         const typeMap: Record<string, AnnotationType> = {
           preposition: 'preposition',
@@ -22,15 +38,15 @@ export const extractAnnotationsFromEditor = (editor: any): Record<string, Annota
         const annotationType = typeMap[mark.type];
         if (annotationType && mark.attrs?.wordIds) {
           // For each word in the annotation, map wordId -> annotationType
-          mark.attrs.wordIds.forEach((wordId: string) => {
+          mark.attrs.wordIds.forEach(wordId => {
             annotations[wordId] = annotationType;
           });
         }
       });
     }
 
-    if (node.content) {
-      node.content.forEach(traverseNode);
+    if (node && typeof node === 'object' && 'content' in node && Array.isArray((node as TipTapNode).content)) {
+      (node as TipTapNode).content!.forEach(traverseNode);
     }
   };
 
@@ -66,7 +82,7 @@ export const getAttributesForAnnotationType = (type: AnnotationType, wordIds: st
  * Gets word IDs from TipTap editor selection
  */
 export const getWordIdsFromSelection = (
-  editor: any,
+  editor: Editor,
   from: number,
   to: number,
   words: SentenceWord[],
@@ -101,7 +117,7 @@ export const getWordIdsFromSelection = (
  * Handles annotation click by applying the appropriate TipTap command
  */
 export const handleAnnotationClick = (
-  editor: any,
+  editor: Editor,
   annotationType: AnnotationType,
   words: SentenceWord[],
   sentence: string,
@@ -151,7 +167,7 @@ export const handleAnnotationClick = (
 /**
  * Clears all diagramming annotations from TipTap editor
  */
-export const handleClearAnnotations = (editor: any) => {
+export const handleClearAnnotations = (editor: Editor) => {
   if (!editor) return;
 
   // Clear all diagramming annotations explicitly
