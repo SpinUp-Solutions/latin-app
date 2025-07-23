@@ -14,56 +14,93 @@ import {
   saveLesson,
   resetLessonState,
   clearError,
-  loadDraft,
+  clearLastSavedLesson,
+  loadDrafts,
   setLesson,
   clearDraft,
+  saveDraft,
+  selectHasDraft,
 } from '@/src/store/slices/lessonSlice';
-import { useLessonDraft } from '@/src/hooks/useLessonDraft';
-import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
+import { useBeforeUnload } from '@/src/hooks/useLessonDraft';
+import { UnifiedDialog } from '@/src/components/ui/core/UnifiedDialog';
 
 export default function CreateLessonPage() {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const { user, loading: authLoading } = useSelector((state: RootState) => state.auth);
-  const { saving, error, lastSavedLesson, draft, currentLesson } = useSelector((state: RootState) => state.lesson);
-  const { saveDraftToStorage, lastSavedTime } = useLessonDraft(true);
+  const { saving, error, lastSavedLesson, drafts, currentLesson } = useSelector((state: RootState) => state.lesson);
+
+  const [isContinuingDraft, setIsContinuingDraft] = useState(false);
+  const [originalDraft, setOriginalDraft] = useState<Lesson | null>(null);
+  const [lastSavedTime, setLastSavedTime] = useState<Date | null>(null);
   const [dialogState, setDialogState] = useState<{
     isOpen: boolean;
     title: string;
     description: string;
+    confirmText: string;
+    alternateText?: string;
     onConfirm: () => void;
+    onAlternate?: () => void;
   } | null>(null);
 
-  // Load draft from storage into Redux state on mount
+  const hasDraft = useSelector((state: RootState) => (currentLesson ? selectHasDraft(state, currentLesson.id) : false));
+
+  useBeforeUnload(hasDraft);
+
+  // Initialize page state
   useEffect(() => {
-    dispatch(loadDraft());
+    const urlParams = new URLSearchParams(window.location.search);
+    const continueDraft = urlParams.get('continue');
+    const lessonId = urlParams.get('lessonId');
+
+    dispatch(clearError());
+    dispatch(clearLastSavedLesson());
+    dispatch(loadDrafts());
+
+    if (continueDraft === 'true' && lessonId) {
+      setIsContinuingDraft(true);
+      setTimeout(() => {
+        const draft = drafts[lessonId];
+        if (draft) {
+          setOriginalDraft(JSON.parse(JSON.stringify(draft.lesson)));
+          dispatch(setLesson(draft.lesson));
+        }
+      }, 100);
+    } else {
+      setIsContinuingDraft(false);
+      setOriginalDraft(null);
+      dispatch(setLesson(undefined));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch]);
 
-  // Once draft is loaded into Redux, set it as the current lesson for editing
+  // Cleanup on unmount
   useEffect(() => {
-    if (draft) {
-      dispatch(setLesson(draft.lesson));
-    }
-  }, [draft, dispatch]);
+    return () => {
+      dispatch(resetLessonState());
+    };
+  }, [dispatch]);
 
-  // Auto-save the current lesson to storage whenever it changes
+  // Auto-save functionality
   useEffect(() => {
     if (currentLesson) {
       const timer = setTimeout(() => {
-        saveDraftToStorage(currentLesson);
+        dispatch(saveDraft(currentLesson));
+        setLastSavedTime(new Date());
       }, 1000);
       return () => clearTimeout(timer);
     }
-  }, [currentLesson, saveDraftToStorage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentLesson, dispatch]);
 
   // Handle successful save
   useEffect(() => {
-    if (lastSavedLesson && !saving && !error) {
+    if (lastSavedLesson && !saving && !error && currentLesson && lastSavedLesson.id === currentLesson.id) {
       toast.success('Lesson saved successfully!');
-      dispatch(clearDraft());
+      dispatch(clearDraft(lastSavedLesson.id));
       router.push('/admin/lessons/manage');
     }
-  }, [lastSavedLesson, saving, error, dispatch, router]);
+  }, [lastSavedLesson, saving, error, currentLesson, dispatch, router]);
 
   // Handle save error
   useEffect(() => {
@@ -83,33 +120,35 @@ export default function CreateLessonPage() {
   };
 
   const handleBackToAdmin = () => {
-    if (draft) {
+    if (!currentLesson) {
+      router.push('/admin');
+      return;
+    }
+
+    if (hasDraft) {
       setDialogState({
         isOpen: true,
         title: 'You have unsaved changes',
-        description: 'Leaving now will keep your changes as a draft. Are you sure you want to leave?',
+        description: 'What would you like to do with your changes?',
+        confirmText: 'Save as Draft & Exit',
+        alternateText: isContinuingDraft ? 'Revert to Original & Exit' : 'Discard Changes & Exit',
         onConfirm: () => {
           dispatch(resetLessonState());
           router.push('/admin');
         },
+        onAlternate: () => {
+          if (isContinuingDraft && originalDraft) {
+            dispatch(saveDraft(originalDraft));
+          } else {
+            dispatch(clearDraft(currentLesson.id));
+          }
+          dispatch(resetLessonState());
+          router.push('/admin');
+        },
       });
-      return;
+    } else {
+      router.push('/admin');
     }
-    dispatch(resetLessonState());
-    router.push('/admin');
-  };
-
-  const handleClearDraft = () => {
-    setDialogState({
-      isOpen: true,
-      title: 'Clear draft?',
-      description: 'This will permanently discard your unsaved changes. This action cannot be undone.',
-      onConfirm: () => {
-        dispatch(clearDraft());
-        dispatch(resetLessonState());
-        toast.success('Draft cleared. Starting fresh!');
-      },
-    });
   };
 
   if (authLoading || !user) {
@@ -140,7 +179,7 @@ export default function CreateLessonPage() {
               <h1 className="text-xl font-serif tracking-wide">Create New Lesson</h1>
               <p className="text-sm text-roman-stone">
                 Build a new lesson from scratch
-                {draft && (
+                {hasDraft && (
                   <span className="inline-flex items-center gap-1 ml-2 px-2 py-1 text-xs bg-amber-100 text-amber-800 rounded-full">
                     <span className="w-2 h-2 bg-amber-500 rounded-full inline-block"></span>
                     Draft
@@ -151,7 +190,7 @@ export default function CreateLessonPage() {
           </div>
         </div>
         <div className="flex items-center gap-4">
-          {draft && !saving && lastSavedTime && (
+          {hasDraft && !saving && lastSavedTime && (
             <div className="flex items-center gap-2 text-sm text-green-600">
               <span className="w-2 h-2 bg-green-500 rounded-full inline-block"></span>
               Draft saved at {lastSavedTime.toLocaleTimeString()}
@@ -163,25 +202,20 @@ export default function CreateLessonPage() {
               Saving lesson...
             </div>
           )}
-          {draft && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleClearDraft}
-              className="text-red-600 hover:text-red-700 hover:bg-red-50">
-              Clear Draft
-            </Button>
-          )}
         </div>
       </header>
 
       <LessonBuilder onSave={handleSaveLesson} />
-      <ConfirmationDialog
+
+      <UnifiedDialog
         isOpen={dialogState?.isOpen || false}
         onClose={() => setDialogState(null)}
-        onConfirm={() => dialogState?.onConfirm()}
         title={dialogState?.title || ''}
         description={dialogState?.description || ''}
+        confirmText={dialogState?.confirmText || 'Confirm'}
+        alternateText={dialogState?.alternateText}
+        onConfirm={dialogState?.onConfirm || (() => {})}
+        onAlternate={dialogState?.onAlternate}
       />
     </div>
   );
