@@ -32,7 +32,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onCom
           title={textContent.title || ''}
           content={textContent.content}
           className=""
-          audioPath={textContent.audioPath}
+          audioPath={textContent.audioPath || undefined}
         />
       );
 
@@ -43,7 +43,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onCom
           title={emphasisContent.title || ''}
           content={emphasisContent.content}
           className=""
-          audioPath={emphasisContent.audioPath}
+          audioPath={emphasisContent.audioPath || undefined}
         />
       );
 

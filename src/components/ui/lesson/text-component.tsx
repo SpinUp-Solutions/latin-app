@@ -1,13 +1,14 @@
 'use client';
 
 import React from 'react';
-import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
+import AudioPlayButton from '../core/audio-play-button';
+import { TooltipRenderer } from '../core/tooltip-renderer';
 
 interface TextComponentProps {
   title: string;
   content: string;
   className?: string;
-  audioPath?: string | null;
+  audioPath?: string;
 }
 
 export const TextComponent: React.FC<TextComponentProps> = ({ title, content, className = '', audioPath }) => {
@@ -24,9 +25,9 @@ export const TextComponent: React.FC<TextComponentProps> = ({ title, content, cl
           />
         )}
       </div>
-      <div
+      <TooltipRenderer
+        content={content}
         className="p-4 bg-roman-parchment rounded-lg prose dark:prose-invert max-w-none prose-p:my-2 prose-p:leading-snug prose-headings:my-4 prose-ul:my-2 prose-ol:my-2"
-        dangerouslySetInnerHTML={{ __html: content }}
       />
     </div>
   );

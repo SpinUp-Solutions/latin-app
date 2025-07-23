@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { Lesson, IntroductionPage, ExercisePage } from '@/src/types/lesson';
 import { RenderableContentItem } from '@/src/types/page';
 import { lessonService } from '@/src/services/lessonService';
+import { TooltipData } from '@/src/types/tooltip';
 
 interface LessonWithMetadata extends Lesson {
   createdAt?: string;
@@ -31,6 +32,8 @@ interface LessonEditState {
   saving: boolean;
   error: string | null;
   lastSavedLesson: LessonWithMetadata | null;
+
+  tooltips: Record<string, TooltipData>;
 }
 
 const initialState: LessonEditState = {
@@ -44,6 +47,8 @@ const initialState: LessonEditState = {
   saving: false,
   error: null,
   lastSavedLesson: null,
+
+  tooltips: {},
 };
 
 const DRAFT_KEY = 'lesson_draft';
@@ -295,6 +300,19 @@ const lessonSlice = createSlice({
       state.error = null;
       state.lastSavedLesson = null;
     },
+
+    addTooltip: (state, action: PayloadAction<{ id: string; data: Omit<TooltipData, 'id'> }>) => {
+      const { id, data } = action.payload;
+      state.tooltips[id] = { ...data, id };
+    },
+
+    removeTooltip: (state, action: PayloadAction<string>) => {
+      delete state.tooltips[action.payload];
+    },
+
+    clearTooltips: state => {
+      state.tooltips = {};
+    },
   },
   extraReducers: builder => {
     // Save Lesson
@@ -408,6 +426,9 @@ export const {
   cancelEditing,
   clearError,
   resetLessonState,
+  addTooltip,
+  removeTooltip,
+  clearTooltips,
 } = lessonSlice.actions;
 
 export default lessonSlice.reducer;
