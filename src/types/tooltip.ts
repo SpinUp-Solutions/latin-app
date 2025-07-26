@@ -17,13 +17,16 @@ interface GrammaticalFields {
   principalParts?: string[];
 }
 
+// Unified tooltip data interface
 export interface TooltipData extends BaseTooltipFields, GrammaticalFields {
   id: string;
 }
 
-export interface TooltipFormData extends BaseTooltipFields, GrammaticalFields {
-  word: string;
-}
+// Form data interface for creating/editing tooltips
+export interface TooltipFormData extends BaseTooltipFields, GrammaticalFields {}
+
+// Legacy type alias for backwards compatibility
+export type TooltipFormDataLegacy = TooltipFormData;
 
 export interface MousePosition {
   x: number;
@@ -36,22 +39,9 @@ export interface TooltipPosition {
   isBelow: boolean;
 }
 
-// TipTap mark-specific types
-export interface TooltipMarkAttrs {
+// TipTap mark-specific types - using the same base structure for consistency
+export interface TooltipMarkAttrs extends BaseTooltipFields, GrammaticalFields {
   tooltipId: string;
-  word: string;
-  translation?: string;
-  pronunciation?: string;
-  partOfSpeech?: string;
-  wordType?: string;
-  definition?: string;
-  examples?: string[];
-  etymology?: string;
-  gender?: string;
-  declensionClass?: string;
-  conjugationClass?: string;
-  grammaticalInfo?: string;
-  principalParts?: string[];
 }
 
 export interface TooltipMark {

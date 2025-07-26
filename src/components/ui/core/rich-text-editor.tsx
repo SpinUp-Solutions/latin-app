@@ -1,15 +1,11 @@
-import React, { useState } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { useEditor, EditorContent } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
-import { Tooltip } from './tooltip-extension';
+import React from 'react';
+import { EditorContent } from '@tiptap/react';
 import { TooltipEditorDialog } from './tooltip-editor-dialog';
 import { ToolbarFactory } from './toolbar-factory';
 import { useToolbarConfig } from '@/src/hooks/useToolbarConfig';
-import { addTooltip, removeTooltip } from '@/src/store/slices/lessonSlice';
-import { TooltipData } from '@/src/types/tooltip';
-import { findTooltipMark, generateTooltipId } from '@/src/utils/tooltipUtils';
-import { RootState } from '@/src/store';
+import { useTipTapEditor } from '@/src/hooks/useTipTapEditor';
+import { useTooltipManager } from '@/src/hooks/useTooltipManager';
+import { getAdminExtensions } from '@/src/utils/tiptapExtensions';
 
 interface RichTextEditorProps {
   content: string;
@@ -18,103 +14,20 @@ interface RichTextEditorProps {
 }
 
 const RichTextEditor: React.FC<RichTextEditorProps> = ({ content, onChange, className }) => {
-  const [isTooltipDialogOpen, setIsTooltipDialogOpen] = useState(false);
-  const [selectedText, setSelectedText] = useState('');
-  const [existingTooltipData, setExistingTooltipData] = useState<TooltipData | null>(null);
-  const dispatch = useDispatch();
-  const tooltips = useSelector((state: RootState) => state.lesson.tooltips);
-
-  const editor = useEditor({
-    extensions: [StarterKit, Tooltip],
-    content: content,
-    immediatelyRender: false,
-    onUpdate: ({ editor }) => {
-      onChange(editor.getHTML());
-    },
-    onSelectionUpdate: ({ editor }) => {
-      const { from, to } = editor.state.selection;
-      const text = editor.state.doc.textBetween(from, to);
-      setSelectedText(text);
-    },
-    editorProps: {
-      attributes: {
-        class: 'rich-text-editor-content',
-      },
-    },
+  const editor = useTipTapEditor({
+    extensions: getAdminExtensions({ enableAnnotations: false }),
+    initialContent: content,
+    className: 'rich-text-editor-content',
+    onUpdate: (editor, html) => onChange(html),
   });
 
-  const handleAddTooltip = () => {
-    if (!editor) return;
+  const tooltipManager = useTooltipManager({ editor });
 
-    const { from, to } = editor.state.selection;
-    const selectedText = editor.state.doc.textBetween(from, to);
-
-    if (!selectedText.trim()) {
-      alert('Please select text to add a tooltip');
-      return;
-    }
-
-    const tooltipMark = findTooltipMark(editor, from, to);
-
-    if (tooltipMark && tooltipMark.attrs) {
-      // Get existing tooltip data
-      const tooltipId = tooltipMark.attrs.tooltipId;
-      const existingData = tooltips[tooltipId];
-      if (existingData) {
-        setExistingTooltipData(existingData);
-        setSelectedText(tooltipMark.attrs.word || selectedText);
-      }
-    } else {
-      setExistingTooltipData(null);
-      setSelectedText(selectedText);
-    }
-
-    setIsTooltipDialogOpen(true);
-  };
-
-  const handleSaveTooltip = (tooltipData: Omit<TooltipData, 'id'>) => {
-    if (!editor) return;
-
-    let tooltipId: string;
-
-    if (existingTooltipData) {
-      // Update existing tooltip
-      tooltipId = existingTooltipData.id;
-      dispatch(addTooltip({ id: tooltipId, data: tooltipData }));
-    } else {
-      // Create new tooltip
-      tooltipId = generateTooltipId(tooltipData.word);
-      dispatch(addTooltip({ id: tooltipId, data: tooltipData }));
-    }
-
-    // Add/update tooltip mark to editor with the ID
-    editor
-      .chain()
-      .focus()
-      .setTooltip({ ...tooltipData, tooltipId })
-      .run();
-
-    setIsTooltipDialogOpen(false);
-    setExistingTooltipData(null);
-  };
-
-  const handleRemoveTooltip = () => {
-    if (!editor || !existingTooltipData) return;
-
-    // Remove tooltip from Redux
-    dispatch(removeTooltip(existingTooltipData.id));
-
-    // Remove tooltip mark from editor
-    editor.chain().focus().unsetTooltip().run();
-
-    setIsTooltipDialogOpen(false);
-    setExistingTooltipData(null);
-  };
 
   const toolbarConfig = useToolbarConfig({
     type: 'rich-text',
     editor,
-    onAddTooltip: handleAddTooltip,
+    onAddTooltip: tooltipManager.handleAddTooltip,
   });
 
   return (
@@ -122,15 +35,12 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ content, onChange, clas
       {toolbarConfig && editor && <ToolbarFactory config={toolbarConfig} editor={editor} />}
       <EditorContent editor={editor} />
       <TooltipEditorDialog
-        isOpen={isTooltipDialogOpen}
-        onClose={() => {
-          setIsTooltipDialogOpen(false);
-          setExistingTooltipData(null);
-        }}
-        onSave={handleSaveTooltip}
-        onRemove={handleRemoveTooltip}
-        selectedText={selectedText}
-        initialData={existingTooltipData}
+        isOpen={tooltipManager.isDialogOpen}
+        onClose={tooltipManager.handleCloseDialog}
+        onSave={tooltipManager.handleSaveTooltip}
+        onRemove={tooltipManager.editingTooltip ? tooltipManager.handleRemoveTooltip : undefined}
+        selectedText={tooltipManager.selectedText}
+        initialData={tooltipManager.editingTooltip}
       />
     </div>
   );
