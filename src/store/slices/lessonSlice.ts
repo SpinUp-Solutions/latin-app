@@ -3,6 +3,7 @@ import { Lesson, IntroductionPage, ExercisePage } from '@/src/types/lesson';
 import { RenderableContentItem } from '@/src/types/page';
 import { lessonService } from '@/src/services/lessonService';
 import { TooltipData } from '@/src/types/tooltip';
+import { extractTooltipsFromLesson } from '@/src/utils/tooltipUtils';
 
 interface LessonWithMetadata extends Lesson {
   createdAt?: string;
@@ -84,7 +85,11 @@ export const loadLessonById = createAsyncThunk(
   async (lessonId: string, { rejectWithValue }) => {
     try {
       const lesson = await lessonService.getLesson(lessonId);
-      return lesson as LessonWithMetadata;
+      const tooltips = extractTooltipsFromLesson(lesson);
+      return { 
+        lesson: lesson as LessonWithMetadata,
+        tooltips
+      };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to load lesson';
       return rejectWithValue(errorMessage);
@@ -337,6 +342,10 @@ const lessonSlice = createSlice({
     clearTooltips: state => {
       state.tooltips = {};
     },
+
+    loadTooltips: (state, action: PayloadAction<Record<string, TooltipData>>) => {
+      state.tooltips = { ...state.tooltips, ...action.payload };
+    },
   },
   extraReducers: builder => {
     // Save Lesson
@@ -394,7 +403,8 @@ const lessonSlice = createSlice({
       .addCase(loadLessonById.fulfilled, (state, action) => {
         state.loading = false;
         state.error = null;
-        state.currentLesson = action.payload;
+        state.currentLesson = action.payload.lesson;
+        state.tooltips = action.payload.tooltips;
       })
       .addCase(loadLessonById.rejected, (state, action) => {
         state.loading = false;
@@ -457,6 +467,7 @@ export const {
   addTooltip,
   removeTooltip,
   clearTooltips,
+  loadTooltips,
 } = lessonSlice.actions;
 
 // Selectors

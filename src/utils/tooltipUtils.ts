@@ -219,3 +219,105 @@ export const calculateTooltipPosition = (
 
   return { x, y, isBelow };
 };
+
+/**
+ * Extracts tooltip data from HTML content and returns it as a Record
+ * suitable for Redux store population
+ */
+export const extractTooltipsFromContent = (htmlContent: string): Record<string, TooltipData> => {
+  const tooltips: Record<string, TooltipData> = {};
+  
+  // Create a temporary DOM element to parse the HTML
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = htmlContent;
+  
+  // Find all elements with tooltip attributes
+  const tooltipElements = tempDiv.querySelectorAll('[data-tooltip="true"]');
+  
+  tooltipElements.forEach((element) => {
+    const tooltipId = element.getAttribute('data-tooltip-id');
+    if (!tooltipId) return;
+    
+    // Extract all tooltip data from attributes
+    const examples = element.getAttribute('examples');
+    const principalParts = element.getAttribute('principalParts');
+    
+    const tooltipData: TooltipData = {
+      id: tooltipId,
+      word: element.getAttribute('word') || '',
+      translation: element.getAttribute('translation') || '',
+      pronunciation: element.getAttribute('pronunciation') || '',
+      partOfSpeech: element.getAttribute('partOfSpeech') || '',
+      wordType: element.getAttribute('wordtype') || '',
+      definition: element.getAttribute('definition') || '',
+      examples: examples ? examples.split(',').map(ex => ex.trim()) : [],
+      etymology: element.getAttribute('etymology') || '',
+      gender: element.getAttribute('gender') || '',
+      declensionClass: element.getAttribute('declensionClass') || '',
+      conjugationClass: element.getAttribute('conjugationClass') || '',
+      grammaticalInfo: element.getAttribute('grammaticalInfo') || '',
+      principalParts: principalParts ? principalParts.split(',').map(part => part.trim()) : [],
+    };
+    
+    // Only add if we have meaningful data
+    if (tooltipData.word || tooltipData.translation) {
+      tooltips[tooltipId] = tooltipData;
+    }
+  });
+  
+  return tooltips;
+};
+
+/**
+ * Recursively extracts tooltips from all content in a lesson structure
+ */
+export const extractTooltipsFromLesson = (lesson: any): Record<string, TooltipData> => {
+  const allTooltips: Record<string, TooltipData> = {};
+  
+  const extractFromContentArray = (items: any[]) => {
+    items.forEach(item => {
+      if (typeof item === 'object' && item !== null) {
+        // Check for content property (TipTap editor content)
+        if (item.content && typeof item.content === 'string') {
+          const tooltips = extractTooltipsFromContent(item.content);
+          Object.assign(allTooltips, tooltips);
+        }
+        
+        // Check for sentence content (in exercises)
+        if (item.data?.sentence?.content && typeof item.data.sentence.content === 'string') {
+          const tooltips = extractTooltipsFromContent(item.data.sentence.content);
+          Object.assign(allTooltips, tooltips);
+        }
+        
+        // Recursively check nested objects and arrays
+        Object.values(item).forEach(value => {
+          if (Array.isArray(value)) {
+            extractFromContentArray(value);
+          } else if (typeof value === 'object' && value !== null) {
+            extractFromContentArray([value]);
+          }
+        });
+      }
+    });
+  };
+  
+  // Extract from introduction pages
+  if (lesson.introduction && Array.isArray(lesson.introduction)) {
+    lesson.introduction.forEach((page: any) => {
+      if (page.content && Array.isArray(page.content)) {
+        extractFromContentArray(page.content);
+      }
+    });
+  }
+  
+  // Extract from exercise pages
+  if (lesson.exercises && Array.isArray(lesson.exercises)) {
+    lesson.exercises.forEach((page: any) => {
+      if (page.content && Array.isArray(page.content)) {
+        extractFromContentArray(page.content);
+      }
+    });
+  }
+  
+  return allTooltips;
+};

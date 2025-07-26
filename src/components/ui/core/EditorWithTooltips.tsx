@@ -96,32 +96,9 @@ export const EditorWithTooltips: React.FC<EditorWithTooltipsProps> = ({
           hideTimeoutRef.current = undefined;
         }
 
-        // Try Redux store first, then fall back to element attributes
-        let tooltipData = tooltips[tooltipId];
-        if (!tooltipData) {
-          // Read data directly from element attributes
-          const examples = tooltipElement.getAttribute('examples');
-          const principalParts = tooltipElement.getAttribute('principalParts');
-
-          tooltipData = {
-            id: tooltipId,
-            word: tooltipElement.getAttribute('word') || '',
-            translation: tooltipElement.getAttribute('translation') || '',
-            pronunciation: tooltipElement.getAttribute('pronunciation') || '',
-            partOfSpeech: tooltipElement.getAttribute('partOfSpeech') || '',
-            wordType: tooltipElement.getAttribute('wordtype') || '',
-            definition: tooltipElement.getAttribute('definition') || '',
-            examples: examples ? examples.split(',') : [],
-            etymology: tooltipElement.getAttribute('etymology') || '',
-            gender: tooltipElement.getAttribute('gender') || '',
-            declensionClass: tooltipElement.getAttribute('declensionClass') || '',
-            conjugationClass: tooltipElement.getAttribute('conjugationClass') || '',
-            grammaticalInfo: tooltipElement.getAttribute('grammaticalInfo') || '',
-            principalParts: principalParts ? principalParts.split(',') : [],
-          };
-        }
-
-        if (tooltipData && (tooltipData.word || tooltipData.translation)) {
+        // Get tooltip data from Redux store
+        const tooltipData = tooltips[tooltipId];
+        if (tooltipData) {
           const rect = tooltipElement.getBoundingClientRect();
           setFixedElementPos({
             x: rect.left + rect.width / 2,
