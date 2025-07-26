@@ -23,7 +23,6 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ content, onChange, clas
 
   const tooltipManager = useTooltipManager({ editor });
 
-
   const toolbarConfig = useToolbarConfig({
     type: 'rich-text',
     editor,

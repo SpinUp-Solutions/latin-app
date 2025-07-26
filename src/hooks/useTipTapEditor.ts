@@ -1,9 +1,9 @@
 import { useEditor, Editor } from '@tiptap/react';
-import { Extension } from '@tiptap/core';
+import { Extensions } from '@tiptap/core';
 import { useCallback, useEffect } from 'react';
 
 export interface TipTapEditorOptions {
-  extensions: Extension[];
+  extensions: Extensions;
   initialContent?: string;
   editable?: boolean;
   className?: string;

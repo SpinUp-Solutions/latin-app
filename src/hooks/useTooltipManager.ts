@@ -116,19 +116,24 @@ export const useTooltipManager = ({ editor, disabled = false }: TooltipManagerOp
 
       handleCloseDialog();
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [editor, editingTooltip, dispatch]
   );
 
-  const handleRemoveTooltip = useCallback(() => {
-    if (!editor || !editingTooltip) return;
+  const handleRemoveTooltip = useCallback(
+    () => {
+      if (!editor || !editingTooltip) return;
 
-    // Remove from global state
-    dispatch(removeTooltip(editingTooltip.id));
+      // Remove from global state
+      dispatch(removeTooltip(editingTooltip.id));
 
-    // Remove from editor
-    editor.chain().focus().unsetTooltip().run();
-    handleCloseDialog();
-  }, [editor, editingTooltip, dispatch]);
+      // Remove from editor
+      editor.chain().focus().unsetTooltip().run();
+      handleCloseDialog();
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [editor, editingTooltip, dispatch]
+  );
 
   const handleCloseDialog = useCallback(() => {
     setIsDialogOpen(false);

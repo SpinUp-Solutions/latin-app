@@ -17,7 +17,6 @@ export interface TipTapEditorProps extends Omit<TipTapEditorOptions, 'extensions
 export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   mode = 'admin',
   enableTooltips = true,
-  enableAnnotations = true,
   extensions,
   children,
   showTooltipDialog = true,

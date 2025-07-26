@@ -1,5 +1,5 @@
 import StarterKit from '@tiptap/starter-kit';
-import { Extension } from '@tiptap/core';
+import { Extensions } from '@tiptap/core';
 import { Tooltip } from '@/src/components/ui/core/tooltip-extension';
 import { DiagrammingExtensions } from '@/src/components/ui/core/diagramming-extensions';
 
@@ -21,7 +21,7 @@ const getStarterKitConfig = (mode: EditorMode) => {
     codeBlock: false,
     hardBreak: false,
     horizontalRule: false,
-  };
+  } as const;
 
   if (mode === 'readonly') {
     return {
@@ -29,7 +29,7 @@ const getStarterKitConfig = (mode: EditorMode) => {
       // Disable all text editing features for readonly mode
       paragraph: false,
       text: false,
-    };
+    } as const;
   }
 
   return baseConfig;
@@ -39,8 +39,8 @@ export const createExtensionSet = ({
   mode,
   enableTooltips = true,
   enableAnnotations = true,
-}: ExtensionSetOptions): Extension[] => {
-  const extensions: Extension[] = [StarterKit.configure(getStarterKitConfig(mode))];
+}: ExtensionSetOptions): Extensions => {
+  const extensions: Extensions = [StarterKit.configure(getStarterKitConfig(mode))];
 
   // Add tooltips for all modes except when explicitly disabled
   if (enableTooltips) {
