@@ -20,6 +20,7 @@ import {
   Eraser,
   Undo,
   Redo,
+  ArrowLeft,
 } from 'lucide-react';
 import { ToolbarConfig, useToolbarFactory } from '@/src/components/ui/core/toolbar-factory';
 import { AnnotationType } from '@/src/types/exercises/sentence-diagramming';
@@ -128,6 +129,10 @@ export const useToolbarConfig = ({
             createButton('genitive-arrow', ArrowRight, 'Genitive Arrow', {
               isActive: editor.isActive('genitiveArrow'),
               action: () => onAnnotationClick?.('genitive-arrow'),
+            }),
+            createButton('genitive-arrow-target', ArrowLeft, 'Genitive Target', {
+              isActive: editor.isActive('genitiveArrowTarget'),
+              action: () => onAnnotationClick?.('genitive-arrow-target'),
             }),
             createButton('ablative-phrase', Highlighter, 'Ablative Phrase', {
               isActive: editor.isActive('ablativePhrase'),

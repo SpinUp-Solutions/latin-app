@@ -16,6 +16,7 @@ export type AnnotationType =
   | 'direct-object-underline'
   | 'indirect-object-bracket'
   | 'genitive-arrow'
+  | 'genitive-arrow-target'
   | 'ablative-phrase';
 
 export interface SentenceDiagrammingSolution {

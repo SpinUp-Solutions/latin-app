@@ -32,14 +32,22 @@ export const extractAnnotationsFromEditor = (editor: Editor): Record<string, Ann
           directObjectUnderline: 'direct-object-underline',
           indirectObjectBracket: 'indirect-object-bracket',
           genitiveArrow: 'genitive-arrow',
+          genitiveArrowTarget: 'genitive-arrow-target',
           ablativePhrase: 'ablative-phrase',
         };
 
         const annotationType = typeMap[mark.type];
         if (annotationType && mark.attrs?.wordIds) {
+          // Ensure wordIds is an array before processing
+          const wordIds = Array.isArray(mark.attrs.wordIds) 
+            ? mark.attrs.wordIds 
+            : [mark.attrs.wordIds];
+          
           // For each word in the annotation, map wordId -> annotationType
-          mark.attrs.wordIds.forEach(wordId => {
-            annotations[wordId] = annotationType;
+          wordIds.forEach(wordId => {
+            if (wordId && typeof wordId === 'string') {
+              annotations[wordId] = annotationType;
+            }
           });
         }
       });
@@ -71,6 +79,8 @@ export const getAttributesForAnnotationType = (type: AnnotationType, wordIds: st
         genitiveWordId: wordIds[0],
         modifiedWordId: wordIds[1],
       };
+    case 'genitive-arrow-target':
+      return { ...baseAttributes };
     case 'ablative-phrase':
       return { ...baseAttributes, ablativeType: 'means', hasPreposition: false };
     default:
@@ -156,6 +166,9 @@ export const handleAnnotationClick = (
     case 'genitive-arrow':
       editor.chain().focus().setGenitiveArrow(attributes).run();
       break;
+    case 'genitive-arrow-target':
+      editor.chain().focus().setGenitiveArrowTarget(attributes).run();
+      break;
     case 'ablative-phrase':
       editor.chain().focus().setAblativePhrase(attributes).run();
       break;
@@ -179,6 +192,7 @@ export const handleClearAnnotations = (editor: Editor) => {
     .unsetDirectObjectUnderline()
     .unsetIndirectObjectBracket()
     .unsetGenitiveArrow()
+    .unsetGenitiveArrowTarget()
     .unsetAblativePhrase()
     .run();
 };

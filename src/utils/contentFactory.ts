@@ -173,7 +173,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
         id: baseId,
         type: 'sentence-diagramming',
         title: 'Sentence Diagramming Exercise',
-        instructions: 'Diagram the Latin sentence using the MCS method.',
+        instructions: 'Diagram the Latin sentence ',
         audioPath: null,
         feedbackConfig: createDefaultFeedbackConfig(),
         data: {

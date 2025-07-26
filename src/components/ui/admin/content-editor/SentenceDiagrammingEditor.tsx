@@ -15,15 +15,14 @@ import {
   extractAnnotationsFromEditor,
   handleAnnotationClick,
   handleClearAnnotations,
-  getAttributesForAnnotationType,
 } from '@/src/utils/sentenceDiagramming';
+import { useSelector } from 'react-redux';
 
 export const SentenceDiagrammingEditor: React.FC = () => {
   const dispatch = useAppDispatch();
   const editingContent = useAppSelector(state => state.lesson.editingContent?.content as SentenceDiagrammingExercise);
 
   const [isTooltipDialogOpen, setIsTooltipDialogOpen] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [selectedText, setSelectedText] = useState('');
 
   if (!editingContent) {
@@ -51,7 +50,11 @@ export const SentenceDiagrammingEditor: React.FC = () => {
 
   const handleLatinChange = (latin: string) => {
     const words = tokenizeSentence(latin);
-    handleSentenceChange({ latin, words });
+    handleSentenceChange({
+      latin,
+      words,
+      content: `<p>${latin}</p>`, // Reset content to plain sentence when text changes
+    });
   };
 
   const handleAnnotationsAndContentChange = (annotations: Record<string, AnnotationType>, htmlContent: string) => {
@@ -165,6 +168,7 @@ export const SentenceDiagrammingEditor: React.FC = () => {
           onAnnotationsAndContentChange={handleAnnotationsAndContentChange}
           onAddTooltip={handleAddTooltip}
           editingContent={editingContent}
+          onSelectedTextChange={setSelectedText}
         />
       </div>
 
@@ -208,6 +212,7 @@ interface SentenceDiagrammingCanvasProps {
   onAnnotationsAndContentChange: (annotations: Record<string, AnnotationType>, htmlContent: string) => void;
   onAddTooltip: () => void;
   editingContent: SentenceDiagrammingExercise;
+  onSelectedTextChange: (text: string) => void;
 }
 
 const SentenceDiagrammingCanvas: React.FC<SentenceDiagrammingCanvasProps> = ({
@@ -217,84 +222,46 @@ const SentenceDiagrammingCanvas: React.FC<SentenceDiagrammingCanvasProps> = ({
   onAnnotationsAndContentChange,
   onAddTooltip,
   editingContent,
+  onSelectedTextChange,
 }) => {
-  const editor = useEditor({
-    extensions: [
-      StarterKit.configure({
-        heading: false,
-        bulletList: false,
-        orderedList: false,
-        listItem: false,
-        blockquote: false,
-        codeBlock: false,
-        hardBreak: false,
-        horizontalRule: false,
-      }),
-      Tooltip,
-      ...DiagrammingExtensions,
-    ],
-    content: initialContent || sentence,
-    immediatelyRender: false,
-    onUpdate: ({ editor }) => {
-      const annotations = extractAnnotationsFromEditor(editor);
-      const htmlContent = editor.getHTML();
+  const editor = useEditor(
+    {
+      extensions: [
+        StarterKit.configure({
+          heading: false,
+          bulletList: false,
+          orderedList: false,
+          listItem: false,
+          blockquote: false,
+          codeBlock: false,
+          hardBreak: false,
+          horizontalRule: false,
+        }),
+        Tooltip,
+        ...DiagrammingExtensions,
+      ],
+      content: initialContent || `<p>${sentence}</p>`,
+      immediatelyRender: false,
+      onUpdate: ({ editor }) => {
+        const annotations = extractAnnotationsFromEditor(editor);
+        const htmlContent = editor.getHTML();
 
-      // Single atomic update to prevent race conditions
-      onAnnotationsAndContentChange(annotations, htmlContent);
-    },
-    editorProps: {
-      attributes: {
-        class: 'sentence-diagramming-canvas',
+        // Single atomic update to prevent race conditions
+        onAnnotationsAndContentChange(annotations, htmlContent);
+      },
+      onSelectionUpdate: ({ editor }) => {
+        const { from, to } = editor.state.selection;
+        const text = editor.state.doc.textBetween(from, to);
+        onSelectedTextChange(text);
+      },
+      editorProps: {
+        attributes: {
+          class: 'sentence-diagramming-canvas',
+        },
       },
     },
-  });
-
-  // Generate initial content with annotations if no saved content exists
-  useEffect(() => {
-    if (editor && editingContent && !initialContent) {
-      // Create HTML with embedded annotations
-      const generateAnnotatedHTML = () => {
-        const solutionAnnotations = editingContent.data.solution.annotations;
-        const htmlParts: string[] = [];
-
-        words.forEach(word => {
-          const annotationType = solutionAnnotations[word.id];
-          let wordHtml = word.text;
-
-          if (annotationType) {
-            // Map annotation type to TipTap extension
-            const extensionMap: Record<AnnotationType, string> = {
-              preposition: 'preposition',
-              subordination: 'subordination',
-              'verb-circle': 'verbCircle',
-              'subject-underline': 'subjectUnderline',
-              'direct-object-underline': 'directObjectUnderline',
-              'indirect-object-bracket': 'indirectObjectBracket',
-              'genitive-arrow': 'genitiveArrow',
-              'ablative-phrase': 'ablativePhrase',
-            };
-
-            const extensionName = extensionMap[annotationType];
-            if (extensionName) {
-              const attributes = getAttributesForAnnotationType(annotationType, [word.id]);
-              const attrsString = Object.entries(attributes)
-                .map(([key, value]) => `${key}="${Array.isArray(value) ? value.join(',') : value}"`)
-                .join(' ');
-              wordHtml = `<span data-${extensionName.replace(/([A-Z])/g, '-$1').toLowerCase()}="true" ${attrsString}>${wordHtml}</span>`;
-            }
-          }
-
-          htmlParts.push(wordHtml);
-        });
-
-        // Join with spaces and wrap in paragraph
-        return `<p>${htmlParts.join(' ')}</p>`;
-      };
-
-      const annotatedHTML = generateAnnotatedHTML();
-      editor.commands.setContent(annotatedHTML);
-    }
-  }, [editor, editingContent, initialContent, words]);
+    [initialContent, sentence]
+  ); // Add dependencies to recreate editor when content changes
 
   if (!editor) {
     return <div>Loading editor...</div>;

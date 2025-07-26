@@ -62,7 +62,7 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
         class: 'sentence-diagramming-exercise-content',
       },
     },
-  });
+  }, [exercise.data.sentence.latin]);
 
   const clearAnnotations = () => {
     if (isCorrect === true) return;

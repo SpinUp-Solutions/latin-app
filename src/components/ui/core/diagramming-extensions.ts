@@ -34,6 +34,8 @@ declare module '@tiptap/core' {
       unsetIndirectObjectBracket: () => ReturnType;
       setGenitiveArrow: (attributes?: Record<string, unknown>) => ReturnType;
       unsetGenitiveArrow: () => ReturnType;
+      setGenitiveArrowTarget: (attributes?: Record<string, unknown>) => ReturnType;
+      unsetGenitiveArrowTarget: () => ReturnType;
       setAblativePhrase: (attributes?: Record<string, unknown>) => ReturnType;
       unsetAblativePhrase: () => ReturnType;
     };
@@ -218,6 +220,14 @@ export const extensionConfigs: DiagrammingExtensionConfig[] = [
     },
   },
   {
+    name: 'genitiveArrowTarget',
+    dataAttribute: 'data-genitive-arrow-target',
+    className: 'genitive-arrow-target-annotation',
+    style:
+      'background-color: #fef2f2; border: 1px solid #ef4444; padding: 1px 2px; border-radius: 3px; position: relative;',
+    title: 'Genitive Target (what is possessed/modified)',
+  },
+  {
     name: 'ablativePhrase',
     dataAttribute: 'data-ablative-phrase',
     className: 'ablative-phrase-annotation',
@@ -266,7 +276,8 @@ export const SubjectUnderlineExtension = createDiagrammingExtension(extensionCon
 export const DirectObjectUnderlineExtension = createDiagrammingExtension(extensionConfigs[4]);
 export const IndirectObjectBracketExtension = createDiagrammingExtension(extensionConfigs[5]);
 export const GenitiveArrowExtension = createDiagrammingExtension(extensionConfigs[6]);
-export const AblativePhraseExtension = createDiagrammingExtension(extensionConfigs[7]);
+export const GenitiveArrowTargetExtension = createDiagrammingExtension(extensionConfigs[7]);
+export const AblativePhraseExtension = createDiagrammingExtension(extensionConfigs[8]);
 
 export const DiagrammingExtensions = [
   PrepositionExtension,
@@ -276,5 +287,6 @@ export const DiagrammingExtensions = [
   DirectObjectUnderlineExtension,
   IndirectObjectBracketExtension,
   GenitiveArrowExtension,
+  GenitiveArrowTargetExtension,
   AblativePhraseExtension,
 ];
