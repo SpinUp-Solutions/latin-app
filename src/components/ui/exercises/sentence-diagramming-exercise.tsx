@@ -92,9 +92,6 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
     userAnnotations: Record<string, AnnotationType>,
     solutionAnnotations: Record<string, AnnotationType>
   ) => {
-    console.log('=== VALIDATION DEBUG ===');
-    console.log('User annotations:', userAnnotations);
-    console.log('Solution annotations:', solutionAnnotations);
     let totalCorrect = 0;
     const totalExpected = Object.keys(solutionAnnotations).length;
 
@@ -104,8 +101,6 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
         totalCorrect++;
       }
     });
-
-    console.log(`Final totals: correct=${totalCorrect}, expected=${totalExpected}`);
 
     return {
       isComplete: totalCorrect === totalExpected,

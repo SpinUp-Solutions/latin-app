@@ -86,18 +86,8 @@ export const findTooltipMark = (editor: Editor, from: number, to: number): Mark 
 };
 
 export const findTooltipMarkWithData = (editor: Editor, from: number, to: number): TooltipMark | null => {
-  let tooltipMark: TooltipMark | null = null;
-
-  editor.state.doc.nodesBetween(from, to, (node, pos) => {
-    if (node.isText && !tooltipMark) {
-      const foundMark = node.marks.find(mark => isTooltipMark(mark));
-      if (foundMark && from >= pos && from < pos + node.nodeSize) {
-        tooltipMark = foundMark as TooltipMark;
-      }
-    }
-  });
-
-  return tooltipMark;
+  const mark = findTooltipMark(editor, from, to);
+  return mark as TooltipMark | null;
 };
 
 export const getEmptyFormData = (): TooltipFormData => createDefaultFormData();
