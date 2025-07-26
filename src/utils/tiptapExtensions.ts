@@ -40,9 +40,7 @@ export const createExtensionSet = ({
   enableTooltips = true,
   enableAnnotations = true,
 }: ExtensionSetOptions): Extension[] => {
-  const extensions: Extension[] = [
-    StarterKit.configure(getStarterKitConfig(mode)),
-  ];
+  const extensions: Extension[] = [StarterKit.configure(getStarterKitConfig(mode))];
 
   // Add tooltips for all modes except when explicitly disabled
   if (enableTooltips) {

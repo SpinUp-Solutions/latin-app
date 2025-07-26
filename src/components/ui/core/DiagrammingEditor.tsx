@@ -33,17 +33,19 @@ export const DiagrammingEditor: React.FC<DiagrammingEditorProps> = ({
     extensions: isStudentMode ? getStudentExtensions() : getAdminExtensions(),
     initialContent,
     className,
-    onUpdate: onUpdate ? (editor, html) => {
-      const { extractAnnotationsFromEditor } = require('@/src/utils/sentenceDiagramming');
-      const annotations = extractAnnotationsFromEditor(editor);
-      onUpdate(annotations, html);
-    } : undefined,
+    onUpdate: onUpdate
+      ? (editor, html) => {
+          const { extractAnnotationsFromEditor } = require('@/src/utils/sentenceDiagramming');
+          const annotations = extractAnnotationsFromEditor(editor);
+          onUpdate(annotations, html);
+        }
+      : undefined,
     onEditorReady,
   });
 
-  const tooltipManager = useTooltipManager({ 
+  const tooltipManager = useTooltipManager({
     editor,
-    disabled: disabled || isStudentMode
+    disabled: disabled || isStudentMode,
   });
 
   const clearAnnotations = () => {

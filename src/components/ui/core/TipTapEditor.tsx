@@ -37,7 +37,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
     <div className="tiptap-editor">
       {children}
       <EditorContent editor={editor} />
-      
+
       {showTooltipDialog && enableTooltips && (
         <TooltipEditorDialog
           isOpen={tooltipManager.isDialogOpen}

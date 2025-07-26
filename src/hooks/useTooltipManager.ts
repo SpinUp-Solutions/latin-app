@@ -13,7 +13,7 @@ export interface TooltipManagerOptions {
 export const useTooltipManager = ({ editor, disabled = false }: TooltipManagerOptions) => {
   const dispatch = useAppDispatch();
   const tooltips = useAppSelector(state => state.lesson.tooltips);
-  
+
   const [activeTooltip, setActiveTooltip] = useState<TooltipData | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTooltip, setEditingTooltip] = useState<TooltipData | null>(null);
@@ -21,10 +21,10 @@ export const useTooltipManager = ({ editor, disabled = false }: TooltipManagerOp
 
   const handleAddTooltip = useCallback(() => {
     if (!editor || disabled) return;
-    
+
     const { from, to } = editor.state.selection;
     const selectedText = editor.state.doc.textBetween(from, to);
-    
+
     if (!selectedText.trim()) {
       alert('Please select text to add a tooltip');
       return;
@@ -60,66 +60,71 @@ export const useTooltipManager = ({ editor, disabled = false }: TooltipManagerOp
       setEditingTooltip(null);
       setSelectedText(selectedText);
     }
-    
+
     setIsDialogOpen(true);
   }, [editor, disabled, tooltips]);
 
-  const handleSaveTooltip = useCallback((tooltipData: TooltipFormData) => {
-    if (!editor) return;
+  const handleSaveTooltip = useCallback(
+    (tooltipData: TooltipFormData) => {
+      if (!editor) return;
 
-    const tooltipId = editingTooltip?.id || generateTooltipId(tooltipData.word);
-    
-    // Save to global state
-    dispatch(addTooltip({
-      id: tooltipId,
-      data: {
-        word: tooltipData.word,
-        translation: tooltipData.translation,
-        pronunciation: tooltipData.pronunciation,
-        partOfSpeech: tooltipData.partOfSpeech,
-        wordType: tooltipData.wordType,
-        definition: tooltipData.definition,
-        examples: tooltipData.examples,
-        etymology: tooltipData.etymology,
-        gender: tooltipData.gender,
-        declensionClass: tooltipData.declensionClass,
-        conjugationClass: tooltipData.conjugationClass,
-        grammaticalInfo: tooltipData.grammaticalInfo,
-        principalParts: tooltipData.principalParts,
-      }
-    }));
-    
-    // Apply to editor
-    editor
-      .chain()
-      .focus()
-      .setTooltip({
-        tooltipId,
-        word: tooltipData.word,
-        translation: tooltipData.translation,
-        pronunciation: tooltipData.pronunciation,
-        partOfSpeech: tooltipData.partOfSpeech,
-        wordType: tooltipData.wordType,
-        definition: tooltipData.definition,
-        examples: tooltipData.examples,
-        etymology: tooltipData.etymology,
-        gender: tooltipData.gender,
-        declensionClass: tooltipData.declensionClass,
-        conjugationClass: tooltipData.conjugationClass,
-        grammaticalInfo: tooltipData.grammaticalInfo,
-        principalParts: tooltipData.principalParts,
-      })
-      .run();
+      const tooltipId = editingTooltip?.id || generateTooltipId(tooltipData.word);
 
-    handleCloseDialog();
-  }, [editor, editingTooltip, dispatch]);
+      // Save to global state
+      dispatch(
+        addTooltip({
+          id: tooltipId,
+          data: {
+            word: tooltipData.word,
+            translation: tooltipData.translation,
+            pronunciation: tooltipData.pronunciation,
+            partOfSpeech: tooltipData.partOfSpeech,
+            wordType: tooltipData.wordType,
+            definition: tooltipData.definition,
+            examples: tooltipData.examples,
+            etymology: tooltipData.etymology,
+            gender: tooltipData.gender,
+            declensionClass: tooltipData.declensionClass,
+            conjugationClass: tooltipData.conjugationClass,
+            grammaticalInfo: tooltipData.grammaticalInfo,
+            principalParts: tooltipData.principalParts,
+          },
+        })
+      );
+
+      // Apply to editor
+      editor
+        .chain()
+        .focus()
+        .setTooltip({
+          tooltipId,
+          word: tooltipData.word,
+          translation: tooltipData.translation,
+          pronunciation: tooltipData.pronunciation,
+          partOfSpeech: tooltipData.partOfSpeech,
+          wordType: tooltipData.wordType,
+          definition: tooltipData.definition,
+          examples: tooltipData.examples,
+          etymology: tooltipData.etymology,
+          gender: tooltipData.gender,
+          declensionClass: tooltipData.declensionClass,
+          conjugationClass: tooltipData.conjugationClass,
+          grammaticalInfo: tooltipData.grammaticalInfo,
+          principalParts: tooltipData.principalParts,
+        })
+        .run();
+
+      handleCloseDialog();
+    },
+    [editor, editingTooltip, dispatch]
+  );
 
   const handleRemoveTooltip = useCallback(() => {
     if (!editor || !editingTooltip) return;
-    
+
     // Remove from global state
     dispatch(removeTooltip(editingTooltip.id));
-    
+
     // Remove from editor
     editor.chain().focus().unsetTooltip().run();
     handleCloseDialog();
@@ -131,12 +136,15 @@ export const useTooltipManager = ({ editor, disabled = false }: TooltipManagerOp
     setSelectedText('');
   }, []);
 
-  const handleTooltipHover = useCallback((tooltipElement: HTMLElement) => {
-    const tooltipId = tooltipElement.getAttribute('data-tooltip-id');
-    if (tooltipId && tooltips[tooltipId]) {
-      setActiveTooltip(tooltips[tooltipId]);
-    }
-  }, [tooltips]);
+  const handleTooltipHover = useCallback(
+    (tooltipElement: HTMLElement) => {
+      const tooltipId = tooltipElement.getAttribute('data-tooltip-id');
+      if (tooltipId && tooltips[tooltipId]) {
+        setActiveTooltip(tooltips[tooltipId]);
+      }
+    },
+    [tooltips]
+  );
 
   const handleTooltipLeave = useCallback(() => {
     setActiveTooltip(null);
@@ -149,7 +157,7 @@ export const useTooltipManager = ({ editor, disabled = false }: TooltipManagerOp
     selectedText,
     activeTooltip,
     tooltips,
-    
+
     // Actions
     handleAddTooltip,
     handleSaveTooltip,

@@ -1,7 +1,7 @@
 import React from 'react';
 import { SentenceWord, AnnotationType, SentenceDiagrammingExercise } from '@/src/types/exercises/sentence-diagramming';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
-import { updateEditingContent, addTooltip, removeTooltip } from '@/src/store/slices/lessonSlice';
+import { updateEditingContent } from '@/src/store/slices/lessonSlice';
 import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
 import { DiagrammingEditor } from '../../core/DiagrammingEditor';
