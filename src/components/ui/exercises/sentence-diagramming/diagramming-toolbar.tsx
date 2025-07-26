@@ -8,8 +8,9 @@ interface DiagrammingToolbarProps {
   editor: Editor;
   onAnnotationClick: (type: AnnotationType) => void;
   onClearAnnotations: () => void;
-  onAddTooltip: () => void;
+  onAddTooltip?: () => void;
   disabled?: boolean;
+  isStudentMode?: boolean;
 }
 
 export const DiagrammingToolbar: React.FC<DiagrammingToolbarProps> = ({
@@ -18,9 +19,10 @@ export const DiagrammingToolbar: React.FC<DiagrammingToolbarProps> = ({
   onClearAnnotations,
   onAddTooltip,
   disabled = false,
+  isStudentMode = false,
 }) => {
   const toolbarConfig = useToolbarConfig({
-    type: 'diagramming',
+    type: isStudentMode ? 'diagramming-student' : 'diagramming',
     editor,
     onAnnotationClick,
     onClearAnnotations,

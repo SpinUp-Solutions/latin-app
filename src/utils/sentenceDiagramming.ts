@@ -1,28 +1,13 @@
 import { AnnotationType, SentenceWord } from '@/src/types/exercises/sentence-diagramming';
 import { Editor } from '@tiptap/react';
-
-interface TipTapMark {
-  type: string;
-  attrs?: {
-    wordIds?: string[];
-    [key: string]: unknown;
-  };
-}
-
-interface TipTapNode {
-  type?: string;
-  text?: string;
-  marks?: TipTapMark[];
-  content?: TipTapNode[];
-}
+import { Node } from '@tiptap/pm/model';
 
 export const extractAnnotationsFromEditor = (editor: Editor): Record<string, AnnotationType> => {
   const annotations: Record<string, AnnotationType> = {};
-  const doc = editor.getJSON();
 
-  const traverseNode = (node: unknown) => {
-    if (node && typeof node === 'object' && 'marks' in node && Array.isArray((node as TipTapNode).marks)) {
-      (node as TipTapNode).marks!.forEach(mark => {
+  editor.state.doc.descendants((node: Node) => {
+    if (node.marks) {
+      node.marks.forEach(mark => {
         // Map TipTap extension names to annotation types
         const typeMap: Record<string, AnnotationType> = {
           preposition: 'preposition',
@@ -36,13 +21,11 @@ export const extractAnnotationsFromEditor = (editor: Editor): Record<string, Ann
           ablativePhrase: 'ablative-phrase',
         };
 
-        const annotationType = typeMap[mark.type];
+        const annotationType = typeMap[mark.type.name];
         if (annotationType && mark.attrs?.wordIds) {
           // Ensure wordIds is an array before processing
-          const wordIds = Array.isArray(mark.attrs.wordIds) 
-            ? mark.attrs.wordIds 
-            : [mark.attrs.wordIds];
-          
+          const wordIds = Array.isArray(mark.attrs.wordIds) ? mark.attrs.wordIds : [mark.attrs.wordIds];
+
           // For each word in the annotation, map wordId -> annotationType
           wordIds.forEach(wordId => {
             if (wordId && typeof wordId === 'string') {
@@ -52,40 +35,9 @@ export const extractAnnotationsFromEditor = (editor: Editor): Record<string, Ann
         }
       });
     }
+  });
 
-    if (node && typeof node === 'object' && 'content' in node && Array.isArray((node as TipTapNode).content)) {
-      (node as TipTapNode).content!.forEach(traverseNode);
-    }
-  };
-
-  traverseNode(doc);
   return annotations;
-};
-
-export const getAttributesForAnnotationType = (type: AnnotationType, wordIds: string[]) => {
-  const baseAttributes = { wordIds };
-
-  switch (type) {
-    case 'verb-circle':
-      return { ...baseAttributes, voice: 'active', expectsDirectObject: true, expectsAgent: false };
-    case 'subordination':
-      return { ...baseAttributes, clauseType: 'relative' };
-    case 'subject-underline':
-      return { ...baseAttributes, person: '3rd', number: 'singular' };
-    case 'genitive-arrow':
-      return {
-        ...baseAttributes,
-        relationshipType: 'possession',
-        genitiveWordId: wordIds[0],
-        modifiedWordId: wordIds[1],
-      };
-    case 'genitive-arrow-target':
-      return { ...baseAttributes };
-    case 'ablative-phrase':
-      return { ...baseAttributes, ablativeType: 'means', hasPreposition: false };
-    default:
-      return baseAttributes;
-  }
 };
 
 /**
@@ -101,7 +53,6 @@ export const getWordIdsFromSelection = (
   const selectedText = editor?.state.doc.textBetween(from, to) || '';
 
   const matchingWords = words.filter(word => {
-    // Check if the word text is contained in the selection
     return selectedText.trim().split(/\s+/).includes(word.text);
   });
 
@@ -142,7 +93,7 @@ export const handleAnnotationClick = (
   }
 
   const selectedWordIds = getWordIdsFromSelection(editor, from, to, words, sentence);
-  const attributes = getAttributesForAnnotationType(annotationType, selectedWordIds);
+  const attributes = { wordIds: selectedWordIds };
 
   switch (annotationType) {
     case 'preposition':

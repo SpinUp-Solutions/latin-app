@@ -6,9 +6,10 @@ import { DiagrammingExtensions } from '../../core/diagramming-extensions';
 import { DiagrammingToolbar } from '../../exercises/sentence-diagramming/diagramming-toolbar';
 import { SentenceWord, AnnotationType, SentenceDiagrammingExercise } from '@/src/types/exercises/sentence-diagramming';
 import { TooltipEditorDialog } from '../../core/tooltip-editor-dialog';
-import { TooltipData } from '@/src/types/tooltip';
+import { TooltipData, TooltipFormData } from '@/src/types/tooltip';
+import { findTooltipMarkWithData, generateTooltipId } from '@/src/utils/tooltipUtils';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
-import { updateEditingContent } from '@/src/store/slices/lessonSlice';
+import { updateEditingContent, addTooltip, removeTooltip } from '@/src/store/slices/lessonSlice';
 import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
 import {
@@ -21,9 +22,12 @@ import { useSelector } from 'react-redux';
 export const SentenceDiagrammingEditor: React.FC = () => {
   const dispatch = useAppDispatch();
   const editingContent = useAppSelector(state => state.lesson.editingContent?.content as SentenceDiagrammingExercise);
+  const tooltips = useAppSelector(state => state.lesson.tooltips);
 
   const [isTooltipDialogOpen, setIsTooltipDialogOpen] = useState(false);
   const [selectedText, setSelectedText] = useState('');
+  const [currentEditor, setCurrentEditor] = useState<any>(null);
+  const [editingTooltip, setEditingTooltip] = useState<TooltipData | null>(null);
 
   if (!editingContent) {
     return <div>No content selected for editing</div>;
@@ -90,12 +94,113 @@ export const SentenceDiagrammingEditor: React.FC = () => {
   };
 
   const handleAddTooltip = () => {
+    if (!currentEditor) return;
+    
+    const { from, to } = currentEditor.state.selection;
+    const selectedText = currentEditor.state.doc.textBetween(from, to);
+    
+    if (!selectedText.trim()) {
+      alert('Please select text to add a tooltip');
+      return;
+    }
+
+    // Check if there's already a tooltip on this selection
+    const existingTooltip = findTooltipMarkWithData(currentEditor, from, to);
+    if (existingTooltip) {
+      const tooltipId = existingTooltip.attrs.tooltipId;
+      const tooltipData = tooltips[tooltipId];
+      if (tooltipData) {
+        setEditingTooltip(tooltipData);
+      } else {
+        // Fallback to mark data if not in global state
+        setEditingTooltip({
+          id: tooltipId,
+          word: existingTooltip.attrs.word,
+          translation: existingTooltip.attrs.translation,
+          pronunciation: existingTooltip.attrs.pronunciation,
+          partOfSpeech: existingTooltip.attrs.partOfSpeech,
+          wordType: existingTooltip.attrs.wordType,
+          definition: existingTooltip.attrs.definition,
+          examples: existingTooltip.attrs.examples,
+          etymology: existingTooltip.attrs.etymology,
+          gender: existingTooltip.attrs.gender,
+          declensionClass: existingTooltip.attrs.declensionClass,
+          conjugationClass: existingTooltip.attrs.conjugationClass,
+          grammaticalInfo: existingTooltip.attrs.grammaticalInfo,
+          principalParts: existingTooltip.attrs.principalParts,
+        });
+      }
+    } else {
+      setEditingTooltip(null);
+      setSelectedText(selectedText);
+    }
+    
     setIsTooltipDialogOpen(true);
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleSaveTooltip = (tooltipData: Omit<TooltipData, 'id'>) => {
+  const handleSaveTooltip = (tooltipData: TooltipFormData) => {
+    if (!currentEditor) return;
+
+    const tooltipId = editingTooltip?.id || generateTooltipId(tooltipData.word);
+    
+    // Save to global state
+    dispatch(addTooltip({
+      id: tooltipId,
+      data: {
+        word: tooltipData.word,
+        translation: tooltipData.translation,
+        pronunciation: tooltipData.pronunciation,
+        partOfSpeech: tooltipData.partOfSpeech,
+        wordType: tooltipData.wordType,
+        definition: tooltipData.definition,
+        examples: tooltipData.examples,
+        etymology: tooltipData.etymology,
+        gender: tooltipData.gender,
+        declensionClass: tooltipData.declensionClass,
+        conjugationClass: tooltipData.conjugationClass,
+        grammaticalInfo: tooltipData.grammaticalInfo,
+        principalParts: tooltipData.principalParts,
+      }
+    }));
+    
+    // Apply to editor
+    currentEditor
+      .chain()
+      .focus()
+      .setTooltip({
+        tooltipId,
+        word: tooltipData.word,
+        translation: tooltipData.translation,
+        pronunciation: tooltipData.pronunciation,
+        partOfSpeech: tooltipData.partOfSpeech,
+        wordType: tooltipData.wordType,
+        definition: tooltipData.definition,
+        examples: tooltipData.examples,
+        etymology: tooltipData.etymology,
+        gender: tooltipData.gender,
+        declensionClass: tooltipData.declensionClass,
+        conjugationClass: tooltipData.conjugationClass,
+        grammaticalInfo: tooltipData.grammaticalInfo,
+        principalParts: tooltipData.principalParts,
+      })
+      .run();
+
     setIsTooltipDialogOpen(false);
+    setEditingTooltip(null);
+    setSelectedText('');
+  };
+
+  const handleRemoveTooltip = () => {
+    if (!currentEditor || !editingTooltip) return;
+    
+    // Remove from global state
+    dispatch(removeTooltip(editingTooltip.id));
+    
+    // Remove from editor
+    currentEditor.chain().focus().unsetTooltip().run();
+    setIsTooltipDialogOpen(false);
+    setEditingTooltip(null);
+    setSelectedText('');
   };
 
   return (
@@ -169,6 +274,7 @@ export const SentenceDiagrammingEditor: React.FC = () => {
           onAddTooltip={handleAddTooltip}
           editingContent={editingContent}
           onSelectedTextChange={setSelectedText}
+          onEditorReady={setCurrentEditor}
         />
       </div>
 
@@ -195,11 +301,15 @@ export const SentenceDiagrammingEditor: React.FC = () => {
 
       <TooltipEditorDialog
         isOpen={isTooltipDialogOpen}
-        onClose={() => setIsTooltipDialogOpen(false)}
+        onClose={() => {
+          setIsTooltipDialogOpen(false);
+          setEditingTooltip(null);
+          setSelectedText('');
+        }}
         onSave={handleSaveTooltip}
-        onRemove={() => {}}
+        onRemove={editingTooltip ? handleRemoveTooltip : undefined}
         selectedText={selectedText}
-        initialData={null}
+        initialData={editingTooltip}
       />
     </div>
   );
@@ -213,6 +323,7 @@ interface SentenceDiagrammingCanvasProps {
   onAddTooltip: () => void;
   editingContent: SentenceDiagrammingExercise;
   onSelectedTextChange: (text: string) => void;
+  onEditorReady: (editor: any) => void;
 }
 
 const SentenceDiagrammingCanvas: React.FC<SentenceDiagrammingCanvasProps> = ({
@@ -223,45 +334,50 @@ const SentenceDiagrammingCanvas: React.FC<SentenceDiagrammingCanvasProps> = ({
   onAddTooltip,
   editingContent,
   onSelectedTextChange,
+  onEditorReady,
 }) => {
-  const editor = useEditor(
-    {
-      extensions: [
-        StarterKit.configure({
-          heading: false,
-          bulletList: false,
-          orderedList: false,
-          listItem: false,
-          blockquote: false,
-          codeBlock: false,
-          hardBreak: false,
-          horizontalRule: false,
-        }),
-        Tooltip,
-        ...DiagrammingExtensions,
-      ],
-      content: initialContent || `<p>${sentence}</p>`,
-      immediatelyRender: false,
-      onUpdate: ({ editor }) => {
-        const annotations = extractAnnotationsFromEditor(editor);
-        const htmlContent = editor.getHTML();
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        heading: false,
+        bulletList: false,
+        orderedList: false,
+        listItem: false,
+        blockquote: false,
+        codeBlock: false,
+        hardBreak: false,
+        horizontalRule: false,
+      }),
+      Tooltip,
+      ...DiagrammingExtensions,
+    ],
+    content: initialContent || `<p>${sentence}</p>`,
+    immediatelyRender: false,
+    onUpdate: ({ editor }) => {
+      const annotations = extractAnnotationsFromEditor(editor);
+      const htmlContent = editor.getHTML();
 
-        // Single atomic update to prevent race conditions
-        onAnnotationsAndContentChange(annotations, htmlContent);
-      },
-      onSelectionUpdate: ({ editor }) => {
-        const { from, to } = editor.state.selection;
-        const text = editor.state.doc.textBetween(from, to);
-        onSelectedTextChange(text);
-      },
-      editorProps: {
-        attributes: {
-          class: 'sentence-diagramming-canvas',
-        },
+      // Single atomic update to prevent race conditions
+      onAnnotationsAndContentChange(annotations, htmlContent);
+    },
+    onSelectionUpdate: ({ editor }) => {
+      const { from, to } = editor.state.selection;
+      const text = editor.state.doc.textBetween(from, to);
+      onSelectedTextChange(text);
+    },
+    editorProps: {
+      attributes: {
+        class: 'sentence-diagramming-canvas',
       },
     },
-    [initialContent, sentence]
-  ); // Add dependencies to recreate editor when content changes
+  });
+
+  // Notify parent when editor is ready
+  React.useEffect(() => {
+    if (editor) {
+      onEditorReady(editor);
+    }
+  }, [editor, onEditorReady]);
 
   if (!editor) {
     return <div>Loading editor...</div>;

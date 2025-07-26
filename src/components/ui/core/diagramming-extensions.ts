@@ -6,7 +6,6 @@ export interface DiagrammingExtensionConfig {
   className: string;
   style: string;
   title: string;
-  attributes?: Record<string, { default: unknown }>;
   customRender?: (HTMLAttributes: Record<string, unknown>) => [string, Record<string, unknown>, number];
 }
 
@@ -53,10 +52,7 @@ export const createDiagrammingExtension = (config: DiagrammingExtensionConfig) =
     name: config.name,
 
     addAttributes() {
-      return {
-        ...baseAttributes,
-        ...config.attributes,
-      };
+      return baseAttributes;
     },
 
     parseHTML() {
@@ -132,11 +128,6 @@ export const extensionConfigs: DiagrammingExtensionConfig[] = [
     style:
       'background-color: #dbeafe; border: 2px dashed #3b82f6; padding: 1px 2px; border-radius: 3px; position: relative;',
     title: 'Subordinate Clause',
-    attributes: {
-      clauseType: {
-        default: 'relative',
-      },
-    },
   },
   {
     name: 'verbCircle',
@@ -144,17 +135,6 @@ export const extensionConfigs: DiagrammingExtensionConfig[] = [
     className: 'verb-circle-annotation',
     style: '', // Will be overridden by customRender
     title: 'Verb',
-    attributes: {
-      voice: {
-        default: 'active',
-      },
-      expectsDirectObject: {
-        default: true,
-      },
-      expectsAgent: {
-        default: false,
-      },
-    },
     customRender: HTMLAttributes => {
       const voice = HTMLAttributes.voice || 'active';
       const isActive = voice === 'active';
@@ -177,14 +157,6 @@ export const extensionConfigs: DiagrammingExtensionConfig[] = [
     className: 'subject-underline-annotation',
     style: 'border-bottom: 2px solid #1f2937; padding-bottom: 1px;',
     title: 'Subject (Nominative)',
-    attributes: {
-      person: {
-        default: '3rd',
-      },
-      number: {
-        default: 'singular',
-      },
-    },
   },
   {
     name: 'directObjectUnderline',
@@ -207,17 +179,6 @@ export const extensionConfigs: DiagrammingExtensionConfig[] = [
     style:
       'background-color: #fdf4ff; border: 1px solid #a855f7; padding: 1px 2px; border-radius: 3px; position: relative;',
     title: 'Genitive (shows possession/relationship)',
-    attributes: {
-      genitiveWordId: {
-        default: '',
-      },
-      modifiedWordId: {
-        default: '',
-      },
-      relationshipType: {
-        default: 'possession',
-      },
-    },
   },
   {
     name: 'genitiveArrowTarget',
@@ -233,14 +194,6 @@ export const extensionConfigs: DiagrammingExtensionConfig[] = [
     className: 'ablative-phrase-annotation',
     style: '', // Will be overridden by customRender
     title: 'Ablative Phrase',
-    attributes: {
-      ablativeType: {
-        default: 'means',
-      },
-      hasPreposition: {
-        default: false,
-      },
-    },
     customRender: HTMLAttributes => {
       const ablativeType = HTMLAttributes.ablativeType || 'means';
       const typeColors = {
