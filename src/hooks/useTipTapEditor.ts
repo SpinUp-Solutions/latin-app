@@ -1,6 +1,6 @@
 import { useEditor, Editor } from '@tiptap/react';
 import { Extension } from '@tiptap/core';
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 
 export interface TipTapEditorOptions {
   extensions: Extension[];
@@ -41,6 +41,16 @@ export const useTipTapEditor = ({
       },
     },
   });
+
+  // Update editor content when initialContent changes
+  useEffect(() => {
+    if (editor && initialContent !== undefined) {
+      const currentContent = editor.getHTML();
+      if (currentContent !== initialContent) {
+        editor.commands.setContent(initialContent, false);
+      }
+    }
+  }, [editor, initialContent]);
 
   // Notify when editor is ready
   useCallback(() => {

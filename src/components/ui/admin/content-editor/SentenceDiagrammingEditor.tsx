@@ -1,7 +1,7 @@
 import React from 'react';
 import { SentenceWord, AnnotationType, SentenceDiagrammingExercise } from '@/src/types/exercises/sentence-diagramming';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
-import { updateEditingContent } from '@/src/store/slices/lessonSlice';
+import { updateEditingContent, addTooltip, removeTooltip } from '@/src/store/slices/lessonSlice';
 import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
 import { DiagrammingEditor } from '../../core/DiagrammingEditor';
@@ -15,22 +15,33 @@ export const SentenceDiagrammingEditor: React.FC = () => {
   }
 
   const updateContent = (updates: Partial<SentenceDiagrammingExercise>) => {
-    dispatch(updateEditingContent({ ...editingContent, ...updates }));
+    const updatedContent = { ...editingContent, ...updates };
+
+    dispatch(updateEditingContent(updatedContent));
   };
 
   const updateData = (dataUpdates: Partial<SentenceDiagrammingExercise['data']>) => {
-    updateContent({
+    const updatedContent = {
+      ...editingContent,
       data: {
         ...editingContent.data,
         ...dataUpdates,
       },
-    });
+    };
+
+    dispatch(updateEditingContent(updatedContent));
   };
 
   const handleSentenceChange = (sentenceUpdates: Partial<SentenceDiagrammingExercise['data']['sentence']>) => {
-    updateData({
-      sentence: { ...editingContent.data.sentence, ...sentenceUpdates },
-    });
+    const updatedContent = {
+      ...editingContent,
+      data: {
+        ...editingContent.data,
+        sentence: { ...editingContent.data.sentence, ...sentenceUpdates },
+      },
+    };
+
+    dispatch(updateEditingContent(updatedContent));
   };
 
   const handleLatinChange = (latin: string) => {
@@ -43,16 +54,22 @@ export const SentenceDiagrammingEditor: React.FC = () => {
   };
 
   const handleAnnotationsAndContentChange = (annotations: Record<string, AnnotationType>, htmlContent: string) => {
-    updateData({
-      solution: {
-        ...editingContent.data.solution,
-        annotations: annotations,
+    const updatedContent = {
+      ...editingContent,
+      data: {
+        ...editingContent.data,
+        solution: {
+          ...editingContent.data.solution,
+          annotations: annotations,
+        },
+        sentence: {
+          ...editingContent.data.sentence,
+          content: htmlContent,
+        },
       },
-      sentence: {
-        ...editingContent.data.sentence,
-        content: htmlContent,
-      },
-    });
+    };
+
+    dispatch(updateEditingContent(updatedContent));
   };
 
   const tokenizeSentence = (latin: string): SentenceWord[] => {
@@ -73,7 +90,6 @@ export const SentenceDiagrammingEditor: React.FC = () => {
       };
     });
   };
-
 
   return (
     <div className="space-y-6">
@@ -167,8 +183,6 @@ export const SentenceDiagrammingEditor: React.FC = () => {
         feedbackConfig={editingContent.feedbackConfig}
         onChange={feedbackConfig => updateContent({ feedbackConfig })}
       />
-
     </div>
   );
 };
-

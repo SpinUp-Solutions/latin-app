@@ -25,10 +25,6 @@ interface SentenceDiagrammingExerciseProps {
 }
 
 export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExerciseProps> = ({ exercise, onComplete }) => {
-  console.log('=== EXERCISE COMPONENT RECEIVED ===');
-  console.log('Exercise data:', exercise);
-  console.log('Solution annotations:', exercise.data.solution.annotations);
-
   const [userAnnotations, setUserAnnotations] = useState<Record<string, AnnotationType>>({});
   const [showHint, setShowHint] = useState(false);
   const [currentHintIndex, setCurrentHintIndex] = useState(0);
