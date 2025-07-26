@@ -1,5 +1,4 @@
-import React, { useState, useRef } from 'react';
-import { EditorContent } from '@tiptap/react';
+import React, { useState } from 'react';
 import { DiagrammingToolbar } from './sentence-diagramming/diagramming-toolbar';
 import {
   SentenceDiagrammingExercise as SentenceDiagrammingExerciseType,
@@ -17,7 +16,7 @@ import {
 import { useTipTapEditor } from '@/src/hooks/useTipTapEditor';
 import { getStudentExtensions } from '@/src/utils/tiptapExtensions';
 import { stripAdminAnnotations } from '@/src/utils/contentUtils';
-import { TooltipRenderer } from '../core/tooltip-renderer';
+import { EditorWithTooltips } from '../core/EditorWithTooltips';
 
 interface SentenceDiagrammingExerciseProps {
   exercise: SentenceDiagrammingExerciseType;
@@ -28,7 +27,6 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
   const [userAnnotations, setUserAnnotations] = useState<Record<string, AnnotationType>>({});
   const [showHint, setShowHint] = useState(false);
   const [currentHintIndex, setCurrentHintIndex] = useState(0);
-  const editorRef = useRef<HTMLDivElement>(null);
 
   const { isCorrect, message, level, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
     exercise.feedbackConfig
@@ -47,6 +45,7 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
       setUserAnnotations(annotations);
     },
   });
+
 
   const clearAnnotations = () => {
     if (isCorrect === true) return;
@@ -132,31 +131,25 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
         </div>
 
         <div className="sentence-diagramming-editor border border-gray-300 rounded-md">
-          <DiagrammingToolbar
+          <EditorWithTooltips
             editor={editor}
-            onAnnotationClick={type =>
-              handleAnnotationClick(
-                editor,
-                type,
-                exercise.data.sentence.words,
-                exercise.data.sentence.latin,
-                isCorrect === true
-              )
-            }
-            onClearAnnotations={clearAnnotations}
-            disabled={isCorrect === true}
-            isStudentMode={true}
-          />
-
-          <div ref={editorRef} className="p-4 min-h-[150px] bg-white relative">
-            <EditorContent editor={editor} />
-            <div className="absolute inset-0 p-4 pointer-events-none z-10">
-              <TooltipRenderer
-                content={editor?.getHTML() || ''}
-                className="opacity-0 [&_[data-tooltip='true']]:pointer-events-auto [&_[data-tooltip='true']]:cursor-help"
-              />
-            </div>
-          </div>
+            className="p-4 min-h-[150px] bg-white">
+            <DiagrammingToolbar
+              editor={editor}
+              onAnnotationClick={type =>
+                handleAnnotationClick(
+                  editor,
+                  type,
+                  exercise.data.sentence.words,
+                  exercise.data.sentence.latin,
+                  isCorrect === true
+                )
+              }
+              onClearAnnotations={clearAnnotations}
+              disabled={isCorrect === true}
+              isStudentMode={true}
+            />
+          </EditorWithTooltips>
         </div>
       </div>
 
