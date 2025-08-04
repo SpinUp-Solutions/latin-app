@@ -19,5 +19,6 @@ export type {
   TextSelectionExercise,
   VerbAnalysisExercise,
   VerbConjugationExercise,
+  MultipleChoiceExercise,
   Exercise,
 } from './exercise';

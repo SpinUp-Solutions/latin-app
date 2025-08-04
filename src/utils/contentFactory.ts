@@ -215,6 +215,41 @@ export const createNewContent = (type: string): RenderableContentItem => {
           difficulty: 'beginner',
         },
       };
+    case 'multiple-choice':
+      return {
+        id: baseId,
+        type: 'multiple-choice',
+        title: 'Multiple Choice Question',
+        instructions: 'Select the correct answer from the choices below.',
+        audioPath: null,
+        feedbackConfig: createDefaultFeedbackConfig(),
+        data: {
+          question: 'What is the correct answer?',
+          options: [
+            {
+              id: `option-${Date.now()}-1`,
+              text: 'Option A',
+              isCorrect: true,
+            },
+            {
+              id: `option-${Date.now()}-2`,
+              text: 'Option B',
+              isCorrect: false,
+            },
+            {
+              id: `option-${Date.now()}-3`,
+              text: 'Option C',
+              isCorrect: false,
+            },
+            {
+              id: `option-${Date.now()}-4`,
+              text: 'Option D',
+              isCorrect: false,
+            },
+          ],
+          explanation: 'This explains why the correct answer is right.',
+        },
+      };
     default:
       throw new Error(`Unknown content type: ${type}`);
   }

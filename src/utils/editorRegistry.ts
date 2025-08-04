@@ -33,6 +33,8 @@ export const getEditorTitle = (contentType: string): string => {
       return 'Edit Verb Conjugation Exercise';
     case 'sentence-diagramming':
       return 'Edit Sentence Diagramming Exercise';
+    case 'multiple-choice':
+      return 'Edit Multiple Choice Exercise';
     default:
       return `Edit ${contentType} Content`;
   }

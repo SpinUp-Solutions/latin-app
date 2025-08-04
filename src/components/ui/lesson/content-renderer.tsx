@@ -8,6 +8,7 @@ import TextSelectionExercise from '../exercises/text-selection-exercise';
 import VerbAnalysisExercise from '../exercises/verb-analysis-exercise';
 import VerbConjugationExercise from '../exercises/verb-conjugation-exercise';
 import { SentenceDiagrammingExercise } from '../exercises/sentence-diagramming-exercise';
+import MultipleChoiceExercise from '../exercises/multiple-choice-exercise';
 import { ContentItem, TextContent, TableContent, VocabularyContent } from '@/src/types/lesson';
 import {
   MatchingExercise,
@@ -16,6 +17,7 @@ import {
   VerbAnalysisExercise as VerbAnalysisExerciseType,
   VerbConjugationExercise as VerbConjugationExerciseType,
   SentenceDiagrammingExercise as SentenceDiagrammingExerciseType,
+  MultipleChoiceExercise as MultipleChoiceExerciseType,
 } from '@/src/types/exercise';
 import { VocabularyViewer } from './VocabularyViewer';
 import TextComponent from './text-component';
@@ -76,6 +78,9 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onCom
       return (
         <SentenceDiagrammingExercise exercise={content as SentenceDiagrammingExerciseType} onComplete={onComplete} />
       );
+
+    case 'multiple-choice':
+      return <MultipleChoiceExercise exercise={content as MultipleChoiceExerciseType} onComplete={onComplete} />;
 
     default:
       return (

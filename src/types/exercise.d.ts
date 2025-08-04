@@ -6,5 +6,6 @@ export type {
   VerbAnalysisExercise,
   VerbConjugationExercise,
   SentenceDiagrammingExercise,
+  MultipleChoiceExercise,
   Exercise,
 } from './exercises';
