@@ -275,9 +275,16 @@ export const extractTooltipsFromLesson = (lesson: Lesson): Record<string, Toolti
         }
 
         // Check for sentence content (in exercises)
-        if ('data' in item && item.data && typeof item.data === 'object' && 
-            'sentence' in item.data && item.data.sentence && typeof item.data.sentence === 'object' &&
-            'content' in item.data.sentence && typeof item.data.sentence.content === 'string') {
+        if (
+          'data' in item &&
+          item.data &&
+          typeof item.data === 'object' &&
+          'sentence' in item.data &&
+          item.data.sentence &&
+          typeof item.data.sentence === 'object' &&
+          'content' in item.data.sentence &&
+          typeof item.data.sentence.content === 'string'
+        ) {
           const tooltips = extractTooltipsFromContent(item.data.sentence.content);
           Object.assign(allTooltips, tooltips);
         }

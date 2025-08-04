@@ -207,6 +207,62 @@ export const TableEditor: React.FC = () => {
           </table>
         </div>
       </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-2">Footnotes</label>
+        <div className="space-y-2">
+          {(editingContent.tableData.footnotes || []).map((footnote: string, index: number) => (
+            <div key={index} className="flex items-start gap-2">
+              <span className="text-sm text-gray-500 pt-2 min-w-[20px]">{index + 1}.</span>
+
+              <textarea
+                value={footnote}
+                onChange={e =>
+                  updateContent({
+                    tableData: {
+                      ...editingContent.tableData,
+                      footnotes:
+                        editingContent.tableData.footnotes?.map((f: string, i: number) =>
+                          i === index ? e.target.value : f
+                        ) || [],
+                    },
+                  })
+                }
+                className="flex-1 p-2 border rounded-md text-sm resize-none"
+                placeholder="Enter footnote text..."
+                rows={2}
+              />
+              <button
+                onClick={() =>
+                  updateContent({
+                    tableData: {
+                      ...editingContent.tableData,
+                      footnotes:
+                        editingContent.tableData.footnotes?.filter((_: string, i: number) => i !== index) || [],
+                    },
+                  })
+                }
+                className="mt-1 text-red-500 hover:text-red-700 transition-colors"
+                title="Remove footnote">
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
+          <button
+            onClick={() =>
+              updateContent({
+                tableData: {
+                  ...editingContent.tableData,
+                  footnotes: [...(editingContent.tableData.footnotes || []), ''],
+                },
+              })
+            }
+            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-50 rounded-md transition-colors">
+            <Plus className="h-4 w-4" />
+            Add Footnote
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

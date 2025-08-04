@@ -29,6 +29,7 @@ export interface TableData {
   caption?: string;
   columns: Column[];
   rows: TableRow[];
+  footnotes?: string[];
 }
 
 interface ConjugationTableProps {
@@ -75,6 +76,23 @@ const ConjugationTable: React.FC<ConjugationTableProps> = ({ data, className, au
             </RomanTableRow>
           ))}
         </RomanTableBody>
+        {data.footnotes && data.footnotes.length > 0 && (
+          <RomanTableBody>
+            <RomanTableRow>
+              <RomanTableCell
+                colSpan={data.columns.length + (data.rows.some(row => row.rowHeader !== undefined) ? 1 : 0)}>
+                <div className="text-sm text-roman-stone space-y-1 pt-2">
+                  {data.footnotes.map((footnote, index) => (
+                    <div key={index} className="flex items-start gap-2">
+                      <span className="text-roman-terracotta font-serif">{index + 1}.</span>
+                      <span className="font-serif">{footnote}</span>
+                    </div>
+                  ))}
+                </div>
+              </RomanTableCell>
+            </RomanTableRow>
+          </RomanTableBody>
+        )}
         {data.caption && <RomanTableCaption>{data.caption}</RomanTableCaption>}
       </RomanTable>
     </div>
