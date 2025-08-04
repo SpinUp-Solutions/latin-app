@@ -10,6 +10,7 @@ import {
 } from '@/src/utils/exercises/verbConjugationExercise';
 import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
+import { SimpleRichDisplay } from '../core/simple-rich-display';
 
 interface Props {
   exercise: VerbConjugationExercise;
@@ -105,7 +106,11 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
   return (
     <div className="space-y-6 max-w-full">
       <div className="flex justify-between items-start">
-        {exercise.title && <h3 className="text-xl font-serif text-roman-red mb-4">{exercise.title}</h3>}
+        {exercise.title && (
+          <h3 className="text-xl font-serif text-roman-red mb-4">
+            <SimpleRichDisplay content={exercise.title} />
+          </h3>
+        )}
         {exercise.audioPath && (
           <AudioPlayButton
             audioPath={exercise.audioPath}
@@ -117,7 +122,7 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
       </div>
       {exercise.instructions && (
         <div className="p-6 bg-roman-parchment rounded-lg mb-4">
-          <p className="whitespace-pre-wrap break-words">{exercise.instructions}</p>
+          <SimpleRichDisplay content={exercise.instructions} className="whitespace-pre-wrap break-words" />
         </div>
       )}
 
@@ -126,8 +131,12 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
         <div className="mb-6">
           <h4 className="text-lg font-serif text-roman-red mb-2">Original Passage</h4>
           <div className="p-4 bg-gray-50 rounded-lg border">
-            <p className="font-serif italic text-lg mb-2">{exercise.data.passage.latin}</p>
-            <p className="text-gray-700">{exercise.data.passage.translation}</p>
+            <p className="font-serif italic text-lg mb-2">
+              <SimpleRichDisplay content={exercise.data.passage.latin} />
+            </p>
+            <p className="text-gray-700">
+              <SimpleRichDisplay content={exercise.data.passage.translation} />
+            </p>
           </div>
 
           {exercise.data.passage.specialVocab && (
@@ -150,7 +159,7 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
             <div className="mb-6">
               <h4 className="text-lg font-serif text-roman-red mb-2">Your Task</h4>
               <div className="p-4 bg-roman-parchment rounded-lg border border-gray-200">
-                <p className="text-gray-800">{exercise.data.conjugationTask.instructions}</p>
+                <SimpleRichDisplay content={exercise.data.conjugationTask.instructions} className="text-gray-800" />
               </div>
             </div>
 
@@ -179,8 +188,12 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
               <div className="space-y-2">
                 {exercise.data.livingLatinPractice.examples.map((example, index) => (
                   <div key={index} className="bg-white p-3 rounded border">
-                    <p className="font-serif italic text-lg">{example.latin}</p>
-                    <p className="text-gray-600 text-sm">{example.translation}</p>
+                    <p className="font-serif italic text-lg">
+                      <SimpleRichDisplay content={example.latin} />
+                    </p>
+                    <p className="text-gray-600 text-sm">
+                      <SimpleRichDisplay content={example.translation} />
+                    </p>
                   </div>
                 ))}
               </div>
@@ -195,7 +208,11 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
                   label="Exercise"
                 />
 
-                <p className="mb-4 text-gray-800">Write in Latin: &quot;{currentLivingLatinExercise.english}&quot;</p>
+                <p className="mb-4 text-gray-800">
+                  Write in Latin: &quot;
+                  <SimpleRichDisplay content={currentLivingLatinExercise.english} />
+                  &quot;
+                </p>
 
                 <ExerciseInput
                   value={userAnswer}

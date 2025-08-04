@@ -4,6 +4,7 @@ import { Badge } from '@/src/components/ui/badge';
 import { Button } from '@/src/components/ui/button';
 import { ExternalLink } from 'lucide-react';
 import { TooltipData } from '@/src/types/tooltip';
+import { SimpleRichDisplay } from './simple-rich-display';
 
 interface TooltipContentProps extends Omit<TooltipData, 'id'> {
   className?: string;
@@ -75,21 +76,21 @@ const TooltipContentComponent: React.FC<TooltipContentProps> = ({
         {translation && (
           <div>
             <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">Translation</h4>
-            <p className="text-xs">{translation}</p>
+            <SimpleRichDisplay content={translation} className="text-xs" />
           </div>
         )}
 
         {definition && (
           <div>
             <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">Definition</h4>
-            <p className="text-xs">{definition}</p>
+            <SimpleRichDisplay content={definition} className="text-xs" />
           </div>
         )}
 
         {grammaticalInfo && (
           <div>
             <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">Grammar</h4>
-            <p className="text-xs font-mono">{grammaticalInfo}</p>
+            <SimpleRichDisplay content={grammaticalInfo} className="text-xs font-mono" />
           </div>
         )}
 
@@ -98,7 +99,7 @@ const TooltipContentComponent: React.FC<TooltipContentProps> = ({
             <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
               Principal Parts
             </h4>
-            <p className="text-xs font-mono">{principalParts.join(', ')}</p>
+            <SimpleRichDisplay content={principalParts.join(', ')} className="text-xs font-mono" />
           </div>
         )}
 
@@ -118,7 +119,7 @@ const TooltipContentComponent: React.FC<TooltipContentProps> = ({
         {etymology && (
           <div>
             <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">Etymology</h4>
-            <p className="text-xs text-muted-foreground">{etymology}</p>
+            <SimpleRichDisplay content={etymology} className="text-xs text-muted-foreground" />
           </div>
         )}
 

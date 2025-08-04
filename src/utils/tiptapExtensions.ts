@@ -3,7 +3,7 @@ import { Extensions } from '@tiptap/core';
 import { Tooltip } from '@/src/components/ui/core/tooltip-extension';
 import { DiagrammingExtensions } from '@/src/components/ui/core/diagramming-extensions';
 
-export type EditorMode = 'admin' | 'student' | 'readonly';
+export type EditorMode = 'admin' | 'student' | 'readonly' | 'simple';
 
 export interface ExtensionSetOptions {
   mode: EditorMode;
@@ -29,6 +29,23 @@ const getStarterKitConfig = (mode: EditorMode) => {
       // Disable all text editing features for readonly mode
       paragraph: false,
       text: false,
+    } as const;
+  }
+
+  if (mode === 'simple') {
+    return {
+      ...baseConfig,
+      // Keep only basic text and formatting (bold, italic) for simple mode
+      heading: false,
+      bulletList: false,
+      orderedList: false,
+      listItem: false,
+      blockquote: false,
+      codeBlock: false,
+      hardBreak: false,
+      horizontalRule: false,
+      dropcursor: false,
+      gapcursor: false,
     } as const;
   }
 
@@ -65,6 +82,9 @@ export const getStudentExtensions = (options?: Partial<ExtensionSetOptions>) =>
 export const getReadonlyExtensions = (options?: Partial<ExtensionSetOptions>) =>
   createExtensionSet({ mode: 'readonly', ...options });
 
+export const getSimpleExtensions = (options?: Partial<ExtensionSetOptions>) =>
+  createExtensionSet({ mode: 'simple', enableTooltips: false, enableAnnotations: false, ...options });
+
 // Extension presets for specific use cases
 export const EXTENSION_PRESETS = {
   ADMIN_FULL: () => getAdminExtensions(),
@@ -72,4 +92,5 @@ export const EXTENSION_PRESETS = {
   STUDENT_WITH_TOOLTIPS: () => getStudentExtensions(),
   READONLY_WITH_TOOLTIPS: () => getReadonlyExtensions(),
   READONLY_SIMPLE: () => getReadonlyExtensions({ enableTooltips: false, enableAnnotations: false }),
+  SIMPLE: () => getSimpleExtensions(),
 } as const;

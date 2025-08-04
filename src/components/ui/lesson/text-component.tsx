@@ -3,6 +3,7 @@
 import React from 'react';
 import AudioPlayButton from '../core/audio-play-button';
 import { TooltipRenderer } from '../core/tooltip-renderer';
+import { SimpleRichDisplay } from '../core/simple-rich-display';
 
 interface TextComponentProps {
   title: string;
@@ -15,7 +16,9 @@ export const TextComponent: React.FC<TextComponentProps> = ({ title, content, cl
   return (
     <div className={`text-component relative ${className}`}>
       <div className="flex justify-between items-start">
-        <h3 className="text-lg font-serif text-roman-red mb-2">{title}</h3>
+        <h3 className="text-lg font-serif text-roman-red mb-2">
+          <SimpleRichDisplay content={title} />
+        </h3>
         {audioPath && (
           <AudioPlayButton
             audioPath={audioPath}

@@ -6,6 +6,7 @@ import { IntroductionPage, ExercisePage } from '@/src/types/lesson';
 import { RenderableContentItem } from '@/src/types/page';
 import { ContentItem } from './ContentItem';
 import { createNewContent } from '@/src/utils/contentFactory';
+import { SimpleRichEditor } from '../../core/simple-rich-editor';
 
 interface PageSectionProps {
   title: string;
@@ -56,12 +57,12 @@ export const PageSection: React.FC<PageSectionProps> = ({
         {pages.map((page, pageIndex) => (
           <div key={page.id} className="border rounded-lg p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <input
-                type="text"
-                value={page.title || ''}
-                onChange={e => onUpdatePageTitle(pageIndex, e.target.value)}
+              <SimpleRichEditor
+                content={page.title || ''}
+                onChange={value => onUpdatePageTitle(pageIndex, value)}
                 className="text-lg font-medium bg-transparent border-none outline-none"
                 placeholder="Page title..."
+                singleLine={true}
               />
               <Button variant="ghost" size="sm" onClick={() => onRemovePage(pageIndex)}>
                 <Trash2 className="h-4 w-4" />

@@ -6,6 +6,7 @@ import { Lesson, IntroductionPage, ExercisePage } from '@/src/types/lesson';
 import { BookOpen, Check } from 'lucide-react';
 import { Button } from '@/src/components/ui/button';
 import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
+import { SimpleRichDisplay } from '../core/simple-rich-display';
 import PageTemplate from './page-template';
 import useAudio from '@/src/hooks/useAudio';
 import LessonProgressBar from './lesson-progress-bar';
@@ -115,8 +116,12 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
               <BookOpen className="h-6 w-6 text-roman-terracotta" />
             </div>
             <div>
-              <h3 className="text-xl font-serif">{lesson.title}</h3>
-              <p className="text-sm text-roman-stone">{lesson.description}</p>
+              <h3 className="text-xl font-serif">
+                <SimpleRichDisplay content={lesson.title} />
+              </h3>
+              <p className="text-sm text-roman-stone">
+                <SimpleRichDisplay content={lesson.description} />
+              </p>
             </div>
           </div>
         </RomanCardHeader>

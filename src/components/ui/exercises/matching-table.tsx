@@ -9,6 +9,7 @@ import FieldSelect from '../core/field-select';
 import { validateMatchingExercise } from '@/src/utils/exercises/matchingExercise';
 import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
+import { SimpleRichDisplay } from '../core/simple-rich-display';
 
 interface MatchingItem {
   id: string;
@@ -155,7 +156,11 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-start">
-        {exercise.title && <h3 className="text-xl font-serif text-roman-red mb-4">{exercise.title}</h3>}
+        {exercise.title && (
+          <h3 className="text-xl font-serif text-roman-red mb-4">
+            <SimpleRichDisplay content={exercise.title} />
+          </h3>
+        )}
         {exercise.audioPath && (
           <AudioPlayButton
             audioPath={exercise.audioPath}
@@ -167,7 +172,7 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
       </div>
       {exercise.instructions && (
         <div className="p-6 bg-roman-parchment rounded-lg mb-4">
-          <p className="whitespace-pre-wrap break-words">{exercise.instructions}</p>
+          <SimpleRichDisplay content={exercise.instructions} className="whitespace-pre-wrap break-words" />
         </div>
       )}
 
@@ -234,13 +239,15 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
           <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
             <div className="text-sm">
               {selectedLeft && (
-                <div>
-                  <span className="font-medium">Selected from left:</span> {selectedLeft.value}
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">Selected from left:</span> 
+                  <SimpleRichDisplay content={selectedLeft.value} />
                 </div>
               )}
               {selectedRight && (
-                <div>
-                  <span className="font-medium">Selected from right:</span> {selectedRight.value}
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">Selected from right:</span> 
+                  <SimpleRichDisplay content={selectedRight.value} />
                 </div>
               )}
               {selectedLeft && !selectedRight && (
@@ -266,9 +273,13 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.8 }}
                     className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
-                    <span className="font-medium text-green-800">{leftItem?.value}</span>
+                    <div className="font-medium text-green-800">
+                      <SimpleRichDisplay content={leftItem?.value || ''} />
+                    </div>
                     <ArrowRight className="h-4 w-4 text-green-600" />
-                    <span className="font-medium text-green-800">{rightItem?.value}</span>
+                    <div className="font-medium text-green-800">
+                      <SimpleRichDisplay content={rightItem?.value || ''} />
+                    </div>
                   </motion.div>
                 ))}
               </AnimatePresence>

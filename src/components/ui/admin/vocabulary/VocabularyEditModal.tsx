@@ -1,15 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/src/components/ui/dialog';
 import { Button } from '@/src/components/ui/button';
-import { Input } from '@/src/components/ui/input';
 import { Label } from '@/src/components/ui/label';
-import { Textarea } from '@/src/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { Word, EditingCell } from '@/src/types/admin-vocabulary';
 import { parseEditingCellValue } from '@/src/utils/vocabUtils';
 import { DeclensionTable } from './tables/DeclensionTable';
 import { AdjectiveDeclensionTable } from './tables/AdjectiveDeclensionTable';
 import { ConjugationTable } from './tables/ConjugationTable';
+import { SimpleRichEditor } from '../../core/simple-rich-editor';
 
 interface VocabularyEditModalProps {
   word: Word | null;
@@ -148,10 +147,10 @@ export const VocabularyEditModal: React.FC<VocabularyEditModalProps> = ({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="word">Word</Label>
-              <Input
-                id="word"
-                value={editFormData.word || ''}
-                onChange={e => setEditFormData({ ...editFormData, word: e.target.value })}
+              <SimpleRichEditor
+                content={editFormData.word || ''}
+                onChange={value => setEditFormData({ ...editFormData, word: value })}
+                singleLine={true}
               />
             </div>
             <div>
@@ -180,38 +179,37 @@ export const VocabularyEditModal: React.FC<VocabularyEditModalProps> = ({
 
           <div>
             <Label htmlFor="translation">Translation</Label>
-            <Textarea
-              id="translation"
-              value={editFormData.translation || ''}
-              onChange={e => setEditFormData({ ...editFormData, translation: e.target.value })}
+            <SimpleRichEditor
+              content={editFormData.translation || ''}
+              onChange={value => setEditFormData({ ...editFormData, translation: value })}
               rows={2}
             />
           </div>
 
           <div>
             <Label htmlFor="grammaticalInfo">Grammatical Info</Label>
-            <Input
-              id="grammaticalInfo"
-              value={editFormData.grammaticalInfo || ''}
-              onChange={e => setEditFormData({ ...editFormData, grammaticalInfo: e.target.value })}
+            <SimpleRichEditor
+              content={editFormData.grammaticalInfo || ''}
+              onChange={value => setEditFormData({ ...editFormData, grammaticalInfo: value })}
+              singleLine={true}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="section">Section</Label>
-              <Input
-                id="section"
-                value={editFormData.section || ''}
-                onChange={e => setEditFormData({ ...editFormData, section: e.target.value })}
+              <SimpleRichEditor
+                content={editFormData.section || ''}
+                onChange={value => setEditFormData({ ...editFormData, section: value })}
+                singleLine={true}
               />
             </div>
             <div>
               <Label htmlFor="subsection">Subsection</Label>
-              <Input
-                id="subsection"
-                value={editFormData.subsection || ''}
-                onChange={e => setEditFormData({ ...editFormData, subsection: e.target.value })}
+              <SimpleRichEditor
+                content={editFormData.subsection || ''}
+                onChange={value => setEditFormData({ ...editFormData, subsection: value })}
+                singleLine={true}
               />
             </div>
           </div>
@@ -234,30 +232,29 @@ export const VocabularyEditModal: React.FC<VocabularyEditModalProps> = ({
             </div>
             <div>
               <Label htmlFor="declensionClass">Declension Class</Label>
-              <Input
-                id="declensionClass"
-                value={editFormData.declensionClass || ''}
-                onChange={e => setEditFormData({ ...editFormData, declensionClass: e.target.value })}
+              <SimpleRichEditor
+                content={editFormData.declensionClass || ''}
+                onChange={value => setEditFormData({ ...editFormData, declensionClass: value })}
+                singleLine={true}
               />
             </div>
           </div>
 
           <div>
             <Label htmlFor="etymology">Etymology</Label>
-            <Textarea
-              id="etymology"
-              value={editFormData.etymology || ''}
-              onChange={e => setEditFormData({ ...editFormData, etymology: e.target.value })}
+            <SimpleRichEditor
+              content={editFormData.etymology || ''}
+              onChange={value => setEditFormData({ ...editFormData, etymology: value })}
               rows={2}
             />
           </div>
 
           <div>
             <Label htmlFor="pronunciation">Pronunciation</Label>
-            <Input
-              id="pronunciation"
-              value={editFormData.pronunciation || ''}
-              onChange={e => setEditFormData({ ...editFormData, pronunciation: e.target.value })}
+            <SimpleRichEditor
+              content={editFormData.pronunciation || ''}
+              onChange={value => setEditFormData({ ...editFormData, pronunciation: value })}
+              singleLine={true}
             />
           </div>
 

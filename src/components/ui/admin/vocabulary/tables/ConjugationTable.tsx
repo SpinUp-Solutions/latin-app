@@ -12,6 +12,7 @@ import { formatCellValue } from '@/src/utils/vocabUtils';
 import { EditableCell } from '../shared/EditableCell';
 import { TableToggleButton } from '../shared/TableToggleButton';
 import { BaseTableProps } from '@/src/types/admin-vocabulary';
+import { SimpleRichDisplay } from '../../core/simple-rich-display';
 
 export const ConjugationTable: React.FC<BaseTableProps> = ({
   word,
@@ -49,7 +50,7 @@ export const ConjugationTable: React.FC<BaseTableProps> = ({
       );
     }
 
-    return formatCellValue(cellValue) || '—';
+    return <SimpleRichDisplay content={formatCellValue(cellValue) || '—'} />;
   };
 
   const renderTenseSection = (

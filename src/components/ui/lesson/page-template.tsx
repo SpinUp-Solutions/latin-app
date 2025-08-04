@@ -4,6 +4,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { IntroductionPage, ExercisePage } from '@/src/types/lesson';
 import ContentRenderer from './content-renderer';
+import { SimpleRichDisplay } from '../core/simple-rich-display';
 
 interface PageTemplateProps {
   page: IntroductionPage | ExercisePage;
@@ -18,7 +19,11 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({ page }) => {
       exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.3 }}
       className="space-y-6">
-      {page.title && <h2 className="text-xl font-serif text-roman-red mb-4">{page.title}</h2>}
+      {page.title && (
+        <h2 className="text-xl font-serif text-roman-red mb-4">
+          <SimpleRichDisplay content={page.title} />
+        </h2>
+      )}
 
       {page.items.map((item, index) => (
         <motion.div

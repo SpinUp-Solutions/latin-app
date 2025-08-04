@@ -1,4 +1,5 @@
 import React from 'react';
+import { SimpleRichDisplay } from './simple-rich-display';
 
 interface FieldSelectProps {
   items: string[];
@@ -55,7 +56,7 @@ const FieldSelect: React.FC<FieldSelectProps> = ({
             }`}
             onClick={() => onSelect(item, index)}
             disabled={isMatched}>
-            {item}
+            <SimpleRichDisplay content={item} />
           </button>
         );
       })}

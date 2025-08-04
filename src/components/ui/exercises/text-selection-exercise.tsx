@@ -8,6 +8,7 @@ import { FeedbackDisplay } from '../feedback';
 import { validateTextSelectionExercise } from '@/src/utils/exercises/textSelectionExercise';
 import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
+import { SimpleRichDisplay } from '../core/simple-rich-display';
 
 interface Props {
   exercise: TextSelectionExercise;
@@ -61,7 +62,11 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
   return (
     <div className="space-y-6 max-w-full">
       <div className="flex justify-between items-start">
-        {exercise.title && <h3 className="text-xl font-serif text-roman-red mb-4">{exercise.title}</h3>}
+        {exercise.title && (
+          <h3 className="text-xl font-serif text-roman-red mb-4">
+            <SimpleRichDisplay content={exercise.title} />
+          </h3>
+        )}
         {exercise.audioPath && (
           <AudioPlayButton
             audioPath={exercise.audioPath}
@@ -73,7 +78,7 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
       </div>
       {exercise.instructions && (
         <div className="p-6 bg-roman-parchment rounded-lg mb-4">
-          <p className="whitespace-pre-wrap break-words">{exercise.instructions}</p>
+          <SimpleRichDisplay content={exercise.instructions} className="whitespace-pre-wrap break-words" />
         </div>
       )}
 
@@ -86,7 +91,10 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
 
       <div className="p-6 bg-white rounded-lg border border-gray-200">
         <div className="overflow-x-auto">
-          <p className="mb-6 whitespace-pre-wrap break-words min-w-[300px]">{currentQuestion.text}</p>
+          <SimpleRichDisplay
+            content={currentQuestion.text}
+            className="mb-6 whitespace-pre-wrap break-words min-w-[300px]"
+          />
           <div className="font-serif text-lg leading-relaxed min-w-[300px]">
             {exercise.data.passage.split(' ').map((word, index) => (
               <span

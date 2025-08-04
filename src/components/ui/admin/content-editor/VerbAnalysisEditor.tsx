@@ -7,6 +7,8 @@ import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonSlice';
 import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
+import { SimpleRichEditor } from '../../core/simple-rich-editor';
+import { SimpleRichDisplay } from '../../core/simple-rich-display';
 
 export const VerbAnalysisEditor: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -199,23 +201,23 @@ export const VerbAnalysisEditor: React.FC = () => {
       <div className="space-y-4">
         <div>
           <label className="block text-sm font-medium mb-1">Exercise Title</label>
-          <input
-            type="text"
-            value={editingContent.title || ''}
-            onChange={e => updateContent({ title: e.target.value })}
-            className="w-full p-2 border rounded-md"
+          <SimpleRichEditor
+            content={editingContent.title || ''}
+            onChange={value => updateContent({ title: value })}
             placeholder="Enter exercise title..."
+            singleLine={true}
+            className="w-full"
           />
         </div>
 
         <div>
           <label className="block text-sm font-medium mb-1">Instructions</label>
-          <textarea
-            value={editingContent.instructions || ''}
-            onChange={e => updateContent({ instructions: e.target.value })}
-            className="w-full p-2 border rounded-md"
-            rows={3}
+          <SimpleRichEditor
+            content={editingContent.instructions || ''}
+            onChange={value => updateContent({ instructions: value })}
             placeholder="Provide instructions for students..."
+            rows={3}
+            className="w-full"
           />
         </div>
 
@@ -229,12 +231,12 @@ export const VerbAnalysisEditor: React.FC = () => {
       {/* Passage */}
       <div>
         <label className="block text-sm font-medium mb-2">Latin Text Passage</label>
-        <textarea
-          value={editingContent.data.passage || ''}
-          onChange={e => updateData({ passage: e.target.value })}
-          className="w-full p-3 border rounded-md font-serif text-base"
-          rows={4}
+        <SimpleRichEditor
+          content={editingContent.data.passage || ''}
+          onChange={value => updateData({ passage: value })}
           placeholder="Enter the Latin text that contains the verbs students will analyze..."
+          rows={4}
+          className="w-full font-serif text-base"
         />
         <p className="text-xs text-gray-500 mt-1">
           Students will click on verbs in this passage and enter the correct pronouns
@@ -300,7 +302,9 @@ export const VerbAnalysisEditor: React.FC = () => {
                 {verb.explanation && (
                   <div className="mt-3">
                     <label className="block text-xs font-medium mb-1">Explanation</label>
-                    <div className="w-full p-2 border rounded text-sm bg-gray-50">{verb.explanation}</div>
+                    <div className="w-full p-2 border rounded text-sm bg-gray-50">
+                      <SimpleRichDisplay content={verb.explanation} />
+                    </div>
                   </div>
                 )}
               </CardContent>
@@ -375,24 +379,24 @@ export const VerbAnalysisEditor: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-medium mb-1">Correct Pronoun</label>
-                <input
-                  type="text"
-                  value={wordPopup.correctPronoun}
-                  onChange={e => setWordPopup(prev => (prev ? { ...prev, correctPronoun: e.target.value } : null))}
-                  className="w-full p-2 border rounded text-sm"
+                <SimpleRichEditor
+                  content={wordPopup.correctPronoun}
+                  onChange={value => setWordPopup(prev => (prev ? { ...prev, correctPronoun: value } : null))}
                   placeholder="e.g., I, you, he/she/it..."
+                  singleLine={true}
+                  className="w-full"
                   autoFocus
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-medium mb-1">Explanation (optional)</label>
-                <textarea
-                  value={wordPopup.explanation}
-                  onChange={e => setWordPopup(prev => (prev ? { ...prev, explanation: e.target.value } : null))}
-                  className="w-full p-2 border rounded text-sm"
-                  rows={2}
+                <SimpleRichEditor
+                  content={wordPopup.explanation}
+                  onChange={value => setWordPopup(prev => (prev ? { ...prev, explanation: value } : null))}
                   placeholder="e.g., First person singular..."
+                  rows={2}
+                  className="w-full text-sm"
                 />
               </div>
 

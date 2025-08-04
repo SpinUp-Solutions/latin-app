@@ -14,6 +14,7 @@ import {
   handleClearAnnotations,
 } from '@/src/utils/sentenceDiagramming';
 import { useTipTapEditor } from '@/src/hooks/useTipTapEditor';
+import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { getStudentExtensions } from '@/src/utils/tiptapExtensions';
 import { stripAdminAnnotations } from '@/src/utils/contentUtils';
 import { EditorWithTooltips } from '../core/EditorWithTooltips';
@@ -117,7 +118,7 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
     <div className="sentence-diagramming-exercise space-y-4">
       <div className="bg-white p-4 rounded-lg border">
         <h3 className="text-lg font-semibold mb-2">{exercise.title}</h3>
-        <p className="text-gray-600 mb-4">{exercise.instructions}</p>
+        <SimpleRichDisplay content={exercise.instructions} className="text-gray-600 mb-4" />
 
         <div className="mb-4">
           <div className="text-sm font-medium text-gray-700 mb-1">Translation:</div>
@@ -153,7 +154,7 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
               Hint {currentHintIndex + 1} of {exercise.data.hints.length}
             </span>
           </div>
-          <p className="text-blue-700 mb-3">{exercise.data.hints[currentHintIndex]}</p>
+          <SimpleRichDisplay content={exercise.data.hints[currentHintIndex]} className="text-blue-700 mb-3" />
           <div className="flex gap-2">
             <Button onClick={handlePreviousHint} disabled={currentHintIndex === 0} variant="outline" size="sm">
               Previous

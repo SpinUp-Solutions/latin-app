@@ -14,6 +14,7 @@ import {
   getProgressionRulesWithDefaults,
   getTimingConfigWithDefaults,
 } from '@/src/utils/feedbackDefaults';
+import { SimpleRichEditor } from '../../core/simple-rich-editor';
 
 interface FeedbackConfigEditorProps {
   feedbackConfig: FeedbackConfig;
@@ -117,10 +118,10 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({ feed
                       <div className="space-y-3">
                         <div>
                           <label className="block text-xs font-medium mb-1">Feedback Message (optional)</label>
-                          <textarea
-                            value={level.message || ''}
-                            onChange={e => updateEscalationLevel(index, { ...level, message: e.target.value })}
-                            className="w-full p-2 border rounded-md text-sm"
+                          <SimpleRichEditor
+                            content={level.message || ''}
+                            onChange={value => updateEscalationLevel(index, { ...level, message: value })}
+                            className="w-full text-sm"
                             rows={2}
                             placeholder="e.g., 'Not quite right. Try again.' or 'Look at the verb ending...'"
                           />
@@ -184,34 +185,34 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({ feed
             <div className="space-y-3">
               <div>
                 <label className="block text-sm font-medium mb-1">Default Success Message</label>
-                <input
-                  type="text"
-                  value={successMessageWithDefaults.default || ''}
-                  onChange={e => updateSuccessMessage({ default: e.target.value })}
-                  className="w-full p-2 border rounded-md"
+                <SimpleRichEditor
+                  content={successMessageWithDefaults.default || ''}
+                  onChange={value => updateSuccessMessage({ default: value })}
                   placeholder="e.g., 'Correct!' or 'Well done!'"
+                  singleLine={true}
+                  className="w-full"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium mb-1">Completion Message</label>
-                <input
-                  type="text"
-                  value={successMessageWithDefaults.completion || ''}
-                  onChange={e => updateSuccessMessage({ completion: e.target.value })}
-                  className="w-full p-2 border rounded-md"
+                <SimpleRichEditor
+                  content={successMessageWithDefaults.completion || ''}
+                  onChange={value => updateSuccessMessage({ completion: value })}
                   placeholder="e.g., 'Excellent! You've completed the exercise!'"
+                  singleLine={true}
+                  className="w-full"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium mb-1">Advance Message</label>
-                <input
-                  type="text"
-                  value={successMessageWithDefaults.advance || ''}
-                  onChange={e => updateSuccessMessage({ advance: e.target.value })}
-                  className="w-full p-2 border rounded-md"
+                <SimpleRichEditor
+                  content={successMessageWithDefaults.advance || ''}
+                  onChange={value => updateSuccessMessage({ advance: value })}
                   placeholder="e.g., 'Correct! Moving to the next question...'"
+                  singleLine={true}
+                  className="w-full"
                 />
               </div>
 

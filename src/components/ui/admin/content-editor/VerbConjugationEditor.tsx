@@ -7,6 +7,7 @@ import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonSlice';
 import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
+import { SimpleRichEditor } from '../../core/simple-rich-editor';
 
 export const VerbConjugationEditor: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -254,23 +255,23 @@ export const VerbConjugationEditor: React.FC = () => {
       <div className="space-y-4">
         <div>
           <label className="block text-sm font-medium mb-1">Exercise Title</label>
-          <input
-            type="text"
-            value={editingContent.title || ''}
-            onChange={e => updateContent({ title: e.target.value })}
-            className="w-full p-2 border rounded-md"
+          <SimpleRichEditor
+            content={editingContent.title || ''}
+            onChange={value => updateContent({ title: value })}
             placeholder="Enter exercise title..."
+            singleLine={true}
+            className="w-full"
           />
         </div>
 
         <div>
           <label className="block text-sm font-medium mb-1">Instructions</label>
-          <textarea
-            value={editingContent.instructions || ''}
-            onChange={e => updateContent({ instructions: e.target.value })}
-            className="w-full p-2 border rounded-md"
-            rows={3}
+          <SimpleRichEditor
+            content={editingContent.instructions || ''}
+            onChange={value => updateContent({ instructions: value })}
             placeholder="Provide instructions for students..."
+            rows={3}
+            className="w-full"
           />
         </div>
 
@@ -292,23 +293,23 @@ export const VerbConjugationEditor: React.FC = () => {
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-1">Latin Text</label>
-              <textarea
-                value={editingContent.data.passage.latin}
-                onChange={e => updatePassage({ latin: e.target.value })}
-                className="w-full p-3 border rounded-md font-serif text-base"
-                rows={3}
+              <SimpleRichEditor
+                content={editingContent.data.passage.latin}
+                onChange={value => updatePassage({ latin: value })}
                 placeholder="Enter the Latin passage..."
+                rows={3}
+                className="w-full font-serif text-base"
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium mb-1">English Translation</label>
-              <textarea
-                value={editingContent.data.passage.translation}
-                onChange={e => updatePassage({ translation: e.target.value })}
-                className="w-full p-3 border rounded-md"
-                rows={3}
+              <SimpleRichEditor
+                content={editingContent.data.passage.translation}
+                onChange={value => updatePassage({ translation: value })}
                 placeholder="Enter the English translation..."
+                rows={3}
+                className="w-full"
               />
             </div>
 
@@ -330,22 +331,21 @@ export const VerbConjugationEditor: React.FC = () => {
                   <div className="space-y-2">
                     <div>
                       <label className="block text-xs font-medium mb-1">Latin Term</label>
-                      <input
-                        type="text"
-                        value={newVocabTerm}
-                        onChange={e => setNewVocabTerm(e.target.value)}
-                        className="w-full p-2 border rounded text-sm font-serif italic"
+                      <SimpleRichEditor
+                        content={newVocabTerm}
+                        onChange={setNewVocabTerm}
                         placeholder="e.g., quid, mi, opis..."
-                        autoFocus
+                        singleLine={true}
+                        className="w-full font-serif italic"
                       />
                     </div>
                     <div>
                       <label className="block text-xs font-medium mb-1">Definition/Explanation</label>
-                      <input
-                        type="text"
-                        value={newVocabDefinition}
-                        onChange={e => setNewVocabDefinition(e.target.value)}
-                        className="w-full p-2 border rounded text-sm"
+                      <SimpleRichEditor
+                        content={newVocabDefinition}
+                        onChange={setNewVocabDefinition}
+                        singleLine={true}
+                        className="w-full"
                         placeholder="e.g., (accusative/direct object form) something"
                       />
                     </div>
@@ -374,12 +374,12 @@ export const VerbConjugationEditor: React.FC = () => {
                       <div key={term} className="flex items-center gap-2">
                         <span className="font-serif italic text-sm w-24 text-right">{term}</span>
                         <span className="text-sm">=</span>
-                        <input
-                          type="text"
-                          value={definition}
-                          onChange={e => updateSpecialVocab(term, e.target.value)}
-                          className="flex-1 p-1 border rounded text-sm"
+                        <SimpleRichEditor
+                          content={definition}
+                          onChange={value => updateSpecialVocab(term, value)}
                           placeholder="Definition or explanation..."
+                          singleLine={true}
+                          className="flex-1"
                         />
                         <Button onClick={() => removeSpecialVocab(term)} size="sm" variant="ghost">
                           <Trash2 className="h-3 w-3" />
@@ -413,23 +413,23 @@ export const VerbConjugationEditor: React.FC = () => {
             <div className="space-y-3">
               <div>
                 <label className="block text-sm font-medium mb-1">Task Instructions</label>
-                <textarea
-                  value={editingContent.data.conjugationTask.instructions}
-                  onChange={e => updateConjugationTask({ instructions: e.target.value })}
-                  className="w-full p-2 border rounded-md"
-                  rows={3}
+                <SimpleRichEditor
+                  content={editingContent.data.conjugationTask.instructions}
+                  onChange={value => updateConjugationTask({ instructions: value })}
                   placeholder="Instructions for the conjugation task..."
+                  rows={3}
+                  className="w-full"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium mb-1">Correct Answer</label>
-                <textarea
-                  value={editingContent.data.conjugationTask.answer}
-                  onChange={e => updateConjugationTask({ answer: e.target.value })}
-                  className="w-full p-2 border rounded-md font-serif"
-                  rows={2}
+                <SimpleRichEditor
+                  content={editingContent.data.conjugationTask.answer}
+                  onChange={value => updateConjugationTask({ answer: value })}
                   placeholder="The correct Latin answer..."
+                  rows={2}
+                  className="w-full font-serif"
                 />
               </div>
             </div>
@@ -478,20 +478,20 @@ export const VerbConjugationEditor: React.FC = () => {
                         <div className="grid grid-cols-1 gap-2">
                           <div>
                             <label className="block text-xs font-medium mb-1">Latin</label>
-                            <input
-                              type="text"
-                              value={example.latin}
-                              onChange={e => updateExample(index, 'latin', e.target.value)}
-                              className="w-full p-2 border rounded text-sm font-serif"
+                            <SimpleRichEditor
+                              content={example.latin}
+                              onChange={value => updateExample(index, 'latin', value)}
                               placeholder="e.g., Sis felix semper!"
+                              singleLine={true}
+                              className="w-full font-serif"
                             />
                           </div>
                           <div>
                             <label className="block text-xs font-medium mb-1">Translation</label>
-                            <input
-                              type="text"
-                              value={example.translation}
-                              onChange={e => updateExample(index, 'translation', e.target.value)}
+                            <SimpleRichEditor
+                              content={example.translation}
+                              onChange={value => updateExample(index, 'translation', value)}
+                              singleLine={true}
                               className="w-full p-2 border rounded text-sm"
                               placeholder="e.g., May you always be happy!"
                             />
@@ -526,22 +526,22 @@ export const VerbConjugationEditor: React.FC = () => {
                         <div className="grid grid-cols-1 gap-2">
                           <div>
                             <label className="block text-xs font-medium mb-1">English Prompt</label>
-                            <input
-                              type="text"
-                              value={exercise.english}
-                              onChange={e => updateExercise(index, 'english', e.target.value)}
-                              className="w-full p-2 border rounded text-sm"
+                            <SimpleRichEditor
+                              content={exercise.english}
+                              onChange={value => updateExercise(index, 'english', value)}
                               placeholder="e.g., May she always be happy!"
+                              singleLine={true}
+                              className="w-full"
                             />
                           </div>
                           <div>
                             <label className="block text-xs font-medium mb-1">Latin Answer</label>
-                            <input
-                              type="text"
-                              value={exercise.answer}
-                              onChange={e => updateExercise(index, 'answer', e.target.value)}
-                              className="w-full p-2 border rounded text-sm font-serif"
+                            <SimpleRichEditor
+                              content={exercise.answer}
+                              onChange={value => updateExercise(index, 'answer', value)}
                               placeholder="e.g., Sit felix semper"
+                              singleLine={true}
+                              className="w-full font-serif"
                             />
                           </div>
                         </div>
