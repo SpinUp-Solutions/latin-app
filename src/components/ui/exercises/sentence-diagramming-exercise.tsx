@@ -46,7 +46,6 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
     },
   });
 
-
   const clearAnnotations = () => {
     if (isCorrect === true) return;
 
@@ -126,9 +125,7 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
         </div>
 
         <div className="sentence-diagramming-editor border border-gray-300 rounded-md">
-          <EditorWithTooltips
-            editor={editor}
-            className="p-4 min-h-[150px] bg-white">
+          <EditorWithTooltips editor={editor} className="p-4 min-h-[150px] bg-white">
             <DiagrammingToolbar
               editor={editor}
               onAnnotationClick={type =>

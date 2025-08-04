@@ -9,18 +9,14 @@ interface TooltipRendererProps {
   onTooltipHide?: () => void;
 }
 
-export const TooltipRenderer: React.FC<TooltipRendererProps> = ({ 
-  content, 
+export const TooltipRenderer: React.FC<TooltipRendererProps> = ({
+  content,
   className,
   onTooltipShow,
-  onTooltipHide
+  onTooltipHide,
 }) => {
   return (
-    <TooltipContainer 
-      className={className}
-      onTooltipShow={onTooltipShow}
-      onTooltipHide={onTooltipHide}
-    >
+    <TooltipContainer className={className} onTooltipShow={onTooltipShow} onTooltipHide={onTooltipHide}>
       <div dangerouslySetInnerHTML={{ __html: content }} />
     </TooltipContainer>
   );

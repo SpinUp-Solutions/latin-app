@@ -8,9 +8,10 @@ import {
   TooltipMark,
   isTooltipMark,
 } from '@/src/types/tooltip';
+import { Lesson, IntroductionPage, ExercisePage, RenderableContentItem } from '@/src/types/lesson';
 
 export const generateTooltipId = (word?: string): string => {
-  const randomId = Math.random().toString(36).substr(2, 9);
+  const randomId = Math.random().toString(36).substring(2, 11);
   return word ? `${word}-${Date.now()}-${randomId}` : randomId;
 };
 
@@ -216,22 +217,22 @@ export const calculateTooltipPosition = (
  */
 export const extractTooltipsFromContent = (htmlContent: string): Record<string, TooltipData> => {
   const tooltips: Record<string, TooltipData> = {};
-  
+
   // Create a temporary DOM element to parse the HTML
   const tempDiv = document.createElement('div');
   tempDiv.innerHTML = htmlContent;
-  
+
   // Find all elements with tooltip attributes
   const tooltipElements = tempDiv.querySelectorAll('[data-tooltip="true"]');
-  
-  tooltipElements.forEach((element) => {
+
+  tooltipElements.forEach(element => {
     const tooltipId = element.getAttribute('data-tooltip-id');
     if (!tooltipId) return;
-    
+
     // Extract all tooltip data from attributes
     const examples = element.getAttribute('examples');
     const principalParts = element.getAttribute('principalParts');
-    
+
     const tooltipData: TooltipData = {
       id: tooltipId,
       word: element.getAttribute('word') || '',
@@ -248,66 +249,68 @@ export const extractTooltipsFromContent = (htmlContent: string): Record<string, 
       grammaticalInfo: element.getAttribute('grammaticalInfo') || '',
       principalParts: principalParts ? principalParts.split(',').map(part => part.trim()) : [],
     };
-    
+
     // Only add if we have meaningful data
     if (tooltipData.word || tooltipData.translation) {
       tooltips[tooltipId] = tooltipData;
     }
   });
-  
+
   return tooltips;
 };
 
 /**
  * Recursively extracts tooltips from all content in a lesson structure
  */
-export const extractTooltipsFromLesson = (lesson: any): Record<string, TooltipData> => {
+export const extractTooltipsFromLesson = (lesson: Lesson): Record<string, TooltipData> => {
   const allTooltips: Record<string, TooltipData> = {};
-  
-  const extractFromContentArray = (items: any[]) => {
+
+  const extractFromContentArray = (items: RenderableContentItem[]) => {
     items.forEach(item => {
       if (typeof item === 'object' && item !== null) {
         // Check for content property (TipTap editor content)
-        if (item.content && typeof item.content === 'string') {
+        if ('content' in item && typeof item.content === 'string') {
           const tooltips = extractTooltipsFromContent(item.content);
           Object.assign(allTooltips, tooltips);
         }
-        
+
         // Check for sentence content (in exercises)
-        if (item.data?.sentence?.content && typeof item.data.sentence.content === 'string') {
+        if ('data' in item && item.data && typeof item.data === 'object' && 
+            'sentence' in item.data && item.data.sentence && typeof item.data.sentence === 'object' &&
+            'content' in item.data.sentence && typeof item.data.sentence.content === 'string') {
           const tooltips = extractTooltipsFromContent(item.data.sentence.content);
           Object.assign(allTooltips, tooltips);
         }
-        
+
         // Recursively check nested objects and arrays
         Object.values(item).forEach(value => {
           if (Array.isArray(value)) {
             extractFromContentArray(value);
           } else if (typeof value === 'object' && value !== null) {
-            extractFromContentArray([value]);
+            extractFromContentArray([value as RenderableContentItem]);
           }
         });
       }
     });
   };
-  
+
   // Extract from introduction pages
   if (lesson.introduction && Array.isArray(lesson.introduction)) {
-    lesson.introduction.forEach((page: any) => {
-      if (page.content && Array.isArray(page.content)) {
-        extractFromContentArray(page.content);
+    lesson.introduction.forEach((page: IntroductionPage) => {
+      if (page.items && Array.isArray(page.items)) {
+        extractFromContentArray(page.items);
       }
     });
   }
-  
+
   // Extract from exercise pages
   if (lesson.exercises && Array.isArray(lesson.exercises)) {
-    lesson.exercises.forEach((page: any) => {
-      if (page.content && Array.isArray(page.content)) {
-        extractFromContentArray(page.content);
+    lesson.exercises.forEach((page: ExercisePage) => {
+      if (page.items && Array.isArray(page.items)) {
+        extractFromContentArray(page.items);
       }
     });
   }
-  
+
   return allTooltips;
 };

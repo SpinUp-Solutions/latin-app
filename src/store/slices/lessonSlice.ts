@@ -86,9 +86,9 @@ export const loadLessonById = createAsyncThunk(
     try {
       const lesson = await lessonService.getLesson(lessonId);
       const tooltips = extractTooltipsFromLesson(lesson);
-      return { 
+      return {
         lesson: lesson as LessonWithMetadata,
-        tooltips
+        tooltips,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to load lesson';

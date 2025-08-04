@@ -21,24 +21,21 @@ export const EditorWithTooltips: React.FC<EditorWithTooltipsProps> = ({
 }) => {
   const editorRef = useRef<HTMLDivElement>(null);
 
-  const handleClick = useCallback(
-    (e: MouseEvent) => {
-      // Always pass click events to the editor, regardless of tooltip
-      const editorElement = editorRef.current?.querySelector('.ProseMirror');
-      if (editorElement && e.target !== editorElement) {
-        // Create a new click event and dispatch it to the editor
-        const clickEvent = new MouseEvent('click', {
-          bubbles: true,
-          cancelable: true,
-          clientX: e.clientX,
-          clientY: e.clientY,
-          view: window,
-        });
-        editorElement.dispatchEvent(clickEvent);
-      }
-    },
-    []
-  );
+  const handleClick = useCallback((e: MouseEvent) => {
+    // Always pass click events to the editor, regardless of tooltip
+    const editorElement = editorRef.current?.querySelector('.ProseMirror');
+    if (editorElement && e.target !== editorElement) {
+      // Create a new click event and dispatch it to the editor
+      const clickEvent = new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+        clientX: e.clientX,
+        clientY: e.clientY,
+        view: window,
+      });
+      editorElement.dispatchEvent(clickEvent);
+    }
+  }, []);
 
   if (!editor) {
     return <div>Loading editor...</div>;
@@ -51,8 +48,7 @@ export const EditorWithTooltips: React.FC<EditorWithTooltipsProps> = ({
         className={`relative [&_[data-tooltip='true']]:cursor-help ${className || ''}`}
         onTooltipShow={onTooltipShow}
         onTooltipHide={onTooltipHide}
-        onMouseClick={handleClick}
-      >
+        onMouseClick={handleClick}>
         <div ref={editorRef}>
           <EditorContent editor={editor} />
         </div>
