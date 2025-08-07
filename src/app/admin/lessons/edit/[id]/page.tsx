@@ -11,7 +11,13 @@ import { LessonBuilder } from '@/src/components/ui/admin';
 import { ClipboardProvider } from '@/src/components/ui/core/clipboard';
 import { Lesson } from '@/src/types/lesson';
 import { useAppDispatch } from '@/src/store/hooks';
-import { saveLesson, resetLessonState, clearError } from '@/src/store/slices/lessonSlice';
+import {
+  saveLesson,
+  resetLessonState,
+  clearError,
+  clearLastSavedLesson,
+  setLesson,
+} from '@/src/store/slices/lessonSlice';
 import { lessonService } from '@/src/services/lessonService';
 
 interface EditLessonPageProps {
@@ -24,9 +30,9 @@ export default function EditLessonPage({ params }: EditLessonPageProps) {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const { user, loading: authLoading } = useSelector((state: RootState) => state.auth);
-  const { saving, error, lastSavedLesson } = useSelector((state: RootState) => state.lesson);
-  const [lesson, setLesson] = useState<Lesson | null>(null);
+  const { saving, error, lastSavedLesson, currentLesson } = useSelector((state: RootState) => state.lesson);
   const [loading, setLoading] = useState(true);
+  const [navigating, setNavigating] = useState(false);
 
   useEffect(() => {
     if (!authLoading && (!user || user.role !== 'admin')) {
@@ -46,7 +52,7 @@ export default function EditLessonPage({ params }: EditLessonPageProps) {
       setLoading(true);
       const lessonData = await lessonService.getLesson(params.id);
       if (lessonData) {
-        setLesson(lessonData);
+        dispatch(setLesson(lessonData));
       } else {
         toast.error('Lesson not found');
         router.push('/admin/lessons/manage');
@@ -63,10 +69,10 @@ export default function EditLessonPage({ params }: EditLessonPageProps) {
   useEffect(() => {
     if (lastSavedLesson && !saving && !error) {
       toast.success('Lesson updated successfully!');
-      router.push('/admin/lessons/manage');
-      dispatch(resetLessonState());
+      // Clear the lastSavedLesson flag to prevent repeated notifications
+      dispatch(clearLastSavedLesson());
     }
-  }, [lastSavedLesson, saving, error, dispatch, router]);
+  }, [lastSavedLesson, saving, error, dispatch]);
 
   // Handle save error
   useEffect(() => {
@@ -86,8 +92,10 @@ export default function EditLessonPage({ params }: EditLessonPageProps) {
   };
 
   const handleBackToManage = () => {
-    dispatch(resetLessonState());
+    setNavigating(true);
     router.push('/admin/lessons/manage');
+    // Reset state after navigation starts
+    setTimeout(() => dispatch(resetLessonState()), 100);
   };
 
   if (authLoading || loading || !user) {
@@ -102,16 +110,10 @@ export default function EditLessonPage({ params }: EditLessonPageProps) {
     return null;
   }
 
-  if (!lesson) {
+  if (navigating || !currentLesson) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-roman-marble">
-        <div className="text-center">
-          <h2 className="text-2xl font-serif text-gray-800 mb-4">Lesson not found</h2>
-          <Button onClick={handleBackToManage}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Manage Lessons
-          </Button>
-        </div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>
       </div>
     );
   }
@@ -130,7 +132,7 @@ export default function EditLessonPage({ params }: EditLessonPageProps) {
             </div>
             <div>
               <h1 className="text-xl font-serif tracking-wide">Edit Lesson</h1>
-              <p className="text-sm text-roman-stone">Editing: {lesson.title || 'Untitled Lesson'}</p>
+              <p className="text-sm text-roman-stone">Editing: {currentLesson.title || 'Untitled Lesson'}</p>
             </div>
           </div>
         </div>
@@ -143,7 +145,7 @@ export default function EditLessonPage({ params }: EditLessonPageProps) {
       </header>
 
       <ClipboardProvider>
-        <LessonBuilder initialLesson={lesson} onSave={handleSaveLesson} />
+        <LessonBuilder initialLesson={currentLesson} onSave={handleSaveLesson} />
       </ClipboardProvider>
     </div>
   );

@@ -93,11 +93,9 @@ export const LessonBuilder: React.FC<LessonBuilderProps> = ({ initialLesson, onS
   };
 
   const handlePasteBulk = (selectedIndices: number[]) => {
-    // Paste to the first introduction page, or create one if none exist
     const targetPageType: PageType = 'introduction';
     const targetPageIndex = 0;
 
-    // Ensure we have at least one introduction page
     if (currentLesson.introduction.length === 0) {
       dispatch(addIntroductionPage());
     }
