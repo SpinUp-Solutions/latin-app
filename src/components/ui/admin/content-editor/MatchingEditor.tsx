@@ -11,7 +11,6 @@ import { SimpleRichEditor } from '../../core/simple-rich-editor';
 import { SimpleRichDisplay } from '../../core/simple-rich-display';
 import { RichTextSelect } from '../../core/rich-text-select';
 
-
 export const MatchingEditor: React.FC = () => {
   const dispatch = useAppDispatch();
   const editingContent = useAppSelector(state => state.lesson.editingContent?.content as MatchingExercise);

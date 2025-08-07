@@ -46,7 +46,11 @@ export const MultipleChoiceEditor: React.FC = () => {
     updateData({ options: newOptions });
   };
 
-  const updateOption = (index: number, field: keyof MultipleChoiceExercise['data']['options'][0], value: string | boolean) => {
+  const updateOption = (
+    index: number,
+    field: keyof MultipleChoiceExercise['data']['options'][0],
+    value: string | boolean
+  ) => {
     const newOptions = editingContent.data.options.map((option, i) => {
       if (i === index) {
         // If setting this option as correct, unset all others
@@ -133,17 +137,16 @@ export const MultipleChoiceEditor: React.FC = () => {
 
         <div className="space-y-3">
           {editingContent.data.options.map((option, index) => (
-            <Card key={option.id} className={cn(
-              'transition-all duration-200',
-              option.isCorrect && 'ring-2 ring-green-200 bg-green-50'
-            )}>
+            <Card
+              key={option.id}
+              className={cn('transition-all duration-200', option.isCorrect && 'ring-2 ring-green-200 bg-green-50')}>
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
                   {/* Option Letter */}
                   <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-sm font-medium mt-1">
                     {String.fromCharCode(65 + index)}
                   </div>
-                  
+
                   {/* Option Text */}
                   <div className="flex-1">
                     <SimpleRichEditor
@@ -161,11 +164,7 @@ export const MultipleChoiceEditor: React.FC = () => {
                       onClick={() => updateOption(index, 'isCorrect', !option.isCorrect)}
                       size="sm"
                       variant={option.isCorrect ? 'default' : 'outline'}
-                      className={cn(
-                        'min-w-[80px]',
-                        option.isCorrect && 'bg-green-600 hover:bg-green-700'
-                      )}
-                    >
+                      className={cn('min-w-[80px]', option.isCorrect && 'bg-green-600 hover:bg-green-700')}>
                       {option.isCorrect ? (
                         <>
                           <Check className="h-4 w-4 mr-1" />
@@ -178,13 +177,12 @@ export const MultipleChoiceEditor: React.FC = () => {
                         </>
                       )}
                     </Button>
-                    
+
                     <Button
                       onClick={() => removeOption(index)}
                       size="sm"
                       variant="ghost"
-                      disabled={editingContent.data.options.length <= 2}
-                    >
+                      disabled={editingContent.data.options.length <= 2}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -229,9 +227,7 @@ export const MultipleChoiceEditor: React.FC = () => {
               <div>
                 <strong>Correct Options:</strong> {getCorrectOptionCount()}
               </div>
-              {getCorrectOptionCount() === 0 && (
-                <div className="text-red-600">❌ No correct answer selected</div>
-              )}
+              {getCorrectOptionCount() === 0 && <div className="text-red-600">❌ No correct answer selected</div>}
               {getCorrectOptionCount() > 1 && (
                 <div className="text-amber-600">⚠️ Multiple correct answers selected (only one should be correct)</div>
               )}
@@ -241,12 +237,8 @@ export const MultipleChoiceEditor: React.FC = () => {
               {editingContent.data.options.some(option => option.text.trim() === '') && (
                 <div className="text-amber-600">⚠️ Some options are missing text</div>
               )}
-              {editingContent.data.question.trim() === '' && (
-                <div className="text-amber-600">⚠️ Question is empty</div>
-              )}
-              {editingContent.data.explanation && (
-                <div className="text-green-600">✓ Has explanation</div>
-              )}
+              {editingContent.data.question.trim() === '' && <div className="text-amber-600">⚠️ Question is empty</div>}
+              {editingContent.data.explanation && <div className="text-green-600">✓ Has explanation</div>}
             </div>
           </CardContent>
         </Card>
@@ -265,19 +257,17 @@ export const MultipleChoiceEditor: React.FC = () => {
                 {editingContent.data.options
                   .filter(option => option.text.trim() !== '')
                   .map((option, index) => (
-                    <div key={option.id} className={cn(
-                      'p-3 rounded border flex items-center gap-3',
-                      option.isCorrect 
-                        ? 'bg-green-50 border-green-200' 
-                        : 'bg-gray-50 border-gray-200'
-                    )}>
+                    <div
+                      key={option.id}
+                      className={cn(
+                        'p-3 rounded border flex items-center gap-3',
+                        option.isCorrect ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'
+                      )}>
                       <div className="w-6 h-6 rounded-full border-2 border-gray-300 flex items-center justify-center text-sm">
                         {String.fromCharCode(65 + index)}
                       </div>
                       <SimpleRichDisplay content={option.text} />
-                      {option.isCorrect && (
-                        <Check className="h-4 w-4 text-green-600 ml-auto" />
-                      )}
+                      {option.isCorrect && <Check className="h-4 w-4 text-green-600 ml-auto" />}
                     </div>
                   ))}
               </div>

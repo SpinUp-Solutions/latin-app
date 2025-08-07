@@ -44,9 +44,7 @@ export const OddOneOutEditor: React.FC = () => {
   };
 
   const updateItem = (itemId: string, updates: { text?: string; isOddOneOut?: boolean }) => {
-    const updatedItems = editingContent.data.items.map(item => 
-      item.id === itemId ? { ...item, ...updates } : item
-    );
+    const updatedItems = editingContent.data.items.map(item => (item.id === itemId ? { ...item, ...updates } : item));
 
     updateData({ items: updatedItems });
   };
@@ -117,11 +115,7 @@ export const OddOneOutEditor: React.FC = () => {
         <CardContent className="p-4">
           <div className="flex justify-between items-center mb-4">
             <h4 className="text-lg font-medium">Items</h4>
-            <Button
-              onClick={addItem}
-              size="sm"
-              className="bg-roman-terracotta hover:bg-roman-terracotta/90"
-            >
+            <Button onClick={addItem} size="sm" className="bg-roman-terracotta hover:bg-roman-terracotta/90">
               <Plus className="w-4 h-4 mr-1" />
               Add Item
             </Button>
@@ -137,17 +131,12 @@ export const OddOneOutEditor: React.FC = () => {
                 <div
                   key={item.id}
                   className={`p-4 border rounded-lg ${
-                    item.isOddOneOut 
-                      ? 'border-green-500 bg-green-50' 
-                      : 'border-gray-200 bg-white'
-                  }`}
-                >
+                    item.isOddOneOut ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-white'
+                  }`}>
                   <div className="flex items-start gap-3">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="text-sm font-medium text-gray-600">
-                          Item {index + 1}
-                        </span>
+                        <span className="text-sm font-medium text-gray-600">Item {index + 1}</span>
                         {item.isOddOneOut && (
                           <div className="flex items-center gap-1 text-green-600 text-sm">
                             <CheckCircle2 className="w-4 h-4" />
@@ -155,7 +144,7 @@ export const OddOneOutEditor: React.FC = () => {
                           </div>
                         )}
                       </div>
-                      
+
                       <SimpleRichEditor
                         content={item.text}
                         onChange={value => updateItem(item.id, { text: value })}
@@ -168,13 +157,12 @@ export const OddOneOutEditor: React.FC = () => {
                         <Button
                           onClick={() => setAsOddOneOut(item.id)}
                           size="sm"
-                          variant={item.isOddOneOut ? "default" : "outline"}
+                          variant={item.isOddOneOut ? 'default' : 'outline'}
                           className={
-                            item.isOddOneOut 
-                              ? "bg-green-600 hover:bg-green-700 text-white" 
-                              : "border-green-600 text-green-600 hover:bg-green-50"
-                          }
-                        >
+                            item.isOddOneOut
+                              ? 'bg-green-600 hover:bg-green-700 text-white'
+                              : 'border-green-600 text-green-600 hover:bg-green-50'
+                          }>
                           {item.isOddOneOut ? (
                             <>
                               <CheckCircle2 className="w-4 h-4 mr-1" />
@@ -194,8 +182,7 @@ export const OddOneOutEditor: React.FC = () => {
                       onClick={() => deleteItem(item.id)}
                       size="sm"
                       variant="outline"
-                      className="text-red-600 border-red-600 hover:bg-red-50"
-                    >
+                      className="text-red-600 border-red-600 hover:bg-red-50">
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
@@ -209,9 +196,7 @@ export const OddOneOutEditor: React.FC = () => {
             <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
               <div className="flex items-center gap-2 text-yellow-800">
                 <XCircle className="w-4 h-4" />
-                <span className="text-sm font-medium">
-                  Please select which item is the odd one out.
-                </span>
+                <span className="text-sm font-medium">Please select which item is the odd one out.</span>
               </div>
             </div>
           )}
@@ -230,7 +215,7 @@ export const OddOneOutEditor: React.FC = () => {
       <Card>
         <CardContent className="p-4">
           <h4 className="text-lg font-medium mb-4">Exercise Options</h4>
-          
+
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-1">Explanation (Optional)</label>
@@ -276,23 +261,16 @@ export const OddOneOutEditor: React.FC = () => {
                   <SimpleRichDisplay content={editingContent.data.question} />
                 </div>
               )}
-              
+
               <div className="grid grid-cols-2 gap-3">
-                {editingContent.data.items.map((item) => (
+                {editingContent.data.items.map(item => (
                   <div
                     key={item.id}
                     className={`p-3 rounded border-2 ${
-                      item.isOddOneOut 
-                        ? 'border-green-500 bg-green-50' 
-                        : 'border-gray-200 bg-white'
-                    }`}
-                  >
+                      item.isOddOneOut ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-white'
+                    }`}>
                     <SimpleRichDisplay content={item.text} />
-                    {item.isOddOneOut && (
-                      <div className="mt-2 text-xs text-green-600 font-medium">
-                        ✓ Odd One Out
-                      </div>
-                    )}
+                    {item.isOddOneOut && <div className="mt-2 text-xs text-green-600 font-medium">✓ Odd One Out</div>}
                   </div>
                 ))}
               </div>

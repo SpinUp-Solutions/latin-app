@@ -13,7 +13,7 @@ export const validateOddOneOutExercise = (
 ): OddOneOutValidationResult => {
   const correctItem = exercise.data.items.find(item => item.isOddOneOut);
   const selectedItem = exercise.data.items.find(item => item.id === selectedItemId);
-  
+
   return {
     isCorrect: selectedItemId === correctItem?.id,
     correctItemId: correctItem?.id,

@@ -255,11 +255,11 @@ export const createNewContent = (type: string): RenderableContentItem => {
         id: baseId,
         type: 'odd-one-out',
         title: 'Odd One Out Exercise',
-        instructions: 'Select the item that doesn\'t belong with the others.',
+        instructions: "Select the item that doesn't belong with the others.",
         audioPath: null,
         feedbackConfig: createDefaultFeedbackConfig(),
         data: {
-          question: 'Which of these items doesn\'t belong?',
+          question: "Which of these items doesn't belong?",
           items: [
             {
               id: `item-${Date.now()}-1`,

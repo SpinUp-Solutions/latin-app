@@ -33,7 +33,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
 
   const handleSubmit = () => {
     if (isProcessing || !selectedItemId) return;
-    
+
     setIsProcessing(true);
     setHasSubmitted(true);
 
@@ -41,7 +41,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
 
     if (validation.isCorrect) {
       handleCorrect(true);
-      
+
       // Auto-advance logic
       if (exercise.feedbackConfig.progressionRules?.autoAdvance !== false) {
         const delay = exercise.feedbackConfig.timingConfig?.nextExerciseDelay || 2000;
@@ -53,7 +53,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
       // Let the feedback system handle escalation - don't pass hint/correct answer
       handleIncorrect();
     }
-    
+
     setIsProcessing(false);
   };
 
@@ -63,8 +63,6 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
     setHasSubmitted(false);
     reset();
   };
-
-  const correctItem = exercise.data.items.find(item => item.isOddOneOut);
 
   return (
     <div className="space-y-4">
@@ -84,7 +82,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
           />
         )}
       </div>
-      
+
       {/* Instructions */}
       {exercise.instructions && (
         <div className="p-4 bg-roman-parchment rounded-lg mb-4">
@@ -104,7 +102,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
 
         {/* Items Grid */}
         <div className="grid grid-cols-2 gap-3 mb-6">
-          {exercise.data.items.map((item) => {
+          {exercise.data.items.map(item => {
             const isSelected = selectedItemId === item.id;
             const isCorrectItem = item.isOddOneOut;
             // Only show correct answer when user got it right OR feedback system says to show answer
@@ -118,32 +116,32 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
                 disabled={hasSubmitted}
                 className={`
                   relative p-4 rounded-lg border-2 transition-all duration-200 text-left
-                  ${showCorrectHighlight 
-                    ? 'border-green-500 bg-green-50' 
-                    : showIncorrectHighlight
-                    ? 'border-red-500 bg-red-50'
-                    : isSelected
-                    ? 'border-roman-terracotta bg-roman-parchment'
-                    : 'border-gray-200 hover:border-roman-terracotta/50 hover:bg-gray-50'
+                  ${
+                    showCorrectHighlight
+                      ? 'border-green-500 bg-green-50'
+                      : showIncorrectHighlight
+                        ? 'border-red-500 bg-red-50'
+                        : isSelected
+                          ? 'border-roman-terracotta bg-roman-parchment'
+                          : 'border-gray-200 hover:border-roman-terracotta/50 hover:bg-gray-50'
                   }
                   ${hasSubmitted ? 'cursor-default' : 'cursor-pointer'}
-                `}
-              >
+                `}>
                 <div className="text-base font-medium">
                   <SimpleRichDisplay content={item.text} />
                 </div>
-                
+
                 {/* Selection indicator */}
                 {isSelected && (
                   <div className="absolute top-2 right-2">
-                    <CheckCircle2 
+                    <CheckCircle2
                       className={`w-5 h-5 ${
-                        showCorrectHighlight 
-                          ? 'text-green-600' 
-                          : showIncorrectHighlight 
-                          ? 'text-red-600'
-                          : 'text-roman-terracotta'
-                      }`} 
+                        showCorrectHighlight
+                          ? 'text-green-600'
+                          : showIncorrectHighlight
+                            ? 'text-red-600'
+                            : 'text-roman-terracotta'
+                      }`}
                     />
                   </div>
                 )}
@@ -156,7 +154,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
         {exercise.data.requireExplanation && (
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Explain why this item doesn't belong:
+              Explain why this item doesn&apos;t belong:
             </label>
             <SimpleRichEditor
               content={userExplanation}
@@ -175,16 +173,14 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
             <Button
               onClick={handleSubmit}
               disabled={!selectedItemId || isProcessing}
-              className="bg-roman-terracotta hover:bg-roman-terracotta/90 text-white"
-            >
+              className="bg-roman-terracotta hover:bg-roman-terracotta/90 text-white">
               {isProcessing ? 'Checking...' : 'Submit Answer'}
             </Button>
           ) : (
             <Button
               onClick={handleReset}
               variant="outline"
-              className="border-roman-terracotta text-roman-terracotta hover:bg-roman-parchment"
-            >
+              className="border-roman-terracotta text-roman-terracotta hover:bg-roman-parchment">
               Try Again
             </Button>
           )}

@@ -1,4 +1,17 @@
-import { Type, Lightbulb, Table, Book, Target, Search, Zap, Users, FileText, Pencil, CheckSquare, Filter } from 'lucide-react';
+import {
+  Type,
+  Lightbulb,
+  Table,
+  Book,
+  Target,
+  Search,
+  Zap,
+  Users,
+  FileText,
+  Pencil,
+  CheckSquare,
+  Filter,
+} from 'lucide-react';
 
 export const CONTENT_TYPES = [
   { type: 'text', icon: Type, label: 'Text Block' },
