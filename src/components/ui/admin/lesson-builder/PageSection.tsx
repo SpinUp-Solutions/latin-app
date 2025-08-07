@@ -26,6 +26,7 @@ import { restrictToVerticalAxis, restrictToParentElement } from '@dnd-kit/modifi
 import { CSS } from '@dnd-kit/utilities';
 import { useDispatch } from 'react-redux';
 import { reorderPages } from '@/src/store/slices/lessonSlice';
+import { PasteZone } from '../../core/clipboard';
 
 interface PageSectionProps {
   title: string;
@@ -110,13 +111,16 @@ const SortablePage: React.FC<SortablePageProps> = ({
         onRemoveContent={(itemIndex: number) => onRemoveContent(pageIndex, itemIndex)}
       />
 
-      <div className="flex flex-wrap gap-2 pt-2 border-t">
-        {contentTypes.map(({ type, icon: ContentIcon, label }) => (
-          <Button key={type} variant="outline" size="sm" onClick={() => handleAddContent(type)}>
-            <ContentIcon className="h-4 w-4 mr-1" />
-            {label}
-          </Button>
-        ))}
+      <div className="space-y-3 pt-2 border-t">
+        <PasteZone pageType={pageType} pageIndex={pageIndex} />
+        <div className="flex flex-wrap gap-2">
+          {contentTypes.map(({ type, icon: ContentIcon, label }) => (
+            <Button key={type} variant="outline" size="sm" onClick={() => handleAddContent(type)}>
+              <ContentIcon className="h-4 w-4 mr-1" />
+              {label}
+            </Button>
+          ))}
+        </div>
       </div>
     </div>
   );

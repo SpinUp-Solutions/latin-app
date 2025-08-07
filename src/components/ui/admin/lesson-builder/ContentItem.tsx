@@ -1,10 +1,12 @@
 import React from 'react';
 import { Button } from '@/src/components/ui/button';
-import { Edit, Trash2, Type, Lightbulb, Table, Book, Target, GripVertical } from 'lucide-react';
+import { Edit, Trash2, Type, Lightbulb, Table, Book, Target, GripVertical, Copy } from 'lucide-react';
 import { RenderableContentItem } from '@/src/types/page';
 import { SimpleRichDisplay } from '../../core/simple-rich-display';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useClipboard } from '../../core/clipboard';
+import { toast } from 'sonner';
 
 interface ContentItemProps {
   item: RenderableContentItem;
@@ -30,6 +32,7 @@ const getContentIcon = (type: string) => {
 
 export const ContentItem: React.FC<ContentItemProps> = ({ item, onEdit, onRemove, isDraggable = false }) => {
   const Icon = getContentIcon(item.type);
+  const { copyItem } = useClipboard();
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
@@ -40,6 +43,11 @@ export const ContentItem: React.FC<ContentItemProps> = ({ item, onEdit, onRemove
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
+  };
+
+  const handleCopy = () => {
+    copyItem(item);
+    toast.success(`Copied "${item.title || item.type}" to clipboard`);
   };
 
   return (
@@ -65,6 +73,9 @@ export const ContentItem: React.FC<ContentItemProps> = ({ item, onEdit, onRemove
         <span className="text-sm text-gray-500">({item.type})</span>
       </div>
       <div className="flex gap-1">
+        <Button variant="ghost" size="sm" onClick={handleCopy} title="Copy content">
+          <Copy className="h-4 w-4" />
+        </Button>
         <Button variant="ghost" size="sm" onClick={onEdit}>
           <Edit className="h-4 w-4" />
         </Button>
