@@ -20,7 +20,7 @@ export const RichTextSelect: React.FC<RichTextSelectProps> = ({
   onChange,
   options,
   className = '',
-  placeholder = '-- Select an option --'
+  placeholder = '-- Select an option --',
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const selectedOption = options.find(opt => opt.id === value);
@@ -47,8 +47,7 @@ export const RichTextSelect: React.FC<RichTextSelectProps> = ({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex-1 w-full p-2 border rounded-md text-sm bg-white hover:bg-gray-50 flex items-center justify-between"
-      >
+        className="flex-1 w-full p-2 border rounded-md text-sm bg-white hover:bg-gray-50 flex items-center justify-between">
         <div className="flex-1 text-left">
           {selectedOption && selectedOption.id !== '' ? (
             <SimpleRichDisplay content={selectedOption.value} />
@@ -58,7 +57,7 @@ export const RichTextSelect: React.FC<RichTextSelectProps> = ({
         </div>
         <ChevronDown className="h-4 w-4 text-gray-400" />
       </button>
-      
+
       {isOpen && (
         <div className="absolute top-full left-0 right-0 z-10 mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto">
           {options.map(option => (
@@ -69,8 +68,7 @@ export const RichTextSelect: React.FC<RichTextSelectProps> = ({
                 onChange(option.id);
                 setIsOpen(false);
               }}
-              className="w-full p-2 text-left hover:bg-gray-50 border-b last:border-b-0"
-            >
+              className="w-full p-2 text-left hover:bg-gray-50 border-b last:border-b-0">
               {option.id === '' ? (
                 <span className="text-gray-500">{option.value}</span>
               ) : (

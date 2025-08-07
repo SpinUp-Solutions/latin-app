@@ -3,7 +3,8 @@ import { Button } from '@/src/components/ui/button';
 import { Save, X } from 'lucide-react';
 import { EditingCell } from '@/src/types/admin-vocabulary';
 import { formatCellValue } from '@/src/utils/vocabUtils';
-import { SimpleRichEditor } from '../../core/simple-rich-editor';
+import SimpleRichDisplay from '../../../core/simple-rich-display';
+import SimpleRichEditor from '../../../core/simple-rich-editor';
 
 interface EditableCellProps {
   value: string[];

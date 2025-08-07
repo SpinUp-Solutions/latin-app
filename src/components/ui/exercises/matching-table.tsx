@@ -240,13 +240,13 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
             <div className="text-sm">
               {selectedLeft && (
                 <div className="flex items-center gap-2">
-                  <span className="font-medium">Selected from left:</span> 
+                  <span className="font-medium">Selected from left:</span>
                   <SimpleRichDisplay content={selectedLeft.value} />
                 </div>
               )}
               {selectedRight && (
                 <div className="flex items-center gap-2">
-                  <span className="font-medium">Selected from right:</span> 
+                  <span className="font-medium">Selected from right:</span>
                   <SimpleRichDisplay content={selectedRight.value} />
                 </div>
               )}

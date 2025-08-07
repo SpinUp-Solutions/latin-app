@@ -385,7 +385,6 @@ export const VerbAnalysisEditor: React.FC = () => {
                   placeholder="e.g., I, you, he/she/it..."
                   singleLine={true}
                   className="w-full"
-                  autoFocus
                 />
               </div>
 

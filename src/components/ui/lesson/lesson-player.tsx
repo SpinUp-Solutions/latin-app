@@ -120,7 +120,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
                 <SimpleRichDisplay content={lesson.title} />
               </h3>
               <p className="text-sm text-roman-stone">
-                <SimpleRichDisplay content={lesson.description} />
+                <SimpleRichDisplay content={lesson.description || ''} />
               </p>
             </div>
           </div>

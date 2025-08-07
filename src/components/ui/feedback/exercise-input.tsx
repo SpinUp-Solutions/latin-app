@@ -19,13 +19,6 @@ const ExerciseInput: React.FC<ExerciseInputProps> = ({
   buttonText = 'Check',
   className = '',
 }) => {
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      onSubmit();
-    }
-  };
-
   return (
     <div className={`${className}`}>
       <div className="flex gap-4">
