@@ -9,6 +9,7 @@ import VerbAnalysisExercise from '../exercises/verb-analysis-exercise';
 import VerbConjugationExercise from '../exercises/verb-conjugation-exercise';
 import { SentenceDiagrammingExercise } from '../exercises/sentence-diagramming-exercise';
 import MultipleChoiceExercise from '../exercises/multiple-choice-exercise';
+import OddOneOutExercise from '../exercises/odd-one-out-exercise';
 import { ContentItem, TextContent, TableContent, VocabularyContent } from '@/src/types/lesson';
 import {
   MatchingExercise,
@@ -18,6 +19,7 @@ import {
   VerbConjugationExercise as VerbConjugationExerciseType,
   SentenceDiagrammingExercise as SentenceDiagrammingExerciseType,
   MultipleChoiceExercise as MultipleChoiceExerciseType,
+  OddOneOutExercise as OddOneOutExerciseType,
 } from '@/src/types/exercise';
 import { VocabularyViewer } from './VocabularyViewer';
 import TextComponent from './text-component';
@@ -81,6 +83,9 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onCom
 
     case 'multiple-choice':
       return <MultipleChoiceExercise exercise={content as MultipleChoiceExerciseType} onComplete={onComplete} />;
+
+    case 'odd-one-out':
+      return <OddOneOutExercise exercise={content as OddOneOutExerciseType} onComplete={onComplete} />;
 
     default:
       return (

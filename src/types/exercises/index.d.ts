@@ -6,6 +6,7 @@ export type { VerbAnalysisExercise } from './verb-analysis';
 export type { VerbConjugationExercise } from './verb-conjugation';
 export type { SentenceDiagrammingExercise } from './sentence-diagramming';
 export type { MultipleChoiceExercise } from './multiple-choice';
+export type { OddOneOutExercise } from './odd-one-out';
 
 import type { MatchingExercise } from './matching';
 import type { FillExercise } from './fill';
@@ -14,6 +15,7 @@ import type { VerbAnalysisExercise } from './verb-analysis';
 import type { VerbConjugationExercise } from './verb-conjugation';
 import type { SentenceDiagrammingExercise } from './sentence-diagramming';
 import type { MultipleChoiceExercise } from './multiple-choice';
+import type { OddOneOutExercise } from './odd-one-out';
 
 export type Exercise =
   | MatchingExercise
@@ -22,4 +24,5 @@ export type Exercise =
   | VerbAnalysisExercise
   | VerbConjugationExercise
   | SentenceDiagrammingExercise
-  | MultipleChoiceExercise;
+  | MultipleChoiceExercise
+  | OddOneOutExercise;

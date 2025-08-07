@@ -16,6 +16,7 @@ import { VerbAnalysisEditor } from './content-editor/VerbAnalysisEditor';
 import { VerbConjugationEditor } from './content-editor/VerbConjugationEditor';
 import { SentenceDiagrammingEditor } from './content-editor/SentenceDiagrammingEditor';
 import { MultipleChoiceEditor } from './content-editor/MultipleChoiceEditor';
+import { OddOneOutEditor } from './content-editor/OddOneOutEditor';
 
 import { getEditorTitle } from '@/src/utils/editorRegistry';
 
@@ -59,6 +60,8 @@ export const ContentEditor: React.FC = () => {
         return <SentenceDiagrammingEditor />;
       case 'multiple-choice':
         return <MultipleChoiceEditor />;
+      case 'odd-one-out':
+        return <OddOneOutEditor />;
       default:
         return (
           <div className="p-8 text-center text-gray-500">
