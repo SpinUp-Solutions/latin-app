@@ -1,13 +1,16 @@
 import React from 'react';
 import { Button } from '@/src/components/ui/button';
-import { Edit, Trash2, Type, Lightbulb, Table, Book, Target } from 'lucide-react';
+import { Edit, Trash2, Type, Lightbulb, Table, Book, Target, GripVertical } from 'lucide-react';
 import { RenderableContentItem } from '@/src/types/page';
 import { SimpleRichDisplay } from '../../core/simple-rich-display';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface ContentItemProps {
   item: RenderableContentItem;
   onEdit: () => void;
   onRemove: () => void;
+  isDraggable?: boolean;
 }
 
 const getContentIcon = (type: string) => {
@@ -25,12 +28,36 @@ const getContentIcon = (type: string) => {
   }
 };
 
-export const ContentItem: React.FC<ContentItemProps> = ({ item, onEdit, onRemove }) => {
+export const ContentItem: React.FC<ContentItemProps> = ({ item, onEdit, onRemove, isDraggable = false }) => {
   const Icon = getContentIcon(item.type);
 
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: item.id,
+    disabled: !isDraggable,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
   return (
-    <div className="flex items-center justify-between bg-gray-50 p-3 rounded">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center justify-between bg-gray-50 p-3 rounded border hover:bg-gray-100">
       <div className="flex items-center gap-2">
+        {isDraggable && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="cursor-grab active:cursor-grabbing p-1 text-gray-400 hover:text-gray-600"
+            {...attributes}
+            {...listeners}>
+            <GripVertical className="h-4 w-4" />
+          </Button>
+        )}
         <Icon className="h-4 w-4" />
         <span className="font-medium">
           <SimpleRichDisplay content={item.title || ''} />
