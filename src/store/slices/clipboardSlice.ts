@@ -1,22 +1,7 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { RenderableContentItem } from '@/src/types/page';
-import { TooltipData } from '@/src/types/tooltip';
 import { regenerateContentAndTooltipIds } from '@/src/utils/idUtils';
 import { extractTooltipsFromContentItem } from '@/src/utils/tooltipUtils';
-
-interface ClipboardItem {
-  content: RenderableContentItem;
-  associatedTooltips: Record<string, TooltipData>;
-  sourceLesson?: string;
-  sourcePageType?: 'introduction' | 'exercises';
-  sourcePageIndex?: number;
-  copiedAt: string;
-}
-
-export interface ClipboardState {
-  items: ClipboardItem[];
-  maxItems: number;
-}
+import { ClipboardItem, ClipboardState, CopyContentPayload, PasteResult } from '@/src/types/clipboard';
 
 const initialState: ClipboardState = {
   items: [],
@@ -27,37 +12,27 @@ const clipboardSlice = createSlice({
   name: 'clipboard',
   initialState,
   reducers: {
-    copyContentItem: (
-      state,
-      action: PayloadAction<{
-        content: RenderableContentItem;
-        sourceLesson?: string;
-        sourcePageType?: 'introduction' | 'exercises';
-        sourcePageIndex?: number;
-      }>
-    ) => {
-      const { content, sourceLesson, sourcePageType, sourcePageIndex } = action.payload;
-      
+    copyContentItem: (state, action: PayloadAction<CopyContentPayload>) => {
+      const { content, source } = action.payload;
+
       const contentCopy = JSON.parse(JSON.stringify(content));
       const associatedTooltips = extractTooltipsFromContentItem(contentCopy);
-      
+
       const clipboardItem: ClipboardItem = {
         content: contentCopy,
         associatedTooltips,
-        sourceLesson,
-        sourcePageType,
-        sourcePageIndex,
+        source,
         copiedAt: new Date().toISOString(),
       };
 
       state.items.unshift(clipboardItem);
-      
+
       if (state.items.length > state.maxItems) {
         state.items = state.items.slice(0, state.maxItems);
       }
     },
 
-    clearClipboard: (state) => {
+    clearClipboard: state => {
       state.items = [];
     },
 
@@ -73,7 +48,7 @@ export const pasteContentItem = (clipboardIndex: number = 0) => {
   return (dispatch: unknown, getState: () => { clipboard: ClipboardState }) => {
     const state = getState();
     const clipboardItem = state.clipboard.items[clipboardIndex];
-    
+
     if (!clipboardItem) {
       return null;
     }
@@ -82,17 +57,15 @@ export const pasteContentItem = (clipboardIndex: number = 0) => {
       clipboardItem.content,
       clipboardItem.associatedTooltips
     );
-    
+
     return {
       content,
       tooltips,
       metadata: {
-        sourceLesson: clipboardItem.sourceLesson,
-        sourcePageType: clipboardItem.sourcePageType,
-        sourcePageIndex: clipboardItem.sourcePageIndex,
+        ...clipboardItem.source,
         copiedAt: clipboardItem.copiedAt,
       },
-    };
+    } as PasteResult;
   };
 };
 

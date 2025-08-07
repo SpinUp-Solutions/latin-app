@@ -1,36 +1,16 @@
 import React, { createContext, useContext, ReactNode } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { RenderableContentItem } from '@/src/types/page';
-import { TooltipData } from '@/src/types/tooltip';
-import { 
-  copyContentItem, 
-  pasteContentItem, 
+import { ClipboardSource, ClipboardTarget, ClipboardContextType, PasteResult } from '@/src/types/clipboard';
+import {
+  copyContentItem,
+  pasteContentItem,
   clearClipboard,
   selectClipboardItems,
   selectHasClipboardItems,
-  type ClipboardState
 } from '@/src/store/slices/clipboardSlice';
 import { addContentToPage, loadTooltips } from '@/src/store/slices/lessonSlice';
 import { AppDispatch } from '@/src/store';
-
-interface ClipboardSource {
-  lesson?: string;
-  pageType?: 'introduction' | 'exercises';
-  pageIndex?: number;
-}
-
-interface ClipboardTarget {
-  pageType: 'introduction' | 'exercises';
-  pageIndex: number;
-}
-
-interface ClipboardContextType {
-  copyItem: (content: RenderableContentItem, source?: ClipboardSource) => void;
-  pasteItem: (target: ClipboardTarget) => void;
-  hasItems: boolean;
-  clearItems: () => void;
-  clipboardItems: ClipboardState['items'];
-}
 
 const ClipboardContext = createContext<ClipboardContextType | undefined>(undefined);
 
@@ -52,28 +32,21 @@ export const ClipboardProvider: React.FC<ClipboardProviderProps> = ({ children }
   const hasItems = useSelector(selectHasClipboardItems);
 
   const copyItem = (content: RenderableContentItem, source?: ClipboardSource) => {
-    dispatch(copyContentItem({
-      content,
-      sourceLesson: source?.lesson,
-      sourcePageType: source?.pageType,
-      sourcePageIndex: source?.pageIndex,
-    }));
+    dispatch(copyContentItem({ content, source }));
   };
 
   const pasteItem = (target: ClipboardTarget) => {
-    const result = dispatch(pasteContentItem(0)) as {
-      content: RenderableContentItem;
-      tooltips: Record<string, TooltipData>;
-      metadata: ClipboardSource & { copiedAt: string };
-    } | null;
-    
+    const result = dispatch(pasteContentItem(0)) as PasteResult | null;
+
     if (result && result.content && result.tooltips) {
-      dispatch(addContentToPage({
-        pageType: target.pageType,
-        pageIndex: target.pageIndex,
-        content: result.content,
-      }));
-      
+      dispatch(
+        addContentToPage({
+          pageType: target.pageType,
+          pageIndex: target.pageIndex,
+          content: result.content,
+        })
+      );
+
       if (Object.keys(result.tooltips).length > 0) {
         dispatch(loadTooltips(result.tooltips));
       }
@@ -92,8 +65,7 @@ export const ClipboardProvider: React.FC<ClipboardProviderProps> = ({ children }
         hasItems,
         clearItems,
         clipboardItems,
-      }}
-    >
+      }}>
       {children}
     </ClipboardContext.Provider>
   );

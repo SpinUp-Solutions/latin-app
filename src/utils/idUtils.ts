@@ -14,7 +14,7 @@ export const regenerateContentIds = (
   idMapping: IdMapping = {}
 ): { content: RenderableContentItem; idMapping: IdMapping } => {
   const newContent = JSON.parse(JSON.stringify(content)) as RenderableContentItem;
-  
+
   const oldId = newContent.id;
   const newId = generateId('content');
   newContent.id = newId;
@@ -37,7 +37,7 @@ const regenerateNestedIds = (obj: unknown, idMapping: IdMapping): void => {
   Object.keys(obj as Record<string, unknown>).forEach(key => {
     const objRecord = obj as Record<string, unknown>;
     const value = objRecord[key];
-    
+
     if (key === 'id' && typeof value === 'string' && value !== objRecord.id) {
       const newId = generateId('nested');
       idMapping[value] = newId;
@@ -59,14 +59,14 @@ const updateIdReferences = (obj: unknown, idMapping: IdMapping): void => {
   Object.keys(obj as Record<string, unknown>).forEach(key => {
     const objRecord = obj as Record<string, unknown>;
     const value = objRecord[key];
-    
+
     if (typeof value === 'string') {
       if (key.includes('Id') || key.includes('Ref') || key === 'target') {
         if (idMapping[value]) {
           objRecord[key] = idMapping[value];
         }
       }
-      
+
       if (value.includes('data-tooltip-id=') || value.includes('id=') || value.includes('data-id=')) {
         let updatedValue = value;
         Object.keys(idMapping).forEach(oldId => {
@@ -86,11 +86,11 @@ export const regenerateTooltipIds = (
   idMapping: IdMapping = {}
 ): { tooltips: Record<string, TooltipData>; idMapping: IdMapping } => {
   const newTooltips: Record<string, TooltipData> = {};
-  
+
   Object.entries(tooltips).forEach(([oldId, tooltip]) => {
     const newId = generateId('tooltip');
     idMapping[oldId] = newId;
-    
+
     newTooltips[newId] = {
       ...tooltip,
       id: newId,
@@ -109,15 +109,15 @@ export const regenerateContentAndTooltipIds = (
   idMapping: IdMapping;
 } => {
   let idMapping: IdMapping = {};
-  
+
   const { content: newContent, idMapping: contentIdMapping } = regenerateContentIds(content, idMapping);
   idMapping = { ...idMapping, ...contentIdMapping };
-  
+
   const { tooltips: newTooltips, idMapping: tooltipIdMapping } = regenerateTooltipIds(tooltips, idMapping);
   idMapping = { ...idMapping, ...tooltipIdMapping };
-  
+
   updateIdReferences(newContent, idMapping);
-  
+
   return {
     content: newContent,
     tooltips: newTooltips,
