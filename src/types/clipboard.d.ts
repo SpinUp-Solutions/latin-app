@@ -52,7 +52,12 @@ export interface PasteResult {
 export interface ClipboardContextType {
   copyItem: (content: RenderableContentItem, source?: ClipboardSource) => void;
   pasteItem: (target: ClipboardTarget) => void;
+  pasteBulk: (target: ClipboardTarget, selectedIndices: number[]) => void;
   hasItems: boolean;
   clearItems: () => void;
   clipboardItems: ClipboardItem[];
+  selectedItems: number[];
+  toggleSelection: (index: number) => void;
+  selectAll: () => void;
+  clearSelection: () => void;
 }

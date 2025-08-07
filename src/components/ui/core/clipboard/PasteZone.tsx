@@ -11,18 +11,23 @@ interface PasteZoneProps {
 }
 
 export const PasteZone: React.FC<PasteZoneProps> = ({ pageType, pageIndex, className = '' }) => {
-  const { pasteItem, hasItems, clipboardItems } = useClipboard();
+  const { pasteBulk, hasItems, selectedItems, clipboardItems } = useClipboard();
 
   if (!hasItems) {
     return null;
   }
 
-  const latestItem = clipboardItems[0];
-  const itemType = latestItem?.content?.type || 'content';
-  const itemTitle = latestItem?.content?.title || 'Untitled';
+  const hasSelection = selectedItems.length > 0;
+  const selectedCount = selectedItems.length;
+
+  // Show selection info or fallback to latest item
+  const displayText = hasSelection
+    ? `${selectedCount} selected item${selectedCount > 1 ? 's' : ''}`
+    : `${clipboardItems.length} item${clipboardItems.length > 1 ? 's' : ''} in clipboard`;
 
   const handlePaste = () => {
-    pasteItem({ pageType, pageIndex });
+    const indicesToPaste = hasSelection ? selectedItems : [0]; // If no selection, paste latest
+    pasteBulk({ pageType, pageIndex }, indicesToPaste);
   };
 
   return (
@@ -31,17 +36,16 @@ export const PasteZone: React.FC<PasteZoneProps> = ({ pageType, pageIndex, class
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm text-blue-700">
           <Clipboard className="h-4 w-4" />
-          <span>
-            Paste: {itemTitle} ({itemType})
-          </span>
+          <span>Paste: {displayText}</span>
         </div>
         <Button
           variant="outline"
           size="sm"
           onClick={handlePaste}
-          className="border-blue-300 text-blue-700 hover:bg-blue-100">
+          className="border-blue-300 text-blue-700 hover:bg-blue-100"
+          disabled={!hasSelection && clipboardItems.length === 0}>
           <Plus className="h-4 w-4 mr-1" />
-          Paste
+          {hasSelection ? `Paste Selected (${selectedCount})` : 'Paste Latest'}
         </Button>
       </div>
     </div>

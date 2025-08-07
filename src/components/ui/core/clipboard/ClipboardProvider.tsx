@@ -30,6 +30,7 @@ export const ClipboardProvider: React.FC<ClipboardProviderProps> = ({ children }
   const dispatch = useDispatch<AppDispatch>();
   const clipboardItems = useSelector(selectClipboardItems);
   const hasItems = useSelector(selectHasClipboardItems);
+  const [selectedItems, setSelectedItems] = React.useState<number[]>([]);
 
   const copyItem = (content: RenderableContentItem, source?: ClipboardSource) => {
     dispatch(copyContentItem({ content, source }));
@@ -55,16 +56,59 @@ export const ClipboardProvider: React.FC<ClipboardProviderProps> = ({ children }
 
   const clearItems = () => {
     dispatch(clearClipboard());
+    setSelectedItems([]);
   };
+
+  const pasteBulk = (target: ClipboardTarget, selectedIndices: number[]) => {
+    selectedIndices.forEach(index => {
+      const result = dispatch(pasteContentItem(index)) as PasteResult | null;
+
+      if (result && result.content && result.tooltips) {
+        dispatch(
+          addContentToPage({
+            pageType: target.pageType,
+            pageIndex: target.pageIndex,
+            content: result.content,
+          })
+        );
+
+        if (Object.keys(result.tooltips).length > 0) {
+          dispatch(loadTooltips(result.tooltips));
+        }
+      }
+    });
+  };
+
+  const toggleSelection = (index: number) => {
+    setSelectedItems(prev => (prev.includes(index) ? prev.filter(i => i !== index) : [...prev, index]));
+  };
+
+  const selectAll = () => {
+    setSelectedItems(clipboardItems.map((_, index) => index));
+  };
+
+  const clearSelection = () => {
+    setSelectedItems([]);
+  };
+
+  // Clear selections when clipboard items change
+  React.useEffect(() => {
+    setSelectedItems(prev => prev.filter(index => index < clipboardItems.length));
+  }, [clipboardItems.length]);
 
   return (
     <ClipboardContext.Provider
       value={{
         copyItem,
         pasteItem,
+        pasteBulk,
         hasItems,
         clearItems,
         clipboardItems,
+        selectedItems,
+        toggleSelection,
+        selectAll,
+        clearSelection,
       }}>
       {children}
     </ClipboardContext.Provider>
