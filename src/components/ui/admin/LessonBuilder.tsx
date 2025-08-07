@@ -65,7 +65,7 @@ export const LessonBuilder: React.FC<LessonBuilderProps> = ({ initialLesson, onS
     dispatch(updatePageTitle({ pageType, pageIndex, title }));
   };
 
-  // Handle content operations
+  // Handle content operation
   const handleAddContent =
     (pageType: 'introduction' | 'exercises') => (pageIndex: number, content: RenderableContentItem) => {
       dispatch(addContentToPage({ pageType, pageIndex, content }));
