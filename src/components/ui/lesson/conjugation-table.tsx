@@ -97,6 +97,7 @@ const ConjugationTable: React.FC<ConjugationTableProps> = ({ data, className, au
                       <span className="font-serif">
                         <SimpleRichDisplay content={footnote} />
                       </span>
+
                     </div>
                   ))}
                 </div>
