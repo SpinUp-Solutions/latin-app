@@ -3,6 +3,8 @@ export * from './textSelectionExercise';
 export * from './verbAnalysisExercise';
 export * from './verbConjugationExercise';
 export * from './matchingExercise';
+export * from './multipleChoiceExercise';
+export * from './oddOneOutExercise';
 
 // Shared types and helpers
 export * from './types';

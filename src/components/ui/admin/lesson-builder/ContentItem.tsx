@@ -33,7 +33,7 @@ export const ContentItem: React.FC<ContentItemProps> = ({ item, onEdit, onRemove
       <div className="flex items-center gap-2">
         <Icon className="h-4 w-4" />
         <span className="font-medium">
-          <SimpleRichDisplay content={item.title || 'Untitled'} />
+          <SimpleRichDisplay content={item.title || ''} />
         </span>
         <span className="text-sm text-gray-500">({item.type})</span>
       </div>

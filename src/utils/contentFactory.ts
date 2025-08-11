@@ -215,6 +215,77 @@ export const createNewContent = (type: string): RenderableContentItem => {
           difficulty: 'beginner',
         },
       };
+    case 'multiple-choice':
+      return {
+        id: baseId,
+        type: 'multiple-choice',
+        title: 'Multiple Choice Question',
+        instructions: 'Select the correct answer from the choices below.',
+        audioPath: null,
+        feedbackConfig: createDefaultFeedbackConfig(),
+        data: {
+          question: 'What is the correct answer?',
+          options: [
+            {
+              id: `option-${Date.now()}-1`,
+              text: 'Option A',
+              isCorrect: true,
+            },
+            {
+              id: `option-${Date.now()}-2`,
+              text: 'Option B',
+              isCorrect: false,
+            },
+            {
+              id: `option-${Date.now()}-3`,
+              text: 'Option C',
+              isCorrect: false,
+            },
+            {
+              id: `option-${Date.now()}-4`,
+              text: 'Option D',
+              isCorrect: false,
+            },
+          ],
+          explanation: 'This explains why the correct answer is right.',
+        },
+      };
+    case 'odd-one-out':
+      return {
+        id: baseId,
+        type: 'odd-one-out',
+        title: 'Odd One Out Exercise',
+        instructions: "Select the item that doesn't belong with the others.",
+        audioPath: null,
+        feedbackConfig: createDefaultFeedbackConfig(),
+        data: {
+          question: "Which of these items doesn't belong?",
+          items: [
+            {
+              id: `item-${Date.now()}-1`,
+              text: 'Item A',
+              isOddOneOut: false,
+            },
+            {
+              id: `item-${Date.now()}-2`,
+              text: 'Item B',
+              isOddOneOut: false,
+            },
+            {
+              id: `item-${Date.now()}-3`,
+              text: 'Item C',
+              isOddOneOut: false,
+            },
+            {
+              id: `item-${Date.now()}-4`,
+              text: 'Item D',
+              isOddOneOut: true,
+            },
+          ],
+          explanation: 'This item is different because...',
+          requireExplanation: false,
+        },
+      };
     default:
       throw new Error(`Unknown content type: ${type}`);
   }
