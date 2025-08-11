@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { useAppSelector } from '@/src/store/hooks';
 import { useAdminApi } from '@/src/hooks/useAdminApi';
 import { Button } from '../../button';
-import { Upload, CheckCircle, Trash2, Loader2, Play, Pause } from 'lucide-react';
+import { Upload, CheckCircle, Trash2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useAudio } from '@/src/hooks/useAudio';
+import AudioPlayButton from '../../core/audio-play-button';
 
 interface AudioUploadSectionProps {
   audioPath: string | null | undefined;
@@ -21,15 +21,10 @@ export const AudioUploadSection: React.FC<AudioUploadSectionProps> = ({
 }) => {
   const lessonId = useAppSelector(state => state.lesson.currentLesson?.id);
   const { makeAdminRequest } = useAdminApi();
-  const { isPlaying, play, pause, setAudioSource } = useAudio(audioPath);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-
-  React.useEffect(() => {
-    setAudioSource(audioPath);
-  }, [audioPath, setAudioSource]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
@@ -85,18 +80,6 @@ export const AudioUploadSection: React.FC<AudioUploadSectionProps> = ({
     }
   };
 
-  const handlePlayPause = () => {
-    if (!audioPath) return;
-
-    if (isPlaying) {
-      pause();
-    } else {
-      play();
-    }
-  };
-
-  const isCurrentlyPlaying = isPlaying;
-
   return (
     <div className={`space-y-2 ${className}`}>
       <label className="block text-sm font-medium text-gray-700">Audio</label>
@@ -151,13 +134,13 @@ export const AudioUploadSection: React.FC<AudioUploadSectionProps> = ({
               </div>
             </div>
             <div className="flex items-center space-x-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
-                onClick={handlePlayPause}>
-                {isCurrentlyPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-              </Button>
+              {audioPath && (
+                <AudioPlayButton
+                  audioPath={audioPath}
+                  size="sm"
+                  className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+                />
+              )}
               <Button
                 variant="ghost"
                 size="sm"

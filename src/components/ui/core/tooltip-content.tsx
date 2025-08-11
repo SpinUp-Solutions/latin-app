@@ -38,7 +38,8 @@ const TooltipContentComponent: React.FC<TooltipContentProps> = ({
     }
   };
   return (
-    <Card className={`w-72 max-w-sm shadow-lg border ${className || ''}`}>
+    <Card className={`w-72 max-w-sm shadow-lg border mt-[-40px] ${className || ''}`}>
+      {' '}
       <CardHeader className="pb-1 pt-3 px-3">
         <CardTitle className="text-sm font-semibold">{word}</CardTitle>
         {pronunciation && <div className="text-xs text-muted-foreground font-mono">/{pronunciation}/</div>}
@@ -70,7 +71,6 @@ const TooltipContentComponent: React.FC<TooltipContentProps> = ({
           )}
         </div>
       </CardHeader>
-
       <CardContent className="space-y-1.5 pt-0 px-3 pb-3">
         {translation && (
           <div>

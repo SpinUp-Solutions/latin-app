@@ -8,7 +8,7 @@ interface UseAudioReturn {
   togglePlay: () => void;
   play: () => void;
   pause: () => void;
-  onEnded: () => void;
+  onEnded: () => void; // might be useful later ()
   setAudioSource: (src: string | null | undefined) => void;
 }
 
@@ -62,13 +62,11 @@ export function useAudio(initialAudioPath?: string | null, onAudioEnded?: () => 
       return;
     }
 
-    // Start loading state
-    setIsLoading(true);
-
     let url = signedUrl;
     console.log('Current signed URL:', url);
     if (!url) {
       console.log('Getting new signed URL...');
+      setIsLoading(true);
       const newSignedUrl = await getSignedUrl();
       if (newSignedUrl) {
         setSignedUrl(newSignedUrl);
@@ -83,9 +81,29 @@ export function useAudio(initialAudioPath?: string | null, onAudioEnded?: () => 
 
     if (url) {
       console.log('Setting audio source and playing:', url);
-      if (audio.src !== url) {
+      const needsNewSource = audio.src !== url;
+
+      if (needsNewSource) {
+        setIsLoading(true);
         audio.src = url;
         console.log('Audio source updated');
+      }
+
+      if (audio.readyState >= 3 && !needsNewSource) {
+        console.log('Audio already ready, playing immediately');
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              console.log('Audio playing successfully');
+              setIsPlaying(true);
+            })
+            .catch(error => {
+              console.error('Audio play error:', error);
+              setIsPlaying(false);
+            });
+        }
+        return;
       }
 
       const handleCanPlay = () => {

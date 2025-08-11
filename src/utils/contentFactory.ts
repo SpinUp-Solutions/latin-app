@@ -168,6 +168,53 @@ export const createNewContent = (type: string): RenderableContentItem => {
           },
         },
       };
+    case 'sentence-diagramming':
+      return {
+        id: baseId,
+        type: 'sentence-diagramming',
+        title: 'Sentence Diagramming Exercise',
+        instructions: 'Diagram the Latin sentence ',
+        audioPath: null,
+        feedbackConfig: createDefaultFeedbackConfig(),
+        data: {
+          sentence: {
+            latin: 'Marcus puellam videt',
+            translation: 'Marcus sees the girl',
+            words: [
+              {
+                id: 'word-1',
+                text: 'Marcus',
+                index: 0,
+                startPosition: 0,
+                endPosition: 6,
+              },
+              {
+                id: 'word-2',
+                text: 'puellam',
+                index: 1,
+                startPosition: 7,
+                endPosition: 14,
+              },
+              {
+                id: 'word-3',
+                text: 'videt',
+                index: 2,
+                startPosition: 15,
+                endPosition: 20,
+              },
+            ],
+          },
+          solution: {
+            annotations: {},
+          },
+          hints: [
+            'Start by identifying the verb in the sentence.',
+            'Look for the subject - who is doing the action?',
+            'Find the direct object - what is being acted upon?',
+          ],
+          difficulty: 'beginner',
+        },
+      };
     default:
       throw new Error(`Unknown content type: ${type}`);
   }

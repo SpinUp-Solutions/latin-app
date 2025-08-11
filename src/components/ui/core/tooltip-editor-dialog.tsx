@@ -3,11 +3,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
 import { Label } from '@/src/components/ui/label';
-import { Textarea } from '@/src/components/ui/textarea';
 import { Badge } from '@/src/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/src/components/ui/tabs';
 import { Alert, AlertDescription } from '@/src/components/ui/alert';
 import { X, Plus, Search, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { SimpleInput, SimpleTextarea, SimpleSelect } from '@/src/components/ui/form-components';
 import { TooltipData, TooltipFormData } from '@/src/types/tooltip';
 import { WordLookupService, WordLookupResult } from '@/src/services/wordLookupService';
 import { transformToFormData, cleanFormData, getEmptyFormData } from '@/src/utils/tooltipUtils';
@@ -255,50 +255,34 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
 
             <TabsContent value="basic" className="space-y-4 mt-4">
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="translation">Translation</Label>
-                  <Input
-                    id="translation"
-                    value={formData.translation}
-                    onChange={e => handleInputChange('translation', e.target.value)}
-                    placeholder="English translation"
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="pronunciation">Pronunciation</Label>
-                  <Input
-                    id="pronunciation"
-                    value={formData.pronunciation}
-                    onChange={e => handleInputChange('pronunciation', e.target.value)}
-                    placeholder="IPA pronunciation"
-                    className="mt-1"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="wordType">Word Type Details</Label>
-                <Input
-                  id="wordType"
-                  value={formData.wordType}
-                  onChange={e => handleInputChange('wordType', e.target.value)}
-                  placeholder="Additional type information"
-                  className="mt-1"
+                <SimpleInput
+                  label="Translation"
+                  value={formData.translation || ''}
+                  onChange={value => handleInputChange('translation', value)}
+                  placeholder="English translation"
+                />
+                <SimpleInput
+                  label="Pronunciation"
+                  value={formData.pronunciation || ''}
+                  onChange={value => handleInputChange('pronunciation', value)}
+                  placeholder="IPA pronunciation"
                 />
               </div>
 
-              <div>
-                <Label htmlFor="definition">Definition</Label>
-                <Textarea
-                  id="definition"
-                  value={formData.definition}
-                  onChange={e => handleInputChange('definition', e.target.value)}
-                  placeholder="Detailed definition"
-                  className="mt-1"
-                  rows={3}
-                />
-              </div>
+              <SimpleInput
+                label="Word Type Details"
+                value={formData.wordType || ''}
+                onChange={value => handleInputChange('wordType', value)}
+                placeholder="Additional type information"
+              />
+
+              <SimpleTextarea
+                label="Definition"
+                value={formData.definition || ''}
+                onChange={value => handleInputChange('definition', value)}
+                placeholder="Detailed definition"
+                rows={3}
+              />
 
               <div>
                 <Label>Examples</Label>
@@ -336,89 +320,71 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
                 </div>
               </div>
 
-              <div>
-                <Label htmlFor="etymology">Etymology</Label>
-                <Textarea
-                  id="etymology"
-                  value={formData.etymology}
-                  onChange={e => handleInputChange('etymology', e.target.value)}
-                  placeholder="Word origin and history"
-                  className="mt-1"
-                  rows={2}
-                />
-              </div>
+              <SimpleTextarea
+                label="Etymology"
+                value={formData.etymology || ''}
+                onChange={value => handleInputChange('etymology', value)}
+                placeholder="Word origin and history"
+                rows={2}
+              />
             </TabsContent>
 
             <TabsContent value="noun" className="space-y-4 mt-4">
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="gender">Gender</Label>
-                  <select
-                    id="gender"
-                    value={formData.gender}
-                    onChange={e => handleInputChange('gender', e.target.value)}
-                    className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
-                    <option value="">Select gender...</option>
-                    <option value="masculine">Masculine</option>
-                    <option value="feminine">Feminine</option>
-                    <option value="neuter">Neuter</option>
-                  </select>
-                </div>
-                <div>
-                  <Label htmlFor="declensionClass">Declension</Label>
-                  <select
-                    id="declensionClass"
-                    value={formData.declensionClass}
-                    onChange={e => handleInputChange('declensionClass', e.target.value)}
-                    className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
-                    <option value="">Select declension...</option>
-                    <option value="1st">1st Declension</option>
-                    <option value="2nd">2nd Declension</option>
-                    <option value="3rd">3rd Declension</option>
-                    <option value="4th">4th Declension</option>
-                    <option value="5th">5th Declension</option>
-                  </select>
-                </div>
-              </div>
-              <div>
-                <Label htmlFor="grammaticalInfo">Grammatical Information</Label>
-                <Input
-                  id="grammaticalInfo"
-                  value={formData.grammaticalInfo}
-                  onChange={e => handleInputChange('grammaticalInfo', e.target.value)}
-                  placeholder="e.g., puella, -ae f"
-                  className="mt-1"
+                <SimpleSelect
+                  label="Gender"
+                  value={formData.gender || ''}
+                  onChange={value => handleInputChange('gender', value)}
+                  placeholder="Select gender..."
+                  options={[
+                    { value: 'masculine', label: 'Masculine' },
+                    { value: 'feminine', label: 'Feminine' },
+                    { value: 'neuter', label: 'Neuter' },
+                  ]}
+                />
+                <SimpleSelect
+                  label="Declension"
+                  value={formData.declensionClass || ''}
+                  onChange={value => handleInputChange('declensionClass', value)}
+                  placeholder="Select declension..."
+                  options={[
+                    { value: '1st', label: '1st Declension' },
+                    { value: '2nd', label: '2nd Declension' },
+                    { value: '3rd', label: '3rd Declension' },
+                    { value: '4th', label: '4th Declension' },
+                    { value: '5th', label: '5th Declension' },
+                  ]}
                 />
               </div>
+              <SimpleInput
+                label="Grammatical Information"
+                value={formData.grammaticalInfo || ''}
+                onChange={value => handleInputChange('grammaticalInfo', value)}
+                placeholder="e.g., puella, -ae f"
+              />
             </TabsContent>
 
             <TabsContent value="verb" className="space-y-4 mt-4">
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="conjugationClass">Conjugation</Label>
-                  <select
-                    id="conjugationClass"
-                    value={formData.conjugationClass}
-                    onChange={e => handleInputChange('conjugationClass', e.target.value)}
-                    className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
-                    <option value="">Select conjugation...</option>
-                    <option value="1st">1st Conjugation</option>
-                    <option value="2nd">2nd Conjugation</option>
-                    <option value="3rd">3rd Conjugation</option>
-                    <option value="3rd-io">3rd Conjugation (i-stem)</option>
-                    <option value="4th">4th Conjugation</option>
-                  </select>
-                </div>
-                <div>
-                  <Label htmlFor="grammaticalInfo">Grammatical Information</Label>
-                  <Input
-                    id="grammaticalInfo"
-                    value={formData.grammaticalInfo}
-                    onChange={e => handleInputChange('grammaticalInfo', e.target.value)}
-                    placeholder="e.g., amo, amare, amavi, amatus"
-                    className="mt-1"
-                  />
-                </div>
+                <SimpleSelect
+                  label="Conjugation"
+                  value={formData.conjugationClass || ''}
+                  onChange={value => handleInputChange('conjugationClass', value)}
+                  placeholder="Select conjugation..."
+                  options={[
+                    { value: '1st', label: '1st Conjugation' },
+                    { value: '2nd', label: '2nd Conjugation' },
+                    { value: '3rd', label: '3rd Conjugation' },
+                    { value: '3rd-io', label: '3rd Conjugation (i-stem)' },
+                    { value: '4th', label: '4th Conjugation' },
+                  ]}
+                />
+                <SimpleInput
+                  label="Grammatical Information"
+                  value={formData.grammaticalInfo || ''}
+                  onChange={value => handleInputChange('grammaticalInfo', value)}
+                  placeholder="e.g., amo, amare, amavi, amatus"
+                />
               </div>
 
               <div>
@@ -450,31 +416,25 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
 
             <TabsContent value="adjective" className="space-y-4 mt-4">
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="declensionClass">Declension Type</Label>
-                  <select
-                    id="declensionClass"
-                    value={formData.declensionClass}
-                    onChange={e => handleInputChange('declensionClass', e.target.value)}
-                    className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
-                    <option value="">Select type...</option>
-                    <option value="1st-2nd">1st-2nd Declension</option>
-                    <option value="3rd">3rd Declension</option>
-                    <option value="3rd-one-termination">3rd Declension (one termination)</option>
-                    <option value="3rd-two-termination">3rd Declension (two termination)</option>
-                    <option value="3rd-three-termination">3rd Declension (three termination)</option>
-                  </select>
-                </div>
-                <div>
-                  <Label htmlFor="grammaticalInfo">Grammatical Information</Label>
-                  <Input
-                    id="grammaticalInfo"
-                    value={formData.grammaticalInfo}
-                    onChange={e => handleInputChange('grammaticalInfo', e.target.value)}
-                    placeholder="e.g., bonus, -a, -um"
-                    className="mt-1"
-                  />
-                </div>
+                <SimpleSelect
+                  label="Declension Type"
+                  value={formData.declensionClass || ''}
+                  onChange={value => handleInputChange('declensionClass', value)}
+                  placeholder="Select type..."
+                  options={[
+                    { value: '1st-2nd', label: '1st-2nd Declension' },
+                    { value: '3rd', label: '3rd Declension' },
+                    { value: '3rd-one-termination', label: '3rd Declension (one termination)' },
+                    { value: '3rd-two-termination', label: '3rd Declension (two termination)' },
+                    { value: '3rd-three-termination', label: '3rd Declension (three termination)' },
+                  ]}
+                />
+                <SimpleInput
+                  label="Grammatical Information"
+                  value={formData.grammaticalInfo || ''}
+                  onChange={value => handleInputChange('grammaticalInfo', value)}
+                  placeholder="e.g., bonus, -a, -um"
+                />
               </div>
             </TabsContent>
           </Tabs>

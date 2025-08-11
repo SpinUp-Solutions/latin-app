@@ -14,6 +14,7 @@ import { FillEditor } from './content-editor/FillEditor';
 import { TextSelectionEditor } from './content-editor/TextSelectionEditor';
 import { VerbAnalysisEditor } from './content-editor/VerbAnalysisEditor';
 import { VerbConjugationEditor } from './content-editor/VerbConjugationEditor';
+import { SentenceDiagrammingEditor } from './content-editor/SentenceDiagrammingEditor';
 
 import { getEditorTitle } from '@/src/utils/editorRegistry';
 
@@ -53,6 +54,8 @@ export const ContentEditor: React.FC = () => {
         return <VerbAnalysisEditor />;
       case 'verb-conjugation':
         return <VerbConjugationEditor />;
+      case 'sentence-diagramming':
+        return <SentenceDiagrammingEditor />;
       default:
         return (
           <div className="p-8 text-center text-gray-500">

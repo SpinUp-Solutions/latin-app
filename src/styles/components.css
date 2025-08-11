@@ -32,3 +32,87 @@
   @apply prose dark:prose-invert prose-sm sm:prose-base lg:prose-lg xl:prose-2xl m-5 min-h-[150px] focus:outline-none;
   @apply prose-p:my-2 prose-p:leading-snug prose-headings:my-4 prose-ul:my-2 prose-ol:my-2;
 } 
+
+/* Sentence Diagramming Extensions */
+.sentence-diagramming-canvas .ProseMirror,
+.sentence-diagramming-exercise-content .ProseMirror {
+  min-height: 100px;
+  padding: 8px;
+  font-size: 16px;
+  line-height: 1.8;
+  font-family: Georgia, serif;
+}
+
+/* Base annotation styles */
+.sentence-diagramming-canvas span[data-preposition],
+.sentence-diagramming-canvas span[data-subordination],
+.sentence-diagramming-canvas span[data-verb-circle],
+.sentence-diagramming-canvas span[data-subject-underline],
+.sentence-diagramming-canvas span[data-direct-object-underline],
+.sentence-diagramming-canvas span[data-indirect-object-bracket],
+.sentence-diagramming-canvas span[data-genitive-arrow],
+.sentence-diagramming-canvas span[data-genitive-arrow-target],
+.sentence-diagramming-canvas span[data-ablative-phrase],
+.sentence-diagramming-exercise-content span[data-preposition],
+.sentence-diagramming-exercise-content span[data-subordination],
+.sentence-diagramming-exercise-content span[data-verb-circle],
+.sentence-diagramming-exercise-content span[data-subject-underline],
+.sentence-diagramming-exercise-content span[data-direct-object-underline],
+.sentence-diagramming-exercise-content span[data-indirect-object-bracket],
+.sentence-diagramming-exercise-content span[data-genitive-arrow],
+.sentence-diagramming-exercise-content span[data-genitive-arrow-target],
+.sentence-diagramming-exercise-content span[data-ablative-phrase] {
+  cursor: pointer;
+  margin: 0 1px;
+  display: inline-block;
+}
+
+/* Preposition parentheses */
+.preposition-annotation::before {
+  content: '(';
+  color: #92400e;
+  font-weight: bold;
+}
+
+.preposition-annotation::after {
+  content: ')';
+  color: #92400e;
+  font-weight: bold;
+}
+
+/* Subordination brackets */
+.subordination-annotation::before {
+  content: '[';
+  color: #1e40af;
+  font-weight: bold;
+}
+
+.subordination-annotation::after {
+  content: ']';
+  color: #1e40af;
+  font-weight: bold;
+}
+
+/* Indirect object L-bracket */
+.indirect-object-bracket-annotation::before {
+  content: '⌊';
+  color: #059669;
+  font-weight: bold;
+  margin-right: 2px;
+}
+
+/* Genitive arrow */
+.genitive-arrow-annotation::after {
+  content: '→';
+  color: #7c3aed;
+  font-weight: bold;
+  margin-left: 2px;
+}
+
+/* Genitive arrow target */
+.genitive-arrow-target-annotation::before {
+  content: '←';
+  color: #ef4444;
+  font-weight: bold;
+  margin-right: 2px;
+}

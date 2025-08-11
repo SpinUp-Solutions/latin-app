@@ -8,9 +8,10 @@ import {
   TooltipMark,
   isTooltipMark,
 } from '@/src/types/tooltip';
+import { Lesson, IntroductionPage, ExercisePage, RenderableContentItem } from '@/src/types/lesson';
 
 export const generateTooltipId = (word?: string): string => {
-  const randomId = Math.random().toString(36).substr(2, 9);
+  const randomId = Math.random().toString(36).substring(2, 11);
   return word ? `${word}-${Date.now()}-${randomId}` : randomId;
 };
 
@@ -86,18 +87,8 @@ export const findTooltipMark = (editor: Editor, from: number, to: number): Mark 
 };
 
 export const findTooltipMarkWithData = (editor: Editor, from: number, to: number): TooltipMark | null => {
-  let tooltipMark: TooltipMark | null = null;
-
-  editor.state.doc.nodesBetween(from, to, (node, pos) => {
-    if (node.isText && !tooltipMark) {
-      const foundMark = node.marks.find(mark => isTooltipMark(mark));
-      if (foundMark && from >= pos && from < pos + node.nodeSize) {
-        tooltipMark = foundMark as TooltipMark;
-      }
-    }
-  });
-
-  return tooltipMark;
+  const mark = findTooltipMark(editor, from, to);
+  return mark as TooltipMark | null;
 };
 
 export const getEmptyFormData = (): TooltipFormData => createDefaultFormData();
@@ -218,4 +209,115 @@ export const calculateTooltipPosition = (
   }
 
   return { x, y, isBelow };
+};
+
+/**
+ * Extracts tooltip data from HTML content and returns it as a Record
+ * suitable for Redux store population
+ */
+export const extractTooltipsFromContent = (htmlContent: string): Record<string, TooltipData> => {
+  const tooltips: Record<string, TooltipData> = {};
+
+  // Create a temporary DOM element to parse the HTML
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = htmlContent;
+
+  // Find all elements with tooltip attributes
+  const tooltipElements = tempDiv.querySelectorAll('[data-tooltip="true"]');
+
+  tooltipElements.forEach(element => {
+    const tooltipId = element.getAttribute('data-tooltip-id');
+    if (!tooltipId) return;
+
+    // Extract all tooltip data from attributes
+    const examples = element.getAttribute('examples');
+    const principalParts = element.getAttribute('principalParts');
+
+    const tooltipData: TooltipData = {
+      id: tooltipId,
+      word: element.getAttribute('word') || '',
+      translation: element.getAttribute('translation') || '',
+      pronunciation: element.getAttribute('pronunciation') || '',
+      partOfSpeech: element.getAttribute('partOfSpeech') || '',
+      wordType: element.getAttribute('wordtype') || '',
+      definition: element.getAttribute('definition') || '',
+      examples: examples ? examples.split(',').map(ex => ex.trim()) : [],
+      etymology: element.getAttribute('etymology') || '',
+      gender: element.getAttribute('gender') || '',
+      declensionClass: element.getAttribute('declensionClass') || '',
+      conjugationClass: element.getAttribute('conjugationClass') || '',
+      grammaticalInfo: element.getAttribute('grammaticalInfo') || '',
+      principalParts: principalParts ? principalParts.split(',').map(part => part.trim()) : [],
+    };
+
+    // Only add if we have meaningful data
+    if (tooltipData.word || tooltipData.translation) {
+      tooltips[tooltipId] = tooltipData;
+    }
+  });
+
+  return tooltips;
+};
+
+/**
+ * Recursively extracts tooltips from all content in a lesson structure
+ */
+export const extractTooltipsFromLesson = (lesson: Lesson): Record<string, TooltipData> => {
+  const allTooltips: Record<string, TooltipData> = {};
+
+  const extractFromContentArray = (items: RenderableContentItem[]) => {
+    items.forEach(item => {
+      if (typeof item === 'object' && item !== null) {
+        // Check for content property (TipTap editor content)
+        if ('content' in item && typeof item.content === 'string') {
+          const tooltips = extractTooltipsFromContent(item.content);
+          Object.assign(allTooltips, tooltips);
+        }
+
+        // Check for sentence content (in exercises)
+        if (
+          'data' in item &&
+          item.data &&
+          typeof item.data === 'object' &&
+          'sentence' in item.data &&
+          item.data.sentence &&
+          typeof item.data.sentence === 'object' &&
+          'content' in item.data.sentence &&
+          typeof item.data.sentence.content === 'string'
+        ) {
+          const tooltips = extractTooltipsFromContent(item.data.sentence.content);
+          Object.assign(allTooltips, tooltips);
+        }
+
+        // Recursively check nested objects and arrays
+        Object.values(item).forEach(value => {
+          if (Array.isArray(value)) {
+            extractFromContentArray(value);
+          } else if (typeof value === 'object' && value !== null) {
+            extractFromContentArray([value as RenderableContentItem]);
+          }
+        });
+      }
+    });
+  };
+
+  // Extract from introduction pages
+  if (lesson.introduction && Array.isArray(lesson.introduction)) {
+    lesson.introduction.forEach((page: IntroductionPage) => {
+      if (page.items && Array.isArray(page.items)) {
+        extractFromContentArray(page.items);
+      }
+    });
+  }
+
+  // Extract from exercise pages
+  if (lesson.exercises && Array.isArray(lesson.exercises)) {
+    lesson.exercises.forEach((page: ExercisePage) => {
+      if (page.items && Array.isArray(page.items)) {
+        extractFromContentArray(page.items);
+      }
+    });
+  }
+
+  return allTooltips;
 };
