@@ -8,6 +8,7 @@ import { Button } from '@/src/components/ui/button';
 import { ArrowLeft, BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
 import { LessonBuilder } from '@/src/components/ui/admin';
+import { ClipboardProvider } from '@/src/components/ui/core/clipboard';
 import { Lesson } from '@/src/types/lesson';
 import { useAppDispatch } from '@/src/store/hooks';
 import {
@@ -205,7 +206,9 @@ export default function CreateLessonPage() {
         </div>
       </header>
 
-      <LessonBuilder onSave={handleSaveLesson} />
+      <ClipboardProvider>
+        <LessonBuilder onSave={handleSaveLesson} />
+      </ClipboardProvider>
 
       <UnifiedDialog
         isOpen={dialogState?.isOpen || false}

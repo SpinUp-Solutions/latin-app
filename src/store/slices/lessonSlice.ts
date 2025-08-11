@@ -346,6 +346,39 @@ const lessonSlice = createSlice({
     loadTooltips: (state, action: PayloadAction<Record<string, TooltipData>>) => {
       state.tooltips = { ...state.tooltips, ...action.payload };
     },
+
+    reorderPages: (
+      state,
+      action: PayloadAction<{
+        pageType: 'introduction' | 'exercises';
+        fromIndex: number;
+        toIndex: number;
+      }>
+    ) => {
+      const { pageType, fromIndex, toIndex } = action.payload;
+      if (state.currentLesson && fromIndex !== toIndex) {
+        const pages = state.currentLesson[pageType];
+        const [movedPage] = pages.splice(fromIndex, 1);
+        pages.splice(toIndex, 0, movedPage);
+      }
+    },
+
+    reorderContentItems: (
+      state,
+      action: PayloadAction<{
+        pageType: 'introduction' | 'exercises';
+        pageIndex: number;
+        fromIndex: number;
+        toIndex: number;
+      }>
+    ) => {
+      const { pageType, pageIndex, fromIndex, toIndex } = action.payload;
+      if (state.currentLesson && fromIndex !== toIndex) {
+        const items = state.currentLesson[pageType][pageIndex].items;
+        const [movedItem] = items.splice(fromIndex, 1);
+        items.splice(toIndex, 0, movedItem);
+      }
+    },
   },
   extraReducers: builder => {
     // Save Lesson
@@ -468,6 +501,8 @@ export const {
   removeTooltip,
   clearTooltips,
   loadTooltips,
+  reorderPages,
+  reorderContentItems,
 } = lessonSlice.actions;
 
 // Selectors

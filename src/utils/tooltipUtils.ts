@@ -321,3 +321,40 @@ export const extractTooltipsFromLesson = (lesson: Lesson): Record<string, Toolti
 
   return allTooltips;
 };
+
+/**
+ * Extracts only the tooltips used by a specific content item
+ */
+export const extractTooltipsFromContentItem = (item: RenderableContentItem): Record<string, TooltipData> => {
+  const itemTooltips: Record<string, TooltipData> = {};
+
+  if (typeof item === 'object' && item !== null) {
+    if ('content' in item && typeof item.content === 'string') {
+      const tooltips = extractTooltipsFromContent(item.content);
+      Object.assign(itemTooltips, tooltips);
+    }
+
+    if (
+      'data' in item &&
+      item.data &&
+      typeof item.data === 'object' &&
+      'sentence' in item.data &&
+      item.data.sentence &&
+      typeof item.data.sentence === 'object' &&
+      'content' in item.data.sentence &&
+      typeof item.data.sentence.content === 'string'
+    ) {
+      const tooltips = extractTooltipsFromContent(item.data.sentence.content);
+      Object.assign(itemTooltips, tooltips);
+    }
+
+    Object.values(item).forEach(value => {
+      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        const nestedTooltips = extractTooltipsFromContentItem(value as RenderableContentItem);
+        Object.assign(itemTooltips, nestedTooltips);
+      }
+    });
+  }
+
+  return itemTooltips;
+};

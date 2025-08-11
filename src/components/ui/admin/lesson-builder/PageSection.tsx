@@ -1,12 +1,32 @@
 import React from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, GripVertical } from 'lucide-react';
 import { IntroductionPage, ExercisePage } from '@/src/types/lesson';
 import { RenderableContentItem } from '@/src/types/page';
-import { ContentItem } from './ContentItem';
 import { createNewContent } from '@/src/utils/contentFactory';
 import { SimpleRichEditor } from '../../core/simple-rich-editor';
+import { DraggableContentList } from './DraggableContentList';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { restrictToVerticalAxis, restrictToParentElement } from '@dnd-kit/modifiers';
+import { CSS } from '@dnd-kit/utilities';
+import { useDispatch } from 'react-redux';
+import { reorderPages } from '@/src/store/slices/lessonSlice';
+import { PasteZone } from '../../core/clipboard';
 
 interface PageSectionProps {
   title: string;
@@ -22,10 +42,95 @@ interface PageSectionProps {
   onRemoveContent: (pageIndex: number, itemIndex: number) => void;
 }
 
+interface SortablePageProps {
+  page: IntroductionPage | ExercisePage;
+  pageIndex: number;
+  pageType: 'introduction' | 'exercises';
+  contentTypes: readonly { type: string; icon: React.ComponentType<{ className?: string }>; label: string }[];
+  onRemovePage: (pageIndex: number) => void;
+  onUpdatePageTitle: (pageIndex: number, title: string) => void;
+  onAddContent: (pageIndex: number, content: RenderableContentItem) => void;
+  onEditContent: (pageIndex: number, itemIndex: number) => void;
+  onRemoveContent: (pageIndex: number, itemIndex: number) => void;
+}
+
+const SortablePage: React.FC<SortablePageProps> = ({
+  page,
+  pageIndex,
+  pageType,
+  contentTypes,
+  onRemovePage,
+  onUpdatePageTitle,
+  onAddContent,
+  onEditContent,
+  onRemoveContent,
+}) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: page.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const handleAddContent = (contentType: string) => {
+    const newContent = createNewContent(contentType);
+    onAddContent(pageIndex, newContent);
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="border rounded-lg p-4 space-y-3 bg-white hover:shadow-sm">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 flex-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="cursor-grab active:cursor-grabbing p-1 text-gray-400 hover:text-gray-600"
+            {...attributes}
+            {...listeners}>
+            <GripVertical className="h-4 w-4" />
+          </Button>
+          <SimpleRichEditor
+            content={page.title || ''}
+            onChange={value => onUpdatePageTitle(pageIndex, value)}
+            className="text-lg font-medium bg-transparent border-none outline-none flex-1"
+            placeholder="Page title..."
+            singleLine={true}
+          />
+        </div>
+        <Button variant="ghost" size="sm" onClick={() => onRemovePage(pageIndex)}>
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+
+      <DraggableContentList
+        items={page.items}
+        pageType={pageType}
+        pageIndex={pageIndex}
+        onEditContent={(itemIndex: number) => onEditContent(pageIndex, itemIndex)}
+        onRemoveContent={(itemIndex: number) => onRemoveContent(pageIndex, itemIndex)}
+      />
+
+      <div className="space-y-3 pt-2 border-t">
+        <PasteZone pageType={pageType} pageIndex={pageIndex} />
+        <div className="flex flex-wrap gap-2">
+          {contentTypes.map(({ type, icon: ContentIcon, label }) => (
+            <Button key={type} variant="outline" size="sm" onClick={() => handleAddContent(type)}>
+              <ContentIcon className="h-4 w-4 mr-1" />
+              {label}
+            </Button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const PageSection: React.FC<PageSectionProps> = ({
   title,
   icon: Icon,
   pages,
+  pageType,
   contentTypes,
   onAddPage,
   onRemovePage,
@@ -34,9 +139,33 @@ export const PageSection: React.FC<PageSectionProps> = ({
   onEditContent,
   onRemoveContent,
 }) => {
-  const handleAddContent = (pageIndex: number, contentType: string) => {
-    const newContent = createNewContent(contentType);
-    onAddContent(pageIndex, newContent);
+  const dispatch = useDispatch();
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (active.id !== over?.id) {
+      const activeIndex = pages.findIndex(page => page.id === active.id);
+      const overIndex = pages.findIndex(page => page.id === over?.id);
+
+      dispatch(
+        reorderPages({
+          pageType,
+          fromIndex: activeIndex,
+          toIndex: overIndex,
+        })
+      );
+    }
   };
 
   return (
@@ -54,44 +183,28 @@ export const PageSection: React.FC<PageSectionProps> = ({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {pages.map((page, pageIndex) => (
-          <div key={page.id} className="border rounded-lg p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <SimpleRichEditor
-                content={page.title || ''}
-                onChange={value => onUpdatePageTitle(pageIndex, value)}
-                className="text-lg font-medium bg-transparent border-none outline-none"
-                placeholder="Page title..."
-                singleLine={true}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+          modifiers={[restrictToVerticalAxis, restrictToParentElement]}>
+          <SortableContext items={pages.map(page => page.id)} strategy={verticalListSortingStrategy}>
+            {pages.map((page, pageIndex) => (
+              <SortablePage
+                key={page.id}
+                page={page}
+                pageIndex={pageIndex}
+                pageType={pageType}
+                contentTypes={contentTypes}
+                onRemovePage={onRemovePage}
+                onUpdatePageTitle={onUpdatePageTitle}
+                onAddContent={onAddContent}
+                onEditContent={onEditContent}
+                onRemoveContent={onRemoveContent}
               />
-              <Button variant="ghost" size="sm" onClick={() => onRemovePage(pageIndex)}>
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-
-            {/* Content Items */}
-            <div className="space-y-2">
-              {page.items.map((item, itemIndex) => (
-                <ContentItem
-                  key={item.id}
-                  item={item}
-                  onEdit={() => onEditContent(pageIndex, itemIndex)}
-                  onRemove={() => onRemoveContent(pageIndex, itemIndex)}
-                />
-              ))}
-            </div>
-
-            {/* Add Content Buttons */}
-            <div className="flex flex-wrap gap-2 pt-2 border-t">
-              {contentTypes.map(({ type, icon: ContentIcon, label }) => (
-                <Button key={type} variant="outline" size="sm" onClick={() => handleAddContent(pageIndex, type)}>
-                  <ContentIcon className="h-4 w-4 mr-1" />
-                  {label}
-                </Button>
-              ))}
-            </div>
-          </div>
-        ))}
+            ))}
+          </SortableContext>
+        </DndContext>
       </CardContent>
     </Card>
   );

@@ -24,9 +24,11 @@ import {
 import { LessonInfoForm } from './lesson-builder/LessonInfoForm';
 import { PageSection } from './lesson-builder/PageSection';
 import { LessonPreview } from './lesson-builder/LessonPreview';
+import { PageType } from '@/src/types/clipboard';
 
 import { CONTENT_TYPES, EXERCISE_TYPES } from '@/src/utils/contentTypeConstants';
 import { ContentEditor } from './ContentEditor';
+import { useClipboard, ClipboardPanel } from '../core/clipboard';
 
 interface LessonBuilderProps {
   initialLesson?: Lesson;
@@ -36,6 +38,7 @@ interface LessonBuilderProps {
 export const LessonBuilder: React.FC<LessonBuilderProps> = ({ initialLesson, onSave }) => {
   const dispatch = useAppDispatch();
   const { currentLesson, saving } = useAppSelector(state => state.lesson);
+  const { pasteBulk } = useClipboard();
 
   useEffect(() => {
     dispatch(setLesson(initialLesson));
@@ -62,7 +65,7 @@ export const LessonBuilder: React.FC<LessonBuilderProps> = ({ initialLesson, onS
     dispatch(updatePageTitle({ pageType, pageIndex, title }));
   };
 
-  // Handle content operations
+  // Handle content operation
   const handleAddContent =
     (pageType: 'introduction' | 'exercises') => (pageIndex: number, content: RenderableContentItem) => {
       dispatch(addContentToPage({ pageType, pageIndex, content }));
@@ -87,6 +90,17 @@ export const LessonBuilder: React.FC<LessonBuilderProps> = ({ initialLesson, onS
 
   const handleAddExercisePage = () => {
     dispatch(addExercisePage());
+  };
+
+  const handlePasteBulk = (selectedIndices: number[]) => {
+    const targetPageType: PageType = 'introduction';
+    const targetPageIndex = 0;
+
+    if (currentLesson.introduction.length === 0) {
+      dispatch(addIntroductionPage());
+    }
+
+    pasteBulk({ pageType: targetPageType, pageIndex: targetPageIndex }, selectedIndices);
   };
 
   return (
@@ -154,6 +168,9 @@ export const LessonBuilder: React.FC<LessonBuilderProps> = ({ initialLesson, onS
 
       {/* Content Editor Modal */}
       <ContentEditor />
+
+      {/* Clipboard Panel */}
+      <ClipboardPanel onPasteBulk={handlePasteBulk} />
     </>
   );
 };
