@@ -1,6 +1,6 @@
 import React from 'react';
 import { Label } from '@/src/components/ui/label';
-import { Input } from '@/src/components/ui/input';
+import { SimpleRichEditor } from '@/src/components/ui/core/simple-rich-editor';
 
 interface SimpleInputProps {
   label: string;
@@ -29,12 +29,12 @@ export const SimpleInput: React.FC<SimpleInputProps> = ({
         {label}
         {required && ' *'}
       </Label>
-      <Input
-        id={inputId}
-        value={value}
-        onChange={e => onChange(e.target.value)}
+      <SimpleRichEditor
+        content={value}
+        onChange={onChange}
         placeholder={placeholder}
         disabled={disabled}
+        singleLine={true}
         className="mt-1"
       />
     </div>

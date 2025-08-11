@@ -3,6 +3,7 @@ import { EmphasisContent } from '@/src/types/lesson';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonSlice';
 import { AudioUploadSection } from './AudioUploadSection';
+import { SimpleRichEditor } from '../../core/simple-rich-editor';
 
 export const EmphasisEditor: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -20,22 +21,22 @@ export const EmphasisEditor: React.FC = () => {
     <div className="space-y-4">
       <div>
         <label className="block text-sm font-medium mb-1">Title</label>
-        <input
-          type="text"
-          value={editingContent.title || ''}
-          onChange={e => handleChange({ title: e.target.value })}
-          className="w-full p-2 border rounded-md"
+        <SimpleRichEditor
+          content={editingContent.title || ''}
+          onChange={value => handleChange({ title: value })}
           placeholder="Enter title..."
+          singleLine={true}
+          className="w-full"
         />
       </div>
       <div>
         <label className="block text-sm font-medium mb-1">Emphasized Content</label>
-        <textarea
-          value={editingContent.content}
-          onChange={e => handleChange({ content: e.target.value })}
-          className="w-full p-2 border rounded-md"
-          rows={4}
+        <SimpleRichEditor
+          content={editingContent.content}
+          onChange={value => handleChange({ content: value })}
           placeholder="Enter emphasized content..."
+          rows={4}
+          className="w-full"
         />
       </div>
       <AudioUploadSection

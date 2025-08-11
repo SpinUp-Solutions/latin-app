@@ -4,6 +4,7 @@ import { TableContent } from '@/src/types/lesson';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonSlice';
 import type { Column, TableRow } from '@/src/components/ui/lesson/conjugation-table';
+import { SimpleRichEditor } from '../../core/simple-rich-editor';
 import { AudioUploadSection } from './AudioUploadSection';
 
 export const TableEditor: React.FC = () => {
@@ -99,16 +100,16 @@ export const TableEditor: React.FC = () => {
     <div className="space-y-4">
       <div>
         <label className="block text-sm font-medium mb-1">Table Title</label>
-        <input
-          type="text"
-          value={editingContent.tableData.title || ''}
-          onChange={e =>
+        <SimpleRichEditor
+          content={editingContent.tableData.title || ''}
+          onChange={value =>
             updateContent({
-              tableData: { ...editingContent.tableData, title: e.target.value },
+              tableData: { ...editingContent.tableData, title: value },
             })
           }
-          className="w-full p-2 border rounded-md"
+          className="w-full"
           placeholder="Enter table title..."
+          singleLine={true}
         />
       </div>
 
@@ -129,11 +130,11 @@ export const TableEditor: React.FC = () => {
                 {editingContent.tableData.columns.map((col: Column) => (
                   <th key={col.id} className="p-2 text-left relative group">
                     <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={col.header}
-                        onChange={e => updateColumnHeader(col.id, e.target.value)}
-                        className="w-full p-1 border rounded text-sm"
+                      <SimpleRichEditor
+                        content={col.header}
+                        onChange={value => updateColumnHeader(col.id, value)}
+                        className="w-full text-sm"
+                        singleLine={true}
                       />
                       {editingContent.tableData.columns.length > 1 && (
                         <button
@@ -174,11 +175,11 @@ export const TableEditor: React.FC = () => {
                   </td>
                   {editingContent.tableData.columns.map((col: Column) => (
                     <td key={col.id} className="p-2">
-                      <input
-                        type="text"
-                        value={row.cells[col.id] || ''}
-                        onChange={e => updateCell(row.id, col.id, e.target.value)}
-                        className="w-full p-1 border rounded text-sm"
+                      <SimpleRichEditor
+                        content={row.cells[col.id] || ''}
+                        onChange={value => updateCell(row.id, col.id, value)}
+                        className="w-full text-sm"
+                        singleLine={true}
                       />
                     </td>
                   ))}
@@ -215,20 +216,19 @@ export const TableEditor: React.FC = () => {
             <div key={index} className="flex items-start gap-2">
               <span className="text-sm text-gray-500 pt-2 min-w-[20px]">{index + 1}.</span>
 
-              <textarea
-                value={footnote}
-                onChange={e =>
+              <SimpleRichEditor
+                content={footnote}
+                onChange={value =>
                   updateContent({
                     tableData: {
                       ...editingContent.tableData,
                       footnotes:
-                        editingContent.tableData.footnotes?.map((f: string, i: number) =>
-                          i === index ? e.target.value : f
-                        ) || [],
+                        editingContent.tableData.footnotes?.map((f: string, i: number) => (i === index ? value : f)) ||
+                        [],
                     },
                   })
                 }
-                className="flex-1 p-2 border rounded-md text-sm resize-none"
+                className="flex-1 text-sm"
                 placeholder="Enter footnote text..."
                 rows={2}
               />

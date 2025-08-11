@@ -11,6 +11,7 @@ import {
   RomanTableCaption,
 } from '../core/roman-table';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
+import { SimpleRichDisplay } from '../core/simple-rich-display';
 
 export interface Column {
   id: string;
@@ -42,7 +43,11 @@ const ConjugationTable: React.FC<ConjugationTableProps> = ({ data, className, au
   return (
     <div className={className}>
       <div className="flex justify-between items-start mb-2">
-        {data.title && <h3 className="text-lg font-serif text-roman-red">{data.title}</h3>}
+        {data.title && (
+          <h3 className="text-lg font-serif text-roman-red">
+            <SimpleRichDisplay content={data.title} />
+          </h3>
+        )}
         {audioPath && (
           <AudioPlayButton
             audioPath={audioPath}
@@ -59,7 +64,7 @@ const ConjugationTable: React.FC<ConjugationTableProps> = ({ data, className, au
             {data.rows.some(row => row.rowHeader !== undefined) && <RomanTableHead></RomanTableHead>}
             {data.columns.map(column => (
               <RomanTableHead key={column.id} className={column.className}>
-                {column.header}
+                <SimpleRichDisplay content={column.header} />
               </RomanTableHead>
             ))}
           </RomanTableRow>
@@ -67,10 +72,14 @@ const ConjugationTable: React.FC<ConjugationTableProps> = ({ data, className, au
         <RomanTableBody>
           {data.rows.map(row => (
             <RomanTableRow key={row.id}>
-              {row.rowHeader && <RomanTableHead>{row.rowHeader}</RomanTableHead>}
+              {row.rowHeader && (
+                <RomanTableHead>
+                  <SimpleRichDisplay content={row.rowHeader} />
+                </RomanTableHead>
+              )}
               {data.columns.map(column => (
                 <RomanTableCell key={`${row.id}-${column.id}`} className={column.className}>
-                  {row.cells[column.id] || ''}
+                  <SimpleRichDisplay content={row.cells[column.id] || ''} />
                 </RomanTableCell>
               ))}
             </RomanTableRow>
@@ -85,7 +94,10 @@ const ConjugationTable: React.FC<ConjugationTableProps> = ({ data, className, au
                   {data.footnotes.map((footnote, index) => (
                     <div key={index} className="flex items-start gap-2">
                       <span className="text-roman-terracotta font-serif">{index + 1}.</span>
-                      <span className="font-serif">{footnote}</span>
+                      <span className="font-serif">
+                        <SimpleRichDisplay content={footnote} />
+                      </span>
+
                     </div>
                   ))}
                 </div>
@@ -93,7 +105,11 @@ const ConjugationTable: React.FC<ConjugationTableProps> = ({ data, className, au
             </RomanTableRow>
           </RomanTableBody>
         )}
-        {data.caption && <RomanTableCaption>{data.caption}</RomanTableCaption>}
+        {data.caption && (
+          <RomanTableCaption>
+            <SimpleRichDisplay content={data.caption} />
+          </RomanTableCaption>
+        )}
       </RomanTable>
     </div>
   );

@@ -2,6 +2,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
 import { BookOpen } from 'lucide-react';
 import { Lesson } from '@/src/types/lesson';
+import { SimpleRichEditor } from '../../core/simple-rich-editor';
 
 interface LessonInfoFormProps {
   lesson: Lesson;
@@ -31,22 +32,22 @@ export const LessonInfoForm: React.FC<LessonInfoFormProps> = ({ lesson, onUpdate
         </div>
         <div>
           <label className="block text-sm font-medium mb-1">Title</label>
-          <input
-            type="text"
-            value={lesson.title}
-            onChange={e => onUpdateInfo({ title: e.target.value })}
-            className="w-full p-2 border rounded-md"
+          <SimpleRichEditor
+            content={lesson.title}
+            onChange={value => onUpdateInfo({ title: value })}
             placeholder="Enter lesson title..."
+            singleLine={true}
+            className="w-full"
           />
         </div>
         <div>
           <label className="block text-sm font-medium mb-1">Description</label>
-          <textarea
-            value={lesson.description || ''}
-            onChange={e => onUpdateInfo({ description: e.target.value })}
-            className="w-full p-2 border rounded-md"
-            rows={2}
+          <SimpleRichEditor
+            content={lesson.description || ''}
+            onChange={value => onUpdateInfo({ description: value })}
             placeholder="Enter lesson description..."
+            rows={2}
+            className="w-full"
           />
         </div>
       </CardContent>

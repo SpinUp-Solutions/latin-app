@@ -1,9 +1,10 @@
 import React from 'react';
 import { Button } from '@/src/components/ui/button';
-import { Input } from '@/src/components/ui/input';
 import { Save, X } from 'lucide-react';
 import { EditingCell } from '@/src/types/admin-vocabulary';
 import { formatCellValue } from '@/src/utils/vocabUtils';
+import SimpleRichDisplay from '../../../core/simple-rich-display';
+import SimpleRichEditor from '../../../core/simple-rich-editor';
 
 interface EditableCellProps {
   value: string[];
@@ -36,9 +37,8 @@ export const EditableCell: React.FC<EditableCellProps> = ({
   if (isEditing) {
     return (
       <div className="flex items-center gap-1">
-        <Input
-          value={editingCellValue}
-          onChange={e => onEditingCellValueChange(e.target.value)}
+        <div
+          className="flex-1"
           onKeyDown={e => {
             if (e.key === 'Enter') {
               e.preventDefault();
@@ -47,11 +47,15 @@ export const EditableCell: React.FC<EditableCellProps> = ({
               e.preventDefault();
               onCellEditCancel();
             }
-          }}
-          className="text-sm min-w-0 flex-1"
-          autoFocus
-          placeholder="Enter value..."
-        />
+          }}>
+          <SimpleRichEditor
+            content={editingCellValue}
+            onChange={onEditingCellValueChange}
+            className="text-sm min-w-0"
+            placeholder="Enter value..."
+            singleLine={true}
+          />
+        </div>
         <Button size="sm" variant="outline" onClick={onCellEditSave} className="h-8 w-8 p-0" title="Save">
           <Save className="h-3 w-3" />
         </Button>
@@ -77,7 +81,7 @@ export const EditableCell: React.FC<EditableCellProps> = ({
           onCellDoubleClick(rowIndex, cellKey, tableType, displayValue);
         }
       }}>
-      {displayValue}
+      <SimpleRichDisplay content={displayValue} />
     </span>
   );
 };

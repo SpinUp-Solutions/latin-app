@@ -10,6 +10,7 @@ import { Button } from '@/src/components/ui/button';
 import { toast } from 'sonner';
 import { BookOpen, MessageCircle, Trophy, User, TreePine, FlaskConical, Headphones } from 'lucide-react';
 import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
+import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -117,8 +118,12 @@ export default function DashboardPage() {
                       <BookOpen className="h-6 w-6 text-roman-terracotta" />
                     </div>
                     <div>
-                      <h3 className="text-xl font-serif">Lesson III: {currentLesson.title}</h3>
-                      <p className="text-sm text-roman-stone">{currentLesson.description}</p>
+                      <h3 className="text-xl font-serif">
+                        Lesson III: <SimpleRichDisplay content={currentLesson.title} />
+                      </h3>
+                      <p className="text-sm text-roman-stone">
+                        <SimpleRichDisplay content={currentLesson.description} />
+                      </p>
                     </div>
                   </div>
                 </RomanCardHeader>

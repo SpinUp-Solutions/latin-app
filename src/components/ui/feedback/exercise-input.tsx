@@ -1,4 +1,6 @@
 import React from 'react';
+import { SimpleRichEditor } from '../core/simple-rich-editor';
+import { Button } from '../button';
 
 interface ExerciseInputProps {
   value: string;
@@ -17,28 +19,21 @@ const ExerciseInput: React.FC<ExerciseInputProps> = ({
   buttonText = 'Check',
   className = '',
 }) => {
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      onSubmit();
-    }
-  };
-
   return (
     <div className={`${className}`}>
       <div className="flex gap-4">
         <div className="flex-1">
-          <input
-            type="text"
-            value={value}
-            onChange={e => onChange(e.target.value)}
-            onKeyPress={handleKeyPress}
-            className="w-full p-2 border rounded"
+          <SimpleRichEditor
+            content={value}
+            onChange={onChange}
             placeholder={placeholder}
+            singleLine={true}
+            className="w-full"
           />
         </div>
-        <button onClick={onSubmit} className="bg-roman-red text-white px-4 py-2 rounded hover:bg-red-700">
+        <Button onClick={onSubmit} className="bg-roman-red text-white hover:bg-red-700">
           {buttonText}
-        </button>
+        </Button>
       </div>
     </div>
   );

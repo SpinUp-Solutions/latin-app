@@ -2,6 +2,7 @@ import React from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Edit, Trash2, Type, Lightbulb, Table, Book, Target } from 'lucide-react';
 import { RenderableContentItem } from '@/src/types/page';
+import { SimpleRichDisplay } from '../../core/simple-rich-display';
 
 interface ContentItemProps {
   item: RenderableContentItem;
@@ -31,7 +32,9 @@ export const ContentItem: React.FC<ContentItemProps> = ({ item, onEdit, onRemove
     <div className="flex items-center justify-between bg-gray-50 p-3 rounded">
       <div className="flex items-center gap-2">
         <Icon className="h-4 w-4" />
-        <span className="font-medium">{item.title}</span>
+        <span className="font-medium">
+          <SimpleRichDisplay content={item.title || 'Untitled'} />
+        </span>
         <span className="text-sm text-gray-500">({item.type})</span>
       </div>
       <div className="flex gap-1">

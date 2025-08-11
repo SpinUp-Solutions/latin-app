@@ -3,6 +3,7 @@ import { TextContent } from '@/src/types/lesson';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonSlice';
 import RichTextEditor from '../../core/rich-text-editor';
+import { SimpleRichEditor } from '../../core/simple-rich-editor';
 import { AudioUploadSection } from './AudioUploadSection';
 
 export const TextEditor: React.FC = () => {
@@ -25,12 +26,12 @@ export const TextEditor: React.FC = () => {
     <div className="space-y-4">
       <div>
         <label className="block text-sm font-medium mb-1">Title</label>
-        <input
-          type="text"
-          value={editingContent.title || ''}
-          onChange={e => handleChange({ title: e.target.value })}
-          className="w-full p-2 border rounded-md"
+        <SimpleRichEditor
+          content={editingContent.title || ''}
+          onChange={value => handleChange({ title: value })}
           placeholder="Enter title..."
+          singleLine={true}
+          className="w-full"
         />
       </div>
       <div>

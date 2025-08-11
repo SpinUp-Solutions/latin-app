@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/src/components/ui/ta
 import { ChevronLeft, ChevronRight, BookOpen, Grid3X3 } from 'lucide-react';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
+import { SimpleRichDisplay } from '../core/simple-rich-display';
 
 interface VocabularyViewerProps {
   content: VocabularyContent;
@@ -28,7 +29,9 @@ export function VocabularyViewer({ content }: VocabularyViewerProps) {
     return (
       <div className="space-y-6">
         <div className="text-center space-y-2">
-          <h2 className="text-2xl font-serif text-gray-800">{content.title || 'Vocabulary'}</h2>
+          <h2 className="text-2xl font-serif text-gray-800">
+            <SimpleRichDisplay content={content.title || 'Vocabulary'} />
+          </h2>
           <p className="text-roman-stone">No vocabulary items available</p>
         </div>
         <RomanCard>
@@ -84,7 +87,9 @@ export function VocabularyViewer({ content }: VocabularyViewerProps) {
                 {!isFlipped ? (
                   // Front side - Latin word
                   <div className="text-center space-y-2">
-                    <h3 className="text-xl font-serif text-roman-red">{currentItem.latin}</h3>
+                    <h3 className="text-xl font-serif text-roman-red">
+                      <SimpleRichDisplay content={currentItem.latin} />
+                    </h3>
                     {currentItem.pronunciation && (
                       <p className="text-xs text-roman-stone italic">/{currentItem.pronunciation}/</p>
                     )}
@@ -98,16 +103,26 @@ export function VocabularyViewer({ content }: VocabularyViewerProps) {
                 ) : (
                   // Back side - English translation
                   <div className="text-center space-y-2">
-                    <h3 className="text-lg font-medium text-gray-800">{currentItem.english}</h3>
+                    <h3 className="text-lg font-medium text-gray-800">
+                      <SimpleRichDisplay content={currentItem.english} />
+                    </h3>
                     {currentItem.partOfSpeech && (
                       <Badge variant="secondary" className="text-xs">
                         {currentItem.partOfSpeech}
                       </Badge>
                     )}
                     {currentItem.example && (
-                      <p className="text-xs text-roman-stone italic">&ldquo;{currentItem.example}&rdquo;</p>
+                      <p className="text-xs text-roman-stone italic">
+                        &ldquo;
+                        <SimpleRichDisplay content={currentItem.example} />
+                        &rdquo;
+                      </p>
                     )}
-                    {currentItem.notes && <p className="text-xs text-roman-stone">{currentItem.notes}</p>}
+                    {currentItem.notes && (
+                      <p className="text-xs text-roman-stone">
+                        <SimpleRichDisplay content={currentItem.notes} />
+                      </p>
+                    )}
                     <div className="pt-2">
                       <p className="text-xs text-roman-stone">Click to see Latin word</p>
                     </div>
@@ -146,16 +161,30 @@ export function VocabularyViewer({ content }: VocabularyViewerProps) {
           <RomanCardContent className="p-4">
             <div className="space-y-3">
               <div className="flex items-center gap-3">
-                <h3 className="text-xl font-serif text-roman-red">{item.latin}</h3>
+                <h3 className="text-xl font-serif text-roman-red">
+                  <SimpleRichDisplay content={item.latin} />
+                </h3>
                 {item.pronunciation && <span className="text-sm text-roman-stone italic">/{item.pronunciation}/</span>}
                 {item.audioPath && <AudioPlayButton audioPath={item.audioPath} variant="vocabulary" size="sm" />}
               </div>
-              <p className="text-lg text-gray-800">{item.english}</p>
+              <p className="text-lg text-gray-800">
+                <SimpleRichDisplay content={item.english} />
+              </p>
               <div className="flex items-center gap-2">
                 {item.partOfSpeech && <Badge variant="secondary">{item.partOfSpeech}</Badge>}
               </div>
-              {item.example && <p className="text-sm text-roman-stone italic">&ldquo;{item.example}&rdquo;</p>}
-              {item.notes && <p className="text-xs text-roman-stone">{item.notes}</p>}
+              {item.example && (
+                <p className="text-sm text-roman-stone italic">
+                  &ldquo;
+                  <SimpleRichDisplay content={item.example} />
+                  &rdquo;
+                </p>
+              )}
+              {item.notes && (
+                <p className="text-xs text-roman-stone">
+                  <SimpleRichDisplay content={item.notes} />
+                </p>
+              )}
             </div>
           </RomanCardContent>
         </RomanCard>
@@ -168,7 +197,9 @@ export function VocabularyViewer({ content }: VocabularyViewerProps) {
       <div className="text-center space-y-2">
         <div className="flex justify-center items-center gap-4">
           <div>
-            <h2 className="text-2xl font-serif text-gray-800">{content.title || 'Vocabulary'}</h2>
+            <h2 className="text-2xl font-serif text-gray-800">
+              <SimpleRichDisplay content={content.title || 'Vocabulary'} />
+            </h2>
             <p className="text-roman-stone">Study these {vocabularyItems.length} words</p>
           </div>
           {content.audioPath && (

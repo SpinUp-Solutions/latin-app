@@ -7,6 +7,8 @@ import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonSlice';
 import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
+import { SimpleRichEditor } from '../../core/simple-rich-editor';
+import { SimpleRichDisplay } from '../../core/simple-rich-display';
 
 export const TextSelectionEditor: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -102,23 +104,23 @@ export const TextSelectionEditor: React.FC = () => {
       <div className="space-y-4">
         <div>
           <label className="block text-sm font-medium mb-1">Exercise Title</label>
-          <input
-            type="text"
-            value={editingContent.title || ''}
-            onChange={e => updateContent({ title: e.target.value })}
-            className="w-full p-2 border rounded-md"
+          <SimpleRichEditor
+            content={editingContent.title || ''}
+            onChange={value => updateContent({ title: value })}
             placeholder="Enter exercise title..."
+            singleLine={true}
+            className="w-full"
           />
         </div>
 
         <div>
           <label className="block text-sm font-medium mb-1">Instructions</label>
-          <textarea
-            value={editingContent.instructions || ''}
-            onChange={e => updateContent({ instructions: e.target.value })}
-            className="w-full p-2 border rounded-md"
-            rows={3}
+          <SimpleRichEditor
+            content={editingContent.instructions || ''}
+            onChange={value => updateContent({ instructions: value })}
             placeholder="Provide instructions for students..."
+            rows={3}
+            className="w-full"
           />
         </div>
 
@@ -132,12 +134,12 @@ export const TextSelectionEditor: React.FC = () => {
       {/* Passage */}
       <div>
         <label className="block text-sm font-medium mb-2">Text Passage</label>
-        <textarea
-          value={editingContent.data.passage || ''}
-          onChange={e => updateData({ passage: e.target.value })}
-          className="w-full p-3 border rounded-md font-serif text-base"
-          rows={4}
+        <SimpleRichEditor
+          content={editingContent.data.passage || ''}
+          onChange={value => updateData({ passage: value })}
           placeholder="Enter the Latin text that students will analyze..."
+          rows={4}
+          className="w-full font-serif text-base"
         />
         <p className="text-xs text-gray-500 mt-1">Students will click on words in this passage to answer questions</p>
 
@@ -180,23 +182,23 @@ export const TextSelectionEditor: React.FC = () => {
                 <div className="space-y-3">
                   <div>
                     <label className="block text-xs font-medium mb-1">Question ID</label>
-                    <input
-                      type="text"
-                      value={question.id}
-                      onChange={e => updateQuestion(index, 'id', e.target.value)}
-                      className="w-full p-2 border rounded text-sm"
+                    <SimpleRichEditor
+                      content={question.id}
+                      onChange={value => updateQuestion(index, 'id', value)}
                       placeholder="Unique identifier for this question"
+                      singleLine={true}
+                      className="w-full text-sm"
                     />
                   </div>
 
                   <div>
                     <label className="block text-xs font-medium mb-1">Question Text/Prompt</label>
-                    <textarea
-                      value={question.text}
-                      onChange={e => updateQuestion(index, 'text', e.target.value)}
-                      className="w-full p-2 border rounded text-sm"
-                      rows={2}
+                    <SimpleRichEditor
+                      content={question.text}
+                      onChange={value => updateQuestion(index, 'text', value)}
                       placeholder="What should students look for? e.g., 'Click on the unnecessary pronoun in the passage.'"
+                      rows={2}
+                      className="w-full text-sm"
                     />
                   </div>
 
@@ -222,12 +224,12 @@ export const TextSelectionEditor: React.FC = () => {
 
                   <div>
                     <label className="block text-xs font-medium mb-1">Explanation (optional)</label>
-                    <textarea
-                      value={question.explanation || ''}
-                      onChange={e => updateQuestion(index, 'explanation', e.target.value)}
-                      className="w-full p-2 border rounded text-sm"
-                      rows={2}
+                    <SimpleRichEditor
+                      content={question.explanation || ''}
+                      onChange={value => updateQuestion(index, 'explanation', value)}
                       placeholder="Explain why this is the correct answer (shown after correct selection)"
+                      rows={2}
+                      className="w-full text-sm"
                     />
                   </div>
 
@@ -249,7 +251,7 @@ export const TextSelectionEditor: React.FC = () => {
                       </div>
                       {question.explanation && (
                         <div>
-                          <strong>Explanation:</strong> {question.explanation}
+                          <strong>Explanation:</strong> <SimpleRichDisplay content={question.explanation} />
                         </div>
                       )}
                     </div>

@@ -11,6 +11,7 @@ import { formatCellValue } from '@/src/utils/vocabUtils';
 import { EditableCell } from '../shared/EditableCell';
 import { TableToggleButton } from '../shared/TableToggleButton';
 import { BaseTableProps } from '@/src/types/admin-vocabulary';
+import SimpleRichDisplay from '../../../core/simple-rich-display';
 
 export const AdjectiveDeclensionTable: React.FC<BaseTableProps> = ({
   word,
@@ -45,7 +46,7 @@ export const AdjectiveDeclensionTable: React.FC<BaseTableProps> = ({
         />
       );
     }
-    return formatCellValue(value) || '—';
+    return <SimpleRichDisplay content={formatCellValue(value) || '—'} />;
   };
 
   return (

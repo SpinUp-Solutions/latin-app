@@ -7,6 +7,9 @@ import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonSlice';
 import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
+import { SimpleRichEditor } from '../../core/simple-rich-editor';
+import { SimpleRichDisplay } from '../../core/simple-rich-display';
+import { RichTextSelect } from '../../core/rich-text-select';
 
 export const MatchingEditor: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -109,23 +112,23 @@ export const MatchingEditor: React.FC = () => {
       <div className="space-y-4">
         <div>
           <label className="block text-sm font-medium mb-1">Exercise Title</label>
-          <input
-            type="text"
-            value={editingContent.title || ''}
-            onChange={e => updateContent({ title: e.target.value })}
-            className="w-full p-2 border rounded-md"
+          <SimpleRichEditor
+            content={editingContent.title || ''}
+            onChange={value => updateContent({ title: value })}
             placeholder="Enter exercise title..."
+            singleLine={true}
+            className="w-full"
           />
         </div>
 
         <div>
           <label className="block text-sm font-medium mb-1">Instructions</label>
-          <textarea
-            value={editingContent.instructions || ''}
-            onChange={e => updateContent({ instructions: e.target.value })}
-            className="w-full p-2 border rounded-md"
-            rows={3}
+          <SimpleRichEditor
+            content={editingContent.instructions || ''}
+            onChange={value => updateContent({ instructions: value })}
             placeholder="Provide instructions for students..."
+            rows={3}
+            className="w-full"
           />
         </div>
 
@@ -148,12 +151,12 @@ export const MatchingEditor: React.FC = () => {
         <div className="space-y-2">
           {editingContent.data.leftColumn.map((item, index) => (
             <div key={item.id} className="flex items-center gap-2">
-              <input
-                type="text"
-                value={item.value}
-                onChange={e => updateLeftItem(index, e.target.value)}
-                className="flex-1 p-2 border rounded-md text-sm"
+              <SimpleRichEditor
+                content={item.value}
+                onChange={value => updateLeftItem(index, value)}
                 placeholder={`Left item ${index + 1}...`}
+                singleLine={true}
+                className="flex-1"
               />
               <Button
                 onClick={() => removeLeftItem(index)}
@@ -179,12 +182,12 @@ export const MatchingEditor: React.FC = () => {
         <div className="space-y-2">
           {editingContent.data.rightColumn.map((item, index) => (
             <div key={item.id} className="flex items-center gap-2">
-              <input
-                type="text"
-                value={item.value}
-                onChange={e => updateRightItem(index, e.target.value)}
-                className="flex-1 p-2 border rounded-md text-sm"
+              <SimpleRichEditor
+                content={item.value}
+                onChange={value => updateRightItem(index, value)}
                 placeholder={`Right item ${index + 1}...`}
+                singleLine={true}
+                className="flex-1"
               />
               <Button
                 onClick={() => removeRightItem(index)}
@@ -208,18 +211,17 @@ export const MatchingEditor: React.FC = () => {
                 .filter(item => item.value.trim() !== '')
                 .map(leftItem => (
                   <div key={leftItem.id} className="flex items-center gap-3">
-                    <div className="flex-1 p-2 bg-gray-50 rounded border text-sm">{leftItem.value}</div>
+                    <div className="flex-1 p-2 bg-gray-50 rounded border text-sm">
+                      <SimpleRichDisplay content={leftItem.value} />
+                    </div>
                     <ArrowRight className="h-4 w-4 text-gray-400" />
-                    <select
+                    <RichTextSelect
                       value={editingContent.data.answers[leftItem.id] || ''}
-                      onChange={e => updateAnswer(leftItem.id, e.target.value)}
-                      className="flex-1 p-2 border rounded-md text-sm">
-                      {getAvailableRightItems().map(rightItem => (
-                        <option key={rightItem.id} value={rightItem.id}>
-                          {rightItem.id === '' ? rightItem.value : rightItem.value}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={value => updateAnswer(leftItem.id, value)}
+                      options={getAvailableRightItems()}
+                      className="flex-1"
+                      placeholder="-- Select match --"
+                    />
                   </div>
                 ))}
               {editingContent.data.leftColumn.filter(item => item.value.trim() !== '').length === 0 && (

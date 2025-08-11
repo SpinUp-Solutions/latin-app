@@ -1,6 +1,6 @@
 import React from 'react';
 import { Label } from '@/src/components/ui/label';
-import { Textarea } from '@/src/components/ui/textarea';
+import { SimpleRichEditor } from '@/src/components/ui/core/simple-rich-editor';
 
 interface SimpleTextareaProps {
   label: string;
@@ -26,10 +26,9 @@ export const SimpleTextarea: React.FC<SimpleTextareaProps> = ({
   return (
     <div>
       <Label htmlFor={textareaId}>{label}</Label>
-      <Textarea
-        id={textareaId}
-        value={value}
-        onChange={e => onChange(e.target.value)}
+      <SimpleRichEditor
+        content={value}
+        onChange={onChange}
         placeholder={placeholder}
         rows={rows}
         disabled={disabled}

@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { loadLessons, deleteLesson, clearDraft, loadDrafts } from '@/src/store/slices/lessonSlice';
 import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
+import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 
 interface LessonManagerProps {
   onEditLesson: (lesson: Lesson) => void;
@@ -122,13 +123,15 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <BookOpen className="h-5 w-5" />
-              {selectedLesson.title}
+              <SimpleRichDisplay content={selectedLesson.title} />
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
               <h4 className="font-medium text-gray-700 mb-1">Description</h4>
-              <p className="text-gray-600">{selectedLesson.description || 'No description provided'}</p>
+              <div className="text-gray-600">
+                <SimpleRichDisplay content={selectedLesson.description || 'No description provided'} />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -192,7 +195,9 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
                     <CardTitle className="flex items-start justify-between">
                       <div className="flex items-center gap-2">
                         <FileText className="h-5 w-5 text-amber-600" />
-                        <span className="truncate">{draft.lesson.title}</span>
+                        <div className="truncate">
+                          <SimpleRichDisplay content={draft.lesson.title} />
+                        </div>
                       </div>
                       <span className="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded-full">Draft</span>
                     </CardTitle>
@@ -205,7 +210,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
                         WebkitLineClamp: 2,
                         WebkitBoxOrient: 'vertical' as const,
                       }}>
-                      {draft.lesson.description || 'No description provided'}
+                      <SimpleRichDisplay content={draft.lesson.description || 'No description provided'} />
                     </p>
 
                     <div className="text-xs text-gray-500 space-y-1">
@@ -268,7 +273,9 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
                     <CardTitle className="flex items-start justify-between">
                       <div className="flex items-center gap-2">
                         <BookOpen className="h-5 w-5 text-blue-600" />
-                        <span className="truncate">{lesson.title}</span>
+                        <div className="truncate">
+                          <SimpleRichDisplay content={lesson.title} />
+                        </div>
                       </div>
                       {lesson.published && (
                         <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Published</span>
@@ -283,7 +290,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
                         WebkitLineClamp: 2,
                         WebkitBoxOrient: 'vertical' as const,
                       }}>
-                      {lesson.description || 'No description provided'}
+                      <SimpleRichDisplay content={lesson.description || 'No description provided'} />
                     </p>
 
                     <div className="text-xs text-gray-500 space-y-1">

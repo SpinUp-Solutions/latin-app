@@ -5,6 +5,7 @@ import { updateEditingContent } from '@/src/store/slices/lessonSlice';
 import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
 import { DiagrammingEditor } from '../../core/DiagrammingEditor';
+import { SimpleRichEditor } from '../../core/simple-rich-editor';
 
 export const SentenceDiagrammingEditor: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -95,44 +96,44 @@ export const SentenceDiagrammingEditor: React.FC = () => {
     <div className="space-y-6">
       <div>
         <label className="block text-sm font-medium mb-1">Title</label>
-        <input
-          type="text"
-          value={editingContent.title || ''}
-          onChange={e => updateContent({ title: e.target.value })}
-          className="w-full p-2 border rounded-md"
+        <SimpleRichEditor
+          content={editingContent.title || ''}
+          onChange={value => updateContent({ title: value })}
           placeholder="Enter exercise title..."
+          singleLine={true}
+          className="w-full"
         />
       </div>
 
       <div>
         <label className="block text-sm font-medium mb-1">Instructions</label>
-        <textarea
-          value={editingContent.instructions || ''}
-          onChange={e => updateContent({ instructions: e.target.value })}
-          className="w-full p-2 border rounded-md h-24"
+        <SimpleRichEditor
+          content={editingContent.instructions || ''}
+          onChange={value => updateContent({ instructions: value })}
           placeholder="Enter instructions for students..."
+          className="w-full h-24"
         />
       </div>
 
       <div>
         <label className="block text-sm font-medium mb-1">Latin Sentence</label>
-        <input
-          type="text"
-          value={editingContent.data.sentence.latin}
-          onChange={e => handleLatinChange(e.target.value)}
-          className="w-full p-2 border rounded-md"
+        <SimpleRichEditor
+          content={editingContent.data.sentence.latin}
+          onChange={value => handleLatinChange(value)}
           placeholder="Enter Latin sentence..."
+          singleLine={true}
+          className="w-full"
         />
       </div>
 
       <div>
         <label className="block text-sm font-medium mb-1">English Translation</label>
-        <input
-          type="text"
-          value={editingContent.data.sentence.translation}
-          onChange={e => handleSentenceChange({ translation: e.target.value })}
-          className="w-full p-2 border rounded-md"
+        <SimpleRichEditor
+          content={editingContent.data.sentence.translation}
+          onChange={value => handleSentenceChange({ translation: value })}
           placeholder="Enter English translation..."
+          singleLine={true}
+          className="w-full"
         />
       </div>
 
@@ -165,11 +166,11 @@ export const SentenceDiagrammingEditor: React.FC = () => {
 
       <div>
         <label className="block text-sm font-medium mb-1">Hints</label>
-        <textarea
-          value={editingContent.data.hints?.join('\n') || ''}
-          onChange={e => updateData({ hints: e.target.value.split('\n').filter(h => h.trim()) })}
-          className="w-full p-2 border rounded-md h-24"
+        <SimpleRichEditor
+          content={editingContent.data.hints?.join('\n') || ''}
+          onChange={value => updateData({ hints: value.split('\n').filter(h => h.trim()) })}
           placeholder="Enter hints (one per line)..."
+          className="w-full h-24"
         />
       </div>
 
