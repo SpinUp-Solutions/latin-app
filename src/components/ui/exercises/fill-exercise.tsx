@@ -19,15 +19,14 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
   const [userAnswer, setUserAnswer] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const { currentIndex, isLastItem, nextItem } = useExerciseProgression({
+  const { currentIndex, isLastItem, autoAdvanceIfEnabled } = useExerciseProgression({
     totalItems: exercise.data.items.length,
     feedbackConfig: exercise.feedbackConfig,
     onComplete,
   });
 
-  const { isCorrect, message, level, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
-    exercise.feedbackConfig
-  );
+  const { isCorrect, message, level, showExplanation, hint, correctAnswer, handleCorrect, handleIncorrect, reset } =
+    useExerciseFeedback(exercise.feedbackConfig);
 
   const handleSubmit = () => {
     if (isProcessing) return; // Prevent multiple submissions
@@ -37,16 +36,12 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
 
     if (validation.isCorrect) {
       handleCorrect(isLastItem);
-      // Auto-advance logic based on configuration
-      if (exercise.feedbackConfig.progressionRules?.autoAdvance !== false) {
-        const progressionDelay = exercise.feedbackConfig.timingConfig?.progressionDelay || 1500;
-        setTimeout(() => {
-          nextItem();
-          setUserAnswer('');
-          reset();
-          setIsProcessing(false);
-        }, progressionDelay);
-      } else {
+      autoAdvanceIfEnabled(() => {
+        setUserAnswer('');
+        reset();
+        setIsProcessing(false);
+      });
+      if (exercise.feedbackConfig.progressionRules?.autoAdvance === false) {
         setIsProcessing(false);
       }
     } else {
@@ -104,9 +99,10 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
           isCorrect={isCorrect}
           message={message}
           level={level}
-          hint={currentItem.hint}
+          hint={hint}
+          correctAnswer={correctAnswer}
           explanation={currentItem.explanation}
-          showExplanation={isCorrect === true && (exercise.feedbackConfig.successMessage?.showExplanation ?? true)}
+          showExplanation={showExplanation}
         />
       </div>
     </div>

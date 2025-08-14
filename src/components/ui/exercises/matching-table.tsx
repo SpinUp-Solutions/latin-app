@@ -34,7 +34,7 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
   const [shuffledLeftColumn, setShuffledLeftColumn] = useState<MatchingItem[]>(leftColumn);
   const [shuffledRightColumn, setShuffledRightColumn] = useState<MatchingItem[]>(rightColumn);
 
-  const { isCorrect, message, level, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
+  const { isCorrect, message, level, hint, correctAnswer, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
     exercise.feedbackConfig
   );
 
@@ -258,7 +258,14 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
         )}
 
         {/* Feedback Display */}
-        <FeedbackDisplay isCorrect={isCorrect} message={message} level={level} showExplanation={false} />
+        <FeedbackDisplay
+          isCorrect={isCorrect}
+          message={message}
+          level={level}
+          hint={hint}
+          correctAnswer={correctAnswer}
+          showExplanation={false}
+        />
 
         {/* Matched pairs */}
         {Object.keys(matches).length > 0 && (

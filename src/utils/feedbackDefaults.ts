@@ -57,3 +57,17 @@ export function createDefaultFeedbackConfig(): FeedbackConfig {
     timingConfig: getTimingConfigWithDefaults(),
   };
 }
+
+export function getEffectiveFeedbackConfig(config: FeedbackConfig): {
+  escalationLevels: FeedbackLevel[];
+  successMessage: SuccessMessageConfig;
+  progressionRules: ProgressionRules;
+  timingConfig: TimingConfig;
+} {
+  return {
+    escalationLevels: (config.escalationLevels ?? []).map(normalizeEscalationLevel),
+    successMessage: getSuccessMessageWithDefaults(config.successMessage),
+    progressionRules: getProgressionRulesWithDefaults(config.progressionRules),
+    timingConfig: getTimingConfigWithDefaults(config.timingConfig),
+  };
+}

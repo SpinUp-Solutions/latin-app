@@ -1,32 +1,34 @@
 import { useState, useCallback, useMemo } from 'react';
 import type { FeedbackConfig, FeedbackLevel } from '@/src/types/exercises/base';
-import { normalizeEscalationLevel } from '@/src/utils/feedbackDefaults';
+import { getEffectiveFeedbackConfig } from '@/src/utils/feedbackDefaults';
 
 interface FeedbackState {
   isCorrect: boolean | null;
   message: string;
   level: FeedbackLevel | null;
-  attempt: number;
+  showExplanation: boolean;
+  hint?: string;
+  correctAnswer?: string;
 }
 
 interface FeedbackActions {
   handleCorrect: (isLastItem?: boolean) => void;
   handleIncorrect: (hint?: string, correctAnswer?: string) => void;
   reset: () => void;
-  buildIncorrectMessage: (hint?: string, correctAnswer?: string) => string;
-  buildSuccessMessage: (isLastItem?: boolean) => string;
 }
 
 export function useExerciseFeedback(config: FeedbackConfig): FeedbackState & FeedbackActions {
-  const levels: FeedbackLevel[] = useMemo(
-    () => (config.escalationLevels ?? []).map(normalizeEscalationLevel),
-    [config.escalationLevels]
-  );
+  const {
+    escalationLevels: levels,
+    successMessage,
+    progressionRules,
+  } = useMemo(() => getEffectiveFeedbackConfig(config), [config]);
 
-  const [attempt, setAttempt] = useState(0);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
   const [message, setMessage] = useState<string>('');
   const [activeLevelIndex, setActiveLevelIndex] = useState<number>(0);
+  const [activeHint, setActiveHint] = useState<string | undefined>(undefined);
+  const [activeCorrectAnswer, setActiveCorrectAnswer] = useState<string | undefined>(undefined);
 
   /** Returns the current escalation level. */
   const level: FeedbackLevel | null = useMemo(() => {
@@ -35,29 +37,18 @@ export function useExerciseFeedback(config: FeedbackConfig): FeedbackState & Fee
     return levels[boundedIndex] ?? null;
   }, [levels, activeLevelIndex]);
 
-  const buildIncorrectMessage = useCallback(
-    (hint?: string, correctAnswer?: string): string => {
-      const currentLevel = level;
-      if (!currentLevel) return '';
-
-      let builtMessage = currentLevel.message || '';
-      if (currentLevel.showAnswer && correctAnswer) {
-        builtMessage = `Incorrect. The correct answer is "${correctAnswer}"`;
-      }
-      return builtMessage;
-    },
-    [level]
-  );
+  // Derived flag to control explanation rendering for correct answers
+  const showExplanation = isCorrect === true && Boolean(successMessage?.showExplanation);
 
   const buildSuccessMessage = useCallback(
     (isLastItem?: boolean): string => {
-      if (isLastItem && config.successMessage?.completion) {
-        return config.successMessage.completion;
+      if (isLastItem && successMessage?.completion) {
+        return successMessage.completion;
       }
 
-      return config.successMessage?.advance || config.successMessage?.default || '';
+      return successMessage?.advance || successMessage?.default || '';
     },
-    [config.successMessage]
+    [successMessage]
   );
 
   /** Call when the user submits a CORRECT answer. */
@@ -66,55 +57,53 @@ export function useExerciseFeedback(config: FeedbackConfig): FeedbackState & Fee
       setIsCorrect(true);
       setMessage(buildSuccessMessage(isLastItem));
 
-      if (config.progressionRules?.resetOnCorrect !== false) {
-        setAttempt(0);
+      if (progressionRules?.resetOnCorrect !== false) {
         setActiveLevelIndex(0);
       }
     },
-    [buildSuccessMessage, config.progressionRules?.resetOnCorrect]
+    [buildSuccessMessage, progressionRules?.resetOnCorrect]
   );
 
   /** Call when the user submits a WRONG answer. */
   const handleIncorrect = useCallback(
     (hint?: string, correctAnswer?: string) => {
       setIsCorrect(false);
-      setAttempt(previousAttempt => {
-        const indexForThisAttempt = Math.min(previousAttempt, Math.max(levels.length - 1, 0));
-        const currentLevel = levels[indexForThisAttempt] ?? null;
+      setActiveLevelIndex(previousIndex => {
+        const nextIndex = Math.min(previousIndex + 1, Math.max(levels.length - 1, 0));
+        const currentLevel = levels[nextIndex] ?? null;
 
         if (currentLevel) {
-          let builtMessage = currentLevel.message || '';
-          if (currentLevel.showAnswer && correctAnswer) {
-            builtMessage = `Incorrect. The correct answer is "${correctAnswer}"`;
-          }
+          const builtMessage = currentLevel.message || 'Incorrect.';
           setMessage(builtMessage);
         } else {
           setMessage('');
         }
 
-        setActiveLevelIndex(indexForThisAttempt);
-        return previousAttempt + 1;
+        return nextIndex;
       });
+      setActiveHint(hint);
+      setActiveCorrectAnswer(correctAnswer);
     },
     [levels]
   );
 
   const reset = useCallback(() => {
-    setAttempt(0);
     setIsCorrect(null);
     setMessage('');
     setActiveLevelIndex(0);
+    setActiveHint(undefined);
+    setActiveCorrectAnswer(undefined);
   }, []);
 
   return {
     level,
-    attempt,
     isCorrect,
     message,
+    showExplanation,
+    hint: activeHint,
+    correctAnswer: activeCorrectAnswer,
     handleCorrect,
     handleIncorrect,
     reset,
-    buildIncorrectMessage,
-    buildSuccessMessage,
   };
 }

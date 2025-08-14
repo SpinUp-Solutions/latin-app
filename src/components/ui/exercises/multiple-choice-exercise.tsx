@@ -20,7 +20,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const { isCorrect, message, level, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
+  const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
     exercise.feedbackConfig
   );
 
@@ -162,8 +162,9 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
           isCorrect={isCorrect}
           message={message}
           level={level}
+          correctAnswer={exercise.data.options.find(opt => opt.isCorrect)?.text}
           explanation={exercise.data.explanation}
-          showExplanation={isCorrect === true && (exercise.feedbackConfig.successMessage?.showExplanation ?? true)}
+          showExplanation={showExplanation}
         />
       </div>
     </div>

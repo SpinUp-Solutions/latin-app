@@ -9,6 +9,7 @@ import {
   validateVerbConjugationLivingLatin,
 } from '@/src/utils/exercises/verbConjugationExercise';
 import { ExerciseProgress } from './exercise-progress';
+import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 
@@ -23,9 +24,15 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
   const [currentLivingLatinIndex, setCurrentLivingLatinIndex] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const { isCorrect, message, level, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
+  const { isCorrect, message, level, hint, correctAnswer, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
     exercise.feedbackConfig
   );
+
+  const { autoAdvanceIfEnabled } = useExerciseProgression({
+    totalItems: 1,
+    feedbackConfig: exercise.feedbackConfig,
+    onComplete,
+  });
 
   const handleConjugationSubmit = () => {
     if (!exercise.data.conjugationTask || isProcessing) return;
@@ -38,16 +45,18 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
 
       // Move to living latin if it exists, otherwise complete
       if (!exercise.data.livingLatinPractice) {
-        const nextExerciseDelay = exercise.feedbackConfig.timingConfig?.nextExerciseDelay || 2500;
-        setTimeout(() => onComplete?.(), nextExerciseDelay);
+        // useExerciseProgression handles nextExerciseDelay for completion
+        onComplete?.();
       } else {
-        const progressionDelay = exercise.feedbackConfig.timingConfig?.progressionDelay || 1500;
-        setTimeout(() => {
+        autoAdvanceIfEnabled(() => {
           reset();
           setConjugationCompleted(true);
           setUserAnswer('');
           setIsProcessing(false);
-        }, progressionDelay);
+        });
+        if (exercise.feedbackConfig.progressionRules?.autoAdvance === false) {
+          setIsProcessing(false);
+        }
       }
     } else {
       handleIncorrect(undefined, validation.correctAnswer);
@@ -66,22 +75,17 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
       handleCorrect(isLastExercise);
 
       if (isLastExercise) {
-        // Auto-advance logic based on configuration
-        if (exercise.feedbackConfig.progressionRules?.autoAdvance !== false) {
-          const nextExerciseDelay = exercise.feedbackConfig.timingConfig?.nextExerciseDelay || 2500;
-          setTimeout(() => {
-            onComplete?.();
-          }, nextExerciseDelay);
-        }
+        onComplete?.();
       } else {
-        // Move to next living latin exercise
-        const progressionDelay = exercise.feedbackConfig.timingConfig?.progressionDelay || 1500;
-        setTimeout(() => {
-          reset(); // Reset feedback first
+        autoAdvanceIfEnabled(() => {
+          reset();
           setCurrentLivingLatinIndex(prev => prev + 1);
           setUserAnswer('');
           setIsProcessing(false);
-        }, progressionDelay);
+        });
+        if (exercise.feedbackConfig.progressionRules?.autoAdvance === false) {
+          setIsProcessing(false);
+        }
       }
     } else {
       handleIncorrect(undefined, validation.correctAnswer);
@@ -173,7 +177,13 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
               />
             </div>
 
-            <FeedbackDisplay isCorrect={isCorrect} message={message} level={level} />
+            <FeedbackDisplay
+              isCorrect={isCorrect}
+              message={message}
+              level={level}
+              hint={hint}
+              correctAnswer={correctAnswer}
+            />
           </>
         )}
 
@@ -222,7 +232,13 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
                   buttonText="Submit"
                 />
 
-                <FeedbackDisplay isCorrect={isCorrect} message={message} level={level} />
+                <FeedbackDisplay
+                  isCorrect={isCorrect}
+                  message={message}
+                  level={level}
+                  hint={hint}
+                  correctAnswer={correctAnswer}
+                />
               </div>
             )}
           </div>

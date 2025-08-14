@@ -8,6 +8,7 @@ interface FeedbackDisplayProps {
   message: string;
   level?: FeedbackLevel | null;
   hint?: string;
+  correctAnswer?: string;
   explanation?: string;
   showExplanation?: boolean;
   className?: string;
@@ -18,13 +19,15 @@ export const FeedbackDisplay: React.FC<FeedbackDisplayProps> = ({
   message,
   level,
   hint,
+  correctAnswer,
   explanation,
   showExplanation = false,
   className = '',
 }) => {
   const shouldShowHint = !isCorrect && Boolean(level?.showHint) && Boolean(hint);
+  const shouldShowAnswer = !isCorrect && Boolean(level?.showAnswer) && Boolean(correctAnswer);
   const hasPrimaryMessage = Boolean(message);
-  const shouldRender = isCorrect !== null && (hasPrimaryMessage || shouldShowHint);
+  const shouldRender = isCorrect !== null && (hasPrimaryMessage || shouldShowHint || shouldShowAnswer);
   if (!shouldRender) return null;
 
   const baseClasses = 'mt-4 p-3 rounded-lg shadow-md border transition-all duration-200';
@@ -53,6 +56,15 @@ export const FeedbackDisplay: React.FC<FeedbackDisplayProps> = ({
                 <HelpCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
                 <span className="text-sm">
                   <SimpleRichDisplay content={hint as string} />
+                </span>
+              </div>
+            )}
+
+            {shouldShowAnswer && (
+              <div className="flex items-start gap-2 mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-blue-800">
+                <Check className="h-4 w-4 flex-shrink-0 mt-0.5 text-blue-600" />
+                <span className="text-sm">
+                  <SimpleRichDisplay content={`Correct answer: ${correctAnswer as string}`} />
                 </span>
               </div>
             )}

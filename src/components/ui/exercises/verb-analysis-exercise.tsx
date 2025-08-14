@@ -20,15 +20,14 @@ const VerbAnalysisExerciseComponent: React.FC<Props> = ({ exercise, onComplete }
   const [selectedWordIndex, setSelectedWordIndex] = useState<number | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const { currentIndex, isLastItem, nextItem } = useExerciseProgression({
+  const { currentIndex, isLastItem, autoAdvanceIfEnabled } = useExerciseProgression({
     totalItems: exercise.data.verbs.length,
     feedbackConfig: exercise.feedbackConfig,
     onComplete,
   });
 
-  const { isCorrect, message, level, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
-    exercise.feedbackConfig
-  );
+  const { isCorrect, message, level, showExplanation, hint, correctAnswer, handleCorrect, handleIncorrect, reset } =
+    useExerciseFeedback(exercise.feedbackConfig);
 
   const currentVerb = exercise.data.verbs[currentIndex];
 
@@ -50,18 +49,13 @@ const VerbAnalysisExerciseComponent: React.FC<Props> = ({ exercise, onComplete }
 
     if (validation.isCorrect) {
       handleCorrect(isLastItem);
-
-      // Auto-advance logic based on configuration
-      if (exercise.feedbackConfig.progressionRules?.autoAdvance !== false) {
-        const progressionDelay = exercise.feedbackConfig.timingConfig?.progressionDelay || 1500;
-        setTimeout(() => {
-          nextItem();
-          setUserAnswer('');
-          setSelectedWordIndex(null);
-          reset();
-          setIsProcessing(false);
-        }, progressionDelay);
-      } else {
+      autoAdvanceIfEnabled(() => {
+        setUserAnswer('');
+        setSelectedWordIndex(null);
+        reset();
+        setIsProcessing(false);
+      });
+      if (exercise.feedbackConfig.progressionRules?.autoAdvance === false) {
         setIsProcessing(false);
       }
     } else {
@@ -144,9 +138,10 @@ const VerbAnalysisExerciseComponent: React.FC<Props> = ({ exercise, onComplete }
           isCorrect={isCorrect}
           message={message}
           level={level}
-          hint={currentVerb.hint}
+          hint={hint}
+          correctAnswer={correctAnswer}
           explanation={currentVerb.explanation}
-          showExplanation={isCorrect === true && (exercise.feedbackConfig.successMessage?.showExplanation ?? true)}
+          showExplanation={showExplanation}
         />
       </div>
     </div>
