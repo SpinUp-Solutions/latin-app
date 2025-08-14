@@ -1,5 +1,6 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import type { FeedbackConfig, FeedbackLevel } from '@/src/types/exercises/base';
+import { normalizeEscalationLevel } from '@/src/utils/feedbackDefaults';
 
 interface FeedbackState {
   isCorrect: boolean | null;
@@ -17,29 +18,33 @@ interface FeedbackActions {
 }
 
 export function useExerciseFeedback(config: FeedbackConfig): FeedbackState & FeedbackActions {
-  const levels: FeedbackLevel[] = config.escalationLevels ?? [];
+  const levels: FeedbackLevel[] = useMemo(
+    () => (config.escalationLevels ?? []).map(normalizeEscalationLevel),
+    [config.escalationLevels]
+  );
+
   const [attempt, setAttempt] = useState(0);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
   const [message, setMessage] = useState<string>('');
+  const [activeLevelIndex, setActiveLevelIndex] = useState<number>(0);
 
   /** Returns the current escalation level. */
-  const level = levels[Math.min(attempt, levels.length - 1)] ?? null;
+  const level: FeedbackLevel | null = useMemo(() => {
+    if (levels.length === 0) return null;
+    const boundedIndex = Math.min(Math.max(activeLevelIndex, 0), levels.length - 1);
+    return levels[boundedIndex] ?? null;
+  }, [levels, activeLevelIndex]);
 
   const buildIncorrectMessage = useCallback(
     (hint?: string, correctAnswer?: string): string => {
-      if (!level) return '';
+      const currentLevel = level;
+      if (!currentLevel) return '';
 
-      let message = level.message || '';
-
-      if (level.showHint && hint) {
-        message = message ? `${message} Hint: ${hint}` : `Hint: ${hint}`;
+      let builtMessage = currentLevel.message || '';
+      if (currentLevel.showAnswer && correctAnswer) {
+        builtMessage = `Incorrect. The correct answer is "${correctAnswer}"`;
       }
-
-      if (level.showAnswer && correctAnswer) {
-        message = `Incorrect. The correct answer is "${correctAnswer}"`;
-      }
-
-      return message;
+      return builtMessage;
     },
     [level]
   );
@@ -63,6 +68,7 @@ export function useExerciseFeedback(config: FeedbackConfig): FeedbackState & Fee
 
       if (config.progressionRules?.resetOnCorrect !== false) {
         setAttempt(0);
+        setActiveLevelIndex(0);
       }
     },
     [buildSuccessMessage, config.progressionRules?.resetOnCorrect]
@@ -72,16 +78,32 @@ export function useExerciseFeedback(config: FeedbackConfig): FeedbackState & Fee
   const handleIncorrect = useCallback(
     (hint?: string, correctAnswer?: string) => {
       setIsCorrect(false);
-      setMessage(buildIncorrectMessage(hint, correctAnswer));
-      setAttempt(a => a + 1);
+      setAttempt(previousAttempt => {
+        const indexForThisAttempt = Math.min(previousAttempt, Math.max(levels.length - 1, 0));
+        const currentLevel = levels[indexForThisAttempt] ?? null;
+
+        if (currentLevel) {
+          let builtMessage = currentLevel.message || '';
+          if (currentLevel.showAnswer && correctAnswer) {
+            builtMessage = `Incorrect. The correct answer is "${correctAnswer}"`;
+          }
+          setMessage(builtMessage);
+        } else {
+          setMessage('');
+        }
+
+        setActiveLevelIndex(indexForThisAttempt);
+        return previousAttempt + 1;
+      });
     },
-    [buildIncorrectMessage]
+    [levels]
   );
 
   const reset = useCallback(() => {
     setAttempt(0);
     setIsCorrect(null);
     setMessage('');
+    setActiveLevelIndex(0);
   }, []);
 
   return {

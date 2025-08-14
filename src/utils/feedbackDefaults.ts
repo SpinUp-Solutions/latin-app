@@ -1,4 +1,10 @@
-import type { FeedbackConfig, SuccessMessageConfig, ProgressionRules, TimingConfig } from '@/src/types/exercises/base';
+import type {
+  FeedbackConfig,
+  SuccessMessageConfig,
+  ProgressionRules,
+  TimingConfig,
+  FeedbackLevel,
+} from '@/src/types/exercises/base';
 
 export const FEEDBACK_DEFAULTS = {
   progressionDelay: 1500,
@@ -32,6 +38,14 @@ export function getTimingConfigWithDefaults(timing?: TimingConfig): TimingConfig
   return {
     progressionDelay: timing?.progressionDelay ?? FEEDBACK_DEFAULTS.progressionDelay,
     nextExerciseDelay: timing?.nextExerciseDelay ?? FEEDBACK_DEFAULTS.nextExerciseDelay,
+  };
+}
+
+export function normalizeEscalationLevel(level: FeedbackLevel): FeedbackLevel {
+  return {
+    ...level,
+    showHint: !!level.showHint,
+    showAnswer: !!level.showAnswer,
   };
 }
 

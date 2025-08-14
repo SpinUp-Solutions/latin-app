@@ -22,7 +22,10 @@ export const FeedbackDisplay: React.FC<FeedbackDisplayProps> = ({
   showExplanation = false,
   className = '',
 }) => {
-  if (isCorrect === null || !message) return null;
+  const shouldShowHint = !isCorrect && Boolean(level?.showHint) && Boolean(hint);
+  const hasPrimaryMessage = Boolean(message);
+  const shouldRender = isCorrect !== null && (hasPrimaryMessage || shouldShowHint);
+  if (!shouldRender) return null;
 
   const baseClasses = 'mt-4 p-3 rounded-lg shadow-md border transition-all duration-200';
   const statusClasses = isCorrect
@@ -39,15 +42,17 @@ export const FeedbackDisplay: React.FC<FeedbackDisplayProps> = ({
             <X className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
           )}
           <div className="flex-1 space-y-2">
-            <span className="font-medium block">
-              <SimpleRichDisplay content={message} />
-            </span>
+            {hasPrimaryMessage && (
+              <span className="font-medium block">
+                <SimpleRichDisplay content={message} />
+              </span>
+            )}
 
-            {!isCorrect && level?.showHint && hint && (
+            {shouldShowHint && (
               <div className="flex items-start gap-2 mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-yellow-800">
                 <HelpCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
                 <span className="text-sm">
-                  <SimpleRichDisplay content={hint} />
+                  <SimpleRichDisplay content={hint as string} />
                 </span>
               </div>
             )}

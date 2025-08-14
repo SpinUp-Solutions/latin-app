@@ -57,10 +57,6 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
 
   const handleAnswerChange = (value: string) => {
     setUserAnswer(value);
-    // Reset feedback when user types
-    if (isCorrect !== null) {
-      reset();
-    }
   };
 
   const currentItem = exercise.data.items[currentIndex];
