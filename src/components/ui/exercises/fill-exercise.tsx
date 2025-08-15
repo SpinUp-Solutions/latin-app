@@ -25,8 +25,9 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
     onComplete,
   });
 
-  const { isCorrect, message, level, showExplanation, hint, correctAnswer, handleCorrect, handleIncorrect, reset } =
-    useExerciseFeedback(exercise.feedbackConfig);
+  const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
+    exercise.feedbackConfig
+  );
 
   const handleSubmit = () => {
     if (isProcessing) return; // Prevent multiple submissions
@@ -45,7 +46,7 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
         setIsProcessing(false);
       }
     } else {
-      handleIncorrect(validation.hint, validation.correctAnswer);
+      handleIncorrect();
       setIsProcessing(false);
     }
   };
@@ -99,8 +100,8 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
           isCorrect={isCorrect}
           message={message}
           level={level}
-          hint={hint}
-          correctAnswer={correctAnswer}
+          hint={currentItem.hint}
+          correctAnswer={currentItem.answer}
           explanation={currentItem.explanation}
           showExplanation={showExplanation}
         />
