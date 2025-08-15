@@ -24,7 +24,7 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
   const [currentLivingLatinIndex, setCurrentLivingLatinIndex] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const { isCorrect, message, level, hint, correctAnswer, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
+  const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
     exercise.feedbackConfig
   );
 
@@ -59,7 +59,7 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
         }
       }
     } else {
-      handleIncorrect(undefined, validation.correctAnswer);
+      handleIncorrect();
       setIsProcessing(false);
     }
   };
@@ -88,7 +88,7 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
         }
       }
     } else {
-      handleIncorrect(undefined, validation.correctAnswer);
+      handleIncorrect();
       setIsProcessing(false);
     }
   };
@@ -177,13 +177,7 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
               />
             </div>
 
-            <FeedbackDisplay
-              isCorrect={isCorrect}
-              message={message}
-              level={level}
-              hint={hint}
-              correctAnswer={correctAnswer}
-            />
+            <FeedbackDisplay isCorrect={isCorrect} message={message} level={level} showExplanation={showExplanation} />
           </>
         )}
 
@@ -236,8 +230,7 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
                   isCorrect={isCorrect}
                   message={message}
                   level={level}
-                  hint={hint}
-                  correctAnswer={correctAnswer}
+                  showExplanation={showExplanation}
                 />
               </div>
             )}

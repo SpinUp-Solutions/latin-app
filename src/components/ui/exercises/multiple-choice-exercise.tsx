@@ -52,8 +52,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
         }, completionDelay);
       }
     } else {
-      const correctOption = exercise.data.options.find(opt => opt.id === validation.correctOptionId);
-      handleIncorrect(undefined, correctOption?.text);
+      handleIncorrect();
     }
 
     setIsProcessing(false);

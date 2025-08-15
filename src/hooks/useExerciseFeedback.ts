@@ -1,62 +1,118 @@
-import { useState, useCallback, useMemo } from 'react';
-import type { FeedbackConfig, FeedbackLevel } from '@/src/types/exercises/base';
+import { useReducer, useCallback, useMemo } from 'react';
+import type { FeedbackConfig, FeedbackState, FeedbackAction } from '@/src/types/exercises/base';
 import { getEffectiveFeedbackConfig } from '@/src/utils/feedbackDefaults';
 
+// Initial state for the feedback state machine
+const createInitialState = (): FeedbackState => ({
+  phase: 'initial',
+  currentAttempt: 0,
+  activeLevel: null,
+  displayMessage: '',
+  shouldShowHint: false,
+  shouldShowAnswer: false,
+  shouldShowExplanation: false,
+});
+
+// Pure reducer function - handles all state transitions
+function feedbackReducer(state: FeedbackState, action: FeedbackAction): FeedbackState {
+  switch (action.type) {
+    case 'ANSWER_INCORRECT': {
+      const { escalationLevels } = action;
+      const nextAttempt = state.currentAttempt + 1;
+
+      // Get the escalation level for this attempt (clamped to available levels)
+      const levelIndex = Math.min(nextAttempt - 1, escalationLevels.length - 1);
+      const activeLevel = escalationLevels[levelIndex] || null;
+
+      return {
+        phase: 'attempting',
+        currentAttempt: nextAttempt,
+        activeLevel,
+        displayMessage: activeLevel?.message || 'Incorrect.',
+        shouldShowHint: Boolean(activeLevel?.showHint),
+        shouldShowAnswer: Boolean(activeLevel?.showAnswer),
+        shouldShowExplanation: false,
+      };
+    }
+
+    case 'ANSWER_CORRECT': {
+      const { successMessage, showExplanation } = action;
+
+      return {
+        phase: 'succeeded',
+        currentAttempt: 0, // Reset for next item
+        activeLevel: null,
+        displayMessage: successMessage,
+        shouldShowHint: false,
+        shouldShowAnswer: false,
+        shouldShowExplanation: showExplanation,
+      };
+    }
+
+    case 'RESET': {
+      return createInitialState();
+    }
+
+    default:
+      return state;
+  }
+}
+
 export function useExerciseFeedback(config: FeedbackConfig) {
-  const { escalationLevels, successMessage, progressionRules } = useMemo(
-    () => getEffectiveFeedbackConfig(config),
-    [config]
-  );
-
-  const [attempt, setAttempt] = useState(0);
-  const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
-  const [message, setMessage] = useState<string>('');
-
-  // Current level is simply the attempt clamped to available levels
-  const level = useMemo(() => {
-    if (escalationLevels.length === 0) return null;
-    const levelIndex = Math.min(attempt, escalationLevels.length - 1);
-    return escalationLevels[levelIndex] ?? null;
-  }, [escalationLevels, attempt]);
-
-  const showExplanation = isCorrect === true && Boolean(successMessage?.showExplanation);
+  const machineConfig = useMemo(() => getEffectiveFeedbackConfig(config), [config]);
+  const [state, dispatch] = useReducer(feedbackReducer, undefined, createInitialState);
 
   const buildSuccessMessage = useCallback(
     (isLastItem?: boolean): string => {
+      const { successMessage } = machineConfig;
+
       if (isLastItem && successMessage?.completion) {
         return successMessage.completion;
       }
 
-      return successMessage?.advance || successMessage?.default || '';
+      return successMessage?.advance || successMessage?.default || 'Correct!';
     },
-    [successMessage]
+    [machineConfig]
   );
 
   const handleCorrect = useCallback(
     (isLastItem?: boolean) => {
-      setIsCorrect(true);
-      setMessage(buildSuccessMessage(isLastItem));
-      if (progressionRules?.resetOnCorrect !== false) {
-        setAttempt(0);
-      }
+      const successMessage = buildSuccessMessage(isLastItem);
+      const showExplanation = Boolean(machineConfig.successMessage?.showExplanation);
+
+      dispatch({
+        type: 'ANSWER_CORRECT',
+        successMessage,
+        showExplanation,
+        isLastItem,
+      });
     },
-    [buildSuccessMessage, progressionRules?.resetOnCorrect]
+    [buildSuccessMessage, machineConfig.successMessage?.showExplanation]
   );
 
   const handleIncorrect = useCallback(() => {
-    setIsCorrect(false);
-    const currentLevel = escalationLevels[attempt] ?? escalationLevels[escalationLevels.length - 1] ?? null;
-    setMessage(currentLevel?.message || 'Incorrect.');
-    setAttempt(prev => Math.min(prev + 1, escalationLevels.length - 1));
-  }, [escalationLevels, attempt]);
+    dispatch({
+      type: 'ANSWER_INCORRECT',
+      escalationLevels: machineConfig.escalationLevels,
+    });
+  }, [machineConfig.escalationLevels]);
 
   const reset = useCallback(() => {
-    setAttempt(0);
-    setIsCorrect(null);
-    setMessage('');
+    dispatch({ type: 'RESET' });
   }, []);
 
+  // Derived values for backward compatibility
+  const isCorrect = state.phase === 'succeeded' ? true : state.phase === 'attempting' ? false : null;
+
+  const level = state.activeLevel;
+  const message = state.displayMessage;
+  const showExplanation = state.shouldShowExplanation;
+
   return {
+    // New state machine interface
+    feedbackState: state,
+
+    // Backward compatible interface
     level,
     isCorrect,
     message,

@@ -55,6 +55,30 @@ export interface FeedbackConfig {
   timingConfig?: TimingConfig;
 }
 
+// New robust state machine types
+export type FeedbackPhase = 'initial' | 'attempting' | 'succeeded' | 'failed';
+
+export interface FeedbackState {
+  readonly phase: FeedbackPhase;
+  readonly currentAttempt: number;
+  readonly activeLevel: FeedbackLevel | null;
+  readonly displayMessage: string;
+  readonly shouldShowHint: boolean;
+  readonly shouldShowAnswer: boolean;
+  readonly shouldShowExplanation: boolean;
+}
+
+export type FeedbackAction =
+  | { type: 'ANSWER_INCORRECT'; escalationLevels: FeedbackLevel[] }
+  | { type: 'ANSWER_CORRECT'; successMessage: string; showExplanation: boolean; isLastItem?: boolean }
+  | { type: 'RESET' };
+
+export interface FeedbackMachineConfig {
+  escalationLevels: FeedbackLevel[];
+  successMessage: SuccessMessageConfig;
+  progressionRules: ProgressionRules;
+}
+
 /** Base for every exercise type. */
 export interface BaseExercise extends ContentItem {
   instructions: string;

@@ -26,8 +26,9 @@ const VerbAnalysisExerciseComponent: React.FC<Props> = ({ exercise, onComplete }
     onComplete,
   });
 
-  const { isCorrect, message, level, showExplanation, hint, correctAnswer, handleCorrect, handleIncorrect, reset } =
-    useExerciseFeedback(exercise.feedbackConfig);
+  const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
+    exercise.feedbackConfig
+  );
 
   const currentVerb = exercise.data.verbs[currentIndex];
 
@@ -59,7 +60,7 @@ const VerbAnalysisExerciseComponent: React.FC<Props> = ({ exercise, onComplete }
         setIsProcessing(false);
       }
     } else {
-      handleIncorrect(validation.hint, validation.correctAnswer);
+      handleIncorrect();
       setIsProcessing(false);
     }
   };
@@ -138,8 +139,8 @@ const VerbAnalysisExerciseComponent: React.FC<Props> = ({ exercise, onComplete }
           isCorrect={isCorrect}
           message={message}
           level={level}
-          hint={hint}
-          correctAnswer={correctAnswer}
+          hint={currentVerb.hint}
+          correctAnswer={currentVerb.correctPronoun}
           explanation={currentVerb.explanation}
           showExplanation={showExplanation}
         />

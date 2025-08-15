@@ -25,8 +25,9 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
     onComplete,
   });
 
-  const { isCorrect, message, level, showExplanation, hint, correctAnswer, handleCorrect, handleIncorrect, reset } =
-    useExerciseFeedback(exercise.feedbackConfig);
+  const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
+    exercise.feedbackConfig
+  );
 
   const handleWordClick = (wordIndex: number) => {
     if (isProcessing) return; // Prevent multiple rapid clicks
@@ -46,7 +47,7 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
         setIsProcessing(false);
       }
     } else {
-      handleIncorrect(validation.hint, validation.correctAnswer);
+      handleIncorrect();
       setIsProcessing(false);
     }
   };
@@ -111,8 +112,8 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
           isCorrect={isCorrect}
           message={message}
           level={level}
-          hint={hint}
-          correctAnswer={correctAnswer}
+          hint={currentQuestion.hint}
+          correctAnswer={exercise.data.passage.split(' ')[currentQuestion.correctWordIndex]}
           explanation={currentQuestion.explanation}
           showExplanation={showExplanation}
         />
