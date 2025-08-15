@@ -22,7 +22,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
   const [isProcessing, setIsProcessing] = useState(false);
   const [hasSubmitted, setHasSubmitted] = useState(false);
 
-  const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
+  const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect } = useExerciseFeedback(
     exercise.feedbackConfig
   );
 
@@ -61,7 +61,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
     setSelectedItemId(null);
     setUserExplanation('');
     setHasSubmitted(false);
-    reset();
+    // Don't reset feedback state - preserve escalation level for next attempt
   };
 
   return (
@@ -186,22 +186,14 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
           )}
         </div>
 
-        {/* Show explanation after submission */}
-        {hasSubmitted && exercise.data.explanation && (
-          <div className="p-4 bg-blue-50 rounded-lg border border-blue-200 mb-4">
-            <h5 className="font-medium text-blue-900 mb-2">Explanation:</h5>
-            <div className="text-blue-800">
-              <SimpleRichDisplay content={exercise.data.explanation} />
-            </div>
-          </div>
-        )}
-
         {/* Feedback Display */}
         <FeedbackDisplay
           isCorrect={isCorrect}
           message={message}
           level={level}
           hint={exercise.data.hint}
+          correctAnswer={exercise.data.items.find(item => item.isOddOneOut)?.text}
+          explanation={exercise.data.explanation}
           showExplanation={showExplanation}
         />
       </div>

@@ -28,7 +28,7 @@ function feedbackReducer(state: FeedbackState, action: FeedbackAction): Feedback
         phase: 'attempting',
         currentAttempt: nextAttempt,
         activeLevel,
-        displayMessage: activeLevel?.message || 'Incorrect.',
+        displayMessage: activeLevel?.message || '',
         shouldShowHint: Boolean(activeLevel?.showHint),
         shouldShowAnswer: Boolean(activeLevel?.showAnswer),
         shouldShowExplanation: false,

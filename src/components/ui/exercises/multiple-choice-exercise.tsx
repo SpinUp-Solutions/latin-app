@@ -61,7 +61,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
   const handleReset = () => {
     setSelectedOptionId(null);
     setHasSubmitted(false);
-    reset();
+    // Don't reset feedback state - preserve escalation level for next attempt
   };
 
   const getOptionClassName = (optionId: string) => {
@@ -70,11 +70,13 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
     }
 
     const option = exercise.data.options.find(opt => opt.id === optionId);
-    if (option?.isCorrect) {
+
+    if (selectedOptionId === optionId && option?.isCorrect) {
       return 'bg-green-50 border-green-300 text-green-900';
     } else if (selectedOptionId === optionId && !option?.isCorrect) {
       return 'bg-red-50 border-red-300 text-red-900';
     }
+    // All other options remain neutral
     return 'opacity-60';
   };
 
