@@ -62,6 +62,7 @@ export const VerbConjugationEditor: React.FC = () => {
         conjugationTask: {
           instructions: '',
           answer: '',
+          hint: '',
         },
       });
     }
@@ -168,6 +169,7 @@ export const VerbConjugationEditor: React.FC = () => {
     const newExercise = {
       english: '',
       answer: '',
+      hint: '',
     };
     const newExercises = [...editingContent.data.livingLatinPractice.exercises, newExercise];
     updateData({
@@ -178,7 +180,7 @@ export const VerbConjugationEditor: React.FC = () => {
     });
   };
 
-  const updateExercise = (index: number, field: 'english' | 'answer', value: string) => {
+  const updateExercise = (index: number, field: 'english' | 'answer' | 'hint', value: string) => {
     if (!editingContent.data.livingLatinPractice) return;
 
     const newExercises = editingContent.data.livingLatinPractice.exercises.map((exercise, i) =>
@@ -423,6 +425,20 @@ export const VerbConjugationEditor: React.FC = () => {
               </div>
 
               <div>
+                <label className="block text-sm font-medium mb-1">Hint (Optional)</label>
+                <SimpleRichEditor
+                  content={editingContent.data.conjugationTask.hint || ''}
+                  onChange={value => updateConjugationTask({ hint: value })}
+                  placeholder="Helpful hint for students when they make mistakes..."
+                  rows={2}
+                  className="w-full"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Shown when students make incorrect attempts (if enabled in feedback config)
+                </p>
+              </div>
+
+              <div>
                 <label className="block text-sm font-medium mb-1">Correct Answer</label>
                 <SimpleRichEditor
                   content={editingContent.data.conjugationTask.answer}
@@ -530,6 +546,16 @@ export const VerbConjugationEditor: React.FC = () => {
                               content={exercise.english}
                               onChange={value => updateExercise(index, 'english', value)}
                               placeholder="e.g., May she always be happy!"
+                              singleLine={true}
+                              className="w-full"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium mb-1">Hint (Optional)</label>
+                            <SimpleRichEditor
+                              content={exercise.hint || ''}
+                              onChange={value => updateExercise(index, 'hint', value)}
+                              placeholder="Helpful hint for this exercise..."
                               singleLine={true}
                               className="w-full"
                             />

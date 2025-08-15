@@ -22,7 +22,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
   const [isProcessing, setIsProcessing] = useState(false);
   const [hasSubmitted, setHasSubmitted] = useState(false);
 
-  const { isCorrect, message, level, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
+  const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
     exercise.feedbackConfig
   );
 
@@ -201,7 +201,8 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
           isCorrect={isCorrect}
           message={message}
           level={level}
-          showExplanation={isCorrect === true && (exercise.feedbackConfig.successMessage?.showExplanation ?? true)}
+          hint={exercise.data.hint}
+          showExplanation={showExplanation}
         />
       </div>
     </div>

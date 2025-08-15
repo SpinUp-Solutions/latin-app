@@ -258,7 +258,13 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
         )}
 
         {/* Feedback Display */}
-        <FeedbackDisplay isCorrect={isCorrect} message={message} level={level} showExplanation={showExplanation} />
+        <FeedbackDisplay
+          isCorrect={isCorrect}
+          message={message}
+          level={level}
+          hint={exercise.data.hint}
+          showExplanation={showExplanation}
+        />
 
         {/* Matched pairs */}
         {Object.keys(matches).length > 0 && (

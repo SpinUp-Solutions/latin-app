@@ -161,6 +161,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
           isCorrect={isCorrect}
           message={message}
           level={level}
+          hint={exercise.data.hint}
           correctAnswer={exercise.data.options.find(opt => opt.isCorrect)?.text}
           explanation={exercise.data.explanation}
           showExplanation={showExplanation}

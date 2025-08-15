@@ -177,7 +177,13 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
               />
             </div>
 
-            <FeedbackDisplay isCorrect={isCorrect} message={message} level={level} showExplanation={showExplanation} />
+            <FeedbackDisplay
+              isCorrect={isCorrect}
+              message={message}
+              level={level}
+              hint={exercise.data.conjugationTask?.hint}
+              showExplanation={showExplanation}
+            />
           </>
         )}
 
@@ -230,6 +236,7 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
                   isCorrect={isCorrect}
                   message={message}
                   level={level}
+                  hint={currentLivingLatinExercise?.hint}
                   showExplanation={showExplanation}
                 />
               </div>

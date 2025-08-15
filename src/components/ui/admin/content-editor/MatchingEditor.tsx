@@ -201,6 +201,21 @@ export const MatchingEditor: React.FC = () => {
         </div>
       </div>
 
+      {/* Hint */}
+      <div>
+        <label className="block text-sm font-medium mb-1">Hint (Optional)</label>
+        <SimpleRichEditor
+          content={editingContent.data.hint || ''}
+          onChange={value => updateData({ hint: value })}
+          placeholder="Provide a helpful hint when students make incorrect matches..."
+          rows={2}
+          className="w-full"
+        />
+        <p className="text-xs text-gray-500 mt-1">
+          Shown when students make incorrect attempts (if enabled in feedback config)
+        </p>
+      </div>
+
       {/* Answer Mappings */}
       <div>
         <label className="block text-sm font-medium mb-3">Answer Mappings</label>
@@ -261,6 +276,7 @@ export const MatchingEditor: React.FC = () => {
                 editingContent.data.leftColumn.filter(item => item.value.trim() !== '').length && (
                 <div className="text-amber-600">⚠️ Some left items don&apos;t have answer mappings</div>
               )}
+              {editingContent.data.hint && <div className="text-green-600">✓ Has hint</div>}
             </div>
           </CardContent>
         </Card>

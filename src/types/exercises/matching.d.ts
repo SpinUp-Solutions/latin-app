@@ -11,5 +11,6 @@ export interface MatchingExercise extends BaseExercise {
     leftColumn: MatchingItem[];
     rightColumn: MatchingItem[];
     answers: Record<string, string>; // leftId -> rightId
+    hint?: string; // Optional hint shown on incorrect matches
   };
 }

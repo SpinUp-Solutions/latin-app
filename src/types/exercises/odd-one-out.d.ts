@@ -11,6 +11,7 @@ export interface OddOneOutExercise extends BaseExercise {
   data: {
     question: string;
     items: OddOneOutItem[];
+    hint?: string; // Optional hint shown on incorrect answers
     explanation?: string;
     requireExplanation?: boolean; // Whether student must provide their own explanation
   };

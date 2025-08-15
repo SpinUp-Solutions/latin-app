@@ -12,6 +12,7 @@ export interface VerbConjugationExercise extends BaseExercise {
     conjugationTask?: {
       instructions: string;
       answer: string;
+      hint?: string; // Optional hint for conjugation task
     };
     livingLatinPractice?: {
       examples: {
@@ -21,6 +22,7 @@ export interface VerbConjugationExercise extends BaseExercise {
       exercises: {
         english: string;
         answer: string;
+        hint?: string; // Optional hint for each living latin exercise
       }[];
     };
   };
