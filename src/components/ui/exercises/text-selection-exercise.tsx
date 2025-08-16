@@ -19,17 +19,17 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
   const [selectedWordIndex, setSelectedWordIndex] = useState<number | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const { currentIndex, isLastItem, nextItem } = useExerciseProgression({
+  const { currentIndex, isLastItem, autoAdvanceIfEnabled } = useExerciseProgression({
     totalItems: exercise.data.questions.length,
     feedbackConfig: exercise.feedbackConfig,
     onComplete,
   });
 
-  const { isCorrect, message, level, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
+  const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
     exercise.feedbackConfig
   );
 
-  const handleWordClick = (word: string, wordIndex: number) => {
+  const handleWordClick = (wordIndex: number) => {
     if (isProcessing) return; // Prevent multiple rapid clicks
 
     setSelectedWordIndex(wordIndex);
@@ -38,21 +38,16 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
 
     if (validation.isCorrect) {
       handleCorrect(isLastItem);
-
-      // Auto-advance logic based on configuration
-      if (exercise.feedbackConfig.progressionRules?.autoAdvance !== false) {
-        const progressionDelay = exercise.feedbackConfig.timingConfig?.progressionDelay || 1500;
-        setTimeout(() => {
-          nextItem();
-          setSelectedWordIndex(null);
-          reset();
-          setIsProcessing(false);
-        }, progressionDelay);
-      } else {
+      autoAdvanceIfEnabled(() => {
+        setSelectedWordIndex(null);
+        reset();
+        setIsProcessing(false);
+      });
+      if (exercise.feedbackConfig.progressionRules?.autoAdvance === false) {
         setIsProcessing(false);
       }
     } else {
-      handleIncorrect(validation.hint, validation.correctAnswer);
+      handleIncorrect();
       setIsProcessing(false);
     }
   };
@@ -99,7 +94,7 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
             {exercise.data.passage.split(' ').map((word, index) => (
               <span
                 key={index}
-                onClick={() => handleWordClick(word, index)}
+                onClick={() => handleWordClick(index)}
                 className={`cursor-pointer inline-block px-1 py-0.5 mx-0.5 rounded hover:bg-roman-parchment hover:text-roman-red transition-colors ${
                   selectedWordIndex === index
                     ? isCorrect
@@ -118,8 +113,9 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
           message={message}
           level={level}
           hint={currentQuestion.hint}
+          correctAnswer={exercise.data.passage.split(' ')[currentQuestion.correctWordIndex]}
           explanation={currentQuestion.explanation}
-          showExplanation={isCorrect === true && (exercise.feedbackConfig.successMessage?.showExplanation ?? true)}
+          showExplanation={showExplanation}
         />
       </div>
     </div>

@@ -13,6 +13,7 @@ import {
   getSuccessMessageWithDefaults,
   getProgressionRulesWithDefaults,
   getTimingConfigWithDefaults,
+  normalizeEscalationLevel,
 } from '@/src/utils/feedbackDefaults';
 import { SimpleRichEditor } from '../../core/simple-rich-editor';
 
@@ -58,7 +59,8 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({ feed
   };
 
   const updateEscalationLevel = (index: number, level: FeedbackLevel) => {
-    const newLevels = feedbackConfig.escalationLevels.map((l, i) => (i === index ? level : l));
+    const normalizedLevel = normalizeEscalationLevel(level);
+    const newLevels = feedbackConfig.escalationLevels.map((l, i) => (i === index ? normalizedLevel : l));
     updateEscalationLevels(newLevels);
   };
 
@@ -131,7 +133,7 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({ feed
                           <label className="flex items-center gap-2 text-xs">
                             <input
                               type="checkbox"
-                              checked={level.showHint || false}
+                              checked={!!level.showHint}
                               onChange={e => updateEscalationLevel(index, { ...level, showHint: e.target.checked })}
                             />
                             Show Hint
@@ -140,7 +142,7 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({ feed
                           <label className="flex items-center gap-2 text-xs">
                             <input
                               type="checkbox"
-                              checked={level.showAnswer || false}
+                              checked={!!level.showAnswer}
                               onChange={e => updateEscalationLevel(index, { ...level, showAnswer: e.target.checked })}
                             />
                             Show Answer

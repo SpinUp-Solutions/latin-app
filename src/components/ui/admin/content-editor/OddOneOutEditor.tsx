@@ -218,6 +218,20 @@ export const OddOneOutEditor: React.FC = () => {
 
           <div className="space-y-4">
             <div>
+              <label className="block text-sm font-medium mb-1">Hint (Optional)</label>
+              <SimpleRichEditor
+                content={editingContent.data.hint || ''}
+                onChange={value => updateData({ hint: value })}
+                placeholder="Provide a helpful hint when students make mistakes..."
+                rows={2}
+                className="w-full"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Shown when students make incorrect attempts (if enabled in feedback config)
+              </p>
+            </div>
+
+            <div>
               <label className="block text-sm font-medium mb-1">Explanation (Optional)</label>
               <SimpleRichEditor
                 content={editingContent.data.explanation || ''}

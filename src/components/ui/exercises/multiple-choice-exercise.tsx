@@ -20,7 +20,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const { isCorrect, message, level, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
+  const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
     exercise.feedbackConfig
   );
 
@@ -52,8 +52,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
         }, completionDelay);
       }
     } else {
-      const correctOption = exercise.data.options.find(opt => opt.id === validation.correctOptionId);
-      handleIncorrect(undefined, correctOption?.text);
+      handleIncorrect();
     }
 
     setIsProcessing(false);
@@ -62,7 +61,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
   const handleReset = () => {
     setSelectedOptionId(null);
     setHasSubmitted(false);
-    reset();
+    // Don't reset feedback state - preserve escalation level for next attempt
   };
 
   const getOptionClassName = (optionId: string) => {
@@ -71,11 +70,13 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
     }
 
     const option = exercise.data.options.find(opt => opt.id === optionId);
-    if (option?.isCorrect) {
+
+    if (selectedOptionId === optionId && option?.isCorrect) {
       return 'bg-green-50 border-green-300 text-green-900';
     } else if (selectedOptionId === optionId && !option?.isCorrect) {
       return 'bg-red-50 border-red-300 text-red-900';
     }
+    // All other options remain neutral
     return 'opacity-60';
   };
 
@@ -162,8 +163,10 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
           isCorrect={isCorrect}
           message={message}
           level={level}
+          hint={exercise.data.hint}
+          correctAnswer={exercise.data.options.find(opt => opt.isCorrect)?.text}
           explanation={exercise.data.explanation}
-          showExplanation={isCorrect === true && (exercise.feedbackConfig.successMessage?.showExplanation ?? true)}
+          showExplanation={showExplanation}
         />
       </div>
     </div>

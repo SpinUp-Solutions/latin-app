@@ -36,6 +36,7 @@ export const TextSelectionEditor: React.FC = () => {
       id: `q${Date.now()}`,
       text: '',
       correctWordIndex: 0,
+      hint: '',
       explanation: '',
     };
     const newQuestions = [...editingContent.data.questions, newQuestion];
@@ -223,6 +224,20 @@ export const TextSelectionEditor: React.FC = () => {
                   </div>
 
                   <div>
+                    <label className="block text-xs font-medium mb-1">Hint (optional)</label>
+                    <SimpleRichEditor
+                      content={question.hint || ''}
+                      onChange={value => updateQuestion(index, 'hint', value)}
+                      placeholder="Provide a helpful hint when students make mistakes..."
+                      rows={2}
+                      className="w-full text-sm"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Shown when students make incorrect attempts (if enabled in feedback config)
+                    </p>
+                  </div>
+
+                  <div>
                     <label className="block text-xs font-medium mb-1">Explanation (optional)</label>
                     <SimpleRichEditor
                       content={question.explanation || ''}
@@ -282,6 +297,10 @@ export const TextSelectionEditor: React.FC = () => {
               </div>
               <div>
                 <strong>Total Questions:</strong> {editingContent.data.questions.length}
+              </div>
+              <div>
+                <strong>Questions with hints:</strong>{' '}
+                {editingContent.data.questions.filter(q => q.hint && q.hint.trim() !== '').length}
               </div>
               <div>
                 <strong>Questions with explanations:</strong>{' '}

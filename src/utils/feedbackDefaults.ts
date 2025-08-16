@@ -1,4 +1,10 @@
-import type { FeedbackConfig, SuccessMessageConfig, ProgressionRules, TimingConfig } from '@/src/types/exercises/base';
+import type {
+  FeedbackConfig,
+  SuccessMessageConfig,
+  ProgressionRules,
+  TimingConfig,
+  FeedbackLevel,
+} from '@/src/types/exercises/base';
 
 export const FEEDBACK_DEFAULTS = {
   progressionDelay: 1500,
@@ -35,11 +41,33 @@ export function getTimingConfigWithDefaults(timing?: TimingConfig): TimingConfig
   };
 }
 
+export function normalizeEscalationLevel(level: FeedbackLevel): FeedbackLevel {
+  return {
+    ...level,
+    showHint: !!level.showHint,
+    showAnswer: !!level.showAnswer,
+  };
+}
+
 export function createDefaultFeedbackConfig(): FeedbackConfig {
   return {
     escalationLevels: [],
     successMessage: getSuccessMessageWithDefaults(),
     progressionRules: getProgressionRulesWithDefaults(),
     timingConfig: getTimingConfigWithDefaults(),
+  };
+}
+
+export function getEffectiveFeedbackConfig(config: FeedbackConfig): {
+  escalationLevels: FeedbackLevel[];
+  successMessage: SuccessMessageConfig;
+  progressionRules: ProgressionRules;
+  timingConfig: TimingConfig;
+} {
+  return {
+    escalationLevels: (config.escalationLevels ?? []).map(normalizeEscalationLevel),
+    successMessage: getSuccessMessageWithDefaults(config.successMessage),
+    progressionRules: getProgressionRulesWithDefaults(config.progressionRules),
+    timingConfig: getTimingConfigWithDefaults(config.timingConfig),
   };
 }

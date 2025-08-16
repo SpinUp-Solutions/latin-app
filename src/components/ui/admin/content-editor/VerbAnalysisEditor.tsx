@@ -19,6 +19,7 @@ export const VerbAnalysisEditor: React.FC = () => {
     wordIndex: number;
     position: { x: number; y: number };
     correctPronoun: string;
+    hint: string;
     explanation: string;
     isEditing: boolean;
   } | null>(null);
@@ -48,6 +49,7 @@ export const VerbAnalysisEditor: React.FC = () => {
         wordIndex,
         position: { x, y },
         correctPronoun: existingVerb?.correctPronoun || '',
+        hint: existingVerb?.hint || '',
         explanation: existingVerb?.explanation || '',
         isEditing: !!existingVerb,
       });
@@ -119,6 +121,7 @@ export const VerbAnalysisEditor: React.FC = () => {
           ? {
               wordIndex: wordPopup.wordIndex,
               correctPronoun: wordPopup.correctPronoun,
+              hint: wordPopup.hint || undefined,
               explanation: wordPopup.explanation || undefined,
             }
           : verb
@@ -129,6 +132,7 @@ export const VerbAnalysisEditor: React.FC = () => {
         {
           wordIndex: wordPopup.wordIndex,
           correctPronoun: wordPopup.correctPronoun,
+          hint: wordPopup.hint || undefined,
           explanation: wordPopup.explanation || undefined,
         },
       ];
@@ -299,6 +303,15 @@ export const VerbAnalysisEditor: React.FC = () => {
                   </div>
                 </div>
 
+                {verb.hint && (
+                  <div className="mt-3">
+                    <label className="block text-xs font-medium mb-1">Hint</label>
+                    <div className="w-full p-2 border rounded text-sm bg-gray-50">
+                      <SimpleRichDisplay content={verb.hint} />
+                    </div>
+                  </div>
+                )}
+
                 {verb.explanation && (
                   <div className="mt-3">
                     <label className="block text-xs font-medium mb-1">Explanation</label>
@@ -385,6 +398,17 @@ export const VerbAnalysisEditor: React.FC = () => {
                   placeholder="e.g., I, you, he/she/it..."
                   singleLine={true}
                   className="w-full"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium mb-1">Hint (optional)</label>
+                <SimpleRichEditor
+                  content={wordPopup.hint}
+                  onChange={value => setWordPopup(prev => (prev ? { ...prev, hint: value } : null))}
+                  placeholder="e.g., Look at the ending..."
+                  rows={2}
+                  className="w-full text-sm"
                 />
               </div>
 

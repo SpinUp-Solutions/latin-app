@@ -64,8 +64,7 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
         onComplete();
       }
     } else {
-      const feedback = `${result.accuracy.toFixed(1)}% correct (${result.totalCorrect}/${result.totalExpected})`;
-      handleIncorrect(feedback, 'Check your annotations and try again.');
+      handleIncorrect();
     }
   };
 

@@ -1,98 +1,124 @@
-import { useState, useCallback } from 'react';
-import type { FeedbackConfig, FeedbackLevel } from '@/src/types/exercises/base';
+import { useReducer, useCallback, useMemo } from 'react';
+import type { FeedbackConfig, FeedbackState, FeedbackAction } from '@/src/types/exercises/base';
+import { getEffectiveFeedbackConfig } from '@/src/utils/feedbackDefaults';
 
-interface FeedbackState {
-  isCorrect: boolean | null;
-  message: string;
-  level: FeedbackLevel | null;
-  attempt: number;
+// Initial state for the feedback state machine
+const createInitialState = (): FeedbackState => ({
+  phase: 'initial',
+  currentAttempt: 0,
+  activeLevel: null,
+  displayMessage: '',
+  shouldShowHint: false,
+  shouldShowAnswer: false,
+  shouldShowExplanation: false,
+});
+
+// Pure reducer function - handles all state transitions
+function feedbackReducer(state: FeedbackState, action: FeedbackAction): FeedbackState {
+  switch (action.type) {
+    case 'ANSWER_INCORRECT': {
+      const { escalationLevels } = action;
+      const nextAttempt = state.currentAttempt + 1;
+
+      // Get the escalation level for this attempt (clamped to available levels)
+      const levelIndex = Math.min(nextAttempt - 1, escalationLevels.length - 1);
+      const activeLevel = escalationLevels[levelIndex] || null;
+
+      return {
+        phase: 'attempting',
+        currentAttempt: nextAttempt,
+        activeLevel,
+        displayMessage: activeLevel?.message || '',
+        shouldShowHint: Boolean(activeLevel?.showHint),
+        shouldShowAnswer: Boolean(activeLevel?.showAnswer),
+        shouldShowExplanation: false,
+      };
+    }
+
+    case 'ANSWER_CORRECT': {
+      const { successMessage, showExplanation } = action;
+
+      return {
+        phase: 'succeeded',
+        currentAttempt: 0, // Reset for next item
+        activeLevel: null,
+        displayMessage: successMessage,
+        shouldShowHint: false,
+        shouldShowAnswer: false,
+        shouldShowExplanation: showExplanation,
+      };
+    }
+
+    case 'RESET': {
+      return createInitialState();
+    }
+
+    default:
+      return state;
+  }
 }
 
-interface FeedbackActions {
-  handleCorrect: (isLastItem?: boolean) => void;
-  handleIncorrect: (hint?: string, correctAnswer?: string) => void;
-  reset: () => void;
-  buildIncorrectMessage: (hint?: string, correctAnswer?: string) => string;
-  buildSuccessMessage: (isLastItem?: boolean) => string;
-}
-
-export function useExerciseFeedback(config: FeedbackConfig): FeedbackState & FeedbackActions {
-  const levels: FeedbackLevel[] = config.escalationLevels ?? [];
-  const [attempt, setAttempt] = useState(0);
-  const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
-  const [message, setMessage] = useState<string>('');
-
-  /** Returns the current escalation level. */
-  const level = levels[Math.min(attempt, levels.length - 1)] ?? null;
-
-  const buildIncorrectMessage = useCallback(
-    (hint?: string, correctAnswer?: string): string => {
-      if (!level) return '';
-
-      let message = level.message || '';
-
-      if (level.showHint && hint) {
-        message = message ? `${message} Hint: ${hint}` : `Hint: ${hint}`;
-      }
-
-      if (level.showAnswer && correctAnswer) {
-        message = `Incorrect. The correct answer is "${correctAnswer}"`;
-      }
-
-      return message;
-    },
-    [level]
-  );
+export function useExerciseFeedback(config: FeedbackConfig) {
+  const machineConfig = useMemo(() => getEffectiveFeedbackConfig(config), [config]);
+  const [state, dispatch] = useReducer(feedbackReducer, undefined, createInitialState);
 
   const buildSuccessMessage = useCallback(
     (isLastItem?: boolean): string => {
-      if (isLastItem && config.successMessage?.completion) {
-        return config.successMessage.completion;
+      const { successMessage } = machineConfig;
+
+      if (isLastItem && successMessage?.completion) {
+        return successMessage.completion;
       }
 
-      return config.successMessage?.advance || config.successMessage?.default || '';
+      return successMessage?.advance || successMessage?.default || 'Correct!';
     },
-    [config.successMessage]
+    [machineConfig]
   );
 
-  /** Call when the user submits a CORRECT answer. */
   const handleCorrect = useCallback(
     (isLastItem?: boolean) => {
-      setIsCorrect(true);
-      setMessage(buildSuccessMessage(isLastItem));
+      const successMessage = buildSuccessMessage(isLastItem);
+      const showExplanation = Boolean(machineConfig.successMessage?.showExplanation);
 
-      if (config.progressionRules?.resetOnCorrect !== false) {
-        setAttempt(0);
-      }
+      dispatch({
+        type: 'ANSWER_CORRECT',
+        successMessage,
+        showExplanation,
+        isLastItem,
+      });
     },
-    [buildSuccessMessage, config.progressionRules?.resetOnCorrect]
+    [buildSuccessMessage, machineConfig.successMessage?.showExplanation]
   );
 
-  /** Call when the user submits a WRONG answer. */
-  const handleIncorrect = useCallback(
-    (hint?: string, correctAnswer?: string) => {
-      setIsCorrect(false);
-      setMessage(buildIncorrectMessage(hint, correctAnswer));
-      setAttempt(a => a + 1);
-    },
-    [buildIncorrectMessage]
-  );
+  const handleIncorrect = useCallback(() => {
+    dispatch({
+      type: 'ANSWER_INCORRECT',
+      escalationLevels: machineConfig.escalationLevels,
+    });
+  }, [machineConfig.escalationLevels]);
 
   const reset = useCallback(() => {
-    setAttempt(0);
-    setIsCorrect(null);
-    setMessage('');
+    dispatch({ type: 'RESET' });
   }, []);
 
+  // Derived values for backward compatibility
+  const isCorrect = state.phase === 'succeeded' ? true : state.phase === 'attempting' ? false : null;
+
+  const level = state.activeLevel;
+  const message = state.displayMessage;
+  const showExplanation = state.shouldShowExplanation;
+
   return {
+    // New state machine interface
+    feedbackState: state,
+
+    // Backward compatible interface
     level,
-    attempt,
     isCorrect,
     message,
+    showExplanation,
     handleCorrect,
     handleIncorrect,
     reset,
-    buildIncorrectMessage,
-    buildSuccessMessage,
   };
 }

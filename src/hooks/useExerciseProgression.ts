@@ -1,5 +1,6 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import type { FeedbackConfig } from '@/src/types/exercises/base';
+import { getEffectiveFeedbackConfig } from '@/src/utils/feedbackDefaults';
 
 interface ExerciseProgressionOptions {
   totalItems: number;
@@ -16,6 +17,7 @@ interface ExerciseProgressionActions {
   nextItem: () => void;
   reset: () => void;
   goToItem: (index: number) => void;
+  autoAdvanceIfEnabled: (afterAdvance: () => void) => void;
 }
 
 export function useExerciseProgression({
@@ -24,6 +26,10 @@ export function useExerciseProgression({
   onComplete,
 }: ExerciseProgressionOptions): ExerciseProgressionState & ExerciseProgressionActions {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const { progressionRules, timingConfig } = useMemo(
+    () => getEffectiveFeedbackConfig(feedbackConfig),
+    [feedbackConfig]
+  );
 
   const isLastItem = currentIndex >= totalItems - 1;
 
@@ -32,18 +38,12 @@ export function useExerciseProgression({
       setCurrentIndex(prev => prev + 1);
     } else if (onComplete) {
       // Auto-advance logic based on configuration
-      if (feedbackConfig.progressionRules?.autoAdvance !== false) {
-        const delay = feedbackConfig.timingConfig?.nextExerciseDelay || 2500;
+      if (progressionRules?.autoAdvance !== false) {
+        const delay = timingConfig?.nextExerciseDelay || 2500;
         setTimeout(onComplete, delay);
       }
     }
-  }, [
-    currentIndex,
-    totalItems,
-    onComplete,
-    feedbackConfig.progressionRules?.autoAdvance,
-    feedbackConfig.timingConfig?.nextExerciseDelay,
-  ]);
+  }, [currentIndex, totalItems, onComplete, progressionRules?.autoAdvance, timingConfig?.nextExerciseDelay]);
 
   const reset = useCallback(() => {
     setCurrentIndex(0);
@@ -64,5 +64,14 @@ export function useExerciseProgression({
     nextItem,
     reset,
     goToItem,
+    autoAdvanceIfEnabled: (afterAdvance: () => void) => {
+      if (progressionRules?.autoAdvance !== false) {
+        const delay = timingConfig?.progressionDelay || 1500;
+        setTimeout(() => {
+          nextItem();
+          afterAdvance();
+        }, delay);
+      }
+    },
   };
 }

@@ -19,13 +19,13 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
   const [userAnswer, setUserAnswer] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const { currentIndex, isLastItem, nextItem } = useExerciseProgression({
+  const { currentIndex, isLastItem, autoAdvanceIfEnabled } = useExerciseProgression({
     totalItems: exercise.data.items.length,
     feedbackConfig: exercise.feedbackConfig,
     onComplete,
   });
 
-  const { isCorrect, message, level, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
+  const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
     exercise.feedbackConfig
   );
 
@@ -37,30 +37,22 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
 
     if (validation.isCorrect) {
       handleCorrect(isLastItem);
-      // Auto-advance logic based on configuration
-      if (exercise.feedbackConfig.progressionRules?.autoAdvance !== false) {
-        const progressionDelay = exercise.feedbackConfig.timingConfig?.progressionDelay || 1500;
-        setTimeout(() => {
-          nextItem();
-          setUserAnswer('');
-          reset();
-          setIsProcessing(false);
-        }, progressionDelay);
-      } else {
+      autoAdvanceIfEnabled(() => {
+        setUserAnswer('');
+        reset();
+        setIsProcessing(false);
+      });
+      if (exercise.feedbackConfig.progressionRules?.autoAdvance === false) {
         setIsProcessing(false);
       }
     } else {
-      handleIncorrect(validation.hint, validation.correctAnswer);
+      handleIncorrect();
       setIsProcessing(false);
     }
   };
 
   const handleAnswerChange = (value: string) => {
     setUserAnswer(value);
-    // Reset feedback when user types
-    if (isCorrect !== null) {
-      reset();
-    }
   };
 
   const currentItem = exercise.data.items[currentIndex];
@@ -109,8 +101,9 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
           message={message}
           level={level}
           hint={currentItem.hint}
+          correctAnswer={currentItem.answer}
           explanation={currentItem.explanation}
-          showExplanation={isCorrect === true && (exercise.feedbackConfig.successMessage?.showExplanation ?? true)}
+          showExplanation={showExplanation}
         />
       </div>
     </div>
