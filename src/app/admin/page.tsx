@@ -105,6 +105,12 @@ export default function AdminPage() {
                     View All Words
                   </Link>
                 </Button>
+                <Button asChild className="w-full justify-start" variant="outline">
+                  <Link href="/admin/vocabulary-pools">
+                    <BookOpen className="h-4 w-4 mr-2" />
+                    Vocabulary Pools
+                  </Link>
+                </Button>
               </div>
             </RomanCardContent>
           </RomanCard>
