@@ -33,11 +33,11 @@ export default function AddWordsPage({ params }: AddWordsPageProps) {
 
   if (error || !pool) {
     return (
-      <PoolNotFoundPage 
-        poolId={poolId} 
+      <PoolNotFoundPage
+        poolId={poolId}
         backHref={`/admin/vocabulary-pools/${poolId}/words`}
         backLabel="Back to Words"
-        error={error} 
+        error={error}
       />
     );
   }
@@ -83,7 +83,7 @@ export default function AddWordsPage({ params }: AddWordsPageProps) {
               <Library className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-xl font-serif tracking-wide">Add Words to "{pool.name}"</h1>
+              <h1 className="text-xl font-serif tracking-wide">Add Words to &ldquo;{pool.name}&rdquo;</h1>
               <p className="text-sm text-roman-stone">Select words to add to this vocabulary pool</p>
             </div>
           </div>

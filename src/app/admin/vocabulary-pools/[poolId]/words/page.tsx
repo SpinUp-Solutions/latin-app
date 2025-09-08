@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Button } from '@/src/components/ui/button';
 import { Badge } from '@/src/components/ui/badge';
 import { Input } from '@/src/components/ui/input';
@@ -25,7 +24,6 @@ interface WordsPageProps {
 
 export default function WordsPage({ params }: WordsPageProps) {
   const { poolId } = params;
-  const router = useRouter();
   const { pool, loading, error, removeWords } = useVocabularyPool(poolId);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -39,11 +37,11 @@ export default function WordsPage({ params }: WordsPageProps) {
 
   if (error || !pool) {
     return (
-      <PoolNotFoundPage 
-        poolId={poolId} 
+      <PoolNotFoundPage
+        poolId={poolId}
         backHref={`/admin/vocabulary-pools/${poolId}`}
         backLabel="Back to Pool"
-        error={error} 
+        error={error}
       />
     );
   }
