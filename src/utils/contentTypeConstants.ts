@@ -3,6 +3,7 @@ import {
   Lightbulb,
   Table,
   Book,
+  Library,
   Target,
   Search,
   Zap,
@@ -18,6 +19,7 @@ export const CONTENT_TYPES = [
   { type: 'emphasis', icon: Lightbulb, label: 'Emphasis' },
   { type: 'table', icon: Table, label: 'Table' },
   { type: 'vocabulary', icon: Book, label: 'Vocabulary' },
+  { type: 'vocabulary-pool', icon: Library, label: 'Vocabulary Pool' },
 ] as const;
 
 export const EXERCISE_TYPES = [
@@ -35,4 +37,5 @@ export const EXERCISE_TYPES = [
   { type: 'emphasis', icon: Lightbulb, label: 'Emphasis' },
   { type: 'table', icon: Table, label: 'Table' },
   { type: 'vocabulary', icon: Book, label: 'Vocabulary' },
+  { type: 'vocabulary-pool', icon: Library, label: 'Vocabulary Pool' },
 ] as const;

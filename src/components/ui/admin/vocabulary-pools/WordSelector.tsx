@@ -20,7 +20,7 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
   selectedWordIds,
   onSelectionChange,
   excludeWordIds = [],
-  maxSelection
+  maxSelection,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [wordTypeFilter, setWordTypeFilter] = useState('all');
@@ -34,11 +34,11 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
 
     try {
       const params = new URLSearchParams({ limit: '100' });
-      
+
       if (searchQuery.trim()) {
         params.append('search', searchQuery.trim());
       }
-      
+
       if (wordTypeFilter && wordTypeFilter !== 'all') {
         params.append('wordType', wordTypeFilter);
       }
@@ -60,12 +60,10 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
 
   useEffect(() => {
     searchWords();
-  }, [searchQuery, wordTypeFilter]);
+  }, [searchQuery, wordTypeFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filteredWords = useMemo(() => {
-    return availableWords.filter(word => 
-      !excludeWordIds.includes(word.id) && !selectedWordIds.includes(word.id)
-    );
+    return availableWords.filter(word => !excludeWordIds.includes(word.id) && !selectedWordIds.includes(word.id));
   }, [availableWords, excludeWordIds, selectedWordIds]);
 
   const selectedWords = useMemo(() => {
@@ -83,7 +81,6 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
     onSelectionChange(selectedWordIds.filter(id => id !== wordId));
   };
 
-
   return (
     <div className="space-y-6">
       {/* Search Section */}
@@ -91,7 +88,7 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
         <RomanCardContent className="p-4">
           <div className="space-y-4">
             <Label className="text-base font-medium">Search Words</Label>
-            
+
             <div className="space-y-4">
               <div className="flex gap-4">
                 <div className="flex-1 relative">
@@ -99,11 +96,11 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
                   <Input
                     placeholder="Search by word or translation..."
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={e => setSearchQuery(e.target.value)}
                     className="pl-10"
                   />
                 </div>
-                
+
                 <Select value={wordTypeFilter} onValueChange={setWordTypeFilter}>
                   <SelectTrigger className="w-48">
                     <SelectValue placeholder="All Types" />
@@ -137,9 +134,7 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
         <RomanCardContent className="p-4">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <Label className="text-base font-medium">
-                Available Words
-              </Label>
+              <Label className="text-base font-medium">Available Words</Label>
               {maxSelection && (
                 <Badge variant="outline">
                   {selectedWordIds.length} / {maxSelection} selected
@@ -162,8 +157,7 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
                   <Card
                     key={word.id}
                     className="cursor-pointer hover:bg-gray-50 transition-colors"
-                    onClick={() => handleAddWord(word.id)}
-                  >
+                    onClick={() => handleAddWord(word.id)}>
                     <CardContent className="p-3">
                       <div className="flex items-center justify-between">
                         <div className="flex-1 min-w-0">
@@ -176,12 +170,11 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={(e) => {
+                          onClick={e => {
                             e.stopPropagation();
                             handleAddWord(word.id);
                           }}
-                          disabled={maxSelection ? selectedWordIds.length >= maxSelection : false}
-                        >
+                          disabled={maxSelection ? selectedWordIds.length >= maxSelection : false}>
                           <Plus className="h-3 w-3" />
                         </Button>
                       </div>
@@ -199,10 +192,8 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
         <RomanCard>
           <RomanCardContent className="p-4">
             <div className="space-y-4">
-              <Label className="text-base font-medium">
-                Selected Words ({selectedWordIds.length})
-              </Label>
-              
+              <Label className="text-base font-medium">Selected Words ({selectedWordIds.length})</Label>
+
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-48 overflow-y-auto">
                 {selectedWords.map(word => (
                   <Card key={word.id} className="bg-blue-50 border-blue-200">
@@ -219,8 +210,7 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
                           size="sm"
                           variant="ghost"
                           onClick={() => handleRemoveWord(word.id)}
-                          className="text-red-600 hover:text-red-700"
-                        >
+                          className="text-red-600 hover:text-red-700">
                           <X className="h-3 w-3" />
                         </Button>
                       </div>

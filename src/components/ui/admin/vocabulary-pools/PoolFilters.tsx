@@ -18,11 +18,7 @@ interface PoolFiltersProps {
   loading: boolean;
 }
 
-export const PoolFilters: React.FC<PoolFiltersProps> = ({
-  filters,
-  onFiltersChange,
-  loading,
-}) => {
+export const PoolFilters: React.FC<PoolFiltersProps> = ({ filters, onFiltersChange, loading }) => {
   const hasActiveFilters = filters.search || filters.difficulty || filters.isActive !== null;
 
   const handleReset = () => {
@@ -43,12 +39,7 @@ export const PoolFilters: React.FC<PoolFiltersProps> = ({
           <Filter className="h-4 w-4" />
           <h3 className="text-sm font-medium">Filters</h3>
           {hasActiveFilters && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleReset}
-              className="ml-auto"
-            >
+            <Button variant="outline" size="sm" onClick={handleReset} className="ml-auto">
               <RotateCcw className="h-3 w-3 mr-1" />
               Reset
             </Button>
@@ -62,7 +53,7 @@ export const PoolFilters: React.FC<PoolFiltersProps> = ({
             <Input
               placeholder="Search pools..."
               value={filters.search}
-              onChange={(e) => onFiltersChange({ search: e.target.value })}
+              onChange={e => onFiltersChange({ search: e.target.value })}
               className="pl-10"
               disabled={loading}
             />
@@ -70,10 +61,9 @@ export const PoolFilters: React.FC<PoolFiltersProps> = ({
 
           {/* Difficulty */}
           <Select
-            value={filters.difficulty || "all"}
-            onValueChange={(value) => onFiltersChange({ difficulty: value === "all" ? "" : value })}
-            disabled={loading}
-          >
+            value={filters.difficulty || 'all'}
+            onValueChange={value => onFiltersChange({ difficulty: value === 'all' ? '' : value })}
+            disabled={loading}>
             <SelectTrigger>
               <SelectValue placeholder="All Difficulties" />
             </SelectTrigger>
@@ -88,13 +78,12 @@ export const PoolFilters: React.FC<PoolFiltersProps> = ({
           {/* Status */}
           <Select
             value={filters.isActive === null ? 'all' : filters.isActive.toString()}
-            onValueChange={(value) => 
-              onFiltersChange({ 
-                isActive: value === 'all' ? null : value === 'true' 
+            onValueChange={value =>
+              onFiltersChange({
+                isActive: value === 'all' ? null : value === 'true',
               })
             }
-            disabled={loading}
-          >
+            disabled={loading}>
             <SelectTrigger>
               <SelectValue placeholder="All Status" />
             </SelectTrigger>
@@ -108,12 +97,11 @@ export const PoolFilters: React.FC<PoolFiltersProps> = ({
           {/* Sort */}
           <Select
             value={`${filters.sortBy}-${filters.sortOrder}`}
-            onValueChange={(value) => {
+            onValueChange={value => {
               const [sortBy, sortOrder] = value.split('-') as ['name' | 'createdAt' | 'wordCount', 'asc' | 'desc'];
               onFiltersChange({ sortBy, sortOrder });
             }}
-            disabled={loading}
-          >
+            disabled={loading}>
             <SelectTrigger>
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>

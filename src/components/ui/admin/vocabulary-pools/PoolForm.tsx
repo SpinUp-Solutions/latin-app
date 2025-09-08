@@ -18,13 +18,7 @@ interface PoolFormProps {
   mode: 'create' | 'edit';
 }
 
-export const PoolForm: React.FC<PoolFormProps> = ({
-  initialData,
-  onSubmit,
-  onCancel,
-  isLoading,
-  mode
-}) => {
+export const PoolForm: React.FC<PoolFormProps> = ({ initialData, onSubmit, onCancel, isLoading, mode }) => {
   const [formData, setFormData] = useState({
     name: initialData?.name || '',
     description: initialData?.description || '',
@@ -78,7 +72,7 @@ export const PoolForm: React.FC<PoolFormProps> = ({
     if (tag && !formData.tags.includes(tag)) {
       setFormData(prev => ({
         ...prev,
-        tags: [...prev.tags, tag]
+        tags: [...prev.tags, tag],
       }));
       setNewTag('');
     }
@@ -87,7 +81,7 @@ export const PoolForm: React.FC<PoolFormProps> = ({
   const handleRemoveTag = (tagToRemove: string) => {
     setFormData(prev => ({
       ...prev,
-      tags: prev.tags.filter(tag => tag !== tagToRemove)
+      tags: prev.tags.filter(tag => tag !== tagToRemove),
     }));
   };
 
@@ -107,7 +101,7 @@ export const PoolForm: React.FC<PoolFormProps> = ({
             <Input
               id="name"
               value={formData.name}
-              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+              onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
               placeholder="Enter pool name (e.g., Lesson 1 Core Vocabulary)"
               className={errors.name ? 'border-red-500' : ''}
             />
@@ -119,7 +113,7 @@ export const PoolForm: React.FC<PoolFormProps> = ({
             <Textarea
               id="description"
               value={formData.description}
-              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
               placeholder="Describe the purpose and content of this vocabulary pool"
               rows={3}
               className={errors.description ? 'border-red-500' : ''}
@@ -131,8 +125,9 @@ export const PoolForm: React.FC<PoolFormProps> = ({
             <Label htmlFor="difficulty">Difficulty Level</Label>
             <Select
               value={formData.difficulty}
-              onValueChange={(value) => setFormData(prev => ({ ...prev, difficulty: value as 'beginner' | 'intermediate' | 'advanced' }))}
-            >
+              onValueChange={value =>
+                setFormData(prev => ({ ...prev, difficulty: value as 'beginner' | 'intermediate' | 'advanced' }))
+              }>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -149,31 +144,22 @@ export const PoolForm: React.FC<PoolFormProps> = ({
             <div className="flex gap-2">
               <Input
                 value={newTag}
-                onChange={(e) => setNewTag(e.target.value)}
+                onChange={e => setNewTag(e.target.value)}
                 onKeyPress={handleKeyPress}
                 placeholder="Add tag (e.g., nouns, family, animals)"
                 className="flex-1"
               />
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleAddTag}
-                disabled={!newTag.trim()}
-              >
+              <Button type="button" variant="outline" onClick={handleAddTag} disabled={!newTag.trim()}>
                 Add
               </Button>
             </div>
-            
+
             {formData.tags.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-2">
-                {formData.tags.map((tag) => (
+                {formData.tags.map(tag => (
                   <Badge key={tag} variant="secondary" className="flex items-center gap-1">
                     {tag}
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveTag(tag)}
-                      className="hover:text-red-600"
-                    >
+                    <button type="button" onClick={() => handleRemoveTag(tag)} className="hover:text-red-600">
                       <X className="h-3 w-3" />
                     </button>
                   </Badge>
@@ -191,33 +177,27 @@ export const PoolForm: React.FC<PoolFormProps> = ({
             <p className="text-sm text-gray-600 mb-4">
               You can add words now or add them later after creating the pool.
             </p>
-            
+
             <WordSelector
               selectedWordIds={formData.wordDocIds}
-              onSelectionChange={(wordIds) => setFormData(prev => ({ ...prev, wordDocIds: wordIds }))}
+              onSelectionChange={wordIds => setFormData(prev => ({ ...prev, wordDocIds: wordIds }))}
             />
           </div>
 
           <div className="flex justify-end gap-4 pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onCancel}
-              disabled={isLoading}
-            >
+            <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
               Cancel
             </Button>
-            <Button
-              type="submit"
-              disabled={isLoading}
-            >
+            <Button type="submit" disabled={isLoading}>
               {isLoading ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                   {mode === 'create' ? 'Creating...' : 'Saving...'}
                 </>
+              ) : mode === 'create' ? (
+                'Create Pool'
               ) : (
-                mode === 'create' ? 'Create Pool' : 'Save Changes'
+                'Save Changes'
               )}
             </Button>
           </div>

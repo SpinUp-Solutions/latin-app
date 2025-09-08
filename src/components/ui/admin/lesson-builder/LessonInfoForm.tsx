@@ -65,9 +65,9 @@ export const LessonInfoForm: React.FC<LessonInfoFormProps> = ({ lesson, onUpdate
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <VocabularyPoolSelector 
+          <VocabularyPoolSelector
             selectedPoolId={lesson.vocabulary_pool}
-            onPoolSelect={(poolId) => onUpdateInfo({ vocabulary_pool: poolId })}
+            onPoolSelect={poolId => onUpdateInfo({ vocabulary_pool: poolId })}
           />
         </CardContent>
       </Card>

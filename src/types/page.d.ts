@@ -1,5 +1,5 @@
 import { TextContent, EmphasisContent, TableContent } from './content';
-import { VocabularyContent } from './vocabulary';
+import { VocabularyContent, VocabularyPoolContent } from './vocabulary';
 import {
   MatchingExercise,
   FillExercise,
@@ -16,6 +16,7 @@ export type RenderableContentItem =
   | EmphasisContent
   | TableContent
   | VocabularyContent
+  | VocabularyPoolContent
   | MatchingExercise
   | FillExercise
   | TextSelectionExercise

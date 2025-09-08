@@ -82,7 +82,10 @@ const initialState: VocabularyPoolState = {
 // Async thunks
 export const loadPools = createAsyncThunk(
   'vocabularyPools/loadPools',
-  async ({ reset = false, filters }: { reset?: boolean; filters?: Record<string, unknown> }, { getState, rejectWithValue }) => {
+  async (
+    { reset = false, filters }: { reset?: boolean; filters?: Record<string, unknown> },
+    { getState, rejectWithValue }
+  ) => {
     try {
       const state = getState() as { vocabularyPools: VocabularyPoolState };
 

@@ -10,7 +10,7 @@ import VerbConjugationExercise from '../exercises/verb-conjugation-exercise';
 import { SentenceDiagrammingExercise } from '../exercises/sentence-diagramming-exercise';
 import MultipleChoiceExercise from '../exercises/multiple-choice-exercise';
 import OddOneOutExercise from '../exercises/odd-one-out-exercise';
-import { ContentItem, TextContent, TableContent, VocabularyContent } from '@/src/types/lesson';
+import { ContentItem, TextContent, TableContent, VocabularyContent, VocabularyPoolContent } from '@/src/types/lesson';
 import {
   MatchingExercise,
   FillExercise as FillExerciseType,
@@ -22,6 +22,7 @@ import {
   OddOneOutExercise as OddOneOutExerciseType,
 } from '@/src/types/exercise';
 import { VocabularyViewer } from './VocabularyViewer';
+import { VocabularyPoolViewer } from './VocabularyPoolViewer';
 import TextComponent from './text-component';
 
 interface ContentRendererProps {
@@ -59,6 +60,9 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onCom
 
     case 'vocabulary':
       return <VocabularyViewer content={content as VocabularyContent} />;
+
+    case 'vocabulary-pool':
+      return <VocabularyPoolViewer content={content as VocabularyPoolContent} />;
 
     case 'matching':
       const matchingExercise = content as MatchingExercise;

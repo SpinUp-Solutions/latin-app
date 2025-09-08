@@ -14,12 +14,12 @@ interface PoolWordListProps {
   onRemoveWord?: (wordId: string) => void;
 }
 
-export const PoolWordList: React.FC<PoolWordListProps> = ({ 
-  words, 
-  poolId, 
-  compact = false, 
+export const PoolWordList: React.FC<PoolWordListProps> = ({
+  words,
+  poolId, // eslint-disable-line @typescript-eslint/no-unused-vars
+  compact = false,
   showRemove = false,
-  onRemoveWord 
+  onRemoveWord,
 }) => {
   if (words.length === 0) {
     return (
@@ -34,15 +34,14 @@ export const PoolWordList: React.FC<PoolWordListProps> = ({
   return (
     <RomanCard>
       <RomanCardContent className="p-4">
-        <div className={`grid gap-3 ${
-          compact 
-            ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' 
-            : 'grid-cols-1 md:grid-cols-2'
-        }`}>
+        <div
+          className={`grid gap-3 ${
+            compact ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1 md:grid-cols-2'
+          }`}>
           {words.map(word => (
-            <WordCard 
-              key={word.id} 
-              word={word} 
+            <WordCard
+              key={word.id}
+              word={word}
               compact={compact}
               showRemove={showRemove}
               onRemove={() => onRemoveWord?.(word.id)}
@@ -64,30 +63,25 @@ interface WordCardProps {
 const WordCard: React.FC<WordCardProps> = ({ word, compact, showRemove, onRemove }) => {
   return (
     <Card className="hover:bg-gray-50 transition-colors">
-      <CardContent className={compact ? "p-3" : "p-4"}>
+      <CardContent className={compact ? 'p-3' : 'p-4'}>
         <div className="space-y-2">
           <div className="flex items-start justify-between">
             <div className="flex-1 min-w-0">
-              <h4 className={`font-medium truncate ${compact ? 'text-sm' : ''}`}>
-                {word.word}
-              </h4>
-              <p className={`text-gray-600 truncate ${compact ? 'text-xs' : 'text-sm'}`}>
-                {word.translation}
-              </p>
+              <h4 className={`font-medium truncate ${compact ? 'text-sm' : ''}`}>{word.word}</h4>
+              <p className={`text-gray-600 truncate ${compact ? 'text-xs' : 'text-sm'}`}>{word.translation}</p>
             </div>
-            
+
             {showRemove && onRemove && (
               <Button
                 size="sm"
                 variant="ghost"
                 onClick={onRemove}
-                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-              >
+                className="text-red-600 hover:text-red-700 hover:bg-red-50">
                 <X className="h-3 w-3" />
               </Button>
             )}
           </div>
-          
+
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="text-xs">
               {word.wordType}
@@ -98,12 +92,8 @@ const WordCard: React.FC<WordCardProps> = ({ word, compact, showRemove, onRemove
               </Badge>
             )}
           </div>
-          
-          {!compact && word.section && (
-            <div className="text-xs text-gray-500">
-              Section: {word.section}
-            </div>
-          )}
+
+          {!compact && word.section && <div className="text-xs text-gray-500">Section: {word.section}</div>}
         </div>
       </CardContent>
     </Card>

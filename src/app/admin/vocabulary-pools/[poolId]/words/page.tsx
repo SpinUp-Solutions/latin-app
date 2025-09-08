@@ -7,14 +7,14 @@ import { Badge } from '@/src/components/ui/badge';
 import { Input } from '@/src/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { Card, CardContent } from '@/src/components/ui/card';
-import { Plus, Search, Trash2, BookOpen } from 'lucide-react';
+import { Plus, Search, Trash2, BookOpen, ArrowLeft, Library } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
 
 import { useVocabularyPool } from '@/src/hooks/useVocabularyPool';
-import { PoolHeader } from '@/src/components/ui/admin/vocabulary-pools/PoolHeader';
-import { PoolNavigation } from '@/src/components/ui/admin/vocabulary-pools/PoolNavigation';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
+import { PoolNotFoundPage } from '@/src/components/ui/admin/vocabulary-pools/PoolNotFoundPage';
+import { AdminLoadingPage } from '@/src/components/ui/admin/AdminLoadingPage';
 import type { Word } from '@/src/types/admin-vocabulary';
 
 interface WordsPageProps {
@@ -27,44 +27,35 @@ export default function WordsPage({ params }: WordsPageProps) {
   const { poolId } = params;
   const router = useRouter();
   const { pool, loading, error, removeWords } = useVocabularyPool(poolId);
-  
+
   const [searchQuery, setSearchQuery] = useState('');
   const [wordTypeFilter, setWordTypeFilter] = useState('all');
   const [selectedWordIds, setSelectedWordIds] = useState<string[]>([]);
   const [removing, setRemoving] = useState(false);
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-roman-marble">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>
-      </div>
-    );
+    return <AdminLoadingPage />;
   }
 
   if (error || !pool) {
     return (
-      <div className="min-h-screen bg-roman-marble">
-        <PoolHeader
-          title="Pool Not Found"
-          navigation={<PoolNavigation currentPage="words" poolId={poolId} />}
-        />
-        <div className="container mx-auto py-6 px-4 text-center">
-          <p className="text-red-600 mb-4">{error || 'Pool not found'}</p>
-          <Button onClick={() => router.push('/admin/vocabulary-pools')}>
-            Back to Pools
-          </Button>
-        </div>
-      </div>
+      <PoolNotFoundPage 
+        poolId={poolId} 
+        backHref={`/admin/vocabulary-pools/${poolId}`}
+        backLabel="Back to Pool"
+        error={error} 
+      />
     );
   }
 
   const filteredWords = pool.words.filter(word => {
-    const matchesSearch = !searchQuery || 
+    const matchesSearch =
+      !searchQuery ||
       word.word.toLowerCase().includes(searchQuery.toLowerCase()) ||
       word.translation.toLowerCase().includes(searchQuery.toLowerCase());
-    
+
     const matchesType = wordTypeFilter === 'all' || word.wordType === wordTypeFilter;
-    
+
     return matchesSearch && matchesType;
   });
 
@@ -86,7 +77,7 @@ export default function WordsPage({ params }: WordsPageProps) {
 
   const handleRemoveSelected = async () => {
     if (selectedWordIds.length === 0) return;
-    
+
     const confirmed = confirm(`Remove ${selectedWordIds.length} word(s) from this pool?`);
     if (!confirmed) return;
 
@@ -108,25 +99,31 @@ export default function WordsPage({ params }: WordsPageProps) {
 
   return (
     <div className="min-h-screen bg-roman-marble">
-      <PoolHeader
-        title={`Manage Words - ${pool.name}`}
-        subtitle={`${pool.words.length} words in this pool`}
-        navigation={
-          <PoolNavigation 
-            currentPage="words" 
-            poolId={poolId} 
-            poolName={pool.name}
-          />
-        }
-        actions={
-          <Button asChild>
-            <Link href={`/admin/vocabulary-pools/${poolId}/words/add`}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Words
+      <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button asChild variant="ghost">
+            <Link href={`/admin/vocabulary-pools/${poolId}`}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Pool
             </Link>
           </Button>
-        }
-      />
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 rounded-full bg-roman-red flex items-center justify-center text-white font-serif">
+              <Library className="h-5 w-5" />
+            </div>
+            <div>
+              <h1 className="text-xl font-serif tracking-wide">Manage Words - {pool.name}</h1>
+              <p className="text-sm text-roman-stone">{pool.words.length} words in this pool</p>
+            </div>
+          </div>
+        </div>
+        <Button asChild>
+          <Link href={`/admin/vocabulary-pools/${poolId}/words/add`}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Words
+          </Link>
+        </Button>
+      </header>
 
       <main className="container mx-auto py-6 px-4 space-y-6">
         {/* Search and Filters */}
@@ -138,11 +135,11 @@ export default function WordsPage({ params }: WordsPageProps) {
                 <Input
                   placeholder="Search words..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={e => setSearchQuery(e.target.value)}
                   className="pl-10"
                 />
               </div>
-              
+
               <Select value={wordTypeFilter} onValueChange={setWordTypeFilter}>
                 <SelectTrigger className="w-48">
                   <SelectValue placeholder="All Types" />
@@ -169,26 +166,17 @@ export default function WordsPage({ params }: WordsPageProps) {
             <RomanCardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleSelectAll}
-                  >
+                  <Button variant="outline" size="sm" onClick={handleSelectAll}>
                     {selectedWordIds.length === filteredWords.length ? 'Deselect All' : 'Select All'}
                   </Button>
-                  
+
                   <span className="text-sm text-gray-600">
                     {selectedWordIds.length > 0 && `${selectedWordIds.length} selected`}
                   </span>
                 </div>
 
                 {selectedWordIds.length > 0 && (
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={handleRemoveSelected}
-                    disabled={removing}
-                  >
+                  <Button variant="destructive" size="sm" onClick={handleRemoveSelected} disabled={removing}>
                     <Trash2 className="h-4 w-4 mr-2" />
                     {removing ? 'Removing...' : `Remove Selected (${selectedWordIds.length})`}
                   </Button>
@@ -203,9 +191,7 @@ export default function WordsPage({ params }: WordsPageProps) {
           <RomanCardContent className="p-4">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-serif">
-                  Words ({filteredWords.length})
-                </h3>
+                <h3 className="text-lg font-serif">Words ({filteredWords.length})</h3>
               </div>
 
               {filteredWords.length === 0 ? (
@@ -228,7 +214,7 @@ export default function WordsPage({ params }: WordsPageProps) {
                       key={word.id}
                       word={word}
                       selected={selectedWordIds.includes(word.id)}
-                      onSelect={(selected) => handleSelectWord(word.id, selected)}
+                      onSelect={selected => handleSelectWord(word.id, selected)}
                     />
                   ))}
                 </div>
@@ -249,12 +235,11 @@ interface WordCardProps {
 
 const WordCard: React.FC<WordCardProps> = ({ word, selected, onSelect }) => {
   return (
-    <Card 
+    <Card
       className={`cursor-pointer transition-colors ${
         selected ? 'ring-2 ring-roman-red bg-blue-50' : 'hover:bg-gray-50'
       }`}
-      onClick={() => onSelect(!selected)}
-    >
+      onClick={() => onSelect(!selected)}>
       <CardContent className="p-4">
         <div className="space-y-2">
           <div className="flex items-start justify-between">
@@ -265,12 +250,12 @@ const WordCard: React.FC<WordCardProps> = ({ word, selected, onSelect }) => {
             <input
               type="checkbox"
               checked={selected}
-              onChange={(e) => onSelect(e.target.checked)}
-              onClick={(e) => e.stopPropagation()}
+              onChange={e => onSelect(e.target.checked)}
+              onClick={e => e.stopPropagation()}
               className="mt-1"
             />
           </div>
-          
+
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="text-xs">
               {word.wordType}

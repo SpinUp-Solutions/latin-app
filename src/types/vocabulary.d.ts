@@ -17,6 +17,10 @@ export interface VocabularyContent extends ContentItem {
   studyMode?: 'flashcards' | 'list' | 'quiz';
 }
 
+export interface VocabularyPoolContent extends ContentItem {
+  type: 'vocabulary-pool';
+}
+
 export interface ParsedEntry {
   id: number;
   originalText: string;

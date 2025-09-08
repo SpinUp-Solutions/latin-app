@@ -1,7 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Badge } from '@/src/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/src/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/src/components/ui/dialog';
 import { Input } from '@/src/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { Card, CardContent } from '@/src/components/ui/card';
@@ -10,6 +17,8 @@ import { cn } from '@/src/lib/utils';
 import Link from 'next/link';
 
 import { useVocabularyPools } from '@/src/hooks/useVocabularyPools';
+import { useAppDispatch } from '@/src/store/hooks';
+import { loadPools } from '@/src/store/slices/vocabularyPoolSlice';
 import type { VocabularyPool } from '@/src/types/vocabulary-pool';
 
 interface VocabularyPoolSelectorProps {
@@ -21,9 +30,10 @@ interface VocabularyPoolSelectorProps {
 export const VocabularyPoolSelector: React.FC<VocabularyPoolSelectorProps> = ({
   selectedPoolId,
   onPoolSelect,
-  disabled = false
+  disabled = false,
 }) => {
-  const { pools, loading, loadPools, filters, updateFilters } = useVocabularyPools();
+  const dispatch = useAppDispatch();
+  const { pools, loading, filters, updateFilters } = useVocabularyPools();
   const [selectedPool, setSelectedPool] = useState<VocabularyPool | null>(null);
   const [showPoolPicker, setShowPoolPicker] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -41,17 +51,24 @@ export const VocabularyPoolSelector: React.FC<VocabularyPoolSelectorProps> = ({
   // Load pools when modal opens
   useEffect(() => {
     if (showPoolPicker) {
-      loadPools(true);
+      dispatch(loadPools({ reset: true, filters }));
     }
-  }, [showPoolPicker, loadPools]);
+  }, [showPoolPicker, dispatch, filters]);
 
-  const filteredPools = pools.filter(pool => 
-    pool.metadata.isActive &&
-    (searchQuery ? 
-      pool.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      pool.description.toLowerCase().includes(searchQuery.toLowerCase())
-      : true
-    )
+  // Load pools initially if we have a selectedPoolId but no pools
+  useEffect(() => {
+    if (selectedPoolId && pools.length === 0 && !loading) {
+      dispatch(loadPools({ reset: true, filters }));
+    }
+  }, [selectedPoolId, pools.length, loading, dispatch, filters]);
+
+  const filteredPools = pools.filter(
+    pool =>
+      pool.metadata.isActive &&
+      (searchQuery
+        ? pool.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          pool.description.toLowerCase().includes(searchQuery.toLowerCase())
+        : true)
   );
 
   return (
@@ -67,17 +84,14 @@ export const VocabularyPoolSelector: React.FC<VocabularyPoolSelectorProps> = ({
                 <span>{selectedPool.metadata.wordCount} words</span>
                 <Badge variant="secondary">{selectedPool.metadata.difficulty}</Badge>
                 {selectedPool.metadata.tags.map(tag => (
-                  <Badge key={tag} variant="outline" className="text-xs">{tag}</Badge>
+                  <Badge key={tag} variant="outline" className="text-xs">
+                    {tag}
+                  </Badge>
                 ))}
               </div>
             </div>
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowPoolPicker(true)}
-                disabled={disabled}
-              >
+              <Button variant="outline" size="sm" onClick={() => setShowPoolPicker(true)} disabled={disabled}>
                 Change Pool
               </Button>
               <Button
@@ -87,8 +101,7 @@ export const VocabularyPoolSelector: React.FC<VocabularyPoolSelectorProps> = ({
                   onPoolSelect(undefined);
                   setSelectedPool(null);
                 }}
-                disabled={disabled}
-              >
+                disabled={disabled}>
                 Remove Pool
               </Button>
             </div>
@@ -98,10 +111,7 @@ export const VocabularyPoolSelector: React.FC<VocabularyPoolSelectorProps> = ({
         <div className="border-2 border-dashed rounded-lg p-8 text-center">
           <Library className="h-8 w-8 mx-auto text-gray-400 mb-2" />
           <p className="text-gray-600 mb-4">No vocabulary pool assigned</p>
-          <Button
-            onClick={() => setShowPoolPicker(true)}
-            disabled={disabled}
-          >
+          <Button onClick={() => setShowPoolPicker(true)} disabled={disabled}>
             <Library className="h-4 w-4 mr-2" />
             Select Vocabulary Pool
           </Button>
@@ -113,9 +123,7 @@ export const VocabularyPoolSelector: React.FC<VocabularyPoolSelectorProps> = ({
         <DialogContent className="max-w-4xl max-h-[80vh]">
           <DialogHeader>
             <DialogTitle>Select Vocabulary Pool</DialogTitle>
-            <DialogDescription>
-              Choose a vocabulary pool to assign to this lesson
-            </DialogDescription>
+            <DialogDescription>Choose a vocabulary pool to assign to this lesson</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
@@ -126,14 +134,13 @@ export const VocabularyPoolSelector: React.FC<VocabularyPoolSelectorProps> = ({
                 <Input
                   placeholder="Search pools..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={e => setSearchQuery(e.target.value)}
                   className="pl-10"
                 />
               </div>
               <Select
                 value={filters.difficulty || 'all'}
-                onValueChange={(value) => updateFilters({ difficulty: value === 'all' ? '' : value })}
-              >
+                onValueChange={value => updateFilters({ difficulty: value === 'all' ? '' : value })}>
                 <SelectTrigger className="w-48">
                   <SelectValue placeholder="All Difficulties" />
                 </SelectTrigger>
@@ -169,30 +176,25 @@ export const VocabularyPoolSelector: React.FC<VocabularyPoolSelectorProps> = ({
                     <Card
                       key={pool.id}
                       className={cn(
-                        "cursor-pointer hover:bg-gray-50 transition-colors",
-                        selectedPoolId === pool.id && "ring-2 ring-roman-red"
+                        'cursor-pointer hover:bg-gray-50 transition-colors',
+                        selectedPoolId === pool.id && 'ring-2 ring-roman-red'
                       )}
                       onClick={() => {
                         onPoolSelect(pool.id);
                         setSelectedPool(pool);
                         setShowPoolPicker(false);
-                      }}
-                    >
+                      }}>
                       <CardContent className="p-4">
                         <div className="space-y-2">
                           <h4 className="font-medium">{pool.name}</h4>
-                          <p className="text-sm text-gray-600 line-clamp-2">
-                            {pool.description}
-                          </p>
+                          <p className="text-sm text-gray-600 line-clamp-2">{pool.description}</p>
                           <div className="flex items-center gap-2 text-sm text-gray-500">
                             <span>{pool.metadata.wordCount} words</span>
                             <Badge variant="secondary" className="text-xs">
                               {pool.metadata.difficulty}
                             </Badge>
                           </div>
-                          {selectedPoolId === pool.id && (
-                            <Badge className="text-xs">Currently Selected</Badge>
-                          )}
+                          {selectedPoolId === pool.id && <Badge className="text-xs">Currently Selected</Badge>}
                         </div>
                       </CardContent>
                     </Card>

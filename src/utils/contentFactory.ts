@@ -55,6 +55,12 @@ export const createNewContent = (type: string): RenderableContentItem => {
         vocabularyItems: [],
         studyMode: 'flashcards',
       };
+    case 'vocabulary-pool':
+      return {
+        id: baseId,
+        type: 'vocabulary-pool',
+        title: 'Vocabulary Pool',
+      };
     case 'matching':
       return {
         id: baseId,

@@ -17,7 +17,7 @@ export interface LessonWithVocabularyPool extends Lesson {
 export type { IntroductionPage, ExercisePage } from './page';
 export type { RenderableContentItem } from './page';
 export type { ContentItem, TextContent, EmphasisContent, TableContent, ComponentNarration } from './content';
-export type { VocabularyItem, VocabularyContent } from './vocabulary';
+export type { VocabularyItem, VocabularyContent, VocabularyPoolContent } from './vocabulary';
 export type {
   BaseExercise,
   MatchingExercise,

@@ -3,14 +3,15 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/src/components/ui/button';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Library } from 'lucide-react';
 import { toast } from 'sonner';
+import Link from 'next/link';
 
 import { useVocabularyPool } from '@/src/hooks/useVocabularyPool';
-import { PoolHeader } from '@/src/components/ui/admin/vocabulary-pools/PoolHeader';
-import { PoolNavigation } from '@/src/components/ui/admin/vocabulary-pools/PoolNavigation';
 import { WordSelector } from '@/src/components/ui/admin/vocabulary-pools/WordSelector';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
+import { PoolNotFoundPage } from '@/src/components/ui/admin/vocabulary-pools/PoolNotFoundPage';
+import { AdminLoadingPage } from '@/src/components/ui/admin/AdminLoadingPage';
 
 interface AddWordsPageProps {
   params: {
@@ -22,32 +23,22 @@ export default function AddWordsPage({ params }: AddWordsPageProps) {
   const { poolId } = params;
   const router = useRouter();
   const { pool, loading, error, addWords } = useVocabularyPool(poolId);
-  
+
   const [selectedWordIds, setSelectedWordIds] = useState<string[]>([]);
   const [adding, setAdding] = useState(false);
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-roman-marble">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>
-      </div>
-    );
+    return <AdminLoadingPage />;
   }
 
   if (error || !pool) {
     return (
-      <div className="min-h-screen bg-roman-marble">
-        <PoolHeader
-          title="Pool Not Found"
-          navigation={<PoolNavigation currentPage="add-words" poolId={poolId} />}
-        />
-        <div className="container mx-auto py-6 px-4 text-center">
-          <p className="text-red-600 mb-4">{error || 'Pool not found'}</p>
-          <Button onClick={() => router.push('/admin/vocabulary-pools')}>
-            Back to Pools
-          </Button>
-        </div>
-      </div>
+      <PoolNotFoundPage 
+        poolId={poolId} 
+        backHref={`/admin/vocabulary-pools/${poolId}/words`}
+        backLabel="Back to Words"
+        error={error} 
+      />
     );
   }
 
@@ -79,23 +70,25 @@ export default function AddWordsPage({ params }: AddWordsPageProps) {
 
   return (
     <div className="min-h-screen bg-roman-marble">
-      <PoolHeader
-        title={`Add Words to "${pool.name}"`}
-        subtitle="Select words to add to this vocabulary pool"
-        navigation={
-          <PoolNavigation 
-            currentPage="add-words" 
-            poolId={poolId} 
-            poolName={pool.name}
-          />
-        }
-        actions={
-          <Button variant="ghost" onClick={handleCancel}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Words
+      <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button asChild variant="ghost">
+            <Link href={`/admin/vocabulary-pools/${poolId}/words`}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Words
+            </Link>
           </Button>
-        }
-      />
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 rounded-full bg-roman-red flex items-center justify-center text-white font-serif">
+              <Library className="h-5 w-5" />
+            </div>
+            <div>
+              <h1 className="text-xl font-serif tracking-wide">Add Words to "{pool.name}"</h1>
+              <p className="text-sm text-roman-stone">Select words to add to this vocabulary pool</p>
+            </div>
+          </div>
+        </div>
+      </header>
 
       <main className="container mx-auto py-6 px-4 space-y-6">
         {/* Instructions */}
@@ -124,17 +117,10 @@ export default function AddWordsPage({ params }: AddWordsPageProps) {
         <RomanCard>
           <RomanCardContent className="p-4">
             <div className="flex justify-end gap-4">
-              <Button
-                variant="outline"
-                onClick={handleCancel}
-                disabled={adding}
-              >
+              <Button variant="outline" onClick={handleCancel} disabled={adding}>
                 Cancel
               </Button>
-              <Button
-                onClick={handleAddWords}
-                disabled={adding || selectedWordIds.length === 0}
-              >
+              <Button onClick={handleAddWords} disabled={adding || selectedWordIds.length === 0}>
                 {adding ? (
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
