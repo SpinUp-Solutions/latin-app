@@ -2,10 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { LiveLessonWithData } from '@/src/types/live-lesson';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { lessonId: string } }
-) {
+export async function GET(request: NextRequest, { params }: { params: { lessonId: string } }) {
   try {
     const { lessonId } = params;
 
@@ -14,10 +11,7 @@ export async function GET(
     }
 
     // First check if this lesson is published in live_lessons
-    const liveLessonsSnapshot = await adminDb
-      .collection('live_lessons')
-      .where('lessonId', '==', lessonId)
-      .get();
+    const liveLessonsSnapshot = await adminDb.collection('live_lessons').where('lessonId', '==', lessonId).get();
 
     if (liveLessonsSnapshot.empty) {
       return NextResponse.json({ error: 'Lesson not found or not published' }, { status: 404 });

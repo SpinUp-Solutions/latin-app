@@ -11,7 +11,7 @@ export default function DynamicLessonPage() {
   const params = useParams();
   const lessonId = params.lessonId as string;
   const dispatch = useDispatch<AppDispatch>();
-  
+
   const { currentLesson, lessonLoading, error } = useSelector((state: RootState) => state.liveLesson);
 
   useEffect(() => {

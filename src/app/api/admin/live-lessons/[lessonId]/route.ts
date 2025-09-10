@@ -2,10 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { lessonId: string } }
-) {
+export async function DELETE(request: NextRequest, { params }: { params: { lessonId: string } }) {
   try {
     const user = await verifyAdminAccess(request);
     if (!user) {
@@ -16,7 +13,7 @@ export async function DELETE(
 
     // Check if live lesson exists
     const liveLessonDoc = await adminDb.collection('live_lessons').doc(lessonId).get();
-    
+
     if (!liveLessonDoc.exists) {
       return NextResponse.json({ error: 'Live lesson not found' }, { status: 404 });
     }
