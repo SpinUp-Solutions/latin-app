@@ -7,14 +7,14 @@ interface LiveLessonState {
   // Admin state
   liveLessons: LiveLessonWithData[];
   availableLessons: Lesson[];
-  
+
   // Student state
   studentLessons: LiveLessonWithData[];
-  
+
   // Individual lesson state
   currentLesson: Lesson | null;
   lessonLoading: boolean;
-  
+
   // Common state
   loading: boolean;
   error: string | null;
@@ -140,26 +140,26 @@ const liveLessonSlice = createSlice({
   name: 'liveLesson',
   initialState,
   reducers: {
-    clearError: (state) => {
+    clearError: state => {
       state.error = null;
     },
-    
+
     // Local reordering for optimistic UI
     localReorderLiveLessons: (state, action: PayloadAction<{ fromIndex: number; toIndex: number }>) => {
       const { fromIndex, toIndex } = action.payload;
       const [removed] = state.liveLessons.splice(fromIndex, 1);
       state.liveLessons.splice(toIndex, 0, removed);
-      
+
       // Update order values
       state.liveLessons.forEach((lesson, index) => {
         lesson.order = index;
       });
     },
   },
-  extraReducers: (builder) => {
+  extraReducers: builder => {
     // Fetch admin live lessons
     builder
-      .addCase(fetchAdminLiveLessons.pending, (state) => {
+      .addCase(fetchAdminLiveLessons.pending, state => {
         state.loading = true;
         state.error = null;
       })
@@ -175,7 +175,7 @@ const liveLessonSlice = createSlice({
 
     // Publish lesson
     builder
-      .addCase(publishLesson.pending, (state) => {
+      .addCase(publishLesson.pending, state => {
         state.error = null;
       })
       .addCase(publishLesson.fulfilled, (state, action) => {
@@ -183,7 +183,7 @@ const liveLessonSlice = createSlice({
         const lessonToPublish = state.availableLessons.find(l => l.id === action.meta.arg.lessonId);
         if (lessonToPublish) {
           state.availableLessons = state.availableLessons.filter(l => l.id !== action.meta.arg.lessonId);
-          
+
           const newLiveLesson: LiveLessonWithData = {
             lessonId: lessonToPublish.id,
             order: action.meta.arg.order ?? state.liveLessons.length,
@@ -191,7 +191,7 @@ const liveLessonSlice = createSlice({
             publishedBy: '', // Will be set by backend
             lessonData: lessonToPublish,
           };
-          
+
           state.liveLessons.push(newLiveLesson);
           state.liveLessons.sort((a, b) => a.order - b.order);
         }
@@ -202,7 +202,7 @@ const liveLessonSlice = createSlice({
 
     // Unpublish lesson
     builder
-      .addCase(unpublishLesson.pending, (state) => {
+      .addCase(unpublishLesson.pending, state => {
         state.error = null;
       })
       .addCase(unpublishLesson.fulfilled, (state, action) => {
@@ -219,7 +219,7 @@ const liveLessonSlice = createSlice({
 
     // Reorder live lessons
     builder
-      .addCase(reorderLiveLessons.pending, (state) => {
+      .addCase(reorderLiveLessons.pending, state => {
         state.error = null;
       })
       .addCase(reorderLiveLessons.rejected, (state, action) => {
@@ -229,7 +229,7 @@ const liveLessonSlice = createSlice({
 
     // Batch operations
     builder
-      .addCase(batchPublishLessons.pending, (state) => {
+      .addCase(batchPublishLessons.pending, state => {
         state.error = null;
       })
       .addCase(batchPublishLessons.fulfilled, () => {
@@ -240,7 +240,7 @@ const liveLessonSlice = createSlice({
       });
 
     builder
-      .addCase(batchUnpublishLessons.pending, (state) => {
+      .addCase(batchUnpublishLessons.pending, state => {
         state.error = null;
       })
       .addCase(batchUnpublishLessons.fulfilled, () => {
@@ -252,7 +252,7 @@ const liveLessonSlice = createSlice({
 
     // Fetch student live lessons
     builder
-      .addCase(fetchStudentLiveLessons.pending, (state) => {
+      .addCase(fetchStudentLiveLessons.pending, state => {
         state.loading = true;
         state.error = null;
       })
@@ -267,7 +267,7 @@ const liveLessonSlice = createSlice({
 
     // Fetch lesson by ID
     builder
-      .addCase(fetchLessonById.pending, (state) => {
+      .addCase(fetchLessonById.pending, state => {
         state.lessonLoading = true;
         state.error = null;
       })

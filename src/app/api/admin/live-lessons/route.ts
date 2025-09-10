@@ -12,10 +12,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get all live lessons
-    const liveLessonsSnapshot = await adminDb
-      .collection('live_lessons')
-      .orderBy('order', 'asc')
-      .get();
+    const liveLessonsSnapshot = await adminDb.collection('live_lessons').orderBy('order', 'asc').get();
 
     const liveLessonIds = new Set<string>();
     const liveLessons: LiveLesson[] = [];
@@ -27,10 +24,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Get all lessons from lessons collection
-    const allLessonsSnapshot = await adminDb
-      .collection('lessons')
-      .orderBy('updatedAt', 'desc')
-      .get();
+    const allLessonsSnapshot = await adminDb.collection('lessons').orderBy('updatedAt', 'desc').get();
 
     const availableLessons: Lesson[] = [];
     const lessonMap = new Map<string, Lesson>();
@@ -38,7 +32,7 @@ export async function GET(request: NextRequest) {
     allLessonsSnapshot.docs.forEach(doc => {
       const lesson = { id: doc.id, ...doc.data() } as Lesson;
       lessonMap.set(doc.id, lesson);
-      
+
       // Only add to available if not already live
       if (!liveLessonIds.has(doc.id)) {
         availableLessons.push(lesson);
@@ -86,10 +80,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if already published
-    const existingLiveLesson = await adminDb
-      .collection('live_lessons')
-      .where('lessonId', '==', lessonId)
-      .get();
+    const existingLiveLesson = await adminDb.collection('live_lessons').where('lessonId', '==', lessonId).get();
 
     if (!existingLiveLesson.empty) {
       return NextResponse.json({ error: 'Lesson is already live' }, { status: 409 });
@@ -98,11 +89,7 @@ export async function POST(request: NextRequest) {
     // Get the highest order number if not provided
     let finalOrder = order;
     if (finalOrder === undefined) {
-      const highestOrderDoc = await adminDb
-        .collection('live_lessons')
-        .orderBy('order', 'desc')
-        .limit(1)
-        .get();
+      const highestOrderDoc = await adminDb.collection('live_lessons').orderBy('order', 'desc').limit(1).get();
 
       finalOrder = highestOrderDoc.empty ? 0 : highestOrderDoc.docs[0].data().order + 1;
     }

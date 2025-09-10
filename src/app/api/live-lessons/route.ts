@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { LiveLessonWithData } from '@/src/types/live-lesson';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // Verify user is authenticated (student or admin)
 

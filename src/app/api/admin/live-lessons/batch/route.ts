@@ -26,11 +26,7 @@ export async function POST(request: NextRequest) {
 
     if (action === 'publish') {
       // Get current max order
-      const highestOrderDoc = await adminDb
-        .collection('live_lessons')
-        .orderBy('order', 'desc')
-        .limit(1)
-        .get();
+      const highestOrderDoc = await adminDb.collection('live_lessons').orderBy('order', 'desc').limit(1).get();
 
       let nextOrder = highestOrderDoc.empty ? 0 : highestOrderDoc.docs[0].data().order + 1;
 
@@ -64,7 +60,7 @@ export async function POST(request: NextRequest) {
       for (const lessonId of lessonIds) {
         const liveLessonRef = adminDb.collection('live_lessons').doc(lessonId);
         const liveLessonDoc = await liveLessonRef.get();
-        
+
         if (!liveLessonDoc.exists) {
           console.warn(`Live lesson ${lessonId} not found, skipping`);
           continue;

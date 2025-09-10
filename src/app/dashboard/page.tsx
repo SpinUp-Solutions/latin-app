@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import React from 'react';
 import { BookOpen, User, Clock, Target, TrendingUp, CheckCircle, Play } from 'lucide-react';
 import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
+import { LessonStatus } from '@/src/types/live-lesson';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -45,7 +46,8 @@ export default function DashboardPage() {
     );
   }
 
-  const getStatus = (progress: number) => (progress === 100 ? 'completed' : progress > 0 ? 'current' : 'upcoming');
+  const getStatus = (progress: number): LessonStatus =>
+    progress === 100 ? 'completed' : progress > 0 ? 'current' : 'upcoming';
 
   const lessons = studentLessons.map(liveLesson => ({
     ...liveLesson.lessonData,
@@ -66,7 +68,10 @@ export default function DashboardPage() {
     { label: 'Current Streak', value: '7 days', icon: TrendingUp, color: 'roman-terracotta' },
   ];
 
-  const statusConfig = {
+  const statusConfig: Record<
+    LessonStatus,
+    { card: string; icon: string; button: string; text: string; showIcon: JSX.Element | null }
+  > = {
     completed: {
       card: 'border-roman-green bg-roman-green/5',
       icon: 'bg-roman-green text-white',
@@ -86,6 +91,27 @@ export default function DashboardPage() {
       icon: 'bg-roman-gold text-white',
       button: 'bg-roman-gold hover:bg-roman-gold/90',
       text: 'Start',
+      showIcon: null,
+    },
+    available: {
+      card: 'border-roman-stone bg-roman-stone/5',
+      icon: 'bg-roman-stone text-white',
+      button: 'bg-roman-stone hover:bg-roman-stone/90',
+      text: 'Start',
+      showIcon: null,
+    },
+    'in-progress': {
+      card: 'border-roman-terracotta bg-roman-terracotta/5',
+      icon: 'bg-roman-terracotta text-white',
+      button: 'bg-roman-terracotta hover:bg-roman-terracotta/90',
+      text: 'Continue',
+      showIcon: null,
+    },
+    locked: {
+      card: 'border-gray-300 bg-gray-100',
+      icon: 'bg-gray-300 text-gray-500',
+      button: 'bg-gray-400 cursor-not-allowed',
+      text: 'Locked',
       showIcon: null,
     },
   };
@@ -250,7 +276,7 @@ export default function DashboardPage() {
               <RomanCardHeader>
                 <h3 className="text-2xl font-serif flex items-center gap-3">
                   <TrendingUp className="h-6 w-6 text-roman-red" />
-                  This Week's Progress
+                  This Week&apos;s Progress
                 </h3>
                 <p className="text-roman-stone mt-1">Track your learning achievements</p>
               </RomanCardHeader>

@@ -4,36 +4,23 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState, AppDispatch } from '@/src/store';
-import {
-  fetchAdminLiveLessons,
-  batchPublishLessons,
-  batchUnpublishLessons,
-} from '@/src/store/slices/liveLessonSlice';
+import { fetchAdminLiveLessons, batchPublishLessons, batchUnpublishLessons } from '@/src/store/slices/liveLessonSlice';
 import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
 import { RomanCard, RomanCardContent, RomanCardHeader } from '@/src/components/ui/core/roman-card';
 import { Badge } from '@/src/components/ui/badge';
 import { Checkbox } from '@/src/components/ui/checkbox';
-import { 
-  ArrowLeft, 
-  Globe, 
-  Search, 
-  Filter,
-  BookOpen,
-  Clock,
-  CheckCircle
-} from 'lucide-react';
+import { ArrowLeft, Globe, Search, Filter, BookOpen, Clock, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
-
+import { LiveLessonWithData } from '@/src/types/live-lesson';
+import { Lesson } from '@/src/types/lesson';
 
 export default function LiveLessonsPage() {
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
   const { user } = useSelector((state: RootState) => state.auth);
-  const { liveLessons, availableLessons, loading } = useSelector(
-    (state: RootState) => state.liveLesson
-  );
+  const { liveLessons, availableLessons, loading } = useSelector((state: RootState) => state.liveLesson);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'live' | 'draft'>('all');
@@ -46,7 +33,7 @@ export default function LiveLessonsPage() {
       router.push('/dashboard');
       return;
     }
-    
+
     dispatch(fetchAdminLiveLessons());
   }, [dispatch, user, router]);
 
@@ -56,35 +43,36 @@ export default function LiveLessonsPage() {
     setSelectedLessons(liveIds);
   }, [liveLessons]);
 
+  const getFilteredLessons = (): Array<(LiveLessonWithData & { isLive: true }) | (Lesson & { isLive: false })> => {
+    const lessons: Array<(LiveLessonWithData & { isLive: true }) | (Lesson & { isLive: false })> = [];
 
-  const getFilteredLessons = () => {
-    const lessons = [];
-    
     if (filterStatus === 'all' || filterStatus === 'live') {
       for (const liveLesson of liveLessons) {
         const lesson = liveLesson.lessonData;
-        const matchesSearch = !searchQuery || 
+        const matchesSearch =
+          !searchQuery ||
           lesson.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
           lesson.description?.toLowerCase().includes(searchQuery.toLowerCase());
-        
+
         if (matchesSearch) {
-          lessons.push({ ...liveLesson, isLive: true });
+          lessons.push({ ...liveLesson, isLive: true as const });
         }
       }
     }
-    
+
     if (filterStatus === 'all' || filterStatus === 'draft') {
       for (const lesson of availableLessons) {
-        const matchesSearch = !searchQuery || 
+        const matchesSearch =
+          !searchQuery ||
           lesson.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
           lesson.description?.toLowerCase().includes(searchQuery.toLowerCase());
-        
+
         if (matchesSearch) {
-          lessons.push({ ...lesson, isLive: false });
+          lessons.push({ ...lesson, isLive: false as const });
         }
       }
     }
-    
+
     return lessons;
   };
 
@@ -100,18 +88,16 @@ export default function LiveLessonsPage() {
     });
   };
 
-
-
   const hasChanges = useMemo(() => {
     if (originalLiveIds.size !== selectedLessons.size) return true;
-    
-    for (const id of originalLiveIds) {
+
+    for (const id of Array.from(originalLiveIds)) {
       if (!selectedLessons.has(id)) return true;
     }
-    for (const id of selectedLessons) {
+    for (const id of Array.from(selectedLessons)) {
       if (!originalLiveIds.has(id)) return true;
     }
-    
+
     return false;
   }, [originalLiveIds, selectedLessons]);
 
@@ -125,7 +111,7 @@ export default function LiveLessonsPage() {
       if (toUnpublish.length > 0) {
         await dispatch(batchUnpublishLessons(toUnpublish)).unwrap();
       }
-      
+
       if (toPublish.length > 0) {
         await dispatch(batchPublishLessons(toPublish)).unwrap();
       }
@@ -135,10 +121,9 @@ export default function LiveLessonsPage() {
     } catch (error) {
       toast.error('Failed to apply changes');
     }
-    
+
     setIsPublishing(false);
   };
-
 
   if (loading) {
     return (
@@ -167,14 +152,11 @@ export default function LiveLessonsPage() {
 
           {hasChanges && (
             <div className="flex items-center gap-3">
-              <span className="text-sm text-roman-stone">
-                {selectedLessons.size} lessons selected
-              </span>
+              <span className="text-sm text-roman-stone">{selectedLessons.size} lessons selected</span>
               <Button
                 onClick={handleApplyChanges}
                 disabled={isPublishing}
-                className="bg-roman-green hover:bg-roman-green/90"
-              >
+                className="bg-roman-green hover:bg-roman-green/90">
                 <CheckCircle className="h-4 w-4 mr-2" />
                 Apply Changes
               </Button>
@@ -238,7 +220,7 @@ export default function LiveLessonsPage() {
                 <Input
                   placeholder="Search lessons by title or description..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={e => setSearchQuery(e.target.value)}
                   className="pl-10"
                 />
               </div>
@@ -248,22 +230,19 @@ export default function LiveLessonsPage() {
                 <Button
                   variant={filterStatus === 'all' ? 'default' : 'outline'}
                   size="sm"
-                  onClick={() => setFilterStatus('all')}
-                >
+                  onClick={() => setFilterStatus('all')}>
                   All
                 </Button>
                 <Button
                   variant={filterStatus === 'live' ? 'default' : 'outline'}
                   size="sm"
-                  onClick={() => setFilterStatus('live')}
-                >
+                  onClick={() => setFilterStatus('live')}>
                   Live
                 </Button>
                 <Button
                   variant={filterStatus === 'draft' ? 'default' : 'outline'}
                   size="sm"
-                  onClick={() => setFilterStatus('draft')}
-                >
+                  onClick={() => setFilterStatus('draft')}>
                   Draft
                 </Button>
               </div>
@@ -274,33 +253,26 @@ export default function LiveLessonsPage() {
         {/* Lessons List */}
         <RomanCard>
           <RomanCardHeader>
-            <h2 className="text-lg font-serif">
-              Lessons ({getFilteredLessons().length})
-            </h2>
+            <h2 className="text-lg font-serif">Lessons ({getFilteredLessons().length})</h2>
           </RomanCardHeader>
           <RomanCardContent className="p-0">
             <div className="divide-y divide-border">
               {getFilteredLessons().length === 0 ? (
-                <div className="p-8 text-center text-gray-500">
-                  No lessons found matching your criteria
-                </div>
+                <div className="p-8 text-center text-gray-500">No lessons found matching your criteria</div>
               ) : (
-                getFilteredLessons().map((lesson) => {
+                getFilteredLessons().map(lesson => {
                   const lessonId = lesson.isLive ? lesson.lessonId : lesson.id;
                   const lessonData = lesson.isLive ? lesson.lessonData : lesson;
-                  
+
                   return (
-                    <div
-                      key={lessonId}
-                      className="p-4 hover:bg-gray-50 transition-colors"
-                    >
+                    <div key={lessonId} className="p-4 hover:bg-gray-50 transition-colors">
                       <div className="flex items-start gap-4">
                         <Checkbox
                           checked={selectedLessons.has(lessonId)}
                           onCheckedChange={() => handleSelectLesson(lessonId)}
                           className="mt-1"
                         />
-                        
+
                         <div className="flex-1">
                           <div className="flex items-start justify-between">
                             <div>
@@ -311,25 +283,17 @@ export default function LiveLessonsPage() {
                                 </Badge>
                               </div>
                               {lessonData.description && (
-                                <p className="text-sm text-gray-600 mb-2">
-                                  {lessonData.description}
-                                </p>
+                                <p className="text-sm text-gray-600 mb-2">{lessonData.description}</p>
                               )}
                               <div className="flex items-center gap-4 text-xs text-gray-500">
                                 <span>{lessonData.introduction?.length || 0} intro pages</span>
                                 <span>{lessonData.exercises?.length || 0} exercise pages</span>
                               </div>
                             </div>
-                            
+
                             <div className="flex items-center gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                asChild
-                              >
-                                <Link href={`/admin/lessons/edit/${lessonId}`}>
-                                  Edit
-                                </Link>
+                              <Button size="sm" variant="outline" asChild>
+                                <Link href={`/admin/lessons/edit/${lessonId}`}>Edit</Link>
                               </Button>
                             </div>
                           </div>

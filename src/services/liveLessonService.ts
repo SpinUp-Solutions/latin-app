@@ -1,4 +1,5 @@
 import { LiveLessonWithData } from '@/src/types/live-lesson';
+import { Lesson } from '@/src/types/lesson';
 import { auth } from './firebase';
 
 class LiveLessonService {
@@ -31,7 +32,7 @@ class LiveLessonService {
   }
 
   // Admin methods
-  async getAdminLiveLessons(): Promise<{ liveLessons: LiveLessonWithData[]; availableLessons: unknown[] }> {
+  async getAdminLiveLessons(): Promise<{ liveLessons: LiveLessonWithData[]; availableLessons: Lesson[] }> {
     return this.makeRequest('/api/admin/live-lessons');
   }
 
@@ -72,7 +73,7 @@ class LiveLessonService {
   // Student methods (public)
   async getStudentLiveLessons(): Promise<{ lessons: LiveLessonWithData[] }> {
     const token = await this.getAuthToken();
-    
+
     const response = await fetch('/api/live-lessons', {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -88,7 +89,7 @@ class LiveLessonService {
 
   async getLessonById(lessonId: string): Promise<LiveLessonWithData> {
     const token = await this.getAuthToken();
-    
+
     const response = await fetch(`/api/lessons/${lessonId}`, {
       headers: {
         Authorization: `Bearer ${token}`,
