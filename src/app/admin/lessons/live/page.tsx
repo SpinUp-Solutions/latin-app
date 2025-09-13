@@ -7,8 +7,9 @@ import { RootState, AppDispatch } from '@/src/store';
 import {
   loadLessons,
   updateLessonsPublishStatus,
+  selectFilteredLessons,
   selectLiveLessons,
-  selectAvailableLessons
+  selectAvailableLessons,
 } from '@/src/store/slices/lessonSlice';
 import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
@@ -18,7 +19,6 @@ import { Checkbox } from '@/src/components/ui/checkbox';
 import { ArrowLeft, Globe, Search, Filter, BookOpen, Clock, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
-import { Lesson } from '@/src/types/lesson';
 
 export default function LiveLessonsPage() {
   const router = useRouter();
@@ -53,37 +53,8 @@ export default function LiveLessonsPage() {
     }
   }, [liveLessons, initialized]);
 
-  const getFilteredLessons = (): Array<(Lesson & { isLive: true }) | (Lesson & { isLive: false })> => {
-    const lessons: Array<(Lesson & { isLive: true }) | (Lesson & { isLive: false })> = [];
-
-    if (filterStatus === 'all' || filterStatus === 'live') {
-      for (const lesson of liveLessons) {
-        const matchesSearch =
-          !searchQuery ||
-          lesson.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          lesson.description?.toLowerCase().includes(searchQuery.toLowerCase());
-
-        if (matchesSearch) {
-          lessons.push({ ...lesson, isLive: true as const });
-        }
-      }
-    }
-
-    if (filterStatus === 'all' || filterStatus === 'draft') {
-      for (const lesson of availableLessons) {
-        const matchesSearch =
-          !searchQuery ||
-          lesson.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          lesson.description?.toLowerCase().includes(searchQuery.toLowerCase());
-
-        if (matchesSearch) {
-          lessons.push({ ...lesson, isLive: false as const });
-        }
-      }
-    }
-
-    return lessons;
-  };
+  // Use the new parameterized selector for efficient filtering
+  const filteredLessons = useSelector((state: RootState) => selectFilteredLessons(state, filterStatus, searchQuery));
 
   const handleSelectLesson = (lessonId: string) => {
     setSelectedLessons(prev => {
@@ -118,17 +89,21 @@ export default function LiveLessonsPage() {
 
     try {
       if (toUnpublish.length > 0) {
-        await dispatch(updateLessonsPublishStatus({
-          lessonIds: toUnpublish,
-          isLive: false
-        })).unwrap();
+        await dispatch(
+          updateLessonsPublishStatus({
+            lessonIds: toUnpublish,
+            isLive: false,
+          })
+        ).unwrap();
       }
 
       if (toPublish.length > 0) {
-        await dispatch(updateLessonsPublishStatus({
-          lessonIds: toPublish,
-          isLive: true
-        })).unwrap();
+        await dispatch(
+          updateLessonsPublishStatus({
+            lessonIds: toPublish,
+            isLive: true,
+          })
+        ).unwrap();
       }
 
       toast.success('Changes applied successfully');
@@ -268,14 +243,14 @@ export default function LiveLessonsPage() {
         {/* Lessons List */}
         <RomanCard>
           <RomanCardHeader>
-            <h2 className="text-lg font-serif">Lessons ({getFilteredLessons().length})</h2>
+            <h2 className="text-lg font-serif">Lessons ({filteredLessons.length})</h2>
           </RomanCardHeader>
           <RomanCardContent className="p-0">
             <div className="divide-y divide-border">
-              {getFilteredLessons().length === 0 ? (
+              {filteredLessons.length === 0 ? (
                 <div className="p-8 text-center text-gray-500">No lessons found matching your criteria</div>
               ) : (
-                getFilteredLessons().map(lesson => {
+                filteredLessons.map(lesson => {
                   return (
                     <div key={lesson.id} className="p-4 hover:bg-gray-50 transition-colors">
                       <div className="flex items-start gap-4">
@@ -294,9 +269,7 @@ export default function LiveLessonsPage() {
                                   {lesson.isLive ? 'Live' : 'Draft'}
                                 </Badge>
                               </div>
-                              {lesson.description && (
-                                <p className="text-sm text-gray-600 mb-2">{lesson.description}</p>
-                              )}
+                              {lesson.description && <p className="text-sm text-gray-600 mb-2">{lesson.description}</p>}
                               <div className="flex items-center gap-4 text-xs text-gray-500">
                                 <span>{lesson.introduction?.length || 0} intro pages</span>
                                 <span>{lesson.exercises?.length || 0} exercise pages</span>

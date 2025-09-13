@@ -17,7 +17,7 @@ export async function GET(request: NextRequest, { params }: { params: { lessonId
     }
 
     const lessonData = lessonDoc.data();
-    
+
     if (!lessonData?.isLive) {
       return NextResponse.json({ error: 'Lesson not published' }, { status: 404 });
     }

@@ -27,7 +27,8 @@ export async function POST(request: NextRequest) {
 
     // Get current max order if publishing and no startOrder provided
     if (isLive && !nextOrder) {
-      const maxOrderDoc = await adminDb.collection('lessons')
+      const maxOrderDoc = await adminDb
+        .collection('lessons')
         .where('isLive', '==', true)
         .orderBy('liveOrder', 'desc')
         .limit(1)

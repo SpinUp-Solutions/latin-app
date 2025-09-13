@@ -8,12 +8,12 @@ export interface Lesson {
   vocabulary_pool?: string;
   introduction: IntroductionPage[];
   exercises: ExercisePage[];
-  
+
   isLive: boolean;
   liveOrder: number | null;
   publishedAt: string | null;
   publishedBy: string | null;
-  
+
   createdAt?: string;
   createdBy?: string;
   updatedAt?: string;

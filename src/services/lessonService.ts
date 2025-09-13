@@ -79,7 +79,11 @@ class LessonService {
     return response.lesson;
   }
 
-  async updatePublishStatus(lessonIds: string[], isLive: boolean, startOrder?: number): Promise<{ success: boolean; message: string; processedCount: number }> {
+  async updatePublishStatus(
+    lessonIds: string[],
+    isLive: boolean,
+    startOrder?: number
+  ): Promise<{ success: boolean; message: string; processedCount: number }> {
     return this.makeRequest('/api/admin/lessons/update-publish-status', {
       method: 'POST',
       body: JSON.stringify({ lessonIds, isLive, startOrder }),

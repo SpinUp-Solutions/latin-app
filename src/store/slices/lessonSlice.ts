@@ -1,4 +1,4 @@
-import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk, PayloadAction, createSelector } from '@reduxjs/toolkit';
 import { Lesson, IntroductionPage, ExercisePage, LessonWithProgress } from '@/src/types/lesson';
 import { RenderableContentItem } from '@/src/types/page';
 import { lessonService } from '@/src/services/lessonService';
@@ -576,11 +576,58 @@ export const selectDraftLastModified = (state: { lesson: LessonState }, lessonId
 
 export const selectDraft = (state: { lesson: LessonState }, lessonId: string) => state.lesson.drafts[lessonId];
 
-export const selectLiveLessons = (state: { lesson: LessonState }) => 
-  state.lesson.lessons.filter(l => l.isLive).sort((a, b) => (a.liveOrder || 0) - (b.liveOrder || 0));
+// Base selector for lessons
+const selectLessons = (state: { lesson: LessonState }) => state.lesson.lessons;
+
+// Parameterized selector for filtering lessons
+export const selectFilteredLessons = createSelector(
+  [
+    selectLessons,
+    (_: { lesson: LessonState }, filter: 'all' | 'live' | 'draft') => filter,
+    (_: { lesson: LessonState }, __: 'all' | 'live' | 'draft', searchQuery: string = '') => searchQuery
+  ],
+  (lessons, filter, searchQuery) => {
+    let filtered = lessons;
+
+    // Filter by status
+    if (filter === 'live') {
+      filtered = filtered.filter(l => l.isLive);
+    } else if (filter === 'draft') {
+      filtered = filtered.filter(l => !l.isLive);
+    }
+
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(l =>
+        l.title.toLowerCase().includes(query) ||
+        l.description?.toLowerCase().includes(query) ||
+        false
+      );
+    }
+
+    // Sort live lessons by order
+    if (filter === 'live' || filter === 'all') {
+      filtered = filtered.sort((a, b) => {
+        if (a.isLive && b.isLive) {
+          return (a.liveOrder || 0) - (b.liveOrder || 0);
+        }
+        if (a.isLive && !b.isLive) return -1;
+        if (!a.isLive && b.isLive) return 1;
+        return 0;
+      });
+    }
+
+    return filtered;
+  }
+);
+
+// Convenience selectors using the parameterized selector
+export const selectLiveLessons = (state: { lesson: LessonState }) =>
+  selectFilteredLessons(state, 'live', '');
 
 export const selectAvailableLessons = (state: { lesson: LessonState }) =>
-  state.lesson.lessons.filter(l => !l.isLive);
+  selectFilteredLessons(state, 'draft', '');
 
 export const selectLessonById = (state: { lesson: LessonState }, lessonId: string) =>
   state.lesson.lessons.find(l => l.id === lessonId);

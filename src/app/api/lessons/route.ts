@@ -4,10 +4,7 @@ import { LessonWithProgress } from '@/src/types/lesson';
 
 export async function GET() {
   try {
-    const snapshot = await adminDb.collection('lessons')
-      .where('isLive', '==', true)
-      .orderBy('liveOrder', 'asc')
-      .get();
+    const snapshot = await adminDb.collection('lessons').where('isLive', '==', true).orderBy('liveOrder', 'asc').get();
 
     if (snapshot.empty) {
       return NextResponse.json({ lessons: [] });
