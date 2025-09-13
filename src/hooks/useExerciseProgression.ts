@@ -5,7 +5,7 @@ import { getEffectiveFeedbackConfig } from '@/src/utils/feedbackDefaults';
 interface ExerciseProgressionOptions {
   totalItems: number;
   feedbackConfig: FeedbackConfig;
-  onComplete?: () => void;
+  onComplete?: (score: number) => void;
 }
 
 interface ExerciseProgressionState {
@@ -14,10 +14,10 @@ interface ExerciseProgressionState {
 }
 
 interface ExerciseProgressionActions {
-  nextItem: () => void;
+  nextItem: (score?: number) => void;
   reset: () => void;
   goToItem: (index: number) => void;
-  autoAdvanceIfEnabled: (afterAdvance: () => void) => void;
+  autoAdvanceIfEnabled: (afterAdvance: () => void, score?: number) => void;
 }
 
 export function useExerciseProgression({
@@ -33,17 +33,22 @@ export function useExerciseProgression({
 
   const isLastItem = currentIndex >= totalItems - 1;
 
-  const nextItem = useCallback(() => {
-    if (currentIndex < totalItems - 1) {
-      setCurrentIndex(prev => prev + 1);
-    } else if (onComplete) {
-      // Auto-advance logic based on configuration
-      if (progressionRules?.autoAdvance !== false) {
-        const delay = timingConfig?.nextExerciseDelay || 2500;
-        setTimeout(onComplete, delay);
+  const nextItem = useCallback(
+    (score?: number) => {
+      if (currentIndex < totalItems - 1) {
+        setCurrentIndex(prev => prev + 1);
+      } else if (onComplete) {
+        // Auto-advance logic based on configuration
+        if (progressionRules?.autoAdvance !== false) {
+          const delay = timingConfig?.nextExerciseDelay || 2500;
+          setTimeout(() => onComplete(score || 100), delay);
+        } else {
+          onComplete(score || 100);
+        }
       }
-    }
-  }, [currentIndex, totalItems, onComplete, progressionRules?.autoAdvance, timingConfig?.nextExerciseDelay]);
+    },
+    [currentIndex, totalItems, onComplete, progressionRules?.autoAdvance, timingConfig?.nextExerciseDelay]
+  );
 
   const reset = useCallback(() => {
     setCurrentIndex(0);
@@ -64,11 +69,11 @@ export function useExerciseProgression({
     nextItem,
     reset,
     goToItem,
-    autoAdvanceIfEnabled: (afterAdvance: () => void) => {
+    autoAdvanceIfEnabled: (afterAdvance: () => void, score?: number) => {
       if (progressionRules?.autoAdvance !== false) {
         const delay = timingConfig?.progressionDelay || 1500;
         setTimeout(() => {
-          nextItem();
+          nextItem(score);
           afterAdvance();
         }, delay);
       }

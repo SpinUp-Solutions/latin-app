@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/src/services/firebase';
 import type { RootState, AppDispatch } from '@/src/store';
 import { loadStudentLessons } from '@/src/store/slices/lessonSlice';
+import { loadUserProgress } from '@/src/store/slices/progressSlice';
+import { getContentCount } from '@/src/utils/lessonUtils';
 import { Button } from '@/src/components/ui/button';
 import { toast } from 'sonner';
 import React from 'react';
@@ -19,6 +21,7 @@ export default function DashboardPage() {
   const dispatch = useDispatch<AppDispatch>();
   const { user, loading } = useSelector((state: RootState) => state.auth);
   const { studentLessons, loading: lessonsLoading } = useSelector((state: RootState) => state.lesson);
+  const progressState = useSelector((state: RootState) => state.progress.currentProgress);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -27,6 +30,47 @@ export default function DashboardPage() {
       dispatch(loadStudentLessons());
     }
   }, [user, loading, router, dispatch]);
+
+  // Load progress for all lessons
+  useEffect(() => {
+    if (user?.uid && studentLessons.length > 0) {
+      studentLessons.forEach(lesson => {
+        dispatch(loadUserProgress({ userId: user.uid, lessonId: lesson.id }));
+      });
+    }
+  }, [dispatch, user?.uid, studentLessons]);
+
+  const lessons = useMemo(() => {
+    return studentLessons.map(lesson => {
+      const userProgress = progressState[lesson.id];
+      const contentCount = getContentCount(lesson);
+
+      let progress = 0;
+      let exercisesCompleted = 0;
+      let status: LessonStatus = 'available';
+
+      if (userProgress) {
+        progress = userProgress.progress || 0;
+        exercisesCompleted = userProgress.exerciseProgress?.length || 0;
+        status =
+          userProgress.status === 'completed'
+            ? 'completed'
+            : userProgress.status === 'in-progress'
+              ? 'in-progress'
+              : 'available';
+      }
+
+      return {
+        ...lesson,
+        progress,
+        status,
+        exercisesCompleted,
+        totalExercises: contentCount.exerciseItems,
+        totalIntroPages: contentCount.introPages,
+        userProgress,
+      };
+    });
+  }, [studentLessons, progressState]);
 
   const handleSignOut = async () => {
     try {
@@ -45,12 +89,6 @@ export default function DashboardPage() {
       </div>
     );
   }
-
-  const lessons = studentLessons.map(lesson => ({
-    ...lesson,
-    progress: lesson.progress || 0,
-    status: lesson.status || 'available',
-  }));
 
   const todaysGoals = [
     { task: 'Complete current lesson', completed: false, points: 50 },
@@ -188,18 +226,18 @@ export default function DashboardPage() {
                           <div className="flex items-center gap-4 text-xs text-roman-stone mb-3">
                             <span className="flex items-center gap-1">
                               <BookOpen className="h-3 w-3" />
-                              {lesson.introduction?.length || 0} intro pages
+                              {lesson.totalIntroPages || 0} intro pages
                             </span>
                             <span className="flex items-center gap-1">
                               <BookOpen className="h-3 w-3" />
-                              {lesson.exercises?.length || 0} exercises
+                              {lesson.totalExercises || 0} exercises
                             </span>
                           </div>
 
-                          {lesson.progress > 0 && (
-                            <div className="mb-4">
-                              <div className="flex justify-between items-center mb-1">
-                                <span className="text-xs font-medium">Progress</span>
+                          {(lesson.progress > 0 || lesson.exercisesCompleted > 0) && (
+                            <div className="mb-4 space-y-2">
+                              <div className="flex justify-between items-center">
+                                <span className="text-xs font-medium">Overall Progress</span>
                                 <span className="text-xs font-semibold">{lesson.progress}%</span>
                               </div>
                               <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
@@ -209,6 +247,28 @@ export default function DashboardPage() {
                                   }`}
                                   style={{ width: `${lesson.progress}%` }}></div>
                               </div>
+
+                              <div className="flex justify-between items-center">
+                                <span className="text-xs text-roman-stone">Exercises Completed</span>
+                                <span className="text-xs font-medium">
+                                  {lesson.exercisesCompleted}/{lesson.totalExercises}
+                                </span>
+                              </div>
+                              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-roman-terracotta rounded-full transition-all"
+                                  style={{
+                                    width: `${lesson.totalExercises > 0 ? (lesson.exercisesCompleted / lesson.totalExercises) * 100 : 0}%`,
+                                  }}></div>
+                              </div>
+
+                              {lesson.userProgress?.exerciseProgress &&
+                                lesson.userProgress.exerciseProgress.length > 0 && (
+                                  <div className="text-xs text-roman-stone">
+                                    Average Score: {lesson.userProgress.score || 'N/A'}
+                                    {lesson.userProgress.score && '%'}
+                                  </div>
+                                )}
                             </div>
                           )}
 

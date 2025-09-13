@@ -15,7 +15,7 @@ import { SimpleRichDisplay } from '../core/simple-rich-display';
 
 interface Props {
   exercise: VerbConjugationExercise;
-  onComplete?: () => void;
+  onComplete?: (score: number) => void;
 }
 
 const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
@@ -23,6 +23,7 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
   const [conjugationCompleted, setConjugationCompleted] = useState(false);
   const [currentLivingLatinIndex, setCurrentLivingLatinIndex] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [correctAnswers, setCorrectAnswers] = useState(0);
 
   const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
     exercise.feedbackConfig
@@ -43,10 +44,15 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
     if (validation.isCorrect) {
       handleCorrect(false); // Not the final completion yet
 
+      const newCorrectAnswers = correctAnswers + 1;
+      setCorrectAnswers(newCorrectAnswers);
+
       // Move to living latin if it exists, otherwise complete
       if (!exercise.data.livingLatinPractice) {
+        // Calculate final score (conjugation task completed successfully = 100%)
+        const finalScore = 100;
         // useExerciseProgression handles nextExerciseDelay for completion
-        onComplete?.();
+        onComplete?.(finalScore);
       } else {
         autoAdvanceIfEnabled(() => {
           reset();
@@ -71,11 +77,16 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
     const validation = validateVerbConjugationLivingLatin(userAnswer, exercise, currentLivingLatinIndex);
 
     if (validation.isCorrect) {
+      const newCorrectAnswers = correctAnswers + 1;
+      setCorrectAnswers(newCorrectAnswers);
       const isLastExercise = currentLivingLatinIndex >= exercise.data.livingLatinPractice!.exercises.length - 1;
       handleCorrect(isLastExercise);
 
       if (isLastExercise) {
-        onComplete?.();
+        // Calculate final score: 1 point for conjugation + points for living latin exercises
+        const totalExercises = 1 + exercise.data.livingLatinPractice!.exercises.length;
+        const finalScore = Math.round((newCorrectAnswers / totalExercises) * 100);
+        onComplete?.(finalScore);
       } else {
         autoAdvanceIfEnabled(() => {
           reset();

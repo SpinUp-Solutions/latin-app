@@ -10,25 +10,17 @@ import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { loadLessons, deleteLesson, clearDraft, loadDrafts } from '@/src/store/slices/lessonSlice';
 import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
+import { getContentCount } from '@/src/utils/lessonUtils';
 
 interface LessonManagerProps {
   onEditLesson: (lesson: Lesson) => void;
   onContinueDraft: (lessonId: string) => void;
 }
 
-interface LessonWithMetadata extends Lesson {
-  createdAt?: string;
-  createdBy?: string;
-  updatedAt?: string;
-  updatedBy?: string;
-  version?: number;
-  published?: boolean;
-}
-
 export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onContinueDraft }) => {
   const dispatch = useAppDispatch();
   const { lessons, loading, error, drafts } = useAppSelector(state => state.lesson);
-  const [selectedLesson, setSelectedLesson] = useState<LessonWithMetadata | null>(null);
+  const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [dialogState, setDialogState] = useState<{
     isOpen: boolean;
     title: string;
@@ -84,12 +76,6 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
       hour: '2-digit',
       minute: '2-digit',
     });
-  };
-
-  const getContentCount = (lesson: Lesson) => {
-    const introCount = lesson.introduction.reduce((count, page) => count + page.items.length, 0);
-    const exerciseCount = lesson.exercises.reduce((count, page) => count + page.items.length, 0);
-    return { introCount, exerciseCount, total: introCount + exerciseCount };
   };
 
   if (loading) {
@@ -155,17 +141,17 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
               <h4 className="font-medium text-gray-700 mb-2">Content Summary</h4>
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div className="bg-blue-50 p-3 rounded">
-                  <div className="text-2xl font-bold text-blue-600">{selectedLesson.introduction.length}</div>
+                  <div className="text-2xl font-bold text-blue-600">{contentCount.introPages}</div>
                   <div className="text-sm text-blue-700">Introduction Pages</div>
-                  <div className="text-xs text-gray-500">{contentCount.introCount} items</div>
+                  <div className="text-xs text-gray-500">{contentCount.introItems} items</div>
                 </div>
                 <div className="bg-green-50 p-3 rounded">
-                  <div className="text-2xl font-bold text-green-600">{selectedLesson.exercises.length}</div>
+                  <div className="text-2xl font-bold text-green-600">{contentCount.exercisePages}</div>
                   <div className="text-sm text-green-700">Exercise Pages</div>
-                  <div className="text-xs text-gray-500">{contentCount.exerciseCount} items</div>
+                  <div className="text-xs text-gray-500">{contentCount.exerciseItems} items</div>
                 </div>
                 <div className="bg-purple-50 p-3 rounded">
-                  <div className="text-2xl font-bold text-purple-600">{contentCount.total}</div>
+                  <div className="text-2xl font-bold text-purple-600">{contentCount.totalItems}</div>
                   <div className="text-sm text-purple-700">Total Content Items</div>
                   <div className="text-xs text-gray-500">Across all pages</div>
                 </div>
@@ -221,9 +207,9 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
                     </div>
 
                     <div className="flex justify-between text-xs text-gray-600">
-                      <span>{draft.lesson.introduction.length} intro pages</span>
-                      <span>{draft.lesson.exercises.length} exercise pages</span>
-                      <span>{getContentCount(draft.lesson).total} items</span>
+                      <span>{getContentCount(draft.lesson).introPages} intro pages</span>
+                      <span>{getContentCount(draft.lesson).exercisePages} exercise pages</span>
+                      <span>{getContentCount(draft.lesson).totalItems} items</span>
                     </div>
 
                     <div className="flex gap-2 pt-2">
@@ -302,9 +288,9 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
                     </div>
 
                     <div className="flex justify-between text-xs text-gray-600">
-                      <span>{lesson.introduction.length} intro pages</span>
-                      <span>{lesson.exercises.length} exercise pages</span>
-                      <span>{contentCount.total} items</span>
+                      <span>{contentCount.introPages} intro pages</span>
+                      <span>{contentCount.exercisePages} exercise pages</span>
+                      <span>{contentCount.totalItems} items</span>
                     </div>
 
                     <div className="flex gap-2">

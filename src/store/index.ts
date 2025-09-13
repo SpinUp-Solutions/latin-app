@@ -3,6 +3,7 @@ import authReducer from './slices/authSlice';
 import lessonReducer from './slices/lessonSlice';
 import clipboardReducer from './slices/clipboardSlice';
 import vocabularyPoolsReducer from './slices/vocabularyPoolSlice';
+import progressReducer from './slices/progressSlice';
 
 export const store = configureStore({
   reducer: {
@@ -10,6 +11,7 @@ export const store = configureStore({
     lesson: lessonReducer,
     clipboard: clipboardReducer,
     vocabularyPools: vocabularyPoolsReducer,
+    progress: progressReducer,
   },
   middleware: getDefaultMiddleware =>
     getDefaultMiddleware({

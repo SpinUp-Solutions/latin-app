@@ -12,12 +12,14 @@ import { SimpleRichDisplay } from '../core/simple-rich-display';
 
 interface Props {
   exercise: FillExercise;
-  onComplete?: () => void;
+  onComplete?: (score: number) => void;
 }
 
 const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
   const [userAnswer, setUserAnswer] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+
+  const [correctAnswers, setCorrectAnswers] = useState(0);
 
   const { currentIndex, isLastItem, autoAdvanceIfEnabled } = useExerciseProgression({
     totalItems: exercise.data.items.length,
@@ -36,12 +38,25 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
     setIsProcessing(true);
 
     if (validation.isCorrect) {
+      const newCorrectAnswers = correctAnswers + 1;
+      setCorrectAnswers(newCorrectAnswers);
       handleCorrect(isLastItem);
-      autoAdvanceIfEnabled(() => {
-        setUserAnswer('');
-        reset();
-        setIsProcessing(false);
-      });
+
+      if (isLastItem) {
+        const finalScore = Math.round((newCorrectAnswers / exercise.data.items.length) * 100);
+        autoAdvanceIfEnabled(() => {
+          setUserAnswer('');
+          reset();
+          setIsProcessing(false);
+        }, finalScore);
+      } else {
+        autoAdvanceIfEnabled(() => {
+          setUserAnswer('');
+          reset();
+          setIsProcessing(false);
+        });
+      }
+
       if (exercise.feedbackConfig.progressionRules?.autoAdvance === false) {
         setIsProcessing(false);
       }

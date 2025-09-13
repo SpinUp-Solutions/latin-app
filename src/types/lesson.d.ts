@@ -32,6 +32,27 @@ export interface LessonWithProgress extends Lesson {
   status?: LessonStatus;
 }
 
+export interface ExerciseProgress {
+  exerciseId: string;
+  completedAt: string;
+  score: number;
+}
+
+export interface UserProgress {
+  userId: string;
+  lessonId: string;
+  status: 'not-started' | 'in-progress' | 'completed';
+  completedAt?: string;
+  progress: number;
+  exerciseProgress: ExerciseProgress[];
+  score?: number;
+}
+
+export interface LessonWithAccess extends Lesson {
+  isAccessible: boolean;
+  userProgress?: UserProgress;
+}
+
 export type { IntroductionPage, ExercisePage } from './page';
 export type { RenderableContentItem } from './page';
 export type { ContentItem, TextContent, EmphasisContent, TableContent, ComponentNarration } from './content';

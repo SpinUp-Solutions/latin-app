@@ -8,9 +8,11 @@ import { SimpleRichDisplay } from '../core/simple-rich-display';
 
 interface PageTemplateProps {
   page: IntroductionPage | ExercisePage;
+  pageIndex?: number;
+  onExerciseComplete?: (itemIndex: number, score: number) => void;
 }
 
-export const PageTemplate: React.FC<PageTemplateProps> = ({ page }) => {
+export const PageTemplate: React.FC<PageTemplateProps> = ({ page, pageIndex, onExerciseComplete }) => {
   return (
     <motion.div
       key={page.id}
@@ -32,7 +34,12 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({ page }) => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: index * 0.1 }}
           className="space-y-4">
-          <ContentRenderer content={item} />
+          <ContentRenderer
+            content={item}
+            pageIndex={pageIndex}
+            itemIndex={index}
+            onComplete={onExerciseComplete ? score => onExerciseComplete(index, score) : undefined}
+          />
         </motion.div>
       ))}
     </motion.div>

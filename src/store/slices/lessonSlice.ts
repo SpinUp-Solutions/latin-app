@@ -4,14 +4,7 @@ import { RenderableContentItem } from '@/src/types/page';
 import { lessonService } from '@/src/services/lessonService';
 import { TooltipData } from '@/src/types/tooltip';
 import { extractTooltipsFromLesson } from '@/src/utils/tooltipUtils';
-
-interface LessonWithMetadata extends Lesson {
-  createdAt?: string;
-  createdBy?: string;
-  updatedAt?: string;
-  updatedBy?: string;
-  version?: number;
-}
+import { getLiveLessonsSorted } from '@/src/utils/lessonUtils';
 
 interface LessonState {
   currentLesson: Lesson | null;
@@ -24,13 +17,13 @@ interface LessonState {
   } | null;
   isModalOpen: boolean;
 
-  lessons: LessonWithMetadata[];
+  lessons: Lesson[];
   studentLessons: LessonWithProgress[];
-  
+
   loading: boolean;
   saving: boolean;
   error: string | null;
-  lastSavedLesson: LessonWithMetadata | null;
+  lastSavedLesson: Lesson | null;
 
   tooltips: Record<string, TooltipData>;
 }
@@ -67,7 +60,7 @@ export const saveLesson = createAsyncThunk(
 export const loadLessons = createAsyncThunk('lesson/loadLessons', async (_, { rejectWithValue }) => {
   try {
     const result = await lessonService.getLessons();
-    return result.lessons as LessonWithMetadata[];
+    return result.lessons as Lesson[];
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to load lessons';
     return rejectWithValue(errorMessage);
@@ -95,7 +88,7 @@ export const loadLessonById = createAsyncThunk(
         lesson = await lessonService.getLesson(lessonId);
       }
       const tooltips = extractTooltipsFromLesson(lesson);
-      return { lesson: lesson as LessonWithMetadata, tooltips };
+      return { lesson: lesson as Lesson, tooltips };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to load lesson';
       return rejectWithValue(errorMessage);
@@ -115,12 +108,28 @@ export const deleteLesson = createAsyncThunk('lesson/deleteLesson', async (lesso
 
 export const updateLessonsPublishStatus = createAsyncThunk(
   'lesson/updatePublishStatus',
-  async ({ lessonIds, isLive, startOrder }: { lessonIds: string[]; isLive: boolean; startOrder?: number }, { rejectWithValue }) => {
+  async (
+    { lessonIds, isLive, startOrder }: { lessonIds: string[]; isLive: boolean; startOrder?: number },
+    { rejectWithValue }
+  ) => {
     try {
       const result = await lessonService.updatePublishStatus(lessonIds, isLive, startOrder);
       return { ...result, lessonIds, isLive };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to update lessons';
+      return rejectWithValue(errorMessage);
+    }
+  }
+);
+
+export const reorderLessons = createAsyncThunk(
+  'lesson/reorderLessons',
+  async (updates: { lessonId: string; liveOrder: number }[], { rejectWithValue }) => {
+    try {
+      const result = await lessonService.reorderLessons(updates);
+      return { ...result, updates };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to reorder lessons';
       return rejectWithValue(errorMessage);
     }
   }
@@ -400,12 +409,12 @@ const lessonSlice = createSlice({
 
     localReorderLiveLessons: (state, action: PayloadAction<{ fromIndex: number; toIndex: number }>) => {
       const { fromIndex, toIndex } = action.payload;
-      const liveLessons = state.lessons.filter(l => l.isLive).sort((a, b) => (a.liveOrder || 0) - (b.liveOrder || 0));
-      
+      const liveLessons = getLiveLessonsSorted(state.lessons);
+
       if (fromIndex < liveLessons.length && toIndex < liveLessons.length) {
         const [removed] = liveLessons.splice(fromIndex, 1);
         liveLessons.splice(toIndex, 0, removed);
-        
+
         liveLessons.forEach((lesson, index) => {
           const lessonInState = state.lessons.find(l => l.id === lesson.id);
           if (lessonInState) {
@@ -424,7 +433,7 @@ const lessonSlice = createSlice({
       .addCase(saveLesson.fulfilled, (state, action) => {
         state.saving = false;
         state.error = null;
-        state.lastSavedLesson = action.payload.lesson as LessonWithMetadata;
+        state.lastSavedLesson = action.payload.lesson as Lesson;
         delete state.drafts[action.payload.lesson.id];
 
         if (state.currentLesson && state.currentLesson.id === action.payload.lesson.id) {
@@ -433,9 +442,9 @@ const lessonSlice = createSlice({
 
         const existingIndex = state.lessons.findIndex(l => l.id === action.payload.lesson.id);
         if (existingIndex >= 0) {
-          state.lessons[existingIndex] = action.payload.lesson as LessonWithMetadata;
+          state.lessons[existingIndex] = action.payload.lesson as Lesson;
         } else {
-          state.lessons.unshift(action.payload.lesson as LessonWithMetadata);
+          state.lessons.unshift(action.payload.lesson as Lesson);
         }
       })
       .addCase(saveLesson.rejected, (state, action) => {
@@ -512,6 +521,22 @@ const lessonSlice = createSlice({
         state.error = action.payload as string;
       })
 
+      .addCase(reorderLessons.pending, state => {
+        state.error = null;
+      })
+      .addCase(reorderLessons.fulfilled, (state, action) => {
+        const { updates } = action.payload;
+        updates.forEach(({ lessonId, liveOrder }) => {
+          const lesson = state.lessons.find(l => l.id === lessonId);
+          if (lesson) {
+            lesson.liveOrder = liveOrder;
+          }
+        });
+      })
+      .addCase(reorderLessons.rejected, (state, action) => {
+        state.error = action.payload as string;
+      })
+
       .addCase(loadDrafts.fulfilled, (state, action) => {
         state.drafts = action.payload;
       })
@@ -584,7 +609,7 @@ export const selectFilteredLessons = createSelector(
   [
     selectLessons,
     (_: { lesson: LessonState }, filter: 'all' | 'live' | 'draft') => filter,
-    (_: { lesson: LessonState }, __: 'all' | 'live' | 'draft', searchQuery: string = '') => searchQuery
+    (_: { lesson: LessonState }, __: 'all' | 'live' | 'draft', searchQuery: string = '') => searchQuery,
   ],
   (lessons, filter, searchQuery) => {
     let filtered = lessons;
@@ -599,16 +624,14 @@ export const selectFilteredLessons = createSelector(
     // Filter by search query
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
-      filtered = filtered.filter(l =>
-        l.title.toLowerCase().includes(query) ||
-        l.description?.toLowerCase().includes(query) ||
-        false
+      filtered = filtered.filter(
+        l => l.title.toLowerCase().includes(query) || l.description?.toLowerCase().includes(query) || false
       );
     }
 
     // Sort live lessons by order
     if (filter === 'live' || filter === 'all') {
-      filtered = filtered.sort((a, b) => {
+      filtered = [...filtered].sort((a, b) => {
         if (a.isLive && b.isLive) {
           return (a.liveOrder || 0) - (b.liveOrder || 0);
         }
@@ -623,11 +646,9 @@ export const selectFilteredLessons = createSelector(
 );
 
 // Convenience selectors using the parameterized selector
-export const selectLiveLessons = (state: { lesson: LessonState }) =>
-  selectFilteredLessons(state, 'live', '');
+export const selectLiveLessons = (state: { lesson: LessonState }) => selectFilteredLessons(state, 'live', '');
 
-export const selectAvailableLessons = (state: { lesson: LessonState }) =>
-  selectFilteredLessons(state, 'draft', '');
+export const selectAvailableLessons = (state: { lesson: LessonState }) => selectFilteredLessons(state, 'draft', '');
 
 export const selectLessonById = (state: { lesson: LessonState }, lessonId: string) =>
   state.lesson.lessons.find(l => l.id === lessonId);

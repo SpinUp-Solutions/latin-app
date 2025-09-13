@@ -27,7 +27,9 @@ import TextComponent from './text-component';
 
 interface ContentRendererProps {
   content: ContentItem;
-  onComplete?: () => void;
+  onComplete?: (score: number) => void;
+  pageIndex?: number;
+  itemIndex?: number;
 }
 
 export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onComplete }) => {

@@ -1,6 +1,7 @@
 import React from 'react';
 import { BookOpen } from 'lucide-react';
 import { Lesson } from '@/src/types/lesson';
+import { hasLessonContent } from '@/src/utils/lessonUtils';
 import { LessonPlayer } from '@/src/components/ui/lesson/lesson-player';
 
 interface LessonPreviewProps {
@@ -8,7 +9,7 @@ interface LessonPreviewProps {
 }
 
 export const LessonPreview: React.FC<LessonPreviewProps> = ({ lesson }) => {
-  const hasContent = lesson.introduction.length > 0 || lesson.exercises.length > 0;
+  const hasContent = hasLessonContent(lesson);
 
   return (
     <div className="w-1/2 border-l border-border bg-white overflow-y-auto">

@@ -89,6 +89,15 @@ class LessonService {
       body: JSON.stringify({ lessonIds, isLive, startOrder }),
     });
   }
+
+  async reorderLessons(
+    updates: { lessonId: string; liveOrder: number }[]
+  ): Promise<{ success: boolean; message: string; updatedCount: number }> {
+    return this.makeRequest('/api/admin/lessons/reorder', {
+      method: 'POST',
+      body: JSON.stringify({ updates }),
+    });
+  }
 }
 
 export const lessonService = new LessonService();

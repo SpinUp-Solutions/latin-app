@@ -13,7 +13,7 @@ import { CheckCircle2 } from 'lucide-react';
 
 interface Props {
   exercise: OddOneOutExercise;
-  onComplete?: () => void;
+  onComplete?: (score: number) => void;
 }
 
 const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
@@ -46,7 +46,8 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
       if (exercise.feedbackConfig.progressionRules?.autoAdvance !== false) {
         const delay = exercise.feedbackConfig.timingConfig?.nextExerciseDelay || 2000;
         setTimeout(() => {
-          onComplete?.();
+          // Single exercise, successful completion = 100%
+          onComplete?.(100);
         }, delay);
       }
     } else {

@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { AnimatePresence } from 'framer-motion';
+import { useDispatch, useSelector } from 'react-redux';
 import { Lesson, IntroductionPage, ExercisePage } from '@/src/types/lesson';
 import { BookOpen, Check } from 'lucide-react';
 import { Button } from '@/src/components/ui/button';
@@ -11,6 +12,8 @@ import PageTemplate from './page-template';
 import useAudio from '@/src/hooks/useAudio';
 import LessonProgressBar from './lesson-progress-bar';
 import LessonNavigation from '../exercises/lesson-navigation';
+import { RootState, AppDispatch } from '@/src/store';
+import { markExerciseComplete, loadUserProgress } from '@/src/store/slices/progressSlice';
 
 interface LessonPlayerProps {
   lesson: Lesson;
@@ -19,10 +22,19 @@ interface LessonPlayerProps {
 type LessonMode = 'introduction' | 'exercise';
 
 export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
+  const dispatch = useDispatch<AppDispatch>();
+  const { user } = useSelector((state: RootState) => state.auth);
+
   const [mode, setMode] = useState<LessonMode>('introduction');
   const [currentIntroIndex, setCurrentIntroIndex] = useState(0);
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
   const [introCompleted, setIntroCompleted] = useState(false);
+
+  useEffect(() => {
+    if (user?.uid) {
+      dispatch(loadUserProgress({ userId: user.uid, lessonId: lesson.id }));
+    }
+  }, [dispatch, user?.uid, lesson.id]);
 
   const currentIntroPage: IntroductionPage | undefined =
     mode === 'introduction' ? lesson.introduction[currentIntroIndex] : undefined;
@@ -54,6 +66,24 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
   }, [handleNext]);
 
   const { audioRef, isPlaying, togglePlay } = useAudio(currentContentForAudio?.audioPath, handleAudioEnded);
+
+  const handleExerciseComplete = useCallback(
+    (itemIndex: number, score: number) => {
+      if (!user?.uid) return;
+
+      const exerciseId = `page${currentExerciseIndex}-item${itemIndex}`;
+      dispatch(
+        markExerciseComplete({
+          userId: user.uid,
+          lessonId: lesson.id,
+          exerciseId,
+          score,
+          lesson,
+        })
+      );
+    },
+    [dispatch, user?.uid, lesson, currentExerciseIndex]
+  );
 
   function handlePrevious() {
     if (mode === 'introduction') {
@@ -162,10 +192,15 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
             <div className="lesson-content">
               <AnimatePresence mode="wait">
                 {mode === 'introduction' && currentIntroPage && (
-                  <PageTemplate key={currentIntroPage.id} page={currentIntroPage} />
+                  <PageTemplate key={currentIntroPage.id} page={currentIntroPage} pageIndex={currentIntroIndex} />
                 )}
                 {mode === 'exercise' && currentExercisePage && (
-                  <PageTemplate key={currentExercisePage.id} page={currentExercisePage} />
+                  <PageTemplate
+                    key={currentExercisePage.id}
+                    page={currentExercisePage}
+                    pageIndex={currentExerciseIndex}
+                    onExerciseComplete={handleExerciseComplete}
+                  />
                 )}
               </AnimatePresence>
             </div>
