@@ -7,7 +7,7 @@ import { signOut } from 'firebase/auth';
 import { auth } from '@/src/services/firebase';
 import type { RootState, AppDispatch } from '@/src/store';
 import { loadStudentLessons } from '@/src/store/slices/lessonSlice';
-import { loadUserProgress } from '@/src/store/slices/progressSlice';
+import { loadUserProgress, resetProgress } from '@/src/store/slices/progressSlice';
 import { getContentCount } from '@/src/utils/lessonUtils';
 import { Button } from '@/src/components/ui/button';
 import { toast } from 'sonner';
@@ -79,6 +79,40 @@ export default function DashboardPage() {
       toast.success('Successfully logged out!');
     } catch {
       toast.error('Failed to log out. Please try again.');
+    }
+  };
+
+  const handleResetProgress = async () => {
+    if (!user?.uid) return;
+
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        toast.error('User not authenticated');
+        return;
+      }
+
+      const token = await currentUser.getIdToken();
+      const response = await fetch('/api/dev/reset-progress', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ userId: user.uid })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        dispatch(resetProgress());
+        toast.success(`Progress reset successfully! Deleted ${data.deletedCount || 0} records`);
+      } else {
+        toast.error(`Reset failed: ${data.error}`);
+      }
+    } catch (error) {
+      console.error('Reset progress error:', error);
+      toast.error('Failed to reset progress');
     }
   };
 
@@ -170,6 +204,9 @@ export default function DashboardPage() {
             onClick={() => router.push('/profile')}>
             <User className="h-5 w-5 mr-2" />
             Profile
+          </Button>
+          <Button variant="destructive" size="sm" onClick={handleResetProgress}>
+            Reset Progress
           </Button>
           <Button onClick={handleSignOut}>Sign Out</Button>
         </div>
