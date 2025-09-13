@@ -34,6 +34,7 @@ export default function LiveLessonsPage() {
   const [selectedLessons, setSelectedLessons] = useState<Set<string>>(new Set());
   const [isPublishing, setIsPublishing] = useState(false);
   const [originalLiveIds, setOriginalLiveIds] = useState<Set<string>>(new Set());
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
     if (!user || user.role !== 'admin') {
@@ -45,10 +46,13 @@ export default function LiveLessonsPage() {
   }, [dispatch, user, router]);
 
   useEffect(() => {
-    const liveIds = new Set(liveLessons.map(l => l.id));
-    setOriginalLiveIds(liveIds);
-    setSelectedLessons(liveIds);
-  }, [liveLessons]);
+    if (liveLessons.length > 0 && !initialized) {
+      const liveIds = new Set(liveLessons.map(l => l.id));
+      setOriginalLiveIds(liveIds);
+      setSelectedLessons(liveIds);
+      setInitialized(true);
+    }
+  }, [liveLessons, initialized]);
 
   const getFilteredLessons = (): Array<(Lesson & { isLive: true }) | (Lesson & { isLive: false })> => {
     const lessons: Array<(Lesson & { isLive: true }) | (Lesson & { isLive: false })> = [];
