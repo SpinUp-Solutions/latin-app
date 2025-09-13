@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
 import { signOut } from 'firebase/auth';
@@ -31,14 +31,28 @@ export default function DashboardPage() {
     }
   }, [user, loading, router, dispatch]);
 
-  // Load progress for all lessons
-  useEffect(() => {
+  const loadAllProgress = useCallback(() => {
     if (user?.uid && studentLessons.length > 0) {
       studentLessons.forEach(lesson => {
         dispatch(loadUserProgress({ userId: user.uid, lessonId: lesson.id }));
       });
     }
   }, [dispatch, user?.uid, studentLessons]);
+
+  useEffect(() => {
+    loadAllProgress();
+  }, [loadAllProgress]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        loadAllProgress();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [loadAllProgress]);
 
   const lessons = useMemo(() => {
     return studentLessons.map(lesson => {
