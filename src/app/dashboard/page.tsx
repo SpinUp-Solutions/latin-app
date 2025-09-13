@@ -6,25 +6,25 @@ import { useDispatch, useSelector } from 'react-redux';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/src/services/firebase';
 import type { RootState, AppDispatch } from '@/src/store';
-import { fetchStudentLiveLessons } from '@/src/store/slices/liveLessonSlice';
+import { loadStudentLessons } from '@/src/store/slices/lessonSlice';
 import { Button } from '@/src/components/ui/button';
 import { toast } from 'sonner';
 import React from 'react';
 import { BookOpen, User, Clock, Target, TrendingUp, CheckCircle, Play } from 'lucide-react';
 import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
-import { LessonStatus } from '@/src/types/live-lesson';
+import { LessonStatus } from '@/src/types/lesson';
 
 export default function DashboardPage() {
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
   const { user, loading } = useSelector((state: RootState) => state.auth);
-  const { studentLessons, loading: lessonsLoading } = useSelector((state: RootState) => state.liveLesson);
+  const { studentLessons, loading: lessonsLoading } = useSelector((state: RootState) => state.lesson);
 
   useEffect(() => {
     if (!loading && !user) {
       router.push('/login');
     } else if (user) {
-      dispatch(fetchStudentLiveLessons());
+      dispatch(loadStudentLessons());
     }
   }, [user, loading, router, dispatch]);
 
@@ -46,13 +46,10 @@ export default function DashboardPage() {
     );
   }
 
-  const getStatus = (progress: number): LessonStatus =>
-    progress === 100 ? 'completed' : progress > 0 ? 'current' : 'upcoming';
-
-  const lessons = studentLessons.map(liveLesson => ({
-    ...liveLesson.lessonData,
-    progress: liveLesson.progress || 0,
-    status: getStatus(liveLesson.progress || 0),
+  const lessons = studentLessons.map(lesson => ({
+    ...lesson,
+    progress: lesson.progress || 0,
+    status: lesson.status || 'available',
   }));
 
   const todaysGoals = [

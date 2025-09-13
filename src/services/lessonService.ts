@@ -1,4 +1,4 @@
-import { Lesson } from '@/src/types/lesson';
+import { Lesson, LessonWithProgress } from '@/src/types/lesson';
 import { auth } from './firebase';
 
 class LessonService {
@@ -67,6 +67,50 @@ class LessonService {
   async deleteLesson(id: string): Promise<{ success: boolean; message: string }> {
     return this.makeRequest(`/api/admin/lessons/${id}`, {
       method: 'DELETE',
+    });
+  }
+
+  async getStudentLessons(): Promise<{ lessons: LessonWithProgress[] }> {
+    return this.makeRequest('/api/lessons');
+  }
+
+  async getLessonById(lessonId: string): Promise<LessonWithProgress> {
+    const response = await this.makeRequest(`/api/lessons/${lessonId}`);
+    return response.lesson;
+  }
+
+  async publishLesson(lessonId: string, order?: number): Promise<{ success: boolean; message: string }> {
+    return this.makeRequest('/api/admin/lessons/publish', {
+      method: 'POST',
+      body: JSON.stringify({ lessonId, order }),
+    });
+  }
+
+  async unpublishLesson(lessonId: string): Promise<{ success: boolean; message: string }> {
+    return this.makeRequest('/api/admin/lessons/unpublish', {
+      method: 'POST',
+      body: JSON.stringify({ lessonId }),
+    });
+  }
+
+  async reorderLiveLessons(lessons: { lessonId: string; order: number }[]): Promise<{ success: boolean }> {
+    return this.makeRequest('/api/admin/lessons/reorder', {
+      method: 'POST',
+      body: JSON.stringify({ lessons }),
+    });
+  }
+
+  async batchPublish(lessonIds: string[]): Promise<{ success: boolean; message: string; processedCount: number }> {
+    return this.makeRequest('/api/admin/lessons/batch-publish', {
+      method: 'POST',
+      body: JSON.stringify({ lessonIds }),
+    });
+  }
+
+  async batchUnpublish(lessonIds: string[]): Promise<{ success: boolean; message: string; processedCount: number }> {
+    return this.makeRequest('/api/admin/lessons/batch-unpublish', {
+      method: 'POST',
+      body: JSON.stringify({ lessonIds }),
     });
   }
 }

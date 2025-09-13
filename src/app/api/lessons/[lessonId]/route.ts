@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
-import { LiveLessonWithData } from '@/src/types/live-lesson';
+import { LessonWithProgress } from '@/src/types/lesson';
 
 export async function GET(request: NextRequest, { params }: { params: { lessonId: string } }) {
   try {
@@ -10,39 +10,27 @@ export async function GET(request: NextRequest, { params }: { params: { lessonId
       return NextResponse.json({ error: 'Lesson ID is required' }, { status: 400 });
     }
 
-    // First check if this lesson is published in live_lessons
-    const liveLessonsSnapshot = await adminDb.collection('live_lessons').where('lessonId', '==', lessonId).get();
-
-    if (liveLessonsSnapshot.empty) {
-      return NextResponse.json({ error: 'Lesson not found or not published' }, { status: 404 });
-    }
-
-    // Get the live lesson data
-    const liveLessonData = liveLessonsSnapshot.docs[0].data();
-
-    // Fetch the lesson data from lessons collection
     const lessonDoc = await adminDb.collection('lessons').doc(lessonId).get();
 
     if (!lessonDoc.exists) {
-      return NextResponse.json({ error: 'Lesson data not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Lesson not found' }, { status: 404 });
     }
 
-    const lessonData = {
-      id: lessonDoc.id,
-      ...lessonDoc.data(),
-    };
+    const lessonData = lessonDoc.data();
+    
+    if (!lessonData?.isLive) {
+      return NextResponse.json({ error: 'Lesson not published' }, { status: 404 });
+    }
 
-    // TODO: Add user progress tracking here
-    // For now, return mock progress data
-    const progress = 0; // Will be fetched from user_progress collection
+    const progress = 0;
     const status = progress === 0 ? 'available' : progress === 100 ? 'completed' : 'in-progress';
 
-    const lesson: LiveLessonWithData = {
-      ...liveLessonData,
-      lessonData,
+    const lesson: LessonWithProgress = {
+      id: lessonDoc.id,
+      ...lessonData,
       progress,
       status,
-    } as LiveLessonWithData;
+    } as LessonWithProgress;
 
     return NextResponse.json({ lesson });
   } catch (error) {

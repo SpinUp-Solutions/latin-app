@@ -4,7 +4,7 @@ import React, { useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
 import type { RootState, AppDispatch } from '@/src/store';
-import { fetchLessonById } from '@/src/store/slices/liveLessonSlice';
+import { loadLessonById } from '@/src/store/slices/lessonSlice';
 import LessonPlayer from '@/src/components/ui/lesson/lesson-player';
 
 export default function DynamicLessonPage() {
@@ -12,15 +12,15 @@ export default function DynamicLessonPage() {
   const lessonId = params.lessonId as string;
   const dispatch = useDispatch<AppDispatch>();
 
-  const { currentLesson, lessonLoading, error } = useSelector((state: RootState) => state.liveLesson);
+  const { currentLesson, loading, error } = useSelector((state: RootState) => state.lesson);
 
   useEffect(() => {
     if (lessonId) {
-      dispatch(fetchLessonById(lessonId));
+      dispatch(loadLessonById({ lessonId, isStudent: true }));
     }
   }, [lessonId, dispatch]);
 
-  if (lessonLoading) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-roman-marble">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>

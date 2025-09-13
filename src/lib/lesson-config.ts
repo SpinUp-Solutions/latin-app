@@ -7,6 +7,10 @@ const lessons: Lesson[] = [
     id: 'lesson-1',
     title: 'The Verb',
     description: 'Lesson 1',
+    isLive: false,
+    liveOrder: null,
+    publishedAt: null,
+    publishedBy: null,
     introduction: [
       {
         id: 'intro-page-1',

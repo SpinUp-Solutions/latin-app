@@ -7,18 +7,26 @@ export async function GET(request: NextRequest) {
   try {
     const user = await verifyAdminAccess(request);
     if (!user) {
-      // This path should not be hit if verifyAdminAccess throws an error,
-      // but it's here for type safety and as a fallback.
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const lessonsSnapshot = await adminDb.collection('lessons').orderBy('updatedAt', 'desc').get();
-    const lessons = lessonsSnapshot.docs.map(doc => ({
+    const snapshot = await adminDb.collection('lessons')
+      .orderBy('updatedAt', 'desc')
+      .get();
+
+    const lessons = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
-    }));
+    })) as Lesson[];
 
-    return NextResponse.json({ lessons });
+    const liveLessons = lessons.filter(l => l.isLive);
+    const availableLessons = lessons.filter(l => !l.isLive);
+
+    return NextResponse.json({
+      lessons,
+      liveLessons,
+      availableLessons,
+    });
   } catch (error) {
     console.error('Error fetching lessons:', error);
     if (error instanceof Error) {
@@ -58,7 +66,10 @@ export async function POST(request: NextRequest) {
       updatedAt: new Date().toISOString(),
       updatedBy: user.uid,
       version: 1,
-      published: false,
+      isLive: false,
+      liveOrder: null,
+      publishedAt: null,
+      publishedBy: null,
     };
 
     // Save to Firestore
@@ -111,7 +122,10 @@ export async function PUT(request: NextRequest) {
       updatedAt: new Date().toISOString(),
       updatedBy: user.uid,
       version: (existingLesson?.version || 0) + 1,
-      published: existingLesson?.published || false,
+      isLive: existingLesson?.isLive || false,
+      liveOrder: existingLesson?.liveOrder || null,
+      publishedAt: existingLesson?.publishedAt || null,
+      publishedBy: existingLesson?.publishedBy || null,
     };
 
     await adminDb.collection('lessons').doc(lesson.id).set(updatedLessonData);
