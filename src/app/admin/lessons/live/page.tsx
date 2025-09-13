@@ -4,7 +4,13 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState, AppDispatch } from '@/src/store';
-import { fetchAdminLiveLessons, batchPublishLessons, batchUnpublishLessons } from '@/src/store/slices/liveLessonSlice';
+import { 
+  loadLessons, 
+  batchPublishLessons, 
+  batchUnpublishLessons,
+  selectLiveLessons,
+  selectAvailableLessons 
+} from '@/src/store/slices/lessonSlice';
 import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
 import { RomanCard, RomanCardContent, RomanCardHeader } from '@/src/components/ui/core/roman-card';
@@ -13,14 +19,15 @@ import { Checkbox } from '@/src/components/ui/checkbox';
 import { ArrowLeft, Globe, Search, Filter, BookOpen, Clock, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
-import { LiveLessonWithData } from '@/src/types/live-lesson';
 import { Lesson } from '@/src/types/lesson';
 
 export default function LiveLessonsPage() {
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
   const { user } = useSelector((state: RootState) => state.auth);
-  const { liveLessons, availableLessons, loading } = useSelector((state: RootState) => state.liveLesson);
+  const { loading } = useSelector((state: RootState) => state.lesson);
+  const liveLessons = useSelector((state: RootState) => selectLiveLessons(state));
+  const availableLessons = useSelector((state: RootState) => selectAvailableLessons(state));
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'live' | 'draft'>('all');
@@ -34,28 +41,27 @@ export default function LiveLessonsPage() {
       return;
     }
 
-    dispatch(fetchAdminLiveLessons());
+    dispatch(loadLessons());
   }, [dispatch, user, router]);
 
   useEffect(() => {
-    const liveIds = new Set(liveLessons.map(l => l.lessonId));
+    const liveIds = new Set(liveLessons.map(l => l.id));
     setOriginalLiveIds(liveIds);
     setSelectedLessons(liveIds);
   }, [liveLessons]);
 
-  const getFilteredLessons = (): Array<(LiveLessonWithData & { isLive: true }) | (Lesson & { isLive: false })> => {
-    const lessons: Array<(LiveLessonWithData & { isLive: true }) | (Lesson & { isLive: false })> = [];
+  const getFilteredLessons = (): Array<(Lesson & { isLive: true }) | (Lesson & { isLive: false })> => {
+    const lessons: Array<(Lesson & { isLive: true }) | (Lesson & { isLive: false })> = [];
 
     if (filterStatus === 'all' || filterStatus === 'live') {
-      for (const liveLesson of liveLessons) {
-        const lesson = liveLesson.lessonData;
+      for (const lesson of liveLessons) {
         const matchesSearch =
           !searchQuery ||
           lesson.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
           lesson.description?.toLowerCase().includes(searchQuery.toLowerCase());
 
         if (matchesSearch) {
-          lessons.push({ ...liveLesson, isLive: true as const });
+          lessons.push({ ...lesson, isLive: true as const });
         }
       }
     }
@@ -117,7 +123,7 @@ export default function LiveLessonsPage() {
       }
 
       toast.success('Changes applied successfully');
-      dispatch(fetchAdminLiveLessons());
+      dispatch(loadLessons());
     } catch (error) {
       toast.error('Failed to apply changes');
     }
@@ -261,15 +267,12 @@ export default function LiveLessonsPage() {
                 <div className="p-8 text-center text-gray-500">No lessons found matching your criteria</div>
               ) : (
                 getFilteredLessons().map(lesson => {
-                  const lessonId = lesson.isLive ? lesson.lessonId : lesson.id;
-                  const lessonData = lesson.isLive ? lesson.lessonData : lesson;
-
                   return (
-                    <div key={lessonId} className="p-4 hover:bg-gray-50 transition-colors">
+                    <div key={lesson.id} className="p-4 hover:bg-gray-50 transition-colors">
                       <div className="flex items-start gap-4">
                         <Checkbox
-                          checked={selectedLessons.has(lessonId)}
-                          onCheckedChange={() => handleSelectLesson(lessonId)}
+                          checked={selectedLessons.has(lesson.id)}
+                          onCheckedChange={() => handleSelectLesson(lesson.id)}
                           className="mt-1"
                         />
 
@@ -277,23 +280,23 @@ export default function LiveLessonsPage() {
                           <div className="flex items-start justify-between">
                             <div>
                               <div className="flex items-center gap-2 mb-1">
-                                <h3 className="font-serif text-lg">{lessonData.title}</h3>
+                                <h3 className="font-serif text-lg">{lesson.title}</h3>
                                 <Badge variant={lesson.isLive ? 'default' : 'secondary'}>
                                   {lesson.isLive ? 'Live' : 'Draft'}
                                 </Badge>
                               </div>
-                              {lessonData.description && (
-                                <p className="text-sm text-gray-600 mb-2">{lessonData.description}</p>
+                              {lesson.description && (
+                                <p className="text-sm text-gray-600 mb-2">{lesson.description}</p>
                               )}
                               <div className="flex items-center gap-4 text-xs text-gray-500">
-                                <span>{lessonData.introduction?.length || 0} intro pages</span>
-                                <span>{lessonData.exercises?.length || 0} exercise pages</span>
+                                <span>{lesson.introduction?.length || 0} intro pages</span>
+                                <span>{lesson.exercises?.length || 0} exercise pages</span>
                               </div>
                             </div>
 
                             <div className="flex items-center gap-2">
                               <Button size="sm" variant="outline" asChild>
-                                <Link href={`/admin/lessons/edit/${lessonId}`}>Edit</Link>
+                                <Link href={`/admin/lessons/edit/${lesson.id}`}>Edit</Link>
                               </Button>
                             </div>
                           </div>

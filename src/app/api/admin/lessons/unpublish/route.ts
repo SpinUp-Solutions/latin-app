@@ -2,24 +2,34 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 
-export async function DELETE(request: NextRequest, { params }: { params: { lessonId: string } }) {
+export async function POST(request: NextRequest) {
   try {
     const user = await verifyAdminAccess(request);
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { lessonId } = params;
+    const { lessonId } = await request.json();
 
-    // Check if live lesson exists
-    const liveLessonDoc = await adminDb.collection('live_lessons').doc(lessonId).get();
-
-    if (!liveLessonDoc.exists) {
-      return NextResponse.json({ error: 'Live lesson not found' }, { status: 404 });
+    if (!lessonId) {
+      return NextResponse.json({ error: 'Lesson ID is required' }, { status: 400 });
     }
 
-    // Delete the live lesson document
-    await adminDb.collection('live_lessons').doc(lessonId).delete();
+    const lessonDoc = await adminDb.collection('lessons').doc(lessonId).get();
+    if (!lessonDoc.exists) {
+      return NextResponse.json({ error: 'Lesson not found' }, { status: 404 });
+    }
+
+    if (!lessonDoc.data()?.isLive) {
+      return NextResponse.json({ error: 'Lesson is not live' }, { status: 409 });
+    }
+
+    await adminDb.collection('lessons').doc(lessonId).update({
+      isLive: false,
+      liveOrder: null,
+      publishedAt: null,
+      publishedBy: null,
+    });
 
     console.log(`Lesson ${lessonId} unpublished by ${user.uid}`);
 
@@ -29,9 +39,6 @@ export async function DELETE(request: NextRequest, { params }: { params: { lesso
     });
   } catch (error) {
     console.error('Error unpublishing lesson:', error);
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
     return NextResponse.json({ error: 'Failed to unpublish lesson' }, { status: 500 });
   }
 }
