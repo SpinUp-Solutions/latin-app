@@ -79,38 +79,10 @@ class LessonService {
     return response.lesson;
   }
 
-  async publishLesson(lessonId: string, order?: number): Promise<{ success: boolean; message: string }> {
-    return this.makeRequest('/api/admin/lessons/publish', {
+  async updatePublishStatus(lessonIds: string[], isLive: boolean, startOrder?: number): Promise<{ success: boolean; message: string; processedCount: number }> {
+    return this.makeRequest('/api/admin/lessons/update-publish-status', {
       method: 'POST',
-      body: JSON.stringify({ lessonId, order }),
-    });
-  }
-
-  async unpublishLesson(lessonId: string): Promise<{ success: boolean; message: string }> {
-    return this.makeRequest('/api/admin/lessons/unpublish', {
-      method: 'POST',
-      body: JSON.stringify({ lessonId }),
-    });
-  }
-
-  async reorderLiveLessons(lessons: { lessonId: string; order: number }[]): Promise<{ success: boolean }> {
-    return this.makeRequest('/api/admin/lessons/reorder', {
-      method: 'POST',
-      body: JSON.stringify({ lessons }),
-    });
-  }
-
-  async batchPublish(lessonIds: string[]): Promise<{ success: boolean; message: string; processedCount: number }> {
-    return this.makeRequest('/api/admin/lessons/batch-publish', {
-      method: 'POST',
-      body: JSON.stringify({ lessonIds }),
-    });
-  }
-
-  async batchUnpublish(lessonIds: string[]): Promise<{ success: boolean; message: string; processedCount: number }> {
-    return this.makeRequest('/api/admin/lessons/batch-unpublish', {
-      method: 'POST',
-      body: JSON.stringify({ lessonIds }),
+      body: JSON.stringify({ lessonIds, isLive, startOrder }),
     });
   }
 }
