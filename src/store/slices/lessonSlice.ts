@@ -113,66 +113,14 @@ export const deleteLesson = createAsyncThunk('lesson/deleteLesson', async (lesso
   }
 });
 
-export const publishLesson = createAsyncThunk(
-  'lesson/publishLesson',
-  async ({ lessonId, order }: { lessonId: string; order?: number }, { rejectWithValue }) => {
+export const updateLessonsPublishStatus = createAsyncThunk(
+  'lesson/updatePublishStatus',
+  async ({ lessonIds, isLive, startOrder }: { lessonIds: string[]; isLive: boolean; startOrder?: number }, { rejectWithValue }) => {
     try {
-      const result = await lessonService.publishLesson(lessonId, order);
-      return { ...result, lessonId };
+      const result = await lessonService.updatePublishStatus(lessonIds, isLive, startOrder);
+      return { ...result, lessonIds, isLive };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to publish lesson';
-      return rejectWithValue(errorMessage);
-    }
-  }
-);
-
-export const unpublishLesson = createAsyncThunk(
-  'lesson/unpublishLesson',
-  async (lessonId: string, { rejectWithValue }) => {
-    try {
-      const result = await lessonService.unpublishLesson(lessonId);
-      return { ...result, lessonId };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to unpublish lesson';
-      return rejectWithValue(errorMessage);
-    }
-  }
-);
-
-export const reorderLiveLessons = createAsyncThunk(
-  'lesson/reorderLiveLessons',
-  async (lessons: { lessonId: string; order: number }[], { rejectWithValue }) => {
-    try {
-      const result = await lessonService.reorderLiveLessons(lessons);
-      return result;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to reorder lessons';
-      return rejectWithValue(errorMessage);
-    }
-  }
-);
-
-export const batchPublishLessons = createAsyncThunk(
-  'lesson/batchPublish',
-  async (lessonIds: string[], { rejectWithValue }) => {
-    try {
-      const result = await lessonService.batchPublish(lessonIds);
-      return result;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to publish lessons';
-      return rejectWithValue(errorMessage);
-    }
-  }
-);
-
-export const batchUnpublishLessons = createAsyncThunk(
-  'lesson/batchUnpublish',
-  async (lessonIds: string[], { rejectWithValue }) => {
-    try {
-      const result = await lessonService.batchUnpublish(lessonIds);
-      return result;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to unpublish lessons';
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update lessons';
       return rejectWithValue(errorMessage);
     }
   }
@@ -537,60 +485,30 @@ const lessonSlice = createSlice({
         state.error = action.payload as string;
       })
 
-      .addCase(publishLesson.pending, state => {
+      .addCase(updateLessonsPublishStatus.pending, state => {
         state.error = null;
       })
-      .addCase(publishLesson.fulfilled, (state, action) => {
-        const lesson = state.lessons.find(l => l.id === action.meta.arg.lessonId);
-        if (lesson) {
-          lesson.isLive = true;
-          lesson.publishedAt = new Date().toISOString();
-          lesson.publishedBy = 'admin';
-          lesson.liveOrder = action.meta.arg.order ?? state.lessons.filter(l => l.isLive).length;
+      .addCase(updateLessonsPublishStatus.fulfilled, (state, action) => {
+        const { lessonIds, isLive } = action.payload;
+        let orderCounter = 0;
+
+        if (isLive) {
+          // Get current max order for new live lessons
+          const maxOrder = Math.max(...state.lessons.filter(l => l.isLive).map(l => l.liveOrder || 0), -1);
+          orderCounter = maxOrder + 1;
         }
-      })
-      .addCase(publishLesson.rejected, (state, action) => {
-        state.error = action.payload as string;
-      })
 
-      .addCase(unpublishLesson.pending, state => {
-        state.error = null;
+        lessonIds.forEach(id => {
+          const lesson = state.lessons.find(l => l.id === id);
+          if (lesson) {
+            lesson.isLive = isLive;
+            lesson.liveOrder = isLive ? orderCounter++ : null;
+            lesson.publishedAt = isLive ? new Date().toISOString() : null;
+            lesson.publishedBy = isLive ? 'admin' : null;
+          }
+        });
       })
-      .addCase(unpublishLesson.fulfilled, (state, action) => {
-        const lesson = state.lessons.find(l => l.id === action.meta.arg);
-        if (lesson) {
-          lesson.isLive = false;
-          lesson.liveOrder = null;
-          lesson.publishedAt = null;
-          lesson.publishedBy = null;
-        }
-      })
-      .addCase(unpublishLesson.rejected, (state, action) => {
-        state.error = action.payload as string;
-      })
-
-      .addCase(reorderLiveLessons.pending, state => {
-        state.error = null;
-      })
-      .addCase(reorderLiveLessons.rejected, (state, action) => {
-        state.error = action.payload as string;
-      })
-
-      .addCase(batchPublishLessons.pending, state => {
-        state.error = null;
-      })
-      .addCase(batchPublishLessons.fulfilled, () => {
-      })
-      .addCase(batchPublishLessons.rejected, (state, action) => {
-        state.error = action.payload as string;
-      })
-
-      .addCase(batchUnpublishLessons.pending, state => {
-        state.error = null;
-      })
-      .addCase(batchUnpublishLessons.fulfilled, () => {
-      })
-      .addCase(batchUnpublishLessons.rejected, (state, action) => {
+      .addCase(updateLessonsPublishStatus.rejected, (state, action) => {
         state.error = action.payload as string;
       })
 

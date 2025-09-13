@@ -4,12 +4,11 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState, AppDispatch } from '@/src/store';
-import { 
-  loadLessons, 
-  batchPublishLessons, 
-  batchUnpublishLessons,
+import {
+  loadLessons,
+  updateLessonsPublishStatus,
   selectLiveLessons,
-  selectAvailableLessons 
+  selectAvailableLessons
 } from '@/src/store/slices/lessonSlice';
 import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
@@ -119,11 +118,17 @@ export default function LiveLessonsPage() {
 
     try {
       if (toUnpublish.length > 0) {
-        await dispatch(batchUnpublishLessons(toUnpublish)).unwrap();
+        await dispatch(updateLessonsPublishStatus({
+          lessonIds: toUnpublish,
+          isLive: false
+        })).unwrap();
       }
 
       if (toPublish.length > 0) {
-        await dispatch(batchPublishLessons(toPublish)).unwrap();
+        await dispatch(updateLessonsPublishStatus({
+          lessonIds: toPublish,
+          isLive: true
+        })).unwrap();
       }
 
       toast.success('Changes applied successfully');
