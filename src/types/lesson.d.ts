@@ -25,7 +25,7 @@ export interface LessonWithVocabularyPool extends Lesson {
   vocabularyPoolData?: VocabularyPoolWithWords;
 }
 
-export type LessonStatus = 'available' | 'in-progress' | 'completed' | 'locked' | 'current' | 'upcoming';
+export type LessonStatus = 'available' | 'in-progress' | 'completed' | 'locked';
 
 export interface LessonWithProgress extends Lesson {
   progress?: number;
@@ -41,11 +41,14 @@ export interface ExerciseProgress {
 export interface UserProgress {
   userId: string;
   lessonId: string;
-  status: 'not-started' | 'in-progress' | 'completed';
+  status: LessonStatus;
   completedAt?: string;
   progress: number;
   exerciseProgress: ExerciseProgress[];
   score?: number;
+  overallProgress?: number;
+  exercisesCompleted?: number;
+  totalExercises?: number;
 }
 
 export interface LessonWithAccess extends Lesson {

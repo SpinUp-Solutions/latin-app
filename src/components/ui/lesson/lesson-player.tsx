@@ -78,7 +78,6 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
           lessonId: lesson.id,
           exerciseId,
           score,
-          lesson,
         })
       );
     },

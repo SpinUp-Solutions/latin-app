@@ -127,20 +127,6 @@ export default function DashboardPage() {
       text: 'Review',
       showIcon: <CheckCircle className="h-6 w-6" />,
     },
-    current: {
-      card: 'border-roman-red bg-roman-red/5',
-      icon: 'bg-roman-red text-white',
-      button: 'bg-roman-red hover:bg-roman-red/90',
-      text: 'Continue',
-      showIcon: null,
-    },
-    upcoming: {
-      card: 'border-roman-gold bg-roman-gold/5',
-      icon: 'bg-roman-gold text-white',
-      button: 'bg-roman-gold hover:bg-roman-gold/90',
-      text: 'Start',
-      showIcon: null,
-    },
     available: {
       card: 'border-roman-stone bg-roman-stone/5',
       icon: 'bg-roman-stone text-white',
@@ -250,18 +236,23 @@ export default function DashboardPage() {
                             </span>
                           </div>
 
-                          {(lesson.progress > 0 || lesson.exercisesCompleted > 0) && (
+                          {((typeof lesson.progress === 'number' && lesson.progress > 0) ||
+                            lesson.exercisesCompleted > 0) && (
                             <div className="mb-4 space-y-2">
                               <div className="flex justify-between items-center">
                                 <span className="text-xs font-medium">Overall Progress</span>
-                                <span className="text-xs font-semibold">{lesson.progress}%</span>
+                                <span className="text-xs font-semibold">
+                                  {typeof lesson.progress === 'number' ? lesson.progress : 0}%
+                                </span>
                               </div>
                               <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                                 <div
                                   className={`h-full rounded-full transition-all ${
                                     lesson.status === 'completed' ? 'bg-roman-green' : 'bg-roman-red'
                                   }`}
-                                  style={{ width: `${lesson.progress}%` }}></div>
+                                  style={{
+                                    width: `${typeof lesson.progress === 'number' ? lesson.progress : 0}%`,
+                                  }}></div>
                               </div>
 
                               <div className="flex justify-between items-center">

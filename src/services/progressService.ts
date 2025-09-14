@@ -1,11 +1,4 @@
-import { UserProgress, Lesson, ExerciseProgress } from '@/src/types/lesson';
-import {
-  getLiveLessonsSorted,
-  calculateOverallProgress,
-  calculateAverageScore,
-  isLessonComplete,
-  getContentCount,
-} from '@/src/utils/lessonUtils';
+import { UserProgress, ExerciseProgress } from '@/src/types/lesson';
 import { auth } from './firebase';
 
 class ProgressService {
@@ -79,13 +72,7 @@ class ProgressService {
     });
   }
 
-  async markExerciseComplete(
-    userId: string,
-    lessonId: string,
-    exerciseId: string,
-    score: number,
-    lesson?: Lesson
-  ): Promise<void> {
+  async markExerciseComplete(userId: string, lessonId: string, exerciseId: string, score: number): Promise<void> {
     const existingProgress = await this.getUserProgress(userId, lessonId);
     const exerciseProgress = existingProgress?.exerciseProgress || [];
 
@@ -102,17 +89,9 @@ class ProgressService {
       exerciseProgress.push(newExerciseProgress);
     }
 
-    const totalExercises = lesson ? getContentCount(lesson).exerciseItems : exerciseProgress.length;
-    const overallProgress = calculateOverallProgress(exerciseProgress, totalExercises);
-    const averageScore = calculateAverageScore(exerciseProgress);
-    const isComplete = lesson ? isLessonComplete(exerciseProgress, totalExercises) : false;
-
     const updateData: Partial<UserProgress> = {
       exerciseProgress,
-      progress: overallProgress,
-      score: averageScore,
-      status: isComplete ? 'completed' : 'in-progress',
-      ...(isComplete && { completedAt: new Date().toISOString() }),
+      status: 'in-progress',
     };
 
     await this.updateProgress(userId, lessonId, updateData);
@@ -135,32 +114,6 @@ class ProgressService {
       progress,
       exerciseProgress: existingProgress?.exerciseProgress || [],
     });
-  }
-
-  async canAccessLesson(userId: string, lessonOrder: number, lessons: Lesson[]): Promise<boolean> {
-    if (lessonOrder === 0) return true;
-
-    const previousLesson = lessons.find(l => l.liveOrder === lessonOrder - 1);
-    if (!previousLesson) return false;
-
-    const progress = await this.getUserProgress(userId, previousLesson.id);
-
-    return progress?.status === 'completed';
-  }
-
-  async getCurrentLessonForUser(userId: string, lessons: Lesson[]): Promise<Lesson | null> {
-    const sortedLessons = getLiveLessonsSorted(lessons);
-
-    for (const lesson of sortedLessons) {
-      const progress = await this.getUserProgress(userId, lesson.id);
-
-      if (!progress || progress.status !== 'completed') {
-        const canAccess = await this.canAccessLesson(userId, lesson.liveOrder || 0, lessons);
-        return canAccess ? lesson : null;
-      }
-    }
-
-    return null;
   }
 }
 

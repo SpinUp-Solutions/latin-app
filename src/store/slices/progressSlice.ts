@@ -35,15 +35,13 @@ export const markExerciseComplete = createAsyncThunk(
     lessonId,
     exerciseId,
     score,
-    lesson,
   }: {
     userId: string;
     lessonId: string;
     exerciseId: string;
     score: number;
-    lesson?: Lesson;
   }) => {
-    await progressService.markExerciseComplete(userId, lessonId, exerciseId, score, lesson);
+    await progressService.markExerciseComplete(userId, lessonId, exerciseId, score);
     const updatedProgress = await progressService.getUserProgress(userId, lessonId);
     return { lessonId, progress: updatedProgress };
   }
@@ -131,42 +129,46 @@ export const selectProgressError = (state: { progress: ProgressState }): string 
 
 export const selectAllProgress = (state: { progress: ProgressState }) => state.progress.currentProgress;
 
+function createLessonWithProgress(lesson: Lesson, userProgress?: UserProgress) {
+  if (userProgress && userProgress.overallProgress !== undefined) {
+    return {
+      ...lesson,
+      progress: userProgress.overallProgress,
+      status: userProgress.status || 'available',
+      exercisesCompleted: userProgress.exercisesCompleted || 0,
+      totalExercises: userProgress.totalExercises || 0,
+      totalIntroPages: getContentCount(lesson).introPages,
+      userProgress,
+    };
+  }
+
+  const contentCount = getContentCount(lesson);
+  const progress = userProgress?.progress || 0;
+  const exercisesCompleted = userProgress?.exerciseProgress?.length || 0;
+  const status: LessonStatus =
+    userProgress?.status === 'completed'
+      ? 'completed'
+      : userProgress?.status === 'in-progress'
+        ? 'in-progress'
+        : 'available';
+
+  return {
+    ...lesson,
+    progress,
+    status,
+    exercisesCompleted,
+    totalExercises: contentCount.exerciseItems,
+    totalIntroPages: contentCount.introPages,
+    userProgress,
+  };
+}
+
 export const selectLessonsWithProgress = createSelector(
   [
     (state: { lesson: { studentLessons: Lesson[] }; progress: ProgressState }) => state.lesson.studentLessons,
     selectAllProgress,
   ],
-  (lessons, progressMap) => {
-    return lessons.map(lesson => {
-      const userProgress = progressMap[lesson.id];
-      const contentCount = getContentCount(lesson);
-
-      let progress = 0;
-      let exercisesCompleted = 0;
-      let status: LessonStatus = 'available';
-
-      if (userProgress) {
-        progress = userProgress.progress || 0;
-        exercisesCompleted = userProgress.exerciseProgress?.length || 0;
-        status =
-          userProgress.status === 'completed'
-            ? 'completed'
-            : userProgress.status === 'in-progress'
-              ? 'in-progress'
-              : 'available';
-      }
-
-      return {
-        ...lesson,
-        progress,
-        status,
-        exercisesCompleted,
-        totalExercises: contentCount.exerciseItems,
-        totalIntroPages: contentCount.introPages,
-        userProgress,
-      };
-    });
-  }
+  (lessons, progressMap) => lessons.map(lesson => createLessonWithProgress(lesson, progressMap[lesson.id]))
 );
 
 export const selectLessonWithProgress = createSelector(
@@ -175,29 +177,7 @@ export const selectLessonWithProgress = createSelector(
       state.lesson.studentLessons.find(l => l.id === lessonId),
     (state: { progress: ProgressState }, lessonId: string) => selectLessonProgress(state, lessonId),
   ],
-  (lesson, userProgress) => {
-    if (!lesson) return null;
-
-    const contentCount = getContentCount(lesson);
-    const progress = userProgress?.progress || 0;
-    const exercisesCompleted = userProgress?.exerciseProgress?.length || 0;
-    const status: LessonStatus =
-      userProgress?.status === 'completed'
-        ? 'completed'
-        : userProgress?.status === 'in-progress'
-          ? 'in-progress'
-          : 'available';
-
-    return {
-      ...lesson,
-      progress,
-      status,
-      exercisesCompleted,
-      totalExercises: contentCount.exerciseItems,
-      totalIntroPages: contentCount.introPages,
-      userProgress,
-    };
-  }
+  (lesson, userProgress) => (lesson ? createLessonWithProgress(lesson, userProgress) : null)
 );
 
 export default progressSlice.reducer;

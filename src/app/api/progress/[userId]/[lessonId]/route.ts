@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { auth } from 'firebase-admin';
+import { calculateOverallProgress, isLessonComplete, getContentCount } from '@/src/utils/lessonUtils';
+import { Lesson } from '@/src/types/lesson';
 
 async function verifyAuth(request: NextRequest) {
   const authHeader = request.headers.get('Authorization');
@@ -45,7 +47,11 @@ export async function POST(request: NextRequest, { params }: { params: { userId:
     const { exerciseId, score, ...lessonProgressData } = progressData;
 
     if (exerciseId && typeof score === 'number') {
-      const progressDoc = await adminDb.collection('userProgress').doc(`${params.userId}_${params.lessonId}`).get();
+      const [progressDoc, lessonDoc] = await Promise.all([
+        adminDb.collection('userProgress').doc(`${params.userId}_${params.lessonId}`).get(),
+        adminDb.collection('lessons').doc(params.lessonId).get(),
+      ]);
+
       const existingData = progressDoc.exists ? progressDoc.data() : {};
       const exerciseProgress = existingData?.exerciseProgress || [];
 
@@ -62,6 +68,23 @@ export async function POST(request: NextRequest, { params }: { params: { userId:
         exerciseProgress.push(newExerciseProgress);
       }
 
+      let computedData = {};
+      if (lessonDoc.exists) {
+        const lesson = { id: lessonDoc.id, ...lessonDoc.data() };
+        const totalExercises = getContentCount(lesson as Lesson).exerciseItems;
+
+        const overallProgress = calculateOverallProgress(exerciseProgress, totalExercises);
+        const exercisesCompleted = exerciseProgress.length;
+        const isComplete = isLessonComplete(exerciseProgress, totalExercises);
+
+        computedData = {
+          overallProgress,
+          exercisesCompleted,
+          totalExercises,
+          status: isComplete ? 'completed' : 'in-progress',
+        };
+      }
+
       await adminDb
         .collection('userProgress')
         .doc(`${params.userId}_${params.lessonId}`)
@@ -70,6 +93,7 @@ export async function POST(request: NextRequest, { params }: { params: { userId:
             ...existingData,
             ...lessonProgressData,
             exerciseProgress,
+            ...computedData,
             userId: params.userId,
             lessonId: params.lessonId,
             updatedAt: new Date().toISOString(),
