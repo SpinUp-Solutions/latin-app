@@ -1,14 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useCallback } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/src/services/firebase';
 import type { RootState, AppDispatch } from '@/src/store';
 import { loadStudentLessons } from '@/src/store/slices/lessonSlice';
-import { loadBatchUserProgress, resetProgress } from '@/src/store/slices/progressSlice';
-import { getContentCount } from '@/src/utils/lessonUtils';
+import { loadBatchUserProgress, resetProgress, selectLessonsWithProgress } from '@/src/store/slices/progressSlice';
 import { Button } from '@/src/components/ui/button';
 import { toast } from 'sonner';
 import React from 'react';
@@ -20,8 +19,8 @@ export default function DashboardPage() {
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
   const { user, loading } = useSelector((state: RootState) => state.auth);
-  const { studentLessons, loading: lessonsLoading } = useSelector((state: RootState) => state.lesson);
-  const progressState = useSelector((state: RootState) => state.progress.currentProgress);
+  const { loading: lessonsLoading } = useSelector((state: RootState) => state.lesson);
+  const lessons = useSelector(selectLessonsWithProgress);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -51,38 +50,6 @@ export default function DashboardPage() {
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [loadAllProgress]);
-
-  const lessons = useMemo(() => {
-    return studentLessons.map(lesson => {
-      const userProgress = progressState[lesson.id];
-      const contentCount = getContentCount(lesson);
-
-      let progress = 0;
-      let exercisesCompleted = 0;
-      let status: LessonStatus = 'available';
-
-      if (userProgress) {
-        progress = userProgress.progress || 0;
-        exercisesCompleted = userProgress.exerciseProgress?.length || 0;
-        status =
-          userProgress.status === 'completed'
-            ? 'completed'
-            : userProgress.status === 'in-progress'
-              ? 'in-progress'
-              : 'available';
-      }
-
-      return {
-        ...lesson,
-        progress,
-        status,
-        exercisesCompleted,
-        totalExercises: contentCount.exerciseItems,
-        totalIntroPages: contentCount.introPages,
-        userProgress,
-      };
-    });
-  }, [studentLessons, progressState]);
 
   const handleSignOut = async () => {
     try {

@@ -21,14 +21,11 @@ export async function GET(request: NextRequest, { params }: { params: { userId: 
     }
 
     const progressCollection = adminDb.collection('userProgress');
-    const allProgressDocs = await progressCollection.get();
-    const userProgressDocs = allProgressDocs.docs.filter(
-      doc => doc.id.startsWith(`${params.userId}_`) || doc.data().userId === params.userId
-    );
+    const userProgressDocs = await progressCollection.where('userId', '==', params.userId).get();
 
     const progressMap: Record<string, unknown> = {};
 
-    userProgressDocs.forEach(doc => {
+    userProgressDocs.docs.forEach(doc => {
       const data = doc.data();
       const lessonId = data.lessonId || doc.id.split('_')[1];
 
