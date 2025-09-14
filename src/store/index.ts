@@ -3,7 +3,7 @@ import authReducer from './slices/authSlice';
 import lessonReducer from './slices/lessonSlice';
 import clipboardReducer from './slices/clipboardSlice';
 import vocabularyPoolsReducer from './slices/vocabularyPoolSlice';
-import progressReducer from './slices/progressSlice';
+import { progressApi } from './api/progressApi';
 
 export const store = configureStore({
   reducer: {
@@ -11,12 +11,12 @@ export const store = configureStore({
     lesson: lessonReducer,
     clipboard: clipboardReducer,
     vocabularyPools: vocabularyPoolsReducer,
-    progress: progressReducer,
+    [progressApi.reducerPath]: progressApi.reducer,
   },
   middleware: getDefaultMiddleware =>
     getDefaultMiddleware({
       serializableCheck: false,
-    }),
+    }).concat(progressApi.middleware),
 });
 
 export type RootState = ReturnType<typeof store.getState>;

@@ -7,7 +7,9 @@ import { signOut } from 'firebase/auth';
 import { auth } from '@/src/services/firebase';
 import type { RootState, AppDispatch } from '@/src/store';
 import { loadStudentLessons } from '@/src/store/slices/lessonSlice';
-import { loadBatchUserProgress, resetProgress, selectLessonsWithProgress } from '@/src/store/slices/progressSlice';
+import { useGetBatchUserProgressQuery } from '@/src/store/api/progressApi';
+import { Lesson, UserProgress } from '@/src/types/lesson';
+import { getContentCount } from '@/src/utils/lessonUtils';
 import { Button } from '@/src/components/ui/button';
 import { toast } from 'sonner';
 import React, { memo } from 'react';
@@ -49,14 +51,17 @@ const statusConfig: Record<
   },
 };
 
+interface LessonWithProgress extends Lesson {
+  progress: number;
+  status: LessonStatus;
+  exercisesCompleted: number;
+  totalExercises: number;
+  totalIntroPages: number;
+  userProgress?: UserProgress;
+}
+
 const LessonCard = memo(
-  ({
-    lesson,
-    onLessonClick,
-  }: {
-    lesson: ReturnType<typeof selectLessonsWithProgress>[0];
-    onLessonClick: (id: string) => void;
-  }) => {
+  ({ lesson, onLessonClick }: { lesson: LessonWithProgress; onLessonClick: (id: string) => void }) => {
     const config = statusConfig[lesson.status] || statusConfig.available;
 
     return (
@@ -137,18 +142,54 @@ const LessonCard = memo(
 
 LessonCard.displayName = 'LessonCard';
 
+function createLessonWithProgress(lesson: Lesson, userProgress?: UserProgress): LessonWithProgress {
+  if (userProgress && userProgress.overallProgress !== undefined) {
+    return {
+      ...lesson,
+      progress: userProgress.overallProgress,
+      status: userProgress.status || 'available',
+      exercisesCompleted: userProgress.exercisesCompleted || 0,
+      totalExercises: userProgress.totalExercises || 0,
+      totalIntroPages: getContentCount(lesson).introPages,
+      userProgress,
+    };
+  }
+
+  const contentCount = getContentCount(lesson);
+  const progress = userProgress?.progress || 0;
+  const exercisesCompleted = userProgress?.exerciseProgress?.length || 0;
+  const status: LessonStatus =
+    userProgress?.status === 'completed'
+      ? 'completed'
+      : userProgress?.status === 'in-progress'
+        ? 'in-progress'
+        : 'available';
+
+  return {
+    ...lesson,
+    progress,
+    status,
+    exercisesCompleted,
+    totalExercises: contentCount.exerciseItems,
+    totalIntroPages: contentCount.introPages,
+    userProgress,
+  };
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const dispatch = useDispatch<AppDispatch>();
   const { user, loading } = useSelector((state: RootState) => state.auth);
-  const { loading: lessonsLoading } = useSelector((state: RootState) => state.lesson);
-  const lessons = useSelector(selectLessonsWithProgress);
+  const { studentLessons, loading: lessonsLoading } = useSelector((state: RootState) => state.lesson);
 
-  const loadAllProgress = useCallback(() => {
-    if (user?.uid) {
-      dispatch(loadBatchUserProgress(user.uid));
-    }
-  }, [dispatch, user?.uid]);
+  const { data: progressData, isLoading: progressLoading } = useGetBatchUserProgressQuery(user?.uid || '', {
+    skip: !user?.uid,
+  });
+
+  const lessons = useMemo(() => {
+    if (!studentLessons || !progressData) return [];
+    return studentLessons.map(lesson => createLessonWithProgress(lesson, progressData[lesson.id]));
+  }, [studentLessons, progressData]);
 
   const todaysGoals = useMemo(
     () => [
@@ -188,38 +229,8 @@ export default function DashboardPage() {
       router.push('/login');
     } else if (user) {
       dispatch(loadStudentLessons());
-      loadAllProgress();
     }
-  }, [user, loading, router, dispatch, loadAllProgress]);
-
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        loadAllProgress();
-      }
-    };
-
-    const handleFocus = () => {
-      loadAllProgress();
-    };
-
-    const handlePageShow = () => {
-      loadAllProgress();
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleFocus);
-    window.addEventListener('pageshow', handlePageShow);
-
-    // Also refresh on mount (navigation back)
-    loadAllProgress();
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleFocus);
-      window.removeEventListener('pageshow', handlePageShow);
-    };
-  }, [loadAllProgress]);
+  }, [user, loading, router, dispatch]);
 
   const handleSignOut = async () => {
     try {
@@ -254,7 +265,7 @@ export default function DashboardPage() {
       const data = await response.json();
 
       if (response.ok) {
-        dispatch(resetProgress());
+        window.location.reload();
         toast.success(`Progress reset successfully! Deleted ${data.deletedCount || 0} records`);
       } else {
         toast.error(`Reset failed: ${data.error}`);
@@ -265,7 +276,7 @@ export default function DashboardPage() {
     }
   };
 
-  if (loading || !user || lessonsLoading) {
+  if (loading || !user || lessonsLoading || progressLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-roman-marble">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>
