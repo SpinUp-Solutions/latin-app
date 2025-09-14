@@ -1,26 +1,8 @@
 [
   {
     "origin": ["http://localhost:3000", "https://idyllic-cupcake-73650b.netlify.app"],
-    "method": [
-
-      "GET",      
-
-      "PUT",      
-
-      "POST",     
-
-      "DELETE"    
-
-    ],
-"responseHeader": [
-
-      "Content-Type",
-
-      "Content-Disposition",
-
-      "Firebase-Storage-Download-Tokens" 
-
-    ],
+    "method": ["GET", "PUT", "POST", "DELETE"],
+    "responseHeader": ["Content-Type", "Content-Disposition", "Firebase-Storage-Download-Tokens"],
     "maxAgeSeconds": 3600
   }
-] 
+]

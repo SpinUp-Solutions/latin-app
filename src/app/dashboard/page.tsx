@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
 import { signOut } from 'firebase/auth';
@@ -10,10 +10,132 @@ import { loadStudentLessons } from '@/src/store/slices/lessonSlice';
 import { loadBatchUserProgress, resetProgress, selectLessonsWithProgress } from '@/src/store/slices/progressSlice';
 import { Button } from '@/src/components/ui/button';
 import { toast } from 'sonner';
-import React from 'react';
+import React, { memo } from 'react';
 import { BookOpen, User, Clock, Target, TrendingUp, CheckCircle, Play } from 'lucide-react';
 import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { LessonStatus } from '@/src/types/lesson';
+
+const statusConfig: Record<
+  LessonStatus,
+  { card: string; icon: string; button: string; text: string; showIcon: JSX.Element | null }
+> = {
+  completed: {
+    card: 'border-roman-green bg-roman-green/5',
+    icon: 'bg-roman-green text-white',
+    button: 'bg-roman-green hover:bg-roman-green/90',
+    text: 'Review',
+    showIcon: <CheckCircle className="h-6 w-6" />,
+  },
+  available: {
+    card: 'border-roman-stone bg-roman-stone/5',
+    icon: 'bg-roman-stone text-white',
+    button: 'bg-roman-stone hover:bg-roman-stone/90',
+    text: 'Start',
+    showIcon: null,
+  },
+  'in-progress': {
+    card: 'border-roman-terracotta bg-roman-terracotta/5',
+    icon: 'bg-roman-terracotta text-white',
+    button: 'bg-roman-terracotta hover:bg-roman-terracotta/90',
+    text: 'Continue',
+    showIcon: null,
+  },
+  locked: {
+    card: 'border-gray-300 bg-gray-100',
+    icon: 'bg-gray-300 text-gray-500',
+    button: 'bg-gray-400 cursor-not-allowed',
+    text: 'Locked',
+    showIcon: null,
+  },
+};
+
+const LessonCard = memo(
+  ({
+    lesson,
+    onLessonClick,
+  }: {
+    lesson: ReturnType<typeof selectLessonsWithProgress>[0];
+    onLessonClick: (id: string) => void;
+  }) => {
+    const config = statusConfig[lesson.status] || statusConfig.available;
+
+    return (
+      <RomanCard
+        className={`transition-all duration-200 hover:shadow-xl cursor-pointer hover:-translate-y-1 ${config.card}`}>
+        <RomanCardContent className="p-6">
+          <div className="flex items-start gap-4 mb-4">
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${config.icon}`}>
+              {config.showIcon || <BookOpen className="h-5 w-5" />}
+            </div>
+            <div className="flex-1">
+              <h3 className="text-xl font-serif mb-2">{lesson.title}</h3>
+              <p className="text-sm text-roman-stone mb-3">{lesson.description}</p>
+
+              <div className="flex items-center gap-4 text-xs text-roman-stone mb-3">
+                <span className="flex items-center gap-1">
+                  <BookOpen className="h-3 w-3" />
+                  {lesson.totalIntroPages || 0} intro pages
+                </span>
+                <span className="flex items-center gap-1">
+                  <BookOpen className="h-3 w-3" />
+                  {lesson.totalExercises || 0} exercises
+                </span>
+              </div>
+
+              {((typeof lesson.progress === 'number' && lesson.progress > 0) || lesson.exercisesCompleted > 0) && (
+                <div className="mb-4 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-medium">Overall Progress</span>
+                    <span className="text-xs font-semibold">
+                      {typeof lesson.progress === 'number' ? lesson.progress : 0}%
+                    </span>
+                  </div>
+                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        lesson.status === 'completed' ? 'bg-roman-green' : 'bg-roman-red'
+                      }`}
+                      style={{
+                        width: `${typeof lesson.progress === 'number' ? lesson.progress : 0}%`,
+                      }}></div>
+                  </div>
+
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-roman-stone">Exercises Completed</span>
+                    <span className="text-xs font-medium">
+                      {lesson.exercisesCompleted}/{lesson.totalExercises}
+                    </span>
+                  </div>
+                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-roman-terracotta rounded-full transition-all"
+                      style={{
+                        width: `${lesson.totalExercises > 0 ? (lesson.exercisesCompleted / lesson.totalExercises) * 100 : 0}%`,
+                      }}></div>
+                  </div>
+
+                  {lesson.userProgress?.exerciseProgress && lesson.userProgress.exerciseProgress.length > 0 && (
+                    <div className="text-xs text-roman-stone">
+                      Average Score: {lesson.userProgress.score || 'N/A'}
+                      {lesson.userProgress.score && '%'}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <Button className={`w-full ${config.button}`} onClick={() => onLessonClick(lesson.id)}>
+                <Play className="h-4 w-4 mr-2" />
+                {config.text}
+              </Button>
+            </div>
+          </div>
+        </RomanCardContent>
+      </RomanCard>
+    );
+  }
+);
+
+LessonCard.displayName = 'LessonCard';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -27,6 +149,39 @@ export default function DashboardPage() {
       dispatch(loadBatchUserProgress(user.uid));
     }
   }, [dispatch, user?.uid]);
+
+  const todaysGoals = useMemo(
+    () => [
+      { task: 'Complete current lesson', completed: false, points: 50 },
+      { task: 'Review 15 vocabulary words', completed: true, points: 30 },
+      { task: 'Practice pronunciation', completed: false, points: 20 },
+    ],
+    []
+  );
+
+  const completionStats = useMemo(() => {
+    if (lessons.length === 0) return { percentage: 0, completed: 0, total: 0 };
+    const completed = lessons.filter(l => l.status === 'completed').length;
+    const percentage = Math.round((completed / lessons.length) * 100);
+    return { percentage, completed, total: lessons.length };
+  }, [lessons]);
+
+  const weeklyStats = useMemo(
+    () => [
+      { label: 'Lessons Completed', value: 2, icon: CheckCircle, color: 'roman-green' },
+      { label: 'Words Learned', value: 89, icon: BookOpen, color: 'roman-red' },
+      { label: 'Study Time', value: '4.2h', icon: Clock, color: 'roman-gold' },
+      { label: 'Current Streak', value: '7 days', icon: TrendingUp, color: 'roman-terracotta' },
+    ],
+    []
+  );
+
+  const handleLessonClick = useCallback(
+    (lessonId: string) => {
+      router.push(`/lesson/${lessonId}`);
+    },
+    [router]
+  );
 
   useEffect(() => {
     if (!loading && !user) {
@@ -48,12 +203,21 @@ export default function DashboardPage() {
       loadAllProgress();
     };
 
+    const handlePageShow = () => {
+      loadAllProgress();
+    };
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('focus', handleFocus);
+    window.addEventListener('pageshow', handlePageShow);
+
+    // Also refresh on mount (navigation back)
+    loadAllProgress();
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('pageshow', handlePageShow);
     };
   }, [loadAllProgress]);
 
@@ -109,53 +273,6 @@ export default function DashboardPage() {
     );
   }
 
-  const todaysGoals = [
-    { task: 'Complete current lesson', completed: false, points: 50 },
-    { task: 'Review 15 vocabulary words', completed: true, points: 30 },
-    { task: 'Practice pronunciation', completed: false, points: 20 },
-  ];
-
-  const weeklyStats = [
-    { label: 'Lessons Completed', value: 2, icon: CheckCircle, color: 'roman-green' },
-    { label: 'Words Learned', value: 89, icon: BookOpen, color: 'roman-red' },
-    { label: 'Study Time', value: '4.2h', icon: Clock, color: 'roman-gold' },
-    { label: 'Current Streak', value: '7 days', icon: TrendingUp, color: 'roman-terracotta' },
-  ];
-
-  const statusConfig: Record<
-    LessonStatus,
-    { card: string; icon: string; button: string; text: string; showIcon: JSX.Element | null }
-  > = {
-    completed: {
-      card: 'border-roman-green bg-roman-green/5',
-      icon: 'bg-roman-green text-white',
-      button: 'bg-roman-green hover:bg-roman-green/90',
-      text: 'Review',
-      showIcon: <CheckCircle className="h-6 w-6" />,
-    },
-    available: {
-      card: 'border-roman-stone bg-roman-stone/5',
-      icon: 'bg-roman-stone text-white',
-      button: 'bg-roman-stone hover:bg-roman-stone/90',
-      text: 'Start',
-      showIcon: null,
-    },
-    'in-progress': {
-      card: 'border-roman-terracotta bg-roman-terracotta/5',
-      icon: 'bg-roman-terracotta text-white',
-      button: 'bg-roman-terracotta hover:bg-roman-terracotta/90',
-      text: 'Continue',
-      showIcon: null,
-    },
-    locked: {
-      card: 'border-gray-300 bg-gray-100',
-      icon: 'bg-gray-300 text-gray-500',
-      button: 'bg-gray-400 cursor-not-allowed',
-      text: 'Locked',
-      showIcon: null,
-    },
-  };
-
   return (
     <div className="min-h-screen bg-roman-marble">
       <header className="bg-white border-b border-border px-6 py-4 flex items-center justify-between">
@@ -194,12 +311,9 @@ export default function DashboardPage() {
               </div>
               {lessons.length > 0 && (
                 <div className="text-right">
-                  <div className="text-2xl font-serif text-roman-red">
-                    {Math.round((lessons.filter(l => l.status === 'completed').length / lessons.length) * 100)}%
-                    Complete
-                  </div>
+                  <div className="text-2xl font-serif text-roman-red">{completionStats.percentage}% Complete</div>
                   <div className="text-sm text-roman-stone">
-                    {lessons.filter(l => l.status === 'completed').length} of {lessons.length} lessons finished
+                    {completionStats.completed} of {completionStats.total} lessons finished
                   </div>
                 </div>
               )}
@@ -217,85 +331,7 @@ export default function DashboardPage() {
                   </RomanCardContent>
                 </RomanCard>
               ) : (
-                lessons.map((lesson, index) => (
-                  <RomanCard
-                    key={index}
-                    className={`transition-all duration-200 hover:shadow-xl cursor-pointer hover:-translate-y-1 ${statusConfig[lesson.status]?.card || 'border-gray-300'}`}>
-                    <RomanCardContent className="p-6">
-                      <div className="flex items-start gap-4 mb-4">
-                        <div
-                          className={`w-12 h-12 rounded-xl flex items-center justify-center ${statusConfig[lesson.status]?.icon || 'bg-gray-300 text-gray-500'}`}>
-                          {statusConfig[lesson.status]?.showIcon || <BookOpen className="h-5 w-5" />}
-                        </div>
-                        <div className="flex-1">
-                          <h3 className="text-xl font-serif mb-2">{lesson.title}</h3>
-                          <p className="text-sm text-roman-stone mb-3">{lesson.description}</p>
-
-                          <div className="flex items-center gap-4 text-xs text-roman-stone mb-3">
-                            <span className="flex items-center gap-1">
-                              <BookOpen className="h-3 w-3" />
-                              {lesson.totalIntroPages || 0} intro pages
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <BookOpen className="h-3 w-3" />
-                              {lesson.totalExercises || 0} exercises
-                            </span>
-                          </div>
-
-                          {((typeof lesson.progress === 'number' && lesson.progress > 0) ||
-                            lesson.exercisesCompleted > 0) && (
-                            <div className="mb-4 space-y-2">
-                              <div className="flex justify-between items-center">
-                                <span className="text-xs font-medium">Overall Progress</span>
-                                <span className="text-xs font-semibold">
-                                  {typeof lesson.progress === 'number' ? lesson.progress : 0}%
-                                </span>
-                              </div>
-                              <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                                <div
-                                  className={`h-full rounded-full transition-all ${
-                                    lesson.status === 'completed' ? 'bg-roman-green' : 'bg-roman-red'
-                                  }`}
-                                  style={{
-                                    width: `${typeof lesson.progress === 'number' ? lesson.progress : 0}%`,
-                                  }}></div>
-                              </div>
-
-                              <div className="flex justify-between items-center">
-                                <span className="text-xs text-roman-stone">Exercises Completed</span>
-                                <span className="text-xs font-medium">
-                                  {lesson.exercisesCompleted}/{lesson.totalExercises}
-                                </span>
-                              </div>
-                              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                <div
-                                  className="h-full bg-roman-terracotta rounded-full transition-all"
-                                  style={{
-                                    width: `${lesson.totalExercises > 0 ? (lesson.exercisesCompleted / lesson.totalExercises) * 100 : 0}%`,
-                                  }}></div>
-                              </div>
-
-                              {lesson.userProgress?.exerciseProgress &&
-                                lesson.userProgress.exerciseProgress.length > 0 && (
-                                  <div className="text-xs text-roman-stone">
-                                    Average Score: {lesson.userProgress.score || 'N/A'}
-                                    {lesson.userProgress.score && '%'}
-                                  </div>
-                                )}
-                            </div>
-                          )}
-
-                          <Button
-                            className={`w-full ${statusConfig[lesson.status]?.button || 'bg-gray-400'}`}
-                            onClick={() => router.push(`/lesson/${lesson.id}`)}>
-                            <Play className="h-4 w-4 mr-2" />
-                            {statusConfig[lesson.status]?.text || 'Start'}
-                          </Button>
-                        </div>
-                      </div>
-                    </RomanCardContent>
-                  </RomanCard>
-                ))
+                lessons.map(lesson => <LessonCard key={lesson.id} lesson={lesson} onLessonClick={handleLessonClick} />)
               )}
             </div>
           </section>
