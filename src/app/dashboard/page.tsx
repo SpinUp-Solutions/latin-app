@@ -7,7 +7,7 @@ import { signOut } from 'firebase/auth';
 import { auth } from '@/src/services/firebase';
 import type { RootState, AppDispatch } from '@/src/store';
 import { loadStudentLessons } from '@/src/store/slices/lessonSlice';
-import { loadUserProgress, resetProgress } from '@/src/store/slices/progressSlice';
+import { loadBatchUserProgress, resetProgress } from '@/src/store/slices/progressSlice';
 import { getContentCount } from '@/src/utils/lessonUtils';
 import { Button } from '@/src/components/ui/button';
 import { toast } from 'sonner';
@@ -32,12 +32,10 @@ export default function DashboardPage() {
   }, [user, loading, router, dispatch]);
 
   const loadAllProgress = useCallback(() => {
-    if (user?.uid && studentLessons.length > 0) {
-      studentLessons.forEach(lesson => {
-        dispatch(loadUserProgress({ userId: user.uid, lessonId: lesson.id }));
-      });
+    if (user?.uid) {
+      dispatch(loadBatchUserProgress(user.uid));
     }
-  }, [dispatch, user?.uid, studentLessons]);
+  }, [dispatch, user?.uid]);
 
   useEffect(() => {
     loadAllProgress();
@@ -111,9 +109,9 @@ export default function DashboardPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ userId: user.uid })
+        body: JSON.stringify({ userId: user.uid }),
       });
 
       const data = await response.json();

@@ -23,8 +23,8 @@ export async function POST(request: NextRequest) {
 
     const progressCollection = adminDb.collection('userProgress');
     const allProgressDocs = await progressCollection.get();
-    const userDocs = allProgressDocs.docs.filter(doc =>
-      doc.id.startsWith(`${userId}_`) || doc.data().userId === userId
+    const userDocs = allProgressDocs.docs.filter(
+      doc => doc.id.startsWith(`${userId}_`) || doc.data().userId === userId
     );
 
     if (userDocs.length > 0) {
@@ -37,9 +37,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      deletedCount: userDocs.length
+      deletedCount: userDocs.length,
     });
-
   } catch (error) {
     console.error('Error resetting progress:', error);
     return NextResponse.json({ error: 'Failed to reset progress' }, { status: 500 });

@@ -22,6 +22,11 @@ export const loadUserProgress = createAsyncThunk(
   }
 );
 
+export const loadBatchUserProgress = createAsyncThunk('progress/loadBatchUserProgress', async (userId: string) => {
+  const progressMap = await progressService.getBatchUserProgress(userId);
+  return progressMap;
+});
+
 export const markExerciseComplete = createAsyncThunk(
   'progress/markExerciseComplete',
   async ({
@@ -80,6 +85,18 @@ const progressSlice = createSlice({
       .addCase(loadUserProgress.rejected, (state, action) => {
         state.loading = false;
         state.error = action.error.message || 'Failed to load progress';
+      })
+      .addCase(loadBatchUserProgress.pending, state => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(loadBatchUserProgress.fulfilled, (state, action) => {
+        state.loading = false;
+        state.currentProgress = { ...state.currentProgress, ...action.payload };
+      })
+      .addCase(loadBatchUserProgress.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.error.message || 'Failed to load batch progress';
       })
       .addCase(markExerciseComplete.fulfilled, (state, action) => {
         const { lessonId, progress } = action.payload;

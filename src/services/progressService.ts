@@ -62,6 +62,16 @@ class ProgressService {
     }
   }
 
+  async getBatchUserProgress(userId: string): Promise<Record<string, UserProgress>> {
+    try {
+      const response = await this.makeRequest(`/api/progress/${userId}/batch`);
+      return response || {};
+    } catch (error) {
+      console.error('Error fetching batch progress:', error);
+      return {};
+    }
+  }
+
   async updateProgress(userId: string, lessonId: string, progress: Partial<UserProgress>): Promise<void> {
     await this.makeRequest(`/api/progress/${userId}/${lessonId}`, {
       method: 'POST',
