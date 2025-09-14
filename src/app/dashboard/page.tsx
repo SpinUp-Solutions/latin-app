@@ -22,14 +22,6 @@ export default function DashboardPage() {
   const { loading: lessonsLoading } = useSelector((state: RootState) => state.lesson);
   const lessons = useSelector(selectLessonsWithProgress);
 
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push('/login');
-    } else if (user) {
-      dispatch(loadStudentLessons());
-    }
-  }, [user, loading, router, dispatch]);
-
   const loadAllProgress = useCallback(() => {
     if (user?.uid) {
       dispatch(loadBatchUserProgress(user.uid));
@@ -37,8 +29,13 @@ export default function DashboardPage() {
   }, [dispatch, user?.uid]);
 
   useEffect(() => {
-    loadAllProgress();
-  }, [loadAllProgress]);
+    if (!loading && !user) {
+      router.push('/login');
+    } else if (user) {
+      dispatch(loadStudentLessons());
+      loadAllProgress();
+    }
+  }, [user, loading, router, dispatch, loadAllProgress]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -47,8 +44,17 @@ export default function DashboardPage() {
       }
     };
 
+    const handleFocus = () => {
+      loadAllProgress();
+    };
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [loadAllProgress]);
 
   const handleSignOut = async () => {
