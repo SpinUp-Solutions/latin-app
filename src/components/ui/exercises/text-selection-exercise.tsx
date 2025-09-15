@@ -23,7 +23,6 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
   const { currentIndex, isLastItem, autoAdvanceIfEnabled } = useExerciseProgression({
     totalItems: exercise.data.questions.length,
     feedbackConfig: exercise.feedbackConfig,
-    onComplete,
   });
 
   const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
@@ -44,21 +43,20 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
 
       if (isLastItem) {
         const finalScore = Math.round((newCorrectAnswers / exercise.data.questions.length) * 100);
+
+        onComplete?.(finalScore);
+
         autoAdvanceIfEnabled(() => {
           setSelectedWordIndex(null);
           reset();
           setIsProcessing(false);
-        }, finalScore);
+        });
       } else {
         autoAdvanceIfEnabled(() => {
           setSelectedWordIndex(null);
           reset();
           setIsProcessing(false);
         });
-      }
-
-      if (exercise.feedbackConfig.progressionRules?.autoAdvance === false) {
-        setIsProcessing(false);
       }
     } else {
       handleIncorrect();

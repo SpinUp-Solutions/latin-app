@@ -24,7 +24,6 @@ const VerbAnalysisExerciseComponent: React.FC<Props> = ({ exercise, onComplete }
   const { currentIndex, isLastItem, autoAdvanceIfEnabled } = useExerciseProgression({
     totalItems: exercise.data.verbs.length,
     feedbackConfig: exercise.feedbackConfig,
-    onComplete,
   });
 
   const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
@@ -56,12 +55,15 @@ const VerbAnalysisExerciseComponent: React.FC<Props> = ({ exercise, onComplete }
 
       if (isLastItem) {
         const finalScore = Math.round((newCorrectAnswers / exercise.data.verbs.length) * 100);
+
+        onComplete?.(finalScore);
+
         autoAdvanceIfEnabled(() => {
           setUserAnswer('');
           setSelectedWordIndex(null);
           reset();
           setIsProcessing(false);
-        }, finalScore);
+        });
       } else {
         autoAdvanceIfEnabled(() => {
           setUserAnswer('');
@@ -69,10 +71,6 @@ const VerbAnalysisExerciseComponent: React.FC<Props> = ({ exercise, onComplete }
           reset();
           setIsProcessing(false);
         });
-      }
-
-      if (exercise.feedbackConfig.progressionRules?.autoAdvance === false) {
-        setIsProcessing(false);
       }
     } else {
       handleIncorrect();

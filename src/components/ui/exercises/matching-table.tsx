@@ -97,12 +97,7 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
           const totalMatches = Object.keys(finalAnswer).length;
           const score = Math.round((correctMatches / totalMatches) * 100);
 
-          // Auto-advance logic based on configuration
-          if (exercise.feedbackConfig.progressionRules?.autoAdvance !== false) {
-            setTimeout(() => {
-              onComplete?.(score);
-            }, 1500);
-          }
+          onComplete?.(score);
         }
       } else {
         handleIncorrect();

@@ -24,7 +24,6 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
   const { currentIndex, isLastItem, autoAdvanceIfEnabled } = useExerciseProgression({
     totalItems: exercise.data.items.length,
     feedbackConfig: exercise.feedbackConfig,
-    onComplete,
   });
 
   const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
@@ -32,7 +31,7 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
   );
 
   const handleSubmit = () => {
-    if (isProcessing) return; // Prevent multiple submissions
+    if (isProcessing) return;
 
     const validation = validateFillExercise(userAnswer, exercise, currentIndex);
     setIsProcessing(true);
@@ -44,21 +43,20 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
 
       if (isLastItem) {
         const finalScore = Math.round((newCorrectAnswers / exercise.data.items.length) * 100);
+
+        onComplete?.(finalScore);
+
         autoAdvanceIfEnabled(() => {
           setUserAnswer('');
           reset();
           setIsProcessing(false);
-        }, finalScore);
+        });
       } else {
         autoAdvanceIfEnabled(() => {
           setUserAnswer('');
           reset();
           setIsProcessing(false);
         });
-      }
-
-      if (exercise.feedbackConfig.progressionRules?.autoAdvance === false) {
-        setIsProcessing(false);
       }
     } else {
       handleIncorrect();

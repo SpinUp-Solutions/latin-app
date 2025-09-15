@@ -48,14 +48,11 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
     } else {
       if (currentExerciseIndex < lesson.exercises.length - 1) {
         setCurrentExerciseIndex(currentExerciseIndex + 1);
-      } else {
-        console.log('All exercises completed!');
       }
     }
   }, [mode, currentIntroIndex, lesson.introduction.length, currentExerciseIndex, lesson.exercises.length]);
 
   const handleAudioEnded = useCallback(() => {
-    console.log('Audio ended - advancing to next content');
     handleNext();
   }, [handleNext]);
 
@@ -79,15 +76,12 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
   function handlePrevious() {
     if (mode === 'introduction') {
       if (currentIntroIndex > 0) {
-        console.log(`Moving to previous intro page: ${currentIntroIndex - 1}`);
         setCurrentIntroIndex(currentIntroIndex - 1);
       }
     } else {
       if (currentExerciseIndex > 0) {
-        console.log(`Moving to previous exercise: ${currentExerciseIndex - 1}`);
         setCurrentExerciseIndex(currentExerciseIndex - 1);
       } else if (introCompleted) {
-        console.log('At first exercise, moving back to introduction');
         setMode('introduction');
         setCurrentIntroIndex(lesson.introduction.length - 1);
       }
@@ -96,11 +90,9 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
 
   function handleSwitchMode(newMode: LessonMode) {
     if (newMode === 'exercise' && !introCompleted) {
-      console.log('Cannot switch to exercise mode - intro not completed');
       return;
     }
 
-    console.log(`Switching mode to ${newMode}`);
     setMode(newMode);
 
     if (newMode === 'introduction') {
