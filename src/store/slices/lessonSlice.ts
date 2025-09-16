@@ -226,6 +226,19 @@ const lessonSlice = createSlice({
       }
     },
 
+    updatePageAutoAdvance: (
+      state,
+      action: PayloadAction<{
+        pageIndex: number;
+        autoAdvance: { enabled: boolean; delay: number };
+      }>
+    ) => {
+      const { pageIndex, autoAdvance } = action.payload;
+      if (state.currentLesson?.pages[pageIndex]) {
+        state.currentLesson.pages[pageIndex].autoAdvance = autoAdvance;
+      }
+    },
+
     addContentToPage: (
       state,
       action: PayloadAction<{
@@ -549,6 +562,7 @@ export const {
   updateLessonInfo,
   addPage,
   updatePageTitle,
+  updatePageAutoAdvance,
   addContentToPage,
   updateContentItem,
   removeContent,

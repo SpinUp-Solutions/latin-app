@@ -585,6 +585,8 @@ export const VerbConjugationEditor: React.FC = () => {
       <ExerciseFeedbackSection
         feedbackConfig={editingContent.feedbackConfig}
         onChange={feedbackConfig => updateContent({ feedbackConfig })}
+        itemProgressionDelay={editingContent.itemProgressionDelay}
+        onItemProgressionDelayChange={itemProgressionDelay => updateContent({ itemProgressionDelay })}
       />
 
       {/* Summary and Validation */}

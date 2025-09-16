@@ -6,7 +6,6 @@ import { Page } from '@/src/types/lesson';
 import ContentRenderer from './content-renderer';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { isExerciseType } from '@/src/utils/lessonUtils';
-import { getEffectiveFeedbackConfig } from '@/src/utils/feedbackDefaults';
 
 interface PageTemplateProps {
   page: Page;
@@ -35,13 +34,12 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({ page, pageIndex, onE
         setCompletedExercises(newCompleted);
 
         if (newCompleted.size === totalExercises && totalExercises > 0 && onPageComplete) {
-          const effectiveConfig = getEffectiveFeedbackConfig(page.feedbackConfig || { escalationLevels: [] });
+          const autoAdvance = page.autoAdvance || { enabled: true, delay: 2000 };
 
-          if (effectiveConfig.progressionRules?.autoAdvance !== false) {
-            const delay = effectiveConfig.timingConfig?.nextExerciseDelay || 1500;
+          if (autoAdvance.enabled) {
             setTimeout(() => {
               onPageComplete();
-            }, delay);
+            }, autoAdvance.delay);
           }
         }
       }

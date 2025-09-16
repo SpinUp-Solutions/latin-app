@@ -10,7 +10,6 @@ import {
   MultipleChoiceExercise,
   OddOneOutExercise,
 } from './exercises';
-import { FeedbackConfig } from './exercises/base';
 
 export type RenderableContentItem =
   | TextContent
@@ -35,5 +34,8 @@ export interface BasePage {
 }
 
 export interface Page extends BasePage {
-  feedbackConfig?: FeedbackConfig;
+  autoAdvance?: {
+    enabled: boolean;
+    delay: number;
+  };
 }
