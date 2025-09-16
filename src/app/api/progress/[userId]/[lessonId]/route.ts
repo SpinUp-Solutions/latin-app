@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { auth } from 'firebase-admin';
-import { calculateOverallProgress, isLessonComplete, getContentCount, parsePageIndex, getExerciseCountForPage, getCompletedExercisesForPage } from '@/src/utils/lessonUtils';
+import {
+  calculateOverallProgress,
+  isLessonComplete,
+  getContentCount,
+  parsePageIndex,
+  getExerciseCountForPage,
+  getCompletedExercisesForPage,
+} from '@/src/utils/lessonUtils';
 import { Lesson, PageProgress } from '@/src/types/lesson';
 
 async function verifyAuth(request: NextRequest) {

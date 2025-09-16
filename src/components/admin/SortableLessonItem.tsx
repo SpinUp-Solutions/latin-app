@@ -7,6 +7,7 @@ import { Badge } from '@/src/components/ui/badge';
 import { Button } from '@/src/components/ui/button';
 import { Lesson } from '@/src/types/lesson';
 import Link from 'next/link';
+import React from 'react';
 
 interface SortableLessonItemProps {
   lesson: Lesson;

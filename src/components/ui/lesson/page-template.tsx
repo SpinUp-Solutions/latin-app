@@ -21,30 +21,33 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({ page, pageIndex, onE
   const exerciseItems = page.items.filter(item => isExerciseType(item.type));
   const totalExercises = exerciseItems.length;
 
-  const handleItemComplete = useCallback((itemIndex: number, score: number) => {
-    const item = page.items[itemIndex];
+  const handleItemComplete = useCallback(
+    (itemIndex: number, score: number) => {
+      const item = page.items[itemIndex];
 
-    if (onExerciseComplete) {
-      onExerciseComplete(itemIndex, score);
-    }
+      if (onExerciseComplete) {
+        onExerciseComplete(itemIndex, score);
+      }
 
-    if (isExerciseType(item.type)) {
-      const newCompleted = new Set(completedExercises);
-      newCompleted.add(itemIndex);
-      setCompletedExercises(newCompleted);
+      if (isExerciseType(item.type)) {
+        const newCompleted = new Set(completedExercises);
+        newCompleted.add(itemIndex);
+        setCompletedExercises(newCompleted);
 
-      if (newCompleted.size === totalExercises && totalExercises > 0 && onPageComplete) {
-        const effectiveConfig = getEffectiveFeedbackConfig(page.feedbackConfig || { escalationLevels: [] });
+        if (newCompleted.size === totalExercises && totalExercises > 0 && onPageComplete) {
+          const effectiveConfig = getEffectiveFeedbackConfig(page.feedbackConfig || { escalationLevels: [] });
 
-        if (effectiveConfig.progressionRules?.autoAdvance !== false) {
-          const delay = effectiveConfig.timingConfig?.nextExerciseDelay || 1500;
-          setTimeout(() => {
-            onPageComplete();
-          }, delay);
+          if (effectiveConfig.progressionRules?.autoAdvance !== false) {
+            const delay = effectiveConfig.timingConfig?.nextExerciseDelay || 1500;
+            setTimeout(() => {
+              onPageComplete();
+            }, delay);
+          }
         }
       }
-    }
-  }, [page, completedExercises, totalExercises, onExerciseComplete, onPageComplete]);
+    },
+    [page, completedExercises, totalExercises, onExerciseComplete, onPageComplete]
+  );
   return (
     <motion.div
       key={page.id}

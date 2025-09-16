@@ -92,7 +92,10 @@ export function getExerciseCountForPage(lesson: Lesson, pageIndex: number): numb
   return lesson.pages[pageIndex].items.filter(item => isExerciseType(item.type)).length;
 }
 
-export function getCompletedExercisesForPage(exerciseProgress: ExerciseProgress[], pageIndex: number): ExerciseProgress[] {
+export function getCompletedExercisesForPage(
+  exerciseProgress: ExerciseProgress[],
+  pageIndex: number
+): ExerciseProgress[] {
   return exerciseProgress.filter(ep => {
     const epPageIndex = parsePageIndex(ep.exerciseId);
     return epPageIndex === pageIndex;
