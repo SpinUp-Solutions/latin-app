@@ -71,7 +71,7 @@ export const cleanFormData = (formData: TooltipFormData): Partial<TooltipFormDat
   }, {} as Partial<TooltipFormData>);
 };
 
-export const findTooltipMark = (editor: Editor, from: number, to: number): Mark | null => {
+const findTooltipMark = (editor: Editor, from: number, to: number): Mark | null => {
   let tooltipMark: Mark | null = null;
 
   editor.state.doc.nodesBetween(from, to, (node, pos) => {
@@ -93,87 +93,14 @@ export const findTooltipMarkWithData = (editor: Editor, from: number, to: number
 
 export const getEmptyFormData = (): TooltipFormData => createDefaultFormData();
 
-export const isValidTooltipFormData = (data: unknown): data is TooltipFormData => {
+const isValidTooltipFormData = (data: unknown): data is TooltipFormData => {
   return (
     typeof data === 'object' && data !== null && 'word' in data && typeof (data as TooltipFormData).word === 'string'
   );
 };
 
-export const isValidTooltipData = (data: unknown): data is TooltipData => {
+const isValidTooltipData = (data: unknown): data is TooltipData => {
   return isValidTooltipFormData(data) && 'id' in data && typeof (data as TooltipData).id === 'string';
-};
-
-export const extractTooltipAttrs = (mark: TooltipMark): TooltipFormData => {
-  const attrs = mark.attrs;
-  return {
-    word: attrs.word,
-    translation: attrs.translation,
-    pronunciation: attrs.pronunciation,
-    partOfSpeech: attrs.partOfSpeech,
-    wordType: attrs.wordType,
-    definition: attrs.definition,
-    examples: attrs.examples,
-    etymology: attrs.etymology,
-    gender: attrs.gender,
-    declensionClass: attrs.declensionClass,
-    conjugationClass: attrs.conjugationClass,
-    grammaticalInfo: attrs.grammaticalInfo,
-    principalParts: attrs.principalParts,
-  };
-};
-
-export const createTooltipMarkAttrs = (formData: TooltipFormData, tooltipId: string): TooltipMark['attrs'] => {
-  return {
-    tooltipId,
-    word: formData.word,
-    translation: formData.translation,
-    pronunciation: formData.pronunciation,
-    partOfSpeech: formData.partOfSpeech,
-    wordType: formData.wordType,
-    definition: formData.definition,
-    examples: formData.examples,
-    etymology: formData.etymology,
-    gender: formData.gender,
-    declensionClass: formData.declensionClass,
-    conjugationClass: formData.conjugationClass,
-    grammaticalInfo: formData.grammaticalInfo,
-    principalParts: formData.principalParts,
-  };
-};
-
-export const safeStringValue = (value: string | undefined | null): string => {
-  return value?.trim() || '';
-};
-
-export const safeArrayValue = <T>(value: T[] | undefined | null): T[] => {
-  return Array.isArray(value) ? value : [];
-};
-
-export const mergeTooltipData = (
-  base: Partial<TooltipFormData>,
-  override: Partial<TooltipFormData>
-): TooltipFormData => {
-  const mergedData: TooltipFormData = {
-    word: safeStringValue(override.word) || safeStringValue(base.word) || '',
-    translation: safeStringValue(override.translation) || safeStringValue(base.translation),
-    pronunciation: safeStringValue(override.pronunciation) || safeStringValue(base.pronunciation),
-    partOfSpeech: safeStringValue(override.partOfSpeech) || safeStringValue(base.partOfSpeech),
-    wordType: safeStringValue(override.wordType) || safeStringValue(base.wordType),
-    definition: safeStringValue(override.definition) || safeStringValue(base.definition),
-    examples:
-      safeArrayValue(override.examples).length > 0 ? safeArrayValue(override.examples) : safeArrayValue(base.examples),
-    etymology: safeStringValue(override.etymology) || safeStringValue(base.etymology),
-    gender: safeStringValue(override.gender) || safeStringValue(base.gender),
-    declensionClass: safeStringValue(override.declensionClass) || safeStringValue(base.declensionClass),
-    conjugationClass: safeStringValue(override.conjugationClass) || safeStringValue(base.conjugationClass),
-    grammaticalInfo: safeStringValue(override.grammaticalInfo) || safeStringValue(base.grammaticalInfo),
-    principalParts:
-      safeArrayValue(override.principalParts).length > 0
-        ? safeArrayValue(override.principalParts)
-        : safeArrayValue(base.principalParts),
-  };
-
-  return mergedData;
 };
 
 export const calculateTooltipPosition = (

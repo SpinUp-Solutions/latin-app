@@ -25,9 +25,6 @@ export interface TooltipData extends BaseTooltipFields, GrammaticalFields {
 // Form data interface for creating/editing tooltips
 export interface TooltipFormData extends BaseTooltipFields, GrammaticalFields {}
 
-// Legacy type alias for backwards compatibility
-export type TooltipFormDataLegacy = TooltipFormData;
-
 export interface MousePosition {
   x: number;
   y: number;
