@@ -42,7 +42,6 @@ export const ClipboardProvider: React.FC<ClipboardProviderProps> = ({ children }
     if (result && result.content && result.tooltips) {
       dispatch(
         addContentToPage({
-          pageType: target.pageType,
           pageIndex: target.pageIndex,
           content: result.content,
         })
@@ -66,7 +65,6 @@ export const ClipboardProvider: React.FC<ClipboardProviderProps> = ({ children }
       if (result && result.content && result.tooltips) {
         dispatch(
           addContentToPage({
-            pageType: target.pageType,
             pageIndex: target.pageIndex,
             content: result.content,
           })

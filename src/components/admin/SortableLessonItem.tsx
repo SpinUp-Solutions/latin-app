@@ -2,7 +2,7 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, BookOpen, Clock } from 'lucide-react';
+import { GripVertical, BookOpen } from 'lucide-react';
 import { Badge } from '@/src/components/ui/badge';
 import { Button } from '@/src/components/ui/button';
 import { Lesson } from '@/src/types/lesson';
@@ -52,11 +52,7 @@ export function SortableLessonItem({ lesson, id }: SortableLessonItemProps) {
         <div className="flex items-center gap-4 text-xs text-gray-500">
           <div className="flex items-center gap-1">
             <BookOpen className="w-3 h-3" />
-            <span>{lesson.introduction?.length || 0} intro</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Clock className="w-3 h-3" />
-            <span>{lesson.exercises?.length || 0} exercises</span>
+            <span>{lesson.pages?.length || 0} pages</span>
           </div>
         </div>
       </div>

@@ -11,7 +11,7 @@ const lessons: Lesson[] = [
     liveOrder: null,
     publishedAt: null,
     publishedBy: null,
-    introduction: [
+    pages: [
       {
         id: 'intro-page-1',
         title: 'Welcome to Your First Lesson',
@@ -228,8 +228,6 @@ const lessons: Lesson[] = [
           } as VocabularyContent,
         ],
       },
-    ],
-    exercises: [
       {
         id: 'exercise-page-1',
         title: 'Verb Ending Practice',

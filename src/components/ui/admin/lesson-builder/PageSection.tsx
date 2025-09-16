@@ -2,7 +2,7 @@ import React from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
 import { Plus, Trash2, GripVertical } from 'lucide-react';
-import { IntroductionPage, ExercisePage } from '@/src/types/lesson';
+import { Page } from '@/src/types/lesson';
 import { RenderableContentItem } from '@/src/types/page';
 import { createNewContent } from '@/src/utils/contentFactory';
 import { SimpleRichEditor } from '../../core/simple-rich-editor';
@@ -31,8 +31,7 @@ import { PasteZone } from '../../core/clipboard';
 interface PageSectionProps {
   title: string;
   icon: React.ComponentType<{ className?: string }>;
-  pages: (IntroductionPage | ExercisePage)[];
-  pageType: 'introduction' | 'exercises';
+  pages: Page[];
   contentTypes: readonly { type: string; icon: React.ComponentType<{ className?: string }>; label: string }[];
   onAddPage: () => void;
   onRemovePage: (pageIndex: number) => void;
@@ -43,9 +42,8 @@ interface PageSectionProps {
 }
 
 interface SortablePageProps {
-  page: IntroductionPage | ExercisePage;
+  page: Page;
   pageIndex: number;
-  pageType: 'introduction' | 'exercises';
   contentTypes: readonly { type: string; icon: React.ComponentType<{ className?: string }>; label: string }[];
   onRemovePage: (pageIndex: number) => void;
   onUpdatePageTitle: (pageIndex: number, title: string) => void;
@@ -57,7 +55,6 @@ interface SortablePageProps {
 const SortablePage: React.FC<SortablePageProps> = ({
   page,
   pageIndex,
-  pageType,
   contentTypes,
   onRemovePage,
   onUpdatePageTitle,
@@ -105,14 +102,13 @@ const SortablePage: React.FC<SortablePageProps> = ({
 
       <DraggableContentList
         items={page.items}
-        pageType={pageType}
         pageIndex={pageIndex}
         onEditContent={(itemIndex: number) => onEditContent(pageIndex, itemIndex)}
         onRemoveContent={(itemIndex: number) => onRemoveContent(pageIndex, itemIndex)}
       />
 
       <div className="space-y-3 pt-2 border-t">
-        <PasteZone pageType={pageType} pageIndex={pageIndex} />
+        <PasteZone pageIndex={pageIndex} />
         <div className="flex flex-wrap gap-2">
           {contentTypes.map(({ type, icon: ContentIcon, label }) => (
             <Button key={type} variant="outline" size="sm" onClick={() => handleAddContent(type)}>
@@ -130,7 +126,6 @@ export const PageSection: React.FC<PageSectionProps> = ({
   title,
   icon: Icon,
   pages,
-  pageType,
   contentTypes,
   onAddPage,
   onRemovePage,
@@ -160,7 +155,6 @@ export const PageSection: React.FC<PageSectionProps> = ({
 
       dispatch(
         reorderPages({
-          pageType,
           fromIndex: activeIndex,
           toIndex: overIndex,
         })
@@ -194,7 +188,6 @@ export const PageSection: React.FC<PageSectionProps> = ({
                 key={page.id}
                 page={page}
                 pageIndex={pageIndex}
-                pageType={pageType}
                 contentTypes={contentTypes}
                 onRemovePage={onRemovePage}
                 onUpdatePageTitle={onUpdatePageTitle}

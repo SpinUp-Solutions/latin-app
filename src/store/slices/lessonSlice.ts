@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction, createSelector } from '@reduxjs/toolkit';
-import { Lesson, IntroductionPage, ExercisePage, LessonWithProgress } from '@/src/types/lesson';
+import { Lesson, Page, LessonWithProgress } from '@/src/types/lesson';
 import { RenderableContentItem } from '@/src/types/page';
 import { lessonService } from '@/src/services/lessonService';
 import { TooltipData } from '@/src/types/tooltip';
@@ -11,7 +11,6 @@ interface LessonState {
   drafts: Record<string, { lesson: Lesson; lastModified: string }>;
   editingContent: {
     content: RenderableContentItem;
-    pageType: 'introduction' | 'exercises';
     pageIndex: number;
     itemIndex: number;
   } | null;
@@ -187,8 +186,7 @@ const lessonSlice = createSlice({
         id: `lesson-${Date.now()}`,
         title: 'New Lesson',
         description: '',
-        introduction: [],
-        exercises: [],
+        pages: [],
         isLive: false,
         liveOrder: null,
         publishedAt: null,
@@ -203,113 +201,94 @@ const lessonSlice = createSlice({
       }
     },
 
-    addIntroductionPage: state => {
+    addPage: state => {
       if (state.currentLesson) {
-        const newPage: IntroductionPage = {
-          id: `intro-page-${Date.now()}`,
-          title: 'New Introduction Page',
+        const newPage: Page = {
+          id: `page-${Date.now()}`,
+          title: 'New Page',
           items: [],
           audioPath: null,
         };
-        state.currentLesson.introduction.push(newPage);
-      }
-    },
-
-    addExercisePage: state => {
-      if (state.currentLesson) {
-        const newPage: ExercisePage = {
-          id: `exercise-page-${Date.now()}`,
-          title: 'New Exercise Page',
-          items: [],
-          audioPath: null,
-        };
-        state.currentLesson.exercises.push(newPage);
+        state.currentLesson.pages.push(newPage);
       }
     },
 
     updatePageTitle: (
       state,
       action: PayloadAction<{
-        pageType: 'introduction' | 'exercises';
         pageIndex: number;
         title: string;
       }>
     ) => {
-      const { pageType, pageIndex, title } = action.payload;
+      const { pageIndex, title } = action.payload;
       if (state.currentLesson) {
-        state.currentLesson[pageType][pageIndex].title = title;
+        state.currentLesson.pages[pageIndex].title = title;
       }
     },
 
     addContentToPage: (
       state,
       action: PayloadAction<{
-        pageType: 'introduction' | 'exercises';
         pageIndex: number;
         content: RenderableContentItem;
       }>
     ) => {
-      const { pageType, pageIndex, content } = action.payload;
+      const { pageIndex, content } = action.payload;
       if (state.currentLesson) {
-        state.currentLesson[pageType][pageIndex].items.push(content);
+        state.currentLesson.pages[pageIndex].items.push(content);
       }
     },
 
     updateContentItem: (
       state,
       action: PayloadAction<{
-        pageType: 'introduction' | 'exercises';
         pageIndex: number;
         itemIndex: number;
         content: RenderableContentItem;
       }>
     ) => {
-      const { pageType, pageIndex, itemIndex, content } = action.payload;
+      const { pageIndex, itemIndex, content } = action.payload;
       if (state.currentLesson) {
-        state.currentLesson[pageType][pageIndex].items[itemIndex] = content;
+        state.currentLesson.pages[pageIndex].items[itemIndex] = content;
       }
     },
 
     removeContent: (
       state,
       action: PayloadAction<{
-        pageType: 'introduction' | 'exercises';
         pageIndex: number;
         itemIndex: number;
       }>
     ) => {
-      const { pageType, pageIndex, itemIndex } = action.payload;
+      const { pageIndex, itemIndex } = action.payload;
       if (state.currentLesson) {
-        state.currentLesson[pageType][pageIndex].items.splice(itemIndex, 1);
+        state.currentLesson.pages[pageIndex].items.splice(itemIndex, 1);
       }
     },
 
     removePage: (
       state,
       action: PayloadAction<{
-        pageType: 'introduction' | 'exercises';
         pageIndex: number;
       }>
     ) => {
-      const { pageType, pageIndex } = action.payload;
+      const { pageIndex } = action.payload;
       if (state.currentLesson) {
-        state.currentLesson[pageType].splice(pageIndex, 1);
+        state.currentLesson.pages.splice(pageIndex, 1);
       }
     },
 
     startEditingContent: (
       state,
       action: PayloadAction<{
-        pageType: 'introduction' | 'exercises';
         pageIndex: number;
         itemIndex: number;
       }>
     ) => {
-      const { pageType, pageIndex, itemIndex } = action.payload;
+      const { pageIndex, itemIndex } = action.payload;
       if (state.currentLesson) {
         state.editingContent = {
-          content: JSON.parse(JSON.stringify(state.currentLesson[pageType][pageIndex].items[itemIndex])),
-          pageType,
+          content: JSON.parse(JSON.stringify(state.currentLesson.pages[pageIndex].items[itemIndex])),
           pageIndex,
           itemIndex,
         };
@@ -322,16 +301,16 @@ const lessonSlice = createSlice({
         state.editingContent.content = action.payload;
 
         if (state.currentLesson) {
-          const { pageType, pageIndex, itemIndex } = state.editingContent;
-          state.currentLesson[pageType][pageIndex].items[itemIndex] = action.payload;
+          const { pageIndex, itemIndex } = state.editingContent;
+          state.currentLesson.pages[pageIndex].items[itemIndex] = action.payload;
         }
       }
     },
 
     saveEditingContent: state => {
       if (state.editingContent && state.currentLesson) {
-        const { pageType, pageIndex, itemIndex, content } = state.editingContent;
-        state.currentLesson[pageType][pageIndex].items[itemIndex] = content;
+        const { pageIndex, itemIndex, content } = state.editingContent;
+        state.currentLesson.pages[pageIndex].items[itemIndex] = content;
         state.editingContent = null;
         state.isModalOpen = false;
       }
@@ -377,14 +356,13 @@ const lessonSlice = createSlice({
     reorderPages: (
       state,
       action: PayloadAction<{
-        pageType: 'introduction' | 'exercises';
         fromIndex: number;
         toIndex: number;
       }>
     ) => {
-      const { pageType, fromIndex, toIndex } = action.payload;
+      const { fromIndex, toIndex } = action.payload;
       if (state.currentLesson && fromIndex !== toIndex) {
-        const pages = state.currentLesson[pageType];
+        const pages = state.currentLesson.pages;
         const [movedPage] = pages.splice(fromIndex, 1);
         pages.splice(toIndex, 0, movedPage);
       }
@@ -393,15 +371,14 @@ const lessonSlice = createSlice({
     reorderContentItems: (
       state,
       action: PayloadAction<{
-        pageType: 'introduction' | 'exercises';
         pageIndex: number;
         fromIndex: number;
         toIndex: number;
       }>
     ) => {
-      const { pageType, pageIndex, fromIndex, toIndex } = action.payload;
+      const { pageIndex, fromIndex, toIndex } = action.payload;
       if (state.currentLesson && fromIndex !== toIndex) {
-        const items = state.currentLesson[pageType][pageIndex].items;
+        const items = state.currentLesson.pages[pageIndex].items;
         const [movedItem] = items.splice(fromIndex, 1);
         items.splice(toIndex, 0, movedItem);
       }
@@ -570,8 +547,7 @@ const lessonSlice = createSlice({
 export const {
   setLesson,
   updateLessonInfo,
-  addIntroductionPage,
-  addExercisePage,
+  addPage,
   updatePageTitle,
   addContentToPage,
   updateContentItem,

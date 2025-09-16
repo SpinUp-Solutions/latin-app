@@ -1,18 +1,50 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { IntroductionPage, ExercisePage } from '@/src/types/lesson';
+import { Page } from '@/src/types/lesson';
 import ContentRenderer from './content-renderer';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
+import { isExerciseType } from '@/src/utils/lessonUtils';
+import { getEffectiveFeedbackConfig } from '@/src/utils/feedbackDefaults';
 
 interface PageTemplateProps {
-  page: IntroductionPage | ExercisePage;
+  page: Page;
   pageIndex?: number;
   onExerciseComplete?: (itemIndex: number, score: number) => void;
+  onPageComplete?: () => void;
 }
 
-export const PageTemplate: React.FC<PageTemplateProps> = ({ page, pageIndex, onExerciseComplete }) => {
+export const PageTemplate: React.FC<PageTemplateProps> = ({ page, pageIndex, onExerciseComplete, onPageComplete }) => {
+  const [completedExercises, setCompletedExercises] = useState(new Set<number>());
+
+  const exerciseItems = page.items.filter(item => isExerciseType(item.type));
+  const totalExercises = exerciseItems.length;
+
+  const handleItemComplete = useCallback((itemIndex: number, score: number) => {
+    const item = page.items[itemIndex];
+
+    if (onExerciseComplete) {
+      onExerciseComplete(itemIndex, score);
+    }
+
+    if (isExerciseType(item.type)) {
+      const newCompleted = new Set(completedExercises);
+      newCompleted.add(itemIndex);
+      setCompletedExercises(newCompleted);
+
+      if (newCompleted.size === totalExercises && totalExercises > 0 && onPageComplete) {
+        const effectiveConfig = getEffectiveFeedbackConfig(page.feedbackConfig || { escalationLevels: [] });
+
+        if (effectiveConfig.progressionRules?.autoAdvance !== false) {
+          const delay = effectiveConfig.timingConfig?.nextExerciseDelay || 1500;
+          setTimeout(() => {
+            onPageComplete();
+          }, delay);
+        }
+      }
+    }
+  }, [page, completedExercises, totalExercises, onExerciseComplete, onPageComplete]);
   return (
     <motion.div
       key={page.id}
@@ -27,7 +59,7 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({ page, pageIndex, onE
         </h2>
       )}
 
-      {page.items.map((item, index) => (
+      {page.items.map((item, index: number) => (
         <motion.div
           key={item.id}
           initial={{ opacity: 0, y: 20 }}
@@ -38,7 +70,7 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({ page, pageIndex, onE
             content={item}
             pageIndex={pageIndex}
             itemIndex={index}
-            onComplete={onExerciseComplete ? score => onExerciseComplete(index, score) : undefined}
+            onComplete={(score: number) => handleItemComplete(index, score)}
           />
         </motion.div>
       ))}

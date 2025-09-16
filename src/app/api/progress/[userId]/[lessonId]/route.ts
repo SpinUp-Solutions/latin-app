@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { auth } from 'firebase-admin';
-import { calculateOverallProgress, isLessonComplete, getContentCount } from '@/src/utils/lessonUtils';
-import { Lesson } from '@/src/types/lesson';
+import { calculateOverallProgress, isLessonComplete, getContentCount, parsePageIndex, getExerciseCountForPage, getCompletedExercisesForPage } from '@/src/utils/lessonUtils';
+import { Lesson, PageProgress } from '@/src/types/lesson';
 
 async function verifyAuth(request: NextRequest) {
   const authHeader = request.headers.get('Authorization');
@@ -68,10 +68,32 @@ export async function POST(request: NextRequest, { params }: { params: { userId:
         exerciseProgress.push(newExerciseProgress);
       }
 
+      // Check for page completion
+      const updatedPageProgress = existingData?.pageProgress || [];
+      const pageIndex = parsePageIndex(exerciseId);
+      if (pageIndex !== null && lessonDoc.exists) {
+        const lesson = { id: lessonDoc.id, ...lessonDoc.data() } as Lesson;
+        const totalExercisesOnPage = getExerciseCountForPage(lesson, pageIndex);
+        const completedExercisesOnPage = getCompletedExercisesForPage(exerciseProgress, pageIndex);
+
+        if (completedExercisesOnPage.length === totalExercisesOnPage && totalExercisesOnPage > 0) {
+          // All exercises on this page are now complete!
+          const isAlreadyComplete = updatedPageProgress.some((pp: PageProgress) => pp.pageIndex === pageIndex);
+
+          if (!isAlreadyComplete) {
+            // Add new page completion entry
+            updatedPageProgress.push({
+              pageIndex,
+              completedAt: new Date().toISOString(),
+            });
+          }
+        }
+      }
+
       let computedData = {};
       if (lessonDoc.exists) {
         const lesson = { id: lessonDoc.id, ...lessonDoc.data() };
-        const totalExercises = getContentCount(lesson as Lesson).exerciseItems;
+        const totalExercises = getContentCount(lesson as Lesson).totalExercises;
 
         const overallProgress = calculateOverallProgress(exerciseProgress, totalExercises);
         const exercisesCompleted = exerciseProgress.length;
@@ -93,6 +115,7 @@ export async function POST(request: NextRequest, { params }: { params: { userId:
             ...existingData,
             ...lessonProgressData,
             exerciseProgress,
+            pageProgress: updatedPageProgress,
             ...computedData,
             userId: params.userId,
             lessonId: params.lessonId,

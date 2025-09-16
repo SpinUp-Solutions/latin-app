@@ -141,14 +141,14 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
               <h4 className="font-medium text-gray-700 mb-2">Content Summary</h4>
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div className="bg-blue-50 p-3 rounded">
-                  <div className="text-2xl font-bold text-blue-600">{contentCount.introPages}</div>
-                  <div className="text-sm text-blue-700">Introduction Pages</div>
-                  <div className="text-xs text-gray-500">{contentCount.introItems} items</div>
+                  <div className="text-2xl font-bold text-blue-600">{contentCount.totalPages}</div>
+                  <div className="text-sm text-blue-700">Total Pages</div>
+                  <div className="text-xs text-gray-500">All lesson pages</div>
                 </div>
                 <div className="bg-green-50 p-3 rounded">
-                  <div className="text-2xl font-bold text-green-600">{contentCount.exercisePages}</div>
-                  <div className="text-sm text-green-700">Exercise Pages</div>
-                  <div className="text-xs text-gray-500">{contentCount.exerciseItems} items</div>
+                  <div className="text-2xl font-bold text-green-600">{contentCount.totalExercises}</div>
+                  <div className="text-sm text-green-700">Total Exercises</div>
+                  <div className="text-xs text-gray-500">Exercise content items</div>
                 </div>
                 <div className="bg-purple-50 p-3 rounded">
                   <div className="text-2xl font-bold text-purple-600">{contentCount.totalItems}</div>
@@ -207,8 +207,8 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
                     </div>
 
                     <div className="flex justify-between text-xs text-gray-600">
-                      <span>{getContentCount(draft.lesson).introPages} intro pages</span>
-                      <span>{getContentCount(draft.lesson).exercisePages} exercise pages</span>
+                      <span>{getContentCount(draft.lesson).totalPages} total pages</span>
+                      <span>{getContentCount(draft.lesson).totalExercises} exercises</span>
                       <span>{getContentCount(draft.lesson).totalItems} items</span>
                     </div>
 
@@ -288,8 +288,8 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
                     </div>
 
                     <div className="flex justify-between text-xs text-gray-600">
-                      <span>{contentCount.introPages} intro pages</span>
-                      <span>{contentCount.exercisePages} exercise pages</span>
+                      <span>{contentCount.totalPages} total pages</span>
+                      <span>{contentCount.totalExercises} exercises</span>
                       <span>{contentCount.totalItems} items</span>
                     </div>
 

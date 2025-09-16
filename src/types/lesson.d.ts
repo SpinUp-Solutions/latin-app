@@ -1,4 +1,4 @@
-import { IntroductionPage, ExercisePage } from './page';
+import { Page } from './page';
 import type { VocabularyPoolWithWords } from './vocabulary-pool';
 
 export interface Lesson {
@@ -6,8 +6,7 @@ export interface Lesson {
   title: string;
   description?: string;
   vocabulary_pool?: string;
-  introduction: IntroductionPage[];
-  exercises: ExercisePage[];
+  pages: Page[];
 
   isLive: boolean;
   liveOrder: number | null;
@@ -38,6 +37,11 @@ export interface ExerciseProgress {
   score: number;
 }
 
+export interface PageProgress {
+  pageIndex: number;
+  completedAt: string;
+}
+
 export interface UserProgress {
   userId: string;
   lessonId: string;
@@ -45,6 +49,7 @@ export interface UserProgress {
   completedAt?: string;
   progress: number;
   exerciseProgress: ExerciseProgress[];
+  pageProgress: PageProgress[];
   score?: number;
   overallProgress?: number;
   exercisesCompleted?: number;
@@ -56,7 +61,7 @@ export interface LessonWithAccess extends Lesson {
   userProgress?: UserProgress;
 }
 
-export type { IntroductionPage, ExercisePage } from './page';
+export type { Page } from './page';
 export type { RenderableContentItem } from './page';
 export type { ContentItem, TextContent, EmphasisContent, TableContent, ComponentNarration } from './content';
 export type { VocabularyItem, VocabularyContent, VocabularyPoolContent } from './vocabulary';

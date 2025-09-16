@@ -8,7 +8,7 @@ import {
   TooltipMark,
   isTooltipMark,
 } from '@/src/types/tooltip';
-import { Lesson, IntroductionPage, ExercisePage, RenderableContentItem } from '@/src/types/lesson';
+import { Lesson, Page, RenderableContentItem } from '@/src/types/lesson';
 
 export const generateTooltipId = (word?: string): string => {
   const randomId = Math.random().toString(36).substring(2, 11);
@@ -301,18 +301,9 @@ export const extractTooltipsFromLesson = (lesson: Lesson): Record<string, Toolti
     });
   };
 
-  // Extract from introduction pages
-  if (lesson.introduction && Array.isArray(lesson.introduction)) {
-    lesson.introduction.forEach((page: IntroductionPage) => {
-      if (page.items && Array.isArray(page.items)) {
-        extractFromContentArray(page.items);
-      }
-    });
-  }
-
-  // Extract from exercise pages
-  if (lesson.exercises && Array.isArray(lesson.exercises)) {
-    lesson.exercises.forEach((page: ExercisePage) => {
+  // Extract from unified pages
+  if (lesson.pages && Array.isArray(lesson.pages)) {
+    lesson.pages.forEach((page: Page) => {
       if (page.items && Array.isArray(page.items)) {
         extractFromContentArray(page.items);
       }

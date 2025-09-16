@@ -36,7 +36,7 @@ export async function GET(request: NextRequest, { params }: { params: { userId: 
       const data = doc.data();
       lessonsMap.set(doc.id, {
         id: doc.id,
-        totalExercises: data.totalExercises || getContentCount({ ...data, id: doc.id } as Lesson).exerciseItems,
+        totalExercises: data.totalExercises || getContentCount({ ...data, id: doc.id } as Lesson).totalExercises,
         ...data,
       });
     });
@@ -60,6 +60,8 @@ export async function GET(request: NextRequest, { params }: { params: { userId: 
           ...data,
           userId: params.userId,
           lessonId,
+          exerciseProgress,
+          pageProgress: data.pageProgress || [],
           overallProgress,
           exercisesCompleted,
           totalExercises,

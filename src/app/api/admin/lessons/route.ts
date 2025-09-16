@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
 
     const lessonData = {
       ...lesson,
-      totalExercises: contentCount.exerciseItems,
+      totalExercises: contentCount.totalExercises,
       createdAt: new Date().toISOString(),
       createdBy: user.uid,
       updatedAt: new Date().toISOString(),
@@ -119,7 +119,7 @@ export async function PUT(request: NextRequest) {
 
     const updatedLessonData = {
       ...lesson,
-      totalExercises: contentCount.exerciseItems,
+      totalExercises: contentCount.totalExercises,
       createdAt: existingLesson?.createdAt || new Date().toISOString(),
       createdBy: existingLesson?.createdBy || user.uid,
       updatedAt: new Date().toISOString(),

@@ -10,6 +10,7 @@ import {
   MultipleChoiceExercise,
   OddOneOutExercise,
 } from './exercises';
+import { FeedbackConfig } from './exercises/base';
 
 export type RenderableContentItem =
   | TextContent
@@ -33,6 +34,6 @@ export interface BasePage {
   audioPath?: string | null;
 }
 
-export interface IntroductionPage extends BasePage {}
-
-export interface ExercisePage extends BasePage {}
+export interface Page extends BasePage {
+  feedbackConfig?: FeedbackConfig;
+}

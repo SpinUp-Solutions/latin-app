@@ -348,8 +348,7 @@ export default function LiveLessonsPage() {
                                   <p className="text-sm text-gray-600 mb-2">{lesson.description}</p>
                                 )}
                                 <div className="flex items-center gap-4 text-xs text-gray-500">
-                                  <span>{lesson.introduction?.length || 0} intro pages</span>
-                                  <span>{lesson.exercises?.length || 0} exercise pages</span>
+                                  <span>{lesson.pages?.length || 0} pages</span>
                                 </div>
                               </div>
 

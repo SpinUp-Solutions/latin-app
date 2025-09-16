@@ -9,7 +9,7 @@ import type { RootState, AppDispatch } from '@/src/store';
 import { loadStudentLessons } from '@/src/store/slices/lessonSlice';
 import { useGetBatchUserProgressQuery } from '@/src/store/api/progressApi';
 import { Lesson, UserProgress } from '@/src/types/lesson';
-import { getContentCount } from '@/src/utils/lessonUtils';
+import { getContentCount, calculatePageProgress, getCompletedPagesCount } from '@/src/utils/lessonUtils';
 import { Button } from '@/src/components/ui/button';
 import { toast } from 'sonner';
 import React, { memo } from 'react';
@@ -56,7 +56,9 @@ interface LessonWithProgress extends Lesson {
   status: LessonStatus;
   exercisesCompleted: number;
   totalExercises: number;
-  totalIntroPages: number;
+  totalPages: number;
+  pagesCompleted: number;
+  pageProgress: number;
   userProgress?: UserProgress;
 }
 
@@ -79,7 +81,7 @@ const LessonCard = memo(
               <div className="flex items-center gap-4 text-xs text-roman-stone mb-3">
                 <span className="flex items-center gap-1">
                   <BookOpen className="h-3 w-3" />
-                  {lesson.totalIntroPages || 0} intro pages
+                  {lesson.totalPages || 0} pages
                 </span>
                 <span className="flex items-center gap-1">
                   <BookOpen className="h-3 w-3" />
@@ -119,6 +121,20 @@ const LessonCard = memo(
                       }}></div>
                   </div>
 
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-roman-stone">Pages Completed</span>
+                    <span className="text-xs font-medium">
+                      {lesson.pagesCompleted}/{lesson.totalPages}
+                    </span>
+                  </div>
+                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-roman-gold rounded-full transition-all"
+                      style={{
+                        width: `${lesson.pageProgress}%`,
+                      }}></div>
+                  </div>
+
                   {lesson.userProgress?.exerciseProgress && lesson.userProgress.exerciseProgress.length > 0 && (
                     <div className="text-xs text-roman-stone">
                       Average Score: {lesson.userProgress.score || 'N/A'}
@@ -143,6 +159,11 @@ const LessonCard = memo(
 LessonCard.displayName = 'LessonCard';
 
 function createLessonWithProgress(lesson: Lesson, userProgress?: UserProgress): LessonWithProgress {
+  const contentCount = getContentCount(lesson);
+  const pageProgressArray = userProgress?.pageProgress || [];
+  const pagesCompleted = getCompletedPagesCount(pageProgressArray);
+  const pageProgressPercent = calculatePageProgress(pageProgressArray, contentCount.totalPages);
+
   if (userProgress && userProgress.overallProgress !== undefined) {
     return {
       ...lesson,
@@ -150,12 +171,13 @@ function createLessonWithProgress(lesson: Lesson, userProgress?: UserProgress): 
       status: userProgress.status || 'available',
       exercisesCompleted: userProgress.exercisesCompleted || 0,
       totalExercises: userProgress.totalExercises || 0,
-      totalIntroPages: getContentCount(lesson).introPages,
+      totalPages: contentCount.totalPages,
+      pagesCompleted,
+      pageProgress: pageProgressPercent,
       userProgress,
     };
   }
 
-  const contentCount = getContentCount(lesson);
   const progress = userProgress?.progress || 0;
   const exercisesCompleted = userProgress?.exerciseProgress?.length || 0;
   const status: LessonStatus =
@@ -170,8 +192,10 @@ function createLessonWithProgress(lesson: Lesson, userProgress?: UserProgress): 
     progress,
     status,
     exercisesCompleted,
-    totalExercises: contentCount.exerciseItems,
-    totalIntroPages: contentCount.introPages,
+    totalExercises: contentCount.totalExercises,
+    totalPages: contentCount.totalPages,
+    pagesCompleted,
+    pageProgress: pageProgressPercent,
     userProgress,
   };
 }
