@@ -17,6 +17,7 @@ import {
   removeContent,
   removePage,
   startEditingContent,
+  loadTooltips,
 } from '@/src/store/slices/lessonSlice';
 
 // Components
@@ -27,6 +28,7 @@ import { LessonPreview } from './lesson-builder/LessonPreview';
 import { ALL_CONTENT_TYPES } from '@/src/utils/contentTypeConstants';
 import { ContentEditor } from './ContentEditor';
 import { useClipboard, ClipboardPanel } from '../core/clipboard';
+import { extractTooltipsFromLesson } from '@/src/utils/tooltipUtils';
 
 interface LessonBuilderProps {
   initialLesson?: Lesson;
@@ -40,6 +42,10 @@ export const LessonBuilder: React.FC<LessonBuilderProps> = ({ initialLesson, onS
 
   useEffect(() => {
     dispatch(setLesson(initialLesson));
+    if (initialLesson) {
+      const tooltips = extractTooltipsFromLesson(initialLesson);
+      dispatch(loadTooltips(tooltips));
+    }
   }, [dispatch, initialLesson]);
 
   if (!currentLesson) {
