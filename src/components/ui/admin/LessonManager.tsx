@@ -7,7 +7,8 @@ import { BookOpen, Edit, Trash2, Calendar, Eye, FileText, Clock } from 'lucide-r
 import { Lesson } from '@/src/types/lesson';
 import { toast } from 'sonner';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
-import { loadLessons, deleteLesson, clearDraft, loadDrafts } from '@/src/store/slices/lessonSlice';
+import { useGetLessonsQuery, useDeleteLessonMutation } from '@/src/store/api/lessonApi';
+import { clearDraft, loadDrafts } from '@/src/store/slices/lessonEditorSlice';
 import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { getContentCount } from '@/src/utils/lessonUtils';
@@ -19,7 +20,9 @@ interface LessonManagerProps {
 
 export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onContinueDraft }) => {
   const dispatch = useAppDispatch();
-  const { lessons, loading, error, drafts } = useAppSelector(state => state.lesson);
+  const { data: lessons = [], isLoading: loading, error } = useGetLessonsQuery();
+  const [deleteLesson] = useDeleteLessonMutation();
+  const { drafts } = useAppSelector(state => state.lessonEditor);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [dialogState, setDialogState] = useState<{
     isOpen: boolean;
@@ -29,13 +32,18 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
   } | null>(null);
 
   useEffect(() => {
-    dispatch(loadLessons());
     dispatch(loadDrafts());
   }, [dispatch]);
 
   useEffect(() => {
     if (error) {
-      toast.error(error);
+      const errorMessage =
+        'data' in error
+          ? (error.data as { error?: string })?.error || 'Failed to load lessons'
+          : 'error' in error
+            ? error.error || 'Failed to load lessons'
+            : 'Failed to load lessons';
+      toast.error(errorMessage);
     }
   }, [error]);
 
@@ -46,7 +54,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
       description: 'This action cannot be undone. This will permanently delete the lesson and all of its content.',
       onConfirm: async () => {
         try {
-          await dispatch(deleteLesson(lessonId)).unwrap();
+          await deleteLesson(lessonId).unwrap();
           toast.success('Lesson deleted successfully');
         } catch (error) {
           console.error('Error deleting lesson:', error);

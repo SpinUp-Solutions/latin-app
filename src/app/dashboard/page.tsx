@@ -2,11 +2,11 @@
 
 import { useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useDispatch, useSelector } from 'react-redux';
+import { useSelector } from 'react-redux';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/src/services/firebase';
-import type { RootState, AppDispatch } from '@/src/store';
-import { loadStudentLessons } from '@/src/store/slices/lessonSlice';
+import type { RootState } from '@/src/store';
+import { useGetStudentLessonsQuery } from '@/src/store/api/lessonApi';
 import { useGetBatchUserProgressQuery } from '@/src/store/api/progressApi';
 import { Lesson, UserProgress } from '@/src/types/lesson';
 import { getContentCount, calculatePageProgress, getCompletedPagesCount } from '@/src/utils/lessonUtils';
@@ -202,9 +202,11 @@ function createLessonWithProgress(lesson: Lesson, userProgress?: UserProgress): 
 
 export default function DashboardPage() {
   const router = useRouter();
-  const dispatch = useDispatch<AppDispatch>();
   const { user, loading } = useSelector((state: RootState) => state.auth);
-  const { studentLessons, loading: lessonsLoading } = useSelector((state: RootState) => state.lesson);
+
+  const { data: studentLessons, isLoading: lessonsLoading } = useGetStudentLessonsQuery(undefined, {
+    skip: !user?.uid,
+  });
 
   const { data: progressData, isLoading: progressLoading } = useGetBatchUserProgressQuery(user?.uid || '', {
     skip: !user?.uid,
@@ -251,10 +253,8 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!loading && !user) {
       router.push('/login');
-    } else if (user) {
-      dispatch(loadStudentLessons());
     }
-  }, [user, loading, router, dispatch]);
+  }, [user, loading, router]);
 
   const handleSignOut = async () => {
     try {
