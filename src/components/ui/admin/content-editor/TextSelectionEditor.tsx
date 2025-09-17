@@ -63,7 +63,7 @@ export const TextSelectionEditor: React.FC = () => {
       selectedWord,
       questionIndex,
       passageWords,
-      totalWords: passageWords.length
+      totalWords: passageWords.length,
     });
     updateQuestion(questionIndex, 'correctWordIndex', wordIndex);
   };
@@ -81,7 +81,7 @@ export const TextSelectionEditor: React.FC = () => {
         <div className="p-4 bg-gray-50 rounded border">
           <ClickableRichDisplay
             content={editingContent.data.passage}
-            onWordClick={(index) => handleWordClick(index, questionIndex)}
+            onWordClick={index => handleWordClick(index, questionIndex)}
             selectedWordIndex={editingContent.data.questions[questionIndex]?.correctWordIndex ?? null}
             isCorrect={true}
           />

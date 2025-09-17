@@ -17,7 +17,7 @@ export const splitHtmlIntoWords = (htmlContent: string): string[] => {
     const parentElement = textNode.parentNode as Element;
     textFragments.push({
       text: textNode.textContent,
-      element: parentElement
+      element: parentElement,
     });
   }
 
@@ -56,15 +56,10 @@ export const splitHtmlIntoWords = (htmlContent: string): string[] => {
   return words;
 };
 
-function buildCompleteWord(
-  fragments: Array<{ text: string; element: Element }>,
-  rootElement: Element
-): string {
+function buildCompleteWord(fragments: Array<{ text: string; element: Element }>, rootElement: Element): string {
   if (fragments.length === 0) return '';
 
-  return fragments
-    .map(fragment => createWordFragment(fragment.text, fragment.element, rootElement))
-    .join('');
+  return fragments.map(fragment => createWordFragment(fragment.text, fragment.element, rootElement)).join('');
 }
 
 function createWordFragment(word: string, element: Element, rootElement: Element): string {
@@ -80,7 +75,21 @@ function createWordFragment(word: string, element: Element, rootElement: Element
       const tagName = currentElement.tagName.toLowerCase();
 
       // Skip block-level elements - only include inline formatting
-      const blockElements = new Set(['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'pre', 'ul', 'ol', 'li']);
+      const blockElements = new Set([
+        'p',
+        'div',
+        'h1',
+        'h2',
+        'h3',
+        'h4',
+        'h5',
+        'h6',
+        'blockquote',
+        'pre',
+        'ul',
+        'ol',
+        'li',
+      ]);
       if (blockElements.has(tagName)) {
         currentElement = currentElement.parentNode as Element;
         continue;
@@ -103,6 +112,9 @@ function createWordFragment(word: string, element: Element, rootElement: Element
   return (
     formatStack.slice(0, formatStack.length / 2).join('') +
     word +
-    formatStack.slice(formatStack.length / 2).reverse().join('')
+    formatStack
+      .slice(formatStack.length / 2)
+      .reverse()
+      .join('')
   );
 }

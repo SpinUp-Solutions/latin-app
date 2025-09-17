@@ -19,13 +19,7 @@ export const ClickableRichDisplay: React.FC<ClickableRichDisplayProps> = ({
   className = '',
 }) => {
   const wordFragments = useMemo(() => {
-    const fragments = splitHtmlIntoWords(content);
-    console.log('DEBUG: Original content:', content);
-    console.log('DEBUG: Word fragments:', fragments);
-    fragments.forEach((fragment, index) => {
-      console.log(`DEBUG: Fragment ${index}:`, fragment);
-    });
-    return fragments;
+    return splitHtmlIntoWords(content);
   }, [content]);
 
   const getSelectionClasses = (index: number) => {
@@ -42,15 +36,11 @@ export const ClickableRichDisplay: React.FC<ClickableRichDisplayProps> = ({
           key={`${index}-${wordHtml.slice(0, 10)}`}
           className={cn(
             'inline-block cursor-pointer rounded hover:bg-roman-parchment hover:text-roman-red transition-colors',
-            'mr-1', // Add small margin between words
+            'mr-1',
             getSelectionClasses(index)
           )}
-          onClick={() => onWordClick(index)}
-        >
-          <SimpleRichDisplay
-            content={wordHtml}
-            className="inline not-prose"
-          />
+          onClick={() => onWordClick(index)}>
+          <SimpleRichDisplay content={wordHtml} className="inline not-prose" />
         </div>
       ))}
     </div>

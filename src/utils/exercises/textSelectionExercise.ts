@@ -17,7 +17,9 @@ export const validateTextSelectionExercise = (
   const currentQuestion = exercise.data.questions[currentIndex];
   const isCorrect = selectedWordIndex === currentQuestion.correctWordIndex;
 
-  const plainTextWords = stripHtmlTags(exercise.data.passage).split(/\s+/).filter(w => w.trim());
+  const plainTextWords = stripHtmlTags(exercise.data.passage)
+    .split(/\s+/)
+    .filter(w => w.trim());
   const correctWord = plainTextWords[currentQuestion.correctWordIndex] || '';
 
   return {
