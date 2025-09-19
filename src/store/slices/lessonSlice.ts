@@ -1,6 +1,5 @@
 import { createSlice, createSelector, PayloadAction } from '@reduxjs/toolkit';
 import { Lesson } from '@/src/types/lesson';
-import { getLiveLessonsSorted } from '@/src/utils/lessonUtils';
 
 interface LessonState {
   lessons: Lesson[];
@@ -27,7 +26,7 @@ const lessonSlice = createSlice({
 
     localReorderLiveLessons: (state, action: PayloadAction<{ fromIndex: number; toIndex: number }>) => {
       const { fromIndex, toIndex } = action.payload;
-      const liveLessons = getLiveLessonsSorted(state.lessons);
+      const liveLessons = state.lessons.filter(l => l.isLive).sort((a, b) => (a.liveOrder || 0) - (b.liveOrder || 0));
 
       if (fromIndex < liveLessons.length && toIndex < liveLessons.length) {
         const [removed] = liveLessons.splice(fromIndex, 1);

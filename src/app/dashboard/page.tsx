@@ -8,14 +8,12 @@ import { auth } from '@/src/services/firebase';
 import type { RootState } from '@/src/store';
 import { useGetStudentLessonsQuery } from '@/src/store/api/lessonApi';
 import { useGetBatchUserProgressQuery } from '@/src/store/api/progressApi';
-import { Lesson, UserProgress } from '@/src/types/lesson';
-import { getContentCount, calculateProgressFromPageIndex } from '@/src/utils/lessonUtils';
+import { LessonStatus, UserProgress, Page } from '@/src/types/lesson';
 import { Button } from '@/src/components/ui/button';
 import { toast } from 'sonner';
 import React, { memo } from 'react';
 import { BookOpen, User, Clock, Target, TrendingUp, CheckCircle, Play } from 'lucide-react';
 import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
-import { LessonStatus } from '@/src/types/lesson';
 
 const statusConfig: Record<
   LessonStatus,
@@ -51,16 +49,24 @@ const statusConfig: Record<
   },
 };
 
-interface LessonWithProgress extends Lesson {
-  progress: number;
-  status: LessonStatus;
-  currentPageIndex: number;
-  totalPages: number;
-  userProgress?: UserProgress;
-}
-
 const LessonCard = memo(
-  ({ lesson, onLessonClick }: { lesson: LessonWithProgress; onLessonClick: (id: string) => void }) => {
+  ({
+    lesson,
+    onLessonClick,
+  }: {
+    lesson: {
+      id: string;
+      title: string;
+      description?: string;
+      pages: Page[];
+      status: LessonStatus;
+      progress: number;
+      currentPageIndex: number;
+      totalPages: number;
+      userProgress?: UserProgress;
+    };
+    onLessonClick: (id: string) => void;
+  }) => {
     const config = statusConfig[lesson.status] || statusConfig.available;
 
     return (
@@ -132,29 +138,6 @@ const LessonCard = memo(
 
 LessonCard.displayName = 'LessonCard';
 
-function createLessonWithProgress(lesson: Lesson, userProgress?: UserProgress): LessonWithProgress {
-  const contentCount = getContentCount(lesson);
-  const currentPageIndex = userProgress?.currentPageIndex || 0;
-  const totalPages = contentCount.totalPages;
-  const progress = calculateProgressFromPageIndex(currentPageIndex, totalPages);
-
-  const status: LessonStatus =
-    userProgress?.status === 'completed'
-      ? 'completed'
-      : userProgress?.status === 'in-progress' || currentPageIndex > 0
-        ? 'in-progress'
-        : 'available';
-
-  return {
-    ...lesson,
-    progress,
-    status,
-    currentPageIndex,
-    totalPages,
-    userProgress,
-  };
-}
-
 export default function DashboardPage() {
   const router = useRouter();
   const { user, loading } = useSelector((state: RootState) => state.auth);
@@ -169,7 +152,21 @@ export default function DashboardPage() {
 
   const lessons = useMemo(() => {
     if (!studentLessons || !progressData) return [];
-    return studentLessons.map(lesson => createLessonWithProgress(lesson, progressData[lesson.id]));
+
+    return studentLessons.map(lesson => {
+      const userProgress = progressData[lesson.id];
+      const currentPageIndex = userProgress?.currentPageIndex || 0;
+      const totalPages = lesson.pages.length;
+
+      return {
+        ...lesson,
+        progress: userProgress?.progress || 0,
+        status: userProgress?.status || 'available',
+        currentPageIndex,
+        totalPages,
+        userProgress,
+      };
+    });
   }, [studentLessons, progressData]);
 
   const todaysGoals = useMemo(

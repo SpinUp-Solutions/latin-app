@@ -1,11 +1,5 @@
 import { Lesson, ExerciseProgress } from '@/src/types/lesson';
 
-export interface LessonContentCount {
-  totalPages: number;
-  totalItems: number;
-  totalExercises: number;
-}
-
 const EXERCISE_TYPES = [
   'matching',
   'fill',
@@ -21,48 +15,9 @@ function isExerciseType(contentType: string): boolean {
   return EXERCISE_TYPES.includes(contentType);
 }
 
-export function getContentCount(lesson: Lesson): LessonContentCount {
-  const totalPages = lesson.pages.length;
-  const totalItems = lesson.pages.reduce((count, page) => count + page.items.length, 0);
-  const totalExercises = lesson.pages.reduce(
-    (count, page) => count + page.items.filter(item => isExerciseType(item.type)).length,
-    0
-  );
-
-  return {
-    totalPages,
-    totalItems,
-    totalExercises,
-  };
-}
-
-export function hasLessonContent(lesson: Lesson): boolean {
-  return lesson.pages.length > 0;
-}
-
-export function getExerciseCount(lesson: Lesson): number {
-  return getContentCount(lesson).totalExercises;
-}
-
-export { isExerciseType };
-
-export function sortLessonsByLiveOrder(lessons: Lesson[]): Lesson[] {
-  return lessons.sort((a, b) => (a.liveOrder || 0) - (b.liveOrder || 0));
-}
-
-export function getLiveLessonsSorted(lessons: Lesson[]): Lesson[] {
-  return lessons.filter(l => l.isLive).sort((a, b) => (a.liveOrder || 0) - (b.liveOrder || 0));
-}
-
 export function calculateProgressFromPageIndex(currentPageIndex: number, totalPages: number): number {
   if (totalPages === 0) return 0;
   return Math.round((currentPageIndex / totalPages) * 100);
-}
-
-export function calculateAverageScore(exerciseProgress: ExerciseProgress[]): number | undefined {
-  if (exerciseProgress.length === 0) return undefined;
-  const totalScore = exerciseProgress.reduce((sum, ep) => sum + ep.score, 0);
-  return Math.round(totalScore / exerciseProgress.length);
 }
 
 export function isLessonComplete(currentPageIndex: number, totalPages: number): boolean {
@@ -89,7 +44,4 @@ export function getCompletedExercisesForPage(
   });
 }
 
-export function calculateOverallProgress(exerciseProgress: ExerciseProgress[], totalExercises: number): number {
-  if (totalExercises === 0) return 0;
-  return Math.round((exerciseProgress.length / totalExercises) * 100);
-}
+export { isExerciseType };

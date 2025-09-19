@@ -46,6 +46,7 @@ export interface UserProgress {
   exerciseProgress: ExerciseProgress[];
   score?: number;
   lastAccessedAt: string;
+  progress?: number;
 }
 
 export interface LessonWithAccess extends Lesson {

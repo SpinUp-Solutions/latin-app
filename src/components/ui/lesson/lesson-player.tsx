@@ -11,7 +11,11 @@ import PageTemplate from './page-template';
 import useAudio from '@/src/hooks/useAudio';
 import LessonNavigation from '../exercises/lesson-navigation';
 import { RootState } from '@/src/store';
-import { useMarkExerciseCompleteMutation, useGetBatchUserProgressQuery } from '@/src/store/api/progressApi';
+import {
+  useMarkExerciseCompleteMutation,
+  useUpdatePageProgressMutation,
+  useGetBatchUserProgressQuery,
+} from '@/src/store/api/progressApi';
 
 interface LessonPlayerProps {
   lesson: Lesson;
@@ -20,6 +24,7 @@ interface LessonPlayerProps {
 export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
   const { user } = useSelector((state: RootState) => state.auth);
   const [markExerciseComplete] = useMarkExerciseCompleteMutation();
+  const [updatePageProgress] = useUpdatePageProgressMutation();
 
   const { data: userProgress } = useGetBatchUserProgressQuery(user?.uid || '', {
     skip: !user?.uid,
@@ -42,14 +47,14 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
       setCurrentPageIndex(newPageIndex);
 
       if (user?.uid && newPageIndex > (userProgress?.[lesson.id]?.currentPageIndex || 0)) {
-        markExerciseComplete({
+        updatePageProgress({
           userId: user.uid,
           lessonId: lesson.id,
           currentPageIndex: newPageIndex,
         });
       }
     }
-  }, [currentPageIndex, totalPages, user?.uid, lesson.id, userProgress, markExerciseComplete]);
+  }, [currentPageIndex, totalPages, user?.uid, lesson.id, userProgress, updatePageProgress]);
 
   const handlePageComplete = useCallback(() => {
     handleNext();
