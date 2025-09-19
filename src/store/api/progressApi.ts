@@ -26,14 +26,15 @@ export const progressApi = createApi({
 
     markExerciseComplete: builder.mutation<
       { success: boolean },
-      { userId: string; lessonId: string; exerciseId: string; score: number }
+      { userId: string; lessonId: string; exerciseId?: string; score?: number; currentPageIndex?: number }
     >({
-      query: ({ userId, lessonId, exerciseId, score }) => ({
+      query: ({ userId, lessonId, exerciseId, score, currentPageIndex }) => ({
         url: `/progress/${userId}/${lessonId}`,
         method: 'POST',
         body: {
-          exerciseId,
-          score,
+          ...(exerciseId && { exerciseId }),
+          ...(score !== undefined && { score }),
+          ...(currentPageIndex !== undefined && { currentPageIndex }),
           completedAt: new Date().toISOString(),
         },
       }),

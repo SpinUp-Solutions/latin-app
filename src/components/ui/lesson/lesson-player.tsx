@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { useSelector } from 'react-redux';
 import { Lesson } from '@/src/types/lesson';
@@ -11,7 +11,7 @@ import PageTemplate from './page-template';
 import useAudio from '@/src/hooks/useAudio';
 import LessonNavigation from '../exercises/lesson-navigation';
 import { RootState } from '@/src/store';
-import { useMarkExerciseCompleteMutation } from '@/src/store/api/progressApi';
+import { useMarkExerciseCompleteMutation, useGetBatchUserProgressQuery } from '@/src/store/api/progressApi';
 
 interface LessonPlayerProps {
   lesson: Lesson;
@@ -21,16 +21,35 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
   const { user } = useSelector((state: RootState) => state.auth);
   const [markExerciseComplete] = useMarkExerciseCompleteMutation();
 
+  const { data: userProgress } = useGetBatchUserProgressQuery(user?.uid || '', {
+    skip: !user?.uid,
+  });
+
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
+
+  useEffect(() => {
+    if (userProgress?.[lesson.id]?.currentPageIndex !== undefined) {
+      setCurrentPageIndex(userProgress[lesson.id].currentPageIndex);
+    }
+  }, [userProgress, lesson.id]);
 
   const currentPage = lesson.pages[currentPageIndex];
   const totalPages = lesson.pages.length;
 
   const handleNext = useCallback(() => {
     if (currentPageIndex < totalPages - 1) {
-      setCurrentPageIndex(currentPageIndex + 1);
+      const newPageIndex = currentPageIndex + 1;
+      setCurrentPageIndex(newPageIndex);
+
+      if (user?.uid && newPageIndex > (userProgress?.[lesson.id]?.currentPageIndex || 0)) {
+        markExerciseComplete({
+          userId: user.uid,
+          lessonId: lesson.id,
+          currentPageIndex: newPageIndex,
+        });
+      }
     }
-  }, [currentPageIndex, totalPages]);
+  }, [currentPageIndex, totalPages, user?.uid, lesson.id, userProgress, markExerciseComplete]);
 
   const handlePageComplete = useCallback(() => {
     handleNext();

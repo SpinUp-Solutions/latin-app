@@ -1,4 +1,4 @@
-import { Lesson, ExerciseProgress, PageProgress } from '@/src/types/lesson';
+import { Lesson, ExerciseProgress } from '@/src/types/lesson';
 
 export interface LessonContentCount {
   totalPages: number;
@@ -54,9 +54,9 @@ export function getLiveLessonsSorted(lessons: Lesson[]): Lesson[] {
   return lessons.filter(l => l.isLive).sort((a, b) => (a.liveOrder || 0) - (b.liveOrder || 0));
 }
 
-export function calculateOverallProgress(exerciseProgress: ExerciseProgress[], totalExercises: number): number {
-  if (totalExercises === 0) return 0;
-  return Math.round((exerciseProgress.length / totalExercises) * 100);
+export function calculateProgressFromPageIndex(currentPageIndex: number, totalPages: number): number {
+  if (totalPages === 0) return 0;
+  return Math.round((currentPageIndex / totalPages) * 100);
 }
 
 export function calculateAverageScore(exerciseProgress: ExerciseProgress[]): number | undefined {
@@ -65,21 +65,8 @@ export function calculateAverageScore(exerciseProgress: ExerciseProgress[]): num
   return Math.round(totalScore / exerciseProgress.length);
 }
 
-export function isLessonComplete(exerciseProgress: ExerciseProgress[], totalExercises: number): boolean {
-  return exerciseProgress.length >= totalExercises && totalExercises > 0;
-}
-
-export function calculatePageProgress(pageProgress: PageProgress[], totalPages: number): number {
-  if (totalPages === 0) return 0;
-  return Math.round((pageProgress.length / totalPages) * 100);
-}
-
-export function isPageComplete(pageProgress: PageProgress[], pageIndex: number): boolean {
-  return pageProgress.some(pp => pp.pageIndex === pageIndex);
-}
-
-export function getCompletedPagesCount(pageProgress: PageProgress[]): number {
-  return pageProgress.length;
+export function isLessonComplete(currentPageIndex: number, totalPages: number): boolean {
+  return currentPageIndex >= totalPages;
 }
 
 export function parsePageIndex(exerciseId: string): number | null {
@@ -100,4 +87,9 @@ export function getCompletedExercisesForPage(
     const epPageIndex = parsePageIndex(ep.exerciseId);
     return epPageIndex === pageIndex;
   });
+}
+
+export function calculateOverallProgress(exerciseProgress: ExerciseProgress[], totalExercises: number): number {
+  if (totalExercises === 0) return 0;
+  return Math.round((exerciseProgress.length / totalExercises) * 100);
 }

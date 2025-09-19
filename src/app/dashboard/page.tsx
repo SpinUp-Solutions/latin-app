@@ -9,7 +9,7 @@ import type { RootState } from '@/src/store';
 import { useGetStudentLessonsQuery } from '@/src/store/api/lessonApi';
 import { useGetBatchUserProgressQuery } from '@/src/store/api/progressApi';
 import { Lesson, UserProgress } from '@/src/types/lesson';
-import { getContentCount, calculatePageProgress, getCompletedPagesCount } from '@/src/utils/lessonUtils';
+import { getContentCount, calculateProgressFromPageIndex } from '@/src/utils/lessonUtils';
 import { Button } from '@/src/components/ui/button';
 import { toast } from 'sonner';
 import React, { memo } from 'react';
@@ -54,11 +54,8 @@ const statusConfig: Record<
 interface LessonWithProgress extends Lesson {
   progress: number;
   status: LessonStatus;
-  exercisesCompleted: number;
-  totalExercises: number;
+  currentPageIndex: number;
   totalPages: number;
-  pagesCompleted: number;
-  pageProgress: number;
   userProgress?: UserProgress;
 }
 
@@ -85,14 +82,14 @@ const LessonCard = memo(
                 </span>
                 <span className="flex items-center gap-1">
                   <BookOpen className="h-3 w-3" />
-                  {lesson.totalExercises || 0} exercises
+                  Page {(lesson.currentPageIndex || 0) + 1} of {lesson.totalPages || 0}
                 </span>
               </div>
 
-              {((typeof lesson.progress === 'number' && lesson.progress > 0) || lesson.exercisesCompleted > 0) && (
+              {typeof lesson.progress === 'number' && lesson.progress > 0 && (
                 <div className="mb-4 space-y-2">
                   <div className="flex justify-between items-center">
-                    <span className="text-xs font-medium">Overall Progress</span>
+                    <span className="text-xs font-medium">Progress</span>
                     <span className="text-xs font-semibold">
                       {typeof lesson.progress === 'number' ? lesson.progress : 0}%
                     </span>
@@ -107,46 +104,23 @@ const LessonCard = memo(
                       }}></div>
                   </div>
 
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-roman-stone">Exercises Completed</span>
-                    <span className="text-xs font-medium">
-                      {lesson.exercisesCompleted}/{lesson.totalExercises}
-                    </span>
-                  </div>
-                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-roman-terracotta rounded-full transition-all"
-                      style={{
-                        width: `${lesson.totalExercises > 0 ? (lesson.exercisesCompleted / lesson.totalExercises) * 100 : 0}%`,
-                      }}></div>
-                  </div>
-
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-roman-stone">Pages Completed</span>
-                    <span className="text-xs font-medium">
-                      {lesson.pagesCompleted}/{lesson.totalPages}
-                    </span>
-                  </div>
-                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-roman-gold rounded-full transition-all"
-                      style={{
-                        width: `${lesson.pageProgress}%`,
-                      }}></div>
-                  </div>
-
-                  {lesson.userProgress?.exerciseProgress && lesson.userProgress.exerciseProgress.length > 0 && (
+                  {lesson.status === 'in-progress' && (
                     <div className="text-xs text-roman-stone">
-                      Average Score: {lesson.userProgress.score || 'N/A'}
-                      {lesson.userProgress.score && '%'}
+                      Continue from page {(lesson.currentPageIndex || 0) + 1}
                     </div>
+                  )}
+
+                  {lesson.userProgress?.score && (
+                    <div className="text-xs text-roman-stone">Score: {lesson.userProgress.score}%</div>
                   )}
                 </div>
               )}
 
               <Button className={`w-full ${config.button}`} onClick={() => onLessonClick(lesson.id)}>
                 <Play className="h-4 w-4 mr-2" />
-                {config.text}
+                {lesson.status === 'in-progress' && lesson.currentPageIndex > 0
+                  ? `Continue from page ${lesson.currentPageIndex + 1}`
+                  : config.text}
               </Button>
             </div>
           </div>
@@ -160,30 +134,14 @@ LessonCard.displayName = 'LessonCard';
 
 function createLessonWithProgress(lesson: Lesson, userProgress?: UserProgress): LessonWithProgress {
   const contentCount = getContentCount(lesson);
-  const pageProgressArray = userProgress?.pageProgress || [];
-  const pagesCompleted = getCompletedPagesCount(pageProgressArray);
-  const pageProgressPercent = calculatePageProgress(pageProgressArray, contentCount.totalPages);
+  const currentPageIndex = userProgress?.currentPageIndex || 0;
+  const totalPages = contentCount.totalPages;
+  const progress = calculateProgressFromPageIndex(currentPageIndex, totalPages);
 
-  if (userProgress && userProgress.overallProgress !== undefined) {
-    return {
-      ...lesson,
-      progress: userProgress.overallProgress,
-      status: userProgress.status || 'available',
-      exercisesCompleted: userProgress.exercisesCompleted || 0,
-      totalExercises: userProgress.totalExercises || 0,
-      totalPages: contentCount.totalPages,
-      pagesCompleted,
-      pageProgress: pageProgressPercent,
-      userProgress,
-    };
-  }
-
-  const progress = userProgress?.progress || 0;
-  const exercisesCompleted = userProgress?.exerciseProgress?.length || 0;
   const status: LessonStatus =
     userProgress?.status === 'completed'
       ? 'completed'
-      : userProgress?.status === 'in-progress'
+      : userProgress?.status === 'in-progress' || currentPageIndex > 0
         ? 'in-progress'
         : 'available';
 
@@ -191,11 +149,8 @@ function createLessonWithProgress(lesson: Lesson, userProgress?: UserProgress): 
     ...lesson,
     progress,
     status,
-    exercisesCompleted,
-    totalExercises: contentCount.totalExercises,
-    totalPages: contentCount.totalPages,
-    pagesCompleted,
-    pageProgress: pageProgressPercent,
+    currentPageIndex,
+    totalPages,
     userProgress,
   };
 }
