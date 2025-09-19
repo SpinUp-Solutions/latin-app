@@ -7,6 +7,7 @@ import { Lesson } from '@/src/types/lesson';
 import { BookOpen } from 'lucide-react';
 import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
+import { LessonProgress } from '../core/lesson-progress';
 import PageTemplate from './page-template';
 import useAudio from '@/src/hooks/useAudio';
 import LessonNavigation from '../exercises/lesson-navigation';
@@ -96,7 +97,6 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
   }
 
   const hasAudio = Boolean(currentPage.audioPath);
-  const progress = `${currentPageIndex + 1}/${totalPages}`;
 
   return (
     <div className="lesson-player">
@@ -120,6 +120,10 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
         </RomanCardHeader>
 
         <RomanCardContent>
+          <div className="mb-4">
+            <LessonProgress currentPage={currentPageIndex} totalPages={totalPages} />
+          </div>
+
           <div className="mb-6">
             <div className="text-xs text-gray-400 mb-2">
               <div>Page ID: {currentPage.id}</div>
@@ -141,8 +145,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
           </div>
 
           <div className="flex items-center justify-between border-t border-border pt-4">
-            <div className="text-sm text-roman-stone">Page {progress}</div>
-
+            <div></div>
             <LessonNavigation
               onPrevious={handlePrevious}
               onNext={handleNext}
