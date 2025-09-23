@@ -56,15 +56,6 @@ export const TextSelectionEditor: React.FC = () => {
   };
 
   const handleWordClick = (wordIndex: number, questionIndex: number) => {
-    const passageWords = editingContent.data.passage.split(' ').filter(w => w.trim());
-    const selectedWord = passageWords[wordIndex];
-    console.log('TextSelectionEditor - Word selected:', {
-      wordIndex,
-      selectedWord,
-      questionIndex,
-      passageWords,
-      totalWords: passageWords.length,
-    });
     updateQuestion(questionIndex, 'correctWordIndex', wordIndex);
   };
 
