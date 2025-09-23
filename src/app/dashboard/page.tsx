@@ -12,7 +12,7 @@ import { LessonStatus, UserProgress, Page } from '@/src/types/lesson';
 import { Button } from '@/src/components/ui/button';
 import { toast } from 'sonner';
 import React, { memo } from 'react';
-import { BookOpen, User, Clock, Target, TrendingUp, CheckCircle, Play } from 'lucide-react';
+import { BookOpen, User, Clock, Target, TrendingUp, CheckCircle, Play, Lock } from 'lucide-react';
 import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
 
 const statusConfig: Record<
@@ -45,7 +45,7 @@ const statusConfig: Record<
     icon: 'bg-gray-300 text-gray-500',
     button: 'bg-gray-400 cursor-not-allowed',
     text: 'Locked',
-    showIcon: null,
+    showIcon: <Lock className="h-6 w-6" />,
   },
 };
 
@@ -151,22 +151,16 @@ export default function DashboardPage() {
   });
 
   const lessons = useMemo(() => {
-    if (!studentLessons || !progressData) return [];
+    if (!studentLessons) return [];
 
-    return studentLessons.map(lesson => {
-      const userProgress = progressData[lesson.id];
-      const currentPageIndex = userProgress?.currentPageIndex || 0;
-      const totalPages = lesson.pages.length;
-
-      return {
-        ...lesson,
-        progress: userProgress?.progress || 0,
-        status: userProgress?.status || 'available',
-        currentPageIndex,
-        totalPages,
-        userProgress,
-      };
-    });
+    return studentLessons.map(lesson => ({
+      ...lesson,
+      status: lesson.status || 'available',
+      progress: lesson.progress || 0,
+      currentPageIndex: progressData?.[lesson.id]?.currentPageIndex || 0,
+      totalPages: lesson.pages.length,
+      userProgress: progressData?.[lesson.id],
+    }));
   }, [studentLessons, progressData]);
 
   const todaysGoals = useMemo(
@@ -197,9 +191,16 @@ export default function DashboardPage() {
 
   const handleLessonClick = useCallback(
     (lessonId: string) => {
+      const lesson = lessons.find(l => l.id === lessonId);
+
+      if (lesson?.status === 'locked') {
+        toast.error('Complete the previous lesson to unlock this one');
+        return;
+      }
+
       router.push(`/lesson/${lessonId}`);
     },
-    [router]
+    [router, lessons]
   );
 
   useEffect(() => {

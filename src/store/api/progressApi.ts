@@ -17,7 +17,7 @@ const baseQuery = fetchBaseQuery({
 export const progressApi = createApi({
   reducerPath: 'progressApi',
   baseQuery,
-  tagTypes: ['BatchProgress'],
+  tagTypes: ['BatchProgress', 'StudentLesson'],
   endpoints: builder => ({
     getBatchUserProgress: builder.query<Record<string, UserProgress>, string>({
       query: userId => `/progress/${userId}/batch`,
@@ -37,7 +37,10 @@ export const progressApi = createApi({
           completedAt: new Date().toISOString(),
         },
       }),
-      invalidatesTags: () => [{ type: 'BatchProgress', id: 'LIST' }],
+      invalidatesTags: () => [
+        { type: 'BatchProgress', id: 'LIST' },
+        { type: 'StudentLesson', id: 'LIST' }
+      ],
     }),
 
     updatePageProgress: builder.mutation<
@@ -52,7 +55,10 @@ export const progressApi = createApi({
           completedAt: new Date().toISOString(),
         },
       }),
-      invalidatesTags: () => [{ type: 'BatchProgress', id: 'LIST' }],
+      invalidatesTags: () => [
+        { type: 'BatchProgress', id: 'LIST' },
+        { type: 'StudentLesson', id: 'LIST' }
+      ],
     }),
 
     markLessonComplete: builder.mutation<{ success: boolean }, { userId: string; lessonId: string; score?: number }>({
@@ -66,7 +72,10 @@ export const progressApi = createApi({
           score,
         },
       }),
-      invalidatesTags: () => [{ type: 'BatchProgress', id: 'LIST' }],
+      invalidatesTags: () => [
+        { type: 'BatchProgress', id: 'LIST' },
+        { type: 'StudentLesson', id: 'LIST' }
+      ],
     }),
   }),
 });
