@@ -145,7 +145,6 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
           </div>
 
           <div className="flex items-center justify-between border-t border-border pt-4">
-            <div></div>
             <LessonNavigation
               onPrevious={handlePrevious}
               onNext={handleNext}
