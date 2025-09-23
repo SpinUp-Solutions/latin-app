@@ -7,8 +7,7 @@ import { signOut } from 'firebase/auth';
 import { auth } from '@/src/services/firebase';
 import type { RootState } from '@/src/store';
 import { useGetStudentLessonsQuery } from '@/src/store/api/lessonApi';
-import { useGetBatchUserProgressQuery } from '@/src/store/api/progressApi';
-import { LessonStatus, UserProgress, Page } from '@/src/types/lesson';
+import { LessonStatus, LessonWithProgress } from '@/src/types/lesson';
 import { Button } from '@/src/components/ui/button';
 import { toast } from 'sonner';
 import React, { memo } from 'react';
@@ -54,20 +53,10 @@ const LessonCard = memo(
     lesson,
     onLessonClick,
   }: {
-    lesson: {
-      id: string;
-      title: string;
-      description?: string;
-      pages: Page[];
-      status: LessonStatus;
-      progress: number;
-      currentPageIndex: number;
-      totalPages: number;
-      userProgress?: UserProgress;
-    };
+    lesson: LessonWithProgress & { totalPages: number };
     onLessonClick: (id: string) => void;
   }) => {
-    const config = statusConfig[lesson.status] || statusConfig.available;
+    const config = statusConfig[lesson.status || 'available'] || statusConfig.available;
 
     return (
       <RomanCard
@@ -116,16 +105,14 @@ const LessonCard = memo(
                     </div>
                   )}
 
-                  {lesson.userProgress?.score && (
-                    <div className="text-xs text-roman-stone">Score: {lesson.userProgress.score}%</div>
-                  )}
+                  {lesson.score && <div className="text-xs text-roman-stone">Score: {lesson.score}%</div>}
                 </div>
               )}
 
               <Button className={`w-full ${config.button}`} onClick={() => onLessonClick(lesson.id)}>
                 <Play className="h-4 w-4 mr-2" />
-                {lesson.status === 'in-progress' && lesson.currentPageIndex > 0
-                  ? `Continue from page ${lesson.currentPageIndex + 1}`
+                {lesson.status === 'in-progress' && (lesson.currentPageIndex || 0) > 0
+                  ? `Continue from page ${(lesson.currentPageIndex || 0) + 1}`
                   : config.text}
               </Button>
             </div>
@@ -146,22 +133,14 @@ export default function DashboardPage() {
     skip: !user?.uid,
   });
 
-  const { data: progressData, isLoading: progressLoading } = useGetBatchUserProgressQuery(user?.uid || '', {
-    skip: !user?.uid,
-  });
-
   const lessons = useMemo(() => {
     if (!studentLessons) return [];
 
     return studentLessons.map(lesson => ({
       ...lesson,
-      status: lesson.status || 'available',
-      progress: lesson.progress || 0,
-      currentPageIndex: progressData?.[lesson.id]?.currentPageIndex || 0,
       totalPages: lesson.pages.length,
-      userProgress: progressData?.[lesson.id],
     }));
-  }, [studentLessons, progressData]);
+  }, [studentLessons]);
 
   const todaysGoals = useMemo(
     () => [
@@ -253,7 +232,7 @@ export default function DashboardPage() {
     }
   };
 
-  if (loading || !user || lessonsLoading || progressLoading) {
+  if (loading || !user || lessonsLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-roman-marble">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>

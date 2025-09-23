@@ -1,21 +1,23 @@
 'use client';
 
-import React from 'react';
-import { useParams } from 'next/navigation';
-import { useGetLessonByIdQuery } from '@/src/store/api/lessonApi';
+import React, { useMemo } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { useGetStudentLessonsQuery } from '@/src/store/api/lessonApi';
 import LessonPlayer from '@/src/components/ui/lesson/lesson-player';
 
 export default function DynamicLessonPage() {
   const params = useParams();
+  const router = useRouter();
   const lessonId = params.lessonId as string;
 
-  const {
-    data: lessonData,
-    isLoading: loading,
-    error,
-  } = useGetLessonByIdQuery({ lessonId, isStudent: true }, { skip: !lessonId });
+  const { data: studentLessons, isLoading: loading, error } = useGetStudentLessonsQuery();
 
-  const currentLesson = lessonData?.lesson;
+  const currentLesson = useMemo(() => {
+    if (!studentLessons || !lessonId) return null;
+    return studentLessons.find(lesson => lesson.id === lessonId);
+  }, [studentLessons, lessonId]);
+
+  const isLocked = currentLesson?.status === 'locked';
 
   if (loading) {
     return (
@@ -26,7 +28,7 @@ export default function DynamicLessonPage() {
   }
 
   if (error) {
-    const errorMessage = 'status' in error ? `Error ${error.status}` : 'Failed to load lesson';
+    const errorMessage = 'status' in error ? `Error ${error.status}` : 'Failed to load lessons';
     return (
       <div className="min-h-screen bg-roman-marble">
         <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between">
@@ -40,8 +42,13 @@ export default function DynamicLessonPage() {
         <main className="container mx-auto py-8 px-4">
           <div className="max-w-3xl mx-auto">
             <div className="p-8 bg-white rounded-lg border border-border text-center">
-              <h2 className="text-2xl font-serif text-gray-800 mb-4">Lesson Not Found</h2>
+              <h2 className="text-2xl font-serif text-gray-800 mb-4">Failed to Load Lessons</h2>
               <p className="text-roman-stone">{errorMessage}</p>
+              <button
+                onClick={() => router.push('/dashboard')}
+                className="mt-4 px-4 py-2 bg-roman-red text-white rounded hover:bg-roman-red/90">
+                Return to Dashboard
+              </button>
             </div>
           </div>
         </main>
@@ -49,7 +56,7 @@ export default function DynamicLessonPage() {
     );
   }
 
-  if (!currentLesson) {
+  if (!currentLesson || isLocked) {
     return (
       <div className="min-h-screen bg-roman-marble">
         <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between">
@@ -63,8 +70,19 @@ export default function DynamicLessonPage() {
         <main className="container mx-auto py-8 px-4">
           <div className="max-w-3xl mx-auto">
             <div className="p-8 bg-white rounded-lg border border-border text-center">
-              <h2 className="text-2xl font-serif text-gray-800 mb-4">Lesson Not Available</h2>
-              <p className="text-roman-stone">The requested lesson could not be found.</p>
+              <h2 className="text-2xl font-serif text-gray-800 mb-4">
+                {isLocked ? 'Lesson Locked' : 'Lesson Not Found'}
+              </h2>
+              <p className="text-roman-stone">
+                {isLocked
+                  ? 'Complete the previous lesson to unlock this one.'
+                  : 'The requested lesson could not be found.'}
+              </p>
+              <button
+                onClick={() => router.push('/dashboard')}
+                className="mt-4 px-4 py-2 bg-roman-red text-white rounded hover:bg-roman-red/90">
+                Return to Dashboard
+              </button>
             </div>
           </div>
         </main>

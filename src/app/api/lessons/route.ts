@@ -4,6 +4,8 @@ import { auth } from 'firebase-admin';
 import { LessonWithProgress, UserProgress } from '@/src/types/lesson';
 import { calculateProgressFromPageIndex, isLessonComplete } from '@/src/utils/lessonUtils';
 
+export const dynamic = 'force-dynamic';
+
 async function verifyAuth(request: NextRequest) {
   const authHeader = request.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
@@ -51,10 +53,7 @@ export async function GET(request: NextRequest) {
     const userProgressMap: Record<string, UserProgress> = {};
 
     if (currentUser) {
-      const progressSnapshot = await adminDb
-        .collection('userProgress')
-        .where('userId', '==', currentUser.uid)
-        .get();
+      const progressSnapshot = await adminDb.collection('userProgress').where('userId', '==', currentUser.uid).get();
 
       progressSnapshot.docs.forEach(doc => {
         const data = doc.data();
@@ -78,7 +77,7 @@ export async function GET(request: NextRequest) {
           const totalPages = lesson.pages.length;
           progress = calculateProgressFromPageIndex(currentPageIndex, totalPages);
           const isComplete = isLessonComplete(currentPageIndex, totalPages);
-          status = isComplete ? 'completed' : (currentPageIndex > 0 ? 'in-progress' : 'available');
+          status = isComplete ? 'completed' : currentPageIndex > 0 ? 'in-progress' : 'available';
         } else {
           status = 'available';
         }
@@ -97,7 +96,7 @@ export async function GET(request: NextRequest) {
               const totalPages = lesson.pages.length;
               progress = calculateProgressFromPageIndex(currentPageIndex, totalPages);
               const isComplete = isLessonComplete(currentPageIndex, totalPages);
-              status = isComplete ? 'completed' : (currentPageIndex > 0 ? 'in-progress' : 'available');
+              status = isComplete ? 'completed' : currentPageIndex > 0 ? 'in-progress' : 'available';
             } else {
               status = 'available';
             }
@@ -109,6 +108,11 @@ export async function GET(request: NextRequest) {
         ...lesson,
         progress,
         status,
+        currentPageIndex: userProgress?.currentPageIndex || 0,
+        exerciseProgress: userProgress?.exerciseProgress || [],
+        completedAt: userProgress?.completedAt,
+        score: userProgress?.score,
+        lastAccessedAt: userProgress?.lastAccessedAt,
       } as LessonWithProgress;
     });
 

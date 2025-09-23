@@ -29,6 +29,11 @@ export type LessonStatus = 'available' | 'in-progress' | 'completed' | 'locked';
 export interface LessonWithProgress extends Lesson {
   progress?: number;
   status?: LessonStatus;
+  currentPageIndex?: number;
+  exerciseProgress?: ExerciseProgress[];
+  completedAt?: string;
+  score?: number;
+  lastAccessedAt?: string;
 }
 
 export interface ExerciseProgress {
@@ -47,11 +52,6 @@ export interface UserProgress {
   score?: number;
   lastAccessedAt: string;
   progress?: number;
-}
-
-export interface LessonWithAccess extends Lesson {
-  isAccessible: boolean;
-  userProgress?: UserProgress;
 }
 
 export type { Page } from './page';
