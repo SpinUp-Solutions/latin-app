@@ -37,9 +37,6 @@ export default function EditLessonPage({ params }: EditLessonPageProps) {
       return;
     }
 
-    if (user?.role === 'admin') {
-      // RTK Query will automatically load data
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, authLoading, router, params.id]);
 
