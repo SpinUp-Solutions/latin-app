@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
 import { Plus, Trash2, ChevronDown, ChevronUp, HelpCircle } from 'lucide-react';
@@ -30,27 +30,24 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({
     timing: false,
   });
 
-  const [timingInputValue, setTimingInputValue] = useState<string>((itemProgressionDelay || 2000).toString());
+  const timingInputRef = useRef<HTMLInputElement>(null);
 
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
   };
 
-  const handleTimingChange = (value: string) => {
-    setTimingInputValue(value);
-  };
-
   const handleTimingBlur = () => {
-    const numValue = parseInt(timingInputValue);
-    const finalValue = isNaN(numValue) || numValue < 0 ? 2000 : numValue;
-    setTimingInputValue(finalValue.toString());
-    onItemProgressionDelayChange?.(finalValue);
-  };
+    const value = parseInt(timingInputRef.current?.value || '2000');
+    const validValue = isNaN(value) || value < 0 ? 2000 : value;
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  React.useEffect(() => {
-    setTimingInputValue((itemProgressionDelay || 2000).toString());
-  }, [itemProgressionDelay]);
+    if (timingInputRef.current) {
+      timingInputRef.current.value = validValue.toString();
+    }
+
+    if (validValue !== (itemProgressionDelay || 2000)) {
+      onItemProgressionDelayChange?.(validValue);
+    }
+  };
 
   const updateEscalationLevels = (levels: FeedbackLevel[]) => {
     onChange({ ...feedbackConfig, escalationLevels: levels });
@@ -325,9 +322,9 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({
               <div>
                 <label className="block text-sm font-medium mb-1">Item Progression Delay (ms)</label>
                 <input
+                  ref={timingInputRef}
                   type="number"
-                  value={timingInputValue}
-                  onChange={e => handleTimingChange(e.target.value)}
+                  defaultValue={itemProgressionDelay || 2000}
                   onBlur={handleTimingBlur}
                   className="w-full p-2 border rounded-md text-sm"
                   placeholder="2000"

@@ -115,6 +115,7 @@ const SortablePage: React.FC<SortablePageProps> = ({
       />
 
       <PageAutoAdvanceEditor
+        key={page.id}
         autoAdvance={page.autoAdvance}
         onChange={config => onUpdatePageAutoAdvance(pageIndex, config)}
         isExpanded={isAutoAdvanceExpanded}

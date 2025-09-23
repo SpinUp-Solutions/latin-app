@@ -7,6 +7,7 @@ interface ExerciseFeedbackSectionProps {
   onChange: (config: FeedbackConfig) => void;
   itemProgressionDelay?: number;
   onItemProgressionDelayChange?: (delay: number) => void;
+  exerciseId?: string;
 }
 
 export const ExerciseFeedbackSection: React.FC<ExerciseFeedbackSectionProps> = ({
@@ -14,6 +15,7 @@ export const ExerciseFeedbackSection: React.FC<ExerciseFeedbackSectionProps> = (
   onChange,
   itemProgressionDelay,
   onItemProgressionDelayChange,
+  exerciseId,
 }) => {
   const showTimingConfig = itemProgressionDelay !== undefined && onItemProgressionDelayChange !== undefined;
 
@@ -21,6 +23,7 @@ export const ExerciseFeedbackSection: React.FC<ExerciseFeedbackSectionProps> = (
     <div>
       <h3 className="text-lg font-medium mb-4">Feedback Configuration</h3>
       <FeedbackConfigEditor
+        key={exerciseId}
         feedbackConfig={feedbackConfig}
         onChange={onChange}
         itemProgressionDelay={showTimingConfig ? itemProgressionDelay : undefined}

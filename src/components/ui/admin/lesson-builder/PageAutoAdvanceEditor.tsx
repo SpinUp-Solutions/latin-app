@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 
@@ -15,27 +15,24 @@ export const PageAutoAdvanceEditor: React.FC<PageAutoAdvanceEditorProps> = ({
   isExpanded,
   onToggle,
 }) => {
-  const [delayInputValue, setDelayInputValue] = useState<string>(autoAdvance.delay.toString());
+  const delayInputRef = useRef<HTMLInputElement>(null);
 
   const handleEnabledChange = (enabled: boolean) => {
     onChange({ ...autoAdvance, enabled });
   };
 
-  const handleDelayChange = (value: string) => {
-    setDelayInputValue(value);
-  };
-
   const handleDelayBlur = () => {
-    const numValue = parseInt(delayInputValue);
-    const finalValue = isNaN(numValue) || numValue < 0 ? 2000 : numValue;
-    setDelayInputValue(finalValue.toString());
-    onChange({ ...autoAdvance, delay: finalValue });
-  };
+    const value = parseInt(delayInputRef.current?.value || '2000');
+    const validValue = isNaN(value) || value < 0 ? 2000 : value;
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  React.useEffect(() => {
-    setDelayInputValue(autoAdvance.delay.toString());
-  }, [autoAdvance.delay]);
+    if (delayInputRef.current) {
+      delayInputRef.current.value = validValue.toString();
+    }
+
+    if (validValue !== autoAdvance.delay) {
+      onChange({ ...autoAdvance, delay: validValue });
+    }
+  };
 
   return (
     <Card className="w-full">
@@ -64,9 +61,9 @@ export const PageAutoAdvanceEditor: React.FC<PageAutoAdvanceEditorProps> = ({
             <div>
               <label className="block text-sm font-medium mb-1">Delay (ms)</label>
               <input
+                ref={delayInputRef}
                 type="number"
-                value={delayInputValue}
-                onChange={e => handleDelayChange(e.target.value)}
+                defaultValue={autoAdvance.delay}
                 onBlur={handleDelayBlur}
                 className="w-full p-2 border rounded-md text-sm"
                 placeholder="2000"
