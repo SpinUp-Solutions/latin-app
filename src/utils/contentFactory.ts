@@ -300,6 +300,32 @@ export const createNewContent = (type: string): RenderableContentItem => {
           requireExplanation: false,
         },
       };
+    case 'table-fill':
+      return {
+        id: baseId,
+        type: 'table-fill',
+        title: 'Table Fill Exercise',
+        instructions: 'Fill in the blank cells in the table below.',
+        audioPath: null,
+        itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
+        feedbackConfig: createDefaultFeedbackConfig(),
+        data: {
+          title: 'Exercise Table',
+          columns: [
+            { id: 'col1', header: 'Column 1' },
+            { id: 'col2', header: 'Column 2' },
+          ],
+          rows: [
+            {
+              id: 'row1',
+              cells: {
+                col1: { content: 'Sample content', isBlank: false },
+                col2: { content: '', isBlank: true, answer: 'answer' },
+              },
+            },
+          ],
+        },
+      };
     default:
       throw new Error(`Unknown content type: ${type}`);
   }

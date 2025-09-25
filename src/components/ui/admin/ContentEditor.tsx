@@ -17,6 +17,7 @@ import { VerbConjugationEditor } from './content-editor/VerbConjugationEditor';
 import { SentenceDiagrammingEditor } from './content-editor/SentenceDiagrammingEditor';
 import { MultipleChoiceEditor } from './content-editor/MultipleChoiceEditor';
 import { OddOneOutEditor } from './content-editor/OddOneOutEditor';
+import { TableFillEditor } from './content-editor/TableFillEditor';
 
 import { getEditorTitle } from '@/src/utils/editorRegistry';
 
@@ -62,6 +63,8 @@ export const ContentEditor: React.FC = () => {
         return <MultipleChoiceEditor />;
       case 'odd-one-out':
         return <OddOneOutEditor />;
+      case 'table-fill':
+        return <TableFillEditor />;
       default:
         return (
           <div className="p-8 text-center text-gray-500">

@@ -11,6 +11,7 @@ import {
   Pencil,
   CheckSquare,
   Filter,
+  TableProperties,
 } from 'lucide-react';
 
 export const ALL_CONTENT_TYPES = [
@@ -27,6 +28,7 @@ export const ALL_CONTENT_TYPES = [
   { type: 'verb-analysis', icon: Zap, label: 'Verb Analysis' },
   { type: 'verb-conjugation', icon: Users, label: 'Verb Conjugation' },
   { type: 'sentence-diagramming', icon: Pencil, label: 'Sentence Diagramming' },
+  { type: 'table-fill', icon: TableProperties, label: 'Table Fill Exercise' },
 ] as const;
 
 export const CONTENT_TYPES = [
@@ -46,4 +48,5 @@ export const EXERCISE_TYPES = [
   { type: 'verb-analysis', icon: Zap, label: 'Verb Analysis' },
   { type: 'verb-conjugation', icon: Users, label: 'Verb Conjugation' },
   { type: 'sentence-diagramming', icon: Pencil, label: 'Sentence Diagramming' },
+  { type: 'table-fill', icon: TableProperties, label: 'Table Fill Exercise' },
 ] as const;

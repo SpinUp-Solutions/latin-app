@@ -8,5 +8,6 @@ export type {
   SentenceDiagrammingExercise,
   MultipleChoiceExercise,
   OddOneOutExercise,
+  TableFillExercise,
   Exercise,
 } from './exercises';
