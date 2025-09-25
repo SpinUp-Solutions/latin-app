@@ -15,14 +15,12 @@ export interface TableFillColumn {
 export interface TableFillRow {
   id: string;
   cells: Record<string, TableFillCell>;
-  rowHeader?: string;
 }
 
 export interface TableFillExercise extends BaseExercise {
   type: 'table-fill';
   data: {
     title?: string;
-    caption?: string;
     columns: TableFillColumn[];
     rows: TableFillRow[];
     footnotes?: string[];

@@ -1,7 +1,7 @@
 import { RenderableContentItem } from '@/src/types/page';
 import { createDefaultFeedbackConfig, DEFAULT_ITEM_PROGRESSION_DELAY } from './feedbackDefaults';
 
-const generateId = (prefix?: string): string => {
+export const generateId = (prefix?: string): string => {
   const timestamp = Date.now();
   const random = Math.random().toString(36).substr(2, 9);
   return prefix ? `${prefix}-${timestamp}-${random}` : `${timestamp}-${random}`;

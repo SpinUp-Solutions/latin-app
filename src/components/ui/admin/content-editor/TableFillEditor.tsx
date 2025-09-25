@@ -37,8 +37,7 @@ export const TableFillEditor: React.FC = () => {
       header: 'New Column',
     };
 
-    const updatedData = {
-      ...editingContent.data,
+    updateData({
       columns: [...editingContent.data.columns, newColumn],
       rows: editingContent.data.rows.map((row: TableFillRow) => ({
         ...row,
@@ -47,9 +46,7 @@ export const TableFillEditor: React.FC = () => {
           [newColumn.id]: { content: '', isBlank: false },
         },
       })),
-    };
-
-    updateData(updatedData);
+    });
   };
 
   const addRow = () => {
@@ -67,17 +64,14 @@ export const TableFillEditor: React.FC = () => {
   };
 
   const removeColumn = (columnId: string) => {
-    const updatedData = {
-      ...editingContent.data,
+    updateData({
       columns: editingContent.data.columns.filter((col: TableFillColumn) => col.id !== columnId),
       rows: editingContent.data.rows.map((row: TableFillRow) => {
         const newCells = { ...row.cells };
         delete newCells[columnId];
         return { ...row, cells: newCells };
       }),
-    };
-
-    updateData(updatedData);
+    });
   };
 
   const removeRow = (rowId: string) => {
@@ -87,8 +81,7 @@ export const TableFillEditor: React.FC = () => {
   };
 
   const updateCell = (rowId: string, colId: string, updates: Partial<TableFillCell>) => {
-    const updatedData = {
-      ...editingContent.data,
+    updateData({
       rows: editingContent.data.rows.map((row: TableFillRow) =>
         row.id === rowId
           ? {
@@ -100,9 +93,7 @@ export const TableFillEditor: React.FC = () => {
             }
           : row
       ),
-    };
-
-    updateData(updatedData);
+    });
   };
 
   const updateColumnHeader = (columnId: string, header: string) => {

@@ -15,7 +15,6 @@ import {
   RomanTableRow,
   RomanTableHead,
   RomanTableCell,
-  RomanTableCaption,
 } from '../core/roman-table';
 import { cn } from '@/src/lib/utils';
 
@@ -112,7 +111,6 @@ const TableFillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
         <RomanTable>
           <RomanTableHeader>
             <RomanTableRow>
-              {exercise.data.rows.some(row => row.rowHeader !== undefined) && <RomanTableHead></RomanTableHead>}
               {exercise.data.columns.map(column => (
                 <RomanTableHead key={column.id} className={column.className}>
                   <SimpleRichDisplay content={column.header} />
@@ -123,11 +121,6 @@ const TableFillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
           <RomanTableBody>
             {exercise.data.rows.map(row => (
               <RomanTableRow key={row.id}>
-                {row.rowHeader && (
-                  <RomanTableHead>
-                    <SimpleRichDisplay content={row.rowHeader} />
-                  </RomanTableHead>
-                )}
                 {exercise.data.columns.map(column => {
                   const cell = row.cells[column.id];
                   const cellKey = `${row.id}-${column.id}`;
@@ -161,10 +154,7 @@ const TableFillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
           {exercise.data.footnotes && exercise.data.footnotes.length > 0 && (
             <RomanTableBody>
               <RomanTableRow>
-                <RomanTableCell
-                  colSpan={
-                    exercise.data.columns.length + (exercise.data.rows.some(row => row.rowHeader !== undefined) ? 1 : 0)
-                  }>
+                <RomanTableCell colSpan={exercise.data.columns.length}>
                   <div className="text-sm text-roman-stone space-y-1 pt-2">
                     {exercise.data.footnotes.map((footnote, index) => (
                       <div key={index} className="flex items-start gap-2">
@@ -178,11 +168,6 @@ const TableFillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
                 </RomanTableCell>
               </RomanTableRow>
             </RomanTableBody>
-          )}
-          {exercise.data.caption && (
-            <RomanTableCaption>
-              <SimpleRichDisplay content={exercise.data.caption} />
-            </RomanTableCaption>
           )}
         </RomanTable>
 
