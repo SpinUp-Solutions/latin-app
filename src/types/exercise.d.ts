@@ -9,5 +9,6 @@ export type {
   MultipleChoiceExercise,
   OddOneOutExercise,
   TableFillExercise,
+  ClickOnMultipleWordsExercise,
   Exercise,
 } from './exercises';
