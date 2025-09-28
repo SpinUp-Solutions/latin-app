@@ -11,9 +11,13 @@ import { LessonStatus, LessonWithProgress } from '@/src/types/lesson';
 import { Button } from '@/src/components/ui/button';
 import { toast } from 'sonner';
 import React, { memo } from 'react';
-import { BookOpen, User, Clock, Target, TrendingUp, CheckCircle } from 'lucide-react';
+import { BookOpen, User, Clock, Target, TrendingUp, CheckCircle, Rotate3D } from 'lucide-react';
 import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { CircularProgressButton } from '@/src/components/ui/CircularProgressButton';
+import { Swiper, SwiperSlide } from 'swiper/react';
+import { EffectFade, Navigation } from 'swiper/modules';
+import 'swiper/css';
+import 'swiper/css/navigation';
 
 const statusConfig: Record<LessonStatus, { card: string }> = {
   completed: {
@@ -239,21 +243,36 @@ export default function DashboardPage() {
               )}
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-              {lessons.length === 0 ? (
-                <RomanCard className="col-span-full">
-                  <RomanCardContent className="p-12 text-center">
-                    <BookOpen className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                    <h3 className="text-2xl font-serif text-gray-700 mb-2">No Lessons Available</h3>
-                    <p className="text-gray-500">
-                      Check back soon! Your instructors are preparing amazing Latin lessons for you.
-                    </p>
-                  </RomanCardContent>
-                </RomanCard>
-              ) : (
-                lessons.map(lesson => <LessonCard key={lesson.id} lesson={lesson} onLessonClick={handleLessonClick} />)
-              )}
-            </div>
+            {lessons.length === 0 ? (
+              <RomanCard>
+                <RomanCardContent className="p-12 text-center">
+                  <BookOpen className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-2xl font-serif text-gray-700 mb-2">No Lessons Available</h3>
+                  <p className="text-gray-500">
+                    Check back soon! Your instructors are preparing amazing Latin lessons for you.
+                  </p>
+                </RomanCardContent>
+              </RomanCard>
+            ) : (
+              <div className="relative ">
+                <Swiper
+                  modules={[Navigation, EffectFade]}
+                  spaceBetween={0}
+                  slidesPerView={1}
+                  breakpoints={{
+                    1024: { slidesPerView: 2 },
+                    1280: { slidesPerView: 3 },
+                  }}
+                  navigation
+                  className="lesson-cards-carousel overflow-visible p-16">
+                  {lessons.map(lesson => (
+                    <SwiperSlide key={lesson.id} className="overflow-visible p-16">
+                      <LessonCard lesson={lesson} onLessonClick={handleLessonClick} />
+                    </SwiperSlide>
+                  ))}
+                </Swiper>
+              </div>
+            )}
           </section>
 
           {/* Bottom Section - Goals and Stats */}
