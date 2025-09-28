@@ -93,8 +93,7 @@ export const CircularProgressButton: React.FC<CircularProgressButtonProps> = ({
           !isDisabled && config.hoverColor,
           !isDisabled && 'hover:scale-110 hover:shadow-xl active:scale-100',
           isDisabled && 'opacity-50'
-        )}
-      >
+        )}>
         <Icon className="h-5 w-5 drop-shadow-sm" />
       </button>
     </div>

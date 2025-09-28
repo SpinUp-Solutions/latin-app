@@ -11,13 +11,13 @@ import { LessonStatus, LessonWithProgress } from '@/src/types/lesson';
 import { Button } from '@/src/components/ui/button';
 import { toast } from 'sonner';
 import React, { memo } from 'react';
-import { BookOpen, User, Clock, Target, TrendingUp, CheckCircle, Rotate3D } from 'lucide-react';
+import { BookOpen, User, Clock, Target, TrendingUp, CheckCircle } from 'lucide-react';
 import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { CircularProgressButton } from '@/src/components/ui/CircularProgressButton';
 import { Swiper, SwiperSlide } from 'swiper/react';
-import { EffectFade, Navigation } from 'swiper/modules';
 import 'swiper/css';
 import 'swiper/css/navigation';
+import { SwiperNavigation } from '@/src/components/ui/core/swiper-nav';
 
 const statusConfig: Record<LessonStatus, { card: string }> = {
   completed: {
@@ -124,6 +124,18 @@ export default function DashboardPage() {
     ],
     []
   );
+
+  const getInitialSlideIndex = useMemo(() => {
+    if (lessons.length === 0) return 0;
+
+    const inProgressIndex = lessons.findIndex(lesson => lesson.status === 'in-progress');
+    if (inProgressIndex !== -1) return inProgressIndex;
+
+    const availableIndex = lessons.findIndex(lesson => lesson.status === 'available');
+    if (availableIndex !== -1) return availableIndex;
+
+    return 0;
+  }, [lessons]);
 
   const handleLessonClick = useCallback(
     (lessonId: string) => {
@@ -256,18 +268,29 @@ export default function DashboardPage() {
             ) : (
               <div className="relative ">
                 <Swiper
-                  modules={[Navigation, EffectFade]}
+                  modules={[]}
                   spaceBetween={0}
                   slidesPerView={1}
+                  initialSlide={getInitialSlideIndex}
                   breakpoints={{
                     1024: { slidesPerView: 2 },
                     1280: { slidesPerView: 3 },
                   }}
-                  navigation
-                  className="lesson-cards-carousel overflow-visible p-16">
+                  className="lesson-cards-carousel overflow-visible "
+                  centeredSlides={true}
+                  effect="slide">
+                  <div>
+                    <SwiperNavigation />
+                  </div>
+
                   {lessons.map(lesson => (
-                    <SwiperSlide key={lesson.id} className="overflow-visible p-16">
-                      <LessonCard lesson={lesson} onLessonClick={handleLessonClick} />
+                    <SwiperSlide key={lesson.id} className="overflow-visible p-10 transition-transform duration-500">
+                      {({ isActive }) => (
+                        <div
+                          className={`transform transition-transform duration-500 ${isActive ? 'scale-110' : 'scale-95'}`}>
+                          <LessonCard lesson={lesson} onLessonClick={handleLessonClick} />
+                        </div>
+                      )}
                     </SwiperSlide>
                   ))}
                 </Swiper>
