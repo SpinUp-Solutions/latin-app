@@ -11,40 +11,22 @@ import { LessonStatus, LessonWithProgress } from '@/src/types/lesson';
 import { Button } from '@/src/components/ui/button';
 import { toast } from 'sonner';
 import React, { memo } from 'react';
-import { BookOpen, User, Clock, Target, TrendingUp, CheckCircle, Play, Lock } from 'lucide-react';
+import { BookOpen, User, Clock, Target, TrendingUp, CheckCircle } from 'lucide-react';
 import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
+import { CircularProgressButton } from '@/src/components/ui/CircularProgressButton';
 
-const statusConfig: Record<
-  LessonStatus,
-  { card: string; icon: string; button: string; text: string; showIcon: JSX.Element | null }
-> = {
+const statusConfig: Record<LessonStatus, { card: string }> = {
   completed: {
-    card: 'border-roman-green bg-roman-green/5',
-    icon: 'bg-roman-green text-white',
-    button: 'bg-roman-green hover:bg-roman-green/90',
-    text: 'Review',
-    showIcon: <CheckCircle className="h-6 w-6" />,
+    card: 'bg-gradient-to-br from-roman-green/15 via-roman-green/10 to-emerald-100/5 border border-roman-green/20 backdrop-blur-sm',
   },
   available: {
-    card: 'border-roman-stone bg-roman-stone/5',
-    icon: 'bg-roman-stone text-white',
-    button: 'bg-roman-stone hover:bg-roman-stone/90',
-    text: 'Start',
-    showIcon: null,
+    card: 'bg-gradient-to-br from-roman-stone/10 via-roman-stone/5 to-roman-marble/20 border border-roman-stone/20 backdrop-blur-sm',
   },
   'in-progress': {
-    card: 'border-roman-terracotta bg-roman-terracotta/5',
-    icon: 'bg-roman-terracotta text-white',
-    button: 'bg-roman-terracotta hover:bg-roman-terracotta/90',
-    text: 'Continue',
-    showIcon: null,
+    card: 'bg-gradient-to-br from-roman-terracotta/15 via-roman-red/10 to-roman-terracotta/5 border border-roman-terracotta/20 backdrop-blur-sm',
   },
   locked: {
-    card: 'border-gray-300 bg-gray-100',
-    icon: 'bg-gray-300 text-gray-500',
-    button: 'bg-gray-400 cursor-not-allowed',
-    text: 'Locked',
-    showIcon: <Lock className="h-6 w-6" />,
+    card: 'bg-gradient-to-br from-gray-100 via-gray-50 to-gray-100 border border-gray-300/50 backdrop-blur-sm',
   },
 };
 
@@ -58,63 +40,34 @@ const LessonCard = memo(
   }) => {
     const config = statusConfig[lesson.status || 'available'] || statusConfig.available;
 
+    const handleClick = () => {
+      if (lesson.status === 'locked') {
+        toast.error('Complete the previous lesson to unlock this one');
+        return;
+      }
+      onLessonClick(lesson.id);
+    };
+
     return (
       <RomanCard
-        className={`transition-all duration-200 hover:shadow-xl cursor-pointer hover:-translate-y-1 ${config.card}`}>
-        <RomanCardContent className="p-6">
-          <div className="flex items-start gap-4 mb-4">
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${config.icon}`}>
-              {config.showIcon || <BookOpen className="h-5 w-5" />}
+        className={`group transition-all duration-300 cursor-pointer transform hover:-translate-y-2 hover:scale-[1.02] rounded-3xl shadow-xl hover:shadow-2xl ${config.card}`}
+        onClick={handleClick}>
+        <RomanCardContent className="relative p-6">
+          <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-3xl"></div>
+          <div className="relative flex items-center justify-between">
+            <div className="flex-1 pr-4">
+              <h3 className="text-xl font-serif mb-2 text-gray-900">{lesson.title}</h3>
+              <p className="text-sm text-roman-stone">{lesson.description}</p>
             </div>
-            <div className="flex-1">
-              <h3 className="text-xl font-serif mb-2">{lesson.title}</h3>
-              <p className="text-sm text-roman-stone mb-3">{lesson.description}</p>
-
-              <div className="flex items-center gap-4 text-xs text-roman-stone mb-3">
-                <span className="flex items-center gap-1">
-                  <BookOpen className="h-3 w-3" />
-                  {lesson.totalPages || 0} pages
-                </span>
-                <span className="flex items-center gap-1">
-                  <BookOpen className="h-3 w-3" />
-                  Page {(lesson.currentPageIndex || 0) + 1} of {lesson.totalPages || 0}
-                </span>
-              </div>
-
-              {typeof lesson.progress === 'number' && lesson.progress > 0 && (
-                <div className="mb-4 space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-medium">Progress</span>
-                    <span className="text-xs font-semibold">
-                      {typeof lesson.progress === 'number' ? lesson.progress : 0}%
-                    </span>
-                  </div>
-                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all ${
-                        lesson.status === 'completed' ? 'bg-roman-green' : 'bg-roman-red'
-                      }`}
-                      style={{
-                        width: `${typeof lesson.progress === 'number' ? lesson.progress : 0}%`,
-                      }}></div>
-                  </div>
-
-                  {lesson.status === 'in-progress' && (
-                    <div className="text-xs text-roman-stone">
-                      Continue from page {(lesson.currentPageIndex || 0) + 1}
-                    </div>
-                  )}
-
-                  {lesson.score && <div className="text-xs text-roman-stone">Score: {lesson.score}%</div>}
-                </div>
-              )}
-
-              <Button className={`w-full ${config.button}`} onClick={() => onLessonClick(lesson.id)}>
-                <Play className="h-4 w-4 mr-2" />
-                {lesson.status === 'in-progress' && (lesson.currentPageIndex || 0) > 0
-                  ? `Continue from page ${(lesson.currentPageIndex || 0) + 1}`
-                  : config.text}
-              </Button>
+            <div className="flex-shrink-0">
+              <CircularProgressButton
+                progress={typeof lesson.progress === 'number' ? lesson.progress : 0}
+                status={lesson.status}
+                onClick={(e?: React.MouseEvent) => {
+                  e?.stopPropagation();
+                  handleClick();
+                }}
+              />
             </div>
           </div>
         </RomanCardContent>
