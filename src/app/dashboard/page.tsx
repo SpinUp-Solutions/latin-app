@@ -287,7 +287,7 @@ export default function DashboardPage() {
                     <SwiperSlide key={lesson.id} className="overflow-visible p-10 transition-transform duration-500">
                       {({ isActive }) => (
                         <div
-                          className={`transform transition-transform duration-500 ${isActive ? 'scale-110' : 'scale-95'}`}>
+                          className={`transform transition-transform duration-300 ${isActive ? 'scale-125' : 'scale-95'}`}>
                           <LessonCard lesson={lesson} onLessonClick={handleLessonClick} />
                         </div>
                       )}
