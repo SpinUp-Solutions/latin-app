@@ -7,7 +7,6 @@ import { Swiper, SwiperSlide } from 'swiper/react';
 import { VerticalSwiperNavigation } from '@/src/components/ui/core/VerticalSwiperNavigation';
 import { VocabLessonCard } from '@/src/components/ui/core/VocabLessonCard';
 import 'swiper/css';
-import { Divide } from 'lucide-react';
 
 interface VocabularySwiperProps {
   lessons: LessonWithProgress[];

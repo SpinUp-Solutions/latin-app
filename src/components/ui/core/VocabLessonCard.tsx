@@ -37,7 +37,6 @@ export const VocabLessonCard = memo(({ lesson, onPracticeClick }: VocabLessonCar
   return (
     <div className="group cursor-pointer transform hover:-translate-y-1 transition-all duration-300">
       <div className="relative bg-white rounded-2xl p-4 border border-roman-red/15 shadow-lg group-hover:shadow-xl transition-all duration-300 h-24">
-
         <div className="relative flex items-center h-full">
           <div
             className={`flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center ${config.badge} shadow-md`}>
