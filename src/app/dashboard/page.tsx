@@ -18,6 +18,7 @@ import { Swiper, SwiperSlide } from 'swiper/react';
 import 'swiper/css';
 import 'swiper/css/navigation';
 import { SwiperNavigation } from '@/src/components/ui/core/swiper-nav';
+import { VocabularyPracticeWidget } from '@/src/components/ui/core/VocabularyPracticeWidget';
 
 const statusConfig: Record<LessonStatus, { card: string }> = {
   completed: {
@@ -135,6 +136,10 @@ export default function DashboardPage() {
     if (availableIndex !== -1) return availableIndex;
 
     return 0;
+  }, [lessons]);
+
+  const vocabularyLessons = useMemo(() => {
+    return lessons.filter(lesson => lesson.status === 'completed' || lesson.status === 'in-progress');
   }, [lessons]);
 
   const handleLessonClick = useCallback(
@@ -276,7 +281,7 @@ export default function DashboardPage() {
                     1024: { slidesPerView: 2 },
                     1280: { slidesPerView: 3 },
                   }}
-                  className="lesson-cards-carousel overflow-visible "
+                  className="lesson-cards-carousel overflow-visible p-8"
                   centeredSlides={true}
                   effect="slide">
                   <div>
@@ -296,6 +301,11 @@ export default function DashboardPage() {
                 </Swiper>
               </div>
             )}
+          </section>
+
+          {/* Vocabulary Practice Section */}
+          <section className="mb-12">
+            <VocabularyPracticeWidget lessons={vocabularyLessons} />
           </section>
 
           {/* Bottom Section - Goals and Stats */}
