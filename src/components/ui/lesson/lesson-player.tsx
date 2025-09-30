@@ -2,7 +2,6 @@
 
 import React, { useState, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { useSelector } from 'react-redux';
 import { LessonWithProgress } from '@/src/types/lesson';
 import { BookOpen } from 'lucide-react';
 import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
@@ -11,15 +10,15 @@ import { LessonProgress } from '../core/lesson-progress';
 import PageTemplate from './page-template';
 import useAudio from '@/src/hooks/useAudio';
 import LessonNavigation from '../exercises/lesson-navigation';
-import { RootState } from '@/src/store';
 import { useMarkExerciseCompleteMutation, useUpdatePageProgressMutation } from '@/src/store/api/lessonApi';
+import { useAuth } from '@/src/hooks/useAuth';
 
 interface LessonPlayerProps {
   lesson: LessonWithProgress;
 }
 
 export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
-  const { user } = useSelector((state: RootState) => state.auth);
+  const { user } = useAuth();
   const [markExerciseComplete] = useMarkExerciseCompleteMutation();
   const [updatePageProgress] = useUpdatePageProgressMutation();
 

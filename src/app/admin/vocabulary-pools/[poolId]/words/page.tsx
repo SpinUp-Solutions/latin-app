@@ -9,8 +9,7 @@ import { Card, CardContent } from '@/src/components/ui/card';
 import { Plus, Search, Trash2, BookOpen, ArrowLeft, Library } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
-
-import { useVocabularyPool } from '@/src/hooks/useVocabularyPool';
+import { useGetPoolQuery, useRemoveWordsFromPoolMutation } from '@/src/store/api/vocabularyPoolApi';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { PoolNotFoundPage } from '@/src/components/ui/admin/vocabulary-pools/PoolNotFoundPage';
 import { AdminLoadingPage } from '@/src/components/ui/admin/AdminLoadingPage';
@@ -24,7 +23,8 @@ interface WordsPageProps {
 
 export default function WordsPage({ params }: WordsPageProps) {
   const { poolId } = params;
-  const { pool, loading, error, removeWords } = useVocabularyPool(poolId);
+  const { data: pool, isLoading: loading, error } = useGetPoolQuery(poolId);
+  const [removeWordsMutation] = useRemoveWordsFromPoolMutation();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [wordTypeFilter, setWordTypeFilter] = useState('all');
@@ -41,7 +41,7 @@ export default function WordsPage({ params }: WordsPageProps) {
         poolId={poolId}
         backHref={`/admin/vocabulary-pools/${poolId}`}
         backLabel="Back to Pool"
-        error={error}
+        error={error ? String(error) : null}
       />
     );
   }
@@ -81,14 +81,10 @@ export default function WordsPage({ params }: WordsPageProps) {
 
     setRemoving(true);
     try {
-      const success = await removeWords(selectedWordIds);
-      if (success) {
-        toast.success(`Removed ${selectedWordIds.length} word(s) from pool`);
-        setSelectedWordIds([]);
-      } else {
-        toast.error('Failed to remove words from pool');
-      }
-    } catch (err) {
+      await removeWordsMutation({ poolId, wordDocIds: selectedWordIds }).unwrap();
+      toast.success(`Removed ${selectedWordIds.length} word(s) from pool`);
+      setSelectedWordIds([]);
+    } catch {
       toast.error('Failed to remove words from pool');
     } finally {
       setRemoving(false);

@@ -13,8 +13,9 @@ interface SimpleRichEditorProps {
   placeholder?: string;
   className?: string;
   disabled?: boolean;
-  singleLine?: boolean; // For input-like behavior
-  rows?: number; // For textarea-like behavior
+  singleLine?: boolean;
+  rows?: number;
+  onSubmit?: () => void;
 }
 
 export const SimpleRichEditor: React.FC<SimpleRichEditorProps> = ({
@@ -25,6 +26,7 @@ export const SimpleRichEditor: React.FC<SimpleRichEditorProps> = ({
   disabled = false,
   singleLine = false,
   rows,
+  onSubmit,
 }) => {
   const editor = useTipTapEditor({
     extensions: getSimpleExtensions({ enableTooltips: true }),
@@ -53,6 +55,7 @@ export const SimpleRichEditor: React.FC<SimpleRichEditorProps> = ({
 
           if (singleLine && event.key === 'Enter' && !event.shiftKey) {
             event.preventDefault();
+            onSubmit?.();
             return true;
           }
 
@@ -60,7 +63,7 @@ export const SimpleRichEditor: React.FC<SimpleRichEditorProps> = ({
         },
       },
     });
-  }, [editor, singleLine, tooltipManager]);
+  }, [editor, singleLine, tooltipManager, onSubmit]);
 
   if (!editor) {
     const loadingClasses = singleLine

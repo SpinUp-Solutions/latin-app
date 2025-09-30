@@ -5,8 +5,7 @@ import MatchingTable from '../exercises/matching-table';
 import ConjugationTable from './conjugation-table';
 import FillExercise from '../exercises/fill-exercise';
 import TextSelectionExercise from '../exercises/text-selection-exercise';
-import VerbAnalysisExercise from '../exercises/verb-analysis-exercise';
-import VerbConjugationExercise from '../exercises/verb-conjugation-exercise';
+import FillEmboldedTextExercise from '../exercises/verb-analysis-exercise';
 import { SentenceDiagrammingExercise } from '../exercises/sentence-diagramming-exercise';
 import MultipleChoiceExercise from '../exercises/multiple-choice-exercise';
 import OddOneOutExercise from '../exercises/odd-one-out-exercise';
@@ -17,8 +16,7 @@ import {
   MatchingExercise,
   FillExercise as FillExerciseType,
   TextSelectionExercise as TextSelectionExerciseType,
-  VerbAnalysisExercise as VerbAnalysisExerciseType,
-  VerbConjugationExercise as VerbConjugationExerciseType,
+  FillEmboldedTextExercise as FillEmboldedTextExerciseType,
   SentenceDiagrammingExercise as SentenceDiagrammingExerciseType,
   MultipleChoiceExercise as MultipleChoiceExerciseType,
   OddOneOutExercise as OddOneOutExerciseType,
@@ -80,11 +78,8 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onCom
     case 'text-selection':
       return <TextSelectionExercise exercise={content as TextSelectionExerciseType} onComplete={onComplete} />;
 
-    case 'verb-analysis':
-      return <VerbAnalysisExercise exercise={content as VerbAnalysisExerciseType} onComplete={onComplete} />;
-
-    case 'verb-conjugation':
-      return <VerbConjugationExercise exercise={content as VerbConjugationExerciseType} onComplete={onComplete} />;
+    case 'fill-embolded-text':
+      return <FillEmboldedTextExercise exercise={content as FillEmboldedTextExerciseType} onComplete={onComplete} />;
 
     case 'sentence-diagramming':
       return (

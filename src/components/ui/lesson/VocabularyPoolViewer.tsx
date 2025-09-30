@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { BookOpen } from 'lucide-react';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
-import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
-import { loadPool } from '@/src/store/slices/vocabularyPoolSlice';
+import { useAppSelector } from '@/src/store/hooks';
+import { useGetPoolQuery } from '@/src/store/api/vocabularyPoolApi';
 import { VocabularyWordCard } from '../vocabulary/VocabularyWordCard';
 import type { VocabularyPoolContent } from '@/src/types/vocabulary';
 import type { Word } from '@/src/types/admin-vocabulary';
@@ -15,18 +15,10 @@ interface VocabularyPoolViewerProps {
 }
 
 export function VocabularyPoolViewer({ content }: VocabularyPoolViewerProps) {
-  const dispatch = useAppDispatch();
   const currentLesson = useAppSelector(state => state.lessonEditor.currentLesson);
   const poolIdToUse = currentLesson?.vocabulary_pool || '';
 
-  const vocabularyPool = useAppSelector(state => state.vocabularyPools.currentPool);
-  const isLoading = useAppSelector(state => state.vocabularyPools.currentPoolLoading);
-
-  useEffect(() => {
-    if (poolIdToUse && (!vocabularyPool || vocabularyPool.id !== poolIdToUse) && !isLoading) {
-      dispatch(loadPool(poolIdToUse));
-    }
-  }, [dispatch, poolIdToUse, vocabularyPool?.id, isLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+  const { data: vocabularyPool, isLoading } = useGetPoolQuery(poolIdToUse, { skip: !poolIdToUse });
 
   if (!poolIdToUse) {
     return (

@@ -26,6 +26,7 @@ const ExerciseInput: React.FC<ExerciseInputProps> = ({
           <SimpleRichEditor
             content={value}
             onChange={onChange}
+            onSubmit={onSubmit}
             placeholder={placeholder}
             singleLine={true}
             className="w-full"

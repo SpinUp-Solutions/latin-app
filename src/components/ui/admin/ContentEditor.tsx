@@ -12,8 +12,7 @@ import { VocabularyEditor } from './content-editor/VocabularyEditor';
 import { MatchingEditor } from './content-editor/MatchingEditor';
 import { FillEditor } from './content-editor/FillEditor';
 import { TextSelectionEditor } from './content-editor/TextSelectionEditor';
-import { VerbAnalysisEditor } from './content-editor/VerbAnalysisEditor';
-import { VerbConjugationEditor } from './content-editor/VerbConjugationEditor';
+import { FillEmboldedTextEditor } from './content-editor/VerbAnalysisEditor';
 import { SentenceDiagrammingEditor } from './content-editor/SentenceDiagrammingEditor';
 import { MultipleChoiceEditor } from './content-editor/MultipleChoiceEditor';
 import { OddOneOutEditor } from './content-editor/OddOneOutEditor';
@@ -54,10 +53,8 @@ export const ContentEditor: React.FC = () => {
         return <FillEditor />;
       case 'text-selection':
         return <TextSelectionEditor />;
-      case 'verb-analysis':
-        return <VerbAnalysisEditor />;
-      case 'verb-conjugation':
-        return <VerbConjugationEditor />;
+      case 'fill-embolded-text':
+        return <FillEmboldedTextEditor />;
       case 'sentence-diagramming':
         return <SentenceDiagrammingEditor />;
       case 'multiple-choice':

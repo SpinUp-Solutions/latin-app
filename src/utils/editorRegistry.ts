@@ -27,10 +27,8 @@ export const getEditorTitle = (contentType: string): string => {
       return 'Edit Fill-in-Blank Exercise';
     case 'text-selection':
       return 'Edit Text Selection Exercise';
-    case 'verb-analysis':
-      return 'Edit Verb Analysis Exercise';
-    case 'verb-conjugation':
-      return 'Edit Verb Conjugation Exercise';
+    case 'fill-embolded-text':
+      return 'Edit Fill In Embolded Text Exercise';
     case 'sentence-diagramming':
       return 'Edit Sentence Diagramming Exercise';
     case 'multiple-choice':
