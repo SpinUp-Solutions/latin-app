@@ -1,4 +1,4 @@
-import { Lesson } from '@/src/types/lesson';
+import { Lesson, LessonWithProgress } from '@/src/types/lesson';
 import { auth } from './firebase';
 
 class LessonService {
@@ -67,6 +67,22 @@ class LessonService {
   async deleteLesson(id: string): Promise<{ success: boolean; message: string }> {
     return this.makeRequest(`/api/admin/lessons/${id}`, {
       method: 'DELETE',
+    });
+  }
+
+  async getStudentLessons(): Promise<{ lessons: LessonWithProgress[] }> {
+    return this.makeRequest('/api/lessons');
+  }
+
+  async getLessonById(lessonId: string): Promise<LessonWithProgress> {
+    const response = await this.makeRequest(`/api/lessons/${lessonId}`);
+    return response.lesson;
+  }
+
+  async updatePublishStatus(lessonIds: string[], isLive: boolean, startOrder?: number): Promise<{ success: boolean; message: string; processedCount: number }> {
+    return this.makeRequest('/api/admin/lessons/update-publish-status', {
+      method: 'POST',
+      body: JSON.stringify({ lessonIds, isLive, startOrder }),
     });
   }
 }

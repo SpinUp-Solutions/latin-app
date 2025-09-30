@@ -97,9 +97,14 @@ export default function PoolDetailPage({ params }: PoolDetailPageProps) {
           </Card>
           <Card>
             <CardContent className="p-4">
-              <Badge 
-                variant={pool.metadata.difficulty === 'beginner' ? 'secondary' : pool.metadata.difficulty === 'intermediate' ? 'default' : 'destructive'}
-              >
+              <Badge
+                variant={
+                  pool.metadata.difficulty === 'beginner'
+                    ? 'secondary'
+                    : pool.metadata.difficulty === 'intermediate'
+                      ? 'default'
+                      : 'destructive'
+                }>
                 {pool.metadata.difficulty}
               </Badge>
               <p className="text-sm text-gray-600 mt-1">Difficulty</p>
