@@ -11,7 +11,7 @@ import { useGetLessonsQuery, useDeleteLessonMutation } from '@/src/store/api/les
 import { clearDraft, loadDrafts } from '@/src/store/slices/lessonEditorSlice';
 import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
-import { getContentCount } from '@/src/utils/lessonUtils';
+import { isExerciseType } from '@/src/utils/lessonUtils';
 
 interface LessonManagerProps {
   onEditLesson: (lesson: Lesson) => void;
@@ -95,7 +95,12 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
   }
 
   if (selectedLesson) {
-    const contentCount = getContentCount(selectedLesson);
+    const totalPages = selectedLesson.pages.length;
+    const totalItems = selectedLesson.pages.reduce((count, page) => count + page.items.length, 0);
+    const totalExercises = selectedLesson.pages.reduce(
+      (count, page) => count + page.items.filter(item => isExerciseType(item.type)).length,
+      0
+    );
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -149,17 +154,17 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
               <h4 className="font-medium text-gray-700 mb-2">Content Summary</h4>
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div className="bg-blue-50 p-3 rounded">
-                  <div className="text-2xl font-bold text-blue-600">{contentCount.totalPages}</div>
+                  <div className="text-2xl font-bold text-blue-600">{totalPages}</div>
                   <div className="text-sm text-blue-700">Total Pages</div>
                   <div className="text-xs text-gray-500">All lesson pages</div>
                 </div>
                 <div className="bg-green-50 p-3 rounded">
-                  <div className="text-2xl font-bold text-green-600">{contentCount.totalExercises}</div>
+                  <div className="text-2xl font-bold text-green-600">{totalExercises}</div>
                   <div className="text-sm text-green-700">Total Exercises</div>
                   <div className="text-xs text-gray-500">Exercise content items</div>
                 </div>
                 <div className="bg-purple-50 p-3 rounded">
-                  <div className="text-2xl font-bold text-purple-600">{contentCount.totalItems}</div>
+                  <div className="text-2xl font-bold text-purple-600">{totalItems}</div>
                   <div className="text-sm text-purple-700">Total Content Items</div>
                   <div className="text-xs text-gray-500">Across all pages</div>
                 </div>
@@ -215,9 +220,15 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
                     </div>
 
                     <div className="flex justify-between text-xs text-gray-600">
-                      <span>{getContentCount(draft.lesson).totalPages} total pages</span>
-                      <span>{getContentCount(draft.lesson).totalExercises} exercises</span>
-                      <span>{getContentCount(draft.lesson).totalItems} items</span>
+                      <span>{draft.lesson.pages.length} total pages</span>
+                      <span>
+                        {draft.lesson.pages.reduce(
+                          (count, page) => count + page.items.filter(item => isExerciseType(item.type)).length,
+                          0
+                        )}{' '}
+                        exercises
+                      </span>
+                      <span>{draft.lesson.pages.reduce((count, page) => count + page.items.length, 0)} items</span>
                     </div>
 
                     <div className="flex gap-2 pt-2">
@@ -259,8 +270,6 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {lessons.map(lesson => {
-              const contentCount = getContentCount(lesson);
-
               return (
                 <Card key={lesson.id} className="hover:shadow-lg transition-shadow">
                   <CardHeader>
@@ -296,9 +305,15 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
                     </div>
 
                     <div className="flex justify-between text-xs text-gray-600">
-                      <span>{contentCount.totalPages} total pages</span>
-                      <span>{contentCount.totalExercises} exercises</span>
-                      <span>{contentCount.totalItems} items</span>
+                      <span>{lesson.pages.length} total pages</span>
+                      <span>
+                        {lesson.pages.reduce(
+                          (count, page) => count + page.items.filter(item => isExerciseType(item.type)).length,
+                          0
+                        )}{' '}
+                        exercises
+                      </span>
+                      <span>{lesson.pages.reduce((count, page) => count + page.items.length, 0)} items</span>
                     </div>
 
                     <div className="flex gap-2">
