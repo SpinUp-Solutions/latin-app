@@ -1,25 +1,15 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useRouter } from 'next/navigation';
-import { useSelector } from 'react-redux';
-import { RootState } from '@/src/store';
 import { Button } from '@/src/components/ui/button';
 import { ArrowLeft, BookOpen, Plus } from 'lucide-react';
-import { toast } from 'sonner';
 import { LessonManager } from '@/src/components/ui/admin/LessonManager';
 import { Lesson } from '@/src/types/lesson';
+import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 
-export default function ManageLessonsPage() {
+function ManageLessonsPage() {
   const router = useRouter();
-  const { user, loading: authLoading } = useSelector((state: RootState) => state.auth);
-
-  useEffect(() => {
-    if (!authLoading && (!user || user.role !== 'admin')) {
-      router.push('/dashboard');
-      toast.error('Access denied. Admin privileges required.');
-    }
-  }, [user, authLoading, router]);
 
   const handleEditLesson = (lesson: Lesson) => {
     router.push(`/admin/lessons/edit/${lesson.id}`);
@@ -36,18 +26,6 @@ export default function ManageLessonsPage() {
   const handleContinueDraft = (lessonId: string) => {
     router.push(`/admin/lessons/create?continue=true&lessonId=${lessonId}`);
   };
-
-  if (authLoading || !user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-roman-marble">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>
-      </div>
-    );
-  }
-
-  if (user.role !== 'admin') {
-    return null;
-  }
 
   return (
     <div className="min-h-screen bg-roman-marble">
@@ -79,3 +57,5 @@ export default function ManageLessonsPage() {
     </div>
   );
 }
+
+export default withAdminAuth(ManageLessonsPage);

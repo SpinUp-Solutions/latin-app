@@ -124,59 +124,24 @@ export const createNewContent = (type: string): RenderableContentItem => {
           ],
         },
       };
-    case 'verb-analysis':
+    case 'fill-embolded-text':
       return {
         id: baseId,
-        type: 'verb-analysis',
-        title: 'Verb Analysis Exercise',
-        instructions: 'Analyze the verbs in the passage.',
+        type: 'fill-embolded-text',
+        title: 'Fill In Embolded Text Exercise',
+        instructions: 'Identify the embolded text and provide the answer.',
         audioPath: null,
         itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
         feedbackConfig: createDefaultFeedbackConfig(),
         data: {
-          passage: 'Passage with verbs to analyze.',
+          passage: 'Passage with embolded text to analyze.',
           verbs: [
             {
               wordIndex: 0,
               correctPronoun: 'he/she/it',
-              explanation: 'This verb is third person singular.',
+              explanation: 'This is the correct answer.',
             },
           ],
-        },
-      };
-    case 'verb-conjugation':
-      return {
-        id: baseId,
-        type: 'verb-conjugation',
-        title: 'Verb Conjugation Exercise',
-        instructions: 'Practice verb conjugations.',
-        audioPath: null,
-        itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
-        feedbackConfig: createDefaultFeedbackConfig(),
-        data: {
-          passage: {
-            latin: 'Latin passage',
-            translation: 'English translation',
-            specialVocab: {},
-          },
-          conjugationTask: {
-            instructions: 'Conjugate the verb',
-            answer: 'correct conjugation',
-          },
-          livingLatinPractice: {
-            examples: [
-              {
-                latin: 'Latin example',
-                translation: 'English example',
-              },
-            ],
-            exercises: [
-              {
-                english: 'English phrase',
-                answer: 'Latin answer',
-              },
-            ],
-          },
         },
       };
     case 'sentence-diagramming':

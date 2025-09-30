@@ -1,18 +1,72 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
-import { VocabularyPoolService } from '@/src/services/vocabularyPoolService';
+import { FieldPath } from 'firebase-admin/firestore';
+import type { Word } from '@/src/types/admin-vocabulary';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest, { params }: { params: { poolId: string } }): Promise<NextResponse> {
   try {
     const { poolId } = params;
-    const poolWithWords = await VocabularyPoolService.getPoolWithWords(poolId);
+
+    const poolDoc = await adminDb.collection('vocabulary_pools').doc(poolId).get();
+    if (!poolDoc.exists) {
+      throw new Error('Pool not found');
+    }
+
+    const poolData = poolDoc.data();
+    if (!poolData) {
+      throw new Error('Pool data not found');
+    }
+
+    const pool = {
+      id: poolDoc.id,
+      ...poolData,
+      metadata: {
+        ...poolData.metadata,
+        createdAt: poolData.metadata.createdAt.toDate(),
+        updatedAt: poolData.metadata.updatedAt.toDate(),
+      },
+    };
+
+    const wordIds = poolData.wordDocIds || [];
+    const words: Word[] = [];
+
+    if (wordIds.length > 0) {
+      const batches = [];
+      for (let i = 0; i < wordIds.length; i += 10) {
+        const batch = wordIds.slice(i, i + 10);
+        batches.push(adminDb.collection('words').where(FieldPath.documentId(), 'in', batch).get());
+      }
+
+      const batchResults = await Promise.all(batches);
+      batchResults.forEach(snapshot => {
+        snapshot.docs.forEach(doc => {
+          const data = doc.data();
+          words.push({
+            id: doc.id,
+            ...data,
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
+            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt,
+          } as Word);
+        });
+      });
+
+      const wordMap = new Map(words.map(word => [word.id, word]));
+      const orderedWords = wordIds.map((id: string) => wordMap.get(id)).filter(Boolean);
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          pool: { ...pool, words: orderedWords },
+        },
+      });
+    }
 
     return NextResponse.json({
       success: true,
       data: {
-        pool: poolWithWords,
+        pool: { ...pool, words: [] },
       },
     });
   } catch (error) {
