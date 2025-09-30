@@ -4,6 +4,7 @@ import React, { useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useGetStudentLessonsQuery } from '@/src/store/api/lessonApi';
 import LessonPlayer from '@/src/components/ui/lesson/lesson-player';
+import LessonSidebar from '@/src/components/ui/lesson/lesson-sidebar';
 
 export default function DynamicLessonPage() {
   const params = useParams();
@@ -101,12 +102,15 @@ export default function DynamicLessonPage() {
         </div>
       </header>
 
-      <main className="container mx-auto py-8 px-4">
-        <div className="max-w-3xl mx-auto">
-          <h2 className="text-2xl font-serif text-gray-800 mb-6">{currentLesson.title}</h2>
-          <LessonPlayer lesson={currentLesson} />
-        </div>
-      </main>
+      <div className="flex">
+        <LessonSidebar currentLessonId={lessonId} className="w-80 border-r border-border bg-white" />
+        <main className="flex-1 px-6 py-8">
+          <div className="max-w-3xl mx-auto">
+            <h2 className="text-2xl font-serif text-gray-800 mb-6">{currentLesson.title}</h2>
+            <LessonPlayer lesson={currentLesson} />
+          </div>
+        </main>
+      </div>
     </div>
   );
 }

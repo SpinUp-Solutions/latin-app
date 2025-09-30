@@ -1,4 +1,19 @@
-import { Type, Lightbulb, Table, Book, Library, Target, Search, Zap, Pencil, CheckSquare, Filter } from 'lucide-react';
+import {
+  Type,
+  Lightbulb,
+  Table,
+  Book,
+  Library,
+  Target,
+  Search,
+  Zap,
+  Users,
+  Pencil,
+  CheckSquare,
+  Filter,
+  TableProperties,
+  MousePointerClick,
+} from 'lucide-react';
 
 export const ALL_CONTENT_TYPES = [
   { type: 'text', icon: Type, label: 'Text Block' },
@@ -13,6 +28,8 @@ export const ALL_CONTENT_TYPES = [
   { type: 'text-selection', icon: Search, label: 'Text Selection' },
   { type: 'fill-embolded-text', icon: Zap, label: 'Fill In Embolded Text' },
   { type: 'sentence-diagramming', icon: Pencil, label: 'Sentence Diagramming' },
+  { type: 'table-fill', icon: TableProperties, label: 'Table Fill Exercise' },
+  { type: 'click-on-multiple-words', icon: MousePointerClick, label: 'Click On Multiple Words' },
 ] as const;
 
 export const CONTENT_TYPES = [
@@ -31,4 +48,6 @@ export const EXERCISE_TYPES = [
   { type: 'text-selection', icon: Search, label: 'Text Selection' },
   { type: 'fill-embolded-text', icon: Zap, label: 'Fill In Embolded Text' },
   { type: 'sentence-diagramming', icon: Pencil, label: 'Sentence Diagramming' },
+  { type: 'table-fill', icon: TableProperties, label: 'Table Fill Exercise' },
+  { type: 'click-on-multiple-words', icon: MousePointerClick, label: 'Click On Multiple Words' },
 ] as const;

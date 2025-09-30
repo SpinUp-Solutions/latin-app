@@ -35,6 +35,10 @@ export const getEditorTitle = (contentType: string): string => {
       return 'Edit Multiple Choice Exercise';
     case 'odd-one-out':
       return 'Edit Odd One Out Exercise';
+    case 'table-fill':
+      return 'Edit Table Fill Exercise';
+    case 'click-on-multiple-words':
+      return 'Edit Click On Multiple Words Exercise';
     default:
       return `Edit ${contentType} Content`;
   }

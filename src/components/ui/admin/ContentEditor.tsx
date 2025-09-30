@@ -16,6 +16,8 @@ import { FillEmboldedTextEditor } from './content-editor/VerbAnalysisEditor';
 import { SentenceDiagrammingEditor } from './content-editor/SentenceDiagrammingEditor';
 import { MultipleChoiceEditor } from './content-editor/MultipleChoiceEditor';
 import { OddOneOutEditor } from './content-editor/OddOneOutEditor';
+import { TableFillEditor } from './content-editor/TableFillEditor';
+import { ClickOnMultipleWordsEditor } from './content-editor/ClickOnMultipleWordsEditor';
 
 import { getEditorTitle } from '@/src/utils/editorRegistry';
 
@@ -59,6 +61,10 @@ export const ContentEditor: React.FC = () => {
         return <MultipleChoiceEditor />;
       case 'odd-one-out':
         return <OddOneOutEditor />;
+      case 'table-fill':
+        return <TableFillEditor />;
+      case 'click-on-multiple-words':
+        return <ClickOnMultipleWordsEditor />;
       default:
         return (
           <div className="p-8 text-center text-gray-500">

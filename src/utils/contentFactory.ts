@@ -1,7 +1,7 @@
 import { RenderableContentItem } from '@/src/types/page';
 import { createDefaultFeedbackConfig, DEFAULT_ITEM_PROGRESSION_DELAY } from './feedbackDefaults';
 
-const generateId = (prefix?: string): string => {
+export const generateId = (prefix?: string): string => {
   const timestamp = Date.now();
   const random = Math.random().toString(36).substr(2, 9);
   return prefix ? `${prefix}-${timestamp}-${random}` : `${timestamp}-${random}`;
@@ -263,6 +263,52 @@ export const createNewContent = (type: string): RenderableContentItem => {
           ],
           explanation: 'This item is different because...',
           requireExplanation: false,
+        },
+      };
+    case 'table-fill':
+      return {
+        id: baseId,
+        type: 'table-fill',
+        title: 'Table Fill Exercise',
+        instructions: 'Fill in the blank cells in the table below.',
+        audioPath: null,
+        itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
+        feedbackConfig: createDefaultFeedbackConfig(),
+        data: {
+          title: 'Exercise Table',
+          columns: [
+            { id: 'col1', header: 'Column 1' },
+            { id: 'col2', header: 'Column 2' },
+          ],
+          rows: [
+            {
+              id: 'row1',
+              cells: {
+                col1: { content: 'Sample content', isBlank: false },
+                col2: { content: '', isBlank: true, answer: 'answer' },
+              },
+            },
+          ],
+        },
+      };
+    case 'click-on-multiple-words':
+      return {
+        id: baseId,
+        type: 'click-on-multiple-words',
+        title: 'Click On Multiple Words',
+        instructions: 'Click on all the words that match the criteria.',
+        audioPath: null,
+        itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
+        feedbackConfig: createDefaultFeedbackConfig(),
+        data: {
+          title: 'Word Selection Exercise',
+          passage: 'Click on the <em>adjectives</em> in this sample passage with multiple <strong>descriptive</strong> words.',
+          correctWordIndices: [3, 8, 10],
+          instructions: '',
+          hint: 'Look for words that describe or modify nouns.',
+          explanation: 'Adjectives are words that modify nouns and add descriptive information.',
+          allowOverSelection: false,
+          minimumCorrect: undefined,
         },
       };
     default:
