@@ -12,7 +12,9 @@ import { SimpleRichDisplay } from '../../core/simple-rich-display';
 
 export const FillEmboldedTextEditor: React.FC = () => {
   const dispatch = useAppDispatch();
-  const editingContent = useAppSelector(state => state.lessonEditor.editingContent?.content as FillEmboldedTextExercise);
+  const editingContent = useAppSelector(
+    state => state.lessonEditor.editingContent?.content as FillEmboldedTextExercise
+  );
 
   // New state for word popup
   const [wordPopup, setWordPopup] = useState<{
