@@ -16,7 +16,7 @@ interface VocabularyPoolViewerProps {
 
 export function VocabularyPoolViewer({ content }: VocabularyPoolViewerProps) {
   const dispatch = useAppDispatch();
-  const currentLesson = useAppSelector(state => state.lesson.currentLesson);
+  const currentLesson = useAppSelector(state => state.lessonEditor.currentLesson);
   const poolIdToUse = currentLesson?.vocabulary_pool || '';
 
   const vocabularyPool = useAppSelector(state => state.vocabularyPools.currentPool);

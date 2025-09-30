@@ -4,7 +4,7 @@ import { Card, CardContent } from '@/src/components/ui/card';
 import { Plus, Trash2, CheckCircle2, XCircle } from 'lucide-react';
 import { OddOneOutExercise } from '@/src/types/exercise';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
-import { updateEditingContent } from '@/src/store/slices/lessonSlice';
+import { updateEditingContent } from '@/src/store/slices/lessonEditorSlice';
 import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
 import { SimpleRichEditor } from '../../core/simple-rich-editor';
@@ -12,7 +12,7 @@ import { SimpleRichDisplay } from '../../core/simple-rich-display';
 
 export const OddOneOutEditor: React.FC = () => {
   const dispatch = useAppDispatch();
-  const editingContent = useAppSelector(state => state.lesson.editingContent?.content as OddOneOutExercise);
+  const editingContent = useAppSelector(state => state.lessonEditor.editingContent?.content as OddOneOutExercise);
 
   if (!editingContent) {
     return <div>No content selected for editing</div>;

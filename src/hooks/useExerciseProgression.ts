@@ -1,10 +1,10 @@
-import { useState, useCallback, useMemo } from 'react';
-import type { FeedbackConfig } from '@/src/types/exercises/base';
-import { getEffectiveFeedbackConfig } from '@/src/utils/feedbackDefaults';
+import { useState, useCallback } from 'react';
+import type { ProgressionRules } from '@/src/types/exercises/base';
 
 interface ExerciseProgressionOptions {
   totalItems: number;
-  feedbackConfig: FeedbackConfig;
+  itemProgressionDelay?: number;
+  progressionRules?: ProgressionRules;
 }
 
 interface ExerciseProgressionState {
@@ -18,13 +18,10 @@ interface ExerciseProgressionActions {
 
 export function useExerciseProgression({
   totalItems,
-  feedbackConfig,
+  itemProgressionDelay,
+  progressionRules,
 }: ExerciseProgressionOptions): ExerciseProgressionState & ExerciseProgressionActions {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const { progressionRules, timingConfig } = useMemo(
-    () => getEffectiveFeedbackConfig(feedbackConfig),
-    [feedbackConfig]
-  );
 
   const isLastItem = currentIndex >= totalItems - 1;
 
@@ -39,7 +36,7 @@ export function useExerciseProgression({
     isLastItem,
     autoAdvanceIfEnabled: (afterAdvance: () => void) => {
       if (progressionRules?.autoAdvance !== false) {
-        const delay = timingConfig?.progressionDelay || 1500;
+        const delay = itemProgressionDelay || 2000;
         setTimeout(() => {
           nextItem();
           afterAdvance();

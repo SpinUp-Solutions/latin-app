@@ -4,15 +4,16 @@ import { Card, CardContent } from '@/src/components/ui/card';
 import { Plus, Trash2, Search, Eye } from 'lucide-react';
 import { TextSelectionExercise } from '@/src/types/exercise';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
-import { updateEditingContent } from '@/src/store/slices/lessonSlice';
+import { updateEditingContent } from '@/src/store/slices/lessonEditorSlice';
 import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
 import { SimpleRichEditor } from '../../core/simple-rich-editor';
 import { SimpleRichDisplay } from '../../core/simple-rich-display';
+import { ClickableRichDisplay } from '../../core/clickable-rich-display';
 
 export const TextSelectionEditor: React.FC = () => {
   const dispatch = useAppDispatch();
-  const editingContent = useAppSelector(state => state.lesson.editingContent?.content as TextSelectionExercise);
+  const editingContent = useAppSelector(state => state.lessonEditor.editingContent?.content as TextSelectionExercise);
 
   if (!editingContent) {
     return <div>No content selected for editing</div>;
@@ -66,35 +67,27 @@ export const TextSelectionEditor: React.FC = () => {
   const renderPassagePreview = (questionIndex?: number) => {
     if (!editingContent.data.passage) return null;
 
-    return (
-      <div className="font-serif text-lg leading-relaxed p-4 bg-gray-50 rounded border">
-        {editingContent.data.passage.split(' ').map((word, index) => {
-          const isCurrentQuestionTarget =
-            questionIndex !== undefined && editingContent.data.questions[questionIndex]?.correctWordIndex === index;
+    if (questionIndex !== undefined) {
+      return (
+        <div className="p-4 bg-gray-50 rounded border">
+          <ClickableRichDisplay
+            content={editingContent.data.passage}
+            onWordClick={index => handleWordClick(index, questionIndex)}
+            selectedWordIndex={editingContent.data.questions[questionIndex]?.correctWordIndex ?? null}
+            isCorrect={true}
+          />
+        </div>
+      );
+    }
 
-          return (
-            <span
-              key={index}
-              onClick={() => questionIndex !== undefined && handleWordClick(index, questionIndex)}
-              className={`inline-block px-1 py-0.5 mx-0.5 rounded transition-colors relative group ${
-                isCurrentQuestionTarget
-                  ? 'bg-green-100 text-green-800 border border-green-300 cursor-pointer'
-                  : questionIndex !== undefined
-                    ? 'hover:bg-blue-100 cursor-pointer'
-                    : 'hover:bg-blue-50'
-              }`}
-              title={
-                questionIndex !== undefined
-                  ? `Click to select word at index ${index}: "${word}"`
-                  : `Index: ${index}, Word: "${word}"`
-              }>
-              {word}
-              <span className="absolute -top-6 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                {index}
-              </span>
-            </span>
-          );
-        })}
+    return (
+      <div className="p-4 bg-gray-50 rounded border">
+        <ClickableRichDisplay
+          content={editingContent.data.passage}
+          onWordClick={() => {}}
+          selectedWordIndex={null}
+          isCorrect={null}
+        />
       </div>
     );
   };
@@ -326,6 +319,8 @@ export const TextSelectionEditor: React.FC = () => {
       <ExerciseFeedbackSection
         feedbackConfig={editingContent.feedbackConfig}
         onChange={feedbackConfig => updateContent({ feedbackConfig })}
+        itemProgressionDelay={editingContent.itemProgressionDelay}
+        onItemProgressionDelayChange={itemProgressionDelay => updateContent({ itemProgressionDelay })}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 import { RenderableContentItem } from '@/src/types/page';
-import { createDefaultFeedbackConfig } from './feedbackDefaults';
+import { createDefaultFeedbackConfig, DEFAULT_ITEM_PROGRESSION_DELAY } from './feedbackDefaults';
 
 const generateId = (prefix?: string): string => {
   const timestamp = Date.now();
@@ -68,6 +68,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
         title: 'Matching Exercise',
         instructions: 'Match the items from the left column with the right column.',
         audioPath: null,
+        itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
         feedbackConfig: createDefaultFeedbackConfig(),
         data: {
           leftColumn: [
@@ -91,6 +92,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
         title: 'Fill in the Blanks',
         instructions: 'Complete the sentences by filling in the blanks.',
         audioPath: null,
+        itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
         feedbackConfig: createDefaultFeedbackConfig(),
         data: {
           items: [
@@ -108,6 +110,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
         title: 'Text Selection Exercise',
         instructions: 'Select the correct words in the passage.',
         audioPath: null,
+        itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
         feedbackConfig: createDefaultFeedbackConfig(),
         data: {
           passage: 'Sample passage with selectable words.',
@@ -128,6 +131,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
         title: 'Verb Analysis Exercise',
         instructions: 'Analyze the verbs in the passage.',
         audioPath: null,
+        itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
         feedbackConfig: createDefaultFeedbackConfig(),
         data: {
           passage: 'Passage with verbs to analyze.',
@@ -147,6 +151,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
         title: 'Verb Conjugation Exercise',
         instructions: 'Practice verb conjugations.',
         audioPath: null,
+        itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
         feedbackConfig: createDefaultFeedbackConfig(),
         data: {
           passage: {
@@ -181,6 +186,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
         title: 'Sentence Diagramming Exercise',
         instructions: 'Diagram the Latin sentence ',
         audioPath: null,
+        itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
         feedbackConfig: createDefaultFeedbackConfig(),
         data: {
           sentence: {
@@ -228,6 +234,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
         title: 'Multiple Choice Question',
         instructions: 'Select the correct answer from the choices below.',
         audioPath: null,
+        itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
         feedbackConfig: createDefaultFeedbackConfig(),
         data: {
           question: 'What is the correct answer?',
@@ -263,6 +270,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
         title: 'Odd One Out Exercise',
         instructions: "Select the item that doesn't belong with the others.",
         audioPath: null,
+        itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
         feedbackConfig: createDefaultFeedbackConfig(),
         data: {
           question: "Which of these items doesn't belong?",

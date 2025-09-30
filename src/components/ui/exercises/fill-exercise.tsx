@@ -23,7 +23,8 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
 
   const { currentIndex, isLastItem, autoAdvanceIfEnabled } = useExerciseProgression({
     totalItems: exercise.data.items.length,
-    feedbackConfig: exercise.feedbackConfig,
+    itemProgressionDelay: exercise.itemProgressionDelay,
+    progressionRules: exercise.feedbackConfig.progressionRules,
   });
 
   const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(

@@ -1,18 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
 import { Plus, Trash2, ChevronDown, ChevronUp, HelpCircle } from 'lucide-react';
-import {
-  FeedbackConfig,
-  FeedbackLevel,
-  SuccessMessageConfig,
-  ProgressionRules,
-  TimingConfig,
-} from '@/src/types/exercises/base';
+import { FeedbackConfig, FeedbackLevel, SuccessMessageConfig, ProgressionRules } from '@/src/types/exercises/base';
 import {
   getSuccessMessageWithDefaults,
   getProgressionRulesWithDefaults,
-  getTimingConfigWithDefaults,
   normalizeEscalationLevel,
 } from '@/src/utils/feedbackDefaults';
 import { SimpleRichEditor } from '../../core/simple-rich-editor';
@@ -20,9 +13,16 @@ import { SimpleRichEditor } from '../../core/simple-rich-editor';
 interface FeedbackConfigEditorProps {
   feedbackConfig: FeedbackConfig;
   onChange: (config: FeedbackConfig) => void;
+  itemProgressionDelay?: number;
+  onItemProgressionDelayChange?: (delay: number) => void;
 }
 
-export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({ feedbackConfig, onChange }) => {
+export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({
+  feedbackConfig,
+  onChange,
+  itemProgressionDelay,
+  onItemProgressionDelayChange,
+}) => {
   const [expandedSections, setExpandedSections] = useState({
     escalation: true,
     success: false,
@@ -30,8 +30,23 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({ feed
     timing: false,
   });
 
+  const timingInputRef = useRef<HTMLInputElement>(null);
+
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  const handleTimingBlur = () => {
+    const value = parseInt(timingInputRef.current?.value || '2000');
+    const validValue = isNaN(value) || value < 0 ? 2000 : value;
+
+    if (timingInputRef.current) {
+      timingInputRef.current.value = validValue.toString();
+    }
+
+    if (validValue !== (itemProgressionDelay || 2000)) {
+      onItemProgressionDelayChange?.(validValue);
+    }
   };
 
   const updateEscalationLevels = (levels: FeedbackLevel[]) => {
@@ -46,11 +61,6 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({ feed
   const updateProgressionRules = (updates: Partial<ProgressionRules>) => {
     const current = getProgressionRulesWithDefaults(feedbackConfig.progressionRules);
     onChange({ ...feedbackConfig, progressionRules: { ...current, ...updates } });
-  };
-
-  const updateTimingConfig = (updates: Partial<TimingConfig>) => {
-    const current = getTimingConfigWithDefaults(feedbackConfig.timingConfig);
-    onChange({ ...feedbackConfig, timingConfig: { ...current, ...updates } });
   };
 
   const addEscalationLevel = () => {
@@ -69,10 +79,8 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({ feed
     updateEscalationLevels(newLevels);
   };
 
-  // Get current values with defaults applied for display
   const successMessageWithDefaults = getSuccessMessageWithDefaults(feedbackConfig.successMessage);
   const progressionRulesWithDefaults = getProgressionRulesWithDefaults(feedbackConfig.progressionRules);
-  const timingConfigWithDefaults = getTimingConfigWithDefaults(feedbackConfig.timingConfig);
 
   return (
     <div className="space-y-6">
@@ -294,55 +302,43 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({ feed
         )}
       </Card>
 
-      {/* Timing Configuration */}
-      <Card>
-        <CardHeader>
-          <CardTitle
-            className="flex items-center justify-between cursor-pointer text-base"
-            onClick={() => toggleSection('timing')}>
-            <span>Timing Configuration</span>
-            {expandedSections.timing ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          </CardTitle>
-        </CardHeader>
-        {expandedSections.timing && (
-          <CardContent className="space-y-4">
-            <div className="text-sm text-gray-600">
-              Timing delays give students time to process feedback before moving on. Times are in milliseconds (1000ms =
-              1 second).
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Progression Delay</label>
-                <input
-                  type="number"
-                  value={timingConfigWithDefaults.progressionDelay}
-                  onChange={e => updateTimingConfig({ progressionDelay: parseInt(e.target.value) || 1500 })}
-                  className="w-full p-2 border rounded-md"
-                  placeholder="1500"
-                  min="0"
-                  step="100"
-                />
-                <div className="text-xs text-gray-500 mt-1">Delay before next question within exercise</div>
+      {/* Timing Configuration - Only show for multi-item exercises */}
+      {onItemProgressionDelayChange && (
+        <Card>
+          <CardHeader>
+            <CardTitle
+              className="flex items-center justify-between cursor-pointer text-base"
+              onClick={() => toggleSection('timing')}>
+              <span>Timing Configuration</span>
+              {expandedSections.timing ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </CardTitle>
+          </CardHeader>
+          {expandedSections.timing && (
+            <CardContent className="space-y-4">
+              <div className="text-sm text-gray-600">
+                Control the timing of exercise progression and auto-advance behavior.
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1">Next Exercise Delay</label>
+                <label className="block text-sm font-medium mb-1">Item Progression Delay (ms)</label>
                 <input
+                  ref={timingInputRef}
                   type="number"
-                  value={timingConfigWithDefaults.nextExerciseDelay}
-                  onChange={e => updateTimingConfig({ nextExerciseDelay: parseInt(e.target.value) || 2500 })}
-                  className="w-full p-2 border rounded-md"
-                  placeholder="2500"
+                  defaultValue={itemProgressionDelay || 2000}
+                  onBlur={handleTimingBlur}
+                  className="w-full p-2 border rounded-md text-sm"
+                  placeholder="2000"
                   min="0"
                   step="100"
                 />
-                <div className="text-xs text-gray-500 mt-1">Delay before moving to next exercise</div>
+                <div className="text-xs text-gray-500 mt-1">
+                  Time to wait before automatically advancing to the next exercise item after a correct answer
+                </div>
               </div>
-            </div>
-          </CardContent>
-        )}
-      </Card>
+            </CardContent>
+          )}
+        </Card>
+      )}
     </div>
   );
 };

@@ -4,7 +4,7 @@ import { Card, CardContent } from '@/src/components/ui/card';
 import { Plus } from 'lucide-react';
 import { FillExercise } from '@/src/types/exercise';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
-import { updateEditingContent } from '@/src/store/slices/lessonSlice';
+import { updateEditingContent } from '@/src/store/slices/lessonEditorSlice';
 import { SimpleInput, SimpleTextarea } from '@/src/components/ui/form-components';
 import { FillItemCard } from '@/src/components/ui/form-components/FillItemCard';
 import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
@@ -12,7 +12,7 @@ import { AudioUploadSection } from './AudioUploadSection';
 
 export const FillEditor: React.FC = () => {
   const dispatch = useAppDispatch();
-  const editingContent = useAppSelector(state => state.lesson.editingContent?.content as FillExercise);
+  const editingContent = useAppSelector(state => state.lessonEditor.editingContent?.content as FillExercise);
 
   if (!editingContent) {
     return <div>No content selected for editing</div>;
@@ -142,6 +142,8 @@ export const FillEditor: React.FC = () => {
       <ExerciseFeedbackSection
         feedbackConfig={editingContent.feedbackConfig}
         onChange={feedbackConfig => updateContent({ feedbackConfig })}
+        itemProgressionDelay={editingContent.itemProgressionDelay}
+        onItemProgressionDelayChange={itemProgressionDelay => updateContent({ itemProgressionDelay })}
       />
     </div>
   );
