@@ -1,17 +1,8 @@
 import { Lesson, ExerciseProgress } from '@/src/types/lesson';
-
-const EXERCISE_TYPES = [
-  'matching',
-  'fill',
-  'text-selection',
-  'fill-embolded-text',
-  'multiple-choice',
-  'odd-one-out',
-  'sentence-diagramming',
-];
+import { EXERCISE_TYPES } from './contentTypeConstants';
 
 function isExerciseType(contentType: string): boolean {
-  return EXERCISE_TYPES.includes(contentType);
+  return EXERCISE_TYPES.some(exercise => exercise.type === contentType);
 }
 
 export function calculateProgressFromPageIndex(currentPageIndex: number, totalPages: number): number {
