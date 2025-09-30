@@ -11,40 +11,27 @@ import { LessonStatus, LessonWithProgress } from '@/src/types/lesson';
 import { Button } from '@/src/components/ui/button';
 import { toast } from 'sonner';
 import React, { memo } from 'react';
-import { BookOpen, User, Clock, Target, TrendingUp, CheckCircle, Play, Lock } from 'lucide-react';
-import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
+import { BookOpen, User, TrendingUp } from 'lucide-react';
+import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
+import { CircularProgressButton } from '@/src/components/ui/CircularProgressButton';
+import { Swiper, SwiperSlide } from 'swiper/react';
+import 'swiper/css';
+import 'swiper/css/navigation';
+import { SwiperNavigation } from '@/src/components/ui/core/swiper-nav';
+import { VocabularyPracticeWidget } from '@/src/components/ui/core/VocabularyPracticeWidget';
 
-const statusConfig: Record<
-  LessonStatus,
-  { card: string; icon: string; button: string; text: string; showIcon: JSX.Element | null }
-> = {
+const statusConfig: Record<LessonStatus, { card: string }> = {
   completed: {
-    card: 'border-roman-green bg-roman-green/5',
-    icon: 'bg-roman-green text-white',
-    button: 'bg-roman-green hover:bg-roman-green/90',
-    text: 'Review',
-    showIcon: <CheckCircle className="h-6 w-6" />,
+    card: 'bg-gradient-to-br from-roman-green/15 via-roman-green/10 to-emerald-100/5 border border-roman-green/20 backdrop-blur-sm',
   },
   available: {
-    card: 'border-roman-stone bg-roman-stone/5',
-    icon: 'bg-roman-stone text-white',
-    button: 'bg-roman-stone hover:bg-roman-stone/90',
-    text: 'Start',
-    showIcon: null,
+    card: 'bg-gradient-to-br from-roman-stone/10 via-roman-stone/5 to-roman-marble/20 border border-roman-stone/20 backdrop-blur-sm',
   },
   'in-progress': {
-    card: 'border-roman-terracotta bg-roman-terracotta/5',
-    icon: 'bg-roman-terracotta text-white',
-    button: 'bg-roman-terracotta hover:bg-roman-terracotta/90',
-    text: 'Continue',
-    showIcon: null,
+    card: 'bg-gradient-to-br from-roman-terracotta/15 via-roman-red/10 to-roman-terracotta/5 border border-roman-terracotta/20 backdrop-blur-sm',
   },
   locked: {
-    card: 'border-gray-300 bg-gray-100',
-    icon: 'bg-gray-300 text-gray-500',
-    button: 'bg-gray-400 cursor-not-allowed',
-    text: 'Locked',
-    showIcon: <Lock className="h-6 w-6" />,
+    card: 'bg-gradient-to-br from-gray-100 via-gray-50 to-gray-100 border border-gray-300/50 backdrop-blur-sm',
   },
 };
 
@@ -58,63 +45,34 @@ const LessonCard = memo(
   }) => {
     const config = statusConfig[lesson.status || 'available'] || statusConfig.available;
 
+    const handleClick = () => {
+      if (lesson.status === 'locked') {
+        toast.error('Complete the previous lesson to unlock this one');
+        return;
+      }
+      onLessonClick(lesson.id);
+    };
+
     return (
       <RomanCard
-        className={`transition-all duration-200 hover:shadow-xl cursor-pointer hover:-translate-y-1 ${config.card}`}>
-        <RomanCardContent className="p-6">
-          <div className="flex items-start gap-4 mb-4">
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${config.icon}`}>
-              {config.showIcon || <BookOpen className="h-5 w-5" />}
+        className={`group transition-all duration-300 cursor-pointer transform hover:-translate-y-2 hover:scale-[1.02] rounded-3xl shadow-xl hover:shadow-2xl ${config.card}`}
+        onClick={handleClick}>
+        <RomanCardContent className="relative p-6">
+          <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-3xl"></div>
+          <div className="relative flex items-center justify-between">
+            <div className="flex-1 pr-4">
+              <h3 className="text-xl font-serif mb-2 text-gray-900">{lesson.title}</h3>
+              <p className="text-sm text-roman-stone">{lesson.description}</p>
             </div>
-            <div className="flex-1">
-              <h3 className="text-xl font-serif mb-2">{lesson.title}</h3>
-              <p className="text-sm text-roman-stone mb-3">{lesson.description}</p>
-
-              <div className="flex items-center gap-4 text-xs text-roman-stone mb-3">
-                <span className="flex items-center gap-1">
-                  <BookOpen className="h-3 w-3" />
-                  {lesson.totalPages || 0} pages
-                </span>
-                <span className="flex items-center gap-1">
-                  <BookOpen className="h-3 w-3" />
-                  Page {(lesson.currentPageIndex || 0) + 1} of {lesson.totalPages || 0}
-                </span>
-              </div>
-
-              {typeof lesson.progress === 'number' && lesson.progress > 0 && (
-                <div className="mb-4 space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-medium">Progress</span>
-                    <span className="text-xs font-semibold">
-                      {typeof lesson.progress === 'number' ? lesson.progress : 0}%
-                    </span>
-                  </div>
-                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all ${
-                        lesson.status === 'completed' ? 'bg-roman-green' : 'bg-roman-red'
-                      }`}
-                      style={{
-                        width: `${typeof lesson.progress === 'number' ? lesson.progress : 0}%`,
-                      }}></div>
-                  </div>
-
-                  {lesson.status === 'in-progress' && (
-                    <div className="text-xs text-roman-stone">
-                      Continue from page {(lesson.currentPageIndex || 0) + 1}
-                    </div>
-                  )}
-
-                  {lesson.score && <div className="text-xs text-roman-stone">Score: {lesson.score}%</div>}
-                </div>
-              )}
-
-              <Button className={`w-full ${config.button}`} onClick={() => onLessonClick(lesson.id)}>
-                <Play className="h-4 w-4 mr-2" />
-                {lesson.status === 'in-progress' && (lesson.currentPageIndex || 0) > 0
-                  ? `Continue from page ${(lesson.currentPageIndex || 0) + 1}`
-                  : config.text}
-              </Button>
+            <div className="flex-shrink-0">
+              <CircularProgressButton
+                progress={typeof lesson.progress === 'number' ? lesson.progress : 0}
+                status={lesson.status}
+                onClick={(e?: React.MouseEvent) => {
+                  e?.stopPropagation();
+                  handleClick();
+                }}
+              />
             </div>
           </div>
         </RomanCardContent>
@@ -142,15 +100,6 @@ export default function DashboardPage() {
     }));
   }, [studentLessons]);
 
-  const todaysGoals = useMemo(
-    () => [
-      { task: 'Complete current lesson', completed: false, points: 50 },
-      { task: 'Review 15 vocabulary words', completed: true, points: 30 },
-      { task: 'Practice pronunciation', completed: false, points: 20 },
-    ],
-    []
-  );
-
   const completionStats = useMemo(() => {
     if (lessons.length === 0) return { percentage: 0, completed: 0, total: 0 };
     const completed = lessons.filter(l => l.status === 'completed').length;
@@ -158,15 +107,21 @@ export default function DashboardPage() {
     return { percentage, completed, total: lessons.length };
   }, [lessons]);
 
-  const weeklyStats = useMemo(
-    () => [
-      { label: 'Lessons Completed', value: 2, icon: CheckCircle, color: 'roman-green' },
-      { label: 'Words Learned', value: 89, icon: BookOpen, color: 'roman-red' },
-      { label: 'Study Time', value: '4.2h', icon: Clock, color: 'roman-gold' },
-      { label: 'Current Streak', value: '7 days', icon: TrendingUp, color: 'roman-terracotta' },
-    ],
-    []
-  );
+  const getInitialSlideIndex = useMemo(() => {
+    if (lessons.length === 0) return 0;
+
+    const inProgressIndex = lessons.findIndex(lesson => lesson.status === 'in-progress');
+    if (inProgressIndex !== -1) return inProgressIndex;
+
+    const availableIndex = lessons.findIndex(lesson => lesson.status === 'available');
+    if (availableIndex !== -1) return availableIndex;
+
+    return 0;
+  }, [lessons]);
+
+  const vocabularyLessons = useMemo(() => {
+    return lessons.filter(lesson => lesson.status === 'completed' || lesson.status === 'in-progress');
+  }, [lessons]);
 
   const handleLessonClick = useCallback(
     (lessonId: string) => {
@@ -241,54 +196,80 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-roman-marble">
-      <header className="bg-white border-b border-border px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-full bg-roman-red flex items-center justify-center text-white font-serif">
-            <span className="text-xl">L</span>
-          </div>
-          <div>
-            <h1 className="text-2xl font-serif tracking-wide">Latin Learning</h1>
-            <p className="text-sm text-roman-stone">Welcome back, {user.displayName || user.email?.split('@')[0]}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            className="text-roman-stone hover:text-foreground/80 px-4 py-2 rounded-md text-sm font-medium flex items-center"
-            onClick={() => router.push('/profile')}>
-            <User className="h-5 w-5 mr-2" />
-            Profile
-          </Button>
-          <Button variant="destructive" size="sm" onClick={handleResetProgress}>
-            Reset Progress
-          </Button>
-          <Button onClick={handleSignOut}>Sign Out</Button>
-        </div>
-      </header>
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-roman-marble via-white to-roman-parchment">
+      <div className="absolute inset-0">
+        <div className="absolute top-0 -left-4 w-96 h-96 bg-gradient-to-r from-roman-red/30 to-roman-terracotta/20 rounded-full mix-blend-multiply filter blur-2xl opacity-80 animate-blob"></div>
+        <div
+          className="absolute top-0 -right-4 w-96 h-96 bg-gradient-to-l from-roman-gold/40 to-amber-300/30 rounded-full mix-blend-multiply filter blur-2xl opacity-80 animate-blob"
+          style={{ animationDelay: '2s' }}></div>
+        <div
+          className="absolute -bottom-8 left-20 w-96 h-96 bg-gradient-to-t from-roman-green/25 to-emerald-300/20 rounded-full mix-blend-multiply filter blur-2xl opacity-80 animate-blob"
+          style={{ animationDelay: '4s' }}></div>
+      </div>
 
-      <main className="px-6 py-8">
-        <div className="max-w-[1800px] mx-auto">
-          {/* Available Lessons - Full Width Priority */}
-          <section className="mb-12">
-            <div className="flex items-center justify-between mb-8">
-              <div>
-                <h2 className="text-4xl font-serif text-gray-900 mb-2">Your Learning Path</h2>
-                <p className="text-lg text-roman-stone">Continue your journey through Latin mastery</p>
-              </div>
-              {lessons.length > 0 && (
-                <div className="text-right">
-                  <div className="text-2xl font-serif text-roman-red">{completionStats.percentage}% Complete</div>
-                  <div className="text-sm text-roman-stone">
-                    {completionStats.completed} of {completionStats.total} lessons finished
-                  </div>
-                </div>
-              )}
+      <div className="relative">
+        <header className="bg-white/80 backdrop-blur-sm border-b border-roman-red/20 px-8 py-6 flex items-center justify-between shadow-xl">
+          <div className="flex items-center gap-4">
+            <div className="relative w-16 h-16 bg-gradient-to-br from-roman-red to-roman-terracotta rounded-2xl flex items-center justify-center text-white font-serif shadow-lg">
+              <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-2xl"></div>
+              <span className="text-2xl relative drop-shadow-lg">L</span>
             </div>
+            <div>
+              <h1 className="text-3xl font-serif tracking-wide text-gray-900 mb-1">Latin Learning</h1>
+              <p className="text-lg text-roman-stone leading-relaxed">
+                Welcome back, {user.displayName || user.email?.split('@')[0]}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <Button
+              variant="ghost"
+              className="text-roman-stone hover:text-roman-red px-6 py-3 rounded-xl text-lg font-medium flex items-center hover:bg-roman-red/5 transition-all"
+              onClick={() => router.push('/profile')}>
+              <User className="h-5 w-5 mr-2" />
+              Profile
+            </Button>
+            <Button
+              variant="destructive"
+              size="lg"
+              onClick={handleResetProgress}
+              className="rounded-xl px-6 py-3 text-lg shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5">
+              Reset Progress
+            </Button>
+            <Button
+              onClick={handleSignOut}
+              size="lg"
+              className="bg-gradient-to-r from-gray-900 to-gray-800 hover:from-gray-800 hover:to-gray-700 text-white px-8 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5 hover:scale-105">
+              Sign Out
+            </Button>
+          </div>
+        </header>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+        <main className="px-8 py-12">
+          <div className="max-w-[1800px] mx-auto">
+            {/* Available Lessons - Full Width Priority */}
+            <section className="mb-16">
+              <div className="flex items-center justify-between mb-12">
+                <div>
+                  <h2 className="text-6xl font-serif text-gray-900 mb-4 leading-tight">Your Learning Path</h2>
+                  <p className="text-2xl text-roman-stone leading-relaxed">
+                    Continue your journey through Latin mastery
+                  </p>
+                </div>
+                {lessons.length > 0 && (
+                  <div className="text-right">
+                    <div className="text-4xl font-serif text-transparent bg-clip-text bg-gradient-to-r from-roman-red to-roman-terracotta mb-2">
+                      {completionStats.percentage}% Complete
+                    </div>
+                    <div className="text-lg text-roman-stone leading-relaxed">
+                      {completionStats.completed} of {completionStats.total} lessons finished
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {lessons.length === 0 ? (
-                <RomanCard className="col-span-full">
+                <RomanCard>
                   <RomanCardContent className="p-12 text-center">
                     <BookOpen className="h-16 w-16 text-gray-300 mx-auto mb-4" />
                     <h3 className="text-2xl font-serif text-gray-700 mb-2">No Lessons Available</h3>
@@ -298,79 +279,107 @@ export default function DashboardPage() {
                   </RomanCardContent>
                 </RomanCard>
               ) : (
-                lessons.map(lesson => <LessonCard key={lesson.id} lesson={lesson} onLessonClick={handleLessonClick} />)
+                <div className="relative ">
+                  <Swiper
+                    modules={[]}
+                    spaceBetween={0}
+                    slidesPerView={1}
+                    initialSlide={getInitialSlideIndex}
+                    breakpoints={{
+                      1024: { slidesPerView: 2 },
+                      1280: { slidesPerView: 3 },
+                    }}
+                    className="lesson-cards-carousel overflow-visible p-8"
+                    centeredSlides={true}
+                    effect="slide">
+                    <div>
+                      <SwiperNavigation />
+                    </div>
+
+                    {lessons.map(lesson => (
+                      <SwiperSlide key={lesson.id} className="overflow-visible p-10 transition-transform duration-500">
+                        {({ isActive }) => (
+                          <div
+                            className={`transform transition-transform duration-300 ${isActive ? 'scale-125' : 'scale-95'}`}>
+                            <LessonCard lesson={lesson} onLessonClick={handleLessonClick} />
+                          </div>
+                        )}
+                      </SwiperSlide>
+                    ))}
+                  </Swiper>
+                </div>
               )}
-            </div>
-          </section>
+            </section>
 
-          {/* Bottom Section - Goals and Stats */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-            {/* Today's Goals */}
-            <RomanCard>
-              <RomanCardHeader>
-                <h3 className="text-2xl font-serif flex items-center gap-3">
-                  <Target className="h-6 w-6 text-roman-red" />
-                  Today&apos;s Goals
-                </h3>
-                <p className="text-roman-stone mt-1">Complete your daily learning objectives</p>
-              </RomanCardHeader>
-              <RomanCardContent className="space-y-4">
-                {todaysGoals.map((goal, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center gap-4 p-3 rounded-lg hover:bg-roman-parchment/50 transition-colors">
-                    <div
-                      className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                        goal.completed ? 'bg-roman-green text-white' : 'border-2 border-gray-300'
-                      }`}>
-                      {goal.completed && <CheckCircle className="h-4 w-4" />}
-                    </div>
-                    <div className="flex-1">
-                      <p className={`${goal.completed ? 'line-through text-gray-500' : ''}`}>{goal.task}</p>
-                    </div>
-                    <span className="text-sm font-medium text-roman-red">+{goal.points}pts</span>
-                  </div>
-                ))}
+            {/* Vocabulary Practice Section */}
+            <section className="mb-16">
+              <VocabularyPracticeWidget lessons={vocabularyLessons} />
+            </section>
 
-                <div className="pt-4 border-t border-border">
-                  <div className="flex justify-between items-center">
-                    <span className="font-medium">Daily Progress</span>
-                    <span className="text-lg font-bold text-roman-red">25/90 pts</span>
-                  </div>
-                  <div className="h-3 bg-gray-200 rounded-full overflow-hidden mt-2">
-                    <div className="h-full bg-roman-red rounded-full" style={{ width: '28%' }}></div>
-                  </div>
+            {/* Progress Section */}
+            <section className="mb-16">
+              <div className="relative">
+                {/* Background effects similar to landing page */}
+                <div className="absolute inset-0">
+                  <div className="absolute top-0 left-0 w-72 h-72 bg-gradient-to-r from-roman-green/25 to-emerald-300/15 rounded-full mix-blend-multiply filter blur-2xl opacity-60"></div>
+                  <div className="absolute bottom-0 right-0 w-72 h-72 bg-gradient-to-l from-roman-gold/30 to-amber-300/20 rounded-full mix-blend-multiply filter blur-2xl opacity-60"></div>
                 </div>
-              </RomanCardContent>
-            </RomanCard>
 
-            {/* Weekly Stats */}
-            <RomanCard>
-              <RomanCardHeader>
-                <h3 className="text-2xl font-serif flex items-center gap-3">
-                  <TrendingUp className="h-6 w-6 text-roman-red" />
-                  This Week&apos;s Progress
-                </h3>
-                <p className="text-roman-stone mt-1">Track your learning achievements</p>
-              </RomanCardHeader>
-              <RomanCardContent>
-                <div className="grid grid-cols-2 gap-6">
-                  {weeklyStats.map((stat, index) => (
-                    <div key={index} className="text-center p-4 rounded-lg bg-roman-parchment/30">
-                      <div
-                        className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 bg-${stat.color}/20`}>
-                        <stat.icon className={`h-6 w-6 text-${stat.color}`} />
+                <div className="relative bg-white/80 backdrop-blur-sm rounded-3xl border border-roman-red/20 shadow-2xl overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent"></div>
+
+                  {/* Header */}
+                  <div className="relative p-8 border-b border-roman-red/10">
+                    <div className="flex items-center gap-4">
+                      <div className="relative h-16 w-16 bg-gradient-to-br from-roman-green/20 via-roman-green/15 to-emerald-100/10 rounded-2xl flex items-center justify-center shadow-lg border border-roman-green/30">
+                        <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-2xl"></div>
+                        <TrendingUp className="h-8 w-8 text-roman-green drop-shadow-lg relative" />
                       </div>
-                      <div className="text-2xl font-bold text-gray-900 mb-1">{stat.value}</div>
-                      <div className="text-sm text-roman-stone">{stat.label}</div>
+                      <div>
+                        <h3 className="text-3xl font-serif text-gray-900 mb-1">Progress</h3>
+                        <p className="text-lg text-roman-stone leading-relaxed">Your Latin Learning Journey</p>
+                      </div>
                     </div>
-                  ))}
+                  </div>
+
+                  {/* Content */}
+                  <div className="relative p-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      {/* Lessons Completed */}
+                      <div className="group cursor-pointer transform hover:-translate-y-1 transition-all duration-300">
+                        <div className="text-center p-6 rounded-2xl bg-gradient-to-br from-roman-green/10 to-emerald-100/5 border border-roman-green/20 hover:border-roman-green/30 transition-all duration-300">
+                          <div className="relative h-16 w-16 bg-gradient-to-br from-roman-green/20 to-emerald-100/10 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg">
+                            <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-2xl"></div>
+                            <BookOpen className="h-8 w-8 text-roman-green drop-shadow-lg relative" />
+                          </div>
+                          <div className="text-5xl font-serif font-bold text-transparent bg-clip-text bg-gradient-to-r from-roman-green to-emerald-600 mb-2">
+                            8
+                          </div>
+                          <div className="text-lg text-roman-stone font-medium">Lessons Completed</div>
+                        </div>
+                      </div>
+
+                      {/* Words Learned */}
+                      <div className="group cursor-pointer transform hover:-translate-y-1 transition-all duration-300">
+                        <div className="text-center p-6 rounded-2xl bg-gradient-to-br from-roman-gold/10 to-amber-100/5 border border-roman-gold/20 hover:border-roman-gold/30 transition-all duration-300">
+                          <div className="relative h-16 w-16 bg-gradient-to-br from-roman-gold/20 to-amber-100/10 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg">
+                            <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-2xl"></div>
+                            <BookOpen className="h-8 w-8 text-roman-gold drop-shadow-lg relative" />
+                          </div>
+                          <div className="text-5xl font-serif font-bold text-transparent bg-clip-text bg-gradient-to-r from-roman-gold to-amber-600 mb-2">
+                            245
+                          </div>
+                          <div className="text-lg text-roman-stone font-medium">Words Learned</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </RomanCardContent>
-            </RomanCard>
+              </div>
+            </section>
           </div>
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
   );
 }

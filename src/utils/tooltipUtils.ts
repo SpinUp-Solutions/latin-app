@@ -138,48 +138,49 @@ export const calculateTooltipPosition = (
   return { x, y, isBelow };
 };
 
-/**
- * Extracts tooltip data from HTML content and returns it as a Record
- * suitable for Redux store population
- */
+export const extractTooltipDataFromElement = (element: Element): TooltipData | null => {
+  const tooltipId = element.getAttribute('data-tooltip-id');
+  if (!tooltipId) return null;
+
+  const examples = element.getAttribute('examples');
+  const principalParts = element.getAttribute('principalParts');
+
+  const tooltipData: TooltipData = {
+    id: tooltipId,
+    word: element.getAttribute('word') || '',
+    translation: element.getAttribute('translation') || '',
+    pronunciation: element.getAttribute('pronunciation') || '',
+    partOfSpeech: element.getAttribute('partOfSpeech') || '',
+    wordType: element.getAttribute('wordtype') || '',
+    definition: element.getAttribute('definition') || '',
+    examples: examples ? examples.split(',').map(ex => ex.trim()) : [],
+    etymology: element.getAttribute('etymology') || '',
+    gender: element.getAttribute('gender') || '',
+    declensionClass: element.getAttribute('declensionClass') || '',
+    conjugationClass: element.getAttribute('conjugationClass') || '',
+    grammaticalInfo: element.getAttribute('grammaticalInfo') || '',
+    principalParts: principalParts ? principalParts.split(',').map(part => part.trim()) : [],
+  };
+
+  if (tooltipData.word || tooltipData.translation) {
+    return tooltipData;
+  }
+
+  return null;
+};
+
 export const extractTooltipsFromContent = (htmlContent: string): Record<string, TooltipData> => {
   const tooltips: Record<string, TooltipData> = {};
 
-  // Create a temporary DOM element to parse the HTML
   const tempDiv = document.createElement('div');
   tempDiv.innerHTML = htmlContent;
 
-  // Find all elements with tooltip attributes
   const tooltipElements = tempDiv.querySelectorAll('[data-tooltip="true"]');
 
   tooltipElements.forEach(element => {
-    const tooltipId = element.getAttribute('data-tooltip-id');
-    if (!tooltipId) return;
-
-    // Extract all tooltip data from attributes
-    const examples = element.getAttribute('examples');
-    const principalParts = element.getAttribute('principalParts');
-
-    const tooltipData: TooltipData = {
-      id: tooltipId,
-      word: element.getAttribute('word') || '',
-      translation: element.getAttribute('translation') || '',
-      pronunciation: element.getAttribute('pronunciation') || '',
-      partOfSpeech: element.getAttribute('partOfSpeech') || '',
-      wordType: element.getAttribute('wordtype') || '',
-      definition: element.getAttribute('definition') || '',
-      examples: examples ? examples.split(',').map(ex => ex.trim()) : [],
-      etymology: element.getAttribute('etymology') || '',
-      gender: element.getAttribute('gender') || '',
-      declensionClass: element.getAttribute('declensionClass') || '',
-      conjugationClass: element.getAttribute('conjugationClass') || '',
-      grammaticalInfo: element.getAttribute('grammaticalInfo') || '',
-      principalParts: principalParts ? principalParts.split(',').map(part => part.trim()) : [],
-    };
-
-    // Only add if we have meaningful data
-    if (tooltipData.word || tooltipData.translation) {
-      tooltips[tooltipId] = tooltipData;
+    const tooltipData = extractTooltipDataFromElement(element);
+    if (tooltipData) {
+      tooltips[tooltipData.id] = tooltipData;
     }
   });
 

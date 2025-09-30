@@ -4,8 +4,7 @@ import {
   MatchingExercise,
   FillExercise,
   TextSelectionExercise,
-  VerbAnalysisExercise,
-  VerbConjugationExercise,
+  FillEmboldedTextExercise,
   SentenceDiagrammingExercise,
   MultipleChoiceExercise,
   OddOneOutExercise,
@@ -20,8 +19,7 @@ export type RenderableContentItem =
   | MatchingExercise
   | FillExercise
   | TextSelectionExercise
-  | VerbAnalysisExercise
-  | VerbConjugationExercise
+  | FillEmboldedTextExercise
   | SentenceDiagrammingExercise
   | MultipleChoiceExercise
   | OddOneOutExercise;

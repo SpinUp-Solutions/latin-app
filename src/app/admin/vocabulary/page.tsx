@@ -1,21 +1,18 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSelector } from 'react-redux';
-import { RootState } from '@/src/store';
 import { Button } from '@/src/components/ui/button';
 import { ArrowLeft, BookOpen } from 'lucide-react';
-import { toast } from 'sonner';
 import { Word } from '@/src/types/admin-vocabulary';
 import { useVocabularyData } from '@/src/hooks/useVocabularyData';
 import { VocabularyEditModal } from '@/src/components/ui/admin/vocabulary/VocabularyEditModal';
 import { VocabularyFiltersComponent } from '@/src/components/ui/admin/vocabulary/VocabularyFilters';
 import { VocabularyList } from '@/src/components/ui/admin/vocabulary/VocabularyList';
+import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 
-export default function AdminVocabularyPage() {
+function AdminVocabularyPage() {
   const router = useRouter();
-  const { user, loading: authLoading } = useSelector((state: RootState) => state.auth);
 
   const {
     words,
@@ -31,17 +28,9 @@ export default function AdminVocabularyPage() {
     resetFilters,
   } = useVocabularyData();
 
-  // Edit modal state
   const [editingWord, setEditingWord] = useState<Word | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [updating, setUpdating] = useState(false);
-
-  useEffect(() => {
-    if (!authLoading && (!user || user.role !== 'admin')) {
-      router.push('/dashboard');
-      toast.error('Access denied. Admin privileges required.');
-    }
-  }, [user, authLoading, router]);
 
   const handleEditWord = (word: Word) => {
     setEditingWord(word);
@@ -72,18 +61,6 @@ export default function AdminVocabularyPage() {
   const handleLoadMore = () => {
     loadWords(false);
   };
-
-  if (authLoading || !user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-roman-marble">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>
-      </div>
-    );
-  }
-
-  if (user.role !== 'admin') {
-    return null;
-  }
 
   return (
     <div className="min-h-screen bg-roman-marble">
@@ -139,3 +116,5 @@ export default function AdminVocabularyPage() {
     </div>
   );
 }
+
+export default withAdminAuth(AdminVocabularyPage);

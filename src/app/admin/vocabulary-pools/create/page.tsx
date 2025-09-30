@@ -3,8 +3,7 @@
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-
-import { useVocabularyPools } from '@/src/hooks/useVocabularyPools';
+import { useCreatePoolMutation } from '@/src/store/api/vocabularyPoolApi';
 import { PoolForm } from '@/src/components/ui/admin/vocabulary-pools/PoolForm';
 import { Button } from '@/src/components/ui/button';
 import { ArrowLeft, Library } from 'lucide-react';
@@ -13,16 +12,15 @@ import type { CreatePoolRequest } from '@/src/types/vocabulary-pool';
 
 export default function CreatePoolPage() {
   const router = useRouter();
-  const { createPool, creating } = useVocabularyPools();
+  const [createPoolMutation, { isLoading: creating }] = useCreatePoolMutation();
 
   const handleCreatePool = async (poolData: CreatePoolRequest) => {
-    const success = await createPool(poolData);
-
-    if (success) {
+    try {
+      await createPoolMutation(poolData).unwrap();
       toast.success('Vocabulary pool created successfully');
       router.push('/admin/vocabulary-pools');
       return true;
-    } else {
+    } catch {
       toast.error('Failed to create vocabulary pool');
       return false;
     }

@@ -21,11 +21,11 @@ import {
 } from '@/src/store/slices/lessonEditorSlice';
 import { useBeforeUnload } from '@/src/hooks/useLessonDraft';
 import { UnifiedDialog } from '@/src/components/ui/core/UnifiedDialog';
+import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 
-export default function CreateLessonPage() {
+function CreateLessonPage() {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { user, loading: authLoading } = useSelector((state: RootState) => state.auth);
   const [createLesson, { isLoading: saving }] = useCreateLessonMutation();
   const { drafts, currentLesson } = useSelector((state: RootState) => state.lessonEditor);
 
@@ -132,18 +132,6 @@ export default function CreateLessonPage() {
     }
   };
 
-  if (authLoading || !user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-roman-marble">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>
-      </div>
-    );
-  }
-
-  if (user.role !== 'admin') {
-    return null;
-  }
-
   return (
     <div className="min-h-screen bg-roman-marble">
       <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between">
@@ -203,3 +191,5 @@ export default function CreateLessonPage() {
     </div>
   );
 }
+
+export default withAdminAuth(CreateLessonPage);

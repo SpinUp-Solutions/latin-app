@@ -13,6 +13,7 @@ import { Lesson } from '@/src/types/lesson';
 import { useAppDispatch } from '@/src/store/hooks';
 import { useGetLessonByIdQuery, useUpdateLessonMutation } from '@/src/store/api/lessonApi';
 import { setLesson, loadTooltips, resetLessonState, clearDraft } from '@/src/store/slices/lessonEditorSlice';
+import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 
 interface EditLessonPageProps {
   params: {
@@ -20,28 +21,14 @@ interface EditLessonPageProps {
   };
 }
 
-export default function EditLessonPage({ params }: EditLessonPageProps) {
+function EditLessonPage({ params }: EditLessonPageProps) {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { user, loading: authLoading } = useSelector((state: RootState) => state.auth);
   const { data: lessonData } = useGetLessonByIdQuery({ lessonId: params.id });
   const [updateLesson, { isLoading: saving }] = useUpdateLessonMutation();
   const { currentLesson } = useSelector((state: RootState) => state.lessonEditor);
   const [loading, setLoading] = useState(true);
   const [navigating, setNavigating] = useState(false);
-
-  useEffect(() => {
-    if (!authLoading && (!user || user.role !== 'admin')) {
-      router.push('/dashboard');
-      toast.error('Access denied. Admin privileges required.');
-      return;
-    }
-
-    if (user?.role === 'admin') {
-      // RTK Query will automatically load data
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, authLoading, router, params.id]);
 
   useEffect(() => {
     if (lessonData) {
@@ -69,19 +56,7 @@ export default function EditLessonPage({ params }: EditLessonPageProps) {
     setTimeout(() => dispatch(resetLessonState()), 100);
   };
 
-  if (authLoading || loading || !user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-roman-marble">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>
-      </div>
-    );
-  }
-
-  if (user.role !== 'admin') {
-    return null;
-  }
-
-  if (navigating || !currentLesson) {
+  if (loading || navigating || !currentLesson) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-roman-marble">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>
@@ -121,3 +96,5 @@ export default function EditLessonPage({ params }: EditLessonPageProps) {
     </div>
   );
 }
+
+export default withAdminAuth(EditLessonPage);
