@@ -31,13 +31,6 @@ export interface ProgressionRules {
   allowManualAdvance?: boolean;
 }
 
-export interface TimingConfig {
-  /** Delay before moving to next question/item within exercise (in ms) */
-  progressionDelay?: number;
-  /** Delay before moving to next exercise or completing (in ms) */
-  nextExerciseDelay?: number;
-}
-
 export interface FeedbackConfig {
   /**
    * Ordered list of escalation levels. The component decides WHEN to move
@@ -50,9 +43,6 @@ export interface FeedbackConfig {
 
   /** Generic behaviour flags (work for every exercise). */
   progressionRules?: ProgressionRules;
-
-  /** Timing configuration for delays */
-  timingConfig?: TimingConfig;
 }
 
 // New robust state machine types
@@ -79,9 +69,8 @@ export interface FeedbackMachineConfig {
   progressionRules: ProgressionRules;
 }
 
-/** Base for every exercise type. */
 export interface BaseExercise extends ContentItem {
   instructions: string;
-  /** Per-exercise feedback behaviour. */
+  itemProgressionDelay?: number;
   feedbackConfig: FeedbackConfig;
 }

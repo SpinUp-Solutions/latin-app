@@ -78,7 +78,7 @@ export const TooltipContainer: React.FC<TooltipContainerProps> = ({
   const [activeTooltip, setActiveTooltip] = useState<ActiveTooltip | null>(null);
   const [fixedElementPos, setFixedElementPos] = useState<MousePosition>({ x: 0, y: 0 });
   const hideTimeoutRef = useRef<NodeJS.Timeout>();
-  const tooltips = useSelector((state: RootState) => state.lesson.tooltips);
+  const tooltips = useSelector((state: RootState) => state.lessonEditor.tooltips);
 
   const handleMouseOver = useCallback(
     (e: MouseEvent) => {

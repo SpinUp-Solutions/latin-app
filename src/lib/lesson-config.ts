@@ -246,14 +246,6 @@ const lessons: Lesson[] = [
                 completion: "Excellent! You've mastered verb endings!",
                 showExplanation: true,
               },
-              progressionRules: {
-                autoAdvance: true,
-                resetOnCorrect: true,
-              },
-              timingConfig: {
-                progressionDelay: 1500,
-                nextExerciseDelay: 2000,
-              },
             },
             data: {
               leftColumn: [
@@ -315,6 +307,7 @@ const lessons: Lesson[] = [
             instructions:
               'Match the Latin word with the appropriate English / Latin pronoun that is governing the verb.',
             audioPath: null,
+            itemProgressionDelay: 1800,
             feedbackConfig: {
               escalationLevels: [
                 { message: 'Not quite right. Try again.' },
@@ -328,14 +321,6 @@ const lessons: Lesson[] = [
                 },
                 { showAnswer: true },
               ],
-              progressionRules: {
-                autoAdvance: true,
-                resetOnCorrect: true,
-              },
-              timingConfig: {
-                progressionDelay: 1800,
-                nextExerciseDelay: 2500,
-              },
             },
             data: {
               leftColumn: [
@@ -389,6 +374,7 @@ const lessons: Lesson[] = [
             title: 'Complete the Verb Forms',
             instructions: 'Fill in the correct pronoun for each verb.',
             audioPath: null,
+            itemProgressionDelay: 600,
             feedbackConfig: {
               escalationLevels: [
                 { message: 'Check the verb ending again.' },
@@ -403,14 +389,6 @@ const lessons: Lesson[] = [
                 advance: 'Well done! Moving to the next one.',
                 completion: 'Perfect! You understand Latin verb endings!',
                 showExplanation: true,
-              },
-              progressionRules: {
-                autoAdvance: true,
-                resetOnCorrect: true,
-              },
-              timingConfig: {
-                progressionDelay: 600,
-                nextExerciseDelay: 2000,
               },
             },
             data: {
@@ -499,6 +477,7 @@ const lessons: Lesson[] = [
             title: 'Level 4 Exercise: Text Analysis',
             instructions: 'Click on the unnecessary pronoun in the passage.',
             audioPath: null,
+            itemProgressionDelay: 2000,
             feedbackConfig: {
               escalationLevels: [
                 { message: 'Not quite. Try another word.' },
@@ -512,14 +491,6 @@ const lessons: Lesson[] = [
               successMessage: {
                 default: 'Correct!',
                 showExplanation: true,
-              },
-              progressionRules: {
-                autoAdvance: true,
-                resetOnCorrect: true,
-              },
-              timingConfig: {
-                progressionDelay: 2000,
-                nextExerciseDelay: 2500,
               },
             },
             data: {
@@ -550,6 +521,7 @@ const lessons: Lesson[] = [
             instructions:
               "When a verb becomes bold, click on it and enter the English pronoun that applies to that verb's ending.",
             audioPath: null,
+            itemProgressionDelay: 1700,
             feedbackConfig: {
               escalationLevels: [
                 { message: 'Try again. Look at the verb ending carefully.' },
@@ -563,14 +535,6 @@ const lessons: Lesson[] = [
                 default: 'Correct',
                 completion: 'Congratulations! You have completed the exercise.',
                 showExplanation: true,
-              },
-              progressionRules: {
-                autoAdvance: true,
-                resetOnCorrect: true,
-              },
-              timingConfig: {
-                progressionDelay: 1700,
-                nextExerciseDelay: 3000,
               },
             },
             data: {
@@ -642,6 +606,7 @@ const lessons: Lesson[] = [
             type: 'verb-conjugation',
             title: 'Level 5 Exercise: Advanced Verb Conjugation',
             instructions: 'Study the passage and complete the conjugation tasks.',
+            itemProgressionDelay: 2200,
             feedbackConfig: {
               escalationLevels: [
                 { message: 'Check your conjugation carefully.' },
@@ -654,14 +619,6 @@ const lessons: Lesson[] = [
               successMessage: {
                 advance: 'Well done! Moving to the next one.',
                 showExplanation: true,
-              },
-              progressionRules: {
-                autoAdvance: true,
-                resetOnCorrect: true,
-              },
-              timingConfig: {
-                progressionDelay: 2200,
-                nextExerciseDelay: 3500,
               },
             },
             data: {

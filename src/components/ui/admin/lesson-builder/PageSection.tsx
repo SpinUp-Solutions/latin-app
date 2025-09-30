@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
 import { Plus, Trash2, GripVertical } from 'lucide-react';
@@ -7,6 +7,7 @@ import { RenderableContentItem } from '@/src/types/page';
 import { createNewContent } from '@/src/utils/contentFactory';
 import { SimpleRichEditor } from '../../core/simple-rich-editor';
 import { DraggableContentList } from './DraggableContentList';
+import { PageAutoAdvanceEditor } from './PageAutoAdvanceEditor';
 import {
   DndContext,
   closestCenter,
@@ -25,7 +26,7 @@ import {
 import { restrictToVerticalAxis, restrictToParentElement } from '@dnd-kit/modifiers';
 import { CSS } from '@dnd-kit/utilities';
 import { useDispatch } from 'react-redux';
-import { reorderPages } from '@/src/store/slices/lessonSlice';
+import { reorderPages, updatePageAutoAdvance } from '@/src/store/slices/lessonEditorSlice';
 import { PasteZone } from '../../core/clipboard';
 
 interface PageSectionProps {
@@ -50,6 +51,9 @@ interface SortablePageProps {
   onAddContent: (pageIndex: number, content: RenderableContentItem) => void;
   onEditContent: (pageIndex: number, itemIndex: number) => void;
   onRemoveContent: (pageIndex: number, itemIndex: number) => void;
+  onUpdatePageAutoAdvance: (pageIndex: number, autoAdvance: { enabled: boolean; delay: number }) => void;
+  isAutoAdvanceExpanded: boolean;
+  onToggleAutoAdvance: () => void;
 }
 
 const SortablePage: React.FC<SortablePageProps> = ({
@@ -61,6 +65,9 @@ const SortablePage: React.FC<SortablePageProps> = ({
   onAddContent,
   onEditContent,
   onRemoveContent,
+  onUpdatePageAutoAdvance,
+  isAutoAdvanceExpanded,
+  onToggleAutoAdvance,
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: page.id });
 
@@ -107,6 +114,14 @@ const SortablePage: React.FC<SortablePageProps> = ({
         onRemoveContent={(itemIndex: number) => onRemoveContent(pageIndex, itemIndex)}
       />
 
+      <PageAutoAdvanceEditor
+        key={page.id}
+        autoAdvance={page.autoAdvance}
+        onChange={config => onUpdatePageAutoAdvance(pageIndex, config)}
+        isExpanded={isAutoAdvanceExpanded}
+        onToggle={onToggleAutoAdvance}
+      />
+
       <div className="space-y-3 pt-2 border-t">
         <PasteZone pageIndex={pageIndex} />
         <div className="flex flex-wrap gap-2">
@@ -135,6 +150,16 @@ export const PageSection: React.FC<PageSectionProps> = ({
   onRemoveContent,
 }) => {
   const dispatch = useDispatch();
+  const [expandedAutoAdvancePageId, setExpandedAutoAdvancePageId] = useState<string | null>(null);
+
+  const handleUpdatePageAutoAdvance = (pageIndex: number, autoAdvance: { enabled: boolean; delay: number }) => {
+    dispatch(updatePageAutoAdvance({ pageIndex, autoAdvance }));
+  };
+
+  const handleToggleAutoAdvance = (pageId: string) => {
+    setExpandedAutoAdvancePageId(current => (current === pageId ? null : pageId));
+  };
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -194,6 +219,9 @@ export const PageSection: React.FC<PageSectionProps> = ({
                 onAddContent={onAddContent}
                 onEditContent={onEditContent}
                 onRemoveContent={onRemoveContent}
+                onUpdatePageAutoAdvance={handleUpdatePageAutoAdvance}
+                isAutoAdvanceExpanded={expandedAutoAdvancePageId === page.id}
+                onToggleAutoAdvance={() => handleToggleAutoAdvance(page.id)}
               />
             ))}
           </SortableContext>

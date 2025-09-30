@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { auth } from 'firebase-admin';
-import { calculateOverallProgress, isLessonComplete, getContentCount } from '@/src/utils/lessonUtils';
-import { Lesson } from '@/src/types/lesson';
+import { calculateProgressFromPageIndex, isLessonComplete } from '@/src/utils/lessonUtils';
 
 async function verifyAuth(request: NextRequest) {
   const authHeader = request.headers.get('Authorization');
@@ -36,7 +35,7 @@ export async function GET(request: NextRequest, { params }: { params: { userId: 
       const data = doc.data();
       lessonsMap.set(doc.id, {
         id: doc.id,
-        totalExercises: data.totalExercises || getContentCount({ ...data, id: doc.id } as Lesson).totalExercises,
+        totalPages: data.pages?.length || 0,
         ...data,
       });
     });
@@ -49,22 +48,19 @@ export async function GET(request: NextRequest, { params }: { params: { userId: 
 
       if (lessonId && lessonsMap.has(lessonId)) {
         const lesson = lessonsMap.get(lessonId);
-        const exerciseProgress = data.exerciseProgress || [];
-        const totalExercises = lesson.totalExercises;
+        const currentPageIndex = data.currentPageIndex || 0;
+        const totalPages = lesson.totalPages;
 
-        const overallProgress = calculateOverallProgress(exerciseProgress, totalExercises);
-        const exercisesCompleted = exerciseProgress.length;
-        const isComplete = isLessonComplete(exerciseProgress, totalExercises);
+        const progress = calculateProgressFromPageIndex(currentPageIndex, totalPages);
+        const isComplete = isLessonComplete(currentPageIndex, totalPages);
 
         progressMap[lessonId] = {
           ...data,
           userId: params.userId,
           lessonId,
-          exerciseProgress,
-          pageProgress: data.pageProgress || [],
-          overallProgress,
-          exercisesCompleted,
-          totalExercises,
+          exerciseProgress: data.exerciseProgress || [],
+          currentPageIndex,
+          progress,
           status: isComplete ? 'completed' : data.status === 'not-started' ? 'available' : data.status || 'available',
         };
       }

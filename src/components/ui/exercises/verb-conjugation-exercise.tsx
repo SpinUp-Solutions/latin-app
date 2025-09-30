@@ -31,7 +31,8 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
 
   const { autoAdvanceIfEnabled } = useExerciseProgression({
     totalItems: 1,
-    feedbackConfig: exercise.feedbackConfig,
+    itemProgressionDelay: exercise.itemProgressionDelay,
+    progressionRules: exercise.feedbackConfig.progressionRules,
   });
 
   const handleConjugationSubmit = () => {
