@@ -6,8 +6,7 @@ import { Button } from '@/src/components/ui/button';
 import { ArrowLeft, Library } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
-
-import { useVocabularyPool } from '@/src/hooks/useVocabularyPool';
+import { useGetPoolQuery, useAddWordsToPoolMutation } from '@/src/store/api/vocabularyPoolApi';
 import { WordSelector } from '@/src/components/ui/admin/vocabulary-pools/WordSelector';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { PoolNotFoundPage } from '@/src/components/ui/admin/vocabulary-pools/PoolNotFoundPage';
@@ -22,7 +21,8 @@ interface AddWordsPageProps {
 export default function AddWordsPage({ params }: AddWordsPageProps) {
   const { poolId } = params;
   const router = useRouter();
-  const { pool, loading, error, addWords } = useVocabularyPool(poolId);
+  const { data: pool, isLoading: loading, error } = useGetPoolQuery(poolId);
+  const [addWordsMutation] = useAddWordsToPoolMutation();
 
   const [selectedWordIds, setSelectedWordIds] = useState<string[]>([]);
   const [adding, setAdding] = useState(false);
@@ -37,7 +37,7 @@ export default function AddWordsPage({ params }: AddWordsPageProps) {
         poolId={poolId}
         backHref={`/admin/vocabulary-pools/${poolId}/words`}
         backLabel="Back to Words"
-        error={error}
+        error={error ? String(error) : null}
       />
     );
   }
@@ -50,14 +50,10 @@ export default function AddWordsPage({ params }: AddWordsPageProps) {
 
     setAdding(true);
     try {
-      const success = await addWords(selectedWordIds);
-      if (success) {
-        toast.success(`Added ${selectedWordIds.length} word(s) to pool`);
-        router.push(`/admin/vocabulary-pools/${poolId}/words`);
-      } else {
-        toast.error('Failed to add words to pool');
-      }
-    } catch (err) {
+      await addWordsMutation({ poolId, wordDocIds: selectedWordIds }).unwrap();
+      toast.success(`Added ${selectedWordIds.length} word(s) to pool`);
+      router.push(`/admin/vocabulary-pools/${poolId}/words`);
+    } catch {
       toast.error('Failed to add words to pool');
     } finally {
       setAdding(false);

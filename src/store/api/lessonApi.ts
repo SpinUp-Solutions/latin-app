@@ -1,24 +1,12 @@
-import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import { createApi } from '@reduxjs/toolkit/query/react';
 import { Lesson, LessonWithProgress } from '@/src/types/lesson';
-import { auth } from '@/src/services/firebase';
 import { extractTooltipsFromLesson } from '@/src/utils/tooltipUtils';
 import { TooltipData } from '@/src/types/tooltip';
-
-const baseQuery = fetchBaseQuery({
-  baseUrl: '/api',
-  prepareHeaders: async headers => {
-    const user = auth.currentUser;
-    if (user) {
-      const token = await user.getIdToken();
-      headers.set('authorization', `Bearer ${token}`);
-    }
-    return headers;
-  },
-});
+import { createAuthenticatedBaseQuery } from './baseQuery';
 
 export const lessonApi = createApi({
   reducerPath: 'lessonApi',
-  baseQuery,
+  baseQuery: createAuthenticatedBaseQuery(),
   tagTypes: ['Lesson', 'LessonList', 'StudentLesson'],
   keepUnusedDataFor: 60 * 5,
   refetchOnMountOrArgChange: 30,
