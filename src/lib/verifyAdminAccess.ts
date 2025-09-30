@@ -10,18 +10,12 @@ export async function verifyAdminAccess(request: NextRequest) {
   const token = authHeader.split('Bearer ')[1];
   const decodedToken = await adminAuth.verifyIdToken(token);
 
-  // Check custom claims first
-  if (decodedToken.admin === true) {
-    return decodedToken;
-  }
-
-  // Fallback to checking Firestore for the role
   const userDoc = await adminDb.collection('users').doc(decodedToken.uid).get();
   const userData = userDoc.data();
 
-  if (userData?.role === 'admin') {
-    return decodedToken;
+  if (userData?.role !== 'admin') {
+    throw new Error('Forbidden');
   }
 
-  throw new Error('Forbidden');
+  return decodedToken;
 }

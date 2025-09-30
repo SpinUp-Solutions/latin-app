@@ -1,17 +1,17 @@
 /**
- * Verb Analysis Exercise Validation Utilities
+ * Fill Embolded Text Exercise Validation Utilities
  */
 
-import { VerbAnalysisExercise } from '@/src/types/exercise';
+import { FillEmboldedTextExercise } from '@/src/types/exercise';
 import { ValidationResult } from './types';
 import { isTextMatch } from './helpers';
 
 /**
- * Validates a verb analysis exercise answer
+ * Validates a fill embolded text exercise answer
  */
 export const validateVerbAnalysisExercise = (
   userAnswer: string,
-  exercise: VerbAnalysisExercise,
+  exercise: FillEmboldedTextExercise,
   currentIndex: number
 ): ValidationResult => {
   const currentVerb = exercise.data.verbs[currentIndex];

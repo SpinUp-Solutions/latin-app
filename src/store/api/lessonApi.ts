@@ -1,24 +1,12 @@
-import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import { createApi } from '@reduxjs/toolkit/query/react';
 import { Lesson, LessonWithProgress } from '@/src/types/lesson';
-import { auth } from '@/src/services/firebase';
 import { extractTooltipsFromLesson } from '@/src/utils/tooltipUtils';
 import { TooltipData } from '@/src/types/tooltip';
-
-const baseQuery = fetchBaseQuery({
-  baseUrl: '/api',
-  prepareHeaders: async headers => {
-    const user = auth.currentUser;
-    if (user) {
-      const token = await user.getIdToken();
-      headers.set('authorization', `Bearer ${token}`);
-    }
-    return headers;
-  },
-});
+import { createAuthenticatedBaseQuery } from './baseQuery';
 
 export const lessonApi = createApi({
   reducerPath: 'lessonApi',
-  baseQuery,
+  baseQuery: createAuthenticatedBaseQuery(),
   tagTypes: ['Lesson', 'LessonList', 'StudentLesson'],
   keepUnusedDataFor: 60 * 5,
   refetchOnMountOrArgChange: 30,
@@ -40,11 +28,8 @@ export const lessonApi = createApi({
       providesTags: [{ type: 'StudentLesson', id: 'LIST' }],
     }),
 
-    getLessonById: builder.query<
-      { lesson: Lesson; tooltips: Record<string, TooltipData> },
-      { lessonId: string; isStudent?: boolean }
-    >({
-      query: ({ lessonId, isStudent = false }) => (isStudent ? `/lessons/${lessonId}` : `/admin/lessons/${lessonId}`),
+    getLessonById: builder.query<{ lesson: Lesson; tooltips: Record<string, TooltipData> }, { lessonId: string }>({
+      query: ({ lessonId }) => `/admin/lessons/${lessonId}`,
       transformResponse: (response: { lesson?: Lesson } | Lesson) => {
         const lesson = 'lesson' in response ? response.lesson : (response as Lesson);
         if (!lesson) {
@@ -111,6 +96,51 @@ export const lessonApi = createApi({
       }),
       invalidatesTags: [{ type: 'LessonList', id: 'LIST' }],
     }),
+
+    markExerciseComplete: builder.mutation<
+      { success: boolean },
+      { userId: string; lessonId: string; exerciseId: string; score: number }
+    >({
+      query: ({ userId, lessonId, exerciseId, score }) => ({
+        url: `/progress/${userId}/${lessonId}`,
+        method: 'POST',
+        body: {
+          exerciseId,
+          score,
+          completedAt: new Date().toISOString(),
+        },
+      }),
+      invalidatesTags: () => [{ type: 'StudentLesson', id: 'LIST' }],
+    }),
+
+    updatePageProgress: builder.mutation<
+      { success: boolean },
+      { userId: string; lessonId: string; currentPageIndex: number }
+    >({
+      query: ({ userId, lessonId, currentPageIndex }) => ({
+        url: `/progress/${userId}/${lessonId}`,
+        method: 'POST',
+        body: {
+          currentPageIndex,
+          completedAt: new Date().toISOString(),
+        },
+      }),
+      invalidatesTags: () => [{ type: 'StudentLesson', id: 'LIST' }],
+    }),
+
+    markLessonComplete: builder.mutation<{ success: boolean }, { userId: string; lessonId: string; score?: number }>({
+      query: ({ userId, lessonId, score }) => ({
+        url: `/progress/${userId}/${lessonId}`,
+        method: 'POST',
+        body: {
+          status: 'completed',
+          completedAt: new Date().toISOString(),
+          progress: 100,
+          score,
+        },
+      }),
+      invalidatesTags: () => [{ type: 'StudentLesson', id: 'LIST' }],
+    }),
   }),
 });
 
@@ -123,4 +153,7 @@ export const {
   useDeleteLessonMutation,
   useUpdateLessonsPublishStatusMutation,
   useReorderLessonsMutation,
+  useMarkExerciseCompleteMutation,
+  useUpdatePageProgressMutation,
+  useMarkLessonCompleteMutation,
 } = lessonApi;

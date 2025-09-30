@@ -1,55 +1,46 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useRouter } from 'next/navigation';
-import { useSelector } from 'react-redux';
-import { RootState } from '@/src/store';
 import { Button } from '@/src/components/ui/button';
 import { ArrowLeft, Plus, Library } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
-
-import { useVocabularyPools } from '@/src/hooks/useVocabularyPools';
+import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
+import { useGetPoolsQuery, useDeletePoolMutation } from '@/src/store/api/vocabularyPoolApi';
+import { useAppSelector, useAppDispatch } from '@/src/store/hooks';
+import { updateFilters } from '@/src/store/slices/vocabularyPoolSlice';
 import { PoolFilters } from '@/src/components/ui/admin/vocabulary-pools/PoolFilters';
 import { PoolList } from '@/src/components/ui/admin/vocabulary-pools/PoolList';
-import { AdminLoadingPage } from '@/src/components/ui/admin/AdminLoadingPage';
 
-export default function VocabularyPoolsPage() {
+function VocabularyPoolsPage() {
   const router = useRouter();
-  const { user, loading: authLoading } = useSelector((state: RootState) => state.auth);
+  const dispatch = useAppDispatch();
+  const filters = useAppSelector(state => state.vocabularyPools.filters);
+  const { data, isLoading, error } = useGetPoolsQuery({ filters });
+  const [deletePoolMutation] = useDeletePoolMutation();
 
-  const { pools, loading, error, pagination, filters, loadPools, loadMorePools, updateFilters, deletePool } =
-    useVocabularyPools();
-
-  useEffect(() => {
-    if (!authLoading && (!user || user.role !== 'admin')) {
-      router.push('/dashboard');
-      toast.error('Access denied. Admin privileges required.');
-    }
-  }, [user, authLoading, router]);
-
-  useEffect(() => {
-    if (user && user.role === 'admin') {
-      loadPools(true);
-    }
-  }, [user, loadPools]);
+  const pools = data?.pools ?? [];
+  const pagination = {
+    hasMore: data?.hasMore ?? false,
+    lastPoolId: data?.lastPoolId ?? null,
+    total: data?.total ?? 0,
+  };
 
   const handleDeletePool = async (poolId: string, poolName: string) => {
     if (confirm(`Are you sure you want to delete "${poolName}"? This action cannot be undone.`)) {
-      const success = await deletePool(poolId);
-      if (success) {
+      try {
+        await deletePoolMutation(poolId).unwrap();
         toast.success('Pool deleted successfully');
+      } catch {
+        toast.error('Failed to delete pool');
       }
     }
   };
 
-  if (authLoading || !user) {
-    return <AdminLoadingPage />;
-  }
-
-  if (user.role !== 'admin') {
-    return null;
-  }
+  const handleUpdateFilters = (newFilters: Partial<typeof filters>) => {
+    dispatch(updateFilters(newFilters));
+  };
 
   return (
     <div className="min-h-screen bg-roman-marble">
@@ -78,22 +69,19 @@ export default function VocabularyPoolsPage() {
       </header>
 
       <main className="container mx-auto py-6 px-4 space-y-6">
-        <PoolFilters filters={filters} onFiltersChange={updateFilters} loading={loading} />
+        <PoolFilters filters={filters} onFiltersChange={handleUpdateFilters} loading={isLoading} />
 
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-red-600">{error}</p>
-            <Button variant="outline" size="sm" onClick={() => loadPools(true)} className="mt-2">
-              Try Again
-            </Button>
+            <p className="text-red-600">{String(error)}</p>
           </div>
         )}
 
         <PoolList
           pools={pools}
-          loading={loading}
+          loading={isLoading}
           hasMore={pagination.hasMore}
-          onLoadMore={loadMorePools}
+          onLoadMore={() => {}}
           onEdit={pool => router.push(`/admin/vocabulary-pools/${pool.id}/edit`)}
           onView={pool => router.push(`/admin/vocabulary-pools/${pool.id}`)}
           onDelete={handleDeletePool}
@@ -102,3 +90,5 @@ export default function VocabularyPoolsPage() {
     </div>
   );
 }
+
+export default withAdminAuth(VocabularyPoolsPage);

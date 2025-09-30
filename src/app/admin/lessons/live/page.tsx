@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '@/src/store';
 import { Lesson } from '@/src/types/lesson';
@@ -31,11 +30,10 @@ import { ArrowLeft, Globe, Search, Filter, BookOpen, Clock, CheckCircle } from '
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { SortableLessonItem } from '@/src/components/admin/SortableLessonItem';
+import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 
-export default function LiveLessonsPage() {
-  const router = useRouter();
+function LiveLessonsPage() {
   const dispatch = useDispatch();
-  const { user } = useSelector((state: RootState) => state.auth);
   const { data: serverLessons, isLoading: loading } = useGetLessonsQuery();
   const [updatePublishStatus] = useUpdateLessonsPublishStatusMutation();
   const [reorderLessons] = useReorderLessonsMutation();
@@ -54,13 +52,6 @@ export default function LiveLessonsPage() {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
-
-  useEffect(() => {
-    if (!user || user.role !== 'admin') {
-      router.push('/dashboard');
-      return;
-    }
-  }, [user, router]);
 
   // Sync RTK Query data to lessonSlice
   useEffect(() => {
@@ -388,3 +379,5 @@ export default function LiveLessonsPage() {
     </div>
   );
 }
+
+export default withAdminAuth(LiveLessonsPage);

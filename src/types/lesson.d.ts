@@ -29,6 +29,11 @@ export type LessonStatus = 'available' | 'in-progress' | 'completed' | 'locked';
 export interface LessonWithProgress extends Lesson {
   progress?: number;
   status?: LessonStatus;
+  currentPageIndex?: number;
+  exerciseProgress?: ExerciseProgress[];
+  completedAt?: string;
+  score?: number;
+  lastAccessedAt?: string;
 }
 
 export interface ExerciseProgress {
@@ -49,11 +54,6 @@ export interface UserProgress {
   progress?: number;
 }
 
-export interface LessonWithAccess extends Lesson {
-  isAccessible: boolean;
-  userProgress?: UserProgress;
-}
-
 export type { Page } from './page';
 export type { RenderableContentItem } from './page';
 export type { ContentItem, TextContent, EmphasisContent, TableContent, ComponentNarration } from './content';
@@ -63,8 +63,7 @@ export type {
   MatchingExercise,
   FillExercise,
   TextSelectionExercise,
-  VerbAnalysisExercise,
-  VerbConjugationExercise,
+  FillEmboldedTextExercise,
   MultipleChoiceExercise,
   OddOneOutExercise,
   Exercise,

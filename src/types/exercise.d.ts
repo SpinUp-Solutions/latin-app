@@ -3,10 +3,11 @@ export type {
   MatchingExercise,
   FillExercise,
   TextSelectionExercise,
-  VerbAnalysisExercise,
-  VerbConjugationExercise,
+  FillEmboldedTextExercise,
   SentenceDiagrammingExercise,
   MultipleChoiceExercise,
   OddOneOutExercise,
+  TableFillExercise,
+  ClickOnMultipleWordsExercise,
   Exercise,
 } from './exercises';

@@ -1,11 +1,11 @@
 import { BaseExercise } from './base';
 
-export interface VerbAnalysisExercise extends BaseExercise {
-  type: 'verb-analysis';
+export interface FillEmboldedTextExercise extends BaseExercise {
+  type: 'fill-embolded-text';
   data: {
     passage: string;
     verbs: {
-      wordIndex: number; // Index of the verb in the passage
+      wordIndex: number;
       correctPronoun: string;
       explanation?: string;
       hint?: string;
