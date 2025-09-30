@@ -1,24 +1,21 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useParams } from 'next/navigation';
-import { useDispatch, useSelector } from 'react-redux';
-import type { RootState, AppDispatch } from '@/src/store';
-import { loadLessonById } from '@/src/store/slices/lessonSlice';
+import { useGetLessonByIdQuery } from '@/src/store/api/lessonApi';
 import LessonPlayer from '@/src/components/ui/lesson/lesson-player';
 
 export default function DynamicLessonPage() {
   const params = useParams();
   const lessonId = params.lessonId as string;
-  const dispatch = useDispatch<AppDispatch>();
 
-  const { currentLesson, loading, error } = useSelector((state: RootState) => state.lesson);
+  const {
+    data: lessonData,
+    isLoading: loading,
+    error,
+  } = useGetLessonByIdQuery({ lessonId, isStudent: true }, { skip: !lessonId });
 
-  useEffect(() => {
-    if (lessonId) {
-      dispatch(loadLessonById({ lessonId, isStudent: true }));
-    }
-  }, [lessonId, dispatch]);
+  const currentLesson = lessonData?.lesson;
 
   if (loading) {
     return (
@@ -29,6 +26,7 @@ export default function DynamicLessonPage() {
   }
 
   if (error) {
+    const errorMessage = 'status' in error ? `Error ${error.status}` : 'Failed to load lesson';
     return (
       <div className="min-h-screen bg-roman-marble">
         <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between">
@@ -43,7 +41,7 @@ export default function DynamicLessonPage() {
           <div className="max-w-3xl mx-auto">
             <div className="p-8 bg-white rounded-lg border border-border text-center">
               <h2 className="text-2xl font-serif text-gray-800 mb-4">Lesson Not Found</h2>
-              <p className="text-roman-stone">{error}</p>
+              <p className="text-roman-stone">{errorMessage}</p>
             </div>
           </div>
         </main>

@@ -1,13 +1,13 @@
 import React from 'react';
 import { EmphasisContent } from '@/src/types/lesson';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
-import { updateEditingContent } from '@/src/store/slices/lessonSlice';
+import { updateEditingContent } from '@/src/store/slices/lessonEditorSlice';
 import { AudioUploadSection } from './AudioUploadSection';
 import { SimpleRichEditor } from '../../core/simple-rich-editor';
 
 export const EmphasisEditor: React.FC = () => {
   const dispatch = useAppDispatch();
-  const editingContent = useAppSelector(state => state.lesson.editingContent?.content as EmphasisContent);
+  const editingContent = useAppSelector(state => state.lessonEditor.editingContent?.content as EmphasisContent);
 
   if (!editingContent) {
     return <div>No content selected for editing</div>;

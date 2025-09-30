@@ -26,7 +26,7 @@ import {
 import { restrictToVerticalAxis, restrictToParentElement } from '@dnd-kit/modifiers';
 import { CSS } from '@dnd-kit/utilities';
 import { useDispatch } from 'react-redux';
-import { reorderPages, updatePageAutoAdvance } from '@/src/store/slices/lessonSlice';
+import { reorderPages, updatePageAutoAdvance } from '@/src/store/slices/lessonEditorSlice';
 import { PasteZone } from '../../core/clipboard';
 
 interface PageSectionProps {

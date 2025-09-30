@@ -6,22 +6,19 @@ import { useSelector } from 'react-redux';
 import { RootState } from '@/src/store';
 import { Button } from '@/src/components/ui/button';
 import { ArrowLeft, BookOpen } from 'lucide-react';
-import { toast } from 'sonner';
 import { LessonBuilder } from '@/src/components/ui/admin';
 import { ClipboardProvider } from '@/src/components/ui/core/clipboard';
 import { Lesson } from '@/src/types/lesson';
 import { useAppDispatch } from '@/src/store/hooks';
+import { useCreateLessonMutation } from '@/src/store/api/lessonApi';
 import {
-  saveLesson,
   resetLessonState,
-  clearError,
-  clearLastSavedLesson,
   loadDrafts,
   setLesson,
   clearDraft,
   saveDraft,
   selectHasDraft,
-} from '@/src/store/slices/lessonSlice';
+} from '@/src/store/slices/lessonEditorSlice';
 import { useBeforeUnload } from '@/src/hooks/useLessonDraft';
 import { UnifiedDialog } from '@/src/components/ui/core/UnifiedDialog';
 
@@ -29,7 +26,8 @@ export default function CreateLessonPage() {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const { user, loading: authLoading } = useSelector((state: RootState) => state.auth);
-  const { saving, error, lastSavedLesson, drafts, currentLesson } = useSelector((state: RootState) => state.lesson);
+  const [createLesson, { isLoading: saving }] = useCreateLessonMutation();
+  const { drafts, currentLesson } = useSelector((state: RootState) => state.lessonEditor);
 
   const [isContinuingDraft, setIsContinuingDraft] = useState(false);
   const [originalDraft, setOriginalDraft] = useState<Lesson | null>(null);
@@ -54,8 +52,6 @@ export default function CreateLessonPage() {
     const continueDraft = urlParams.get('continue');
     const lessonId = urlParams.get('lessonId');
 
-    dispatch(clearError());
-    dispatch(clearLastSavedLesson());
     dispatch(loadDrafts());
 
     if (continueDraft === 'true' && lessonId) {
@@ -94,29 +90,13 @@ export default function CreateLessonPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentLesson, dispatch]);
 
-  // Handle successful save
-  useEffect(() => {
-    if (lastSavedLesson && !saving && !error && currentLesson && lastSavedLesson.id === currentLesson.id) {
-      toast.success('Lesson saved successfully!');
-      dispatch(clearDraft(lastSavedLesson.id));
-      router.push('/admin/lessons/manage');
-    }
-  }, [lastSavedLesson, saving, error, currentLesson, dispatch, router]);
-
-  // Handle save error
-  useEffect(() => {
-    if (error && !saving) {
-      toast.error(error);
-      dispatch(clearError());
-    }
-  }, [error, saving, dispatch]);
-
   const handleSaveLesson = async (lesson: Lesson) => {
     try {
-      const isUpdate = lesson.hasOwnProperty('createdAt') || lesson.hasOwnProperty('version');
-      await dispatch(saveLesson({ lesson, isUpdate })).unwrap();
+      const result = await createLesson(lesson).unwrap();
+      dispatch(clearDraft(lesson.id));
+      router.push(`/admin/lessons/edit/${result.lesson.id}`);
     } catch (error) {
-      console.error('Error dispatching save lesson:', error);
+      console.error('Error creating lesson:', error);
     }
   };
 

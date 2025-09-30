@@ -2,14 +2,14 @@ import React from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { TableContent } from '@/src/types/lesson';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
-import { updateEditingContent } from '@/src/store/slices/lessonSlice';
+import { updateEditingContent } from '@/src/store/slices/lessonEditorSlice';
 import type { Column, TableRow } from '@/src/components/ui/lesson/conjugation-table';
 import { SimpleRichEditor } from '../../core/simple-rich-editor';
 import { AudioUploadSection } from './AudioUploadSection';
 
 export const TableEditor: React.FC = () => {
   const dispatch = useAppDispatch();
-  const editingContent = useAppSelector(state => state.lesson.editingContent?.content as TableContent);
+  const editingContent = useAppSelector(state => state.lessonEditor.editingContent?.content as TableContent);
 
   if (!editingContent) {
     return <div>No content selected for editing</div>;

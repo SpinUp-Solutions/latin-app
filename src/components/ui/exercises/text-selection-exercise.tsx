@@ -9,6 +9,7 @@ import { validateTextSelectionExercise } from '@/src/utils/exercises/textSelecti
 import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
+import { ClickableRichDisplay } from '../core/clickable-rich-display';
 
 interface Props {
   exercise: TextSelectionExercise;
@@ -103,22 +104,13 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
             content={currentQuestion.text}
             className="mb-6 whitespace-pre-wrap break-words min-w-[300px]"
           />
-          <div className="font-serif text-lg leading-relaxed min-w-[300px]">
-            {exercise.data.passage.split(' ').map((word, index) => (
-              <span
-                key={index}
-                onClick={() => handleWordClick(index)}
-                className={`cursor-pointer inline-block px-1 py-0.5 mx-0.5 rounded hover:bg-roman-parchment hover:text-roman-red transition-colors ${
-                  selectedWordIndex === index
-                    ? isCorrect
-                      ? 'text-green-600 bg-green-50'
-                      : 'text-red-600 bg-red-50'
-                    : ''
-                }`}>
-                {word}
-              </span>
-            ))}
-          </div>
+          <ClickableRichDisplay
+            content={exercise.data.passage}
+            onWordClick={handleWordClick}
+            selectedWordIndex={selectedWordIndex}
+            isCorrect={isCorrect}
+            className="min-w-[300px]"
+          />
         </div>
 
         <FeedbackDisplay

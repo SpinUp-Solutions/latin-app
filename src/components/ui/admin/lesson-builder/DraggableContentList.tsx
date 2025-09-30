@@ -12,7 +12,7 @@ import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrate
 import { restrictToVerticalAxis, restrictToParentElement } from '@dnd-kit/modifiers';
 import { useDispatch } from 'react-redux';
 import { RenderableContentItem } from '@/src/types/page';
-import { reorderContentItems } from '@/src/store/slices/lessonSlice';
+import { reorderContentItems } from '@/src/store/slices/lessonEditorSlice';
 import { ContentItem } from './ContentItem';
 
 interface DraggableContentListProps {

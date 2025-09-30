@@ -84,13 +84,3 @@ export const getReadonlyExtensions = (options?: Partial<ExtensionSetOptions>) =>
 
 export const getSimpleExtensions = (options?: Partial<ExtensionSetOptions>) =>
   createExtensionSet({ mode: 'simple', enableTooltips: false, enableAnnotations: false, ...options });
-
-// Extension presets for specific use cases
-export const EXTENSION_PRESETS = {
-  ADMIN_FULL: () => getAdminExtensions(),
-  STUDENT_PRACTICE: () => getStudentExtensions({ enableTooltips: false }),
-  STUDENT_WITH_TOOLTIPS: () => getStudentExtensions(),
-  READONLY_WITH_TOOLTIPS: () => getReadonlyExtensions(),
-  READONLY_SIMPLE: () => getReadonlyExtensions({ enableTooltips: false, enableAnnotations: false }),
-  SIMPLE: () => getSimpleExtensions(),
-} as const;
