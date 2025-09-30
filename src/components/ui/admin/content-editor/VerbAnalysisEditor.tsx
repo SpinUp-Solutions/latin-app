@@ -4,7 +4,7 @@ import { Card, CardContent } from '@/src/components/ui/card';
 import { Trash2, Eye, AlertCircle, Zap, X, Check } from 'lucide-react';
 import { VerbAnalysisExercise } from '@/src/types/exercise';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
-import { updateEditingContent } from '@/src/store/slices/lessonSlice';
+import { updateEditingContent } from '@/src/store/slices/lessonEditorSlice';
 import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
 import { SimpleRichEditor } from '../../core/simple-rich-editor';
@@ -12,7 +12,7 @@ import { SimpleRichDisplay } from '../../core/simple-rich-display';
 
 export const VerbAnalysisEditor: React.FC = () => {
   const dispatch = useAppDispatch();
-  const editingContent = useAppSelector(state => state.lesson.editingContent?.content as VerbAnalysisExercise);
+  const editingContent = useAppSelector(state => state.lessonEditor.editingContent?.content as VerbAnalysisExercise);
 
   // New state for word popup
   const [wordPopup, setWordPopup] = useState<{

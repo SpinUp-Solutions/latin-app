@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { Editor } from '@tiptap/react';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
-import { addTooltip, removeTooltip } from '@/src/store/slices/lessonSlice';
+import { addTooltip, removeTooltip } from '@/src/store/slices/lessonEditorSlice';
 import { TooltipData, TooltipFormData } from '@/src/types/tooltip';
 import { findTooltipMarkWithData, generateTooltipId } from '@/src/utils/tooltipUtils';
 
@@ -12,7 +12,7 @@ export interface TooltipManagerOptions {
 
 export const useTooltipManager = ({ editor, disabled = false }: TooltipManagerOptions) => {
   const dispatch = useAppDispatch();
-  const tooltips = useAppSelector(state => state.lesson.tooltips);
+  const tooltips = useAppSelector(state => state.lessonEditor.tooltips);
 
   const [activeTooltip, setActiveTooltip] = useState<TooltipData | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);

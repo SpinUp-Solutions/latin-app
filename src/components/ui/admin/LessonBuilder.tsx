@@ -18,7 +18,7 @@ import {
   removePage,
   startEditingContent,
   loadTooltips,
-} from '@/src/store/slices/lessonSlice';
+} from '@/src/store/slices/lessonEditorSlice';
 
 // Components
 import { LessonInfoForm } from './lesson-builder/LessonInfoForm';
@@ -37,7 +37,7 @@ interface LessonBuilderProps {
 
 export const LessonBuilder: React.FC<LessonBuilderProps> = ({ initialLesson, onSave }) => {
   const dispatch = useAppDispatch();
-  const { currentLesson, saving } = useAppSelector(state => state.lesson);
+  const { currentLesson, saving } = useAppSelector(state => state.lessonEditor);
   const { pasteBulk } = useClipboard();
 
   useEffect(() => {

@@ -40,6 +40,21 @@ export const progressApi = createApi({
       invalidatesTags: () => [{ type: 'BatchProgress', id: 'LIST' }],
     }),
 
+    updatePageProgress: builder.mutation<
+      { success: boolean },
+      { userId: string; lessonId: string; currentPageIndex: number }
+    >({
+      query: ({ userId, lessonId, currentPageIndex }) => ({
+        url: `/progress/${userId}/${lessonId}`,
+        method: 'POST',
+        body: {
+          currentPageIndex,
+          completedAt: new Date().toISOString(),
+        },
+      }),
+      invalidatesTags: () => [{ type: 'BatchProgress', id: 'LIST' }],
+    }),
+
     markLessonComplete: builder.mutation<{ success: boolean }, { userId: string; lessonId: string; score?: number }>({
       query: ({ userId, lessonId, score }) => ({
         url: `/progress/${userId}/${lessonId}`,
@@ -56,5 +71,9 @@ export const progressApi = createApi({
   }),
 });
 
-export const { useGetBatchUserProgressQuery, useMarkExerciseCompleteMutation, useMarkLessonCompleteMutation } =
-  progressApi;
+export const {
+  useGetBatchUserProgressQuery,
+  useMarkExerciseCompleteMutation,
+  useUpdatePageProgressMutation,
+  useMarkLessonCompleteMutation,
+} = progressApi;

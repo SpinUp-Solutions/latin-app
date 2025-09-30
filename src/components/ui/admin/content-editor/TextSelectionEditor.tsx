@@ -4,7 +4,7 @@ import { Card, CardContent } from '@/src/components/ui/card';
 import { Plus, Trash2, Search, Eye } from 'lucide-react';
 import { TextSelectionExercise } from '@/src/types/exercise';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
-import { updateEditingContent } from '@/src/store/slices/lessonSlice';
+import { updateEditingContent } from '@/src/store/slices/lessonEditorSlice';
 import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
 import { SimpleRichEditor } from '../../core/simple-rich-editor';
@@ -13,7 +13,7 @@ import { ClickableRichDisplay } from '../../core/clickable-rich-display';
 
 export const TextSelectionEditor: React.FC = () => {
   const dispatch = useAppDispatch();
-  const editingContent = useAppSelector(state => state.lesson.editingContent?.content as TextSelectionExercise);
+  const editingContent = useAppSelector(state => state.lessonEditor.editingContent?.content as TextSelectionExercise);
 
   if (!editingContent) {
     return <div>No content selected for editing</div>;
