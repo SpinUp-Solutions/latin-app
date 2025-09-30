@@ -1,9 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { useSelector } from 'react-redux';
 import { TooltipContent } from './tooltip-content';
 import { TooltipData, MousePosition } from '@/src/types/tooltip';
-import { calculateTooltipPosition } from '@/src/utils/tooltipUtils';
-import { RootState } from '@/src/store';
+import { calculateTooltipPosition, extractTooltipDataFromElement } from '@/src/utils/tooltipUtils';
 
 interface ActiveTooltip {
   id: string;
@@ -78,7 +76,6 @@ export const TooltipContainer: React.FC<TooltipContainerProps> = ({
   const [activeTooltip, setActiveTooltip] = useState<ActiveTooltip | null>(null);
   const [fixedElementPos, setFixedElementPos] = useState<MousePosition>({ x: 0, y: 0 });
   const hideTimeoutRef = useRef<NodeJS.Timeout>();
-  const tooltips = useSelector((state: RootState) => state.lessonEditor.tooltips);
 
   const handleMouseOver = useCallback(
     (e: MouseEvent) => {
@@ -94,7 +91,7 @@ export const TooltipContainer: React.FC<TooltipContainerProps> = ({
           hideTimeoutRef.current = undefined;
         }
 
-        const tooltipData = tooltips[tooltipId];
+        const tooltipData = extractTooltipDataFromElement(tooltipElement);
         if (tooltipData) {
           const rect = tooltipElement.getBoundingClientRect();
           setFixedElementPos({
@@ -106,7 +103,7 @@ export const TooltipContainer: React.FC<TooltipContainerProps> = ({
         }
       }
     },
-    [activeTooltip?.id, tooltips, onTooltipShow]
+    [activeTooltip?.id, onTooltipShow]
   );
 
   const handleMouseMove = useCallback(
