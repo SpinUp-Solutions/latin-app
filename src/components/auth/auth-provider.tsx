@@ -5,7 +5,7 @@ import { useDispatch } from 'react-redux';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/src/services/firebase';
-import { setUser, setLoading, CustomUser } from '@/src/store/slices/authSlice';
+import { setUser, CustomUser } from '@/src/store/slices/authSlice';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const dispatch = useDispatch();
@@ -25,7 +25,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         dispatch(setUser(null));
       }
-      dispatch(setLoading(false));
     });
 
     return () => unsubscribe();

@@ -8,7 +8,6 @@ import Link from 'next/link';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 
 function AdminPage() {
-
   return (
     <div className="min-h-screen bg-roman-marble">
       <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between">
