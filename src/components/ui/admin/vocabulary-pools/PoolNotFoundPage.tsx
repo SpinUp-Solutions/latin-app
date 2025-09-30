@@ -8,14 +8,13 @@ interface PoolNotFoundPageProps {
   poolId: string;
   backHref?: string;
   backLabel?: string;
-  error?: string;
+  error?: string | null;
 }
 
-export const PoolNotFoundPage: React.FC<PoolNotFoundPageProps> = ({ 
-  poolId, 
-  backHref = '/admin/vocabulary-pools', 
+export const PoolNotFoundPage: React.FC<PoolNotFoundPageProps> = ({
+  backHref = '/admin/vocabulary-pools',
   backLabel = 'Back to Vocabulary Pools',
-  error
+  error,
 }) => {
   const router = useRouter();
 

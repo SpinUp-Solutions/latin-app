@@ -5,13 +5,31 @@ export interface Lesson {
   id: string;
   title: string;
   description?: string;
-  vocabulary_pool?: string; // Reference to vocabulary_pools document ID
+  vocabulary_pool?: string;
   introduction: IntroductionPage[];
   exercises: ExercisePage[];
+  
+  isLive: boolean;
+  liveOrder: number | null;
+  publishedAt: string | null;
+  publishedBy: string | null;
+  
+  createdAt?: string;
+  createdBy?: string;
+  updatedAt?: string;
+  updatedBy?: string;
+  version?: number;
 }
 
 export interface LessonWithVocabularyPool extends Lesson {
   vocabularyPoolData?: VocabularyPoolWithWords;
+}
+
+export type LessonStatus = 'available' | 'in-progress' | 'completed' | 'locked' | 'current' | 'upcoming';
+
+export interface LessonWithProgress extends Lesson {
+  progress?: number;
+  status?: LessonStatus;
 }
 
 export type { IntroductionPage, ExercisePage } from './page';

@@ -277,8 +277,8 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
                           <SimpleRichDisplay content={lesson.title} />
                         </div>
                       </div>
-                      {lesson.published && (
-                        <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Published</span>
+                      {lesson.isLive && (
+                        <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Live</span>
                       )}
                     </CardTitle>
                   </CardHeader>

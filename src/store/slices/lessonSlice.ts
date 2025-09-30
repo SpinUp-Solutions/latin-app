@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import { Lesson, IntroductionPage, ExercisePage } from '@/src/types/lesson';
+import { Lesson, IntroductionPage, ExercisePage, LessonWithProgress } from '@/src/types/lesson';
 import { RenderableContentItem } from '@/src/types/page';
 import { lessonService } from '@/src/services/lessonService';
 import { TooltipData } from '@/src/types/tooltip';
@@ -11,18 +11,11 @@ interface LessonWithMetadata extends Lesson {
   updatedAt?: string;
   updatedBy?: string;
   version?: number;
-  published?: boolean;
 }
 
-interface LessonEditState {
+interface LessonState {
   currentLesson: Lesson | null;
-  drafts: Record<
-    string,
-    {
-      lesson: Lesson;
-      lastModified: string;
-    }
-  >;
+  drafts: Record<string, { lesson: Lesson; lastModified: string }>;
   editingContent: {
     content: RenderableContentItem;
     pageType: 'introduction' | 'exercises';
@@ -32,6 +25,8 @@ interface LessonEditState {
   isModalOpen: boolean;
 
   lessons: LessonWithMetadata[];
+  studentLessons: LessonWithProgress[];
+  
   loading: boolean;
   saving: boolean;
   error: string | null;
@@ -40,18 +35,17 @@ interface LessonEditState {
   tooltips: Record<string, TooltipData>;
 }
 
-const initialState: LessonEditState = {
+const initialState: LessonState = {
   currentLesson: null,
   drafts: {},
   editingContent: null,
   isModalOpen: false,
-
   lessons: [],
+  studentLessons: [],
   loading: false,
   saving: false,
   error: null,
   lastSavedLesson: null,
-
   tooltips: {},
 };
 
@@ -80,16 +74,28 @@ export const loadLessons = createAsyncThunk('lesson/loadLessons', async (_, { re
   }
 });
 
+export const loadStudentLessons = createAsyncThunk('lesson/loadStudentLessons', async (_, { rejectWithValue }) => {
+  try {
+    const result = await lessonService.getStudentLessons();
+    return result.lessons;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to load lessons';
+    return rejectWithValue(errorMessage);
+  }
+});
+
 export const loadLessonById = createAsyncThunk(
   'lesson/loadLessonById',
-  async (lessonId: string, { rejectWithValue }) => {
+  async ({ lessonId, isStudent = false }: { lessonId: string; isStudent?: boolean }, { rejectWithValue }) => {
     try {
-      const lesson = await lessonService.getLesson(lessonId);
+      let lesson;
+      if (isStudent) {
+        lesson = await lessonService.getLessonById(lessonId);
+      } else {
+        lesson = await lessonService.getLesson(lessonId);
+      }
       const tooltips = extractTooltipsFromLesson(lesson);
-      return {
-        lesson: lesson as LessonWithMetadata,
-        tooltips,
-      };
+      return { lesson: lesson as LessonWithMetadata, tooltips };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to load lesson';
       return rejectWithValue(errorMessage);
@@ -107,6 +113,19 @@ export const deleteLesson = createAsyncThunk('lesson/deleteLesson', async (lesso
   }
 });
 
+export const updateLessonsPublishStatus = createAsyncThunk(
+  'lesson/updatePublishStatus',
+  async ({ lessonIds, isLive, startOrder }: { lessonIds: string[]; isLive: boolean; startOrder?: number }, { rejectWithValue }) => {
+    try {
+      const result = await lessonService.updatePublishStatus(lessonIds, isLive, startOrder);
+      return { ...result, lessonIds, isLive };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update lessons';
+      return rejectWithValue(errorMessage);
+    }
+  }
+);
+
 export const loadDrafts = createAsyncThunk('lesson/loadDrafts', (_, { rejectWithValue }) => {
   try {
     const draftsData = sessionStorage.getItem(DRAFTS_KEY);
@@ -119,14 +138,11 @@ export const loadDrafts = createAsyncThunk('lesson/loadDrafts', (_, { rejectWith
 
 export const saveDraft = createAsyncThunk('lesson/saveDraft', async (lesson: Lesson, { getState, rejectWithValue }) => {
   try {
-    const state = getState() as { lesson: LessonEditState };
+    const state = getState() as { lesson: LessonState };
     const drafts = { ...state.lesson.drafts };
     const timestamp = new Date().toISOString();
 
-    drafts[lesson.id] = {
-      lesson,
-      lastModified: timestamp,
-    };
+    drafts[lesson.id] = { lesson, lastModified: timestamp };
 
     sessionStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts));
     return { lessonId: lesson.id, draft: { lesson, lastModified: timestamp } };
@@ -140,7 +156,7 @@ export const clearDraft = createAsyncThunk(
   'lesson/clearDraft',
   async (lessonId: string, { getState, rejectWithValue }) => {
     try {
-      const state = getState() as { lesson: LessonEditState };
+      const state = getState() as { lesson: LessonState };
       const drafts = { ...state.lesson.drafts };
       delete drafts[lessonId];
 
@@ -154,7 +170,7 @@ export const clearDraft = createAsyncThunk(
 );
 
 const lessonSlice = createSlice({
-  name: 'lessonEdit',
+  name: 'lesson',
   initialState,
   reducers: {
     setLesson: (state, action: PayloadAction<Lesson | undefined>) => {
@@ -164,6 +180,10 @@ const lessonSlice = createSlice({
         description: '',
         introduction: [],
         exercises: [],
+        isLive: false,
+        liveOrder: null,
+        publishedAt: null,
+        publishedBy: null,
       };
       state.error = null;
     },
@@ -292,10 +312,8 @@ const lessonSlice = createSlice({
       if (state.editingContent) {
         state.editingContent.content = action.payload;
 
-        // Also update the corresponding content in currentLesson for live preview
         if (state.currentLesson) {
           const { pageType, pageIndex, itemIndex } = state.editingContent;
-          // Immer handles immutability - we can directly mutate the nested state
           state.currentLesson[pageType][pageIndex].items[itemIndex] = action.payload;
         }
       }
@@ -379,9 +397,25 @@ const lessonSlice = createSlice({
         items.splice(toIndex, 0, movedItem);
       }
     },
+
+    localReorderLiveLessons: (state, action: PayloadAction<{ fromIndex: number; toIndex: number }>) => {
+      const { fromIndex, toIndex } = action.payload;
+      const liveLessons = state.lessons.filter(l => l.isLive).sort((a, b) => (a.liveOrder || 0) - (b.liveOrder || 0));
+      
+      if (fromIndex < liveLessons.length && toIndex < liveLessons.length) {
+        const [removed] = liveLessons.splice(fromIndex, 1);
+        liveLessons.splice(toIndex, 0, removed);
+        
+        liveLessons.forEach((lesson, index) => {
+          const lessonInState = state.lessons.find(l => l.id === lesson.id);
+          if (lessonInState) {
+            lessonInState.liveOrder = index;
+          }
+        });
+      }
+    },
   },
   extraReducers: builder => {
-    // Save Lesson
     builder
       .addCase(saveLesson.pending, state => {
         state.saving = true;
@@ -393,12 +427,10 @@ const lessonSlice = createSlice({
         state.lastSavedLesson = action.payload.lesson as LessonWithMetadata;
         delete state.drafts[action.payload.lesson.id];
 
-        // Update the current lesson with the saved data (includes metadata)
         if (state.currentLesson && state.currentLesson.id === action.payload.lesson.id) {
           state.currentLesson = action.payload.lesson;
         }
 
-        // Update or add to lessons list
         const existingIndex = state.lessons.findIndex(l => l.id === action.payload.lesson.id);
         if (existingIndex >= 0) {
           state.lessons[existingIndex] = action.payload.lesson as LessonWithMetadata;
@@ -409,10 +441,8 @@ const lessonSlice = createSlice({
       .addCase(saveLesson.rejected, (state, action) => {
         state.saving = false;
         state.error = action.payload as string;
-      });
+      })
 
-    // Load Lessons
-    builder
       .addCase(loadLessons.pending, state => {
         state.loading = true;
         state.error = null;
@@ -425,10 +455,21 @@ const lessonSlice = createSlice({
       .addCase(loadLessons.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
-      });
+      })
 
-    // Load Lesson by ID
-    builder
+      .addCase(loadStudentLessons.pending, state => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(loadStudentLessons.fulfilled, (state, action) => {
+        state.loading = false;
+        state.studentLessons = action.payload;
+      })
+      .addCase(loadStudentLessons.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      })
+
       .addCase(loadLessonById.pending, state => {
         state.loading = true;
         state.error = null;
@@ -442,10 +483,35 @@ const lessonSlice = createSlice({
       .addCase(loadLessonById.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
-      });
+      })
 
-    // Draft handling
-    builder
+      .addCase(updateLessonsPublishStatus.pending, state => {
+        state.error = null;
+      })
+      .addCase(updateLessonsPublishStatus.fulfilled, (state, action) => {
+        const { lessonIds, isLive } = action.payload;
+        let orderCounter = 0;
+
+        if (isLive) {
+          // Get current max order for new live lessons
+          const maxOrder = Math.max(...state.lessons.filter(l => l.isLive).map(l => l.liveOrder || 0), -1);
+          orderCounter = maxOrder + 1;
+        }
+
+        lessonIds.forEach(id => {
+          const lesson = state.lessons.find(l => l.id === id);
+          if (lesson) {
+            lesson.isLive = isLive;
+            lesson.liveOrder = isLive ? orderCounter++ : null;
+            lesson.publishedAt = isLive ? new Date().toISOString() : null;
+            lesson.publishedBy = isLive ? 'admin' : null;
+          }
+        });
+      })
+      .addCase(updateLessonsPublishStatus.rejected, (state, action) => {
+        state.error = action.payload as string;
+      })
+
       .addCase(loadDrafts.fulfilled, (state, action) => {
         state.drafts = action.payload;
       })
@@ -454,10 +520,8 @@ const lessonSlice = createSlice({
       })
       .addCase(clearDraft.fulfilled, (state, action) => {
         delete state.drafts[action.payload];
-      });
+      })
 
-    // Delete Lesson
-    builder
       .addCase(deleteLesson.pending, state => {
         state.loading = true;
         state.error = null;
@@ -465,10 +529,8 @@ const lessonSlice = createSlice({
       .addCase(deleteLesson.fulfilled, (state, action) => {
         state.loading = false;
         state.error = null;
-        // Remove from lessons list
         state.lessons = state.lessons.filter(l => l.id !== action.payload);
 
-        // Clear current lesson if it was deleted
         if (state.currentLesson?.id === action.payload) {
           state.currentLesson = null;
         }
@@ -503,15 +565,24 @@ export const {
   loadTooltips,
   reorderPages,
   reorderContentItems,
+  localReorderLiveLessons,
 } = lessonSlice.actions;
 
-// Selectors
-export const selectHasDraft = (state: { lesson: LessonEditState }, lessonId: string) =>
+export const selectHasDraft = (state: { lesson: LessonState }, lessonId: string) =>
   Boolean(state.lesson.drafts[lessonId]);
 
-export const selectDraftLastModified = (state: { lesson: LessonEditState }, lessonId: string) =>
+export const selectDraftLastModified = (state: { lesson: LessonState }, lessonId: string) =>
   state.lesson.drafts[lessonId]?.lastModified;
 
-export const selectDraft = (state: { lesson: LessonEditState }, lessonId: string) => state.lesson.drafts[lessonId];
+export const selectDraft = (state: { lesson: LessonState }, lessonId: string) => state.lesson.drafts[lessonId];
+
+export const selectLiveLessons = (state: { lesson: LessonState }) => 
+  state.lesson.lessons.filter(l => l.isLive).sort((a, b) => (a.liveOrder || 0) - (b.liveOrder || 0));
+
+export const selectAvailableLessons = (state: { lesson: LessonState }) =>
+  state.lesson.lessons.filter(l => !l.isLive);
+
+export const selectLessonById = (state: { lesson: LessonState }, lessonId: string) =>
+  state.lesson.lessons.find(l => l.id === lessonId);
 
 export default lessonSlice.reducer;

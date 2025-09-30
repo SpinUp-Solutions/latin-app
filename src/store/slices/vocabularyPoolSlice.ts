@@ -83,7 +83,20 @@ const initialState: VocabularyPoolState = {
 export const loadPools = createAsyncThunk(
   'vocabularyPools/loadPools',
   async (
-    { reset = false, filters }: { reset?: boolean; filters?: Record<string, unknown> },
+    {
+      reset = false,
+      filters,
+    }: {
+      reset?: boolean;
+      filters?: {
+        search?: string;
+        difficulty?: string;
+        tags?: string[];
+        isActive?: boolean | null;
+        sortBy?: 'name' | 'createdAt' | 'wordCount';
+        sortOrder?: 'asc' | 'desc';
+      };
+    },
     { getState, rejectWithValue }
   ) => {
     try {
@@ -99,7 +112,9 @@ export const loadPools = createAsyncThunk(
 
       if (filters?.search) params.append('search', filters.search);
       if (filters?.difficulty) params.append('difficulty', filters.difficulty);
-      if (filters?.isActive !== null) params.append('isActive', filters.isActive.toString());
+      if (filters?.isActive !== null && filters?.isActive !== undefined) {
+        params.append('isActive', filters.isActive.toString());
+      }
 
       const response = await fetch(`/api/admin/vocabulary-pools?${params}`);
       const data = await response.json();

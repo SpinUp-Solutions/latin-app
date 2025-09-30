@@ -6,7 +6,7 @@ import { useSelector } from 'react-redux';
 import { RootState } from '@/src/store';
 import { Button } from '@/src/components/ui/button';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
-import { ArrowLeft, Shield, Plus, BookOpen } from 'lucide-react';
+import { ArrowLeft, Shield, Plus, BookOpen, Globe } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
 
@@ -80,6 +80,12 @@ export default function AdminPage() {
                   <Link href="/admin/lessons/manage">
                     <BookOpen className="h-4 w-4 mr-2" />
                     Manage Existing Lessons
+                  </Link>
+                </Button>
+                <Button asChild className="w-full justify-start" variant="outline">
+                  <Link href="/admin/lessons/live">
+                    <Globe className="h-4 w-4 mr-2" />
+                    Manage Live Lessons
                   </Link>
                 </Button>
               </div>

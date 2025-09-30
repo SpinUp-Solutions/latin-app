@@ -1,26 +1,32 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/src/services/firebase';
-import { RootState } from '@/src/store';
+import type { RootState, AppDispatch } from '@/src/store';
+import { loadStudentLessons } from '@/src/store/slices/lessonSlice';
 import { Button } from '@/src/components/ui/button';
 import { toast } from 'sonner';
-import { BookOpen, MessageCircle, Trophy, User, TreePine, FlaskConical, Headphones } from 'lucide-react';
+import React from 'react';
+import { BookOpen, User, Clock, Target, TrendingUp, CheckCircle, Play } from 'lucide-react';
 import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
-import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
+import { LessonStatus } from '@/src/types/lesson';
 
 export default function DashboardPage() {
   const router = useRouter();
+  const dispatch = useDispatch<AppDispatch>();
   const { user, loading } = useSelector((state: RootState) => state.auth);
+  const { studentLessons, loading: lessonsLoading } = useSelector((state: RootState) => state.lesson);
 
   useEffect(() => {
     if (!loading && !user) {
       router.push('/login');
+    } else if (user) {
+      dispatch(loadStudentLessons());
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, dispatch]);
 
   const handleSignOut = async () => {
     try {
@@ -32,7 +38,7 @@ export default function DashboardPage() {
     }
   };
 
-  if (loading || !user) {
+  if (loading || !user || lessonsLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-roman-marble">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>
@@ -40,56 +46,89 @@ export default function DashboardPage() {
     );
   }
 
-  // Mock data for the dashboard
-  const currentLesson = {
-    title: 'Roman Forum Vocabulary',
-    description: 'Master essential terms for discussing Roman civic life',
-    progress: 65,
-    timeLeft: '13 minutes left',
+  const lessons = studentLessons.map(lesson => ({
+    ...lesson,
+    progress: lesson.progress || 0,
+    status: lesson.status || 'available',
+  }));
+
+  const todaysGoals = [
+    { task: 'Complete current lesson', completed: false, points: 50 },
+    { task: 'Review 15 vocabulary words', completed: true, points: 30 },
+    { task: 'Practice pronunciation', completed: false, points: 20 },
+  ];
+
+  const weeklyStats = [
+    { label: 'Lessons Completed', value: 2, icon: CheckCircle, color: 'roman-green' },
+    { label: 'Words Learned', value: 89, icon: BookOpen, color: 'roman-red' },
+    { label: 'Study Time', value: '4.2h', icon: Clock, color: 'roman-gold' },
+    { label: 'Current Streak', value: '7 days', icon: TrendingUp, color: 'roman-terracotta' },
+  ];
+
+  const statusConfig: Record<
+    LessonStatus,
+    { card: string; icon: string; button: string; text: string; showIcon: JSX.Element | null }
+  > = {
+    completed: {
+      card: 'border-roman-green bg-roman-green/5',
+      icon: 'bg-roman-green text-white',
+      button: 'bg-roman-green hover:bg-roman-green/90',
+      text: 'Review',
+      showIcon: <CheckCircle className="h-6 w-6" />,
+    },
+    current: {
+      card: 'border-roman-red bg-roman-red/5',
+      icon: 'bg-roman-red text-white',
+      button: 'bg-roman-red hover:bg-roman-red/90',
+      text: 'Continue',
+      showIcon: null,
+    },
+    upcoming: {
+      card: 'border-roman-gold bg-roman-gold/5',
+      icon: 'bg-roman-gold text-white',
+      button: 'bg-roman-gold hover:bg-roman-gold/90',
+      text: 'Start',
+      showIcon: null,
+    },
+    available: {
+      card: 'border-roman-stone bg-roman-stone/5',
+      icon: 'bg-roman-stone text-white',
+      button: 'bg-roman-stone hover:bg-roman-stone/90',
+      text: 'Start',
+      showIcon: null,
+    },
+    'in-progress': {
+      card: 'border-roman-terracotta bg-roman-terracotta/5',
+      icon: 'bg-roman-terracotta text-white',
+      button: 'bg-roman-terracotta hover:bg-roman-terracotta/90',
+      text: 'Continue',
+      showIcon: null,
+    },
+    locked: {
+      card: 'border-gray-300 bg-gray-100',
+      icon: 'bg-gray-300 text-gray-500',
+      button: 'bg-gray-400 cursor-not-allowed',
+      text: 'Locked',
+      showIcon: null,
+    },
   };
-
-  const lessons = [
-    { title: 'Introduction to Latin', completed: true },
-    { title: 'Basic Nouns and Cases', completed: true },
-    { title: 'Roman Forum Vocabulary', completed: false, current: true },
-    { title: 'Present Tense Verbs', completed: false },
-    { title: 'Simple Conversations', completed: false },
-  ];
-
-  const dailyPractice = [
-    {
-      title: 'Vocabulary Review',
-      description: '10 words • 5 minutes',
-      icon: BookOpen,
-    },
-    {
-      title: 'Translation Challenge',
-      description: '3 sentences • 8 minutes',
-      icon: MessageCircle,
-    },
-  ];
-
-  const leaderboard = [
-    { name: 'Marcus Aurelius', points: 2450, position: 1 },
-    { name: 'Julia Augusta', points: 2340, position: 2 },
-    { name: `${user.displayName || user.email?.split('@')[0]}`, points: 1890, position: 3, isUser: true },
-    { name: 'Gaius Julius', points: 1780, position: 4 },
-    { name: 'Livia Drusilla', points: 1650, position: 5 },
-  ];
 
   return (
     <div className="min-h-screen bg-roman-marble">
-      <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-full bg-roman-red flex items-center justify-center text-white font-serif">
+      <header className="bg-white border-b border-border px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-full bg-roman-red flex items-center justify-center text-white font-serif">
             <span className="text-xl">L</span>
           </div>
-          <h1 className="text-xl font-serif tracking-wide">Latin App</h1>
+          <div>
+            <h1 className="text-2xl font-serif tracking-wide">Latin Learning</h1>
+            <p className="text-sm text-roman-stone">Welcome back, {user.displayName || user.email?.split('@')[0]}</p>
+          </div>
         </div>
         <div className="flex items-center gap-4">
           <Button
             variant="ghost"
-            className="text-roman-stone hover:text-foreground/80 px-3 py-2 rounded-md text-sm font-medium flex items-center"
+            className="text-roman-stone hover:text-foreground/80 px-4 py-2 rounded-md text-sm font-medium flex items-center"
             onClick={() => router.push('/profile')}>
             <User className="h-5 w-5 mr-2" />
             Profile
@@ -98,258 +137,158 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="container mx-auto py-8 px-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {/* Left Column */}
-          <div className="md:col-span-2 space-y-6">
-            <section>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-serif text-gray-800">
-                  Welcome, {user.displayName || user.email?.split('@')[0]}
-                </h2>
-                <span className="text-sm text-roman-stone">Daily streak: 7 days 🔥</span>
+      <main className="px-6 py-8">
+        <div className="max-w-[1800px] mx-auto">
+          {/* Available Lessons - Full Width Priority */}
+          <section className="mb-12">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h2 className="text-4xl font-serif text-gray-900 mb-2">Your Learning Path</h2>
+                <p className="text-lg text-roman-stone">Continue your journey through Latin mastery</p>
               </div>
-
-              <RomanCard>
-                <RomanCardHeader>
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-full bg-roman-parchment flex items-center justify-center flex-shrink-0 border border-roman-terracotta/20">
-                      <BookOpen className="h-6 w-6 text-roman-terracotta" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-serif">
-                        Lesson III: <SimpleRichDisplay content={currentLesson.title} />
-                      </h3>
-                      <p className="text-sm text-roman-stone">
-                        <SimpleRichDisplay content={currentLesson.description} />
-                      </p>
-                    </div>
+              {lessons.length > 0 && (
+                <div className="text-right">
+                  <div className="text-2xl font-serif text-roman-red">
+                    {Math.round((lessons.filter(l => l.status === 'completed').length / lessons.length) * 100)}%
+                    Complete
                   </div>
-                </RomanCardHeader>
-                <RomanCardContent>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium">Progress: {currentLesson.progress}%</span>
-                    <span className="text-sm text-roman-stone">{currentLesson.timeLeft}</span>
+                  <div className="text-sm text-roman-stone">
+                    {lessons.filter(l => l.status === 'completed').length} of {lessons.length} lessons finished
                   </div>
-                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-roman-red rounded-full"
-                      style={{ width: `${currentLesson.progress}%` }}></div>
-                  </div>
-                </RomanCardContent>
-                <div className="border-t border-border p-4 flex justify-between gap-2">
-                  <Button variant="outline">Review Notes</Button>
-                  <Button>Continue</Button>
-                  <Button variant="secondary" onClick={() => router.push('/lesson')}>
-                    Go to Lesson
-                  </Button>
                 </div>
-              </RomanCard>
-            </section>
+              )}
+            </div>
 
-            <section>
-              <h2 className="text-2xl font-serif text-gray-800 mb-4">Extra Practice</h2>
-              <div className="grid grid-cols-2 gap-4">
-                <RomanCard className="cursor-pointer hover:shadow-md transition-shadow">
-                  <RomanCardContent className="p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-full bg-roman-parchment flex items-center justify-center border border-roman-terracotta/20">
-                        <BookOpen className="h-6 w-6 text-roman-terracotta" />
-                      </div>
-                      <div>
-                        <h3 className="font-serif text-lg">Vocabulary</h3>
-                        <p className="text-sm text-roman-stone">Practice word meanings</p>
-                      </div>
-                    </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+              {lessons.length === 0 ? (
+                <RomanCard className="col-span-full">
+                  <RomanCardContent className="p-12 text-center">
+                    <BookOpen className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-2xl font-serif text-gray-700 mb-2">No Lessons Available</h3>
+                    <p className="text-gray-500">
+                      Check back soon! Your instructors are preparing amazing Latin lessons for you.
+                    </p>
                   </RomanCardContent>
                 </RomanCard>
-
-                <RomanCard className="cursor-pointer hover:shadow-md transition-shadow">
-                  <RomanCardContent className="p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-full bg-roman-parchment flex items-center justify-center border border-roman-terracotta/20">
-                        <FlaskConical className="h-6 w-6 text-roman-terracotta" />
-                      </div>
-                      <div>
-                        <h3 className="font-serif text-lg">Morphology</h3>
-                        <p className="text-sm text-roman-stone">Word forms & endings</p>
-                      </div>
-                    </div>
-                  </RomanCardContent>
-                </RomanCard>
-
-                <RomanCard className="cursor-pointer hover:shadow-md transition-shadow">
-                  <RomanCardContent className="p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-full bg-roman-parchment flex items-center justify-center border border-roman-terracotta/20">
-                        <TreePine className="h-6 w-6 text-roman-terracotta" />
-                      </div>
-                      <div>
-                        <h3 className="font-serif text-lg">Diagramming</h3>
-                        <p className="text-sm text-roman-stone">Sentence structure</p>
-                      </div>
-                    </div>
-                  </RomanCardContent>
-                </RomanCard>
-
-                <RomanCard className="cursor-pointer hover:shadow-md transition-shadow">
-                  <RomanCardContent className="p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-full bg-roman-parchment flex items-center justify-center border border-roman-terracotta/20">
-                        <Headphones className="h-6 w-6 text-roman-terracotta" />
-                      </div>
-                      <div>
-                        <h3 className="font-serif text-lg">Listening</h3>
-                        <p className="text-sm text-roman-stone">Audio comprehension</p>
-                      </div>
-                    </div>
-                  </RomanCardContent>
-                </RomanCard>
-              </div>
-            </section>
-
-            <section>
-              <h2 className="text-2xl font-serif text-gray-800 mb-4">Course Curriculum</h2>
-              <div className="w-full">
-                <div className="bg-roman-parchment p-1 rounded-t-lg flex">
-                  <Button variant="default" className="bg-white text-roman-red hover:bg-white/90 focus:bg-white">
-                    Beginner
-                  </Button>
-                  <Button variant="ghost" className="text-gray-700 hover:text-roman-red">
-                    Intermediate
-                  </Button>
-                  <Button variant="ghost" className="text-gray-700 hover:text-roman-red">
-                    Advanced
-                  </Button>
-                </div>
-                <div className="bg-white rounded-b-lg border border-border p-4 space-y-3">
-                  {lessons.map((lesson, index) => (
-                    <div
-                      key={index}
-                      className={`border-l-4 ${
-                        lesson.current
-                          ? 'border-l-roman-red'
-                          : lesson.completed
-                            ? 'border-l-roman-green'
-                            : 'border-l-gray-200'
-                      } bg-white rounded-lg shadow-sm`}>
-                      <div className="p-4 flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div
-                            className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                              lesson.completed
-                                ? 'bg-roman-green text-white'
-                                : lesson.current
-                                  ? 'bg-roman-red text-white'
-                                  : 'bg-roman-parchment text-roman-stone'
-                            }`}>
-                            {lesson.completed ? '✓' : index + 1}
-                          </div>
-                          <span className={`font-medium ${lesson.current ? 'text-roman-red' : ''}`}>
-                            {lesson.title}
-                          </span>
+              ) : (
+                lessons.map((lesson, index) => (
+                  <RomanCard
+                    key={index}
+                    className={`transition-all duration-200 hover:shadow-xl cursor-pointer hover:-translate-y-1 ${statusConfig[lesson.status]?.card || 'border-gray-300'}`}>
+                    <RomanCardContent className="p-6">
+                      <div className="flex items-start gap-4 mb-4">
+                        <div
+                          className={`w-12 h-12 rounded-xl flex items-center justify-center ${statusConfig[lesson.status]?.icon || 'bg-gray-300 text-gray-500'}`}>
+                          {statusConfig[lesson.status]?.showIcon || <BookOpen className="h-5 w-5" />}
                         </div>
-                        <Button
-                          size="sm"
-                          variant={lesson.completed ? 'ghost' : lesson.current ? 'default' : 'outline'}
-                          className={`${lesson.completed ? 'text-roman-stone hover:text-gray-800' : lesson.current ? '' : 'border-gray-200 hover:bg-gray-50'}`}>
-                          {lesson.completed ? 'Review' : lesson.current ? 'Continue' : 'Start'}
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
-          </div>
+                        <div className="flex-1">
+                          <h3 className="text-xl font-serif mb-2">{lesson.title}</h3>
+                          <p className="text-sm text-roman-stone mb-3">{lesson.description}</p>
 
-          {/* Right Column */}
-          <div className="space-y-6">
+                          <div className="flex items-center gap-4 text-xs text-roman-stone mb-3">
+                            <span className="flex items-center gap-1">
+                              <BookOpen className="h-3 w-3" />
+                              {lesson.introduction?.length || 0} intro pages
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <BookOpen className="h-3 w-3" />
+                              {lesson.exercises?.length || 0} exercises
+                            </span>
+                          </div>
+
+                          {lesson.progress > 0 && (
+                            <div className="mb-4">
+                              <div className="flex justify-between items-center mb-1">
+                                <span className="text-xs font-medium">Progress</span>
+                                <span className="text-xs font-semibold">{lesson.progress}%</span>
+                              </div>
+                              <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full transition-all ${
+                                    lesson.status === 'completed' ? 'bg-roman-green' : 'bg-roman-red'
+                                  }`}
+                                  style={{ width: `${lesson.progress}%` }}></div>
+                              </div>
+                            </div>
+                          )}
+
+                          <Button
+                            className={`w-full ${statusConfig[lesson.status]?.button || 'bg-gray-400'}`}
+                            onClick={() => router.push(`/lesson/${lesson.id}`)}>
+                            <Play className="h-4 w-4 mr-2" />
+                            {statusConfig[lesson.status]?.text || 'Start'}
+                          </Button>
+                        </div>
+                      </div>
+                    </RomanCardContent>
+                  </RomanCard>
+                ))
+              )}
+            </div>
+          </section>
+
+          {/* Bottom Section - Goals and Stats */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+            {/* Today's Goals */}
             <RomanCard>
-              <RomanCardHeader className="bg-roman-red border-b-0">
-                <h3 className="font-serif text-lg">Daily Practice</h3>
-                <p className="text-sm opacity-90">Build your Latin skills with daily exercises</p>
+              <RomanCardHeader>
+                <h3 className="text-2xl font-serif flex items-center gap-3">
+                  <Target className="h-6 w-6 text-roman-red" />
+                  Today&apos;s Goals
+                </h3>
+                <p className="text-roman-stone mt-1">Complete your daily learning objectives</p>
               </RomanCardHeader>
-              <RomanCardContent>
-                {dailyPractice.map((practice, index) => (
+              <RomanCardContent className="space-y-4">
+                {todaysGoals.map((goal, index) => (
                   <div
                     key={index}
-                    className={`flex items-center justify-between ${
-                      index < dailyPractice.length - 1 ? 'mb-4 pb-4 border-b border-border' : ''
-                    }`}>
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-roman-parchment flex items-center justify-center">
-                        <practice.icon className="h-5 w-5 text-roman-terracotta" />
-                      </div>
-                      <div>
-                        <p className="font-medium">{practice.title}</p>
-                        <p className="text-xs text-roman-stone">{practice.description}</p>
-                      </div>
+                    className="flex items-center gap-4 p-3 rounded-lg hover:bg-roman-parchment/50 transition-colors">
+                    <div
+                      className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                        goal.completed ? 'bg-roman-green text-white' : 'border-2 border-gray-300'
+                      }`}>
+                      {goal.completed && <CheckCircle className="h-4 w-4" />}
                     </div>
-                    <Button variant="outline" size="sm" className="border-gray-200 hover:bg-gray-50">
-                      Start
-                    </Button>
+                    <div className="flex-1">
+                      <p className={`${goal.completed ? 'line-through text-gray-500' : ''}`}>{goal.task}</p>
+                    </div>
+                    <span className="text-sm font-medium text-roman-red">+{goal.points}pts</span>
                   </div>
                 ))}
+
+                <div className="pt-4 border-t border-border">
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium">Daily Progress</span>
+                    <span className="text-lg font-bold text-roman-red">25/90 pts</span>
+                  </div>
+                  <div className="h-3 bg-gray-200 rounded-full overflow-hidden mt-2">
+                    <div className="h-full bg-roman-red rounded-full" style={{ width: '28%' }}></div>
+                  </div>
+                </div>
               </RomanCardContent>
             </RomanCard>
 
+            {/* Weekly Stats */}
             <RomanCard>
               <RomanCardHeader>
-                <h3 className="text-lg font-serif">Leaderboard</h3>
-                <p className="text-sm text-roman-stone">This week&apos;s top Latin scholars</p>
-              </RomanCardHeader>
-              <RomanCardContent className="space-y-3">
-                {leaderboard.map(userEntry => (
-                  <div
-                    key={userEntry.position}
-                    className={`flex items-center justify-between p-2 rounded ${userEntry.isUser ? 'bg-roman-parchment' : ''}`}>
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`w-6 h-6 rounded-full flex items-center justify-center text-sm ${
-                          userEntry.position === 1
-                            ? 'bg-roman-gold text-white'
-                            : userEntry.position === 2
-                              ? 'bg-gray-400 text-white'
-                              : userEntry.position === 3
-                                ? 'bg-roman-terracotta text-white'
-                                : 'bg-roman-marble text-roman-stone'
-                        }`}>
-                        {userEntry.position}
-                      </div>
-                      <span className={userEntry.isUser ? 'font-medium' : ''}>{userEntry.name}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Trophy className="h-4 w-4 text-roman-gold" />
-                      <span className="font-medium">{userEntry.points}</span>
-                    </div>
-                  </div>
-                ))}
-              </RomanCardContent>
-              <div className="border-t border-border p-4">
-                <Button variant="link" className="text-roman-red hover:text-roman-red/90 w-full text-center">
-                  View Full Rankings
-                </Button>
-              </div>
-            </RomanCard>
-
-            <RomanCard>
-              <RomanCardHeader>
-                <h3 className="text-lg font-serif">Account Information</h3>
+                <h3 className="text-2xl font-serif flex items-center gap-3">
+                  <TrendingUp className="h-6 w-6 text-roman-red" />
+                  This Week&apos;s Progress
+                </h3>
+                <p className="text-roman-stone mt-1">Track your learning achievements</p>
               </RomanCardHeader>
               <RomanCardContent>
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-sm text-roman-stone">Email</p>
-                    <p className="font-medium">{user.email}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-roman-stone">Role</p>
-                    <p className="font-medium">
-                      {user.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'Student'}
-                    </p>
-                  </div>
+                <div className="grid grid-cols-2 gap-6">
+                  {weeklyStats.map((stat, index) => (
+                    <div key={index} className="text-center p-4 rounded-lg bg-roman-parchment/30">
+                      <div
+                        className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 bg-${stat.color}/20`}>
+                        <stat.icon className={`h-6 w-6 text-${stat.color}`} />
+                      </div>
+                      <div className="text-2xl font-bold text-gray-900 mb-1">{stat.value}</div>
+                      <div className="text-sm text-roman-stone">{stat.label}</div>
+                    </div>
+                  ))}
                 </div>
               </RomanCardContent>
             </RomanCard>
