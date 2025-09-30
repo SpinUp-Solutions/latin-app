@@ -2,6 +2,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
 import { BookOpen, Library } from 'lucide-react';
 import { Lesson } from '@/src/types/lesson';
+import { Input } from '@/src/components/ui/input';
 import { SimpleRichEditor } from '../../core/simple-rich-editor';
 import { VocabularyPoolSelector } from '../vocabulary-pools/VocabularyPoolSelector';
 
@@ -35,12 +36,11 @@ export const LessonInfoForm: React.FC<LessonInfoFormProps> = ({ lesson, onUpdate
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Title</label>
-            <SimpleRichEditor
-              content={lesson.title}
-              onChange={value => onUpdateInfo({ title: value })}
+            <Input
+              type="text"
+              value={lesson.title}
+              onChange={e => onUpdateInfo({ title: e.target.value })}
               placeholder="Enter lesson title..."
-              singleLine={true}
-              className="w-full"
             />
           </div>
           <div>
