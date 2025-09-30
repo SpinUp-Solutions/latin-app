@@ -45,13 +45,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
       handleCorrect(true);
       const score = 100;
 
-      // Auto-advance logic based on configuration
-      if (exercise.feedbackConfig.progressionRules?.autoAdvance !== false) {
-        const completionDelay = exercise.feedbackConfig.timingConfig?.nextExerciseDelay || 2000;
-        setTimeout(() => {
-          onComplete?.(score);
-        }, completionDelay);
-      }
+      onComplete?.(score);
     } else {
       handleIncorrect();
     }

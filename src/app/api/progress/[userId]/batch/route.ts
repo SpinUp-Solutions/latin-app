@@ -27,11 +27,18 @@ export async function GET(request: NextRequest, { params }: { params: { userId: 
       adminDb.collection('lessons').where('isLive', '==', true).get(),
     ]);
 
+    if (progressCollection.empty) {
+      return NextResponse.json({});
+    }
+
     const lessonsMap = new Map();
     lessonsCollection.docs.forEach(doc => {
-      const lesson = { id: doc.id, ...doc.data() };
-      const totalExercises = getContentCount(lesson as Lesson).exerciseItems;
-      lessonsMap.set(lesson.id, { ...lesson, totalExercises });
+      const data = doc.data();
+      lessonsMap.set(doc.id, {
+        id: doc.id,
+        totalExercises: data.totalExercises || getContentCount({ ...data, id: doc.id } as Lesson).exerciseItems,
+        ...data,
+      });
     });
 
     const progressMap: Record<string, unknown> = {};
@@ -40,10 +47,10 @@ export async function GET(request: NextRequest, { params }: { params: { userId: 
       const data = doc.data();
       const lessonId = data.lessonId || doc.id.split('_')[1];
 
-      if (lessonId) {
+      if (lessonId && lessonsMap.has(lessonId)) {
         const lesson = lessonsMap.get(lessonId);
         const exerciseProgress = data.exerciseProgress || [];
-        const totalExercises = lesson?.totalExercises || 0;
+        const totalExercises = lesson.totalExercises;
 
         const overallProgress = calculateOverallProgress(exerciseProgress, totalExercises);
         const exercisesCompleted = exerciseProgress.length;
@@ -63,7 +70,6 @@ export async function GET(request: NextRequest, { params }: { params: { userId: 
 
     return NextResponse.json(progressMap);
   } catch (error) {
-    console.error('Error fetching batch progress:', error);
     return NextResponse.json({ error: 'Failed to fetch progress' }, { status: 500 });
   }
 }

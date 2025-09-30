@@ -32,7 +32,6 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
   const { autoAdvanceIfEnabled } = useExerciseProgression({
     totalItems: 1,
     feedbackConfig: exercise.feedbackConfig,
-    onComplete,
   });
 
   const handleConjugationSubmit = () => {
@@ -60,9 +59,6 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
           setUserAnswer('');
           setIsProcessing(false);
         });
-        if (exercise.feedbackConfig.progressionRules?.autoAdvance === false) {
-          setIsProcessing(false);
-        }
       }
     } else {
       handleIncorrect();
@@ -94,9 +90,6 @@ const VerbConjugationExerciseComponent: React.FC<Props> = ({ exercise, onComplet
           setUserAnswer('');
           setIsProcessing(false);
         });
-        if (exercise.feedbackConfig.progressionRules?.autoAdvance === false) {
-          setIsProcessing(false);
-        }
       }
     } else {
       handleIncorrect();

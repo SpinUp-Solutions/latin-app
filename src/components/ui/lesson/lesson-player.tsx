@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { useDispatch, useSelector } from 'react-redux';
+import { useSelector } from 'react-redux';
 import { Lesson, IntroductionPage, ExercisePage } from '@/src/types/lesson';
 import { BookOpen, Check } from 'lucide-react';
 import { Button } from '@/src/components/ui/button';
@@ -12,8 +12,8 @@ import PageTemplate from './page-template';
 import useAudio from '@/src/hooks/useAudio';
 import LessonProgressBar from './lesson-progress-bar';
 import LessonNavigation from '../exercises/lesson-navigation';
-import { RootState, AppDispatch } from '@/src/store';
-import { markExerciseComplete, loadUserProgress } from '@/src/store/slices/progressSlice';
+import { RootState } from '@/src/store';
+import { useMarkExerciseCompleteMutation } from '@/src/store/api/progressApi';
 
 interface LessonPlayerProps {
   lesson: Lesson;
@@ -22,19 +22,13 @@ interface LessonPlayerProps {
 type LessonMode = 'introduction' | 'exercise';
 
 export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
-  const dispatch = useDispatch<AppDispatch>();
   const { user } = useSelector((state: RootState) => state.auth);
+  const [markExerciseComplete] = useMarkExerciseCompleteMutation();
 
   const [mode, setMode] = useState<LessonMode>('introduction');
   const [currentIntroIndex, setCurrentIntroIndex] = useState(0);
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
   const [introCompleted, setIntroCompleted] = useState(false);
-
-  useEffect(() => {
-    if (user?.uid) {
-      dispatch(loadUserProgress({ userId: user.uid, lessonId: lesson.id }));
-    }
-  }, [dispatch, user?.uid, lesson.id]);
 
   const currentIntroPage: IntroductionPage | undefined =
     mode === 'introduction' ? lesson.introduction[currentIntroIndex] : undefined;
@@ -54,14 +48,11 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
     } else {
       if (currentExerciseIndex < lesson.exercises.length - 1) {
         setCurrentExerciseIndex(currentExerciseIndex + 1);
-      } else {
-        console.log('All exercises completed!');
       }
     }
   }, [mode, currentIntroIndex, lesson.introduction.length, currentExerciseIndex, lesson.exercises.length]);
 
   const handleAudioEnded = useCallback(() => {
-    console.log('Audio ended - advancing to next content');
     handleNext();
   }, [handleNext]);
 
@@ -72,30 +63,25 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
       if (!user?.uid) return;
 
       const exerciseId = `page${currentExerciseIndex}-item${itemIndex}`;
-      dispatch(
-        markExerciseComplete({
-          userId: user.uid,
-          lessonId: lesson.id,
-          exerciseId,
-          score,
-        })
-      );
+      markExerciseComplete({
+        userId: user.uid,
+        lessonId: lesson.id,
+        exerciseId,
+        score,
+      });
     },
-    [dispatch, user?.uid, lesson, currentExerciseIndex]
+    [markExerciseComplete, user?.uid, lesson.id, currentExerciseIndex]
   );
 
   function handlePrevious() {
     if (mode === 'introduction') {
       if (currentIntroIndex > 0) {
-        console.log(`Moving to previous intro page: ${currentIntroIndex - 1}`);
         setCurrentIntroIndex(currentIntroIndex - 1);
       }
     } else {
       if (currentExerciseIndex > 0) {
-        console.log(`Moving to previous exercise: ${currentExerciseIndex - 1}`);
         setCurrentExerciseIndex(currentExerciseIndex - 1);
       } else if (introCompleted) {
-        console.log('At first exercise, moving back to introduction');
         setMode('introduction');
         setCurrentIntroIndex(lesson.introduction.length - 1);
       }
@@ -104,11 +90,9 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
 
   function handleSwitchMode(newMode: LessonMode) {
     if (newMode === 'exercise' && !introCompleted) {
-      console.log('Cannot switch to exercise mode - intro not completed');
       return;
     }
 
-    console.log(`Switching mode to ${newMode}`);
     setMode(newMode);
 
     if (newMode === 'introduction') {

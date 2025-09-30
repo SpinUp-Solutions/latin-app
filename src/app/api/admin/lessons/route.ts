@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { Lesson } from '@/src/types/lesson';
 import { verifyAdminAccess } from '../../../../lib/verifyAdminAccess';
+import { getContentCount } from '@/src/utils/lessonUtils';
 
 export async function GET(request: NextRequest) {
   try {
@@ -56,9 +57,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'A lesson with this ID already exists' }, { status: 409 });
     }
 
-    // Add metadata
+    const contentCount = getContentCount(lesson);
+
     const lessonData = {
       ...lesson,
+      totalExercises: contentCount.exerciseItems,
       createdAt: new Date().toISOString(),
       createdBy: user.uid,
       updatedAt: new Date().toISOString(),
@@ -112,9 +115,11 @@ export async function PUT(request: NextRequest) {
     }
 
     const existingLesson = existingLessonDoc.data();
+    const contentCount = getContentCount(lesson);
 
     const updatedLessonData = {
       ...lesson,
+      totalExercises: contentCount.exerciseItems,
       createdAt: existingLesson?.createdAt || new Date().toISOString(),
       createdBy: existingLesson?.createdBy || user.uid,
       updatedAt: new Date().toISOString(),

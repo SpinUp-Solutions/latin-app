@@ -42,16 +42,8 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
     if (validation.isCorrect) {
       handleCorrect(true);
 
-      // Auto-advance logic
-      if (exercise.feedbackConfig.progressionRules?.autoAdvance !== false) {
-        const delay = exercise.feedbackConfig.timingConfig?.nextExerciseDelay || 2000;
-        setTimeout(() => {
-          // Single exercise, successful completion = 100%
-          onComplete?.(100);
-        }, delay);
-      }
+      onComplete?.(100);
     } else {
-      // Let the feedback system handle escalation - don't pass hint/correct answer
       handleIncorrect();
     }
 
