@@ -11,6 +11,7 @@ import { SentenceDiagrammingExercise } from '../exercises/sentence-diagramming-e
 import MultipleChoiceExercise from '../exercises/multiple-choice-exercise';
 import OddOneOutExercise from '../exercises/odd-one-out-exercise';
 import TableFillExercise from '../exercises/table-fill-exercise';
+import ClickOnMultipleWordsExercise from '../exercises/click-on-multiple-words';
 import { ContentItem, TextContent, TableContent, VocabularyContent, VocabularyPoolContent } from '@/src/types/lesson';
 import {
   MatchingExercise,
@@ -22,6 +23,7 @@ import {
   MultipleChoiceExercise as MultipleChoiceExerciseType,
   OddOneOutExercise as OddOneOutExerciseType,
   TableFillExercise as TableFillExerciseType,
+  ClickOnMultipleWordsExercise as ClickOnMultipleWordsExerciseType,
 } from '@/src/types/exercise';
 import { VocabularyViewer } from './VocabularyViewer';
 import { VocabularyPoolViewer } from './VocabularyPoolViewer';
@@ -97,6 +99,9 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onCom
 
     case 'table-fill':
       return <TableFillExercise exercise={content as TableFillExerciseType} onComplete={onComplete} />;
+
+    case 'click-on-multiple-words':
+      return <ClickOnMultipleWordsExercise exercise={content as ClickOnMultipleWordsExerciseType} onComplete={onComplete} />;
 
     default:
       return (
