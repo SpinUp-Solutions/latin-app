@@ -2,34 +2,26 @@
 
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSelector } from 'react-redux';
-import { RootState } from '@/src/store';
 import { Button } from '@/src/components/ui/button';
 import { ArrowLeft, Plus, Library } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
+import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
+import { useAuth } from '@/src/hooks/useAuth';
 
 import { useVocabularyPools } from '@/src/hooks/useVocabularyPools';
 import { PoolFilters } from '@/src/components/ui/admin/vocabulary-pools/PoolFilters';
 import { PoolList } from '@/src/components/ui/admin/vocabulary-pools/PoolList';
-import { AdminLoadingPage } from '@/src/components/ui/admin/AdminLoadingPage';
 
-export default function VocabularyPoolsPage() {
+function VocabularyPoolsPage() {
   const router = useRouter();
-  const { user, loading: authLoading } = useSelector((state: RootState) => state.auth);
+  const { user } = useAuth();
 
   const { pools, loading, error, pagination, filters, loadPools, loadMorePools, updateFilters, deletePool } =
     useVocabularyPools();
 
   useEffect(() => {
-    if (!authLoading && (!user || user.role !== 'admin')) {
-      router.push('/dashboard');
-      toast.error('Access denied. Admin privileges required.');
-    }
-  }, [user, authLoading, router]);
-
-  useEffect(() => {
-    if (user && user.role === 'admin') {
+    if (user) {
       loadPools(true);
     }
   }, [user, loadPools]);
@@ -42,14 +34,6 @@ export default function VocabularyPoolsPage() {
       }
     }
   };
-
-  if (authLoading || !user) {
-    return <AdminLoadingPage />;
-  }
-
-  if (user.role !== 'admin') {
-    return null;
-  }
 
   return (
     <div className="min-h-screen bg-roman-marble">
@@ -102,3 +86,5 @@ export default function VocabularyPoolsPage() {
     </div>
   );
 }
+
+export default withAdminAuth(VocabularyPoolsPage);
