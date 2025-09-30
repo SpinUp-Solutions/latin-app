@@ -37,23 +37,16 @@ export interface ExerciseProgress {
   score: number;
 }
 
-export interface PageProgress {
-  pageIndex: number;
-  completedAt: string;
-}
-
 export interface UserProgress {
   userId: string;
   lessonId: string;
   status: LessonStatus;
   completedAt?: string;
-  progress: number;
+  currentPageIndex: number;
   exerciseProgress: ExerciseProgress[];
-  pageProgress: PageProgress[];
   score?: number;
-  overallProgress?: number;
-  exercisesCompleted?: number;
-  totalExercises?: number;
+  lastAccessedAt: string;
+  progress?: number;
 }
 
 export interface LessonWithAccess extends Lesson {

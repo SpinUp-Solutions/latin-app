@@ -13,11 +13,23 @@ export async function GET() {
     const lessons: LessonWithProgress[] = snapshot.docs.map(doc => {
       const data = doc.data();
       const progress = 0;
-      const status = progress === 0 ? 'available' : progress === 100 ? 'completed' : 'in-progress';
+      const status = 'available';
 
       return {
         id: doc.id,
-        ...data,
+        title: data.title,
+        description: data.description,
+        vocabulary_pool: data.vocabulary_pool,
+        pages: data.pages || [],
+        isLive: data.isLive,
+        liveOrder: data.liveOrder,
+        publishedAt: data.publishedAt,
+        publishedBy: data.publishedBy,
+        createdAt: data.createdAt,
+        createdBy: data.createdBy,
+        updatedAt: data.updatedAt,
+        updatedBy: data.updatedBy,
+        version: data.version,
         progress,
         status,
       } as LessonWithProgress;

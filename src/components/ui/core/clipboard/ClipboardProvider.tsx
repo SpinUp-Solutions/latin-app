@@ -9,7 +9,7 @@ import {
   selectClipboardItems,
   selectHasClipboardItems,
 } from '@/src/store/slices/clipboardSlice';
-import { addContentToPage, loadTooltips } from '@/src/store/slices/lessonSlice';
+import { addContentToPage, loadTooltips } from '@/src/store/slices/lessonEditorSlice';
 import { AppDispatch } from '@/src/store';
 
 const ClipboardContext = createContext<ClipboardContextType | undefined>(undefined);

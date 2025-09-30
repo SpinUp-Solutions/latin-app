@@ -4,14 +4,14 @@ import { Card, CardContent } from '@/src/components/ui/card';
 import { Plus, Trash2, Eye, AlertCircle, Users, BookOpen, Zap, Check, X } from 'lucide-react';
 import { VerbConjugationExercise } from '@/src/types/exercise';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
-import { updateEditingContent } from '@/src/store/slices/lessonSlice';
+import { updateEditingContent } from '@/src/store/slices/lessonEditorSlice';
 import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
 import { SimpleRichEditor } from '../../core/simple-rich-editor';
 
 export const VerbConjugationEditor: React.FC = () => {
   const dispatch = useAppDispatch();
-  const editingContent = useAppSelector(state => state.lesson.editingContent?.content as VerbConjugationExercise);
+  const editingContent = useAppSelector(state => state.lessonEditor.editingContent?.content as VerbConjugationExercise);
 
   const [showAddVocab, setShowAddVocab] = useState(false);
   const [newVocabTerm, setNewVocabTerm] = useState('');

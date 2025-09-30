@@ -2,17 +2,16 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useDispatch, useSelector } from 'react-redux';
-import { RootState, AppDispatch } from '@/src/store';
+import { useSelector, useDispatch } from 'react-redux';
+import { RootState } from '@/src/store';
+import { Lesson } from '@/src/types/lesson';
+import { syncLessonsFromRTQ, localReorderLiveLessons, selectHasUnsavedChanges } from '@/src/store/slices/lessonSlice';
 import {
-  loadLessons,
-  updateLessonsPublishStatus,
-  reorderLessons,
-  selectFilteredLessons,
-  selectLiveLessons,
-  selectAvailableLessons,
-  localReorderLiveLessons,
-} from '@/src/store/slices/lessonSlice';
+  useGetLessonsQuery,
+  useUpdateLessonsPublishStatusMutation,
+  useReorderLessonsMutation,
+} from '@/src/store/api/lessonApi';
+import { selectLiveLessons, selectAvailableLessons, selectFilteredLessons } from '@/src/store/slices/lessonSlice';
 import {
   DndContext,
   closestCenter,
@@ -28,18 +27,21 @@ import { Input } from '@/src/components/ui/input';
 import { RomanCard, RomanCardContent, RomanCardHeader } from '@/src/components/ui/core/roman-card';
 import { Badge } from '@/src/components/ui/badge';
 import { Checkbox } from '@/src/components/ui/checkbox';
-import { ArrowLeft, Globe, Search, Filter, BookOpen, Clock, CheckCircle, Save } from 'lucide-react';
+import { ArrowLeft, Globe, Search, Filter, BookOpen, Clock, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { SortableLessonItem } from '@/src/components/admin/SortableLessonItem';
 
 export default function LiveLessonsPage() {
   const router = useRouter();
-  const dispatch = useDispatch<AppDispatch>();
+  const dispatch = useDispatch();
   const { user } = useSelector((state: RootState) => state.auth);
-  const { loading } = useSelector((state: RootState) => state.lesson);
-  const liveLessons = useSelector((state: RootState) => selectLiveLessons(state));
-  const availableLessons = useSelector((state: RootState) => selectAvailableLessons(state));
+  const { data: serverLessons, isLoading: loading } = useGetLessonsQuery();
+  const [updatePublishStatus] = useUpdateLessonsPublishStatusMutation();
+  const [reorderLessons] = useReorderLessonsMutation();
+  const liveLessons = useSelector(selectLiveLessons);
+  const availableLessons = useSelector(selectAvailableLessons);
+  const hasUnsavedChanges = useSelector(selectHasUnsavedChanges);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'live' | 'draft'>('live');
@@ -58,9 +60,14 @@ export default function LiveLessonsPage() {
       router.push('/dashboard');
       return;
     }
+  }, [user, router]);
 
-    dispatch(loadLessons());
-  }, [dispatch, user, router]);
+  // Sync RTK Query data to lessonSlice
+  useEffect(() => {
+    if (serverLessons) {
+      dispatch(syncLessonsFromRTQ(serverLessons));
+    }
+  }, [serverLessons, dispatch]);
 
   const originalLiveIds = useMemo(() => new Set(liveLessons.map(l => l.id)), [liveLessons]);
 
@@ -106,17 +113,24 @@ export default function LiveLessonsPage() {
     dispatch(localReorderLiveLessons({ fromIndex: oldIndex, toIndex: newIndex }));
   };
 
-  const handleSaveOrder = async () => {
+  const handleApplyLessonOrder = async () => {
     try {
       const updates = liveLessons.map((lesson, index) => ({
         lessonId: lesson.id,
         liveOrder: index,
       }));
 
-      await dispatch(reorderLessons(updates)).unwrap();
-      toast.success('Lesson order updated successfully');
+      await reorderLessons(updates).unwrap();
+      toast.success('Lesson order saved successfully');
     } catch (error) {
-      toast.error('Failed to update lesson order');
+      toast.error('Failed to save lesson order');
+    }
+  };
+
+  const handleCancelLessonOrder = () => {
+    if (serverLessons) {
+      dispatch(syncLessonsFromRTQ(serverLessons));
+      toast.info('Changes discarded');
     }
   };
 
@@ -128,25 +142,20 @@ export default function LiveLessonsPage() {
 
     try {
       if (toUnpublish.length > 0) {
-        await dispatch(
-          updateLessonsPublishStatus({
-            lessonIds: toUnpublish,
-            isLive: false,
-          })
-        ).unwrap();
+        await updatePublishStatus({
+          lessonIds: toUnpublish,
+          isLive: false,
+        }).unwrap();
       }
 
       if (toPublish.length > 0) {
-        await dispatch(
-          updateLessonsPublishStatus({
-            lessonIds: toPublish,
-            isLive: true,
-          })
-        ).unwrap();
+        await updatePublishStatus({
+          lessonIds: toPublish,
+          isLive: true,
+        }).unwrap();
       }
 
       toast.success('Changes applied successfully');
-      dispatch(loadLessons());
     } catch (error) {
       toast.error('Failed to apply changes');
     }
@@ -286,13 +295,20 @@ export default function LiveLessonsPage() {
               <div>
                 <h2 className="text-lg font-serif">Live Lessons Order ({liveLessons.length})</h2>
                 <p className="text-sm text-gray-600">
-                  Drag lessons to reorder. Students will see them in this sequence.
+                  Drag lessons to reorder. Click Apply to save changes.
+                  {hasUnsavedChanges && <span className="text-orange-600 font-medium ml-2">• Unsaved changes</span>}
                 </p>
               </div>
-              <Button onClick={handleSaveOrder} className="flex items-center gap-2">
-                <Save className="w-4 h-4" />
-                Save Order
-              </Button>
+              {hasUnsavedChanges && (
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={handleCancelLessonOrder}>
+                    Cancel
+                  </Button>
+                  <Button size="sm" onClick={handleApplyLessonOrder}>
+                    Apply Changes
+                  </Button>
+                </div>
+              )}
             </RomanCardHeader>
             <RomanCardContent className="p-4">
               {liveLessons.length === 0 ? (
@@ -325,7 +341,7 @@ export default function LiveLessonsPage() {
                 {filteredLessons.length === 0 ? (
                   <div className="p-8 text-center text-gray-500">No lessons found matching your criteria</div>
                 ) : (
-                  filteredLessons.map(lesson => {
+                  filteredLessons.map((lesson: Lesson) => {
                     return (
                       <div key={lesson.id} className="p-4 hover:bg-gray-50 transition-colors">
                         <div className="flex items-start gap-4">

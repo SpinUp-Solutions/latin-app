@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
-import { saveEditingContent, cancelEditing } from '@/src/store/slices/lessonSlice';
+import { saveEditingContent, cancelEditing } from '@/src/store/slices/lessonEditorSlice';
 
 import { EditorModal } from './content-editor/EditorModal';
 import { TextEditor } from './content-editor/TextEditor';
@@ -22,7 +22,7 @@ import { getEditorTitle } from '@/src/utils/editorRegistry';
 
 export const ContentEditor: React.FC = () => {
   const dispatch = useAppDispatch();
-  const { editingContent, isModalOpen } = useAppSelector(state => state.lesson);
+  const { editingContent, isModalOpen } = useAppSelector(state => state.lessonEditor);
 
   if (!isModalOpen || !editingContent) {
     return null;
