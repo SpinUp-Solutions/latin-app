@@ -9,7 +9,7 @@ import {
   selectClipboardItems,
   selectHasClipboardItems,
 } from '@/src/store/slices/clipboardSlice';
-import { addContentToPage, loadTooltips } from '@/src/store/slices/lessonSlice';
+import { addContentToPage, loadTooltips } from '@/src/store/slices/lessonEditorSlice';
 import { AppDispatch } from '@/src/store';
 
 const ClipboardContext = createContext<ClipboardContextType | undefined>(undefined);
@@ -42,7 +42,6 @@ export const ClipboardProvider: React.FC<ClipboardProviderProps> = ({ children }
     if (result && result.content && result.tooltips) {
       dispatch(
         addContentToPage({
-          pageType: target.pageType,
           pageIndex: target.pageIndex,
           content: result.content,
         })
@@ -66,7 +65,6 @@ export const ClipboardProvider: React.FC<ClipboardProviderProps> = ({ children }
       if (result && result.content && result.tooltips) {
         dispatch(
           addContentToPage({
-            pageType: target.pageType,
             pageIndex: target.pageIndex,
             content: result.content,
           })

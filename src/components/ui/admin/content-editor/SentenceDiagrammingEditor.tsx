@@ -1,7 +1,7 @@
 import React from 'react';
 import { SentenceWord, AnnotationType, SentenceDiagrammingExercise } from '@/src/types/exercises/sentence-diagramming';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
-import { updateEditingContent } from '@/src/store/slices/lessonSlice';
+import { updateEditingContent } from '@/src/store/slices/lessonEditorSlice';
 import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
 import { DiagrammingEditor } from '../../core/DiagrammingEditor';
@@ -9,7 +9,9 @@ import { SimpleRichEditor } from '../../core/simple-rich-editor';
 
 export const SentenceDiagrammingEditor: React.FC = () => {
   const dispatch = useAppDispatch();
-  const editingContent = useAppSelector(state => state.lesson.editingContent?.content as SentenceDiagrammingExercise);
+  const editingContent = useAppSelector(
+    state => state.lessonEditor.editingContent?.content as SentenceDiagrammingExercise
+  );
 
   if (!editingContent) {
     return <div>No content selected for editing</div>;

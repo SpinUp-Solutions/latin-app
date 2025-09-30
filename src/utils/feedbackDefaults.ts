@@ -1,20 +1,15 @@
-import type {
-  FeedbackConfig,
-  SuccessMessageConfig,
-  ProgressionRules,
-  TimingConfig,
-  FeedbackLevel,
-} from '@/src/types/exercises/base';
+import type { FeedbackConfig, SuccessMessageConfig, ProgressionRules, FeedbackLevel } from '@/src/types/exercises/base';
 
 export const FEEDBACK_DEFAULTS = {
-  progressionDelay: 1500,
-  nextExerciseDelay: 2500,
   showExplanation: true,
   autoAdvance: true,
   resetOnCorrect: true,
   showProgress: true,
   allowManualAdvance: true,
 } as const;
+
+export const DEFAULT_ITEM_PROGRESSION_DELAY = 2000;
+export const DEFAULT_PAGE_AUTO_ADVANCE = { enabled: true, delay: 2000 };
 
 export function getSuccessMessageWithDefaults(successMessage?: SuccessMessageConfig): SuccessMessageConfig {
   return {
@@ -34,13 +29,6 @@ export function getProgressionRulesWithDefaults(rules?: ProgressionRules): Progr
   };
 }
 
-export function getTimingConfigWithDefaults(timing?: TimingConfig): TimingConfig {
-  return {
-    progressionDelay: timing?.progressionDelay ?? FEEDBACK_DEFAULTS.progressionDelay,
-    nextExerciseDelay: timing?.nextExerciseDelay ?? FEEDBACK_DEFAULTS.nextExerciseDelay,
-  };
-}
-
 export function normalizeEscalationLevel(level: FeedbackLevel): FeedbackLevel {
   return {
     ...level,
@@ -54,7 +42,6 @@ export function createDefaultFeedbackConfig(): FeedbackConfig {
     escalationLevels: [],
     successMessage: getSuccessMessageWithDefaults(),
     progressionRules: getProgressionRulesWithDefaults(),
-    timingConfig: getTimingConfigWithDefaults(),
   };
 }
 
@@ -62,12 +49,10 @@ export function getEffectiveFeedbackConfig(config: FeedbackConfig): {
   escalationLevels: FeedbackLevel[];
   successMessage: SuccessMessageConfig;
   progressionRules: ProgressionRules;
-  timingConfig: TimingConfig;
 } {
   return {
     escalationLevels: (config.escalationLevels ?? []).map(normalizeEscalationLevel),
     successMessage: getSuccessMessageWithDefaults(config.successMessage),
     progressionRules: getProgressionRulesWithDefaults(config.progressionRules),
-    timingConfig: getTimingConfigWithDefaults(config.timingConfig),
   };
 }

@@ -3,14 +3,14 @@ import { Button } from '@/src/components/ui/button';
 import { Plus } from 'lucide-react';
 import { VocabularyContent } from '@/src/types/lesson';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
-import { updateEditingContent } from '@/src/store/slices/lessonSlice';
+import { updateEditingContent } from '@/src/store/slices/lessonEditorSlice';
 import { SimpleInput, SimpleSelect } from '@/src/components/ui/form-components';
 import { VocabularyItemCard } from '@/src/components/ui/form-components/VocabularyItemCard';
 import { AudioUploadSection } from './AudioUploadSection';
 
 export const VocabularyEditor: React.FC = () => {
   const dispatch = useAppDispatch();
-  const editingContent = useAppSelector(state => state.lesson.editingContent?.content as VocabularyContent);
+  const editingContent = useAppSelector(state => state.lessonEditor.editingContent?.content as VocabularyContent);
 
   if (!editingContent) {
     return <div>No content selected for editing</div>;

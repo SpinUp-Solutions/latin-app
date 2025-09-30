@@ -12,6 +12,6 @@ export type {
   Exercise,
 } from './exercises';
 
-export type { RenderableContentItem, BasePage, IntroductionPage, ExercisePage } from './page';
+export type { RenderableContentItem, BasePage } from './page';
 
 export type { Lesson } from './lesson';

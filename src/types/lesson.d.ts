@@ -1,4 +1,4 @@
-import { IntroductionPage, ExercisePage } from './page';
+import { Page } from './page';
 import type { VocabularyPoolWithWords } from './vocabulary-pool';
 
 export interface Lesson {
@@ -6,8 +6,7 @@ export interface Lesson {
   title: string;
   description?: string;
   vocabulary_pool?: string;
-  introduction: IntroductionPage[];
-  exercises: ExercisePage[];
+  pages: Page[];
 
   isLive: boolean;
   liveOrder: number | null;
@@ -30,6 +29,11 @@ export type LessonStatus = 'available' | 'in-progress' | 'completed' | 'locked';
 export interface LessonWithProgress extends Lesson {
   progress?: number;
   status?: LessonStatus;
+  currentPageIndex?: number;
+  exerciseProgress?: ExerciseProgress[];
+  completedAt?: string;
+  score?: number;
+  lastAccessedAt?: string;
 }
 
 export interface ExerciseProgress {
@@ -43,20 +47,14 @@ export interface UserProgress {
   lessonId: string;
   status: LessonStatus;
   completedAt?: string;
-  progress: number;
+  currentPageIndex: number;
   exerciseProgress: ExerciseProgress[];
   score?: number;
-  overallProgress?: number;
-  exercisesCompleted?: number;
-  totalExercises?: number;
+  lastAccessedAt: string;
+  progress?: number;
 }
 
-export interface LessonWithAccess extends Lesson {
-  isAccessible: boolean;
-  userProgress?: UserProgress;
-}
-
-export type { IntroductionPage, ExercisePage } from './page';
+export type { Page } from './page';
 export type { RenderableContentItem } from './page';
 export type { ContentItem, TextContent, EmphasisContent, TableContent, ComponentNarration } from './content';
 export type { VocabularyItem, VocabularyContent, VocabularyPoolContent } from './vocabulary';
@@ -65,8 +63,7 @@ export type {
   MatchingExercise,
   FillExercise,
   TextSelectionExercise,
-  VerbAnalysisExercise,
-  VerbConjugationExercise,
+  FillEmboldedTextExercise,
   MultipleChoiceExercise,
   OddOneOutExercise,
   Exercise,

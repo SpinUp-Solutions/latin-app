@@ -4,11 +4,12 @@ import {
   MatchingExercise,
   FillExercise,
   TextSelectionExercise,
-  VerbAnalysisExercise,
-  VerbConjugationExercise,
+  FillEmboldedTextExercise,
   SentenceDiagrammingExercise,
   MultipleChoiceExercise,
   OddOneOutExercise,
+  TableFillExercise,
+  ClickOnMultipleWordsExercise,
 } from './exercises';
 
 export type RenderableContentItem =
@@ -20,11 +21,12 @@ export type RenderableContentItem =
   | MatchingExercise
   | FillExercise
   | TextSelectionExercise
-  | VerbAnalysisExercise
-  | VerbConjugationExercise
+  | FillEmboldedTextExercise
   | SentenceDiagrammingExercise
   | MultipleChoiceExercise
-  | OddOneOutExercise;
+  | OddOneOutExercise
+  | TableFillExercise
+  | ClickOnMultipleWordsExercise;
 
 export interface BasePage {
   id: string;
@@ -33,6 +35,9 @@ export interface BasePage {
   audioPath?: string | null;
 }
 
-export interface IntroductionPage extends BasePage {}
-
-export interface ExercisePage extends BasePage {}
+export interface Page extends BasePage {
+  autoAdvance?: {
+    enabled: boolean;
+    delay: number;
+  };
+}

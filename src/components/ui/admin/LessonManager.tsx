@@ -7,10 +7,11 @@ import { BookOpen, Edit, Trash2, Calendar, Eye, FileText, Clock } from 'lucide-r
 import { Lesson } from '@/src/types/lesson';
 import { toast } from 'sonner';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
-import { loadLessons, deleteLesson, clearDraft, loadDrafts } from '@/src/store/slices/lessonSlice';
+import { useGetLessonsQuery, useDeleteLessonMutation } from '@/src/store/api/lessonApi';
+import { clearDraft, loadDrafts } from '@/src/store/slices/lessonEditorSlice';
 import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
-import { getContentCount } from '@/src/utils/lessonUtils';
+import { isExerciseType } from '@/src/utils/lessonUtils';
 
 interface LessonManagerProps {
   onEditLesson: (lesson: Lesson) => void;
@@ -19,7 +20,9 @@ interface LessonManagerProps {
 
 export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onContinueDraft }) => {
   const dispatch = useAppDispatch();
-  const { lessons, loading, error, drafts } = useAppSelector(state => state.lesson);
+  const { data: lessons = [], isLoading: loading, error } = useGetLessonsQuery();
+  const [deleteLesson] = useDeleteLessonMutation();
+  const { drafts } = useAppSelector(state => state.lessonEditor);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [dialogState, setDialogState] = useState<{
     isOpen: boolean;
@@ -29,13 +32,18 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
   } | null>(null);
 
   useEffect(() => {
-    dispatch(loadLessons());
     dispatch(loadDrafts());
   }, [dispatch]);
 
   useEffect(() => {
     if (error) {
-      toast.error(error);
+      const errorMessage =
+        'data' in error
+          ? (error.data as { error?: string })?.error || 'Failed to load lessons'
+          : 'error' in error
+            ? error.error || 'Failed to load lessons'
+            : 'Failed to load lessons';
+      toast.error(errorMessage);
     }
   }, [error]);
 
@@ -46,7 +54,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
       description: 'This action cannot be undone. This will permanently delete the lesson and all of its content.',
       onConfirm: async () => {
         try {
-          await dispatch(deleteLesson(lessonId)).unwrap();
+          await deleteLesson(lessonId).unwrap();
           toast.success('Lesson deleted successfully');
         } catch (error) {
           console.error('Error deleting lesson:', error);
@@ -87,7 +95,12 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
   }
 
   if (selectedLesson) {
-    const contentCount = getContentCount(selectedLesson);
+    const totalPages = selectedLesson.pages.length;
+    const totalItems = selectedLesson.pages.reduce((count, page) => count + page.items.length, 0);
+    const totalExercises = selectedLesson.pages.reduce(
+      (count, page) => count + page.items.filter(item => isExerciseType(item.type)).length,
+      0
+    );
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -141,17 +154,17 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
               <h4 className="font-medium text-gray-700 mb-2">Content Summary</h4>
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div className="bg-blue-50 p-3 rounded">
-                  <div className="text-2xl font-bold text-blue-600">{contentCount.introPages}</div>
-                  <div className="text-sm text-blue-700">Introduction Pages</div>
-                  <div className="text-xs text-gray-500">{contentCount.introItems} items</div>
+                  <div className="text-2xl font-bold text-blue-600">{totalPages}</div>
+                  <div className="text-sm text-blue-700">Total Pages</div>
+                  <div className="text-xs text-gray-500">All lesson pages</div>
                 </div>
                 <div className="bg-green-50 p-3 rounded">
-                  <div className="text-2xl font-bold text-green-600">{contentCount.exercisePages}</div>
-                  <div className="text-sm text-green-700">Exercise Pages</div>
-                  <div className="text-xs text-gray-500">{contentCount.exerciseItems} items</div>
+                  <div className="text-2xl font-bold text-green-600">{totalExercises}</div>
+                  <div className="text-sm text-green-700">Total Exercises</div>
+                  <div className="text-xs text-gray-500">Exercise content items</div>
                 </div>
                 <div className="bg-purple-50 p-3 rounded">
-                  <div className="text-2xl font-bold text-purple-600">{contentCount.totalItems}</div>
+                  <div className="text-2xl font-bold text-purple-600">{totalItems}</div>
                   <div className="text-sm text-purple-700">Total Content Items</div>
                   <div className="text-xs text-gray-500">Across all pages</div>
                 </div>
@@ -207,9 +220,15 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
                     </div>
 
                     <div className="flex justify-between text-xs text-gray-600">
-                      <span>{getContentCount(draft.lesson).introPages} intro pages</span>
-                      <span>{getContentCount(draft.lesson).exercisePages} exercise pages</span>
-                      <span>{getContentCount(draft.lesson).totalItems} items</span>
+                      <span>{draft.lesson.pages.length} total pages</span>
+                      <span>
+                        {draft.lesson.pages.reduce(
+                          (count, page) => count + page.items.filter(item => isExerciseType(item.type)).length,
+                          0
+                        )}{' '}
+                        exercises
+                      </span>
+                      <span>{draft.lesson.pages.reduce((count, page) => count + page.items.length, 0)} items</span>
                     </div>
 
                     <div className="flex gap-2 pt-2">
@@ -251,8 +270,6 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {lessons.map(lesson => {
-              const contentCount = getContentCount(lesson);
-
               return (
                 <Card key={lesson.id} className="hover:shadow-lg transition-shadow">
                   <CardHeader>
@@ -288,9 +305,15 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
                     </div>
 
                     <div className="flex justify-between text-xs text-gray-600">
-                      <span>{contentCount.introPages} intro pages</span>
-                      <span>{contentCount.exercisePages} exercise pages</span>
-                      <span>{contentCount.totalItems} items</span>
+                      <span>{lesson.pages.length} total pages</span>
+                      <span>
+                        {lesson.pages.reduce(
+                          (count, page) => count + page.items.filter(item => isExerciseType(item.type)).length,
+                          0
+                        )}{' '}
+                        exercises
+                      </span>
+                      <span>{lesson.pages.reduce((count, page) => count + page.items.length, 0)} items</span>
                     </div>
 
                     <div className="flex gap-2">

@@ -1,14 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useSelector } from 'react-redux';
-import { RootState } from '@/src/store';
 import { toast } from 'sonner';
 import { Word, WordsResponse, VocabularyFilters } from '@/src/types/admin-vocabulary';
+import { useAuth } from './useAuth';
 
 const ITEMS_PER_PAGE = 20;
 const SEARCH_DEBOUNCE_MS = 300;
 
 export const useVocabularyData = () => {
-  const { user } = useSelector((state: RootState) => state.auth);
+  const { user } = useAuth();
 
   const [words, setWords] = useState<Word[]>([]);
   const [loading, setLoading] = useState(false);

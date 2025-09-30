@@ -4,7 +4,7 @@ import { Card, CardContent } from '@/src/components/ui/card';
 import { Plus, Trash2, ArrowRight } from 'lucide-react';
 import { MatchingExercise } from '@/src/types/exercise';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
-import { updateEditingContent } from '@/src/store/slices/lessonSlice';
+import { updateEditingContent } from '@/src/store/slices/lessonEditorSlice';
 import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
 import { SimpleRichEditor } from '../../core/simple-rich-editor';
@@ -13,7 +13,7 @@ import { RichTextSelect } from '../../core/rich-text-select';
 
 export const MatchingEditor: React.FC = () => {
   const dispatch = useAppDispatch();
-  const editingContent = useAppSelector(state => state.lesson.editingContent?.content as MatchingExercise);
+  const editingContent = useAppSelector(state => state.lessonEditor.editingContent?.content as MatchingExercise);
 
   if (!editingContent) {
     return <div>No content selected for editing</div>;

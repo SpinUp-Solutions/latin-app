@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { auth } from 'firebase-admin';
-import { calculateOverallProgress, isLessonComplete, getContentCount } from '@/src/utils/lessonUtils';
+import {
+  isLessonComplete,
+  parsePageIndex,
+  getExerciseCountForPage,
+  getCompletedExercisesForPage,
+} from '@/src/utils/lessonUtils';
 import { Lesson } from '@/src/types/lesson';
 
 async function verifyAuth(request: NextRequest) {
@@ -44,7 +49,7 @@ export async function POST(request: NextRequest, { params }: { params: { userId:
     }
 
     const progressData = await request.json();
-    const { exerciseId, score, ...lessonProgressData } = progressData;
+    const { exerciseId, score, currentPageIndex: directPageIndex, ...lessonProgressData } = progressData;
 
     if (exerciseId && typeof score === 'number') {
       const [progressDoc, lessonDoc] = await Promise.all([
@@ -68,20 +73,31 @@ export async function POST(request: NextRequest, { params }: { params: { userId:
         exerciseProgress.push(newExerciseProgress);
       }
 
+      // Update currentPageIndex when advancing to new furthest page
+      let currentPageIndex = existingData?.currentPageIndex || 0;
+      const pageIndex = parsePageIndex(exerciseId);
+      if (pageIndex !== null && lessonDoc.exists) {
+        const lesson = { id: lessonDoc.id, ...lessonDoc.data() } as Lesson;
+        const totalExercisesOnPage = getExerciseCountForPage(lesson, pageIndex);
+        const completedExercisesOnPage = getCompletedExercisesForPage(exerciseProgress, pageIndex);
+
+        if (completedExercisesOnPage.length === totalExercisesOnPage && totalExercisesOnPage > 0) {
+          // All exercises on this page are complete, advance to next page
+          const nextPageIndex = pageIndex + 1;
+          currentPageIndex = Math.max(currentPageIndex, nextPageIndex);
+        }
+      }
+
       let computedData = {};
       if (lessonDoc.exists) {
-        const lesson = { id: lessonDoc.id, ...lessonDoc.data() };
-        const totalExercises = getContentCount(lesson as Lesson).exerciseItems;
-
-        const overallProgress = calculateOverallProgress(exerciseProgress, totalExercises);
-        const exercisesCompleted = exerciseProgress.length;
-        const isComplete = isLessonComplete(exerciseProgress, totalExercises);
+        const lesson = { id: lessonDoc.id, ...lessonDoc.data() } as Lesson;
+        const totalPages = lesson.pages.length;
+        const isComplete = isLessonComplete(currentPageIndex, totalPages);
 
         computedData = {
-          overallProgress,
-          exercisesCompleted,
-          totalExercises,
+          currentPageIndex,
           status: isComplete ? 'completed' : 'in-progress',
+          lastAccessedAt: new Date().toISOString(),
         };
       }
 
@@ -100,6 +116,24 @@ export async function POST(request: NextRequest, { params }: { params: { userId:
           },
           { merge: true }
         );
+    } else if (directPageIndex !== undefined) {
+      const existingDoc = await adminDb.collection('userProgress').doc(`${params.userId}_${params.lessonId}`).get();
+      const existingData = existingDoc.exists ? existingDoc.data() : {};
+
+      await adminDb
+        .collection('userProgress')
+        .doc(`${params.userId}_${params.lessonId}`)
+        .set(
+          {
+            ...existingData,
+            currentPageIndex: directPageIndex,
+            userId: params.userId,
+            lessonId: params.lessonId,
+            lastAccessedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
     } else {
       await adminDb
         .collection('userProgress')
@@ -109,6 +143,7 @@ export async function POST(request: NextRequest, { params }: { params: { userId:
             ...progressData,
             userId: params.userId,
             lessonId: params.lessonId,
+            lastAccessedAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           },
           { merge: true }

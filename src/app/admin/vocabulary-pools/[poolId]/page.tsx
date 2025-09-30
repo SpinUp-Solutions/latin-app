@@ -6,9 +6,7 @@ import { Button } from '@/src/components/ui/button';
 import { Edit, Trash2, Plus, BookOpen, ArrowLeft, Library } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
-
-import { useVocabularyPool } from '@/src/hooks/useVocabularyPool';
-import { useVocabularyPools } from '@/src/hooks/useVocabularyPools';
+import { useGetPoolQuery, useDeletePoolMutation } from '@/src/store/api/vocabularyPoolApi';
 import { PoolWordList } from '@/src/components/ui/admin/vocabulary-pools/PoolWordList';
 import { PoolNotFoundPage } from '@/src/components/ui/admin/vocabulary-pools/PoolNotFoundPage';
 import { AdminLoadingPage } from '@/src/components/ui/admin/AdminLoadingPage';
@@ -24,17 +22,19 @@ interface PoolDetailPageProps {
 export default function PoolDetailPage({ params }: PoolDetailPageProps) {
   const { poolId } = params;
   const router = useRouter();
-  const { pool, loading, error } = useVocabularyPool(poolId);
-  const { deletePool, deleting } = useVocabularyPools();
+  const { data: pool, isLoading: loading, error } = useGetPoolQuery(poolId);
+  const [deletePoolMutation, { isLoading: deleting }] = useDeletePoolMutation();
 
   const handleDeletePool = async () => {
     if (!pool) return;
 
     if (confirm(`Are you sure you want to delete "${pool.name}"? This action cannot be undone.`)) {
-      const success = await deletePool(pool.id);
-      if (success) {
+      try {
+        await deletePoolMutation(pool.id).unwrap();
         toast.success('Pool deleted successfully');
         router.push('/admin/vocabulary-pools');
+      } catch {
+        toast.error('Failed to delete pool');
       }
     }
   };
@@ -44,7 +44,7 @@ export default function PoolDetailPage({ params }: PoolDetailPageProps) {
   }
 
   if (error || !pool) {
-    return <PoolNotFoundPage poolId={poolId} error={error} />;
+    return <PoolNotFoundPage poolId={poolId} error={error ? String(error) : null} />;
   }
 
   return (
