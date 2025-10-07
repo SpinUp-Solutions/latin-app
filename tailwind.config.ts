@@ -46,6 +46,15 @@ const config: Config = {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
+        roman: {
+          red: '#8B2635',
+          gold: '#D4AF37',
+          green: '#556B2F',
+          terracotta: '#C67C53',
+          marble: '#F5F5F5',
+          parchment: '#F8F3E6',
+          stone: '#707070',
+        },
       },
       borderRadius: {
         lg: 'var(--radius)',
@@ -61,15 +70,47 @@ const config: Config = {
           from: { height: 'var(--radix-accordion-content-height)' },
           to: { height: '0' },
         },
+        blob: {
+          '0%': {
+            transform: 'translate(0px, 0px) scale(1)',
+          },
+          '33%': {
+            transform: 'translate(30px, -50px) scale(1.1)',
+          },
+          '66%': {
+            transform: 'translate(-20px, 20px) scale(0.9)',
+          },
+          '100%': {
+            transform: 'translate(0px, 0px) scale(1)',
+          },
+        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
+        blob: 'blob 7s infinite',
       },
+      animationDelay: {
+        '2000': '2s',
+        '4000': '4s',
+      },
+      fontFamily: {
+        serif: ['Trajan Pro', 'Georgia', 'serif'],
+        sans: ['Open Sans', 'Roboto', 'sans-serif'],
+      },
+      typography: (theme: (path: string) => any) => ({
+        DEFAULT: {
+          css: {
+            'h1, h2, h3, h4, h5, h6': {
+              fontFamily: theme('fontFamily.sans').toString(),
+            },
+          },
+        },
+      }),
     },
   },
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  plugins: [require('tailwindcss-animate')],
+  plugins: [require('tailwindcss-animate'), require('@tailwindcss/typography')],
 };
 
 export default config;

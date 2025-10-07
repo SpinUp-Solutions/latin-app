@@ -1,0 +1,8 @@
+{
+  "projects": {
+    "default": "latin-app-dev",
+    "dev": "latin-app-dev",
+    "staging": "latin-app-staging",
+    "prod": "latin-app-prod"
+  }
+}

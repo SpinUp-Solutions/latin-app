@@ -1,0 +1,149 @@
+import { AnnotationType, SentenceWord } from '@/src/types/exercises/sentence-diagramming';
+import { Editor } from '@tiptap/react';
+import { Node } from '@tiptap/pm/model';
+
+export const extractAnnotationsFromEditor = (editor: Editor): Record<string, AnnotationType> => {
+  const annotations: Record<string, AnnotationType> = {};
+
+  editor.state.doc.descendants((node: Node) => {
+    if (node.marks) {
+      node.marks.forEach(mark => {
+        // Map TipTap extension names to annotation types
+        const typeMap: Record<string, AnnotationType> = {
+          preposition: 'preposition',
+          subordination: 'subordination',
+          verbCircle: 'verb-circle',
+          subjectUnderline: 'subject-underline',
+          directObjectUnderline: 'direct-object-underline',
+          indirectObjectBracket: 'indirect-object-bracket',
+          genitiveArrow: 'genitive-arrow',
+          genitiveArrowTarget: 'genitive-arrow-target',
+          ablativePhrase: 'ablative-phrase',
+        };
+
+        const annotationType = typeMap[mark.type.name];
+        if (annotationType && mark.attrs?.wordIds) {
+          // Ensure wordIds is an array before processing
+          const wordIds = Array.isArray(mark.attrs.wordIds) ? mark.attrs.wordIds : [mark.attrs.wordIds];
+
+          // For each word in the annotation, map wordId -> annotationType
+          wordIds.forEach(wordId => {
+            if (wordId && typeof wordId === 'string') {
+              annotations[wordId] = annotationType;
+            }
+          });
+        }
+      });
+    }
+  });
+
+  return annotations;
+};
+
+/**
+ * Gets word IDs from TipTap editor selection
+ */
+export const getWordIdsFromSelection = (
+  editor: Editor,
+  from: number,
+  to: number,
+  words: SentenceWord[],
+  sentence: string
+): string[] => {
+  const selectedText = editor?.state.doc.textBetween(from, to) || '';
+
+  const matchingWords = words.filter(word => {
+    return selectedText.trim().split(/\s+/).includes(word.text);
+  });
+
+  if (matchingWords.length === 0) {
+    const allText = sentence.split(/\s+/);
+    const selectedWords = selectedText.trim().split(/\s+/);
+
+    selectedWords.forEach(selectedWord => {
+      const wordIndex = allText.findIndex(w => w === selectedWord);
+      if (wordIndex >= 0) {
+        const word = words.find(w => w.index === wordIndex);
+        if (word) matchingWords.push(word);
+      }
+    });
+  }
+
+  return matchingWords.map(word => word.id);
+};
+
+/**
+ * Handles annotation click by applying the appropriate TipTap command
+ */
+export const handleAnnotationClick = (
+  editor: Editor,
+  annotationType: AnnotationType,
+  words: SentenceWord[],
+  sentence: string,
+  isDisabled?: boolean
+) => {
+  if (!editor || isDisabled) return;
+
+  const { from, to } = editor.state.selection;
+  const selectedText = editor.state.doc.textBetween(from, to);
+
+  if (!selectedText.trim()) {
+    alert('Please select text to annotate');
+    return;
+  }
+
+  const selectedWordIds = getWordIdsFromSelection(editor, from, to, words, sentence);
+  const attributes = { wordIds: selectedWordIds };
+
+  switch (annotationType) {
+    case 'preposition':
+      editor.chain().focus().setPreposition(attributes).run();
+      break;
+    case 'subordination':
+      editor.chain().focus().setSubordination(attributes).run();
+      break;
+    case 'verb-circle':
+      editor.chain().focus().setVerbCircle(attributes).run();
+      break;
+    case 'subject-underline':
+      editor.chain().focus().setSubjectUnderline(attributes).run();
+      break;
+    case 'direct-object-underline':
+      editor.chain().focus().setDirectObjectUnderline(attributes).run();
+      break;
+    case 'indirect-object-bracket':
+      editor.chain().focus().setIndirectObjectBracket(attributes).run();
+      break;
+    case 'genitive-arrow':
+      editor.chain().focus().setGenitiveArrow(attributes).run();
+      break;
+    case 'genitive-arrow-target':
+      editor.chain().focus().setGenitiveArrowTarget(attributes).run();
+      break;
+    case 'ablative-phrase':
+      editor.chain().focus().setAblativePhrase(attributes).run();
+      break;
+  }
+};
+
+/**
+ * Clears all diagramming annotations from TipTap editor
+ */
+export const handleClearAnnotations = (editor: Editor) => {
+  if (!editor) return;
+
+  // Clear all diagramming annotations explicitly
+  editor
+    .chain()
+    .focus()
+    .unsetPreposition()
+    .unsetSubordination()
+    .unsetVerbCircle()
+    .unsetSubjectUnderline()
+    .unsetDirectObjectUnderline()
+    .unsetIndirectObjectBracket()
+    .unsetGenitiveArrow()
+    .unsetGenitiveArrowTarget()
+    .unsetAblativePhrase()
+    .run();
+};

@@ -9,7 +9,7 @@ import { AuthProvider } from '@/src/components/auth/auth-provider';
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <ReduxProvider store={store}>
-      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+      <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
         <AuthProvider>{children}</AuthProvider>
       </ThemeProvider>
     </ReduxProvider>
