@@ -302,7 +302,8 @@ export const createNewContent = (type: string): RenderableContentItem => {
         feedbackConfig: createDefaultFeedbackConfig(),
         data: {
           title: 'Word Selection Exercise',
-          passage: 'Click on the <em>adjectives</em> in this sample passage with multiple <strong>descriptive</strong> words.',
+          passage:
+            'Click on the <em>adjectives</em> in this sample passage with multiple <strong>descriptive</strong> words.',
           correctWordIndices: [3, 8, 10],
           instructions: '',
           hint: 'Look for words that describe or modify nouns.',

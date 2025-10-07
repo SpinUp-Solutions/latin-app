@@ -13,7 +13,9 @@ import { stripHtmlTags } from '@/src/utils/exercises/helpers';
 
 export const ClickOnMultipleWordsEditor: React.FC = () => {
   const dispatch = useAppDispatch();
-  const editingContent = useAppSelector(state => state.lessonEditor.editingContent?.content as ClickOnMultipleWordsExercise);
+  const editingContent = useAppSelector(
+    state => state.lessonEditor.editingContent?.content as ClickOnMultipleWordsExercise
+  );
 
   if (!editingContent) {
     return <div>No content selected for editing</div>;
@@ -143,8 +145,7 @@ export const ClickOnMultipleWordsEditor: React.FC = () => {
                 onClick={clearAllSelections}
                 variant="outline"
                 size="sm"
-                disabled={editingContent.data.correctWordIndices.length === 0}
-              >
+                disabled={editingContent.data.correctWordIndices.length === 0}>
                 <RotateCcw className="h-3 w-3 mr-1" />
                 Clear All
               </Button>
@@ -166,15 +167,16 @@ export const ClickOnMultipleWordsEditor: React.FC = () => {
           {/* Selected Words Display */}
           {editingContent.data.correctWordIndices.length > 0 && (
             <div className="mt-3 p-3 bg-blue-50 rounded border border-blue-200">
-              <div className="text-sm font-medium mb-2">Selected Words ({editingContent.data.correctWordIndices.length}):</div>
+              <div className="text-sm font-medium mb-2">
+                Selected Words ({editingContent.data.correctWordIndices.length}):
+              </div>
               <div className="flex flex-wrap gap-2">
                 {getSelectedWords().map(({ index, word }) => (
                   <span
                     key={index}
                     className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded cursor-pointer hover:bg-blue-200"
                     onClick={() => handleWordClick(index)}
-                    title={`Click to deselect word at index ${index}`}
-                  >
+                    title={`Click to deselect word at index ${index}`}>
                     {word} <span className="ml-1 text-blue-600">#{index}</span>
                   </span>
                 ))}
@@ -192,15 +194,11 @@ export const ClickOnMultipleWordsEditor: React.FC = () => {
             <div>
               <div className="font-medium text-sm">Allow Over-Selection</div>
               <div className="text-xs text-gray-600">
-                If enabled, students can select extra words with score penalty. If disabled, any extra selection fails the exercise.
+                If enabled, students can select extra words with score penalty. If disabled, any extra selection fails
+                the exercise.
               </div>
             </div>
-            <Button
-              onClick={toggleAllowOverSelection}
-              variant="ghost"
-              size="sm"
-              className="p-1"
-            >
+            <Button onClick={toggleAllowOverSelection} variant="ghost" size="sm" className="p-1">
               {editingContent.data.allowOverSelection ? (
                 <ToggleRight className="h-6 w-6 text-green-600" />
               ) : (
@@ -220,14 +218,14 @@ export const ClickOnMultipleWordsEditor: React.FC = () => {
                 onChange={e => {
                   const value = parseInt(e.target.value);
                   updateData({
-                    minimumCorrect: isNaN(value) ? undefined : Math.max(1, Math.min(value, editingContent.data.correctWordIndices.length))
+                    minimumCorrect: isNaN(value)
+                      ? undefined
+                      : Math.max(1, Math.min(value, editingContent.data.correctWordIndices.length)),
                   });
                 }}
                 className="w-20 p-2 border rounded text-sm"
               />
-              <p className="text-xs text-gray-500 mt-1">
-                Minimum words students must select correctly (default: all)
-              </p>
+              <p className="text-xs text-gray-500 mt-1">Minimum words students must select correctly (default: all)</p>
             </div>
           )}
         </div>
@@ -266,17 +264,27 @@ export const ClickOnMultipleWordsEditor: React.FC = () => {
             <div className="text-sm space-y-2">
               <div>
                 <strong>Passage Length:</strong>{' '}
-                {editingContent.data.passage ? `${stripHtmlTags(editingContent.data.passage).split(/\s+/).filter(w => w.trim()).length} words` : '0 words'}
+                {editingContent.data.passage
+                  ? `${
+                      stripHtmlTags(editingContent.data.passage)
+                        .split(/\s+/)
+                        .filter(w => w.trim()).length
+                    } words`
+                  : '0 words'}
               </div>
               <div>
                 <strong>Target Words:</strong> {editingContent.data.correctWordIndices.length}
               </div>
               <div>
-                <strong>Selection Mode:</strong> {editingContent.data.allowOverSelection ? 'Lenient (over-selection allowed)' : 'Strict (exact match required)'}
+                <strong>Selection Mode:</strong>{' '}
+                {editingContent.data.allowOverSelection
+                  ? 'Lenient (over-selection allowed)'
+                  : 'Strict (exact match required)'}
               </div>
               {editingContent.data.allowOverSelection && (
                 <div>
-                  <strong>Minimum Required:</strong> {editingContent.data.minimumCorrect || editingContent.data.correctWordIndices.length}
+                  <strong>Minimum Required:</strong>{' '}
+                  {editingContent.data.minimumCorrect || editingContent.data.correctWordIndices.length}
                 </div>
               )}
               <div>
@@ -285,9 +293,7 @@ export const ClickOnMultipleWordsEditor: React.FC = () => {
               <div>
                 <strong>Has Explanation:</strong> {editingContent.data.explanation ? 'Yes' : 'No'}
               </div>
-              {!editingContent.data.passage && (
-                <div className="text-amber-600">⚠️ No passage text provided</div>
-              )}
+              {!editingContent.data.passage && <div className="text-amber-600">⚠️ No passage text provided</div>}
               {editingContent.data.correctWordIndices.length === 0 && (
                 <div className="text-amber-600">⚠️ No target words selected</div>
               )}

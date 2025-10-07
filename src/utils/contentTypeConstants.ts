@@ -7,7 +7,6 @@ import {
   Target,
   Search,
   Zap,
-  Users,
   Pencil,
   CheckSquare,
   Filter,

@@ -29,7 +29,8 @@ export const MultiClickableRichDisplay: React.FC<MultiClickableRichDisplayProps>
   }, [content]);
 
   const getWordClasses = (index: number) => {
-    const baseClasses = 'inline-block cursor-pointer rounded hover:bg-roman-parchment hover:text-roman-red transition-colors mr-1';
+    const baseClasses =
+      'inline-block cursor-pointer rounded hover:bg-roman-parchment hover:text-roman-red transition-colors mr-1';
 
     if (isSubmitted) {
       // After submission, show feedback states
@@ -64,15 +65,14 @@ export const MultiClickableRichDisplay: React.FC<MultiClickableRichDisplayProps>
           onClick={() => handleWordClick(index)}
           role="button"
           tabIndex={isSubmitted ? -1 : 0}
-          onKeyDown={(e) => {
+          onKeyDown={e => {
             if (!isSubmitted && (e.key === 'Enter' || e.key === ' ')) {
               e.preventDefault();
               handleWordClick(index);
             }
           }}
           aria-pressed={selectedWordIndices.has(index)}
-          aria-label={`Word ${index + 1}: ${wordHtml.replace(/<[^>]*>/g, '')}`}
-        >
+          aria-label={`Word ${index + 1}: ${wordHtml.replace(/<[^>]*>/g, '')}`}>
           <SimpleRichDisplay content={wordHtml} className="inline not-prose" />
         </div>
       ))}

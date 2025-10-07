@@ -19,7 +19,9 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete }
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [validationResult, setValidationResult] = useState<ReturnType<typeof validateClickOnMultipleWords> | null>(null);
+  const [validationResult, setValidationResult] = useState<ReturnType<typeof validateClickOnMultipleWords> | null>(
+    null
+  );
 
   const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
     exercise.feedbackConfig
@@ -119,9 +121,7 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete }
         )}
 
         {/* Selection Counter */}
-        <div className="mb-4 text-sm text-gray-600 text-center">
-          {getSelectionSummary()}
-        </div>
+        <div className="mb-4 text-sm text-gray-600 text-center">{getSelectionSummary()}</div>
 
         {/* Interactive Passage */}
         <div className="overflow-x-auto">
@@ -129,7 +129,13 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete }
             content={exercise.data.passage}
             onWordClick={handleWordClick}
             selectedWordIndices={selectedIndices}
-            correctIndices={validationResult ? new Set(Array.from(validationResult.selectedIndices).filter(i => validationResult.correctIndices.has(i))) : undefined}
+            correctIndices={
+              validationResult
+                ? new Set(
+                    Array.from(validationResult.selectedIndices).filter(i => validationResult.correctIndices.has(i))
+                  )
+                : undefined
+            }
             incorrectIndices={validationResult?.extraIndices}
             missedIndices={validationResult?.missedIndices}
             isSubmitted={hasSubmitted}
@@ -140,11 +146,7 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete }
         {/* Action Buttons */}
         <div className="mt-6 flex justify-center gap-4">
           {!hasSubmitted && (
-            <Button
-              onClick={handleSubmit}
-              disabled={isProcessing || selectedIndices.size === 0}
-              className="px-8"
-            >
+            <Button onClick={handleSubmit} disabled={isProcessing || selectedIndices.size === 0} className="px-8">
               {isProcessing ? 'Checking...' : 'Submit Selections'}
             </Button>
           )}

@@ -96,7 +96,9 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onCom
       return <TableFillExercise exercise={content as TableFillExerciseType} onComplete={onComplete} />;
 
     case 'click-on-multiple-words':
-      return <ClickOnMultipleWordsExercise exercise={content as ClickOnMultipleWordsExerciseType} onComplete={onComplete} />;
+      return (
+        <ClickOnMultipleWordsExercise exercise={content as ClickOnMultipleWordsExerciseType} onComplete={onComplete} />
+      );
 
     default:
       return (
