@@ -101,4 +101,13 @@ export const selectLessonById = (state: { lesson: LessonState }, lessonId: strin
 
 export const selectHasUnsavedChanges = (state: { lesson: LessonState }) => state.lesson.hasUnsavedChanges;
 
+export const selectLiveLessons = (state: { lesson: LessonState }) => 
+  state.lesson.lessons.filter(l => l.isLive).sort((a, b) => (a.liveOrder || 0) - (b.liveOrder || 0));
+
+export const selectAvailableLessons = (state: { lesson: LessonState }) =>
+  state.lesson.lessons.filter(l => !l.isLive);
+
+export const selectLessonById = (state: { lesson: LessonState }, lessonId: string) =>
+  state.lesson.lessons.find(l => l.id === lessonId);
+
 export default lessonSlice.reducer;

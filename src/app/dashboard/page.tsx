@@ -2,7 +2,7 @@
 
 import { useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/src/services/firebase';
 import type { RootState } from '@/src/store';
@@ -85,7 +85,9 @@ LessonCard.displayName = 'LessonCard';
 
 export default function DashboardPage() {
   const router = useRouter();
+  const dispatch = useDispatch<AppDispatch>();
   const { user, loading } = useSelector((state: RootState) => state.auth);
+  const { studentLessons, loading: lessonsLoading } = useSelector((state: RootState) => state.lesson);
 
   const { data: studentLessons, isLoading: lessonsLoading } = useGetStudentLessonsQuery(undefined, {
     skip: !user?.uid,
@@ -140,8 +142,10 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!loading && !user) {
       router.push('/login');
+    } else if (user) {
+      dispatch(loadStudentLessons());
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, dispatch]);
 
   const handleSignOut = async () => {
     try {
