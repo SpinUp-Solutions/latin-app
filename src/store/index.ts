@@ -4,8 +4,10 @@ import lessonReducer from './slices/lessonSlice';
 import lessonEditorReducer from './slices/lessonEditorSlice';
 import clipboardReducer from './slices/clipboardSlice';
 import vocabularyPoolsReducer from './slices/vocabularyPoolSlice';
+import vocabularyReducer from './slices/vocabularySlice';
 import { lessonApi } from './api/lessonApi';
 import { vocabularyPoolApi } from './api/vocabularyPoolApi';
+import { vocabularyApi } from './api/vocabularyApi';
 
 export const store = configureStore({
   reducer: {
@@ -14,13 +16,15 @@ export const store = configureStore({
     lessonEditor: lessonEditorReducer,
     clipboard: clipboardReducer,
     vocabularyPools: vocabularyPoolsReducer,
+    vocabulary: vocabularyReducer,
     [lessonApi.reducerPath]: lessonApi.reducer,
     [vocabularyPoolApi.reducerPath]: vocabularyPoolApi.reducer,
+    [vocabularyApi.reducerPath]: vocabularyApi.reducer,
   },
   middleware: getDefaultMiddleware =>
     getDefaultMiddleware({
       serializableCheck: false,
-    }).concat(lessonApi.middleware, vocabularyPoolApi.middleware),
+    }).concat(lessonApi.middleware, vocabularyPoolApi.middleware, vocabularyApi.middleware),
 });
 
 export type RootState = ReturnType<typeof store.getState>;

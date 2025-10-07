@@ -1,9 +1,9 @@
 import React from 'react';
-import { Button } from '@/src/components/ui/button';
 import { Card, CardContent } from '@/src/components/ui/card';
-import { Loader2, BookOpen, Search } from 'lucide-react';
+import { Loader2, Search } from 'lucide-react';
 import { Word } from '@/src/types/admin-vocabulary';
 import { WordCard } from './WordCard';
+import { useInfiniteScroll } from '@/src/hooks/useInfiniteScroll';
 
 interface VocabularyListProps {
   words: Word[];
@@ -41,32 +41,21 @@ const EmptyState: React.FC = () => (
   </Card>
 );
 
-const LoadMoreButton: React.FC<{
-  hasMore: boolean;
+const InfiniteScrollSentinel: React.FC<{
+  sentinelRef: React.RefObject<HTMLDivElement>;
   loadingMore: boolean;
-  onLoadMore: () => void;
-}> = ({ hasMore, loadingMore, onLoadMore }) => {
-  if (!hasMore) return null;
+  hasMore: boolean;
+}> = ({ sentinelRef, loadingMore, hasMore }) => {
+  if (!hasMore && !loadingMore) return null;
 
   return (
-    <div className="flex justify-center p-6 bg-gray-50 border-t border-gray-200">
-      <Button
-        onClick={onLoadMore}
-        disabled={loadingMore}
-        className="flex items-center gap-2 min-w-32"
-        variant="outline">
-        {loadingMore ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading...
-          </>
-        ) : (
-          <>
-            <BookOpen className="h-4 w-4" />
-            Load More Words
-          </>
-        )}
-      </Button>
+    <div ref={sentinelRef} className="flex justify-center p-6 bg-gray-50 border-t border-gray-200">
+      {loadingMore && (
+        <div className="flex items-center gap-2 text-gray-600">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span className="text-sm">Loading more words...</span>
+        </div>
+      )}
     </div>
   );
 };
@@ -79,6 +68,12 @@ export const VocabularyList: React.FC<VocabularyListProps> = ({
   onLoadMore,
   onEditWord,
 }) => {
+  const sentinelRef = useInfiniteScroll({
+    onLoadMore,
+    hasMore,
+    loading: loadingMore,
+  });
+
   if (loading) {
     return <LoadingSpinner />;
   }
@@ -93,7 +88,7 @@ export const VocabularyList: React.FC<VocabularyListProps> = ({
       <div className="mb-4 px-1">
         <p className="text-sm text-gray-600">
           Showing {words.length} word{words.length !== 1 ? 's' : ''}
-          {hasMore && ' (more available)'}
+          {hasMore && ' (scroll down for more)'}
         </p>
       </div>
 
@@ -103,7 +98,7 @@ export const VocabularyList: React.FC<VocabularyListProps> = ({
           <WordCard key={word.id} word={word} onEdit={onEditWord} isLast={index === words.length - 1} />
         ))}
 
-        <LoadMoreButton hasMore={hasMore} loadingMore={loadingMore} onLoadMore={onLoadMore} />
+        <InfiniteScrollSentinel sentinelRef={sentinelRef} loadingMore={loadingMore} hasMore={hasMore} />
       </div>
     </div>
   );
