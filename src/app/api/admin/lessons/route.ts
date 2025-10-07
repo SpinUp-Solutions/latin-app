@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { Lesson } from '@/src/types/lesson';
 import { verifyAdminAccess } from '../../../../lib/verifyAdminAccess';
+import { isExerciseType } from '@/src/utils/lessonUtils';
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,9 +11,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const snapshot = await adminDb.collection('lessons')
-      .orderBy('updatedAt', 'desc')
-      .get();
+    const snapshot = await adminDb.collection('lessons').orderBy('updatedAt', 'desc').get();
 
     const lessons = snapshot.docs.map(doc => ({
       id: doc.id,
@@ -58,9 +57,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'A lesson with this ID already exists' }, { status: 409 });
     }
 
-    // Add metadata
+    const totalExercises = lesson.pages.reduce(
+      (count, page) => count + page.items.filter(item => isExerciseType(item.type)).length,
+      0
+    );
+
     const lessonData = {
       ...lesson,
+      totalExercises,
       createdAt: new Date().toISOString(),
       createdBy: user.uid,
       updatedAt: new Date().toISOString(),
@@ -114,9 +118,14 @@ export async function PUT(request: NextRequest) {
     }
 
     const existingLesson = existingLessonDoc.data();
+    const totalExercises = lesson.pages.reduce(
+      (count, page) => count + page.items.filter(item => isExerciseType(item.type)).length,
+      0
+    );
 
     const updatedLessonData = {
       ...lesson,
+      totalExercises,
       createdAt: existingLesson?.createdAt || new Date().toISOString(),
       createdBy: existingLesson?.createdBy || user.uid,
       updatedAt: new Date().toISOString(),

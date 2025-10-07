@@ -12,17 +12,19 @@ import { SimpleRichDisplay } from '../core/simple-rich-display';
 
 interface Props {
   exercise: FillExercise;
-  onComplete?: () => void;
+  onComplete?: (score: number) => void;
 }
 
 const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
   const [userAnswer, setUserAnswer] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
 
+  const [correctAnswers, setCorrectAnswers] = useState(0);
+
   const { currentIndex, isLastItem, autoAdvanceIfEnabled } = useExerciseProgression({
     totalItems: exercise.data.items.length,
-    feedbackConfig: exercise.feedbackConfig,
-    onComplete,
+    itemProgressionDelay: exercise.itemProgressionDelay,
+    progressionRules: exercise.feedbackConfig.progressionRules,
   });
 
   const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
@@ -30,20 +32,32 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
   );
 
   const handleSubmit = () => {
-    if (isProcessing) return; // Prevent multiple submissions
+    if (isProcessing) return;
 
     const validation = validateFillExercise(userAnswer, exercise, currentIndex);
     setIsProcessing(true);
 
     if (validation.isCorrect) {
+      const newCorrectAnswers = correctAnswers + 1;
+      setCorrectAnswers(newCorrectAnswers);
       handleCorrect(isLastItem);
-      autoAdvanceIfEnabled(() => {
-        setUserAnswer('');
-        reset();
-        setIsProcessing(false);
-      });
-      if (exercise.feedbackConfig.progressionRules?.autoAdvance === false) {
-        setIsProcessing(false);
+
+      if (isLastItem) {
+        const finalScore = Math.round((newCorrectAnswers / exercise.data.items.length) * 100);
+
+        onComplete?.(finalScore);
+
+        autoAdvanceIfEnabled(() => {
+          setUserAnswer('');
+          reset();
+          setIsProcessing(false);
+        });
+      } else {
+        autoAdvanceIfEnabled(() => {
+          setUserAnswer('');
+          reset();
+          setIsProcessing(false);
+        });
       }
     } else {
       handleIncorrect();

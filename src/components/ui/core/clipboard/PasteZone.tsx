@@ -1,16 +1,14 @@
 import React from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Clipboard, Plus } from 'lucide-react';
-import { PageType } from '@/src/types/clipboard';
 import { useClipboard } from './ClipboardProvider';
 
 interface PasteZoneProps {
-  pageType: PageType;
   pageIndex: number;
   className?: string;
 }
 
-export const PasteZone: React.FC<PasteZoneProps> = ({ pageType, pageIndex, className = '' }) => {
+export const PasteZone: React.FC<PasteZoneProps> = ({ pageIndex, className = '' }) => {
   const { pasteBulk, hasItems, selectedItems, clipboardItems } = useClipboard();
 
   if (!hasItems) {
@@ -27,7 +25,7 @@ export const PasteZone: React.FC<PasteZoneProps> = ({ pageType, pageIndex, class
 
   const handlePaste = () => {
     const indicesToPaste = hasSelection ? selectedItems : [0]; // If no selection, paste latest
-    pasteBulk({ pageType, pageIndex }, indicesToPaste);
+    pasteBulk({ pageIndex }, indicesToPaste);
   };
 
   return (

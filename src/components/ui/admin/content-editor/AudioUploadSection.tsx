@@ -19,7 +19,7 @@ export const AudioUploadSection: React.FC<AudioUploadSectionProps> = ({
   contentItemId,
   className = '',
 }) => {
-  const lessonId = useAppSelector(state => state.lesson.currentLesson?.id);
+  const lessonId = useAppSelector(state => state.lessonEditor.currentLesson?.id);
   const { makeAdminRequest } = useAdminApi();
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);

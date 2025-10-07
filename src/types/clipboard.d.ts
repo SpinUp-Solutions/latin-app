@@ -5,12 +5,8 @@ import { TooltipData } from './tooltip';
  * Core clipboard types for content copying and pasting system
  */
 
-// Page type enum for better type safety and reusability
-export type PageType = 'introduction' | 'exercises';
-
 // Unified location interface for clipboard operations
 export interface ClipboardLocation {
-  pageType: PageType;
   pageIndex: number;
   lesson?: string;
 }

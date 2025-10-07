@@ -1,7 +1,7 @@
 import { RenderableContentItem } from '@/src/types/page';
-import { createDefaultFeedbackConfig } from './feedbackDefaults';
+import { createDefaultFeedbackConfig, DEFAULT_ITEM_PROGRESSION_DELAY } from './feedbackDefaults';
 
-const generateId = (prefix?: string): string => {
+export const generateId = (prefix?: string): string => {
   const timestamp = Date.now();
   const random = Math.random().toString(36).substr(2, 9);
   return prefix ? `${prefix}-${timestamp}-${random}` : `${timestamp}-${random}`;
@@ -68,6 +68,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
         title: 'Matching Exercise',
         instructions: 'Match the items from the left column with the right column.',
         audioPath: null,
+        itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
         feedbackConfig: createDefaultFeedbackConfig(),
         data: {
           leftColumn: [
@@ -91,6 +92,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
         title: 'Fill in the Blanks',
         instructions: 'Complete the sentences by filling in the blanks.',
         audioPath: null,
+        itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
         feedbackConfig: createDefaultFeedbackConfig(),
         data: {
           items: [
@@ -108,6 +110,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
         title: 'Text Selection Exercise',
         instructions: 'Select the correct words in the passage.',
         audioPath: null,
+        itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
         feedbackConfig: createDefaultFeedbackConfig(),
         data: {
           passage: 'Sample passage with selectable words.',
@@ -121,57 +124,24 @@ export const createNewContent = (type: string): RenderableContentItem => {
           ],
         },
       };
-    case 'verb-analysis':
+    case 'fill-embolded-text':
       return {
         id: baseId,
-        type: 'verb-analysis',
-        title: 'Verb Analysis Exercise',
-        instructions: 'Analyze the verbs in the passage.',
+        type: 'fill-embolded-text',
+        title: 'Fill In Embolded Text Exercise',
+        instructions: 'Identify the embolded text and provide the answer.',
         audioPath: null,
+        itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
         feedbackConfig: createDefaultFeedbackConfig(),
         data: {
-          passage: 'Passage with verbs to analyze.',
+          passage: 'Passage with embolded text to analyze.',
           verbs: [
             {
               wordIndex: 0,
               correctPronoun: 'he/she/it',
-              explanation: 'This verb is third person singular.',
+              explanation: 'This is the correct answer.',
             },
           ],
-        },
-      };
-    case 'verb-conjugation':
-      return {
-        id: baseId,
-        type: 'verb-conjugation',
-        title: 'Verb Conjugation Exercise',
-        instructions: 'Practice verb conjugations.',
-        audioPath: null,
-        feedbackConfig: createDefaultFeedbackConfig(),
-        data: {
-          passage: {
-            latin: 'Latin passage',
-            translation: 'English translation',
-            specialVocab: {},
-          },
-          conjugationTask: {
-            instructions: 'Conjugate the verb',
-            answer: 'correct conjugation',
-          },
-          livingLatinPractice: {
-            examples: [
-              {
-                latin: 'Latin example',
-                translation: 'English example',
-              },
-            ],
-            exercises: [
-              {
-                english: 'English phrase',
-                answer: 'Latin answer',
-              },
-            ],
-          },
         },
       };
     case 'sentence-diagramming':
@@ -181,6 +151,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
         title: 'Sentence Diagramming Exercise',
         instructions: 'Diagram the Latin sentence ',
         audioPath: null,
+        itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
         feedbackConfig: createDefaultFeedbackConfig(),
         data: {
           sentence: {
@@ -228,6 +199,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
         title: 'Multiple Choice Question',
         instructions: 'Select the correct answer from the choices below.',
         audioPath: null,
+        itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
         feedbackConfig: createDefaultFeedbackConfig(),
         data: {
           question: 'What is the correct answer?',
@@ -263,6 +235,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
         title: 'Odd One Out Exercise',
         instructions: "Select the item that doesn't belong with the others.",
         audioPath: null,
+        itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
         feedbackConfig: createDefaultFeedbackConfig(),
         data: {
           question: "Which of these items doesn't belong?",
@@ -290,6 +263,53 @@ export const createNewContent = (type: string): RenderableContentItem => {
           ],
           explanation: 'This item is different because...',
           requireExplanation: false,
+        },
+      };
+    case 'table-fill':
+      return {
+        id: baseId,
+        type: 'table-fill',
+        title: 'Table Fill Exercise',
+        instructions: 'Fill in the blank cells in the table below.',
+        audioPath: null,
+        itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
+        feedbackConfig: createDefaultFeedbackConfig(),
+        data: {
+          title: 'Exercise Table',
+          columns: [
+            { id: 'col1', header: 'Column 1' },
+            { id: 'col2', header: 'Column 2' },
+          ],
+          rows: [
+            {
+              id: 'row1',
+              cells: {
+                col1: { content: 'Sample content', isBlank: false },
+                col2: { content: '', isBlank: true, answer: 'answer' },
+              },
+            },
+          ],
+        },
+      };
+    case 'click-on-multiple-words':
+      return {
+        id: baseId,
+        type: 'click-on-multiple-words',
+        title: 'Click On Multiple Words',
+        instructions: 'Click on all the words that match the criteria.',
+        audioPath: null,
+        itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
+        feedbackConfig: createDefaultFeedbackConfig(),
+        data: {
+          title: 'Word Selection Exercise',
+          passage:
+            'Click on the <em>adjectives</em> in this sample passage with multiple <strong>descriptive</strong> words.',
+          correctWordIndices: [3, 8, 10],
+          instructions: '',
+          hint: 'Look for words that describe or modify nouns.',
+          explanation: 'Adjectives are words that modify nouns and add descriptive information.',
+          allowOverSelection: false,
+          minimumCorrect: undefined,
         },
       };
     default:

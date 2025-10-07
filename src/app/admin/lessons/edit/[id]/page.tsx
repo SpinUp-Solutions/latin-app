@@ -11,14 +11,9 @@ import { LessonBuilder } from '@/src/components/ui/admin';
 import { ClipboardProvider } from '@/src/components/ui/core/clipboard';
 import { Lesson } from '@/src/types/lesson';
 import { useAppDispatch } from '@/src/store/hooks';
-import {
-  saveLesson,
-  resetLessonState,
-  clearError,
-  clearLastSavedLesson,
-  setLesson,
-} from '@/src/store/slices/lessonSlice';
-import { lessonService } from '@/src/services/lessonService';
+import { useGetLessonByIdQuery, useUpdateLessonMutation } from '@/src/store/api/lessonApi';
+import { setLesson, loadTooltips, resetLessonState, clearDraft } from '@/src/store/slices/lessonEditorSlice';
+import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 
 interface EditLessonPageProps {
   params: {
@@ -26,68 +21,31 @@ interface EditLessonPageProps {
   };
 }
 
-export default function EditLessonPage({ params }: EditLessonPageProps) {
+function EditLessonPage({ params }: EditLessonPageProps) {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { user, loading: authLoading } = useSelector((state: RootState) => state.auth);
-  const { saving, error, lastSavedLesson, currentLesson } = useSelector((state: RootState) => state.lesson);
+  const { data: lessonData } = useGetLessonByIdQuery({ lessonId: params.id });
+  const [updateLesson, { isLoading: saving }] = useUpdateLessonMutation();
+  const { currentLesson } = useSelector((state: RootState) => state.lessonEditor);
   const [loading, setLoading] = useState(true);
   const [navigating, setNavigating] = useState(false);
 
   useEffect(() => {
-    if (!authLoading && (!user || user.role !== 'admin')) {
-      router.push('/dashboard');
-      toast.error('Access denied. Admin privileges required.');
-      return;
-    }
-
-    if (user?.role === 'admin' && params.id) {
-      loadLesson();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, authLoading, router, params.id]);
-
-  const loadLesson = async () => {
-    try {
-      setLoading(true);
-      const lessonData = await lessonService.getLesson(params.id);
-      if (lessonData) {
-        dispatch(setLesson(lessonData));
-      } else {
-        toast.error('Lesson not found');
-        router.push('/admin/lessons/manage');
-      }
-    } catch (error) {
-      console.error('Error loading lesson:', error);
-      toast.error('Failed to load lesson');
-      router.push('/admin/lessons/manage');
-    } finally {
+    if (lessonData) {
+      dispatch(setLesson(lessonData.lesson));
+      dispatch(loadTooltips(lessonData.tooltips));
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    if (lastSavedLesson && !saving && !error) {
-      toast.success('Lesson updated successfully!');
-      // Clear the lastSavedLesson flag to prevent repeated notifications
-      dispatch(clearLastSavedLesson());
-    }
-  }, [lastSavedLesson, saving, error, dispatch]);
-
-  // Handle save error
-  useEffect(() => {
-    if (error && !saving) {
-      toast.error(error);
-      dispatch(clearError());
-    }
-  }, [error, saving, dispatch]);
+  }, [lessonData, dispatch]);
 
   const handleSaveLesson = async (updatedLesson: Lesson) => {
     try {
-      const isUpdate = true; // Always an update for edit page
-      dispatch(saveLesson({ lesson: updatedLesson, isUpdate }));
+      await updateLesson(updatedLesson).unwrap();
+      dispatch(clearDraft(updatedLesson.id));
+      toast.success('Lesson updated successfully!');
     } catch (error) {
-      console.error('Error dispatching save lesson:', error);
+      console.error('Error updating lesson:', error);
+      toast.error('Failed to update lesson');
     }
   };
 
@@ -98,19 +56,7 @@ export default function EditLessonPage({ params }: EditLessonPageProps) {
     setTimeout(() => dispatch(resetLessonState()), 100);
   };
 
-  if (authLoading || loading || !user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-roman-marble">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>
-      </div>
-    );
-  }
-
-  if (user.role !== 'admin') {
-    return null;
-  }
-
-  if (navigating || !currentLesson) {
+  if (loading || navigating || !currentLesson) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-roman-marble">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>
@@ -150,3 +96,5 @@ export default function EditLessonPage({ params }: EditLessonPageProps) {
     </div>
   );
 }
+
+export default withAdminAuth(EditLessonPage);

@@ -1,15 +1,26 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
-import { useDispatch, useSelector } from 'react-redux';
-import { RootState, AppDispatch } from '@/src/store';
+import { useSelector, useDispatch } from 'react-redux';
+import { RootState } from '@/src/store';
+import { Lesson } from '@/src/types/lesson';
+import { syncLessonsFromRTQ, localReorderLiveLessons, selectHasUnsavedChanges } from '@/src/store/slices/lessonSlice';
 import {
-  loadLessons,
-  updateLessonsPublishStatus,
-  selectLiveLessons,
-  selectAvailableLessons
-} from '@/src/store/slices/lessonSlice';
+  useGetLessonsQuery,
+  useUpdateLessonsPublishStatusMutation,
+  useReorderLessonsMutation,
+} from '@/src/store/api/lessonApi';
+import { selectLiveLessons, selectAvailableLessons, selectFilteredLessons } from '@/src/store/slices/lessonSlice';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
 import { RomanCard, RomanCardContent, RomanCardHeader } from '@/src/components/ui/core/roman-card';
@@ -18,72 +29,47 @@ import { Checkbox } from '@/src/components/ui/checkbox';
 import { ArrowLeft, Globe, Search, Filter, BookOpen, Clock, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
-import { Lesson } from '@/src/types/lesson';
+import { SortableLessonItem } from '@/src/components/admin/SortableLessonItem';
+import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 
-export default function LiveLessonsPage() {
-  const router = useRouter();
-  const dispatch = useDispatch<AppDispatch>();
-  const { user } = useSelector((state: RootState) => state.auth);
-  const { loading } = useSelector((state: RootState) => state.lesson);
-  const liveLessons = useSelector((state: RootState) => selectLiveLessons(state));
-  const availableLessons = useSelector((state: RootState) => selectAvailableLessons(state));
+function LiveLessonsPage() {
+  const dispatch = useDispatch();
+  const { data: serverLessons, isLoading: loading } = useGetLessonsQuery();
+  const [updatePublishStatus] = useUpdateLessonsPublishStatusMutation();
+  const [reorderLessons] = useReorderLessonsMutation();
+  const liveLessons = useSelector(selectLiveLessons);
+  const availableLessons = useSelector(selectAvailableLessons);
+  const hasUnsavedChanges = useSelector(selectHasUnsavedChanges);
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'live' | 'draft'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'live' | 'draft'>('live');
   const [selectedLessons, setSelectedLessons] = useState<Set<string>>(new Set());
   const [isPublishing, setIsPublishing] = useState(false);
-  const [originalLiveIds, setOriginalLiveIds] = useState<Set<string>>(new Set());
-  const [initialized, setInitialized] = useState(false);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Sync RTK Query data to lessonSlice
+  useEffect(() => {
+    if (serverLessons) {
+      dispatch(syncLessonsFromRTQ(serverLessons));
+    }
+  }, [serverLessons, dispatch]);
+
+  const originalLiveIds = useMemo(() => new Set(liveLessons.map(l => l.id)), [liveLessons]);
 
   useEffect(() => {
-    if (!user || user.role !== 'admin') {
-      router.push('/dashboard');
-      return;
+    if (liveLessons.length > 0 && selectedLessons.size === 0) {
+      setSelectedLessons(originalLiveIds);
     }
+  }, [liveLessons.length, selectedLessons.size, originalLiveIds]);
 
-    dispatch(loadLessons());
-  }, [dispatch, user, router]);
-
-  useEffect(() => {
-    if (liveLessons.length > 0 && !initialized) {
-      const liveIds = new Set(liveLessons.map(l => l.id));
-      setOriginalLiveIds(liveIds);
-      setSelectedLessons(liveIds);
-      setInitialized(true);
-    }
-  }, [liveLessons, initialized]);
-
-  const getFilteredLessons = (): Array<(Lesson & { isLive: true }) | (Lesson & { isLive: false })> => {
-    const lessons: Array<(Lesson & { isLive: true }) | (Lesson & { isLive: false })> = [];
-
-    if (filterStatus === 'all' || filterStatus === 'live') {
-      for (const lesson of liveLessons) {
-        const matchesSearch =
-          !searchQuery ||
-          lesson.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          lesson.description?.toLowerCase().includes(searchQuery.toLowerCase());
-
-        if (matchesSearch) {
-          lessons.push({ ...lesson, isLive: true as const });
-        }
-      }
-    }
-
-    if (filterStatus === 'all' || filterStatus === 'draft') {
-      for (const lesson of availableLessons) {
-        const matchesSearch =
-          !searchQuery ||
-          lesson.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          lesson.description?.toLowerCase().includes(searchQuery.toLowerCase());
-
-        if (matchesSearch) {
-          lessons.push({ ...lesson, isLive: false as const });
-        }
-      }
-    }
-
-    return lessons;
-  };
+  // Use the new parameterized selector for efficient filtering
+  const filteredLessons = useSelector((state: RootState) => selectFilteredLessons(state, filterStatus, searchQuery));
 
   const handleSelectLesson = (lessonId: string) => {
     setSelectedLessons(prev => {
@@ -99,16 +85,45 @@ export default function LiveLessonsPage() {
 
   const hasChanges = useMemo(() => {
     if (originalLiveIds.size !== selectedLessons.size) return true;
-
     for (const id of Array.from(originalLiveIds)) {
       if (!selectedLessons.has(id)) return true;
     }
-    for (const id of Array.from(selectedLessons)) {
-      if (!originalLiveIds.has(id)) return true;
-    }
-
     return false;
   }, [originalLiveIds, selectedLessons]);
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = liveLessons.findIndex(item => item.id === active.id);
+    const newIndex = liveLessons.findIndex(item => item.id === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    dispatch(localReorderLiveLessons({ fromIndex: oldIndex, toIndex: newIndex }));
+  };
+
+  const handleApplyLessonOrder = async () => {
+    try {
+      const updates = liveLessons.map((lesson, index) => ({
+        lessonId: lesson.id,
+        liveOrder: index,
+      }));
+
+      await reorderLessons(updates).unwrap();
+      toast.success('Lesson order saved successfully');
+    } catch (error) {
+      toast.error('Failed to save lesson order');
+    }
+  };
+
+  const handleCancelLessonOrder = () => {
+    if (serverLessons) {
+      dispatch(syncLessonsFromRTQ(serverLessons));
+      toast.info('Changes discarded');
+    }
+  };
 
   const handleApplyChanges = async () => {
     const toPublish = Array.from(selectedLessons).filter(id => !originalLiveIds.has(id));
@@ -118,21 +133,20 @@ export default function LiveLessonsPage() {
 
     try {
       if (toUnpublish.length > 0) {
-        await dispatch(updateLessonsPublishStatus({
+        await updatePublishStatus({
           lessonIds: toUnpublish,
-          isLive: false
-        })).unwrap();
+          isLive: false,
+        }).unwrap();
       }
 
       if (toPublish.length > 0) {
-        await dispatch(updateLessonsPublishStatus({
+        await updatePublishStatus({
           lessonIds: toPublish,
-          isLive: true
-        })).unwrap();
+          isLive: true,
+        }).unwrap();
       }
 
       toast.success('Changes applied successfully');
-      dispatch(loadLessons());
     } catch (error) {
       toast.error('Failed to apply changes');
     }
@@ -265,60 +279,105 @@ export default function LiveLessonsPage() {
           </RomanCardContent>
         </RomanCard>
 
-        {/* Lessons List */}
-        <RomanCard>
-          <RomanCardHeader>
-            <h2 className="text-lg font-serif">Lessons ({getFilteredLessons().length})</h2>
-          </RomanCardHeader>
-          <RomanCardContent className="p-0">
-            <div className="divide-y divide-border">
-              {getFilteredLessons().length === 0 ? (
-                <div className="p-8 text-center text-gray-500">No lessons found matching your criteria</div>
+        {/* Live Lessons Ordering */}
+        {filterStatus === 'live' && (
+          <RomanCard className="mb-6">
+            <RomanCardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <h2 className="text-lg font-serif">Live Lessons Order ({liveLessons.length})</h2>
+                <p className="text-sm text-gray-600">
+                  Drag lessons to reorder. Click Apply to save changes.
+                  {hasUnsavedChanges && <span className="text-orange-600 font-medium ml-2">• Unsaved changes</span>}
+                </p>
+              </div>
+              {hasUnsavedChanges && (
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={handleCancelLessonOrder}>
+                    Cancel
+                  </Button>
+                  <Button size="sm" onClick={handleApplyLessonOrder}>
+                    Apply Changes
+                  </Button>
+                </div>
+              )}
+            </RomanCardHeader>
+            <RomanCardContent className="p-4">
+              {liveLessons.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  No live lessons found. Publish some lessons to start ordering them.
+                </div>
               ) : (
-                getFilteredLessons().map(lesson => {
-                  return (
-                    <div key={lesson.id} className="p-4 hover:bg-gray-50 transition-colors">
-                      <div className="flex items-start gap-4">
-                        <Checkbox
-                          checked={selectedLessons.has(lesson.id)}
-                          onCheckedChange={() => handleSelectLesson(lesson.id)}
-                          className="mt-1"
-                        />
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                  <SortableContext items={liveLessons.map(l => l.id)} strategy={verticalListSortingStrategy}>
+                    <div className="space-y-3">
+                      {liveLessons.map(lesson => (
+                        <SortableLessonItem key={lesson.id} id={lesson.id} lesson={lesson} />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              )}
+            </RomanCardContent>
+          </RomanCard>
+        )}
 
-                        <div className="flex-1">
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <h3 className="font-serif text-lg">{lesson.title}</h3>
-                                <Badge variant={lesson.isLive ? 'default' : 'secondary'}>
-                                  {lesson.isLive ? 'Live' : 'Draft'}
-                                </Badge>
-                              </div>
-                              {lesson.description && (
-                                <p className="text-sm text-gray-600 mb-2">{lesson.description}</p>
-                              )}
-                              <div className="flex items-center gap-4 text-xs text-gray-500">
-                                <span>{lesson.introduction?.length || 0} intro pages</span>
-                                <span>{lesson.exercises?.length || 0} exercise pages</span>
-                              </div>
-                            </div>
+        {/* Regular Lessons List for All/Draft filters */}
+        {filterStatus !== 'live' && (
+          <RomanCard>
+            <RomanCardHeader>
+              <h2 className="text-lg font-serif">Lessons ({filteredLessons.length})</h2>
+            </RomanCardHeader>
+            <RomanCardContent className="p-0">
+              <div className="divide-y divide-border">
+                {filteredLessons.length === 0 ? (
+                  <div className="p-8 text-center text-gray-500">No lessons found matching your criteria</div>
+                ) : (
+                  filteredLessons.map((lesson: Lesson) => {
+                    return (
+                      <div key={lesson.id} className="p-4 hover:bg-gray-50 transition-colors">
+                        <div className="flex items-start gap-4">
+                          <Checkbox
+                            checked={selectedLessons.has(lesson.id)}
+                            onCheckedChange={() => handleSelectLesson(lesson.id)}
+                            className="mt-1"
+                          />
 
-                            <div className="flex items-center gap-2">
-                              <Button size="sm" variant="outline" asChild>
-                                <Link href={`/admin/lessons/edit/${lesson.id}`}>Edit</Link>
-                              </Button>
+                          <div className="flex-1">
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <h3 className="font-serif text-lg">{lesson.title}</h3>
+                                  <Badge variant={lesson.isLive ? 'default' : 'secondary'}>
+                                    {lesson.isLive ? 'Live' : 'Draft'}
+                                  </Badge>
+                                </div>
+                                {lesson.description && (
+                                  <p className="text-sm text-gray-600 mb-2">{lesson.description}</p>
+                                )}
+                                <div className="flex items-center gap-4 text-xs text-gray-500">
+                                  <span>{lesson.pages?.length || 0} pages</span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <Button size="sm" variant="outline" asChild>
+                                  <Link href={`/admin/lessons/edit/${lesson.id}`}>Edit</Link>
+                                </Button>
+                              </div>
                             </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </RomanCardContent>
-        </RomanCard>
+                    );
+                  })
+                )}
+              </div>
+            </RomanCardContent>
+          </RomanCard>
+        )}
       </main>
     </div>
   );
 }
+
+export default withAdminAuth(LiveLessonsPage);

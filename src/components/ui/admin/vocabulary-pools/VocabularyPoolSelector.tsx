@@ -15,10 +15,9 @@ import { Card, CardContent } from '@/src/components/ui/card';
 import { Library, Search } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import Link from 'next/link';
-
-import { useVocabularyPools } from '@/src/hooks/useVocabularyPools';
-import { useAppDispatch } from '@/src/store/hooks';
-import { loadPools } from '@/src/store/slices/vocabularyPoolSlice';
+import { useGetPoolsQuery } from '@/src/store/api/vocabularyPoolApi';
+import { useAppSelector, useAppDispatch } from '@/src/store/hooks';
+import { updateFilters } from '@/src/store/slices/vocabularyPoolSlice';
 import type { VocabularyPool } from '@/src/types/vocabulary-pool';
 
 interface VocabularyPoolSelectorProps {
@@ -33,34 +32,21 @@ export const VocabularyPoolSelector: React.FC<VocabularyPoolSelectorProps> = ({
   disabled = false,
 }) => {
   const dispatch = useAppDispatch();
-  const { pools, loading, filters, updateFilters } = useVocabularyPools();
+  const filters = useAppSelector(state => state.vocabularyPools.filters);
+  const { data, isLoading: loading } = useGetPoolsQuery({ filters }, { skip: !selectedPoolId });
+  const pools = data?.pools ?? [];
   const [selectedPool, setSelectedPool] = useState<VocabularyPool | null>(null);
   const [showPoolPicker, setShowPoolPicker] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Load selected pool data
   useEffect(() => {
-    if (selectedPoolId && pools.length > 0) {
-      const pool = pools.find(p => p.id === selectedPoolId);
+    if (selectedPoolId && data?.pools && data.pools.length > 0) {
+      const pool = data.pools.find(p => p.id === selectedPoolId);
       setSelectedPool(pool || null);
     } else if (!selectedPoolId) {
       setSelectedPool(null);
     }
-  }, [selectedPoolId, pools]);
-
-  // Load pools when modal opens
-  useEffect(() => {
-    if (showPoolPicker) {
-      dispatch(loadPools({ reset: true, filters }));
-    }
-  }, [showPoolPicker, dispatch, filters]);
-
-  // Load pools initially if we have a selectedPoolId but no pools
-  useEffect(() => {
-    if (selectedPoolId && pools.length === 0 && !loading) {
-      dispatch(loadPools({ reset: true, filters }));
-    }
-  }, [selectedPoolId, pools.length, loading, dispatch, filters]);
+  }, [selectedPoolId, data]);
 
   const filteredPools = pools.filter(
     pool =>
@@ -140,7 +126,7 @@ export const VocabularyPoolSelector: React.FC<VocabularyPoolSelectorProps> = ({
               </div>
               <Select
                 value={filters.difficulty || 'all'}
-                onValueChange={value => updateFilters({ difficulty: value === 'all' ? '' : value })}>
+                onValueChange={value => dispatch(updateFilters({ difficulty: value === 'all' ? '' : value }))}>
                 <SelectTrigger className="w-48">
                   <SelectValue placeholder="All Difficulties" />
                 </SelectTrigger>

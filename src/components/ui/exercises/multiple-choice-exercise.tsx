@@ -12,7 +12,7 @@ import { cn } from '@/src/lib/utils';
 
 interface Props {
   exercise: MultipleChoiceExercise;
-  onComplete?: () => void;
+  onComplete?: (score: number) => void;
 }
 
 const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
@@ -42,15 +42,10 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
     const validation = validateMultipleChoiceExercise(selectedOptionId, exercise);
 
     if (validation.isCorrect) {
-      handleCorrect(true); // Multiple choice is typically single question
+      handleCorrect(true);
+      const score = 100;
 
-      // Auto-advance logic based on configuration
-      if (exercise.feedbackConfig.progressionRules?.autoAdvance !== false) {
-        const completionDelay = exercise.feedbackConfig.timingConfig?.nextExerciseDelay || 2000;
-        setTimeout(() => {
-          onComplete?.();
-        }, completionDelay);
-      }
+      onComplete?.(score);
     } else {
       handleIncorrect();
     }

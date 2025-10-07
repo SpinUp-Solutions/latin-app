@@ -8,7 +8,7 @@ interface LessonPreviewProps {
 }
 
 export const LessonPreview: React.FC<LessonPreviewProps> = ({ lesson }) => {
-  const hasContent = lesson.introduction.length > 0 || lesson.exercises.length > 0;
+  const hasContent = lesson.pages.length > 0;
 
   return (
     <div className="w-1/2 border-l border-border bg-white overflow-y-auto">

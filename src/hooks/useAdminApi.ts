@@ -1,12 +1,11 @@
-import { useSelector } from 'react-redux';
-import { RootState } from '@/src/store';
 import { auth } from '@/src/services/firebase';
+import { useAuth } from './useAuth';
 
 export const useAdminApi = () => {
-  const { user } = useSelector((state: RootState) => state.auth);
+  const { user, isAdmin } = useAuth();
 
   const makeAdminRequest = async (endpoint: string, options: RequestInit = {}) => {
-    if (!user || user.role !== 'admin') {
+    if (!user || !isAdmin) {
       throw new Error('Admin access required');
     }
 

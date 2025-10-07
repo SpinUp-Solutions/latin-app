@@ -1,14 +1,14 @@
 import React from 'react';
 import { TextContent } from '@/src/types/lesson';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
-import { updateEditingContent } from '@/src/store/slices/lessonSlice';
+import { updateEditingContent } from '@/src/store/slices/lessonEditorSlice';
 import RichTextEditor from '../../core/rich-text-editor';
 import { SimpleRichEditor } from '../../core/simple-rich-editor';
 import { AudioUploadSection } from './AudioUploadSection';
 
 export const TextEditor: React.FC = () => {
   const dispatch = useAppDispatch();
-  const editingContent = useAppSelector(state => state.lesson.editingContent?.content as TextContent);
+  const editingContent = useAppSelector(state => state.lessonEditor.editingContent?.content as TextContent);
 
   if (!editingContent) {
     return <div>No content selected for editing</div>;

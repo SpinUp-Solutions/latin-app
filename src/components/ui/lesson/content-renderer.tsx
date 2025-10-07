@@ -5,21 +5,23 @@ import MatchingTable from '../exercises/matching-table';
 import ConjugationTable from './conjugation-table';
 import FillExercise from '../exercises/fill-exercise';
 import TextSelectionExercise from '../exercises/text-selection-exercise';
-import VerbAnalysisExercise from '../exercises/verb-analysis-exercise';
-import VerbConjugationExercise from '../exercises/verb-conjugation-exercise';
+import FillEmboldedTextExercise from '../exercises/verb-analysis-exercise';
 import { SentenceDiagrammingExercise } from '../exercises/sentence-diagramming-exercise';
 import MultipleChoiceExercise from '../exercises/multiple-choice-exercise';
 import OddOneOutExercise from '../exercises/odd-one-out-exercise';
+import TableFillExercise from '../exercises/table-fill-exercise';
+import ClickOnMultipleWordsExercise from '../exercises/click-on-multiple-words';
 import { ContentItem, TextContent, TableContent, VocabularyContent, VocabularyPoolContent } from '@/src/types/lesson';
 import {
   MatchingExercise,
   FillExercise as FillExerciseType,
   TextSelectionExercise as TextSelectionExerciseType,
-  VerbAnalysisExercise as VerbAnalysisExerciseType,
-  VerbConjugationExercise as VerbConjugationExerciseType,
+  FillEmboldedTextExercise as FillEmboldedTextExerciseType,
   SentenceDiagrammingExercise as SentenceDiagrammingExerciseType,
   MultipleChoiceExercise as MultipleChoiceExerciseType,
   OddOneOutExercise as OddOneOutExerciseType,
+  TableFillExercise as TableFillExerciseType,
+  ClickOnMultipleWordsExercise as ClickOnMultipleWordsExerciseType,
 } from '@/src/types/exercise';
 import { VocabularyViewer } from './VocabularyViewer';
 import { VocabularyPoolViewer } from './VocabularyPoolViewer';
@@ -27,7 +29,9 @@ import TextComponent from './text-component';
 
 interface ContentRendererProps {
   content: ContentItem;
-  onComplete?: () => void;
+  onComplete?: (score: number) => void;
+  pageIndex?: number;
+  itemIndex?: number;
 }
 
 export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onComplete }) => {
@@ -74,11 +78,8 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onCom
     case 'text-selection':
       return <TextSelectionExercise exercise={content as TextSelectionExerciseType} onComplete={onComplete} />;
 
-    case 'verb-analysis':
-      return <VerbAnalysisExercise exercise={content as VerbAnalysisExerciseType} onComplete={onComplete} />;
-
-    case 'verb-conjugation':
-      return <VerbConjugationExercise exercise={content as VerbConjugationExerciseType} onComplete={onComplete} />;
+    case 'fill-embolded-text':
+      return <FillEmboldedTextExercise exercise={content as FillEmboldedTextExerciseType} onComplete={onComplete} />;
 
     case 'sentence-diagramming':
       return (
@@ -90,6 +91,14 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onCom
 
     case 'odd-one-out':
       return <OddOneOutExercise exercise={content as OddOneOutExerciseType} onComplete={onComplete} />;
+
+    case 'table-fill':
+      return <TableFillExercise exercise={content as TableFillExerciseType} onComplete={onComplete} />;
+
+    case 'click-on-multiple-words':
+      return (
+        <ClickOnMultipleWordsExercise exercise={content as ClickOnMultipleWordsExerciseType} onComplete={onComplete} />
+      );
 
     default:
       return (

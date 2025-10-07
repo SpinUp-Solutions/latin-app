@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
-import { VerbAnalysisExercise } from '@/src/types/exercise';
+import { FillEmboldedTextExercise } from '@/src/types/exercise';
 import { ExerciseInput, FeedbackDisplay } from '../feedback';
 import { validateVerbAnalysisExercise } from '@/src/utils/exercises/verbAnalysisExercise';
 import { ExerciseProgress } from './exercise-progress';
@@ -11,19 +11,20 @@ import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 
 interface Props {
-  exercise: VerbAnalysisExercise;
-  onComplete?: () => void;
+  exercise: FillEmboldedTextExercise;
+  onComplete?: (score: number) => void;
 }
 
-const VerbAnalysisExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
+const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
   const [userAnswer, setUserAnswer] = useState('');
   const [selectedWordIndex, setSelectedWordIndex] = useState<number | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [correctAnswers, setCorrectAnswers] = useState(0);
 
   const { currentIndex, isLastItem, autoAdvanceIfEnabled } = useExerciseProgression({
     totalItems: exercise.data.verbs.length,
-    feedbackConfig: exercise.feedbackConfig,
-    onComplete,
+    itemProgressionDelay: exercise.itemProgressionDelay,
+    progressionRules: exercise.feedbackConfig.progressionRules,
   });
 
   const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
@@ -49,15 +50,28 @@ const VerbAnalysisExerciseComponent: React.FC<Props> = ({ exercise, onComplete }
     setIsProcessing(true);
 
     if (validation.isCorrect) {
+      const newCorrectAnswers = correctAnswers + 1;
+      setCorrectAnswers(newCorrectAnswers);
       handleCorrect(isLastItem);
-      autoAdvanceIfEnabled(() => {
-        setUserAnswer('');
-        setSelectedWordIndex(null);
-        reset();
-        setIsProcessing(false);
-      });
-      if (exercise.feedbackConfig.progressionRules?.autoAdvance === false) {
-        setIsProcessing(false);
+
+      if (isLastItem) {
+        const finalScore = Math.round((newCorrectAnswers / exercise.data.verbs.length) * 100);
+
+        onComplete?.(finalScore);
+
+        autoAdvanceIfEnabled(() => {
+          setUserAnswer('');
+          setSelectedWordIndex(null);
+          reset();
+          setIsProcessing(false);
+        });
+      } else {
+        autoAdvanceIfEnabled(() => {
+          setUserAnswer('');
+          setSelectedWordIndex(null);
+          reset();
+          setIsProcessing(false);
+        });
       }
     } else {
       handleIncorrect();
@@ -149,4 +163,4 @@ const VerbAnalysisExerciseComponent: React.FC<Props> = ({ exercise, onComplete }
   );
 };
 
-export default VerbAnalysisExerciseComponent;
+export default FillEmboldedTextExerciseComponent;

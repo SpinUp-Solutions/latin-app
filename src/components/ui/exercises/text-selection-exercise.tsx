@@ -9,20 +9,22 @@ import { validateTextSelectionExercise } from '@/src/utils/exercises/textSelecti
 import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
+import { ClickableRichDisplay } from '../core/clickable-rich-display';
 
 interface Props {
   exercise: TextSelectionExercise;
-  onComplete?: () => void;
+  onComplete?: (score: number) => void;
 }
 
 const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
   const [selectedWordIndex, setSelectedWordIndex] = useState<number | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [correctAnswers, setCorrectAnswers] = useState(0);
 
   const { currentIndex, isLastItem, autoAdvanceIfEnabled } = useExerciseProgression({
     totalItems: exercise.data.questions.length,
-    feedbackConfig: exercise.feedbackConfig,
-    onComplete,
+    itemProgressionDelay: exercise.itemProgressionDelay,
+    progressionRules: exercise.feedbackConfig.progressionRules,
   });
 
   const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
@@ -37,14 +39,26 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
     setIsProcessing(true);
 
     if (validation.isCorrect) {
+      const newCorrectAnswers = correctAnswers + 1;
+      setCorrectAnswers(newCorrectAnswers);
       handleCorrect(isLastItem);
-      autoAdvanceIfEnabled(() => {
-        setSelectedWordIndex(null);
-        reset();
-        setIsProcessing(false);
-      });
-      if (exercise.feedbackConfig.progressionRules?.autoAdvance === false) {
-        setIsProcessing(false);
+
+      if (isLastItem) {
+        const finalScore = Math.round((newCorrectAnswers / exercise.data.questions.length) * 100);
+
+        onComplete?.(finalScore);
+
+        autoAdvanceIfEnabled(() => {
+          setSelectedWordIndex(null);
+          reset();
+          setIsProcessing(false);
+        });
+      } else {
+        autoAdvanceIfEnabled(() => {
+          setSelectedWordIndex(null);
+          reset();
+          setIsProcessing(false);
+        });
       }
     } else {
       handleIncorrect();
@@ -90,22 +104,13 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
             content={currentQuestion.text}
             className="mb-6 whitespace-pre-wrap break-words min-w-[300px]"
           />
-          <div className="font-serif text-lg leading-relaxed min-w-[300px]">
-            {exercise.data.passage.split(' ').map((word, index) => (
-              <span
-                key={index}
-                onClick={() => handleWordClick(index)}
-                className={`cursor-pointer inline-block px-1 py-0.5 mx-0.5 rounded hover:bg-roman-parchment hover:text-roman-red transition-colors ${
-                  selectedWordIndex === index
-                    ? isCorrect
-                      ? 'text-green-600 bg-green-50'
-                      : 'text-red-600 bg-red-50'
-                    : ''
-                }`}>
-                {word}
-              </span>
-            ))}
-          </div>
+          <ClickableRichDisplay
+            content={exercise.data.passage}
+            onWordClick={handleWordClick}
+            selectedWordIndex={selectedWordIndex}
+            isCorrect={isCorrect}
+            className="min-w-[300px]"
+          />
         </div>
 
         <FeedbackDisplay

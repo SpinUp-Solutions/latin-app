@@ -1,38 +1,13 @@
 'use client';
 
-import React, { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useSelector } from 'react-redux';
-import { RootState } from '@/src/store';
+import React from 'react';
 import { Button } from '@/src/components/ui/button';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { ArrowLeft, Shield, Plus, BookOpen, Globe } from 'lucide-react';
-import { toast } from 'sonner';
 import Link from 'next/link';
+import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 
-export default function AdminPage() {
-  const router = useRouter();
-  const { user, loading: authLoading } = useSelector((state: RootState) => state.auth);
-
-  useEffect(() => {
-    if (!authLoading && (!user || user.role !== 'admin')) {
-      router.push('/dashboard');
-      toast.error('Access denied. Admin privileges required.');
-    }
-  }, [user, authLoading, router]);
-
-  if (authLoading || !user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-roman-marble">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>
-      </div>
-    );
-  }
-
-  if (user.role !== 'admin') {
-    return null;
-  }
-
+function AdminPage() {
   return (
     <div className="min-h-screen bg-roman-marble">
       <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between">
@@ -150,3 +125,5 @@ export default function AdminPage() {
     </div>
   );
 }
+
+export default withAdminAuth(AdminPage);

@@ -31,7 +31,7 @@
 .rich-text-editor-content {
   @apply prose dark:prose-invert prose-sm sm:prose-base lg:prose-lg xl:prose-2xl m-5 min-h-[150px] focus:outline-none;
   @apply prose-p:my-2 prose-p:leading-snug prose-headings:my-4 prose-ul:my-2 prose-ol:my-2;
-} 
+}
 
 /* Sentence Diagramming Extensions */
 .sentence-diagramming-canvas .ProseMirror,

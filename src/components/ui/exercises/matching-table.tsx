@@ -18,7 +18,7 @@ interface MatchingItem {
 
 interface MatchingTableProps {
   exercise: MatchingExercise;
-  onComplete?: () => void;
+  onComplete?: (score: number) => void;
 }
 
 export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComplete }) => {
@@ -93,12 +93,11 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
         setSelectedRight(null);
 
         if (isLastMatch) {
-          // Auto-advance logic based on configuration
-          if (exercise.feedbackConfig.progressionRules?.autoAdvance !== false) {
-            setTimeout(() => {
-              onComplete?.();
-            }, 1500);
-          }
+          const correctMatches = Object.keys(newMatches).length;
+          const totalMatches = Object.keys(finalAnswer).length;
+          const score = Math.round((correctMatches / totalMatches) * 100);
+
+          onComplete?.(score);
         }
       } else {
         handleIncorrect();

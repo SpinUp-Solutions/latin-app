@@ -12,12 +12,11 @@ import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrate
 import { restrictToVerticalAxis, restrictToParentElement } from '@dnd-kit/modifiers';
 import { useDispatch } from 'react-redux';
 import { RenderableContentItem } from '@/src/types/page';
-import { reorderContentItems } from '@/src/store/slices/lessonSlice';
+import { reorderContentItems } from '@/src/store/slices/lessonEditorSlice';
 import { ContentItem } from './ContentItem';
 
 interface DraggableContentListProps {
   items: RenderableContentItem[];
-  pageType: 'introduction' | 'exercises';
   pageIndex: number;
   onEditContent: (itemIndex: number) => void;
   onRemoveContent: (itemIndex: number) => void;
@@ -25,7 +24,6 @@ interface DraggableContentListProps {
 
 export const DraggableContentList: React.FC<DraggableContentListProps> = ({
   items,
-  pageType,
   pageIndex,
   onEditContent,
   onRemoveContent,
@@ -51,7 +49,6 @@ export const DraggableContentList: React.FC<DraggableContentListProps> = ({
 
       dispatch(
         reorderContentItems({
-          pageType,
           pageIndex,
           fromIndex: activeIndex,
           toIndex: overIndex,

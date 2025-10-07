@@ -21,7 +21,7 @@ import { EditorWithTooltips } from '../core/EditorWithTooltips';
 
 interface SentenceDiagrammingExerciseProps {
   exercise: SentenceDiagrammingExerciseType;
-  onComplete?: () => void;
+  onComplete?: (score: number) => void;
 }
 
 export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExerciseProps> = ({ exercise, onComplete }) => {
@@ -61,7 +61,9 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
     if (result.isComplete) {
       handleCorrect(true); // Always complete since there's only one step
       if (onComplete) {
-        onComplete();
+        // Calculate score based on correctness percentage
+        const score = Math.round(result.accuracy);
+        onComplete(score);
       }
     } else {
       handleIncorrect();

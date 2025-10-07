@@ -2476,1187 +2476,667 @@
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "admiror",
-      "principalParts": [
-        "admiror",
-        "admirari",
-        "admiratus sum"
-      ],
+      "principalParts": ["admiror", "admirari", "admiratus sum"],
       "definition": "to admire, wonder at, be surprised at"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "accuso",
-      "principalParts": [
-        "accuso",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["accuso", "-are", "-avi", "-atus"],
       "definition": "to accuse, prosecute, reproach, blame"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "adjuvo",
-      "principalParts": [
-        "adjuvo",
-        "-are",
-        "adjuvi",
-        "adjutus"
-      ],
+      "principalParts": ["adjuvo", "-are", "adjuvi", "adjutus"],
       "definition": "to help, encourage, keep going, relieve, contribute to"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "administro",
-      "principalParts": [
-        "administro",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["administro", "-are", "-avi", "-atus"],
       "definition": "to administer, direct, manage, run, rule, execute, govern, conduct"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "aedifico",
-      "principalParts": [
-        "aedifico",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["aedifico", "-are", "-avi", "-atus"],
       "definition": "to build"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "aestimo",
-      "principalParts": [
-        "aestimo",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["aestimo", "-are", "-avi", "-atus"],
       "definition": "consider, judge, esteem, reckon, value, assess"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "affirmo",
-      "principalParts": [
-        "affirmo",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["affirmo", "-are", "-avi", "-atus"],
       "definition": "to strengthen, encourage, support, confirm"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "agito",
-      "principalParts": [
-        "agito",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["agito", "-are", "-avi", "-atus"],
       "definition": "to set in motion, dive on, impel, scour, brandish, wave, pursue, shake, drive, insist on, support, celebrate, carry out"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "amo",
-      "principalParts": [
-        "amo",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["amo", "-are", "-avi", "-atus"],
       "definition": "to love, be fond of, like, fall in love with, be in love"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "appello",
-      "principalParts": [
-        "appello",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["appello", "-are", "-avi", "-atus"],
       "definition": "call upon, address, appeal to, accuse, name"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "arbitror",
-      "principalParts": [
-        "arbitror",
-        "arbitrari",
-        "arbitratus sum"
-      ],
+      "principalParts": ["arbitror", "arbitrari", "arbitratus sum"],
       "definition": "observe, witness, testify, decide, judge, think"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "celebro",
-      "principalParts": [
-        "celebro",
-        "-are",
-        "-avi",
-        "-atum"
-      ],
+      "principalParts": ["celebro", "-are", "-avi", "-atum"],
       "definition": "to frequent, crowd, fill, inhabit, celebrate, observe, honor, worship, escort, attend, practice, exercise, announce, publicize"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "certo",
-      "principalParts": [
-        "certo",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["certo", "-are", "-avi", "-atus"],
       "definition": "to contest (pass) to be fought over (intr) (w/ de+abl.) to fight over, struggle for (w/ cum) to fight with, struggle with, compete with, (w/ inf.) to strive to (leg) to debate"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "clamo",
-      "principalParts": [
-        "clamo",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["clamo", "-are", "-avi", "-atus"],
       "definition": "to shout, yell, proclaim, call upon, (intr) shout"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "cogito",
-      "principalParts": [
-        "cogito",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["cogito", "-are", "-avi", "-atus"],
       "definition": "consider, ponder, reflect on, imagine, (w/ inf) intend to, (intr) think"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "colloco",
-      "principalParts": [
-        "colloco",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["colloco", "-are", "-avi", "-atus"],
       "definition": "to place (in a particular place), put in order, arrange, station, deploy (troops), give in marriage, lodge, quarter, occupy, employ, spend, invest (money), bestow, (w/ in+acc or abl) devote (time or energy) to, (pass) occur, be found"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "commemoro",
-      "principalParts": [
-        "commemoro",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["commemoro", "-are", "-avi", "-atus"],
       "definition": "remember, bring up, mention, relate"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "commendo",
-      "principalParts": [
-        "commendo",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["commendo", "-are", "-avi", "-atus"],
       "definition": "entrust, recommend, commit (to writing, posterity) commend, (refl w/ dat) devote oneself to"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "comparo",
-      "principalParts": [
-        "comparo",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["comparo", "-are", "-avi", "-atus"],
       "definition": "unite, match, align, estimate, compare (with or to), point out by way of comparison"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "confirmo",
-      "principalParts": [
-        "confirmo",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["confirmo", "-are", "-avi", "-atus"],
       "definition": "strengthen, establish on a firm basis, develop, reinforce, sanction, ratify, encourage, corroborate, assert positively, (w/ acc&inf) prove that, prove the existence of, give assurances of, affirm, (mil) strengthen, (refl) recover, gain strength, (pass) become mature"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "conor",
-      "principalParts": [
-        "conor",
-        "-ari",
-        "-atus sum"
-      ],
+      "principalParts": ["conor", "-ari", "-atus sum"],
       "definition": "to try"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "conservo",
-      "principalParts": [
-        "conservo",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["conservo", "-are", "-avi", "-atus"],
       "definition": "keep safe, preserve, maintain, act in accordance with, observe, (fig) keep intact"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "consto",
-      "principalParts": [
-        "consto",
-        "constare",
-        "constiti"
-      ],
+      "principalParts": ["consto", "constare", "constiti"],
       "definition": "to stand together, to agree, correspond, to stand firm, be constant"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "convoco",
-      "principalParts": [
-        "convoco",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["convoco", "-are", "-avi", "-atus"],
       "definition": "to call together, assemble, convoke"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "curo",
-      "principalParts": [
-        "curo",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["curo", "-are", "-avi", "-atus"],
       "definition": "to take care of, look after, attend to; to worry about, take charge of"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "damno",
-      "principalParts": [
-        "damno",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["damno", "-are", "-avi", "-atus"],
       "definition": "to find guilty, convict; to sentence, condemn"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "declaro",
-      "principalParts": [
-        "declaro",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["declaro", "-are", "-avi", "-atus"],
       "definition": "to make clear, make evident, disclose; to proclaim, announce officially; to show, prove, demonstrate"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "delecto",
-      "principalParts": [
-        "delecto",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["delecto", "-are", "-avi", "-atus"],
       "definition": "to delight; to amuse, to charm; to attract, allure"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "delector",
-      "principalParts": [
-        "delector",
-        "-ari",
-        "delectatus sum"
-      ],
+      "principalParts": ["delector", "-ari", "delectatus sum"],
       "definition": "charm, delight, entice, please, amuse"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "demonstro",
-      "principalParts": [
-        "demonstro",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["demonstro", "-are", "-avi", "-atus"],
       "definition": "to point out clearly, to state precisely, explain, describe; to mention, speak of"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "deporto",
-      "principalParts": [
-        "deporto",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["deporto", "-are", "-avi", "-atus"],
       "definition": "to carry down, carry away; to bring home, win; to transport, banish"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "desidero",
-      "principalParts": [
-        "desidero",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["desidero", "-are", "-avi", "-atus"],
       "definition": "desire, want, long for"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "despero",
-      "principalParts": [
-        "despero",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["despero", "-are", "-avi", "-atus"],
       "definition": "despair, give up, give up hope"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "disputo",
-      "principalParts": [
-        "disputo",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["disputo", "-are", "-avi", "-atus"],
       "definition": "discuss, debate, argue"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "dissimulo",
-      "principalParts": [
-        "dissimulo",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["dissimulo", "-are", "-avi", "-atus"],
       "definition": "conceal, disguise, hide, dissemble"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "do",
-      "principalParts": [
-        "do",
-        "dare",
-        "dedi",
-        "datus"
-      ],
+      "principalParts": ["do", "dare", "dedi", "datus"],
       "definition": "to give, offer; dedicate; to pay out; to permit, grant"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "dono",
-      "principalParts": [
-        "dono",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["dono", "-are", "-avi", "-atus"],
       "definition": "give, bestow, grant, present"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "dubito",
-      "principalParts": [
-        "dubito",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["dubito", "-are", "-avi", "-atus"],
       "definition": "doubt, hesitate, be uncertain"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "erro",
-      "principalParts": [
-        "erro",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["erro", "-are", "-avi", "-atus"],
       "definition": "make a mistake, err, wander, go astray"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "excito",
-      "principalParts": [
-        "excito",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["excito", "-are", "-avi", "-atus"],
       "definition": "to wake up, rouse, to raise, stir up, to erect, construct, produce, to cause"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "existimo",
-      "principalParts": [
-        "existimo",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["existimo", "-are", "-avi", "-atus"],
       "definition": "to form an opinion of, judge, consider, regard, to think, suppose"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "exploro",
-      "principalParts": [
-        "exploro",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["exploro", "-are", "-avi", "-atus"],
       "definition": "to explore, to investigate, to probe, search, to test, try, try out (w. acc & inf) to ascertain that (w. ut, ne) to ensure"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "expugno",
-      "principalParts": [
-        "expugno",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["expugno", "-are", "-avi", "-atus"],
       "definition": "to assault, storm; to break into, plunder (a home); to defeat; to overcome, sweep aside; to achieve, accomplish; to extort, wrest, gain; to persuade, overcome the resistance of"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "exspecto",
-      "principalParts": [
-        "exspecto",
-        "-are",
-        "-avi",
-        "-atum"
-      ],
+      "principalParts": ["exspecto", "-are", "-avi", "-atum"],
       "definition": "to wait for, expect"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "firmo",
-      "principalParts": [
-        "firmo",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["firmo", "-are", "-avi", "-atus"],
       "definition": "to strengthen, support, reinforce; to encourage; to assure; to fortify; to put on a firm footing, establish; to guarantee; to assert, affirm; to substantiate, vouch for /refl.-to brace oneself"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "habito",
-      "principalParts": [
-        "habito",
-        "-are",
-        "-avi"
-      ],
+      "principalParts": ["habito", "-are", "-avi"],
       "definition": "to live in, inhabit"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "hortor hortari hortatus sum",
-      "principalParts": [
-        "hortor hortari hortatus sum"
-      ],
+      "principalParts": ["hortor hortari hortatus sum"],
       "definition": "to encourage, cheer, incite, instigate; to give a pep talk to"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "ignoro",
-      "principalParts": [
-        "ignoro",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["ignoro", "-are", "-avi", "-atus"],
       "definition": "to not know, be ignorant of, be unfamiliar with; to be unaware of, know nothing about; to fail to recognize; to mistake , misunderstand; to ignore, disregard, take no notice of"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "impero",
-      "principalParts": [
-        "impero",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["impero", "-are", "-avi", "-atus"],
       "definition": "to requisition, give orders for, order, demand; (w. acc of thing and dat of source demanded from) to demand from"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "impetro",
-      "principalParts": [
-        "impetro",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["impetro", "-are", "-avi", "-atus"],
       "definition": "to obtain, procure; to achieve, accomplish, bring to pass"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "incito",
-      "principalParts": [
-        "incito",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["incito", "-are", "-avi", "-atus"],
       "definition": "enrage; urge on; inspire; arouse"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "insto",
-      "principalParts": [
-        "insto",
-        "instare",
-        "institi"
-      ],
+      "principalParts": ["insto", "instare", "institi"],
       "definition": "pursue, threaten, approach, press, ( intr)to be in command, rule, be master; (w dat) to give orders to, order, command, govern, master, exercise control over; to express a command, to dwell, live"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "intro",
-      "principalParts": [
-        "intro",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["intro", "-are", "-avi", "-atus"],
       "definition": "enter, go in, penetrate"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "iacto",
-      "principalParts": [
-        "iacto",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["iacto", "-are", "-avi", "-atus"],
       "definition": "throw away, throw out, throw, disturb, boast, discuss"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "iudico",
-      "principalParts": [
-        "iudico",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["iudico", "-are", "-avi", "-atus"],
       "definition": "judge, give judgement, sentence, conclude, decide, declare, appraise"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "iuro",
-      "principalParts": [
-        "iuro",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["iuro", "-are", "-avi", "-atus"],
       "definition": "swear, call to witness, vow obedience to, conspire a. ius iurandum: oath"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "iuvo",
-      "principalParts": [
-        "iuvo",
-        "iuvare",
-        "iuvi",
-        "iutus"
-      ],
+      "principalParts": ["iuvo", "iuvare", "iuvi", "iutus"],
       "definition": "to help; (of terrain) to give(one) an advantage;to back up(an opinion); to benefit, do good to; to please, delight"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "laboro",
-      "principalParts": [
-        "laboro",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["laboro", "-are", "-avi", "-atus"],
       "definition": "to work at; to make by toil; to produce (grain,etc.); (w. internal acc.) to be worried about, be concerned about"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "laetor",
-      "principalParts": [
-        "laetor",
-        "laetari",
-        "laetatus sum"
-      ],
+      "principalParts": ["laetor", "laetari", "laetatus sum"],
       "definition": "intr. to rejoice, be glad"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "laudo",
-      "principalParts": [
-        "laudo",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["laudo", "-are", "-avi", "-atus"],
       "definition": "to praise, commend; to name, quote, cite; to pronounce the funeral oration over, eulogize"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "lavo",
-      "principalParts": [
-        "lavo",
-        "-are",
-        "-avi",
-        "-atum"
-      ],
+      "principalParts": ["lavo", "-are", "-avi", "-atum"],
       "definition": "to wash away / refl. and pass. and intr. to wash, wash oneself, bathe"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "levo",
-      "principalParts": [
-        "levo",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["levo", "-are", "-avi", "-atus"],
       "definition": "to lift up, raise; to lighten, relieve, ease,; to console, comfort; to lift off, remove; to lessen, weaken; to release, free; to take away; to avert; to restore, refresh / to make smooth, polish; to soothe"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "libero",
-      "principalParts": [
-        "libero",
-        "-are",
-        "-avi. -atus"
-      ],
+      "principalParts": ["libero", "-are", "-avi. -atus"],
       "definition": "to free, set free, release; to acquit; to cancel, get rid of (e.g. debts); to pay for, cover ( an expense); to exempt; to manumit; to cross (threshold); to draw (a sword); to clear (positions of hostile forces); (w. abl. or w. ab or ex) to free from, release from, acquit of; fidem liberare- to keep one’s promise; nomina liberare- to cancel debts; promissa liberare- to fulfill promises / refl. to pay up a debt"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "loco",
-      "principalParts": [
-        "loco",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["loco", "-are", "-avi", "-atus"],
       "definition": "to place , put, set, let; to establish, constitute, set; to lay ( foundations); to station( troops); to rent out, lease; to contract for; to invest (effort); to lend at interest; to farm out (taxes)"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "mando",
-      "principalParts": [
-        "mando",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["mando", "-are", "-avi", "-atus"],
       "definition": "to hand over, to commit, to entrust; to command, order, enjoin; to commission; to delegate (authority); to prescribe, specify"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "memoro",
-      "principalParts": [
-        "memoro",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["memoro", "-are", "-avi", "-atus"],
       "definition": "to mention, bring up; to name, call / intr. (w. de + abl) to speak of"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "ministro",
-      "principalParts": [
-        "ministro",
-        "-are",
-        "-avi",
-        "-atum"
-      ],
+      "principalParts": ["ministro", "-are", "-avi", "-atum"],
       "definition": "to serve, tend to, execute, carry out, hand out (w/ dat.)"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "minor",
-      "principalParts": [
-        "minor",
-        "minari",
-        "minatus sum"
-      ],
+      "principalParts": ["minor", "minari", "minatus sum"],
       "definition": "to jut, project, threaten (w/ dat.)"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "miror",
-      "principalParts": [
-        "miror",
-        "-ari",
-        "-atus sum"
-      ],
+      "principalParts": ["miror", "-ari", "-atus sum"],
       "definition": "to be amazed at, surprised at, look with wonder, admire"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "monstro",
-      "principalParts": [
-        "monstro",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["monstro", "-are", "-avi", "-atus"],
       "definition": "to show, point out, make known, demonstrate, teach, indicated, suggest, appoint, designate, show the way"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "moror",
-      "principalParts": [
-        "moror",
-        "morari",
-        "moratus sum"
-      ],
+      "principalParts": ["moror", "morari", "moratus sum"],
       "definition": "to delay, detain, entertain, hold the attention of, hinder, prevent"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "muto",
-      "principalParts": [
-        "muto",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["muto", "-are", "-avi", "-atus"],
       "definition": "to change, shift, alter, exchange, interchange, barter, sell, modify, transform, vary, change for the better/worse"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "narro",
-      "principalParts": [
-        "narro",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["narro", "-are", "-avi", "-atus"],
       "definition": "to tell, relate, narrate, recount, describe, tell about"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "nego",
-      "principalParts": [
-        "nego",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["nego", "-are", "-avi", "-atus"],
       "definition": "to deny, to say that...not (w/ acc. + inf.), to refuse (w/ dat.), to turn down"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "nomino",
-      "principalParts": [
-        "nomino",
-        "-are",
-        "-avi",
-        "-atum"
-      ],
+      "principalParts": ["nomino", "-are", "-avi", "-atum"],
       "definition": "to name, call by name, make famous, nominate"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "nuntio",
-      "principalParts": [
-        "nuntio",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["nuntio", "-are", "-avi", "-atus"],
       "definition": "to bring word of, to announce, to declare, to report"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "occulto",
-      "principalParts": [
-        "occulto",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["occulto", "-are", "-avi", "-atus"],
       "definition": "to hide, conceal, suppress, keep"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "occupo",
-      "principalParts": [
-        "occupo",
-        "-are -avi -atus"
-      ],
+      "principalParts": ["occupo", "-are -avi -atus"],
       "definition": "to occupy, to seize, grasp, grab, win, gain"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "opinor",
-      "principalParts": [
-        "opinor",
-        "opinari",
-        "opinatus sum"
-      ],
+      "principalParts": ["opinor", "opinari", "opinatus sum"],
       "definition": "to suppose, imagine, conjecture"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "oppugno",
-      "principalParts": [
-        "oppugno",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["oppugno", "-are", "-avi", "-atus"],
       "definition": "to assault, attack, storm, assail"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "opto",
-      "principalParts": [
-        "opto",
-        "-are",
-        "avi",
-        "atus"
-      ],
+      "principalParts": ["opto", "-are", "avi", "atus"],
       "definition": "to choose, select, pray for, wish for"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "orno",
-      "principalParts": [
-        "orno",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["orno", "-are", "-avi", "-atus"],
       "definition": "to fit out, equip, dress; to adorn, embellish, honor"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "oro",
-      "principalParts": [
-        "oro",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["oro", "-are", "-avi", "-atus"],
       "definition": "to pray, speak, plead, beg, entreat"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "paro (1)",
-      "principalParts": [
-        "paro (1)"
-      ],
+      "principalParts": ["paro (1)"],
       "definition": "to prepare, furnish; produce; obtain/get; buy; raise; plan"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "perturbo (1)",
-      "principalParts": [
-        "perturbo (1)"
-      ],
+      "principalParts": ["perturbo (1)"],
       "definition": "to confuse, throw into confusion; disturb, perturb, trouble; alarm"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "postulo",
-      "principalParts": [
-        "postulo",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["postulo", "-are", "-avi", "-atus"],
       "definition": "to demand, claim; to look for as due, expect; (of things) to require; (leg) to arraign, prosecute; (leg) to apply for (a writ from the praetor to prosecute)"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "praesto",
-      "principalParts": [
-        "praesto",
-        "praestare",
-        "praestiti",
-        "praestitus"
-      ],
+      "principalParts": ["praesto", "praestare", "praestiti", "praestitus"],
       "definition": "to be superior to, outdo; to show, exhibit, give evidence of, display; to answer for, be responsible for, take upon oneself; to perform, discharge, fulfill; to keep, maintain, retain; to present, offer, supply; to show oneself, behave; to stand out, be outstanding, be preeminent; it is preferable, it is better"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "probo",
-      "principalParts": [
-        "probo",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["probo", "-are", "-avi", "-atus"],
       "definition": "to approve, commend, esteem; to make good, represent as good, make acceptable; to pronounce judgment on; to pronounce approval of; to make credible, prove, show, demonstrate; to test, try, inspect"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "pugno",
-      "principalParts": [
-        "pugno",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["pugno", "-are", "-avi", "-atus"],
       "definition": "to fight"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "puto",
-      "principalParts": [
-        "puto",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["puto", "-are", "-avi", "-atus"],
       "definition": "to trim, prune, think, ponder, consider, judge, suppose, imagine, reckon, estimate, value, to believe in, recognize"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "recito",
-      "principalParts": [
-        "recito",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["recito", "-are", "-avi", "-atus"],
       "definition": "to read out, read aloud, recite, to name in writing, appoint, constitute"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "religio",
-      "principalParts": [
-        "religio",
-        "-are",
-        "-avi-",
-        "atus"
-      ],
+      "principalParts": ["religio", "-are", "-avi-", "atus"],
       "definition": "to tie back, tie up, to moor(ship), to untie, unfasten, to bind"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "revoco",
-      "principalParts": [
-        "revoco",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["revoco", "-are", "-avi", "-atus"],
       "definition": "to call back, recall, to call off, withdraw, to bring back to life, to call back for an encore, revive, to arraign again, to regain, to resume, to revoke, retract, to check, control, to cancel, to refer, apply, subject, submit to"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "rogo",
-      "principalParts": [
-        "rogo",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["rogo", "-are", "-avi", "-atus"],
       "definition": "to ask, ask for, beg, request, to question, to invite, to nominate for election, to bring forward for approval, introduce, propose, to ask"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "servo",
-      "principalParts": [
-        "servo",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["servo", "-are", "-avi", "-atus"],
       "definition": "to watch over, preserve, protect, store, keep, retain, keep to, continue to dwell in"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "significo",
-      "principalParts": [
-        "significo",
-        "-are",
-        "-avi",
-        "-atum"
-      ],
+      "principalParts": ["significo", "-are", "-avi", "-atum"],
       "definition": "to show, indicate, express, point out, intimate, notify, publish, portend, mean, signify, make signs"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "simulo",
-      "principalParts": [
-        "simulo",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["simulo", "-are", "-avi", "-atus"],
       "definition": "to imitate, copy, represent, put on the appearance of, simulate"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "sollicito",
-      "principalParts": [
-        "sollicito",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["sollicito", "-are", "-avi", "-atus"],
       "definition": "to shake, disturb, disquiet, annoy, molest, worry, make anxious, provoke, tempt, stir up, incite to revoke"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "specto",
-      "principalParts": [
-        "specto",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["specto", "-are", "-avi", "-atus"],
       "definition": "to observe, watch, face in the direction of, consider, bear in mind, aim at, tend toward, examine, test"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "spero",
-      "principalParts": [
-        "spero",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["spero", "-are", "-avi", "-atus"],
       "definition": "to hope for, expect, look forward to, trust, trust in, anticipate, await in fear (ut+subj I hope that)"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "sto",
-      "principalParts": [
-        "sto",
-        "stare",
-        "steti",
-        "statum"
-      ],
+      "principalParts": ["sto", "stare", "steti", "statum"],
       "definition": "to stand, remain standing, last, endure, stand firm, stand upright, stand on end, remain fixed, continue, be moored, ride at anchor, be motionless, be stuck (w/ ex consist of) (w/ abl or in+abl to depend on, rest with) (w/ per+acc of person to depend on, be due to, be the fault of, thanks to)"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "supero",
-      "principalParts": [
-        "supero",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["supero", "-are", "-avi", "-atus"],
       "definition": "to go over, pass over, rise above, pass, go past, go beyond, sail past, double, outdo, surpass, surmount, live past, live beyond, overcome, vanquish, arrive before or ahead of"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "suspicor",
-      "principalParts": [
-        "suspicor",
-        "suspicari",
-        "suspicatus sum"
-      ],
+      "principalParts": ["suspicor", "suspicari", "suspicatus sum"],
       "definition": "to mistrust, suspect; to suppose, surmise, believe"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "tempero",
-      "principalParts": [
-        "tempero",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["tempero", "-are", "-avi", "-atus"],
       "definition": "to compound, combine, blend, temper; to regulate, modify; to adjust; to tune; to govern, control, rule; to control"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "tempto",
-      "principalParts": [
-        "tempto",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["tempto", "-are", "-avi", "-atus"],
       "definition": "to test, feel, probe; to attempt; to attack; to try to influence, tamper with, tempt, try to induce, to urge, incite, sound out; to worry, distress"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "tolero",
-      "principalParts": [
-        "tolero",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["tolero", "-are", "-avi", "-atus"],
       "definition": "to tolerate, endure; to support, maintain, sustain"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "tracto",
-      "principalParts": [
-        "tracto",
-        "-are",
-        "-avi",
-        "-atus"
-      ],
+      "principalParts": ["tracto", "-are", "-avi", "-atus"],
       "definition": "to drag around, haul, pull; to touch, handle; to deal with, treat; to manage, control; to wield; to conduct, carry on, transact; to practice; to discuss; to play the role of; to examine, consider"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "versor",
-      "principalParts": [
-        "versor",
-        "-ari",
-        "-atus sum"
-      ],
+      "principalParts": ["versor", "-ari", "-atus sum"],
       "definition": "(intr) to come and go frequently; to live, stay; to be, be in operation, obtain (w adverbs) to behave; to revolve; to spin around; to toss; to writhe; to be involved in, be engaged in, be busy with; to stay in, live in, pass one’s time in; to be concerned with; to be subject to; to constantly present in; to dwell on"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "voco (1)",
-      "principalParts": [
-        "voco (1)"
-      ],
+      "principalParts": ["voco (1)"],
       "definition": "to call, summon; name; call upon"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "vulnero (1)",
-      "principalParts": [
-        "vulnero (1)"
-      ],
+      "principalParts": ["vulnero (1)"],
       "definition": "to wound/injure/harm, pain/distress; inflict wound on; damage"
     },
     {
       "section": "Verbs: 1st Conjugation (94)",
       "lemma": "vito (1)",
-      "principalParts": [
-        "vito (1)"
-      ],
+      "principalParts": ["vito (1)"],
       "definition": "to avoid, shun, evade"
     },
     {
@@ -5504,322 +4984,187 @@
     {
       "section": "Irregular Verbs (9)",
       "lemma": "abeo",
-      "principalParts": [
-        "abeo",
-        "-ire",
-        "-ii",
-        "-itum"
-      ],
+      "principalParts": ["abeo", "-ire", "-ii", "-itum"],
       "definition": "to go away, depart, disappear, pass away, die, change"
     },
     {
       "section": "Irregular Verbs (9)",
       "lemma": "adeo",
-      "principalParts": [
-        "adeo",
-        "-ire",
-        "-ii",
-        "-itum"
-      ],
+      "principalParts": ["adeo", "-ire", "-ii", "-itum"],
       "definition": "to approach, attack, undertake, take possession of, visit"
     },
     {
       "section": "Irregular Verbs (9)",
       "lemma": "absum",
-      "principalParts": [
-        "absum",
-        "abesse",
-        "afui",
-        "afuturus"
-      ],
+      "principalParts": ["absum", "abesse", "afui", "afuturus"],
       "definition": "to be away, be absent, be distant, to be missing, unsuitable, a. inappropriate, to be wanting"
     },
     {
       "section": "Irregular Verbs (9)",
       "lemma": "adsum",
-      "principalParts": [
-        "adsum",
-        "adesse",
-        "adfui",
-        "adfuturus"
-      ],
+      "principalParts": ["adsum", "adesse", "adfui", "adfuturus"],
       "definition": "to be present, appear, exist, to be at hand, be of assistance, . convene, share, participate, to standby"
     },
     {
       "section": "Irregular Verbs (9)",
       "lemma": "affero",
-      "principalParts": [
-        "affero",
-        "afferre",
-        "attuli",
-        "allatus"
-      ],
+      "principalParts": ["affero", "afferre", "attuli", "allatus"],
       "definition": "to bring to, carry, report, convey, announce, introduce, quote, apply, exert, employ, exercise, produce, cause, allege, assign"
     },
     {
       "section": "Irregular Verbs (9)",
       "lemma": "aio (ajo)",
-      "principalParts": [
-        "aio (ajo)"
-      ],
+      "principalParts": ["aio (ajo)"],
       "definition": "say, assert, affirm, prescribe"
     },
     {
       "section": "Irregular Verbs (9)",
       "lemma": "confero",
-      "principalParts": [
-        "confero",
-        "-ferre",
-        "-tuli",
-        "collatus"
-      ],
+      "principalParts": ["confero", "-ferre", "-tuli", "collatus"],
       "definition": "to bring together, contribute, condense, compress, assemble, discuss, talk over, bear, convey, direct, devote, apply, confer, bestow, give, lend, grant, ascribe, impute, assign, postpone, (w/ in+acc) change someone/thing into, compare, contrast, (refl w/ in+acc) go to, head for, have recourse to, join"
     },
     {
       "section": "Irregular Verbs (9)",
       "lemma": "defero",
-      "principalParts": [
-        "defero",
-        "-ferre",
-        "-tuli",
-        "-latus"
-      ],
+      "principalParts": ["defero", "-ferre", "-tuli", "-latus"],
       "definition": "to bring / carry down; to carry away; to drive off course; to offer, confer, grant"
     },
     {
       "section": "Irregular Verbs (9)",
       "lemma": "desum",
-      "principalParts": [
-        "desum",
-        "deesse",
-        "defui",
-        "defuturus (intr.)"
-      ],
+      "principalParts": ["desum", "deesse", "defui", "defuturus (intr.)"],
       "definition": "to fall short, to fail; to be absent, be missing"
     },
     {
       "section": "Irregular Verbs (9)",
       "lemma": "differo",
-      "principalParts": [
-        "differo",
-        "differre",
-        "distuli",
-        "dilatus"
-      ],
+      "principalParts": ["differo", "differre", "distuli", "dilatus"],
       "definition": "scatter, separate, bewilder, confound"
     },
     {
       "section": "Irregular Verbs (9)",
       "lemma": "effero",
-      "principalParts": [
-        "effero",
-        "efferre",
-        "extuli",
-        "elatus"
-      ],
+      "principalParts": ["effero", "efferre", "extuli", "elatus"],
       "definition": "carry out, bring out"
     },
     {
       "section": "Irregular Verbs (9)",
       "lemma": "eo",
-      "principalParts": [
-        "eo",
-        "ire",
-        "ivi/ii",
-        "itus"
-      ],
+      "principalParts": ["eo", "ire", "ivi/ii", "itus"],
       "definition": "go, march, proceed"
     },
     {
       "section": "Irregular Verbs (9)",
       "lemma": "exeo",
-      "principalParts": [
-        "exeo",
-        "-ire",
-        "-ivi",
-        "-itus"
-      ],
+      "principalParts": ["exeo", "-ire", "-ivi", "-itus"],
       "definition": "to pass beyond, cross, to ward off, avoid, to go out, go forth, to go away, withdraw, depart, retire, to march out, to disembark, to pour out, gush out, flow out, to escape, be freed, to pass away, perish"
     },
     {
       "section": "Irregular Verbs (9)",
       "lemma": "fas est",
-      "principalParts": [
-        "fas est"
-      ],
+      "principalParts": ["fas est"],
       "definition": "it is right, it is permitted, it is lawful"
     },
     {
       "section": "Irregular Verbs (9)",
       "lemma": "fero",
-      "principalParts": [
-        "fero",
-        "ferre",
-        "tuli/tetuli",
-        "latus"
-      ],
+      "principalParts": ["fero", "ferre", "tuli/tetuli", "latus"],
       "definition": "to bear, carry; to bear, produce; to bear, endure; to lead, drive, conduct, direct; to bring, offer; to receive, acquire, obtain, win; to carry off, plunder, ravage; to manifest, display; to make known, report, say, tell; to call; to propose, bring forward; to allow, permit; to cause, create; to set in motion; to call, name; (of circumstances, etc.) to suggest; (in accounting) to enter, to carry/ refl.- to go, proceed; to rush, flee; ( of rivers) to flow/ pass.-(of things) to be carried along; to extend; (of sounds) to carry/ intr.- to say; to allow, permit; to lead"
     },
     {
       "section": "Irregular Verbs (9)",
       "lemma": "fio",
-      "principalParts": [
-        "fio",
-        "fieri",
-        "factus sum"
-      ],
+      "principalParts": ["fio", "fieri", "factus sum"],
       "definition": "to come into being, arise; to be made; to be done; to become, get; to happen, occur; to take place, be held; to arise, develop; (w/ gen. of price) to be valued at; to equal"
     },
     {
       "section": "Irregular Verbs (9)",
       "lemma": "infero",
-      "principalParts": [
-        "infero",
-        "inferre",
-        "intuli",
-        "illatus"
-      ],
+      "principalParts": ["infero", "inferre", "intuli", "illatus"],
       "definition": "carry in, bring to, put on; inflict, cause, impose"
     },
     {
       "section": "Irregular Verbs (9)",
       "lemma": "inquit (defective)",
-      "principalParts": [
-        "inquit (defective)"
-      ],
+      "principalParts": ["inquit (defective)"],
       "definition": "he/she says"
     },
     {
       "section": "Irregular Verbs (9)",
       "lemma": "intereo",
-      "principalParts": [
-        "intereo",
-        "interire",
-        "interivi",
-        "interitus"
-      ],
+      "principalParts": ["intereo", "interire", "interivi", "interitus"],
       "definition": "to be lost, perish, die"
     },
     {
       "section": "Irregular Verbs (9)",
       "lemma": "intersum",
-      "principalParts": [
-        "intersum",
-        "interesse",
-        "interfui"
-      ],
+      "principalParts": ["intersum", "interesse", "interfui"],
       "definition": "to be between, be amongst, be present at; be a concern, be important"
     },
     {
       "section": "Irregular Verbs (9)",
       "lemma": "malo",
-      "principalParts": [
-        "malo",
-        "malle",
-        "malui"
-      ],
+      "principalParts": ["malo", "malle", "malui"],
       "definition": "prefer; would rather"
     },
     {
       "section": "Irregular Verbs (9)",
       "lemma": "memini",
-      "principalParts": [
-        "memini",
-        "meminisse (imperative"
-      ],
+      "principalParts": ["memini", "meminisse (imperative"],
       "definition": "memento; mementote): to remember / (w. gen) to remember, be mindful of"
     },
     {
       "section": "Irregular Verbs (9)",
       "lemma": "necesse est",
-      "principalParts": [
-        "necesse est"
-      ],
+      "principalParts": ["necesse est"],
       "definition": "it is necessary"
     },
     {
       "section": "Irregular Verbs (9)",
       "lemma": "nolo",
-      "principalParts": [
-        "nolo",
-        "nolle",
-        "nolui"
-      ],
+      "principalParts": ["nolo", "nolle", "nolui"],
       "definition": "to be unwilling, to wish not to, refuse to"
     },
     {
       "section": "Irregular Verbs (9)",
       "lemma": "odi",
-      "principalParts": [
-        "odi",
-        "odisse",
-        "osus sum"
-      ],
+      "principalParts": ["odi", "odisse", "osus sum"],
       "definition": "to have taken a dislike to"
     },
     {
       "section": "Irregular Verbs (9)",
       "lemma": "offero",
-      "principalParts": [
-        "offero",
-        "offerre",
-        "obtuli",
-        "oblatus"
-      ],
+      "principalParts": ["offero", "offerre", "obtuli", "oblatus"],
       "definition": "to offer, bring forward, present, show"
     },
     {
       "section": "Irregular Verbs (9)",
       "lemma": "possum",
-      "principalParts": [
-        "possum",
-        "posse",
-        "potui"
-      ],
+      "principalParts": ["possum", "posse", "potui"],
       "definition": "to be able"
     },
     {
       "section": "Irregular Verbs (9)",
       "lemma": "praesum",
-      "principalParts": [
-        "praesum",
-        "praeesse",
-        "praefui",
-        "praefuturus"
-      ],
+      "principalParts": ["praesum", "praeesse", "praefui", "praefuturus"],
       "definition": "to preside; (w. dat) to preside over, be in charge of, . be in command of; to be preeminent in, to govern (a providence)"
     },
     {
       "section": "Irregular Verbs (9)",
       "lemma": "prosum",
-      "principalParts": [
-        "prosum",
-        "prodesse",
-        "profui",
-        "profuturus"
-      ],
+      "principalParts": ["prosum", "prodesse", "profui", "profuturus"],
       "definition": "to be useful, do good, be profitable; (w. dat) to be good . for"
     },
     {
       "section": "Irregular Verbs (9)",
       "lemma": "sum",
-      "principalParts": [
-        "sum",
-        "esse",
-        "fui",
-        "futurus"
-      ],
+      "principalParts": ["sum", "esse", "fui", "futurus"],
       "definition": "be"
     },
     {
       "section": "Irregular Verbs (9)",
       "lemma": "supersum",
-      "principalParts": [
-        "supersum",
-        "superesse",
-        "superfui",
-        "superfuturus"
-      ],
+      "principalParts": ["supersum", "superesse", "superfui", "superfuturus"],
       "definition": "to be left over, still exist, survive; to abound; . to overflow; to be excessive; to be superfluous; to be adequate, to suffice, to outlive, survive"
     },
     {
@@ -7157,1546 +6502,1147 @@
     {
       "section": "Adverbs (169)",
       "lemma": "adeo",
-      "forms": [
-        "adeo"
-      ],
+      "forms": ["adeo"],
       "definition": "to such a degree, so, even, indeed, truly, very, extremely, for that matter, precisely, exactly, cheifly, just"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "adhuc",
-      "forms": [
-        "adhuc"
-      ],
+      "forms": ["adhuc"],
       "definition": "thus far, hithertho, til now, as yet, still, besides, in addition, moreover, still further"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "admodum",
-      "forms": [
-        "admodum"
-      ],
+      "forms": ["admodum"],
       "definition": "to the limit, very, quite, just, fully, just about, at all, quite so, yes"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "aegre",
-      "forms": [
-        "aegre"
-      ],
+      "forms": ["aegre"],
       "definition": "painfully, with difficulty, reluctantly, scarcely, hardly"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "aeque",
-      "forms": [
-        "aeque"
-      ],
+      "forms": ["aeque"],
       "definition": "equally, just, fairly"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "alibi",
-      "forms": [
-        "alibi"
-      ],
+      "forms": ["alibi"],
       "definition": "elsewhere, otherwise, in other respects, in another passage"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "aliquando",
-      "forms": [
-        "aliquando"
-      ],
+      "forms": ["aliquando"],
       "definition": "sometime or other, once, at anytime, now and then, once, now, finally, now at last, someday"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "aliquanto",
-      "forms": [
-        "aliquanto"
-      ],
+      "forms": ["aliquanto"],
       "definition": "somewhat, to some extent, a little, rather"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "aliquid",
-      "forms": [
-        "aliquid"
-      ],
+      "forms": ["aliquid"],
       "definition": "somewhat, to some degree/extent"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "aliter",
-      "forms": [
-        "aliter"
-      ],
+      "forms": ["aliter"],
       "definition": "otherwise, else"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "amplius",
-      "forms": [
-        "amplius"
-      ],
+      "forms": ["amplius"],
       "definition": "any further, any more, any longer, beside, further, more"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "ante",
-      "forms": [
-        "ante",
-        "antea"
-      ],
+      "forms": ["ante", "antea"],
       "definition": "before, previously, first"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "bene",
-      "forms": [
-        "bene"
-      ],
+      "forms": ["bene"],
       "definition": "well, very, quite"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "bis",
-      "forms": [
-        "bis"
-      ],
+      "forms": ["bis"],
       "definition": "two times, on two occasions, twice"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "certe",
-      "forms": [
-        "certe"
-      ],
+      "forms": ["certe"],
       "definition": "surely, certainly, of course, at least"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "certo",
-      "forms": [
-        "certo"
-      ],
+      "forms": ["certo"],
       "definition": "for sure, in fact, really"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "circa",
-      "forms": [
-        "circa"
-      ],
+      "forms": ["circa"],
       "definition": "around, round about, all around, in the vicinity, (prep w/ acc) around, surrounding, about, in the neighborhood of, concerning, near, through, attending, escorting, in respect to, (of time) around, about, toward, (w/ numbers) about, nearly, almost"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "circiter",
-      "forms": [
-        "circiter"
-      ],
+      "forms": ["circiter"],
       "definition": "about, nearly, approximately, (prep w/ acc) about, near"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "circum",
-      "forms": [
-        "circum"
-      ],
+      "forms": ["circum"],
       "definition": "about, all around, (prep w/ acc) around, about, in the neighborhood of"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "clam",
-      "forms": [
-        "clam"
-      ],
+      "forms": ["clam"],
       "definition": "secretly, privately, stealthily, (prep w/ abl. or acc.) without the knowledge of"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "contra",
-      "forms": [
-        "contra"
-      ],
+      "forms": ["contra"],
       "definition": "in opposition, opposite, in front, face to face; in turn, in return; on the other hand; the other way"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "coram",
-      "forms": [
-        "coram"
-      ],
+      "forms": ["coram"],
       "definition": "in person, personally; publicly, openly"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "cottidie",
-      "forms": [
-        "cottidie",
-        "cotidie"
-      ],
+      "forms": ["cottidie", "cotidie"],
       "definition": "daily, every day"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "cras",
-      "forms": [
-        "cras"
-      ],
+      "forms": ["cras"],
       "definition": "tomorrow"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "crebro",
-      "forms": [
-        "crebro"
-      ],
+      "forms": ["crebro"],
       "definition": "repeatedly, frequently; thickly, densely"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "cuiuscemodi",
-      "forms": [
-        "cuiuscemodi",
-        "cuiusmodi"
-      ],
+      "forms": ["cuiuscemodi", "cuiusmodi"],
       "definition": "of what kind, of whatever kind"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "cur",
-      "forms": [
-        "cur"
-      ],
+      "forms": ["cur"],
       "definition": "why"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "deinde",
-      "forms": [
-        "deinde"
-      ],
+      "forms": ["deinde"],
       "definition": "from that place, from there; then, thereafter"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "denique",
-      "forms": [
-        "denique"
-      ],
+      "forms": ["denique"],
       "definition": "finally, at last; in short, in a word"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "diu",
-      "forms": [
-        "diu"
-      ],
+      "forms": ["diu"],
       "definition": "for a long time, for a long while"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "ejusmodi",
-      "forms": [
-        "ejusmodi",
-        "eiusmodi"
-      ],
+      "forms": ["ejusmodi", "eiusmodi"],
       "definition": "of such kind, of this sort"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "ergo",
-      "forms": [
-        "ergo"
-      ],
+      "forms": ["ergo"],
       "definition": "therefore"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "extemplo",
-      "forms": [
-        "extemplo"
-      ],
+      "forms": ["extemplo"],
       "definition": "immediately, right away; on the spur of the moment, forthwith"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "extra",
-      "forms": [
-        "extra"
-      ],
+      "forms": ["extra"],
       "definition": "outside, on the outside; from the outside"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "fere",
-      "forms": [
-        "fere",
-        "ferme"
-      ],
+      "forms": ["fere", "ferme"],
       "definition": "approximately, nearly, almost, about, just about; generally, as a rule, usually; (w negatives) practically; haud fere (hardly never); nemo fere (practically no one)"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "fortasse",
-      "forms": [
-        "fortasse",
-        "-is"
-      ],
+      "forms": ["fortasse", "-is"],
       "definition": "perhaps"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "forte",
-      "forms": [
-        "forte"
-      ],
+      "forms": ["forte"],
       "definition": "by chance, accidentally, by accident"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "frustra",
-      "forms": [
-        "frustra"
-      ],
+      "forms": ["frustra"],
       "definition": "in vain, uselessly, for nothing; without reason, groundlessly; frustra discedere to go away disappointed; frustra esse to be mistaken; frustra habere to have (s.o.) confused"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "haud",
-      "forms": [
-        "haud",
-        "haut",
-        "hau"
-      ],
+      "forms": ["haud", "haut", "hau"],
       "definition": "hardly; not, not at all, by no means"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "heri",
-      "forms": [
-        "heri"
-      ],
+      "forms": ["heri"],
       "definition": "yesterday"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "hic",
-      "forms": [
-        "hic"
-      ],
+      "forms": ["hic"],
       "definition": "here, in this place; at this point; in this affair, in this particular"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "hinc",
-      "forms": [
-        "hinc"
-      ],
+      "forms": ["hinc"],
       "definition": "from here, from this place; on this side, here; for this reason; from this source; after this, from now on, henceforth; (partitive) of this, of these"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "hodie",
-      "forms": [
-        "hodie"
-      ],
+      "forms": ["hodie"],
       "definition": "today; nowadays; still, to the present; at once, immediately"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "huc",
-      "forms": [
-        "huc"
-      ],
+      "forms": ["huc"],
       "definition": "here, to this place; to this point, so far; to such a pitch; for this purpose huc atque illuc here and there, in different directions hucine? so far?"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "hujusmodi",
-      "forms": [
-        "hujusmodi"
-      ],
+      "forms": ["hujusmodi"],
       "definition": "of this sort, this kind of"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "iam",
-      "forms": [
-        "iam"
-      ],
+      "forms": ["iam"],
       "definition": "now, already; by then; very soon; indeed, precisely"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "ibi",
-      "forms": [
-        "ibi"
-      ],
+      "forms": ["ibi"],
       "definition": "there, in that place; then, on that occasion; therein"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "idcirco",
-      "forms": [
-        "idcirco"
-      ],
+      "forms": ["idcirco"],
       "definition": "on that account, for that reason, therefore"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "ideo",
-      "forms": [
-        "ideo"
-      ],
+      "forms": ["ideo"],
       "definition": "therefore"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "igitur",
-      "forms": [
-        "igitur"
-      ],
+      "forms": ["igitur"],
       "definition": "then, therefore,accordingly; as I was saying, so then, in short"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "illuc",
-      "forms": [
-        "illuc"
-      ],
+      "forms": ["illuc"],
       "definition": "to that place, in that direction; to that person, to him, to her; to that matter; to that point"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "immo",
-      "forms": [
-        "immo"
-      ],
+      "forms": ["immo"],
       "definition": "nay, on the contrary, or rather, more precisely; quite so, yes, indeed; immo vero yes and in fact"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "inde",
-      "forms": [
-        "inde"
-      ],
+      "forms": ["inde"],
       "definition": "from that place/time, thence, thenceforth, thereupon"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "interdum",
-      "forms": [
-        "interdum"
-      ],
+      "forms": ["interdum"],
       "definition": "sometimes, now and then, occasionally"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "interea",
-      "forms": [
-        "interea"
-      ],
+      "forms": ["interea"],
       "definition": "meanwhile, in the meantime"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "interim",
-      "forms": [
-        "interim"
-      ],
+      "forms": ["interim"],
       "definition": "meanwhile, in the meantime; sometimes"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "intus",
-      "forms": [
-        "intus"
-      ],
+      "forms": ["intus"],
       "definition": "inside, within; from within"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "istic",
-      "forms": [
-        "istic"
-      ],
+      "forms": ["istic"],
       "definition": "there, on this occasion"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "istinc",
-      "forms": [
-        "istinc"
-      ],
+      "forms": ["istinc"],
       "definition": "from there; of that"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "istuc",
-      "forms": [
-        "istuc"
-      ],
+      "forms": ["istuc"],
       "definition": "(to) there"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "ita",
-      "forms": [
-        "ita"
-      ],
+      "forms": ["ita"],
       "definition": "thus, so; yes; accordingly"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "item",
-      "forms": [
-        "item"
-      ],
+      "forms": ["item"],
       "definition": "likewise; also"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "iterum",
-      "forms": [
-        "iterum"
-      ],
+      "forms": ["iterum"],
       "definition": "again, a second time"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "libenter",
-      "forms": [
-        "libenter",
-        "lubenter"
-      ],
+      "forms": ["libenter", "lubenter"],
       "definition": "willingly, gladly, with pleasure"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "longe",
-      "forms": [
-        "longe"
-      ],
+      "forms": ["longe"],
       "definition": "far, far off, a long way off; away, distant; out of reach; long, for a long period; (to speak) at greater length; (w. comparatives) far, by far, much; longe lateque- far and wide"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "magis",
-      "forms": [
-        "magis",
-        "mage"
-      ],
+      "forms": ["magis", "mage"],
       "definition": "more, to a greater extent, in a higher degree, rather"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "magnopere",
-      "forms": [
-        "magnopere",
-        "magnorpere",
-        "magno opere"
-      ],
+      "forms": ["magnopere", "magnorpere", "magno opere"],
       "definition": "greatly, very much; particularly; strongly, earnestly,heartily"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "male",
-      "forms": [
-        "male"
-      ],
+      "forms": ["male"],
       "definition": "badly, wrongly, wickedly, cruelly, maliciously; unfortunately, unsuccessfully; awkwardly; excessively, extremely, very much (w. adj. having a bad sense) terribly, awfully"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "mane",
-      "forms": [
-        "mane"
-      ],
+      "forms": ["mane"],
       "definition": "in the morning"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "maxime",
-      "forms": [
-        "maxime"
-      ],
+      "forms": ["maxime"],
       "definition": "very, most, especially , particularly; just, precisely, exactly; (in sequences) in the first place, first of all; (in affirmations) by all means, certainly,yes"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "merito",
-      "forms": [
-        "merito"
-      ],
+      "forms": ["merito"],
       "definition": "deservedly, rightly"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "minime",
-      "forms": [
-        "minime",
-        "minume"
-      ],
+      "forms": ["minime", "minume"],
       "definition": "least, very little, by no means, certainly not, at least"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "minus",
-      "forms": [
-        "minus"
-      ],
+      "forms": ["minus"],
       "definition": "less not, by no means, not at all"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "modo",
-      "forms": [
-        "modo"
-      ],
+      "forms": ["modo"],
       "definition": "only, merely, simply, just now, lately, presently"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "multo",
-      "forms": [
-        "multo"
-      ],
+      "forms": ["multo"],
       "definition": "much, far, by far, a great deal"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "multum",
-      "forms": [
-        "multum"
-      ],
+      "forms": ["multum"],
       "definition": "much, a lot, greatly, very, often, frequently"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "ne...quidem",
-      "forms": [
-        "ne...quidem"
-      ],
+      "forms": ["ne...quidem"],
       "definition": "not even"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "necessario",
-      "forms": [
-        "necessario",
-        "-ie"
-      ],
+      "forms": ["necessario", "-ie"],
       "definition": "necessarily, of necessity"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "nequaquam",
-      "forms": [
-        "nequaquam"
-      ],
+      "forms": ["nequaquam"],
       "definition": "by no means, not at all"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "neque",
-      "forms": [
-        "neque",
-        "nec"
-      ],
+      "forms": ["neque", "nec"],
       "definition": "not, nor, and not"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "nihilominus",
-      "forms": [
-        "nihilominus"
-      ],
+      "forms": ["nihilominus"],
       "definition": "nonetheless, nevertheless"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "nimis",
-      "forms": [
-        "nimis"
-      ],
+      "forms": ["nimis"],
       "definition": "very, very much, too much"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "nimium",
-      "forms": [
-        "nimium"
-      ],
+      "forms": ["nimium"],
       "definition": "too, too much, very much"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "noctu",
-      "forms": [
-        "noctu"
-      ],
+      "forms": ["noctu"],
       "definition": "by night, at night"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "non",
-      "forms": [
-        "non"
-      ],
+      "forms": ["non"],
       "definition": "not, no, by no means"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "non iam",
-      "forms": [
-        "non iam"
-      ],
+      "forms": ["non iam"],
       "definition": "no longer"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "non modo",
-      "forms": [
-        "non modo"
-      ],
+      "forms": ["non modo"],
       "definition": "not only"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "non solum",
-      "forms": [
-        "non solum"
-      ],
+      "forms": ["non solum"],
       "definition": "not only"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "nondum",
-      "forms": [
-        "nondum"
-      ],
+      "forms": ["nondum"],
       "definition": "not yet"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "nonne",
-      "forms": [
-        "nonne"
-      ],
+      "forms": ["nonne"],
       "definition": "is it not? whether not?"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "nonnumquam",
-      "forms": [
-        "nonnumquam"
-      ],
+      "forms": ["nonnumquam"],
       "definition": "sometimes"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "num",
-      "forms": [
-        "num"
-      ],
+      "forms": ["num"],
       "definition": "now, even now, surely not, really, actually"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "numquam",
-      "forms": [
-        "numquam"
-      ],
+      "forms": ["numquam"],
       "definition": "never"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "nunc",
-      "forms": [
-        "nunc"
-      ],
+      "forms": ["nunc"],
       "definition": "now, nowadays, today, now, in view of this"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "nuper",
-      "forms": [
-        "nuper"
-      ],
+      "forms": ["nuper"],
       "definition": "newly, lately, recently, freshly, not long ago, just"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "nusquam",
-      "forms": [
-        "nusquam"
-      ],
+      "forms": ["nusquam"],
       "definition": "nowhere, on occasion, for nothing, to nothing"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "obviam",
-      "forms": [
-        "obviam"
-      ],
+      "forms": ["obviam"],
       "definition": "in order to meet, opposed to"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "olim",
-      "forms": [
-        "olim"
-      ],
+      "forms": ["olim"],
       "definition": "once, once upon a time, at the time, for a good while"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "omnino",
-      "forms": [
-        "omnino"
-      ],
+      "forms": ["omnino"],
       "definition": "altogether, entirely, wholly"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "paene",
-      "forms": [
-        "paene"
-      ],
+      "forms": ["paene"],
       "definition": "nearly, almost, mostly"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "palam",
-      "forms": [
-        "palam"
-      ],
+      "forms": ["palam"],
       "definition": "openly, publicly, plainly"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "pariter",
-      "forms": [
-        "pariter"
-      ],
+      "forms": ["pariter"],
       "definition": "equally; together"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "partim",
-      "forms": [
-        "partim"
-      ],
+      "forms": ["partim"],
       "definition": "partly, for the most part; mostly [some... others]"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "parum",
-      "forms": [
-        "parum"
-      ],
+      "forms": ["parum"],
       "definition": "too/very little, not enough, insufficient; less"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "paulatim",
-      "forms": [
-        "paulatim"
-      ],
+      "forms": ["paulatim"],
       "definition": "little by little, by degrees, gradually; a small amount at a time, bit by bit"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "paulo",
-      "forms": [
-        "paulo"
-      ],
+      "forms": ["paulo"],
       "definition": "by a little; by only a small amount; a little; somewhat"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "paulum",
-      "forms": [
-        "paulum"
-      ],
+      "forms": ["paulum"],
       "definition": "little/bit; to a small extent, somewhat; only a small amount/ short while"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "plane",
-      "forms": [
-        "plane"
-      ],
+      "forms": ["plane"],
       "definition": "clearly, plainly, distinctly, completely"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "plus",
-      "forms": [
-        "plus"
-      ],
+      "forms": ["plus"],
       "definition": "more"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "post",
-      "forms": [
-        "post"
-      ],
+      "forms": ["post"],
       "definition": "(of place) behind, back, backwards; (of time) later, afterwards; (of order) next"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "postea",
-      "forms": [
-        "postea"
-      ],
+      "forms": ["postea"],
       "definition": "afterwards, after this, after that, hereafter, thereafter"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "postremo",
-      "forms": [
-        "postremo"
-      ],
+      "forms": ["postremo"],
       "definition": "at last; finally"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "postridie",
-      "forms": [
-        "postridie"
-      ],
+      "forms": ["postridie"],
       "definition": "on the day after, on the following day"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "potius",
-      "forms": [
-        "potius"
-      ],
+      "forms": ["potius"],
       "definition": "rather, more, by preference"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "prae",
-      "forms": [
-        "prae"
-      ],
+      "forms": ["prae"],
       "definition": "before, in front; in preference"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "praesertim",
-      "forms": [
-        "praesertim"
-      ],
+      "forms": ["praesertim"],
       "definition": "especially, particularly"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "praesto esse",
-      "forms": [
-        "praesto esse"
-      ],
+      "forms": ["praesto esse"],
       "definition": "(w. dat.) to be on hand for, attend, serve, be helpful to, aid; to be in the way of, resist, oppose"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "praeter",
-      "forms": [
-        "praeter"
-      ],
+      "forms": ["praeter"],
       "definition": "by, past"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "praeterea",
-      "forms": [
-        "praeterea"
-      ],
+      "forms": ["praeterea"],
       "definition": "besides, moreover; hereafter, thereafter"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "pridie",
-      "forms": [
-        "pridie"
-      ],
+      "forms": ["pridie"],
       "definition": "the day before"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "primo",
-      "forms": [
-        "primo"
-      ],
+      "forms": ["primo"],
       "definition": "first, in the first place; at first, at the beginning"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "primum",
-      "forms": [
-        "primum"
-      ],
+      "forms": ["primum"],
       "definition": "first, in the first place, before all else; at first; for the first time"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "procul",
-      "forms": [
-        "procul"
-      ],
+      "forms": ["procul"],
       "definition": "at a distance, in the distance; far away, a great way off; from a distance from far"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "profecto",
-      "forms": [
-        "profecto"
-      ],
+      "forms": ["profecto"],
       "definition": "really, actually"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "prope",
-      "forms": [
-        "prope"
-      ],
+      "forms": ["prope"],
       "definition": "near, nearby; (of time) near, at hand; (of degree) nearly, almost, practically, just about; (w. ab + abl) close by, near to; (of time) toward, about"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "propterea",
-      "forms": [
-        "propterea"
-      ],
+      "forms": ["propterea"],
       "definition": "for that reason, therefore, on that account"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "qua",
-      "forms": [
-        "qua"
-      ],
+      "forms": ["qua"],
       "definition": "interrogative: by which road, which way, in which direction, by which route, where? relative: where, to the extent that, in so far as, in as much as, in the manner in which, as indef: by any route, by any way, by any chance, in any way"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "quam",
-      "forms": [
-        "quam"
-      ],
+      "forms": ["quam"],
       "definition": "(in questions/exclamations): how, how much; (w/ comparisons): as, than ; (w/superlatives): a... as possible"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "quamobrem",
-      "forms": [
-        "quamobrem"
-      ],
+      "forms": ["quamobrem"],
       "definition": "for what reason, why, for which reason, wherefore, why"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "quando",
-      "forms": [
-        "quando"
-      ],
+      "forms": ["quando"],
       "definition": "when, at what time"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "quanto",
-      "forms": [
-        "quanto"
-      ],
+      "forms": ["quanto"],
       "definition": "by how much, how much"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "quantum",
-      "forms": [
-        "quantum"
-      ],
+      "forms": ["quantum"],
       "definition": "as much as, so much as, as great an extent"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "quare",
-      "forms": [
-        "quare"
-      ],
+      "forms": ["quare"],
       "definition": "by what means, how, in what way, from what cause, why, whereby, wherefore"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "quasi",
-      "forms": [
-        "quasi"
-      ],
+      "forms": ["quasi"],
       "definition": "as it were, so to speak, about, nearly, almost, allegedly"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "quemadmodum",
-      "forms": [
-        "quemadmodum"
-      ],
+      "forms": ["quemadmodum"],
       "definition": "in what way, how"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "quidem",
-      "forms": [
-        "quidem"
-      ],
+      "forms": ["quidem"],
       "definition": "indeed, in fact, at least, at any rate"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "quin",
-      "forms": [
-        "quin"
-      ],
+      "forms": ["quin"],
       "definition": "why not, in fact, as a matter of fact"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "quinetiam",
-      "forms": [
-        "quinetiam"
-      ],
+      "forms": ["quinetiam"],
       "definition": "why not yet?"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "quo",
-      "forms": [
-        "quo"
-      ],
+      "forms": ["quo"],
       "definition": "where? to what place? what for? to what purpose?"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "quodammodo",
-      "forms": [
-        "quodammodo"
-      ],
+      "forms": ["quodammodo"],
       "definition": "in a way"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "quondam",
-      "forms": [
-        "quondam"
-      ],
+      "forms": ["quondam"],
       "definition": "once, at one time, formerly, at times, once in awhile, someday, one day"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "quoque",
-      "forms": [
-        "quoque"
-      ],
+      "forms": ["quoque"],
       "definition": "too (succeeding the word it emphasizes)"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "quot",
-      "forms": [
-        "quot"
-      ],
+      "forms": ["quot"],
       "definition": "how many, as many"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "quotannis",
-      "forms": [
-        "quotannis"
-      ],
+      "forms": ["quotannis"],
       "definition": "every year"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "repente",
-      "forms": [
-        "repente"
-      ],
+      "forms": ["repente"],
       "definition": "suddenly, all of a sudden, unexpectedly"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "rursus",
-      "forms": [
-        "rursus"
-      ],
+      "forms": ["rursus"],
       "definition": "back, backwards, on the contrary, on the other hand, in turn, again, a second time, back again, once more"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "saepe",
-      "forms": [
-        "saepe"
-      ],
+      "forms": ["saepe"],
       "definition": "often"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "sane",
-      "forms": [
-        "sane"
-      ],
+      "forms": ["sane"],
       "definition": "sanely, reasonably, sensibly, certainly, doubtless, truly, very, of course, naturally, really, at all, to be sure, however, yes, of course, then"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "scilicet",
-      "forms": [
-        "scilicet"
-      ],
+      "forms": ["scilicet"],
       "definition": "of course, evidently, certainly, naturally, of course, namely, that is to say"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "secundum",
-      "forms": [
-        "secundum"
-      ],
+      "forms": ["secundum"],
       "definition": "after, behind, beside, by, along, alongside"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "secus",
-      "forms": [
-        "secus"
-      ],
+      "forms": ["secus"],
       "definition": "otherwise, differently"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "semel",
-      "forms": [
-        "semel"
-      ],
+      "forms": ["semel"],
       "definition": "once, one time, but once, once and for all, the first time, ever, at some time, at any time"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "semper",
-      "forms": [
-        "semper"
-      ],
+      "forms": ["semper"],
       "definition": "always, ever"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "sic",
-      "forms": [
-        "sic"
-      ],
+      "forms": ["sic"],
       "definition": "thus, so, in this way, as follows, in these circumstances, in such a way, to such a degree, yes"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "simul",
-      "forms": [
-        "simul"
-      ],
+      "forms": ["simul"],
       "definition": "together at the same time, likewise, (w/abl or cum: together with)"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "simulatque",
-      "forms": [
-        "simulatque",
-        "simulac"
-      ],
+      "forms": ["simulatque", "simulac"],
       "definition": "as soon as"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "sponte",
-      "forms": [
-        "sponte"
-      ],
+      "forms": ["sponte"],
       "definition": "freely, willingly, voluntarily, spontaneously"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "statim",
-      "forms": [
-        "statim"
-      ],
+      "forms": ["statim"],
       "definition": "at once, on the spot"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "subito",
-      "forms": [
-        "subito"
-      ],
+      "forms": ["subito"],
       "definition": "suddenly, unexpectedly, at once"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "super",
-      "forms": [
-        "super"
-      ],
+      "forms": ["super"],
       "definition": "on the top, on the surface, above, besides, moreover, in addition to what has been said"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "supra",
-      "forms": [
-        "supra"
-      ],
+      "forms": ["supra"],
       "definition": "on top, above, up above; earlier, beyond, more"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "tam",
-      "forms": [
-        "tam"
-      ],
+      "forms": ["tam"],
       "definition": "to such an extent, to such a degree, so, so much"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "tamen",
-      "forms": [
-        "tamen"
-      ],
+      "forms": ["tamen"],
       "definition": "yet, nevertheless, still, just the same"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "tandem",
-      "forms": [
-        "tandem"
-      ],
+      "forms": ["tandem"],
       "definition": "at last, in the end, finally; now, tell me, please, just"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "tanto",
-      "forms": [
-        "tanto"
-      ],
+      "forms": ["tanto"],
       "definition": "(indecl) at such a price, for so much"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "tantum",
-      "forms": [
-        "tantum"
-      ],
+      "forms": ["tantum"],
       "definition": "so much, so greatly, to such a degree, so far, so long, so; only, just, but just; hardly, scarcely"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "tantummodo",
-      "forms": [
-        "tantummodo"
-      ],
+      "forms": ["tantummodo"],
       "definition": "only"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "temere",
-      "forms": [
-        "temere"
-      ],
+      "forms": ["temere"],
       "definition": "by chance, without cause; at random; rashly, thoughtlessly"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "ter",
-      "forms": [
-        "ter"
-      ],
+      "forms": ["ter"],
       "definition": "three times"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "tum",
-      "forms": [
-        "tum"
-      ],
+      "forms": ["tum"],
       "definition": "then, at that time; at that moment; in those days; next; moveover, besides"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "tunc",
-      "forms": [
-        "tunc"
-      ],
+      "forms": ["tunc"],
       "definition": "(of time past) then, at that time; (of future time) then, in that event; (of succession in time) thereupon; (in conclusion) consequently, in that case"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "tuto",
-      "forms": [
-        "tuto"
-      ],
+      "forms": ["tuto"],
       "definition": "safely, securely, without rise of harm"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "ubi primum",
-      "forms": [
-        "ubi primum"
-      ],
+      "forms": ["ubi primum"],
       "definition": "as soon as"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "ubi",
-      "forms": [
-        "ubi"
-      ],
+      "forms": ["ubi"],
       "definition": "(interrog) where; conj. where, in which; whereby; with whom, by whom; when; whenever"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "ubique",
-      "forms": [
-        "ubique"
-      ],
+      "forms": ["ubique"],
       "definition": "everywhere, anywhere"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "umquam",
-      "forms": [
-        "umquam",
-        "unquam"
-      ],
+      "forms": ["umquam", "unquam"],
       "definition": "ever, at any time"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "una",
-      "forms": [
-        "una"
-      ],
+      "forms": ["una"],
       "definition": "together; una cum together with; una venire to come along with"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "unde",
-      "forms": [
-        "unde"
-      ],
+      "forms": ["unde"],
       "definition": "from where, whence, from whom; unde unde (or undeunde) by hook or by crook"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "undique",
-      "forms": [
-        "undique"
-      ],
+      "forms": ["undique"],
       "definition": "from all directions, on all sides, everywhere; in all respects, completely"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "unusquisque",
-      "forms": [
-        "unusquisque"
-      ],
+      "forms": ["unusquisque"],
       "definition": "each one, every single one pron. someone, a mere individual"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "usque",
-      "forms": [
-        "usque"
-      ],
+      "forms": ["usque"],
       "definition": "all the way; right on; all the time, continuously; even, as much as; (without addition of an adv or prep) to the fullest extent, completely; prep (w. acc) up to, as far as, right until"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "uti",
-      "forms": [
-        "uti"
-      ],
+      "forms": ["uti"],
       "definition": "an older form of ut, after cicero, but affected by archaizing authors; adv. (in direct and indirect questions; in explanations) how"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "utique",
-      "forms": [
-        "utique"
-      ],
+      "forms": ["utique"],
       "definition": "anyhow, at least, at any rate; in particular, especially; without condition, absolutely; (after negatives) on any account; (in obeying instructions) without fail"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "valde",
-      "forms": [
-        "valde"
-      ],
+      "forms": ["valde"],
       "definition": "greatly, intensely; (w. adj or adv) very; (as affirmative reply) yes, certainly, to be sure"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "velut",
-      "forms": [
-        "velut"
-      ],
+      "forms": ["velut"],
       "definition": "as, just as, even as; as for example; as it were; like, just as if, just as though"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "vero",
-      "forms": [
-        "vero"
-      ],
+      "forms": ["vero"],
       "definition": "in truth, in fact; certainly; to be sure; even; however"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "verum",
-      "forms": [
-        "verum"
-      ],
+      "forms": ["verum"],
       "definition": "truly; yes (in responses) true but, yes but, but in fact; but yet, but even; yet, still"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "verum etiam",
-      "forms": [
-        "verum etiam"
-      ],
+      "forms": ["verum etiam"],
       "definition": "not only...but also"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "videlicet",
-      "forms": [
-        "videlicet"
-      ],
+      "forms": ["videlicet"],
       "definition": "clearly, evidently; (in irony) of course, naturally; (in explanations) namely"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "vix",
-      "forms": [
-        "vix"
-      ],
+      "forms": ["vix"],
       "definition": "scarcely; hardly; with difficulty; barely"
     },
     {
       "section": "Adverbs (169)",
       "lemma": "vulgo",
-      "forms": [
-        "vulgo"
-      ],
+      "forms": ["vulgo"],
       "definition": "generally, publicly, everywhere"
     },
     {
