@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Badge } from '@/src/components/ui/badge';
-import { Edit, ChevronDown, ChevronRight, Volume2, List, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronRight, Volume2, List, ChevronUp } from 'lucide-react';
 import { VocabularyWordWithId } from '@/src/types/vocabulary-new';
 import { DeclensionTable } from './tables/DeclensionTable';
 import { AdjectiveDeclensionTable } from './tables/AdjectiveDeclensionTable';
@@ -16,7 +16,8 @@ import {
 
 interface WordCardProps {
   word: VocabularyWordWithId;
-  onEdit: (word: VocabularyWordWithId) => void;
+  onSelect: (word: VocabularyWordWithId) => void;
+  isSelected?: boolean;
   isLast?: boolean;
 }
 
@@ -61,7 +62,7 @@ const ExpandableDefinitions: React.FC<{ definitions: string[] }> = ({ definition
   );
 };
 
-export const WordCard: React.FC<WordCardProps> = ({ word, onEdit, isLast = false }) => {
+export const WordCard: React.FC<WordCardProps> = ({ word, onSelect, isSelected = false, isLast = false }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [expandedTables, setExpandedTables] = useState<Set<string>>(new Set());
 
@@ -88,12 +89,20 @@ export const WordCard: React.FC<WordCardProps> = ({ word, onEdit, isLast = false
     (hasConjugationTable(word) && word.conjugation_table);
 
   return (
-    <div className={`bg-white hover:bg-gray-50 transition-colors ${!isLast ? 'border-b border-gray-200' : ''}`}>
+    <div
+      className={`bg-white transition-all cursor-pointer ${
+        isSelected ? 'bg-blue-50 border-l-4 border-l-blue-500' : 'hover:bg-gray-50 border-l-4 border-l-transparent'
+      } ${!isLast ? 'border-b border-gray-200' : ''}`}
+      onClick={() => onSelect(word)}>
       {/* Main header row */}
       <div className="flex items-center justify-between px-4 py-3 gap-3">
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <button
-            onClick={() => setIsExpanded(!isExpanded)}
+            onClick={e => {
+              e.stopPropagation();
+              setIsExpanded(!isExpanded);
+              onSelect(word);
+            }}
             className="flex items-center gap-2 hover:text-roman-red transition-colors shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 rounded"
             aria-expanded={isExpanded}
             aria-label={`${isExpanded ? 'Collapse' : 'Expand'} details for ${word.word}`}>
@@ -137,16 +146,12 @@ export const WordCard: React.FC<WordCardProps> = ({ word, onEdit, isLast = false
             <Button
               variant="ghost"
               size="sm"
+              onClick={e => e.stopPropagation()}
               className="h-8 w-8 p-0 text-gray-500 hover:text-gray-700"
               title={`Pronunciation: ${word.pronunciation}`}>
               <Volume2 className="h-4 w-4" />
             </Button>
           )}
-
-          <Button variant="outline" size="sm" onClick={() => onEdit(word)} className="flex items-center gap-1">
-            <Edit className="h-3 w-3" />
-            <span className="hidden sm:inline">Edit</span>
-          </Button>
         </div>
       </div>
 

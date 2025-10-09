@@ -7,15 +7,13 @@ import {
   RomanTableRow,
   RomanTableCell,
 } from '@/src/components/ui/core/roman-table';
-import { TABLE_TYPES } from '@/src/utils/vocabUtils';
+import { TABLE_TYPES, LATIN_CASES } from '@/src/utils/vocabUtils';
 import { TableCell } from '../shared/TableCell';
 import { TableToggleButton } from '../shared/TableToggleButton';
 import { Noun, Pronoun } from '@/src/types/vocabulary-new';
 import { TableProps } from '@/src/types/table-props';
 
-export interface DeclensionTableProps extends TableProps<Noun | Pronoun> {}
-
-export const DeclensionTable: React.FC<DeclensionTableProps> = ({
+export const DeclensionTable: React.FC<TableProps<Noun | Pronoun>> = ({
   word,
   isExpanded,
   onToggle,
@@ -28,8 +26,6 @@ export const DeclensionTable: React.FC<DeclensionTableProps> = ({
   onEditingCellValueChange,
 }) => {
   const declensionTable = word.declension_table;
-
-  if (!declensionTable || declensionTable.length === 0) return null;
 
   return (
     <div className="mt-4 border-t pt-4">
@@ -45,41 +41,44 @@ export const DeclensionTable: React.FC<DeclensionTableProps> = ({
               </RomanTableRow>
             </RomanTableHeader>
             <RomanTableBody>
-              {declensionTable.map((row, index) => (
-                <RomanTableRow key={index} className="hover:bg-gray-50">
-                  <RomanTableCell className="font-medium bg-gray-50">{row.case}</RomanTableCell>
-                  <RomanTableCell className="min-w-32">
-                    <TableCell
-                      value={row.singular}
-                      rowIndex={index}
-                      cellKey="singular"
-                      tableType={TABLE_TYPES.DECLENSION}
-                      isEditMode={isEditMode}
-                      editingCell={editingCell}
-                      editingCellValue={editingCellValue}
-                      onCellDoubleClick={onCellDoubleClick}
-                      onCellEditSave={onCellEditSave}
-                      onCellEditCancel={onCellEditCancel}
-                      onEditingCellValueChange={onEditingCellValueChange}
-                    />
-                  </RomanTableCell>
-                  <RomanTableCell className="min-w-32">
-                    <TableCell
-                      value={row.plural}
-                      rowIndex={index}
-                      cellKey="plural"
-                      tableType={TABLE_TYPES.DECLENSION}
-                      isEditMode={isEditMode}
-                      editingCell={editingCell}
-                      editingCellValue={editingCellValue}
-                      onCellDoubleClick={onCellDoubleClick}
-                      onCellEditSave={onCellEditSave}
-                      onCellEditCancel={onCellEditCancel}
-                      onEditingCellValueChange={onEditingCellValueChange}
-                    />
-                  </RomanTableCell>
-                </RomanTableRow>
-              ))}
+              {LATIN_CASES.map((caseName, index) => {
+                const row = declensionTable?.find(r => r.case.toLowerCase() === caseName.toLowerCase());
+                return (
+                  <RomanTableRow key={index} className="hover:bg-gray-50">
+                    <RomanTableCell className="font-medium bg-gray-50">{caseName}</RomanTableCell>
+                    <RomanTableCell className="min-w-32">
+                      <TableCell
+                        value={row?.singular}
+                        rowIndex={index}
+                        cellKey="singular"
+                        tableType={TABLE_TYPES.DECLENSION}
+                        isEditMode={isEditMode}
+                        editingCell={editingCell}
+                        editingCellValue={editingCellValue}
+                        onCellDoubleClick={onCellDoubleClick}
+                        onCellEditSave={onCellEditSave}
+                        onCellEditCancel={onCellEditCancel}
+                        onEditingCellValueChange={onEditingCellValueChange}
+                      />
+                    </RomanTableCell>
+                    <RomanTableCell className="min-w-32">
+                      <TableCell
+                        value={row?.plural}
+                        rowIndex={index}
+                        cellKey="plural"
+                        tableType={TABLE_TYPES.DECLENSION}
+                        isEditMode={isEditMode}
+                        editingCell={editingCell}
+                        editingCellValue={editingCellValue}
+                        onCellDoubleClick={onCellDoubleClick}
+                        onCellEditSave={onCellEditSave}
+                        onCellEditCancel={onCellEditCancel}
+                        onEditingCellValueChange={onEditingCellValueChange}
+                      />
+                    </RomanTableCell>
+                  </RomanTableRow>
+                );
+              })}
             </RomanTableBody>
           </RomanTable>
         </div>
