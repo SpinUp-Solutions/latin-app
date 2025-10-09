@@ -1,11 +1,19 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSelector, useDispatch } from 'react-redux';
 import { Button } from '@/src/components/ui/button';
 import { ArrowLeft, BookOpen } from 'lucide-react';
-import { Word } from '@/src/types/admin-vocabulary';
-import { useVocabularyData } from '@/src/hooks/useVocabularyData';
+import { toast } from 'sonner';
+import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary-new';
+import { useGetWordsQuery, useGetWordTypeCountsQuery, useUpdateWordMutation } from '@/src/store/api/vocabularyApi';
+import {
+  updateFilters as updateFiltersAction,
+  resetFilters as resetFiltersAction,
+  selectVocabularyFilters,
+} from '@/src/store/slices/vocabularySlice';
+import { useDebounce } from '@/src/hooks/useDebounce';
 import { VocabularyEditModal } from '@/src/components/ui/admin/vocabulary/VocabularyEditModal';
 import { VocabularyFiltersComponent } from '@/src/components/ui/admin/vocabulary/VocabularyFilters';
 import { VocabularyList } from '@/src/components/ui/admin/vocabulary/VocabularyList';
@@ -13,39 +21,52 @@ import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 
 function AdminVocabularyPage() {
   const router = useRouter();
+  const dispatch = useDispatch();
+  const filters = useSelector(selectVocabularyFilters);
+  const debouncedSearch = useDebounce(filters.search, 150);
 
-  const {
-    words,
-    loading,
-    loadingMore,
-    hasMore,
-    wordTypeCounts,
-    countsLoading,
-    filters,
-    loadWords,
-    updateWord,
-    updateFilters,
-    resetFilters,
-  } = useVocabularyData();
-
-  const [editingWord, setEditingWord] = useState<Word | null>(null);
+  const [lastWordId, setLastWordId] = useState<string | null>(null);
+  const [editingWord, setEditingWord] = useState<VocabularyWordWithId | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [updating, setUpdating] = useState(false);
 
-  const handleEditWord = (word: Word) => {
+  const queryArgs = {
+    wordType: filters.wordType,
+    search: debouncedSearch,
+    lastWordId,
+  };
+
+  const { data, isLoading, isFetching } = useGetWordsQuery(queryArgs);
+  const { data: wordTypeCounts = {}, isLoading: countsLoading } = useGetWordTypeCountsQuery();
+  const [updateWord, { isLoading: updating }] = useUpdateWordMutation();
+
+  useEffect(() => {
+    setLastWordId(null);
+  }, [filters.wordType, debouncedSearch]);
+
+  const handleEditWord = (word: VocabularyWordWithId) => {
     setEditingWord(word);
     setIsEditModalOpen(true);
   };
 
-  const handleUpdateWord = async (updates: Partial<Word>) => {
+  const handleUpdateWord = async (updates: Partial<VocabularyWord>) => {
     if (!editingWord) return false;
 
-    setUpdating(true);
     try {
-      const success = await updateWord(editingWord.id, updates);
-      return success;
-    } finally {
-      setUpdating(false);
+      const cleanedUpdates = Object.fromEntries(
+        Object.entries(updates).filter(([, value]) => {
+          if (value === undefined || value === null) return false;
+          if (typeof value === 'string' && value.trim() === '') return false;
+          if (Array.isArray(value) && value.length === 0) return false;
+          return true;
+        })
+      );
+
+      await updateWord({ wordId: editingWord.id, updates: cleanedUpdates }).unwrap();
+      toast.success('Word updated successfully');
+      return true;
+    } catch (error) {
+      toast.error('Error updating word');
+      return false;
     }
   };
 
@@ -59,8 +80,22 @@ function AdminVocabularyPage() {
   };
 
   const handleLoadMore = () => {
-    loadWords(false);
+    if (data?.lastWordId) {
+      setLastWordId(data.lastWordId);
+    }
   };
+
+  const handleUpdateFilters = (newFilters: Partial<typeof filters>) => {
+    dispatch(updateFiltersAction(newFilters));
+  };
+
+  const handleResetFilters = () => {
+    dispatch(resetFiltersAction());
+  };
+
+  const words = data?.words ?? [];
+  const hasMore = data?.hasMore ?? false;
+  const loadingMore = isFetching && lastWordId !== null;
 
   return (
     <div className="min-h-screen bg-roman-marble">
@@ -91,14 +126,14 @@ function AdminVocabularyPage() {
           filters={filters}
           wordTypeCounts={wordTypeCounts}
           countsLoading={countsLoading}
-          onFiltersChange={updateFilters}
+          onFiltersChange={handleUpdateFilters}
           onSearch={handleSearch}
-          onReset={resetFilters}
+          onReset={handleResetFilters}
         />
 
         <VocabularyList
           words={words}
-          loading={loading}
+          loading={isLoading}
           loadingMore={loadingMore}
           hasMore={hasMore}
           onLoadMore={handleLoadMore}

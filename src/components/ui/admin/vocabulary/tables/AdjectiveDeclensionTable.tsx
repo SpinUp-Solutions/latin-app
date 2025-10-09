@@ -7,13 +7,15 @@ import {
   RomanTableRow,
   RomanTableCell,
 } from '@/src/components/ui/core/roman-table';
-import { formatCellValue } from '@/src/utils/vocabUtils';
-import { EditableCell } from '../shared/EditableCell';
+import { TABLE_TYPES } from '@/src/utils/vocabUtils';
+import { TableCell } from '../shared/TableCell';
 import { TableToggleButton } from '../shared/TableToggleButton';
-import { BaseTableProps } from '@/src/types/admin-vocabulary';
-import SimpleRichDisplay from '../../../core/simple-rich-display';
+import { Adjective } from '@/src/types/vocabulary-new';
+import { TableProps } from '@/src/types/table-props';
 
-export const AdjectiveDeclensionTable: React.FC<BaseTableProps> = ({
+export interface AdjectiveDeclensionTableProps extends TableProps<Adjective> {}
+
+export const AdjectiveDeclensionTable: React.FC<AdjectiveDeclensionTableProps> = ({
   word,
   isExpanded,
   onToggle,
@@ -25,29 +27,9 @@ export const AdjectiveDeclensionTable: React.FC<BaseTableProps> = ({
   onCellEditCancel,
   onEditingCellValueChange,
 }) => {
-  const adjectiveDeclensionTable = word.adjectiveDeclensionTable;
+  const adjectiveDeclensionTable = word.adjective_declension_table;
 
   if (!adjectiveDeclensionTable || adjectiveDeclensionTable.length === 0) return null;
-
-  const renderCell = (value: string[], rowIndex: number, cellKey: string) => {
-    if (isEditMode && onCellDoubleClick && onCellEditSave && onCellEditCancel && onEditingCellValueChange) {
-      return (
-        <EditableCell
-          value={value}
-          rowIndex={rowIndex}
-          cellKey={cellKey}
-          tableType="adjective-declension"
-          editingCell={editingCell || null}
-          editingCellValue={editingCellValue}
-          onCellDoubleClick={onCellDoubleClick}
-          onCellEditSave={onCellEditSave}
-          onCellEditCancel={onCellEditCancel}
-          onEditingCellValueChange={onEditingCellValueChange}
-        />
-      );
-    }
-    return <SimpleRichDisplay content={formatCellValue(value) || '—'} />;
-  };
 
   return (
     <div className="mt-4 border-t pt-4">
@@ -76,22 +58,94 @@ export const AdjectiveDeclensionTable: React.FC<BaseTableProps> = ({
                 <RomanTableRow key={index} className="hover:bg-gray-50">
                   <RomanTableCell className="font-medium bg-gray-50">{row.case}</RomanTableCell>
                   <RomanTableCell className="min-w-24 text-center">
-                    {renderCell(row.masculine.singular, index, 'masculine.singular')}
+                    <TableCell
+                      value={row.masculine.singular}
+                      rowIndex={index}
+                      cellKey="masculine.singular"
+                      tableType={TABLE_TYPES.ADJECTIVE_DECLENSION}
+                      isEditMode={isEditMode}
+                      editingCell={editingCell}
+                      editingCellValue={editingCellValue}
+                      onCellDoubleClick={onCellDoubleClick}
+                      onCellEditSave={onCellEditSave}
+                      onCellEditCancel={onCellEditCancel}
+                      onEditingCellValueChange={onEditingCellValueChange}
+                    />
                   </RomanTableCell>
                   <RomanTableCell className="min-w-24 text-center">
-                    {renderCell(row.feminine.singular, index, 'feminine.singular')}
+                    <TableCell
+                      value={row.feminine.singular}
+                      rowIndex={index}
+                      cellKey="feminine.singular"
+                      tableType={TABLE_TYPES.ADJECTIVE_DECLENSION}
+                      isEditMode={isEditMode}
+                      editingCell={editingCell}
+                      editingCellValue={editingCellValue}
+                      onCellDoubleClick={onCellDoubleClick}
+                      onCellEditSave={onCellEditSave}
+                      onCellEditCancel={onCellEditCancel}
+                      onEditingCellValueChange={onEditingCellValueChange}
+                    />
                   </RomanTableCell>
                   <RomanTableCell className="min-w-24 text-center">
-                    {renderCell(row.neuter.singular, index, 'neuter.singular')}
+                    <TableCell
+                      value={row.neuter.singular}
+                      rowIndex={index}
+                      cellKey="neuter.singular"
+                      tableType={TABLE_TYPES.ADJECTIVE_DECLENSION}
+                      isEditMode={isEditMode}
+                      editingCell={editingCell}
+                      editingCellValue={editingCellValue}
+                      onCellDoubleClick={onCellDoubleClick}
+                      onCellEditSave={onCellEditSave}
+                      onCellEditCancel={onCellEditCancel}
+                      onEditingCellValueChange={onEditingCellValueChange}
+                    />
                   </RomanTableCell>
                   <RomanTableCell className="min-w-24 text-center">
-                    {renderCell(row.masculine.plural, index, 'masculine.plural')}
+                    <TableCell
+                      value={row.masculine.plural}
+                      rowIndex={index}
+                      cellKey="masculine.plural"
+                      tableType={TABLE_TYPES.ADJECTIVE_DECLENSION}
+                      isEditMode={isEditMode}
+                      editingCell={editingCell}
+                      editingCellValue={editingCellValue}
+                      onCellDoubleClick={onCellDoubleClick}
+                      onCellEditSave={onCellEditSave}
+                      onCellEditCancel={onCellEditCancel}
+                      onEditingCellValueChange={onEditingCellValueChange}
+                    />
                   </RomanTableCell>
                   <RomanTableCell className="min-w-24 text-center">
-                    {renderCell(row.feminine.plural, index, 'feminine.plural')}
+                    <TableCell
+                      value={row.feminine.plural}
+                      rowIndex={index}
+                      cellKey="feminine.plural"
+                      tableType={TABLE_TYPES.ADJECTIVE_DECLENSION}
+                      isEditMode={isEditMode}
+                      editingCell={editingCell}
+                      editingCellValue={editingCellValue}
+                      onCellDoubleClick={onCellDoubleClick}
+                      onCellEditSave={onCellEditSave}
+                      onCellEditCancel={onCellEditCancel}
+                      onEditingCellValueChange={onEditingCellValueChange}
+                    />
                   </RomanTableCell>
                   <RomanTableCell className="min-w-24 text-center">
-                    {renderCell(row.neuter.plural, index, 'neuter.plural')}
+                    <TableCell
+                      value={row.neuter.plural}
+                      rowIndex={index}
+                      cellKey="neuter.plural"
+                      tableType={TABLE_TYPES.ADJECTIVE_DECLENSION}
+                      isEditMode={isEditMode}
+                      editingCell={editingCell}
+                      editingCellValue={editingCellValue}
+                      onCellDoubleClick={onCellDoubleClick}
+                      onCellEditSave={onCellEditSave}
+                      onCellEditCancel={onCellEditCancel}
+                      onEditingCellValueChange={onEditingCellValueChange}
+                    />
                   </RomanTableCell>
                 </RomanTableRow>
               ))}

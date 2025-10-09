@@ -1,4 +1,3 @@
-import React from 'react';
 import {
   RomanTable,
   RomanTableHeader,
@@ -8,13 +7,15 @@ import {
   RomanTableCell,
 } from '@/src/components/ui/core/roman-table';
 import { type ConjugationTable as ConjugationTableType } from '@/src/types/admin-vocabulary';
-import { formatCellValue } from '@/src/utils/vocabUtils';
-import { EditableCell } from '../shared/EditableCell';
+import { TABLE_TYPES } from '@/src/utils/vocabUtils';
+import { TableCell } from '../shared/TableCell';
 import { TableToggleButton } from '../shared/TableToggleButton';
-import { BaseTableProps } from '@/src/types/admin-vocabulary';
-import SimpleRichDisplay from '../../../core/simple-rich-display';
+import { Verb } from '@/src/types/vocabulary-new';
+import { TableProps } from '@/src/types/table-props';
 
-export const ConjugationTable: React.FC<BaseTableProps> = ({
+export interface ConjugationTableProps extends TableProps<Verb> {}
+
+export const ConjugationTable: React.FC<ConjugationTableProps> = ({
   word,
   isExpanded,
   onToggle,
@@ -26,32 +27,9 @@ export const ConjugationTable: React.FC<BaseTableProps> = ({
   onCellEditCancel,
   onEditingCellValueChange,
 }) => {
-  const conjugationTable = word.conjugationTable;
+  const conjugationTable = word.conjugation_table;
 
   if (!conjugationTable) return null;
-
-  const renderConjugationCell = (value: string[] | undefined, cellKey: string, rowIndex: number = 0) => {
-    const cellValue = value || [];
-
-    if (isEditMode && onCellDoubleClick && onCellEditSave && onCellEditCancel && onEditingCellValueChange) {
-      return (
-        <EditableCell
-          value={cellValue}
-          rowIndex={rowIndex}
-          cellKey={cellKey}
-          tableType="conjugation"
-          editingCell={editingCell || null}
-          editingCellValue={editingCellValue}
-          onCellDoubleClick={onCellDoubleClick}
-          onCellEditSave={onCellEditSave}
-          onCellEditCancel={onCellEditCancel}
-          onEditingCellValueChange={onEditingCellValueChange}
-        />
-      );
-    }
-
-    return <SimpleRichDisplay content={formatCellValue(cellValue) || '—'} />;
-  };
 
   const renderTenseSection = (
     mood: 'indicative' | 'subjunctive',
@@ -92,46 +70,94 @@ export const ConjugationTable: React.FC<BaseTableProps> = ({
                   <RomanTableRow key={tense} className="hover:bg-gray-50">
                     <RomanTableCell className="font-medium bg-gray-50 capitalize">{tense}</RomanTableCell>
                     <RomanTableCell className="text-center">
-                      {renderConjugationCell(
-                        tenseData?.singular?.first,
-                        `${mood}.${voice}.${tense}.singular.first`,
-                        tenseIndex
-                      )}
+                      <TableCell
+                        value={tenseData?.singular?.first}
+                        rowIndex={tenseIndex}
+                        cellKey={`${mood}.${voice}.${tense}.singular.first`}
+                        tableType={TABLE_TYPES.CONJUGATION}
+                        isEditMode={isEditMode}
+                        editingCell={editingCell}
+                        editingCellValue={editingCellValue}
+                        onCellDoubleClick={onCellDoubleClick}
+                        onCellEditSave={onCellEditSave}
+                        onCellEditCancel={onCellEditCancel}
+                        onEditingCellValueChange={onEditingCellValueChange}
+                      />
                     </RomanTableCell>
                     <RomanTableCell className="text-center">
-                      {renderConjugationCell(
-                        tenseData?.singular?.second,
-                        `${mood}.${voice}.${tense}.singular.second`,
-                        tenseIndex
-                      )}
+                      <TableCell
+                        value={tenseData?.singular?.second}
+                        rowIndex={tenseIndex}
+                        cellKey={`${mood}.${voice}.${tense}.singular.second`}
+                        tableType={TABLE_TYPES.CONJUGATION}
+                        isEditMode={isEditMode}
+                        editingCell={editingCell}
+                        editingCellValue={editingCellValue}
+                        onCellDoubleClick={onCellDoubleClick}
+                        onCellEditSave={onCellEditSave}
+                        onCellEditCancel={onCellEditCancel}
+                        onEditingCellValueChange={onEditingCellValueChange}
+                      />
                     </RomanTableCell>
                     <RomanTableCell className="text-center">
-                      {renderConjugationCell(
-                        tenseData?.singular?.third,
-                        `${mood}.${voice}.${tense}.singular.third`,
-                        tenseIndex
-                      )}
+                      <TableCell
+                        value={tenseData?.singular?.third}
+                        rowIndex={tenseIndex}
+                        cellKey={`${mood}.${voice}.${tense}.singular.third`}
+                        tableType={TABLE_TYPES.CONJUGATION}
+                        isEditMode={isEditMode}
+                        editingCell={editingCell}
+                        editingCellValue={editingCellValue}
+                        onCellDoubleClick={onCellDoubleClick}
+                        onCellEditSave={onCellEditSave}
+                        onCellEditCancel={onCellEditCancel}
+                        onEditingCellValueChange={onEditingCellValueChange}
+                      />
                     </RomanTableCell>
                     <RomanTableCell className="text-center">
-                      {renderConjugationCell(
-                        tenseData?.plural?.first,
-                        `${mood}.${voice}.${tense}.plural.first`,
-                        tenseIndex
-                      )}
+                      <TableCell
+                        value={tenseData?.plural?.first}
+                        rowIndex={tenseIndex}
+                        cellKey={`${mood}.${voice}.${tense}.plural.first`}
+                        tableType={TABLE_TYPES.CONJUGATION}
+                        isEditMode={isEditMode}
+                        editingCell={editingCell}
+                        editingCellValue={editingCellValue}
+                        onCellDoubleClick={onCellDoubleClick}
+                        onCellEditSave={onCellEditSave}
+                        onCellEditCancel={onCellEditCancel}
+                        onEditingCellValueChange={onEditingCellValueChange}
+                      />
                     </RomanTableCell>
                     <RomanTableCell className="text-center">
-                      {renderConjugationCell(
-                        tenseData?.plural?.second,
-                        `${mood}.${voice}.${tense}.plural.second`,
-                        tenseIndex
-                      )}
+                      <TableCell
+                        value={tenseData?.plural?.second}
+                        rowIndex={tenseIndex}
+                        cellKey={`${mood}.${voice}.${tense}.plural.second`}
+                        tableType={TABLE_TYPES.CONJUGATION}
+                        isEditMode={isEditMode}
+                        editingCell={editingCell}
+                        editingCellValue={editingCellValue}
+                        onCellDoubleClick={onCellDoubleClick}
+                        onCellEditSave={onCellEditSave}
+                        onCellEditCancel={onCellEditCancel}
+                        onEditingCellValueChange={onEditingCellValueChange}
+                      />
                     </RomanTableCell>
                     <RomanTableCell className="text-center">
-                      {renderConjugationCell(
-                        tenseData?.plural?.third,
-                        `${mood}.${voice}.${tense}.plural.third`,
-                        tenseIndex
-                      )}
+                      <TableCell
+                        value={tenseData?.plural?.third}
+                        rowIndex={tenseIndex}
+                        cellKey={`${mood}.${voice}.${tense}.plural.third`}
+                        tableType={TABLE_TYPES.CONJUGATION}
+                        isEditMode={isEditMode}
+                        editingCell={editingCell}
+                        editingCellValue={editingCellValue}
+                        onCellDoubleClick={onCellDoubleClick}
+                        onCellEditSave={onCellEditSave}
+                        onCellEditCancel={onCellEditCancel}
+                        onEditingCellValueChange={onEditingCellValueChange}
+                      />
                     </RomanTableCell>
                   </RomanTableRow>
                 );
@@ -163,7 +189,19 @@ export const ConjugationTable: React.FC<BaseTableProps> = ({
                 <RomanTableRow key={form} className="hover:bg-gray-50">
                   <RomanTableCell className="font-medium bg-gray-50 capitalize">{form}</RomanTableCell>
                   <RomanTableCell>
-                    {renderConjugationCell(data[form], `${keyPrefix}.${form}`, formIndex)}
+                    <TableCell
+                      value={data[form]}
+                      rowIndex={formIndex}
+                      cellKey={`${keyPrefix}.${form}`}
+                      tableType={TABLE_TYPES.CONJUGATION}
+                      isEditMode={isEditMode}
+                      editingCell={editingCell}
+                      editingCellValue={editingCellValue}
+                      onCellDoubleClick={onCellDoubleClick}
+                      onCellEditSave={onCellEditSave}
+                      onCellEditCancel={onCellEditCancel}
+                      onEditingCellValueChange={onEditingCellValueChange}
+                    />
                   </RomanTableCell>
                 </RomanTableRow>
               ))}
