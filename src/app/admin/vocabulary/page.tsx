@@ -4,9 +4,9 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSelector, useDispatch } from 'react-redux';
 import { Button } from '@/src/components/ui/button';
-import { ArrowLeft, BookOpen } from 'lucide-react';
+import { ArrowLeft, BookOpen, Download, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
-import { Word } from '@/src/types/admin-vocabulary';
+import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary-new';
 import { useGetWordsQuery, useGetWordTypeCountsQuery, useUpdateWordMutation } from '@/src/store/api/vocabularyApi';
 import {
   updateFilters as updateFiltersAction,
@@ -18,6 +18,7 @@ import { VocabularyEditModal } from '@/src/components/ui/admin/vocabulary/Vocabu
 import { VocabularyFiltersComponent } from '@/src/components/ui/admin/vocabulary/VocabularyFilters';
 import { VocabularyList } from '@/src/components/ui/admin/vocabulary/VocabularyList';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
+import { auth } from '@/src/services/firebase';
 
 function AdminVocabularyPage() {
   const router = useRouter();
@@ -26,12 +27,13 @@ function AdminVocabularyPage() {
   const debouncedSearch = useDebounce(filters.search, 150);
 
   const [lastWordId, setLastWordId] = useState<string | null>(null);
-  const [editingWord, setEditingWord] = useState<Word | null>(null);
+  const [editingWord, setEditingWord] = useState<VocabularyWordWithId | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isCreatingBackup, setIsCreatingBackup] = useState(false);
+  const [isMigrating, setIsMigrating] = useState(false);
 
   const queryArgs = {
     wordType: filters.wordType,
-    section: filters.section,
     search: debouncedSearch,
     lastWordId,
   };
@@ -42,14 +44,14 @@ function AdminVocabularyPage() {
 
   useEffect(() => {
     setLastWordId(null);
-  }, [filters.wordType, filters.section, debouncedSearch]);
+  }, [filters.wordType, debouncedSearch]);
 
-  const handleEditWord = (word: Word) => {
+  const handleEditWord = (word: VocabularyWordWithId) => {
     setEditingWord(word);
     setIsEditModalOpen(true);
   };
 
-  const handleUpdateWord = async (updates: Partial<Word>) => {
+  const handleUpdateWord = async (updates: Partial<VocabularyWord>) => {
     if (!editingWord) return false;
 
     try {
@@ -94,6 +96,78 @@ function AdminVocabularyPage() {
     dispatch(resetFiltersAction());
   };
 
+  const handleCreateBackup = async () => {
+    setIsCreatingBackup(true);
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      const token = await user.getIdToken();
+      const response = await fetch('/api/admin/words/backup', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to create backup');
+      }
+
+      toast.success(`Backup created: ${data.filename} (${data.totalWords} words)`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to create backup');
+    } finally {
+      setIsCreatingBackup(false);
+    }
+  };
+
+  const handleMigrate = async (dryRun: boolean = true) => {
+    setIsMigrating(true);
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      const token = await user.getIdToken();
+      const response = await fetch('/api/admin/vocabulary/migrate', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ dryRun }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Migration failed');
+      }
+
+      const mode = dryRun ? 'Dry run' : 'Migration';
+      const message = `${mode} complete: ${data.stats.successful} successful, ${data.stats.failed} failed (${data.performance.wordsPerSecond.toFixed(2)} words/sec)`;
+
+      if (data.stats.failed > 0) {
+        toast.warning(message);
+        console.error('Migration errors:', data.errors);
+      } else {
+        toast.success(message);
+      }
+
+      console.log('Migration stats:', data.stats);
+      console.log('Sample transformations:', data.sample);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Migration failed');
+    } finally {
+      setIsMigrating(false);
+    }
+  };
+
   const words = data?.words ?? [];
   const hasMore = data?.hasMore ?? false;
   const loadingMore = isFetching && lastWordId !== null;
@@ -116,9 +190,23 @@ function AdminVocabularyPage() {
             </div>
           </div>
         </div>
-        <div className="text-sm text-roman-stone">
-          {words.length} words loaded
-          {countsLoading && ' (loading counts...)'}
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleCreateBackup} disabled={isCreatingBackup}>
+            <Download className="h-4 w-4 mr-2" />
+            {isCreatingBackup ? 'Creating Backup...' : 'Backup'}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => handleMigrate(true)} disabled={isMigrating}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            {isMigrating ? 'Running...' : 'Migrate (Dry Run)'}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => handleMigrate(false)} disabled={isMigrating}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            {isMigrating ? 'Running...' : 'Migrate (Live)'}
+          </Button>
+          <div className="text-sm text-roman-stone">
+            {words.length} words loaded
+            {countsLoading && ' (loading counts...)'}
+          </div>
         </div>
       </header>
 
