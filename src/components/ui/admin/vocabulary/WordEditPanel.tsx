@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/src/components/ui/dialog';
 import { Button } from '@/src/components/ui/button';
 import { Label } from '@/src/components/ui/label';
+import { Input } from '@/src/components/ui/input';
+import { Textarea } from '@/src/components/ui/textarea';
 import { VocabularyWord, VocabularyWordWithId, Noun, Verb, Adjective, Pronoun } from '@/src/types/vocabulary-new';
 import { EditingCell } from '@/src/types/admin-vocabulary';
 import {
@@ -15,23 +16,29 @@ import {
 import { DeclensionTable } from './tables/DeclensionTable';
 import { AdjectiveDeclensionTable } from './tables/AdjectiveDeclensionTable';
 import { ConjugationTable } from './tables/ConjugationTable';
-import { SimpleRichEditor } from '../../core/simple-rich-editor';
+import { BookOpen } from 'lucide-react';
 
-interface VocabularyEditModalProps {
+interface WordEditPanelProps {
   word: VocabularyWordWithId | null;
-  isOpen: boolean;
-  onClose: () => void;
   onSave: (updates: Partial<VocabularyWord>) => Promise<boolean>;
   updating: boolean;
 }
 
-export const VocabularyEditModal: React.FC<VocabularyEditModalProps> = ({
-  word,
-  isOpen,
-  onClose,
-  onSave,
-  updating,
-}) => {
+const EmptyState: React.FC = () => (
+  <div className="flex items-center justify-center h-full p-8">
+    <div className="text-center space-y-4 max-w-md">
+      <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
+        <BookOpen className="h-8 w-8 text-gray-400" />
+      </div>
+      <div>
+        <h3 className="text-lg font-medium text-gray-900 mb-2">No Word Selected</h3>
+        <p className="text-sm text-gray-500">Select a word from the list on the left to view and edit its details.</p>
+      </div>
+    </div>
+  </div>
+);
+
+export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, updating }) => {
   const [editFormData, setEditFormData] = useState<Partial<VocabularyWordWithId>>({});
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
   const [editingCellValue, setEditingCellValue] = useState('');
@@ -45,20 +52,10 @@ export const VocabularyEditModal: React.FC<VocabularyEditModalProps> = ({
     }
   }, [word]);
 
-  const handleClose = () => {
-    setEditFormData({});
-    setEditingCell(null);
-    setEditingCellValue('');
-    onClose();
-  };
-
   const handleSave = async () => {
     if (!word) return;
 
-    const success = await onSave(editFormData);
-    if (success) {
-      handleClose();
-    }
+    await onSave(editFormData);
   };
 
   const handleCellDoubleClick = (rowIndex: number, cellKey: string, tableType: string, currentValue: string) => {
@@ -102,55 +99,71 @@ export const VocabularyEditModal: React.FC<VocabularyEditModalProps> = ({
     return expandedEditTables.has(tableType);
   };
 
-  if (!word) return null;
+  if (!word) {
+    return <EmptyState />;
+  }
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto bg-white">
-        <DialogHeader>
-          <DialogTitle>Edit Word: {word.word}</DialogTitle>
-        </DialogHeader>
+    <div className="flex flex-col h-full overflow-hidden bg-white border-l border-gray-200">
+      <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-xl font-serif font-semibold text-roman-red truncate">{word.word}</h2>
+          <p className="text-sm text-gray-500 mt-0.5">{word.part_of_speech}</p>
+        </div>
+        <Button onClick={handleSave} disabled={updating} className="ml-4">
+          {updating ? 'Saving...' : 'Apply'}
+        </Button>
+      </div>
 
-        <div className="space-y-4">
+      <div className="flex-1 overflow-y-auto px-6 py-4">
+        <div className="space-y-6">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="word">Word</Label>
-              <SimpleRichEditor
-                content={editFormData.word || ''}
-                onChange={value => setEditFormData({ ...editFormData, word: value })}
-                singleLine={true}
+              <Input
+                id="word"
+                value={editFormData.word || ''}
+                onChange={e => setEditFormData({ ...editFormData, word: e.target.value })}
+                className="mt-1"
               />
             </div>
             <div>
               <Label htmlFor="part_of_speech">Word Type</Label>
-              <span className="text-sm text-gray-600">{editFormData.part_of_speech}</span>
+              <div className="mt-2">
+                <span className="text-sm text-gray-600">{editFormData.part_of_speech}</span>
+              </div>
             </div>
           </div>
 
           <div>
             <Label htmlFor="translation">Translation</Label>
-            <SimpleRichEditor
-              content={editFormData.translation || ''}
-              onChange={value => setEditFormData({ ...editFormData, translation: value })}
+            <Textarea
+              id="translation"
+              value={editFormData.translation || ''}
+              onChange={e => setEditFormData({ ...editFormData, translation: e.target.value })}
               rows={2}
+              className="mt-1"
             />
           </div>
 
           <div>
             <Label htmlFor="etymology">Etymology</Label>
-            <SimpleRichEditor
-              content={editFormData.etymology || ''}
-              onChange={value => setEditFormData({ ...editFormData, etymology: value })}
+            <Textarea
+              id="etymology"
+              value={editFormData.etymology || ''}
+              onChange={e => setEditFormData({ ...editFormData, etymology: e.target.value })}
               rows={2}
+              className="mt-1"
             />
           </div>
 
           <div>
             <Label htmlFor="pronunciation">Pronunciation</Label>
-            <SimpleRichEditor
-              content={editFormData.pronunciation || ''}
-              onChange={value => setEditFormData({ ...editFormData, pronunciation: value })}
-              singleLine={true}
+            <Input
+              id="pronunciation"
+              value={editFormData.pronunciation || ''}
+              onChange={e => setEditFormData({ ...editFormData, pronunciation: e.target.value })}
+              className="mt-1"
             />
           </div>
 
@@ -207,17 +220,8 @@ export const VocabularyEditModal: React.FC<VocabularyEditModalProps> = ({
                 onEditingCellValueChange={setEditingCellValue}
               />
             )}
-
-          <div className="flex justify-end gap-2 pt-4">
-            <Button variant="outline" onClick={handleClose}>
-              Cancel
-            </Button>
-            <Button onClick={handleSave} disabled={updating}>
-              {updating ? 'Saving...' : 'Save Changes'}
-            </Button>
-          </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   );
 };

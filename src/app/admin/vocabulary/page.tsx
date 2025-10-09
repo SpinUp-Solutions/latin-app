@@ -14,7 +14,7 @@ import {
   selectVocabularyFilters,
 } from '@/src/store/slices/vocabularySlice';
 import { useDebounce } from '@/src/hooks/useDebounce';
-import { VocabularyEditModal } from '@/src/components/ui/admin/vocabulary/VocabularyEditModal';
+import { WordEditPanel } from '@/src/components/ui/admin/vocabulary/WordEditPanel';
 import { VocabularyFiltersComponent } from '@/src/components/ui/admin/vocabulary/VocabularyFilters';
 import { VocabularyList } from '@/src/components/ui/admin/vocabulary/VocabularyList';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
@@ -26,8 +26,7 @@ function AdminVocabularyPage() {
   const debouncedSearch = useDebounce(filters.search, 150);
 
   const [lastWordId, setLastWordId] = useState<string | null>(null);
-  const [editingWord, setEditingWord] = useState<VocabularyWordWithId | null>(null);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedWordId, setSelectedWordId] = useState<string | null>(null);
 
   const queryArgs = {
     wordType: filters.wordType,
@@ -43,13 +42,45 @@ function AdminVocabularyPage() {
     setLastWordId(null);
   }, [filters.wordType, debouncedSearch]);
 
-  const handleEditWord = (word: VocabularyWordWithId) => {
-    setEditingWord(word);
-    setIsEditModalOpen(true);
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash.startsWith('#word-')) {
+      const wordId = hash.substring(6);
+      setSelectedWordId(wordId);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedWordId) {
+      window.location.hash = `word-${selectedWordId}`;
+    } else {
+      if (window.location.hash) {
+        history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
+    }
+  }, [selectedWordId]);
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash;
+      if (hash.startsWith('#word-')) {
+        const wordId = hash.substring(6);
+        setSelectedWordId(wordId);
+      } else {
+        setSelectedWordId(null);
+      }
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  const handleSelectWord = (word: VocabularyWordWithId) => {
+    setSelectedWordId(word.id);
   };
 
   const handleUpdateWord = async (updates: Partial<VocabularyWord>) => {
-    if (!editingWord) return false;
+    if (!selectedWordId) return false;
 
     try {
       const cleanedUpdates = Object.fromEntries(
@@ -61,18 +92,13 @@ function AdminVocabularyPage() {
         })
       );
 
-      await updateWord({ wordId: editingWord.id, updates: cleanedUpdates }).unwrap();
+      await updateWord({ wordId: selectedWordId, updates: cleanedUpdates }).unwrap();
       toast.success('Word updated successfully');
       return true;
     } catch (error) {
       toast.error('Error updating word');
       return false;
     }
-  };
-
-  const handleCloseEditModal = () => {
-    setIsEditModalOpen(false);
-    setEditingWord(null);
   };
 
   const handleSearch = (e: React.FormEvent) => {
@@ -96,10 +122,11 @@ function AdminVocabularyPage() {
   const words = data?.words ?? [];
   const hasMore = data?.hasMore ?? false;
   const loadingMore = isFetching && lastWordId !== null;
+  const selectedWord = selectedWordId ? words.find(w => w.id === selectedWordId) || null : null;
 
   return (
-    <div className="min-h-screen bg-roman-marble">
-      <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between">
+    <div className="h-screen flex flex-col bg-roman-marble">
+      <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-4">
           <Button variant="ghost" onClick={() => router.push('/admin')}>
             <ArrowLeft className="h-4 w-4 mr-2" />
@@ -121,33 +148,34 @@ function AdminVocabularyPage() {
         </div>
       </header>
 
-      <main className="container mx-auto py-8 px-4">
-        <VocabularyFiltersComponent
-          filters={filters}
-          wordTypeCounts={wordTypeCounts}
-          countsLoading={countsLoading}
-          onFiltersChange={handleUpdateFilters}
-          onSearch={handleSearch}
-          onReset={handleResetFilters}
-        />
+      <main className="flex-1 grid grid-cols-[40%_60%] overflow-hidden">
+        <div className="flex flex-col overflow-hidden border-r border-gray-200 bg-roman-marble">
+          <div className="p-4">
+            <VocabularyFiltersComponent
+              filters={filters}
+              wordTypeCounts={wordTypeCounts}
+              countsLoading={countsLoading}
+              onFiltersChange={handleUpdateFilters}
+              onSearch={handleSearch}
+              onReset={handleResetFilters}
+            />
+          </div>
 
-        <VocabularyList
-          words={words}
-          loading={isLoading}
-          loadingMore={loadingMore}
-          hasMore={hasMore}
-          onLoadMore={handleLoadMore}
-          onEditWord={handleEditWord}
-        />
+          <div className="flex-1 overflow-y-auto px-4 pb-4">
+            <VocabularyList
+              words={words}
+              loading={isLoading}
+              loadingMore={loadingMore}
+              hasMore={hasMore}
+              onLoadMore={handleLoadMore}
+              onSelectWord={handleSelectWord}
+              selectedWordId={selectedWordId}
+            />
+          </div>
+        </div>
+
+        <WordEditPanel word={selectedWord} onSave={handleUpdateWord} updating={updating} />
       </main>
-
-      <VocabularyEditModal
-        word={editingWord}
-        isOpen={isEditModalOpen}
-        onClose={handleCloseEditModal}
-        onSave={handleUpdateWord}
-        updating={updating}
-      />
     </div>
   );
 }
