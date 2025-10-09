@@ -3,7 +3,7 @@ import { Card, CardContent } from '@/src/components/ui/card';
 import { Loader2, Search } from 'lucide-react';
 import { Word } from '@/src/types/admin-vocabulary';
 import { WordCard } from './WordCard';
-import { useInfiniteScroll } from '@/src/hooks/useInfiniteScroll';
+import useInfiniteScroll from 'react-infinite-scroll-hook';
 
 interface VocabularyListProps {
   words: Word[];
@@ -42,7 +42,7 @@ const EmptyState: React.FC = () => (
 );
 
 const InfiniteScrollSentinel: React.FC<{
-  sentinelRef: React.RefObject<HTMLDivElement>;
+  sentinelRef: (node: HTMLDivElement | null) => void;
   loadingMore: boolean;
   hasMore: boolean;
 }> = ({ sentinelRef, loadingMore, hasMore }) => {
@@ -68,10 +68,11 @@ export const VocabularyList: React.FC<VocabularyListProps> = ({
   onLoadMore,
   onEditWord,
 }) => {
-  const sentinelRef = useInfiniteScroll({
-    onLoadMore,
-    hasMore,
+  const [sentinelRef] = useInfiniteScroll({
     loading: loadingMore,
+    hasNextPage: hasMore,
+    onLoadMore,
+    rootMargin: '200px',
   });
 
   if (loading) {
