@@ -6,7 +6,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { Button } from '@/src/components/ui/button';
 import { ArrowLeft, BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
-import { Word } from '@/src/types/admin-vocabulary';
+import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary-new';
 import { useGetWordsQuery, useGetWordTypeCountsQuery, useUpdateWordMutation } from '@/src/store/api/vocabularyApi';
 import {
   updateFilters as updateFiltersAction,
@@ -26,12 +26,11 @@ function AdminVocabularyPage() {
   const debouncedSearch = useDebounce(filters.search, 150);
 
   const [lastWordId, setLastWordId] = useState<string | null>(null);
-  const [editingWord, setEditingWord] = useState<Word | null>(null);
+  const [editingWord, setEditingWord] = useState<VocabularyWordWithId | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   const queryArgs = {
     wordType: filters.wordType,
-    section: filters.section,
     search: debouncedSearch,
     lastWordId,
   };
@@ -42,14 +41,14 @@ function AdminVocabularyPage() {
 
   useEffect(() => {
     setLastWordId(null);
-  }, [filters.wordType, filters.section, debouncedSearch]);
+  }, [filters.wordType, debouncedSearch]);
 
-  const handleEditWord = (word: Word) => {
+  const handleEditWord = (word: VocabularyWordWithId) => {
     setEditingWord(word);
     setIsEditModalOpen(true);
   };
 
-  const handleUpdateWord = async (updates: Partial<Word>) => {
+  const handleUpdateWord = async (updates: Partial<VocabularyWord>) => {
     if (!editingWord) return false;
 
     try {

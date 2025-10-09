@@ -1,17 +1,17 @@
 import React from 'react';
 import { Card, CardContent } from '@/src/components/ui/card';
 import { Loader2, Search } from 'lucide-react';
-import { Word } from '@/src/types/admin-vocabulary';
+import { VocabularyWordWithId } from '@/src/types/vocabulary-new';
 import { WordCard } from './WordCard';
 import { useInfiniteScroll } from '@/src/hooks/useInfiniteScroll';
 
 interface VocabularyListProps {
-  words: Word[];
+  words: VocabularyWordWithId[];
   loading: boolean;
   loadingMore: boolean;
   hasMore: boolean;
   onLoadMore: () => void;
-  onEditWord: (word: Word) => void;
+  onEditWord: (word: VocabularyWordWithId) => void;
 }
 
 const LoadingSpinner: React.FC = () => (

@@ -2,15 +2,21 @@ import React, { useState } from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Badge } from '@/src/components/ui/badge';
 import { Edit, ChevronDown, ChevronRight, Volume2, List, ChevronUp } from 'lucide-react';
-import { Word } from '@/src/types/admin-vocabulary';
+import { VocabularyWordWithId } from '@/src/types/vocabulary-new';
 import { DeclensionTable } from './tables/DeclensionTable';
 import { AdjectiveDeclensionTable } from './tables/AdjectiveDeclensionTable';
 import { ConjugationTable } from './tables/ConjugationTable';
-import { getWordTypeColor } from '@/src/utils/vocabUtils';
+import {
+  getWordTypeColor,
+  hasConjugationTable,
+  hasDeclensionTable,
+  hasAdjectiveDeclensionTable,
+  TABLE_TYPES,
+} from '@/src/utils/vocabUtils';
 
 interface WordCardProps {
-  word: Word;
-  onEdit: (word: Word) => void;
+  word: VocabularyWordWithId;
+  onEdit: (word: VocabularyWordWithId) => void;
   isLast?: boolean;
 }
 
@@ -76,7 +82,10 @@ export const WordCard: React.FC<WordCardProps> = ({ word, onEdit, isLast = false
     return expandedTables.has(`${word.id}-${tableType}`);
   };
 
-  const hasTables = word.declensionTable || word.adjectiveDeclensionTable || word.conjugationTable;
+  const hasTables =
+    (hasDeclensionTable(word) && word.declension_table) ||
+    (hasAdjectiveDeclensionTable(word) && word.adjective_declension_table) ||
+    (hasConjugationTable(word) && word.conjugation_table);
 
   return (
     <div className={`bg-white hover:bg-gray-50 transition-colors ${!isLast ? 'border-b border-gray-200' : ''}`}>
@@ -93,19 +102,25 @@ export const WordCard: React.FC<WordCardProps> = ({ word, onEdit, isLast = false
           </button>
 
           <div className="flex items-center gap-2">
-            <Badge className={getWordTypeColor(word.wordType)} shrink-0>
-              {word.wordType}
+            <Badge className={getWordTypeColor(word.part_of_speech)} shrink-0>
+              {word.part_of_speech}
             </Badge>
 
-            {word.declensionClass && (
+            {word.part_of_speech === 'noun' && word.declension && (
               <Badge variant="outline" className="text-xs">
-                {word.declensionClass}
+                Declension {word.declension}
               </Badge>
             )}
 
-            {word.conjugationClass && (
+            {word.part_of_speech === 'verb' && word.conjugation && (
               <Badge variant="outline" className="text-xs">
-                {word.conjugationClass}
+                Conjugation {word.conjugation}
+              </Badge>
+            )}
+
+            {word.part_of_speech === 'adjective' && word.declension && (
+              <Badge variant="outline" className="text-xs">
+                Declension {word.declension}
               </Badge>
             )}
           </div>
@@ -139,14 +154,9 @@ export const WordCard: React.FC<WordCardProps> = ({ word, onEdit, isLast = false
       {isExpanded && (
         <div className="px-4 pb-4 pt-0 border-t border-gray-100">
           <div className="space-y-4 mt-3">
-            {/* Basic info in a simple grid */}
             <div className="text-sm space-y-2">
-              {word.grammaticalInfo && (
-                <div className="text-blue-700 font-medium bg-blue-50 p-2 rounded">{word.grammaticalInfo}</div>
-              )}
-
               <div className="flex flex-wrap gap-x-6 gap-y-1 text-gray-600">
-                {word.gender && (
+                {word.part_of_speech === 'noun' && word.gender && (
                   <span>
                     <strong>Gender:</strong> {word.gender}
                   </span>
@@ -156,24 +166,33 @@ export const WordCard: React.FC<WordCardProps> = ({ word, onEdit, isLast = false
                     <strong>Pronunciation:</strong> {word.pronunciation}
                   </span>
                 )}
-                {word.declensionClass && (
+                {word.part_of_speech === 'noun' && word.declension && (
                   <span>
-                    <strong>Declension:</strong> {word.declensionClass}
+                    <strong>Declension:</strong> {word.declension}
                   </span>
                 )}
-                {word.conjugationClass && (
+                {word.part_of_speech === 'verb' && word.conjugation && (
                   <span>
-                    <strong>Conjugation:</strong> {word.conjugationClass}
+                    <strong>Conjugation:</strong> {word.conjugation}
+                  </span>
+                )}
+                {word.part_of_speech === 'adjective' && word.declension && (
+                  <span>
+                    <strong>Declension:</strong> {word.declension}
+                  </span>
+                )}
+                {word.part_of_speech === 'verb' && word.is_deponent && (
+                  <span>
+                    <strong>Deponent:</strong> Yes
                   </span>
                 )}
               </div>
             </div>
 
-            {/* Principal parts as simple badges */}
-            {word.principalParts && word.principalParts.length > 0 && (
+            {word.principal_parts && word.principal_parts.length > 0 && (
               <div>
                 <span className="text-sm font-medium text-gray-700 mr-2">Principal Parts:</span>
-                {word.principalParts.map((part, idx) => (
+                {word.principal_parts.map((part, idx) => (
                   <Badge key={idx} variant="secondary" className="mr-1 text-xs">
                     {part}
                   </Badge>
@@ -194,30 +213,29 @@ export const WordCard: React.FC<WordCardProps> = ({ word, onEdit, isLast = false
               </div>
             )}
 
-            {/* Tables section */}
             {hasTables && (
               <div className="border-t pt-3 mt-4">
-                {word.declensionTable && (
+                {hasDeclensionTable(word) && word.declension_table && (
                   <DeclensionTable
                     word={word}
-                    isExpanded={isTableExpanded('declension')}
-                    onToggle={() => toggleTableExpansion('declension')}
+                    isExpanded={isTableExpanded(TABLE_TYPES.DECLENSION)}
+                    onToggle={() => toggleTableExpansion(TABLE_TYPES.DECLENSION)}
                   />
                 )}
 
-                {word.adjectiveDeclensionTable && (
+                {hasAdjectiveDeclensionTable(word) && word.adjective_declension_table && (
                   <AdjectiveDeclensionTable
                     word={word}
-                    isExpanded={isTableExpanded('adjective-declension')}
-                    onToggle={() => toggleTableExpansion('adjective-declension')}
+                    isExpanded={isTableExpanded(TABLE_TYPES.ADJECTIVE_DECLENSION)}
+                    onToggle={() => toggleTableExpansion(TABLE_TYPES.ADJECTIVE_DECLENSION)}
                   />
                 )}
 
-                {word.conjugationTable && (
+                {hasConjugationTable(word) && word.conjugation_table && (
                   <ConjugationTable
                     word={word}
-                    isExpanded={isTableExpanded('conjugation')}
-                    onToggle={() => toggleTableExpansion('conjugation')}
+                    isExpanded={isTableExpanded(TABLE_TYPES.CONJUGATION)}
+                    onToggle={() => toggleTableExpansion(TABLE_TYPES.CONJUGATION)}
                   />
                 )}
               </div>

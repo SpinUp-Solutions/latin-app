@@ -1,6 +1,20 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
-import { Word, WordsResponse } from '@/src/types/admin-vocabulary';
+import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary-new';
 import { createAuthenticatedBaseQuery } from './baseQuery';
+
+interface WordsResponse {
+  success: boolean;
+  data: {
+    words: VocabularyWordWithId[];
+    hasMore: boolean;
+    lastWordId: string | null;
+    wordTypeCounts?: Record<string, number>;
+    filters: {
+      wordType?: string;
+      search?: string;
+    };
+  };
+}
 
 export const vocabularyApi = createApi({
   reducerPath: 'vocabularyApi',
@@ -12,20 +26,18 @@ export const vocabularyApi = createApi({
   refetchOnReconnect: true,
   endpoints: builder => ({
     getWords: builder.query<
-      { words: Word[]; hasMore: boolean; lastWordId: string | null },
+      { words: VocabularyWordWithId[]; hasMore: boolean; lastWordId: string | null },
       {
         wordType?: string;
-        section?: string;
         search?: string;
         limit?: number;
         lastWordId?: string | null;
       }
     >({
-      query: ({ wordType, section, search, limit = 20, lastWordId }) => {
+      query: ({ wordType, search, limit = 20, lastWordId }) => {
         const params = new URLSearchParams({ limit: limit.toString() });
 
         if (wordType && wordType !== 'all') params.append('wordType', wordType);
-        if (section && section !== 'all') params.append('section', section);
         if (search) params.append('search', search);
         if (lastWordId) params.append('lastWordId', lastWordId);
 
@@ -39,7 +51,6 @@ export const vocabularyApi = createApi({
       serializeQueryArgs: ({ queryArgs }) => {
         return {
           wordType: queryArgs.wordType,
-          section: queryArgs.section,
           search: queryArgs.search,
         };
       },
@@ -47,9 +58,18 @@ export const vocabularyApi = createApi({
         if (!arg.lastWordId) {
           return newData;
         }
+
+        const existingWords = new Map(currentCache.words.map(w => [w.id, w]));
+
+        newData.words.forEach(word => {
+          existingWords.set(word.id, word);
+        });
+
         return {
           ...newData,
-          words: [...currentCache.words, ...newData.words],
+          words: Array.from(existingWords.values()),
+          hasMore: newData.hasMore,
+          lastWordId: newData.lastWordId,
         };
       },
       forceRefetch: ({ currentArg, previousArg }) => {
@@ -67,32 +87,68 @@ export const vocabularyApi = createApi({
       providesTags: [{ type: 'WordCounts', id: 'COUNTS' }],
     }),
 
-    getWordById: builder.query<Word, string>({
+    getWordById: builder.query<VocabularyWordWithId, string>({
       query: wordId => `/admin/words/${wordId}`,
-      transformResponse: (response: { success: boolean; data: { word: Word } }) => response.data.word,
+      transformResponse: (response: { success: boolean; data: { word: VocabularyWordWithId } }) => response.data.word,
       providesTags: (result, error, wordId) => [{ type: 'Word', id: wordId }],
     }),
 
-    updateWord: builder.mutation<Word, { wordId: string; updates: Partial<Word> }>({
+    updateWord: builder.mutation<VocabularyWordWithId, { wordId: string; updates: Partial<VocabularyWord> }>({
       query: ({ wordId, updates }) => ({
         url: '/admin/words',
         method: 'PUT',
         body: { wordId, updates },
       }),
-      transformResponse: (response: { success: boolean; updatedData: Word }) => response.updatedData,
+      transformResponse: (response: { success: boolean; updatedData: VocabularyWordWithId }) => response.updatedData,
+      async onQueryStarted({ wordId, updates }, { dispatch, queryFulfilled, getState }) {
+        const patchResults: { undo: () => void }[] = [];
+
+        const state = getState() as {
+          vocabularyApi?: { queries?: Record<string, { data?: { words?: VocabularyWordWithId[] } }> };
+        };
+        const cachedQueries = state.vocabularyApi?.queries || {};
+
+        Object.entries(cachedQueries).forEach(([key, value]) => {
+          if (key.startsWith('getWords') && value?.data?.words) {
+            const argsMatch = key.match(/getWords\((.*)\)/);
+            if (argsMatch) {
+              try {
+                const originalArgs = JSON.parse(argsMatch[1]);
+                const patchResult = dispatch(
+                  vocabularyApi.util.updateQueryData('getWords', originalArgs, draft => {
+                    const word = draft.words.find(w => w.id === wordId);
+                    if (word) {
+                      Object.assign(word, updates);
+                    }
+                  })
+                );
+                patchResults.push(patchResult);
+              } catch (e) {
+                console.error('Error parsing query args:', e);
+              }
+            }
+          }
+        });
+
+        try {
+          await queryFulfilled;
+        } catch {
+          patchResults.forEach(patch => patch.undo());
+        }
+      },
       invalidatesTags: (result, error, { wordId }) => [
         { type: 'Word', id: wordId },
         { type: 'WordList', id: 'LIST' },
       ],
     }),
 
-    createWord: builder.mutation<Word, Omit<Word, 'id' | 'createdAt' | 'updatedAt'>>({
+    createWord: builder.mutation<VocabularyWordWithId, Omit<VocabularyWord, 'createdAt' | 'updatedAt'>>({
       query: wordData => ({
         url: '/admin/words',
         method: 'POST',
         body: wordData,
       }),
-      transformResponse: (response: { success: boolean; data: { word: Word } }) => response.data.word,
+      transformResponse: (response: { success: boolean; data: { word: VocabularyWordWithId } }) => response.data.word,
       invalidatesTags: [
         { type: 'WordList', id: 'LIST' },
         { type: 'WordCounts', id: 'COUNTS' },

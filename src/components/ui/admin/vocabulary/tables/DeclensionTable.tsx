@@ -7,13 +7,15 @@ import {
   RomanTableRow,
   RomanTableCell,
 } from '@/src/components/ui/core/roman-table';
-import { formatCellValue } from '@/src/utils/vocabUtils';
-import { EditableCell } from '../shared/EditableCell';
+import { TABLE_TYPES } from '@/src/utils/vocabUtils';
+import { TableCell } from '../shared/TableCell';
 import { TableToggleButton } from '../shared/TableToggleButton';
-import { BaseTableProps } from '@/src/types/admin-vocabulary';
-import SimpleRichDisplay from '../../../core/simple-rich-display';
+import { Noun, Pronoun } from '@/src/types/vocabulary-new';
+import { TableProps } from '@/src/types/table-props';
 
-export const DeclensionTable: React.FC<BaseTableProps> = ({
+export interface DeclensionTableProps extends TableProps<Noun | Pronoun> {}
+
+export const DeclensionTable: React.FC<DeclensionTableProps> = ({
   word,
   isExpanded,
   onToggle,
@@ -25,29 +27,9 @@ export const DeclensionTable: React.FC<BaseTableProps> = ({
   onCellEditCancel,
   onEditingCellValueChange,
 }) => {
-  const declensionTable = word.declensionTable;
+  const declensionTable = word.declension_table;
 
   if (!declensionTable || declensionTable.length === 0) return null;
-
-  const renderCell = (value: string[], rowIndex: number, cellKey: string) => {
-    if (isEditMode && onCellDoubleClick && onCellEditSave && onCellEditCancel && onEditingCellValueChange) {
-      return (
-        <EditableCell
-          value={value}
-          rowIndex={rowIndex}
-          cellKey={cellKey}
-          tableType="declension"
-          editingCell={editingCell || null}
-          editingCellValue={editingCellValue}
-          onCellDoubleClick={onCellDoubleClick}
-          onCellEditSave={onCellEditSave}
-          onCellEditCancel={onCellEditCancel}
-          onEditingCellValueChange={onEditingCellValueChange}
-        />
-      );
-    }
-    return <SimpleRichDisplay content={formatCellValue(value) || '—'} />;
-  };
 
   return (
     <div className="mt-4 border-t pt-4">
@@ -66,8 +48,36 @@ export const DeclensionTable: React.FC<BaseTableProps> = ({
               {declensionTable.map((row, index) => (
                 <RomanTableRow key={index} className="hover:bg-gray-50">
                   <RomanTableCell className="font-medium bg-gray-50">{row.case}</RomanTableCell>
-                  <RomanTableCell className="min-w-32">{renderCell(row.singular, index, 'singular')}</RomanTableCell>
-                  <RomanTableCell className="min-w-32">{renderCell(row.plural, index, 'plural')}</RomanTableCell>
+                  <RomanTableCell className="min-w-32">
+                    <TableCell
+                      value={row.singular}
+                      rowIndex={index}
+                      cellKey="singular"
+                      tableType={TABLE_TYPES.DECLENSION}
+                      isEditMode={isEditMode}
+                      editingCell={editingCell}
+                      editingCellValue={editingCellValue}
+                      onCellDoubleClick={onCellDoubleClick}
+                      onCellEditSave={onCellEditSave}
+                      onCellEditCancel={onCellEditCancel}
+                      onEditingCellValueChange={onEditingCellValueChange}
+                    />
+                  </RomanTableCell>
+                  <RomanTableCell className="min-w-32">
+                    <TableCell
+                      value={row.plural}
+                      rowIndex={index}
+                      cellKey="plural"
+                      tableType={TABLE_TYPES.DECLENSION}
+                      isEditMode={isEditMode}
+                      editingCell={editingCell}
+                      editingCellValue={editingCellValue}
+                      onCellDoubleClick={onCellDoubleClick}
+                      onCellEditSave={onCellEditSave}
+                      onCellEditCancel={onCellEditCancel}
+                      onEditingCellValueChange={onEditingCellValueChange}
+                    />
+                  </RomanTableCell>
                 </RomanTableRow>
               ))}
             </RomanTableBody>

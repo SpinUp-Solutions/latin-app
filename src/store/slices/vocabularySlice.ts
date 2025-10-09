@@ -3,7 +3,6 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 interface VocabularyState {
   filters: {
     wordType: string;
-    section: string;
     search: string;
   };
 }
@@ -11,7 +10,6 @@ interface VocabularyState {
 const initialState: VocabularyState = {
   filters: {
     wordType: 'all',
-    section: 'all',
     search: '',
   },
 };
