@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSelector, useDispatch } from 'react-redux';
 import { Button } from '@/src/components/ui/button';
-import { ArrowLeft, BookOpen, Plus } from 'lucide-react';
+import { ArrowLeft, BookOpen, Plus, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary-new';
 import {
@@ -174,6 +174,26 @@ function AdminVocabularyPage() {
     }
   };
 
+  const handleBackup = () => {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    const backup = {
+      timestamp: new Date().toISOString(),
+      exportDate: new Date().toLocaleString(),
+      totalWords: words.length,
+      words: words,
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `vocabulary-backup-${timestamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success('Backup downloaded successfully');
+  };
+
   const words = data?.words ?? [];
   const hasMore = data?.hasMore ?? false;
   const loadingMore = isFetching && lastWordId !== null;
@@ -202,6 +222,10 @@ function AdminVocabularyPage() {
             {words.length} words loaded
             {countsLoading && ' (loading counts...)'}
           </div>
+          <Button onClick={handleBackup} variant="outline" disabled={words.length === 0}>
+            <Download className="h-4 w-4 mr-2" />
+            Backup
+          </Button>
           <Button onClick={handleStartCreate} disabled={isCreating}>
             <Plus className="h-4 w-4 mr-2" />
             Add New Word
