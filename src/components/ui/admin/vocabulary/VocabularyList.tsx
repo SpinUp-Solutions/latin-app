@@ -12,6 +12,7 @@ interface VocabularyListProps {
   hasMore: boolean;
   onLoadMore: () => void;
   onSelectWord: (word: VocabularyWordWithId) => void;
+  onDeleteWord?: (word: VocabularyWordWithId) => void;
   selectedWordId?: string | null;
 }
 
@@ -68,6 +69,7 @@ export const VocabularyList: React.FC<VocabularyListProps> = ({
   hasMore,
   onLoadMore,
   onSelectWord,
+  onDeleteWord,
   selectedWordId,
 }) => {
   const sentinelRef = useInfiniteScroll({
@@ -102,6 +104,7 @@ export const VocabularyList: React.FC<VocabularyListProps> = ({
             key={word.id}
             word={word}
             onSelect={onSelectWord}
+            onDelete={onDeleteWord}
             isSelected={word.id === selectedWordId}
             isLast={index === words.length - 1}
           />

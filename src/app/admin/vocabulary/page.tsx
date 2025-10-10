@@ -12,6 +12,7 @@ import {
   useGetWordTypeCountsQuery,
   useUpdateWordMutation,
   useCreateWordMutation,
+  useDeleteWordMutation,
 } from '@/src/store/api/vocabularyApi';
 import {
   updateFilters as updateFiltersAction,
@@ -22,6 +23,7 @@ import { useDebounce } from '@/src/hooks/useDebounce';
 import { WordEditPanel } from '@/src/components/ui/admin/vocabulary/WordEditPanel';
 import { VocabularyFiltersComponent } from '@/src/components/ui/admin/vocabulary/VocabularyFilters';
 import { VocabularyList } from '@/src/components/ui/admin/vocabulary/VocabularyList';
+import { DeleteWordDialog } from '@/src/components/ui/admin/vocabulary/DeleteWordDialog';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 
 function AdminVocabularyPage() {
@@ -33,6 +35,8 @@ function AdminVocabularyPage() {
   const [lastWordId, setLastWordId] = useState<string | null>(null);
   const [selectedWordId, setSelectedWordId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [wordToDelete, setWordToDelete] = useState<VocabularyWordWithId | null>(null);
 
   const queryArgs = {
     wordType: filters.wordType,
@@ -44,6 +48,7 @@ function AdminVocabularyPage() {
   const { data: wordTypeCounts = {}, isLoading: countsLoading } = useGetWordTypeCountsQuery();
   const [updateWord, { isLoading: updating }] = useUpdateWordMutation();
   const [createWord, { isLoading: creating }] = useCreateWordMutation();
+  const [deleteWord, { isLoading: deleting }] = useDeleteWordMutation();
 
   useEffect(() => {
     setLastWordId(null);
@@ -147,6 +152,28 @@ function AdminVocabularyPage() {
     dispatch(resetFiltersAction());
   };
 
+  const handleDeleteClick = (word: VocabularyWordWithId) => {
+    setWordToDelete(word);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!wordToDelete) return;
+
+    try {
+      await deleteWord(wordToDelete.id).unwrap();
+      toast.success('Word deleted successfully');
+      setDeleteDialogOpen(false);
+      setWordToDelete(null);
+      if (selectedWordId === wordToDelete.id) {
+        setSelectedWordId(null);
+        setIsCreating(false);
+      }
+    } catch (error) {
+      toast.error('Error deleting word');
+    }
+  };
+
   const words = data?.words ?? [];
   const hasMore = data?.hasMore ?? false;
   const loadingMore = isFetching && lastWordId !== null;
@@ -203,6 +230,7 @@ function AdminVocabularyPage() {
               hasMore={hasMore}
               onLoadMore={handleLoadMore}
               onSelectWord={handleSelectWord}
+              onDeleteWord={handleDeleteClick}
               selectedWordId={selectedWordId}
             />
           </div>
@@ -211,10 +239,19 @@ function AdminVocabularyPage() {
         <WordEditPanel
           word={isCreating ? null : selectedWord}
           onSave={handleSaveOrCreate}
+          onDelete={selectedWord ? () => handleDeleteClick(selectedWord) : undefined}
           updating={updating || creating}
           createMode={isCreating}
         />
       </main>
+
+      <DeleteWordDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        wordName={wordToDelete?.word || ''}
+        onConfirm={handleDeleteConfirm}
+        isDeleting={deleting}
+      />
     </div>
   );
 }

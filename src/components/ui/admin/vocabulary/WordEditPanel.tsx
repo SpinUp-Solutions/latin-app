@@ -31,11 +31,12 @@ import { DeclensionTable } from './tables/DeclensionTable';
 import { AdjectiveDeclensionTable } from './tables/AdjectiveDeclensionTable';
 import { ConjugationTable as ConjugationTableComponent } from './tables/ConjugationTable';
 import { ArrayInputManager } from './ArrayInputManager';
-import { BookOpen, Plus } from 'lucide-react';
+import { BookOpen, Plus, Trash2 } from 'lucide-react';
 
 interface WordEditPanelProps {
   word: VocabularyWordWithId | null;
   onSave: (updates: Partial<VocabularyWord> | Omit<VocabularyWord, 'createdAt' | 'updatedAt'>) => Promise<boolean>;
+  onDelete?: () => void;
   updating: boolean;
   createMode?: boolean;
 }
@@ -77,7 +78,13 @@ const createArrayManager = <T,>(state: T[], setState: (items: T[]) => void) => (
   remove: (index: number) => setState(state.filter((_, i) => i !== index)),
 });
 
-export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, updating, createMode = false }) => {
+export const WordEditPanel: React.FC<WordEditPanelProps> = ({
+  word,
+  onSave,
+  onDelete,
+  updating,
+  createMode = false,
+}) => {
   const [editFormData, setEditFormData] = useState<EditFormData>({});
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
   const [editingCellValue, setEditingCellValue] = useState('');
@@ -256,9 +263,21 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
             </>
           )}
         </div>
-        <Button onClick={handleSave} disabled={updating} className="ml-4">
-          {updating ? (createMode ? 'Creating...' : 'Saving...') : createMode ? 'Create Word' : 'Apply'}
-        </Button>
+        <div className="flex items-center gap-2 ml-4">
+          {!createMode && onDelete && (
+            <Button
+              onClick={onDelete}
+              disabled={updating}
+              variant="outline"
+              className="border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700">
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete
+            </Button>
+          )}
+          <Button onClick={handleSave} disabled={updating}>
+            {updating ? (createMode ? 'Creating...' : 'Saving...') : createMode ? 'Create Word' : 'Apply'}
+          </Button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-4">

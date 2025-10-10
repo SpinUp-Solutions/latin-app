@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Badge } from '@/src/components/ui/badge';
-import { ChevronDown, ChevronRight, Volume2, List, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronRight, Volume2, List, ChevronUp, Trash2 } from 'lucide-react';
 import { VocabularyWordWithId } from '@/src/types/vocabulary-new';
 import { DeclensionTable } from './tables/DeclensionTable';
 import { AdjectiveDeclensionTable } from './tables/AdjectiveDeclensionTable';
@@ -17,6 +17,7 @@ import {
 interface WordCardProps {
   word: VocabularyWordWithId;
   onSelect: (word: VocabularyWordWithId) => void;
+  onDelete?: (word: VocabularyWordWithId) => void;
   isSelected?: boolean;
   isLast?: boolean;
 }
@@ -62,7 +63,7 @@ const ExpandableDefinitions: React.FC<{ definitions: string[] }> = ({ definition
   );
 };
 
-export const WordCard: React.FC<WordCardProps> = ({ word, onSelect, isSelected = false, isLast = false }) => {
+export const WordCard: React.FC<WordCardProps> = ({ word, onSelect, onDelete, isSelected = false, isLast = false }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [expandedTables, setExpandedTables] = useState<Set<string>>(new Set());
 
@@ -150,6 +151,19 @@ export const WordCard: React.FC<WordCardProps> = ({ word, onSelect, isSelected =
               className="h-8 w-8 p-0 text-gray-500 hover:text-gray-700"
               title={`Pronunciation: ${word.pronunciation}`}>
               <Volume2 className="h-4 w-4" />
+            </Button>
+          )}
+          {onDelete && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={e => {
+                e.stopPropagation();
+                onDelete(word);
+              }}
+              className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+              title="Delete word">
+              <Trash2 className="h-4 w-4" />
             </Button>
           )}
         </div>
