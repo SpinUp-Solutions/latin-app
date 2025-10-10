@@ -4,10 +4,15 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSelector, useDispatch } from 'react-redux';
 import { Button } from '@/src/components/ui/button';
-import { ArrowLeft, BookOpen } from 'lucide-react';
+import { ArrowLeft, BookOpen, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary-new';
-import { useGetWordsQuery, useGetWordTypeCountsQuery, useUpdateWordMutation } from '@/src/store/api/vocabularyApi';
+import {
+  useGetWordsQuery,
+  useGetWordTypeCountsQuery,
+  useUpdateWordMutation,
+  useCreateWordMutation,
+} from '@/src/store/api/vocabularyApi';
 import {
   updateFilters as updateFiltersAction,
   resetFilters as resetFiltersAction,
@@ -27,6 +32,7 @@ function AdminVocabularyPage() {
 
   const [lastWordId, setLastWordId] = useState<string | null>(null);
   const [selectedWordId, setSelectedWordId] = useState<string | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
 
   const queryArgs = {
     wordType: filters.wordType,
@@ -37,6 +43,7 @@ function AdminVocabularyPage() {
   const { data, isLoading, isFetching } = useGetWordsQuery(queryArgs);
   const { data: wordTypeCounts = {}, isLoading: countsLoading } = useGetWordTypeCountsQuery();
   const [updateWord, { isLoading: updating }] = useUpdateWordMutation();
+  const [createWord, { isLoading: creating }] = useCreateWordMutation();
 
   useEffect(() => {
     setLastWordId(null);
@@ -77,28 +84,49 @@ function AdminVocabularyPage() {
 
   const handleSelectWord = (word: VocabularyWordWithId) => {
     setSelectedWordId(word.id);
+    setIsCreating(false);
   };
 
-  const handleUpdateWord = async (updates: Partial<VocabularyWord>) => {
-    if (!selectedWordId) return false;
+  const handleSaveOrCreate = async (
+    updates: Partial<VocabularyWord> | Omit<VocabularyWord, 'createdAt' | 'updatedAt'>
+  ) => {
+    if (isCreating) {
+      try {
+        const newWord = await createWord(updates as Omit<VocabularyWord, 'createdAt' | 'updatedAt'>).unwrap();
+        toast.success('Word created successfully');
+        setIsCreating(false);
+        setSelectedWordId(newWord.id);
+        return true;
+      } catch (error) {
+        toast.error('Error creating word');
+        return false;
+      }
+    } else {
+      if (!selectedWordId) return false;
 
-    try {
-      const cleanedUpdates = Object.fromEntries(
-        Object.entries(updates).filter(([, value]) => {
-          if (value === undefined || value === null) return false;
-          if (typeof value === 'string' && value.trim() === '') return false;
-          if (Array.isArray(value) && value.length === 0) return false;
-          return true;
-        })
-      );
+      try {
+        const cleanedUpdates = Object.fromEntries(
+          Object.entries(updates).filter(([, value]) => {
+            if (value === undefined || value === null) return false;
+            if (typeof value === 'string' && value.trim() === '') return false;
+            if (Array.isArray(value) && value.length === 0) return false;
+            return true;
+          })
+        );
 
-      await updateWord({ wordId: selectedWordId, updates: cleanedUpdates }).unwrap();
-      toast.success('Word updated successfully');
-      return true;
-    } catch (error) {
-      toast.error('Error updating word');
-      return false;
+        await updateWord({ wordId: selectedWordId, updates: cleanedUpdates }).unwrap();
+        toast.success('Word updated successfully');
+        return true;
+      } catch (error) {
+        toast.error('Error updating word');
+        return false;
+      }
     }
+  };
+
+  const handleStartCreate = () => {
+    setIsCreating(true);
+    setSelectedWordId(null);
   };
 
   const handleSearch = (e: React.FormEvent) => {
@@ -142,9 +170,15 @@ function AdminVocabularyPage() {
             </div>
           </div>
         </div>
-        <div className="text-sm text-roman-stone">
-          {words.length} words loaded
-          {countsLoading && ' (loading counts...)'}
+        <div className="flex items-center gap-4">
+          <div className="text-sm text-roman-stone">
+            {words.length} words loaded
+            {countsLoading && ' (loading counts...)'}
+          </div>
+          <Button onClick={handleStartCreate} disabled={isCreating}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add New Word
+          </Button>
         </div>
       </header>
 
@@ -174,7 +208,12 @@ function AdminVocabularyPage() {
           </div>
         </div>
 
-        <WordEditPanel word={selectedWord} onSave={handleUpdateWord} updating={updating} />
+        <WordEditPanel
+          word={isCreating ? null : selectedWord}
+          onSave={handleSaveOrCreate}
+          updating={updating || creating}
+          createMode={isCreating}
+        />
       </main>
     </div>
   );

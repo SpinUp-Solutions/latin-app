@@ -76,6 +76,67 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 }
 
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  try {
+    const wordData = await request.json();
+
+    if (!wordData.word || !wordData.part_of_speech || !wordData.translation) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'word, part_of_speech, and translation are required',
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!wordData.definitions || wordData.definitions.length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'At least one definition is required',
+        },
+        { status: 400 }
+      );
+    }
+
+    console.log('Creating new word:', wordData.word);
+    console.log('Word data:', JSON.stringify(wordData, null, 2));
+
+    const newWordData = {
+      ...wordData,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const docRef = await adminDb.collection('vocabulary_words').add(newWordData);
+
+    console.log(`Word created successfully with ID: ${docRef.id}`);
+
+    const createdDoc = await docRef.get();
+    const createdWord = {
+      id: docRef.id,
+      ...createdDoc.data(),
+    };
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        word: createdWord,
+      },
+    });
+  } catch (error) {
+    console.error('Error creating word:', error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+      },
+      { status: 500 }
+    );
+  }
+}
+
 export async function PUT(request: NextRequest): Promise<NextResponse> {
   try {
     const { wordId, updates } = await request.json();

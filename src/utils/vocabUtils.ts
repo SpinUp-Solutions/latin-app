@@ -1,4 +1,13 @@
-import { VocabularyWord, Noun, Verb, Adjective, Pronoun } from '@/src/types/vocabulary-new';
+import {
+  VocabularyWord,
+  Noun,
+  Verb,
+  Adjective,
+  Pronoun,
+  DeclensionTableRow,
+  AdjectiveDeclensionTableRow,
+  ConjugationTable,
+} from '@/src/types/vocabulary-new';
 
 export const TABLE_TYPES = {
   DECLENSION: 'declension',
@@ -80,6 +89,76 @@ export function hasDeclensionTable(word: VocabularyWord): word is Noun | Pronoun
 export function hasAdjectiveDeclensionTable(word: VocabularyWord): word is Adjective {
   return word.part_of_speech === 'adjective';
 }
+
+export const initializeDeclensionTable = (): DeclensionTableRow[] => {
+  return LATIN_CASES.map(caseName => ({
+    case: caseName.toLowerCase(),
+    singular: [],
+    plural: [],
+  }));
+};
+
+export const initializeAdjectiveDeclensionTable = (): AdjectiveDeclensionTableRow[] => {
+  return LATIN_CASES.map(caseName => ({
+    case: caseName.toLowerCase(),
+    masculine: { singular: [], plural: [] },
+    feminine: { singular: [], plural: [] },
+    neuter: { singular: [], plural: [] },
+  }));
+};
+
+export const initializeConjugationTable = (): ConjugationTable => {
+  const createPersonObject = () => ({
+    singular: { first: [], second: [], third: [] },
+    plural: { first: [], second: [], third: [] },
+  });
+
+  const indicativeActive: Record<string, ReturnType<typeof createPersonObject>> = {};
+  const indicativePassive: Record<string, ReturnType<typeof createPersonObject>> = {};
+  const subjunctiveActive: Record<string, ReturnType<typeof createPersonObject>> = {};
+  const subjunctivePassive: Record<string, ReturnType<typeof createPersonObject>> = {};
+
+  INDICATIVE_TENSES.forEach(tense => {
+    indicativeActive[tense] = createPersonObject();
+    indicativePassive[tense] = createPersonObject();
+  });
+
+  SUBJUNCTIVE_TENSES.forEach(tense => {
+    subjunctiveActive[tense] = createPersonObject();
+    subjunctivePassive[tense] = createPersonObject();
+  });
+
+  const imperative: Record<string, string[]> = {};
+  IMPERATIVE_FORMS.forEach(form => {
+    imperative[form] = [];
+  });
+
+  const infinitive: Record<string, string[]> = {};
+  INFINITIVE_FORMS.forEach(form => {
+    infinitive[form] = [];
+  });
+
+  const participle: Record<string, string[]> = {};
+  PARTICIPLE_FORMS.forEach(form => {
+    participle[form] = [];
+  });
+
+  return {
+    indicative: {
+      active: indicativeActive,
+      passive: indicativePassive,
+    },
+    subjunctive: {
+      active: subjunctiveActive,
+      passive: subjunctivePassive,
+    },
+    imperative,
+    nonFinite: {
+      infinitive,
+      participle,
+    },
+  };
+};
 
 export const updateTableCell = (
   formData: Partial<VocabularyWord & { id: string }>,

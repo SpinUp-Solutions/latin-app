@@ -8,7 +8,7 @@ export interface BaseWord {
   etymology?: string;
   pronunciation?: string;
   principal_parts?: string[];
-  type: 'core';
+  type: string;
   alternate_form?: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -104,7 +104,7 @@ export interface ConjugationTable {
 export interface Noun extends BaseWord {
   part_of_speech: 'noun';
   gender?: 'masculine' | 'feminine' | 'neuter';
-  declension: '1' | '2' | '3' | '4-istem' | '4' | '5';
+  declension: '1' | '2' | '3' | '3-istem' | '4' | '5';
   declension_table?: DeclensionTableRow[];
 }
 
