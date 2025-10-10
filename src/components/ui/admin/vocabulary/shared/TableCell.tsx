@@ -1,7 +1,6 @@
 import React from 'react';
 import { EditingCell } from '@/src/types/admin-vocabulary';
 import { formatCellValue } from '@/src/utils/vocabUtils';
-import SimpleRichDisplay from '../../../core/simple-rich-display';
 import { EditableCell } from './EditableCell';
 
 interface TableCellProps {
@@ -50,5 +49,5 @@ export const TableCell: React.FC<TableCellProps> = ({
     );
   }
 
-  return <SimpleRichDisplay content={formatCellValue(cellValue) || '—'} />;
+  return <span>{formatCellValue(cellValue) || '—'}</span>;
 };

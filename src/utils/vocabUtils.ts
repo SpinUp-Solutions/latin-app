@@ -6,6 +6,13 @@ export const TABLE_TYPES = {
   CONJUGATION: 'conjugation',
 } as const;
 
+export const LATIN_CASES = ['Nominative', 'Genitive', 'Dative', 'Accusative', 'Ablative', 'Vocative'];
+export const INDICATIVE_TENSES = ['present', 'imperfect', 'future', 'perfect', 'pluperfect', 'future_perfect'];
+export const SUBJUNCTIVE_TENSES = ['present', 'imperfect', 'perfect', 'pluperfect'];
+export const IMPERATIVE_FORMS = ['present', 'future'];
+export const INFINITIVE_FORMS = ['present', 'perfect', 'future'];
+export const PARTICIPLE_FORMS = ['present', 'perfect', 'future', 'gerundive'];
+
 export type TableType = (typeof TABLE_TYPES)[keyof typeof TABLE_TYPES];
 
 export const getWordTypeColor = (wordType: string): string => {

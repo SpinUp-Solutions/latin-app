@@ -11,7 +11,8 @@ interface VocabularyListProps {
   loadingMore: boolean;
   hasMore: boolean;
   onLoadMore: () => void;
-  onEditWord: (word: VocabularyWordWithId) => void;
+  onSelectWord: (word: VocabularyWordWithId) => void;
+  selectedWordId?: string | null;
 }
 
 const LoadingSpinner: React.FC = () => (
@@ -66,12 +67,14 @@ export const VocabularyList: React.FC<VocabularyListProps> = ({
   loadingMore,
   hasMore,
   onLoadMore,
-  onEditWord,
+  onSelectWord,
+  selectedWordId,
 }) => {
   const sentinelRef = useInfiniteScroll({
     onLoadMore,
     hasMore,
     loading: loadingMore,
+    rootMargin: '500px',
   });
 
   if (loading) {
@@ -95,7 +98,13 @@ export const VocabularyList: React.FC<VocabularyListProps> = ({
       {/* Words list */}
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
         {words.map((word, index) => (
-          <WordCard key={word.id} word={word} onEdit={onEditWord} isLast={index === words.length - 1} />
+          <WordCard
+            key={word.id}
+            word={word}
+            onSelect={onSelectWord}
+            isSelected={word.id === selectedWordId}
+            isLast={index === words.length - 1}
+          />
         ))}
 
         <InfiniteScrollSentinel sentinelRef={sentinelRef} loadingMore={loadingMore} hasMore={hasMore} />

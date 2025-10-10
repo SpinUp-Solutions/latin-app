@@ -91,12 +91,13 @@ export const VocabularyFiltersComponent: React.FC<VocabularyFiltersProps> = ({
             </form>
           </div>
 
-          <div className="flex items-end">
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-gray-700 opacity-0">Actions</Label>
             <Button
               variant="outline"
               size="sm"
               onClick={onReset}
-              className={`flex items-center gap-2 transition-all ${
+              className={`flex items-center gap-2 transition-all w-full ${
                 hasActiveFilters
                   ? 'opacity-100 hover:bg-red-50 hover:border-red-200 hover:text-red-600'
                   : 'opacity-50 cursor-not-allowed'
