@@ -12,6 +12,7 @@ import {
   hasDeclensionTable,
   hasAdjectiveDeclensionTable,
   TABLE_TYPES,
+  isVerb,
 } from '@/src/utils/vocabUtils';
 
 interface WordCardProps {
@@ -194,12 +195,12 @@ export const WordCard: React.FC<WordCardProps> = ({ word, onSelect, isSelected =
               </div>
             </div>
 
-            {word.principal_parts && word.principal_parts.length > 0 && (
+            {isVerb(word) && Array.isArray(word.principal_parts) && word.principal_parts.length > 0 && (
               <div>
                 <span className="text-sm font-medium text-gray-700 mr-2">Principal Parts:</span>
                 {word.principal_parts.map((part, idx) => (
                   <Badge key={idx} variant="secondary" className="mr-1 text-xs">
-                    {part}
+                    {part.full_form || part.shortened_form}
                   </Badge>
                 ))}
               </div>

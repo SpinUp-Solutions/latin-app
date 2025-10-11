@@ -1,12 +1,12 @@
-export * from './enums';
-export * from './declension';
-export * from './verb-conjugation';
-export * from './word-form';
-export * from './base-word';
-export * from './noun';
-export * from './verb';
-export * from './pronoun';
-export * from './adjective';
-export * from './indeclinable-words';
+export * from './schemas/enums';
+export * from './schemas/declension';
+export * from './schemas/verb-conjugation';
+export * from './schemas/word-form';
+export * from './schemas/base-word';
+export * from './schemas/noun';
+export * from './schemas/verb';
+export * from './schemas/pronoun';
+export * from './schemas/adjective';
+export * from './schemas/indeclinable-words';
 
 export type { VocabularyWord, VocabularyWordWithId } from './vocabulary-new';

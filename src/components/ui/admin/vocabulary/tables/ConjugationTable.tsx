@@ -6,7 +6,6 @@ import {
   RomanTableRow,
   RomanTableCell,
 } from '@/src/components/ui/core/roman-table';
-import type { ConjugationTable as ConjugationTableType } from '@/src/types/vocabulary/verb-conjugation';
 import React from 'react';
 import { TABLE_TYPES } from '@/src/utils/vocabUtils';
 import { TableCell } from '../shared/TableCell';
@@ -40,7 +39,6 @@ export const ConjugationTable: React.FC<TableProps<Verb>> = ({
   const renderTenseSection = (
     mood: 'indicative' | 'subjunctive',
     voice: Voice,
-    moodData: NonNullable<ConjugationTableType['indicative'] | ConjugationTableType['subjunctive']> | undefined,
     tenses: IndicativeTense[] | SubjunctiveTense[]
   ) => {
     const voiceColor = voice === Voice.Active ? 'text-green-700 border-green-200' : 'text-blue-700 border-blue-200';
@@ -98,7 +96,7 @@ export const ConjugationTable: React.FC<TableProps<Verb>> = ({
 
   const renderSimpleSection = (
     title: string,
-    data: Record<string, string[]> | undefined,
+    data: Record<string, string[] | null | undefined> | null | undefined,
     keyPrefix: string,
     color: string,
     forms: InfinitiveForm[]
@@ -116,7 +114,7 @@ export const ConjugationTable: React.FC<TableProps<Verb>> = ({
             </RomanTableHeader>
             <RomanTableBody>
               {forms.map(form => {
-                const formValue = data?.[form];
+                const formValue = data?.[form] ?? undefined;
                 return (
                   <RomanTableRow key={form} className="hover:bg-gray-50">
                     <RomanTableCell className="font-medium bg-gray-50 capitalize">{form}</RomanTableCell>
@@ -254,34 +252,14 @@ export const ConjugationTable: React.FC<TableProps<Verb>> = ({
         <div className="mt-4 space-y-6">
           <div className="bg-gray-50 p-4 rounded-lg">
             <h4 className="font-semibold text-roman-stone mb-4 text-lg border-b pb-2">Indicative Mood</h4>
-            {renderTenseSection(
-              'indicative',
-              Voice.Active,
-              conjugationTable?.indicative,
-              VERB_STRUCTURE.conjugationTable.indicative.tenses
-            )}
-            {renderTenseSection(
-              'indicative',
-              Voice.Passive,
-              conjugationTable?.indicative,
-              VERB_STRUCTURE.conjugationTable.indicative.tenses
-            )}
+            {renderTenseSection('indicative', Voice.Active, VERB_STRUCTURE.conjugationTable.indicative.tenses)}
+            {renderTenseSection('indicative', Voice.Passive, VERB_STRUCTURE.conjugationTable.indicative.tenses)}
           </div>
 
           <div className="bg-gray-50 p-4 rounded-lg">
             <h4 className="font-semibold text-roman-stone mb-4 text-lg border-b pb-2">Subjunctive Mood</h4>
-            {renderTenseSection(
-              'subjunctive',
-              Voice.Active,
-              conjugationTable?.subjunctive,
-              VERB_STRUCTURE.conjugationTable.subjunctive.tenses
-            )}
-            {renderTenseSection(
-              'subjunctive',
-              Voice.Passive,
-              conjugationTable?.subjunctive,
-              VERB_STRUCTURE.conjugationTable.subjunctive.tenses
-            )}
+            {renderTenseSection('subjunctive', Voice.Active, VERB_STRUCTURE.conjugationTable.subjunctive.tenses)}
+            {renderTenseSection('subjunctive', Voice.Passive, VERB_STRUCTURE.conjugationTable.subjunctive.tenses)}
           </div>
 
           {renderImperativeSection()}
