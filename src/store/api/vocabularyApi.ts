@@ -1,6 +1,8 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
-import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary-new';
+import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary/vocabulary-new';
 import { createAuthenticatedBaseQuery } from './baseQuery';
+import { VocabularyWordWithIdSchema } from '@/src/types/vocabulary/schemas';
+import { ZodError, ZodIssue } from 'zod';
 
 interface WordsResponse {
   success: boolean;
@@ -13,6 +15,7 @@ interface WordsResponse {
       wordType?: string;
       search?: string;
     };
+    collection?: string;
   };
 }
 
@@ -32,26 +35,37 @@ export const vocabularyApi = createApi({
         search?: string;
         limit?: number;
         lastWordId?: string | null;
+        collection?: string;
       }
     >({
-      query: ({ wordType, search, limit = 20, lastWordId }) => {
+      query: ({ wordType, search, limit = 20, lastWordId, collection = 'vocabulary_words_v2' }) => {
         const params = new URLSearchParams({ limit: limit.toString() });
 
         if (wordType && wordType !== 'all') params.append('wordType', wordType);
         if (search) params.append('search', search);
         if (lastWordId) params.append('lastWordId', lastWordId);
+        if (collection) params.append('collection', collection);
 
         return `/admin/words?${params}`;
       },
-      transformResponse: (response: WordsResponse) => ({
-        words: response.data.words,
-        hasMore: response.data.hasMore,
-        lastWordId: response.data.lastWordId,
-      }),
+      transformResponse: (response: WordsResponse) => {
+        const validatedWords = response.data.words.flatMap((word: unknown) => {
+          const result = VocabularyWordWithIdSchema.safeParse(word);
+          if (result.success) return [result.data as VocabularyWordWithId];
+          console.warn('Vocabulary validation skipped invalid item:', result.error.issues);
+          return [] as VocabularyWordWithId[];
+        });
+        return {
+          words: validatedWords,
+          hasMore: response.data.hasMore,
+          lastWordId: response.data.lastWordId,
+        };
+      },
       serializeQueryArgs: ({ queryArgs }) => {
         return {
           wordType: queryArgs.wordType,
           search: queryArgs.search,
+          collection: queryArgs.collection || 'vocabulary_words_v2',
         };
       },
       merge: (currentCache, newData, { arg }) => {
@@ -81,25 +95,53 @@ export const vocabularyApi = createApi({
           : [{ type: 'WordList', id: 'LIST' }],
     }),
 
-    getWordTypeCounts: builder.query<Record<string, number>, void>({
-      query: () => '/admin/words?countsOnly=true',
+    getWordTypeCounts: builder.query<Record<string, number>, { collection?: string } | void>({
+      query: arg => {
+        const collection = arg?.collection || 'vocabulary_words_v2';
+        return `/admin/words?countsOnly=true&collection=${encodeURIComponent(collection)}`;
+      },
       transformResponse: (response: WordsResponse) => response.data.wordTypeCounts || {},
       providesTags: [{ type: 'WordCounts', id: 'COUNTS' }],
     }),
 
     getWordById: builder.query<VocabularyWordWithId, string>({
       query: wordId => `/admin/words/${wordId}`,
-      transformResponse: (response: { success: boolean; data: { word: VocabularyWordWithId } }) => response.data.word,
+      transformResponse: (response: { success: boolean; data: { word: VocabularyWordWithId } }) => {
+        try {
+          return VocabularyWordWithIdSchema.parse(response.data.word) as VocabularyWordWithId;
+        } catch (error) {
+          if (error instanceof ZodError) {
+            console.error('Vocabulary validation error:', error.issues);
+            throw new Error(`Invalid vocabulary data: ${error.issues.map((e: ZodIssue) => e.message).join(', ')}`);
+          }
+          throw error;
+        }
+      },
       providesTags: (result, error, wordId) => [{ type: 'Word', id: wordId }],
     }),
 
-    updateWord: builder.mutation<VocabularyWordWithId, { wordId: string; updates: Partial<VocabularyWord> }>({
-      query: ({ wordId, updates }) => ({
-        url: '/admin/words',
-        method: 'PUT',
-        body: { wordId, updates },
-      }),
-      transformResponse: (response: { success: boolean; updatedData: VocabularyWordWithId }) => response.updatedData,
+    updateWord: builder.mutation<
+      VocabularyWordWithId,
+      { wordId: string; updates: Partial<VocabularyWord>; collection?: string }
+    >({
+      query: ({ wordId, updates, collection = 'vocabulary_words_v2' }) => {
+        return {
+          url: '/admin/words',
+          method: 'PUT',
+          body: { wordId, updates, collection },
+        };
+      },
+      transformResponse: (response: { success: boolean; updatedData: VocabularyWordWithId }) => {
+        try {
+          return VocabularyWordWithIdSchema.parse(response.updatedData) as VocabularyWordWithId;
+        } catch (error) {
+          if (error instanceof ZodError) {
+            console.error('Vocabulary validation error:', error.issues);
+            throw new Error(`Invalid vocabulary data: ${error.issues.map((e: ZodIssue) => e.message).join(', ')}`);
+          }
+          throw error;
+        }
+      },
       async onQueryStarted({ wordId, updates }, { dispatch, queryFulfilled, getState }) {
         const patchResults: { undo: () => void }[] = [];
 
@@ -116,7 +158,7 @@ export const vocabularyApi = createApi({
                 const originalArgs = JSON.parse(argsMatch[1]);
                 const patchResult = dispatch(
                   vocabularyApi.util.updateQueryData('getWords', originalArgs, draft => {
-                    const word = draft.words.find(w => w.id === wordId);
+                    const word = draft.words.find((w: VocabularyWordWithId) => w.id === wordId);
                     if (word) {
                       Object.assign(word, updates);
                     }
@@ -143,12 +185,24 @@ export const vocabularyApi = createApi({
     }),
 
     createWord: builder.mutation<VocabularyWordWithId, Omit<VocabularyWord, 'createdAt' | 'updatedAt'>>({
-      query: wordData => ({
-        url: '/admin/words',
-        method: 'POST',
-        body: wordData,
-      }),
-      transformResponse: (response: { success: boolean; data: { word: VocabularyWordWithId } }) => response.data.word,
+      query: wordData => {
+        return {
+          url: '/admin/words',
+          method: 'POST',
+          body: wordData,
+        };
+      },
+      transformResponse: (response: { success: boolean; data: { word: VocabularyWordWithId } }) => {
+        try {
+          return VocabularyWordWithIdSchema.parse(response.data.word) as VocabularyWordWithId;
+        } catch (error) {
+          if (error instanceof ZodError) {
+            console.error('Vocabulary validation error:', error.issues);
+            throw new Error(`Invalid vocabulary data: ${error.issues.map((e: ZodIssue) => e.message).join(', ')}`);
+          }
+          throw error;
+        }
+      },
       invalidatesTags: [
         { type: 'WordList', id: 'LIST' },
         { type: 'WordCounts', id: 'COUNTS' },

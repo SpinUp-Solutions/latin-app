@@ -7,11 +7,12 @@ import {
   RomanTableRow,
   RomanTableCell,
 } from '@/src/components/ui/core/roman-table';
-import { TABLE_TYPES, LATIN_CASES } from '@/src/utils/vocabUtils';
+import { TABLE_TYPES } from '@/src/utils/vocabUtils';
 import { TableCell } from '../shared/TableCell';
 import { TableToggleButton } from '../shared/TableToggleButton';
-import { Adjective } from '@/src/types/vocabulary-new';
+import { Adjective } from '@/src/types/vocabulary/vocabulary-new';
 import { TableProps } from '@/src/types/table-props';
+import { ADJECTIVE_STRUCTURE } from '@/src/types/vocabulary/structure';
 
 export const AdjectiveDeclensionTable: React.FC<TableProps<Adjective>> = ({
   word,
@@ -50,16 +51,16 @@ export const AdjectiveDeclensionTable: React.FC<TableProps<Adjective>> = ({
               </RomanTableRow>
             </RomanTableHeader>
             <RomanTableBody>
-              {LATIN_CASES.map((caseName, index) => {
-                const row = adjectiveDeclensionTable?.find(r => r.case.toLowerCase() === caseName.toLowerCase());
+              {ADJECTIVE_STRUCTURE.declensionTable.cases.map(caseName => {
+                const row = adjectiveDeclensionTable?.[caseName];
                 return (
-                  <RomanTableRow key={index} className="hover:bg-gray-50">
-                    <RomanTableCell className="font-medium bg-gray-50">{caseName}</RomanTableCell>
+                  <RomanTableRow key={caseName} className="hover:bg-gray-50">
+                    <RomanTableCell className="font-medium bg-gray-50 capitalize">{caseName}</RomanTableCell>
                     <RomanTableCell className="min-w-24 text-center">
                       <TableCell
-                        value={row?.masculine.singular}
-                        rowIndex={index}
-                        cellKey="masculine.singular"
+                        value={row?.masculine?.singular}
+                        rowIndex={0}
+                        cellKey={`${caseName}.masculine.singular`}
                         tableType={TABLE_TYPES.ADJECTIVE_DECLENSION}
                         isEditMode={isEditMode}
                         editingCell={editingCell}
@@ -72,9 +73,9 @@ export const AdjectiveDeclensionTable: React.FC<TableProps<Adjective>> = ({
                     </RomanTableCell>
                     <RomanTableCell className="min-w-24 text-center">
                       <TableCell
-                        value={row?.feminine.singular}
-                        rowIndex={index}
-                        cellKey="feminine.singular"
+                        value={row?.feminine?.singular}
+                        rowIndex={0}
+                        cellKey={`${caseName}.feminine.singular`}
                         tableType={TABLE_TYPES.ADJECTIVE_DECLENSION}
                         isEditMode={isEditMode}
                         editingCell={editingCell}
@@ -87,9 +88,9 @@ export const AdjectiveDeclensionTable: React.FC<TableProps<Adjective>> = ({
                     </RomanTableCell>
                     <RomanTableCell className="min-w-24 text-center">
                       <TableCell
-                        value={row?.neuter.singular}
-                        rowIndex={index}
-                        cellKey="neuter.singular"
+                        value={row?.neuter?.singular}
+                        rowIndex={0}
+                        cellKey={`${caseName}.neuter.singular`}
                         tableType={TABLE_TYPES.ADJECTIVE_DECLENSION}
                         isEditMode={isEditMode}
                         editingCell={editingCell}
@@ -102,9 +103,9 @@ export const AdjectiveDeclensionTable: React.FC<TableProps<Adjective>> = ({
                     </RomanTableCell>
                     <RomanTableCell className="min-w-24 text-center">
                       <TableCell
-                        value={row?.masculine.plural}
-                        rowIndex={index}
-                        cellKey="masculine.plural"
+                        value={row?.masculine?.plural}
+                        rowIndex={0}
+                        cellKey={`${caseName}.masculine.plural`}
                         tableType={TABLE_TYPES.ADJECTIVE_DECLENSION}
                         isEditMode={isEditMode}
                         editingCell={editingCell}
@@ -117,9 +118,9 @@ export const AdjectiveDeclensionTable: React.FC<TableProps<Adjective>> = ({
                     </RomanTableCell>
                     <RomanTableCell className="min-w-24 text-center">
                       <TableCell
-                        value={row?.feminine.plural}
-                        rowIndex={index}
-                        cellKey="feminine.plural"
+                        value={row?.feminine?.plural}
+                        rowIndex={0}
+                        cellKey={`${caseName}.feminine.plural`}
                         tableType={TABLE_TYPES.ADJECTIVE_DECLENSION}
                         isEditMode={isEditMode}
                         editingCell={editingCell}
@@ -132,9 +133,9 @@ export const AdjectiveDeclensionTable: React.FC<TableProps<Adjective>> = ({
                     </RomanTableCell>
                     <RomanTableCell className="min-w-24 text-center">
                       <TableCell
-                        value={row?.neuter.plural}
-                        rowIndex={index}
-                        cellKey="neuter.plural"
+                        value={row?.neuter?.plural}
+                        rowIndex={0}
+                        cellKey={`${caseName}.neuter.plural`}
                         tableType={TABLE_TYPES.ADJECTIVE_DECLENSION}
                         isEditMode={isEditMode}
                         editingCell={editingCell}

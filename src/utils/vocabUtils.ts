@@ -1,17 +1,10 @@
-import { VocabularyWord, Noun, Verb, Adjective, Pronoun } from '@/src/types/vocabulary-new';
+import { VocabularyWord, Noun, Verb, Adjective, Pronoun } from '@/src/types/vocabulary/vocabulary-new';
 
 export const TABLE_TYPES = {
   DECLENSION: 'declension',
   ADJECTIVE_DECLENSION: 'adjective-declension',
   CONJUGATION: 'conjugation',
 } as const;
-
-export const LATIN_CASES = ['Nominative', 'Genitive', 'Dative', 'Accusative', 'Ablative', 'Vocative'];
-export const INDICATIVE_TENSES = ['present', 'imperfect', 'future', 'perfect', 'pluperfect', 'future_perfect'];
-export const SUBJUNCTIVE_TENSES = ['present', 'imperfect', 'perfect', 'pluperfect'];
-export const IMPERATIVE_FORMS = ['present', 'future'];
-export const INFINITIVE_FORMS = ['present', 'perfect', 'future'];
-export const PARTICIPLE_FORMS = ['present', 'perfect', 'future', 'gerundive'];
 
 export type TableType = (typeof TABLE_TYPES)[keyof typeof TABLE_TYPES];
 
@@ -84,7 +77,6 @@ export function hasAdjectiveDeclensionTable(word: VocabularyWord): word is Adjec
 export const updateTableCell = (
   formData: Partial<VocabularyWord & { id: string }>,
   tableType: string,
-  rowIndex: number,
   cellKey: string,
   newValue: string[]
 ): Partial<VocabularyWord & { id: string }> | null => {
@@ -92,35 +84,47 @@ export const updateTableCell = (
     if (formData.part_of_speech && hasDeclensionTable(formData as VocabularyWord)) {
       const typedFormData = formData as Partial<(Noun | Pronoun) & { id: string }>;
       const declensionTable = typedFormData.declension_table;
+
       if (declensionTable) {
-        const updatedTable = [...declensionTable];
-        updatedTable[rowIndex] = {
-          ...updatedTable[rowIndex],
-          [cellKey]: newValue,
-        };
-        return { ...formData, declension_table: updatedTable } as Partial<VocabularyWord & { id: string }>;
+        const [caseName, numberType] = cellKey.split('.');
+
+        if (caseName && numberType) {
+          return {
+            ...formData,
+            declension_table: {
+              ...declensionTable,
+              [caseName]: {
+                ...declensionTable[caseName as keyof typeof declensionTable],
+                [numberType]: newValue,
+              },
+            },
+          } as Partial<VocabularyWord & { id: string }>;
+        }
       }
     }
   } else if (tableType === TABLE_TYPES.ADJECTIVE_DECLENSION) {
     if (formData.part_of_speech && hasAdjectiveDeclensionTable(formData as VocabularyWord)) {
       const typedFormData = formData as Partial<Adjective & { id: string }>;
       const adjectiveDeclensionTable = typedFormData.adjective_declension_table;
-      if (adjectiveDeclensionTable) {
-        const updatedTable = [...adjectiveDeclensionTable];
-        const [gender, number] = cellKey.split('.');
-        const row = updatedTable[rowIndex];
 
-        if (gender === 'masculine' || gender === 'feminine' || gender === 'neuter') {
-          updatedTable[rowIndex] = {
-            ...row,
-            [gender]: {
-              ...row[gender],
-              [number]: newValue,
-            },
-          };
+      if (adjectiveDeclensionTable) {
+        const [caseName, gender, numberType] = cellKey.split('.');
+
+        if (caseName && gender && numberType) {
           return {
             ...formData,
-            adjective_declension_table: updatedTable,
+            adjective_declension_table: {
+              ...adjectiveDeclensionTable,
+              [caseName]: {
+                ...adjectiveDeclensionTable[caseName as keyof typeof adjectiveDeclensionTable],
+                [gender]: {
+                  ...adjectiveDeclensionTable[caseName as keyof typeof adjectiveDeclensionTable]?.[
+                    gender as 'masculine' | 'feminine' | 'neuter'
+                  ],
+                  [numberType]: newValue,
+                },
+              },
+            },
           } as Partial<VocabularyWord & { id: string }>;
         }
       }

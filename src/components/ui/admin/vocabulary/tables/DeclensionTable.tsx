@@ -7,11 +7,12 @@ import {
   RomanTableRow,
   RomanTableCell,
 } from '@/src/components/ui/core/roman-table';
-import { TABLE_TYPES, LATIN_CASES } from '@/src/utils/vocabUtils';
+import { TABLE_TYPES } from '@/src/utils/vocabUtils';
 import { TableCell } from '../shared/TableCell';
 import { TableToggleButton } from '../shared/TableToggleButton';
-import { Noun, Pronoun } from '@/src/types/vocabulary-new';
+import { Noun, Pronoun } from '@/src/types/vocabulary/vocabulary-new';
 import { TableProps } from '@/src/types/table-props';
+import { NOUN_STRUCTURE } from '@/src/types/vocabulary/structure';
 
 export const DeclensionTable: React.FC<TableProps<Noun | Pronoun>> = ({
   word,
@@ -41,16 +42,16 @@ export const DeclensionTable: React.FC<TableProps<Noun | Pronoun>> = ({
               </RomanTableRow>
             </RomanTableHeader>
             <RomanTableBody>
-              {LATIN_CASES.map((caseName, index) => {
-                const row = declensionTable?.find(r => r.case.toLowerCase() === caseName.toLowerCase());
+              {NOUN_STRUCTURE.declensionTable.cases.map(caseName => {
+                const row = declensionTable?.[caseName];
                 return (
-                  <RomanTableRow key={index} className="hover:bg-gray-50">
-                    <RomanTableCell className="font-medium bg-gray-50">{caseName}</RomanTableCell>
+                  <RomanTableRow key={caseName} className="hover:bg-gray-50">
+                    <RomanTableCell className="font-medium bg-gray-50 capitalize">{caseName}</RomanTableCell>
                     <RomanTableCell className="min-w-32">
                       <TableCell
                         value={row?.singular}
-                        rowIndex={index}
-                        cellKey="singular"
+                        rowIndex={0}
+                        cellKey={`${caseName}.singular`}
                         tableType={TABLE_TYPES.DECLENSION}
                         isEditMode={isEditMode}
                         editingCell={editingCell}
@@ -64,8 +65,8 @@ export const DeclensionTable: React.FC<TableProps<Noun | Pronoun>> = ({
                     <RomanTableCell className="min-w-32">
                       <TableCell
                         value={row?.plural}
-                        rowIndex={index}
-                        cellKey="plural"
+                        rowIndex={0}
+                        cellKey={`${caseName}.plural`}
                         tableType={TABLE_TYPES.DECLENSION}
                         isEditMode={isEditMode}
                         editingCell={editingCell}

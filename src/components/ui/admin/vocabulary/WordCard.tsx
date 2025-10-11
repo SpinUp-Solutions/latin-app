@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Badge } from '@/src/components/ui/badge';
 import { ChevronDown, ChevronRight, Volume2, List, ChevronUp } from 'lucide-react';
-import { VocabularyWordWithId } from '@/src/types/vocabulary-new';
+import { VocabularyWordWithId } from '@/src/types/vocabulary/vocabulary-new';
 import { DeclensionTable } from './tables/DeclensionTable';
 import { AdjectiveDeclensionTable } from './tables/AdjectiveDeclensionTable';
 import { ConjugationTable } from './tables/ConjugationTable';

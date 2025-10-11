@@ -3,7 +3,14 @@ import { Button } from '@/src/components/ui/button';
 import { Label } from '@/src/components/ui/label';
 import { Input } from '@/src/components/ui/input';
 import { Textarea } from '@/src/components/ui/textarea';
-import { VocabularyWord, VocabularyWordWithId, Noun, Verb, Adjective, Pronoun } from '@/src/types/vocabulary-new';
+import {
+  VocabularyWord,
+  VocabularyWordWithId,
+  Noun,
+  Verb,
+  Adjective,
+  Pronoun,
+} from '@/src/types/vocabulary/vocabulary-new';
 import { EditingCell } from '@/src/types/admin-vocabulary';
 import {
   parseEditingCellValue,
@@ -66,10 +73,10 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
   const handleCellEditSave = () => {
     if (!editingCell || !editFormData) return;
 
-    const { rowIndex, cellKey, tableType } = editingCell;
+    const { cellKey, tableType } = editingCell;
     const newValue = parseEditingCellValue(editingCellValue);
 
-    const updated = updateTableCell(editFormData, tableType, rowIndex, cellKey, newValue);
+    const updated = updateTableCell(editFormData, tableType, cellKey, newValue);
     if (updated) {
       setEditFormData(updated as Partial<VocabularyWordWithId>);
     }

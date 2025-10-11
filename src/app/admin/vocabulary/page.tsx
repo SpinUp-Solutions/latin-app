@@ -4,9 +4,9 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSelector, useDispatch } from 'react-redux';
 import { Button } from '@/src/components/ui/button';
-import { ArrowLeft, BookOpen } from 'lucide-react';
+import { ArrowLeft, BookOpen, Play, Beaker } from 'lucide-react';
 import { toast } from 'sonner';
-import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary-new';
+import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary/vocabulary-new';
 import { useGetWordsQuery, useGetWordTypeCountsQuery, useUpdateWordMutation } from '@/src/store/api/vocabularyApi';
 import {
   updateFilters as updateFiltersAction,
@@ -18,6 +18,7 @@ import { WordEditPanel } from '@/src/components/ui/admin/vocabulary/WordEditPane
 import { VocabularyFiltersComponent } from '@/src/components/ui/admin/vocabulary/VocabularyFilters';
 import { VocabularyList } from '@/src/components/ui/admin/vocabulary/VocabularyList';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
+import { auth } from '@/src/services/firebase';
 
 function AdminVocabularyPage() {
   const router = useRouter();
@@ -27,15 +28,19 @@ function AdminVocabularyPage() {
 
   const [lastWordId, setLastWordId] = useState<string | null>(null);
   const [selectedWordId, setSelectedWordId] = useState<string | null>(null);
+  const TARGET_COLLECTION = 'vocabulary_words_v2';
 
   const queryArgs = {
     wordType: filters.wordType,
     search: debouncedSearch,
     lastWordId,
+    collection: TARGET_COLLECTION,
   };
 
   const { data, isLoading, isFetching } = useGetWordsQuery(queryArgs);
-  const { data: wordTypeCounts = {}, isLoading: countsLoading } = useGetWordTypeCountsQuery();
+  const { data: wordTypeCounts = {}, isLoading: countsLoading } = useGetWordTypeCountsQuery({
+    collection: TARGET_COLLECTION,
+  });
   const [updateWord, { isLoading: updating }] = useUpdateWordMutation();
 
   useEffect(() => {
@@ -92,7 +97,7 @@ function AdminVocabularyPage() {
         })
       );
 
-      await updateWord({ wordId: selectedWordId, updates: cleanedUpdates }).unwrap();
+      await updateWord({ wordId: selectedWordId, updates: cleanedUpdates, collection: TARGET_COLLECTION }).unwrap();
       toast.success('Word updated successfully');
       return true;
     } catch (error) {
@@ -119,6 +124,64 @@ function AdminVocabularyPage() {
     dispatch(resetFiltersAction());
   };
 
+  const [migrating, setMigrating] = useState(false);
+  const [dryRunning, setDryRunning] = useState(false);
+
+  const callMigration = async (dryRun: boolean) => {
+    try {
+      if (!dryRun) {
+        const ok = window.confirm('Migrate to new collection (vocabulary_words_v2)?');
+        if (!ok) return;
+      }
+      dryRun ? setDryRunning(true) : setMigrating(true);
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch('/api/admin/migrate-vocabulary', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ dryRun, targetCollection: TARGET_COLLECTION }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json?.success) throw new Error(json?.error || 'Migration failed');
+      const d = json.data;
+
+      console.log('=== MIGRATION RESULTS ===');
+      console.log('Full Response:', JSON.stringify(json, null, 2));
+      console.log('========================');
+
+      const summary = d.summary || {};
+      const warningCount = summary.warningsCount || 0;
+      const errorCount = summary.errorsCount || 0;
+
+      let message = `${dryRun ? 'Dry run' : 'Migration'} complete: ${d.migrated} migrated, ${d.skipped} skipped of ${d.total}`;
+      if (summary.successRate) message += ` (${summary.successRate} success)`;
+      if (warningCount > 0) message += ` - ${warningCount} warnings`;
+      if (errorCount > 0) message += ` - ${errorCount} errors`;
+
+      toast.success(message, { duration: 5000 });
+
+      setLastWordId(null);
+      setSelectedWordId(null);
+
+      if (d.byPartOfSpeech) {
+        console.log('By Part of Speech:', d.byPartOfSpeech);
+      }
+      if (d.warnings && d.warnings.length > 0) {
+        console.warn('Warnings:', d.warnings);
+      }
+      if (d.errors && d.errors.length > 0) {
+        console.error('Errors:', d.errors);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Migration error';
+      toast.error(msg);
+    } finally {
+      dryRun ? setDryRunning(false) : setMigrating(false);
+    }
+  };
+
   const words = data?.words ?? [];
   const hasMore = data?.hasMore ?? false;
   const loadingMore = isFetching && lastWordId !== null;
@@ -142,9 +205,17 @@ function AdminVocabularyPage() {
             </div>
           </div>
         </div>
-        <div className="text-sm text-roman-stone">
-          {words.length} words loaded
-          {countsLoading && ' (loading counts...)'}
+        <div className="flex items-center gap-3">
+          <div className="text-sm text-roman-stone">
+            {words.length} words loaded
+            {countsLoading && ' (loading counts...)'}
+          </div>
+          <Button size="sm" variant="outline" onClick={() => callMigration(true)} disabled={dryRunning || migrating}>
+            <Beaker className="h-4 w-4 mr-2" /> Dry run
+          </Button>
+          <Button size="sm" onClick={() => callMigration(false)} disabled={migrating || dryRunning}>
+            <Play className="h-4 w-4 mr-2" /> Migrate
+          </Button>
         </div>
       </header>
 

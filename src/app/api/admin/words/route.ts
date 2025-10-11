@@ -2,6 +2,48 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { Query } from 'firebase-admin/firestore';
 
+type TimestampLike = {
+  seconds?: number;
+  nanoseconds?: number;
+  _seconds?: number;
+  _nanoseconds?: number;
+  toDate?: () => Date;
+};
+
+const serializeTimestamp = (value: unknown) => {
+  const ts = value as TimestampLike | undefined;
+  if (!ts) return undefined;
+
+  if (typeof ts.seconds === 'number' && typeof ts.nanoseconds === 'number') {
+    return {
+      seconds: ts.seconds,
+      nanoseconds: ts.nanoseconds,
+    };
+  }
+
+  if (typeof ts._seconds === 'number' && typeof ts._nanoseconds === 'number') {
+    return {
+      seconds: ts._seconds,
+      nanoseconds: ts._nanoseconds,
+    };
+  }
+
+  return undefined;
+};
+
+const serializeWord = (data: Record<string, unknown>) => {
+  const serialized: Record<string, unknown> = { ...data };
+  if ('createdAt' in serialized) {
+    const createdAt = serializeTimestamp(serialized.createdAt);
+    if (createdAt) serialized.createdAt = createdAt;
+  }
+  if ('updatedAt' in serialized) {
+    const updatedAt = serializeTimestamp(serialized.updatedAt);
+    if (updatedAt) serialized.updatedAt = updatedAt;
+  }
+  return serialized;
+};
+
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -12,11 +54,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const lastWordId = searchParams.get('lastWordId');
     const search = searchParams.get('search');
     const countsOnly = searchParams.get('countsOnly') === 'true';
+    const collection = searchParams.get('collection') || 'vocabulary_words_v2';
 
-    console.log('Fetching words with filters:', { wordType, limit, lastWordId, search, countsOnly });
+    console.log('Fetching words with filters:', { wordType, limit, lastWordId, search, countsOnly, collection });
 
     if (countsOnly) {
-      const wordTypeCounts = await getWordTypeCounts();
+      const wordTypeCounts = await getWordTypeCounts(collection);
       return NextResponse.json({
         success: true,
         data: {
@@ -25,7 +68,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       });
     }
 
-    let query: Query = adminDb.collection('vocabulary_words').orderBy('word');
+    let query: Query = adminDb.collection(collection).orderBy('word');
 
     if (wordType) {
       query = query.where('part_of_speech', '==', wordType);
@@ -36,7 +79,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
 
     if (lastWordId) {
-      const lastDocSnapshot = await adminDb.collection('vocabulary_words').doc(lastWordId).get();
+      const lastDocSnapshot = await adminDb.collection(collection).doc(lastWordId).get();
       if (lastDocSnapshot.exists) {
         query = query.startAfter(lastDocSnapshot);
       }
@@ -46,10 +89,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     const snapshot = await query.get();
 
-    const words = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+    const words = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...serializeWord(data as Record<string, unknown>),
+      };
+    });
 
     const hasMore = snapshot.docs.length === limit;
     const lastDoc = snapshot.docs[snapshot.docs.length - 1];
@@ -62,6 +108,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         lastWordId: lastDoc?.id || null,
         limit,
         filters: { wordType, search },
+        collection,
       },
     });
   } catch (error) {
@@ -78,7 +125,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
 export async function PUT(request: NextRequest): Promise<NextResponse> {
   try {
-    const { wordId, updates } = await request.json();
+    const { wordId, updates, collection = 'vocabulary_words_v2' } = await request.json();
 
     if (!wordId || !updates) {
       return NextResponse.json(
@@ -90,7 +137,7 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    console.log('Updating word:', wordId);
+    console.log('Updating word:', wordId, 'in collection:', collection);
     console.log('Updates data:', JSON.stringify(updates, null, 2));
 
     const updateData = {
@@ -98,12 +145,12 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
       updatedAt: new Date(),
     };
 
-    await adminDb.collection('vocabulary_words').doc(wordId).update(updateData);
+    await adminDb.collection(collection).doc(wordId).update(updateData);
 
-    console.log(`Word ${wordId} updated successfully`);
+    console.log(`Word ${wordId} updated successfully in ${collection}`);
 
-    const updatedDoc = await adminDb.collection('vocabulary_words').doc(wordId).get();
-    const updatedData = updatedDoc.data();
+    const updatedDoc = await adminDb.collection(collection).doc(wordId).get();
+    const updatedData = serializeWord(updatedDoc.data() as Record<string, unknown>);
     console.log('Updated document data:', JSON.stringify(updatedData, null, 2));
 
     return NextResponse.json({
@@ -123,9 +170,9 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
   }
 }
 
-async function getWordTypeCounts() {
+async function getWordTypeCounts(collection: string) {
   try {
-    const snapshot = await adminDb.collection('vocabulary_words').limit(1000).get();
+    const snapshot = await adminDb.collection(collection).limit(1000).get();
 
     const counts = {
       noun: 0,
