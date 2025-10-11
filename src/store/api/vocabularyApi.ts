@@ -73,15 +73,12 @@ export const vocabularyApi = createApi({
           return newData;
         }
 
-        const existingWords = new Map(currentCache.words.map(w => [w.id, w]));
-
-        newData.words.forEach(word => {
-          existingWords.set(word.id, word);
-        });
+        const existingIds = new Set(currentCache.words.map(w => w.id));
+        const newWords = newData.words.filter(w => !existingIds.has(w.id));
 
         return {
           ...newData,
-          words: Array.from(existingWords.values()),
+          words: [...currentCache.words, ...newWords],
           hasMore: newData.hasMore,
           lastWordId: newData.lastWordId,
         };

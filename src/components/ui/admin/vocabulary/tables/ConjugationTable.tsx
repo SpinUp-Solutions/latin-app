@@ -13,13 +13,7 @@ import { TableToggleButton } from '../shared/TableToggleButton';
 import { Verb } from '@/src/types/vocabulary/vocabulary-new';
 import { TableProps } from '@/src/types/table-props';
 import { VERB_STRUCTURE } from '@/src/types/vocabulary/structure';
-import {
-  IndicativeTense,
-  SubjunctiveTense,
-  Voice,
-  InfinitiveForm,
-  ImperativeTense,
-} from '@/src/types/vocabulary/verb-conjugation';
+import { IndicativeTense, SubjunctiveTense, Voice, ImperativeTense } from '@/src/types/vocabulary/verb-conjugation';
 import { buildFiniteColumns, buildImperativeColumns, getByPath, makePath } from '@/src/utils/structureTable';
 
 export const ConjugationTable: React.FC<TableProps<Verb>> = ({
@@ -99,7 +93,7 @@ export const ConjugationTable: React.FC<TableProps<Verb>> = ({
     data: Record<string, string[] | null | undefined> | null | undefined,
     keyPrefix: string,
     color: string,
-    forms: InfinitiveForm[]
+    forms: readonly string[]
   ) => {
     return (
       <div className="mb-6">
@@ -273,6 +267,22 @@ export const ConjugationTable: React.FC<TableProps<Verb>> = ({
               'nonFinite.infinitive',
               'text-purple-700 border-purple-200',
               VERB_STRUCTURE.conjugationTable.nonFinite.infinitive
+            )}
+
+            {renderSimpleSection(
+              'Gerunds',
+              conjugationTable?.gerund,
+              'gerund',
+              'text-teal-700 border-teal-200',
+              VERB_STRUCTURE.conjugationTable.gerund
+            )}
+
+            {renderSimpleSection(
+              'Supines',
+              conjugationTable?.supine,
+              'supine',
+              'text-amber-700 border-amber-200',
+              VERB_STRUCTURE.conjugationTable.supine
             )}
 
             {renderParticipleSection()}
