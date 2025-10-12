@@ -67,3 +67,10 @@ export const AdjectiveDeclensionTableRowSchema = z.object({
 });
 
 export { CaseSchema, GenderSchema, NumberSchema, NounDeclensionSchema, AdjectiveDeclensionSchema };
+
+export type DeclensionNumberForms = z.infer<typeof DeclensionNumberFormsSchema>;
+export type GenderForms = z.infer<typeof GenderFormsSchema>;
+export type DeclensionTable = z.infer<typeof DeclensionTableSchema>;
+export type AdjectiveDeclensionTable = z.infer<typeof AdjectiveDeclensionTableSchema>;
+export type DeclensionTableRow = z.infer<typeof DeclensionTableRowSchema>;
+export type AdjectiveDeclensionTableRow = z.infer<typeof AdjectiveDeclensionTableRowSchema>;

@@ -72,3 +72,13 @@ export const GrammaticalNumberSchema = z.enum(['singular', 'plural']);
 export const GerundCaseSchema = z.enum(['genitive', 'dative', 'accusative', 'ablative']);
 
 export const SupineCaseSchema = z.enum(['accusative', 'ablative']);
+
+export type PartOfSpeech = z.infer<typeof PartOfSpeechSchema>;
+export type WordType = z.infer<typeof WordTypeSchema>;
+export type PronounType = z.infer<typeof PronounTypeSchema>;
+export type Case = z.infer<typeof CaseSchema>;
+export type Gender = z.infer<typeof GenderSchema>;
+export type Number = z.infer<typeof NumberSchema>;
+export type NounDeclension = z.infer<typeof NounDeclensionSchema>;
+export type AdjectiveDeclension = z.infer<typeof AdjectiveDeclensionSchema>;
+export type Degree = z.infer<typeof DegreeSchema>;
