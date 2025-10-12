@@ -130,11 +130,26 @@ export const vocabularyApi = createApi({
       },
       transformResponse: (response: { success: boolean; updatedData: VocabularyWordWithId }) => {
         try {
-          return VocabularyWordWithIdSchema.parse(response.updatedData) as VocabularyWordWithId;
+          console.log('API transformResponse - validating updatedData:', JSON.stringify(response.updatedData, null, 2));
+          const result = VocabularyWordWithIdSchema.parse(response.updatedData);
+          console.log('API validation PASSED');
+          return result as VocabularyWordWithId;
         } catch (error) {
           if (error instanceof ZodError) {
-            console.error('Vocabulary validation error:', error.issues);
-            throw new Error(`Invalid vocabulary data: ${error.issues.map((e: ZodIssue) => e.message).join(', ')}`);
+            console.error('API Vocabulary validation error DETAILS:');
+            error.issues.forEach((issue, index) => {
+              console.error(`  Issue ${index + 1}:`, {
+                path: issue.path.join('.'),
+                message: issue.message,
+                code: issue.code,
+                received: 'received' in issue ? issue.received : undefined,
+              });
+            });
+            console.error('Failed data structure:', Object.keys(response.updatedData));
+            console.error('Missing id?', !('id' in response.updatedData));
+            throw new Error(
+              `Invalid vocabulary data: ${error.issues.map((e: ZodIssue) => `${e.path.join('.')}: ${e.message}`).join(', ')}`
+            );
           }
           throw error;
         }

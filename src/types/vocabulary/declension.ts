@@ -33,6 +33,12 @@ export enum AdjectiveDeclension {
   Third = '3',
 }
 
+export enum Degree {
+  Positive = 'positive',
+  Comparative = 'comparative',
+  Superlative = 'superlative',
+}
+
 export type NumberForms = {
   [Number.Singular]: string[];
   [Number.Plural]: string[];

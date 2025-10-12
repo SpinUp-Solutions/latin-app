@@ -4,14 +4,13 @@ import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/src/
 import { Switch } from '@/src/components/ui/switch';
 import { VocabularyFormValues } from './types';
 import { PrincipalPartsEditor } from './PrincipalPartsEditor';
+import { VerbConjugationSchema } from '@/src/types/vocabulary/schemas/enums';
+import type { z } from 'zod';
+import React from 'react';
 
-const conjugationOptions = [
-  { value: '1', label: 'First' },
-  { value: '2', label: 'Second' },
-  { value: '3', label: 'Third' },
-  { value: '3io', label: 'Third iō' },
-  { value: '4', label: 'Fourth' },
-];
+type VerbConjugationValue = z.infer<typeof VerbConjugationSchema>;
+
+const conjugationValues = VerbConjugationSchema.options as readonly VerbConjugationValue[];
 
 export const VerbForm = () => {
   const form = useFormContext<VocabularyFormValues>();
@@ -22,26 +21,36 @@ export const VerbForm = () => {
         <FormField
           control={form.control}
           name="conjugation"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Conjugation</FormLabel>
-              <FormControl>
-                <Select value={field.value ?? undefined} onValueChange={field.onChange}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select conjugation" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {conjugationOptions.map(option => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+          render={({ field }) => {
+            const selectValue =
+              field.value && typeof field.value === 'string' && field.value.trim() !== '' ? field.value : undefined;
+            return (
+              <FormItem>
+                <FormLabel>Conjugation</FormLabel>
+                <FormControl>
+                  <Select
+                    value={selectValue}
+                    onValueChange={value => {
+                      if (value && value.trim() !== '') {
+                        field.onChange(value);
+                      }
+                    }}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select conjugation" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {conjugationValues.map(value => (
+                        <SelectItem key={value} value={value}>
+                          {value}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            );
+          }}
         />
 
         <FormField

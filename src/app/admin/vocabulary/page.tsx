@@ -28,7 +28,7 @@ function AdminVocabularyPage() {
 
   const [lastWordId, setLastWordId] = useState<string | null>(null);
   const [selectedWordId, setSelectedWordId] = useState<string | null>(null);
-  const TARGET_COLLECTION = 'vocabulary_words_v2';
+  const TARGET_COLLECTION = 'vocabulary_words_v4';
 
   const queryArgs = {
     wordType: filters.wordType,
@@ -97,11 +97,14 @@ function AdminVocabularyPage() {
         })
       );
 
+      console.debug('VocabularyPage cleaned updates', cleanedUpdates);
       await updateWord({ wordId: selectedWordId, updates: cleanedUpdates, collection: TARGET_COLLECTION }).unwrap();
       toast.success('Word updated successfully');
       return true;
     } catch (error) {
-      toast.error('Error updating word');
+      console.error('Update word error:', error);
+      const message = error instanceof Error ? error.message : 'Error updating word';
+      toast.error(message);
       return false;
     }
   };
@@ -130,7 +133,7 @@ function AdminVocabularyPage() {
   const callMigration = async (dryRun: boolean) => {
     try {
       if (!dryRun) {
-        const ok = window.confirm('Migrate to new collection (vocabulary_words_v2)?');
+        const ok = window.confirm('Migrate to new collection (vocabulary_words_v4)?');
         if (!ok) return;
       }
       dryRun ? setDryRunning(true) : setMigrating(true);

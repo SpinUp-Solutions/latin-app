@@ -2,7 +2,7 @@ import { useFormContext } from 'react-hook-form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/src/components/ui/form';
 import { VocabularyFormValues } from './types';
-
+import React from 'react';
 const pronounOptions = [
   { value: 'personal', label: 'Personal' },
   { value: 'reflexive', label: 'Reflexive' },
@@ -26,7 +26,13 @@ export const PronounForm = () => {
           <FormItem>
             <FormLabel>Pronoun Type</FormLabel>
             <FormControl>
-              <Select value={field.value ?? undefined} onValueChange={field.onChange}>
+              <Select
+                value={field.value ?? undefined}
+                onValueChange={value => {
+                  if (value && value.trim() !== '') {
+                    field.onChange(value);
+                  }
+                }}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select pronoun type" />
                 </SelectTrigger>

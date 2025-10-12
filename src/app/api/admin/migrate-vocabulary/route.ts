@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb, adminAuth } from '@/src/services/firebase-admin';
-import { mapLegacyWord } from '@/src/services/migrations/vocabularyMapping';
+import { mapLegacyWordV4 } from '@/src/services/migrations/vocabularyMapping-v4';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const targetCollection =
       typeof body?.targetCollection === 'string' && body.targetCollection
         ? body.targetCollection
-        : 'vocabulary_words_v2';
+        : 'vocabulary_words_v4';
 
     console.info('[migration] Starting migration run', { dryRun, targetCollection, limit });
 
@@ -32,6 +32,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     let batch = adminDb.batch();
     let ops = 0;
+    const BATCH_SIZE = 50; // Reduced from 400 due to large document sizes
 
     for (const doc of snap.docs) {
       const data = doc.data();
@@ -42,19 +43,44 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         byPartOfSpeech[pos] = { migrated: 0, skipped: 0 };
       }
 
-      const { mapped, reason } = mapLegacyWord(data);
-
-      if (!mapped) {
+      let result;
+      try {
+        result = mapLegacyWordV4(data);
+      } catch (mappingError) {
+        console.error(`[migration] Mapping error for ${doc.id} (${wordName}):`, mappingError);
         skipped++;
         byPartOfSpeech[pos].skipped++;
         errors.push({
           id: doc.id,
           word: wordName,
           part_of_speech: pos,
-          reason: reason || 'Unknown error',
+          reason: `Mapping threw error: ${mappingError instanceof Error ? mappingError.message : String(mappingError)}`,
         });
         continue;
       }
+
+      if (!result.success) {
+        skipped++;
+        byPartOfSpeech[pos].skipped++;
+        errors.push({
+          id: doc.id,
+          word: result.word || wordName,
+          part_of_speech: pos,
+          reason: result.reason,
+        });
+
+        // Log detailed validation errors for debugging
+        if (dryRun) {
+          console.error(`[migration] Validation failed for ${doc.id}:`, {
+            word: wordName,
+            reason: result.reason,
+            originalData: JSON.stringify(data, null, 2),
+          });
+        }
+        continue;
+      }
+
+      const mapped = result.data;
 
       if (pos === 'noun') {
         const hasNomSing = mapped['nominative_singular'];
@@ -89,18 +115,37 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         }
       }
 
-      if (!dryRun) {
+      if (dryRun) {
+        // In dry run, log what would be migrated
+        console.info(`[DRY RUN] Would migrate ${doc.id} (${wordName}):`, {
+          part_of_speech: pos,
+          hasRequiredFields: true,
+          targetCollection,
+        });
+      } else {
         console.info('[migration] Queueing document for write', {
           id: doc.id,
           word: wordName,
           part_of_speech: pos,
           targetCollection,
         });
-        batch.set(adminDb.collection(targetCollection).doc(doc.id), mapped, { merge: true });
+        // Use merge: false for full replacement (v3 has required fields)
+        batch.set(adminDb.collection(targetCollection).doc(doc.id), mapped, { merge: false });
         ops++;
-        if (ops >= 400) {
-          await batch.commit();
-          console.info('[migration] Committed batch', { size: ops, targetCollection });
+        if (ops >= BATCH_SIZE) {
+          try {
+            await batch.commit();
+            console.info('[migration] Committed batch', {
+              size: ops,
+              progress: `${migrated}/${snap.size}`,
+              targetCollection,
+            });
+          } catch (batchError) {
+            console.error('[migration] Batch commit failed:', batchError);
+            throw new Error(
+              `Batch commit failed: ${batchError instanceof Error ? batchError.message : String(batchError)}`
+            );
+          }
           batch = adminDb.batch();
           ops = 0;
         }
@@ -110,8 +155,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     if (!dryRun && ops > 0) {
-      await batch.commit();
-      console.info('[migration] Committed final batch', { size: ops, targetCollection });
+      try {
+        await batch.commit();
+        console.info('[migration] Committed final batch', { size: ops, targetCollection });
+      } catch (batchError) {
+        console.error('[migration] Final batch commit failed:', batchError);
+        throw new Error(
+          `Final batch commit failed: ${batchError instanceof Error ? batchError.message : String(batchError)}`
+        );
+      }
     }
 
     console.info('[migration] Migration run complete', {
@@ -143,6 +195,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
     });
   } catch (error) {
+    console.error('[migration] Fatal error during migration:', error);
+    if (error instanceof Error) {
+      console.error('[migration] Error stack:', error.stack);
+    }
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }

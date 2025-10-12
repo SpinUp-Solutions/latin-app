@@ -5,7 +5,7 @@ import { PronounTypeSchema } from './enums';
 
 export const PronounSchema = BaseWordSchema.extend({
   part_of_speech: z.literal('pronoun'),
-  pronoun_type: PronounTypeSchema,
+  pronoun_type: PronounTypeSchema.nullable(),
   declension_table: DeclensionTableSchema,
 });
 

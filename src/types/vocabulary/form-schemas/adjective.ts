@@ -1,10 +1,19 @@
 import { z } from 'zod';
-import { AdjectiveDeclensionSchema } from '../schemas/enums';
-import { AdjectiveDeclensionTableSchema } from '../schemas/declension';
+import { AdjectiveSchema } from '../schemas/adjective';
 
-export const AdjectiveFormSchema = z.object({
-  declension: AdjectiveDeclensionSchema.nullable().optional(),
-  adjective_declension_table: AdjectiveDeclensionTableSchema.nullable().optional(),
+export const AdjectiveFormSchema = AdjectiveSchema.omit({
+  part_of_speech: true,
+  word: true,
+  translation: true,
+  definitions: true,
+  etymology: true,
+  pronunciation: true,
+  type: true,
+  alternate_form: true,
+  createdAt: true,
+  updatedAt: true,
+  degrees_table: true,
+  dictionary_forms: true,
 });
 
 export type AdjectiveFormValues = z.infer<typeof AdjectiveFormSchema>;

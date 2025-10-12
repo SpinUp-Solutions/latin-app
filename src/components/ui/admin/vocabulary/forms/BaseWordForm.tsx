@@ -76,7 +76,12 @@ export const BaseWordForm = () => {
                   </FormItem>
                 )}
               />
-              <Button type="button" variant="outline" size="icon" onClick={() => removeDefinition(index)} title="Remove definition">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => removeDefinition(index)}
+                title="Remove definition">
                 <Trash2 className="h-4 w-4" />
               </Button>
             </div>

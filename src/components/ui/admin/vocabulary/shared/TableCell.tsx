@@ -4,7 +4,7 @@ import { formatCellValue } from '@/src/utils/vocabUtils';
 import { EditableCell } from './EditableCell';
 
 interface TableCellProps {
-  value: string[] | undefined;
+  value: string[] | null | undefined;
   rowIndex: number;
   cellKey: string;
   tableType: string;

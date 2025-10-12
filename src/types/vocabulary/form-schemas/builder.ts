@@ -4,24 +4,25 @@ import { NounFormSchema, NounFormValues } from './noun';
 import { PronounFormSchema, PronounFormValues } from './pronoun';
 import { AdjectiveFormSchema, AdjectiveFormValues } from './adjective';
 import { VerbFormSchema, VerbFormValues } from './verb';
-import { IndeclinableFormSchema } from './indeclinable';
+import { VerbConjugationSchema } from '../schemas/enums';
+import type { z } from 'zod';
 
 type SpecificSchema =
   | typeof NounFormSchema
   | typeof PronounFormSchema
   | typeof AdjectiveFormSchema
   | typeof VerbFormSchema
-  | typeof IndeclinableFormSchema;
+  | typeof BaseWordFormSchema;
 
 const schemaMap: Record<VocabularyWord['part_of_speech'], SpecificSchema> = {
   noun: NounFormSchema,
   pronoun: PronounFormSchema,
   adjective: AdjectiveFormSchema,
   verb: VerbFormSchema,
-  adverb: IndeclinableFormSchema,
-  preposition: IndeclinableFormSchema,
-  conjunction: IndeclinableFormSchema,
-  interjection: IndeclinableFormSchema,
+  adverb: BaseWordFormSchema,
+  preposition: BaseWordFormSchema,
+  conjunction: BaseWordFormSchema,
+  interjection: BaseWordFormSchema,
 };
 
 export const getFormSchemaForPartOfSpeech = (partOfSpeech: VocabularyWord['part_of_speech']) => {
@@ -31,21 +32,25 @@ export const getFormSchemaForPartOfSpeech = (partOfSpeech: VocabularyWord['part_
 
 const emptyWordForm = { full_form: '', shortened_form: '' } as const;
 
-type ExtendedFormFields = {
-  gender?: NounFormValues['gender'];
-  declension?: NounFormValues['declension'] | AdjectiveFormValues['declension'];
-  declension_table?: NounFormValues['declension_table'];
-  adjective_declension_table?: AdjectiveFormValues['adjective_declension_table'];
-  pronoun_type?: PronounFormValues['pronoun_type'];
-  nominative_singular?: NounFormValues['nominative_singular'];
-  genitive_singular?: NounFormValues['genitive_singular'];
-  conjugation?: VerbFormValues['conjugation'];
-  is_deponent?: VerbFormValues['is_deponent'];
-  principal_parts?: VerbFormValues['principal_parts'];
-  conjugation_table?: VerbFormValues['conjugation_table'];
+type VerbConjugationValue = z.infer<typeof VerbConjugationSchema>;
+
+const verbConjugationValues = VerbConjugationSchema.options as readonly VerbConjugationValue[];
+
+const normalizeConjugation = (value: unknown): VerbConjugationValue | null => {
+  if (value === undefined || value === null) return null;
+  const candidate = String(value)
+    .toLowerCase()
+    .replace(/[^0-9a-z]/g, '');
+  const match = verbConjugationValues.find(option => option.toLowerCase() === candidate);
+  return match ?? null;
 };
 
-export type VocabularyFormValues = BaseWordFormValues & ExtendedFormFields;
+export type VocabularyFormValues =
+  | (BaseWordFormValues & NounFormValues)
+  | (BaseWordFormValues & PronounFormValues)
+  | (BaseWordFormValues & AdjectiveFormValues)
+  | (BaseWordFormValues & VerbFormValues)
+  | BaseWordFormValues;
 
 export const toFormDefaultValues = (word: VocabularyWordWithId): VocabularyFormValues => {
   const base: BaseWordFormValues = {
@@ -63,7 +68,6 @@ export const toFormDefaultValues = (word: VocabularyWordWithId): VocabularyFormV
       ...base,
       gender: word.gender ?? null,
       declension: word.declension ?? null,
-      declension_table: word.declension_table ?? {},
       nominative_singular: word.nominative_singular ?? { ...emptyWordForm },
       genitive_singular: word.genitive_singular ?? { ...emptyWordForm },
     };
@@ -73,7 +77,6 @@ export const toFormDefaultValues = (word: VocabularyWordWithId): VocabularyFormV
     return {
       ...base,
       pronoun_type: word.pronoun_type ?? null,
-      declension_table: word.declension_table ?? {},
     };
   }
 
@@ -81,17 +84,16 @@ export const toFormDefaultValues = (word: VocabularyWordWithId): VocabularyFormV
     return {
       ...base,
       declension: word.declension ?? null,
-      adjective_declension_table: word.adjective_declension_table ?? {},
     };
   }
 
   if (word.part_of_speech === 'verb') {
+    const conjugationValue = normalizeConjugation(word.conjugation);
     return {
       ...base,
-      conjugation: word.conjugation ?? null,
+      conjugation: conjugationValue,
       is_deponent: word.is_deponent ?? null,
       principal_parts: word.principal_parts ?? [],
-      conjugation_table: word.conjugation_table ?? {},
     };
   }
 
@@ -120,39 +122,44 @@ export const applyFormValuesToWord = (
   } as VocabularyWordWithId;
 
   if (word.part_of_speech === 'noun') {
+    const nounValues = values as BaseWordFormValues & NounFormValues;
     return {
       ...baseApplied,
-      gender: values.gender ?? null,
-      declension: values.declension ?? word.declension,
-      declension_table: values.declension_table ?? word.declension_table,
-      nominative_singular: values.nominative_singular ?? null,
-      genitive_singular: values.genitive_singular ?? null,
+      gender: nounValues.gender ?? null,
+      declension: nounValues.declension ?? word.declension,
+      declension_table: word.declension_table,
+      nominative_singular: nounValues.nominative_singular ?? null,
+      genitive_singular: nounValues.genitive_singular ?? null,
     } as VocabularyWordWithId;
   }
 
   if (word.part_of_speech === 'pronoun') {
+    const pronounValues = values as BaseWordFormValues & PronounFormValues;
     return {
       ...baseApplied,
-      pronoun_type: values.pronoun_type ?? word.pronoun_type,
-      declension_table: values.declension_table ?? word.declension_table,
+      pronoun_type: pronounValues.pronoun_type ?? word.pronoun_type,
+      declension_table: word.declension_table,
     } as VocabularyWordWithId;
   }
 
   if (word.part_of_speech === 'adjective') {
+    const adjectiveValues = values as BaseWordFormValues & AdjectiveFormValues;
     return {
       ...baseApplied,
-      declension: values.declension ?? word.declension,
-      adjective_declension_table: values.adjective_declension_table ?? word.adjective_declension_table,
+      declension: adjectiveValues.declension ?? word.declension,
+      dictionary_forms: word.dictionary_forms,
+      degrees_table: word.degrees_table,
     } as VocabularyWordWithId;
   }
 
   if (word.part_of_speech === 'verb') {
+    const verbValues = values as BaseWordFormValues & VerbFormValues;
     return {
       ...baseApplied,
-      conjugation: values.conjugation ?? word.conjugation,
-      is_deponent: values.is_deponent ?? word.is_deponent,
-      principal_parts: values.principal_parts ?? word.principal_parts,
-      conjugation_table: values.conjugation_table ?? word.conjugation_table,
+      conjugation: verbValues.conjugation ?? word.conjugation,
+      is_deponent: verbValues.is_deponent ?? word.is_deponent,
+      principal_parts: verbValues.principal_parts ?? word.principal_parts,
+      conjugation_table: word.conjugation_table,
     } as VocabularyWordWithId;
   }
 
@@ -160,3 +167,16 @@ export const applyFormValuesToWord = (
 };
 
 export type FormSchema = ReturnType<typeof BaseWordFormSchema.merge>;
+
+export const getTableFieldName = (partOfSpeech: VocabularyWord['part_of_speech'], tableType: string): string | null => {
+  if (tableType === 'declension') {
+    return partOfSpeech === 'noun' || partOfSpeech === 'pronoun' ? 'declension_table' : null;
+  }
+  if (tableType === 'adjective-declension') {
+    return partOfSpeech === 'adjective' ? 'degrees_table' : null;
+  }
+  if (tableType === 'conjugation') {
+    return partOfSpeech === 'verb' ? 'conjugation_table' : null;
+  }
+  return null;
+};

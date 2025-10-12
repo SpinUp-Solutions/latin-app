@@ -2,6 +2,7 @@ import { useFormContext } from 'react-hook-form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/src/components/ui/form';
 import { VocabularyFormValues } from './types';
+import React from 'react';
 
 const declensionOptions = [
   { value: '1-2', label: 'First/Second' },
@@ -20,7 +21,13 @@ export const AdjectiveForm = () => {
           <FormItem>
             <FormLabel>Declension (optional)</FormLabel>
             <FormControl>
-              <Select value={field.value ?? undefined} onValueChange={field.onChange}>
+              <Select
+                value={field.value ?? undefined}
+                onValueChange={value => {
+                  if (value && value.trim() !== '') {
+                    field.onChange(value);
+                  }
+                }}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select declension" />
                 </SelectTrigger>

@@ -11,10 +11,10 @@ export const BaseWordSchema = z.object({
   part_of_speech: PartOfSpeechSchema,
   translation: z.string(),
   definitions: z.array(z.string()),
-  etymology: z.string().nullable().optional(),
-  pronunciation: z.string().nullable().optional(),
+  etymology: z.string().nullable(),
+  pronunciation: z.string().nullable(),
   type: WordTypeSchema,
-  alternate_form: z.string().nullable().optional(),
+  alternate_form: z.string().nullable(),
   createdAt: FirestoreTimestampSchema,
   updatedAt: FirestoreTimestampSchema,
 });

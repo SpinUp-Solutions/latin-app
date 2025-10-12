@@ -52,7 +52,12 @@ export const PrincipalPartsEditor = () => {
                 </FormItem>
               )}
             />
-            <Button type="button" variant="outline" size="icon" onClick={() => parts.remove(index)} title="Remove principal part">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={() => parts.remove(index)}
+              title="Remove principal part">
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>

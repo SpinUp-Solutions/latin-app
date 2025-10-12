@@ -5,11 +5,11 @@ import { WordFormSchema } from './word-form';
 
 export const NounSchema = BaseWordSchema.extend({
   part_of_speech: z.literal('noun'),
-  gender: GenderSchema.nullable().optional(),
-  declension: NounDeclensionSchema,
+  gender: GenderSchema.nullable(),
+  declension: NounDeclensionSchema.nullable(),
   declension_table: DeclensionTableSchema,
-  nominative_singular: WordFormSchema.nullable().optional(),
-  genitive_singular: WordFormSchema.nullable().optional(),
+  nominative_singular: WordFormSchema.nullable(),
+  genitive_singular: WordFormSchema.nullable(),
 });
 
 export type Noun = z.infer<typeof NounSchema>;

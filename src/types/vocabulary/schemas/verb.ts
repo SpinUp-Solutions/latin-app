@@ -5,10 +5,10 @@ import { WordFormSchema } from './word-form';
 
 export const VerbSchema = BaseWordSchema.extend({
   part_of_speech: z.literal('verb'),
-  conjugation: VerbConjugationSchema,
+  conjugation: VerbConjugationSchema.nullable(),
   conjugation_table: ConjugationTableSchema,
-  principal_parts: z.array(WordFormSchema).nullable().optional(),
-  is_deponent: z.boolean().nullable().optional(),
+  principal_parts: z.array(WordFormSchema).nullable(),
+  is_deponent: z.boolean().nullable(),
 });
 
 export type Verb = z.infer<typeof VerbSchema>;

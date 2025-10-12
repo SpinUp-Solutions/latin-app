@@ -1,36 +1,33 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useForm, FormProvider, Path, Resolver } from 'react-hook-form';
+import { useForm, FormProvider, Resolver } from 'react-hook-form';
+import { useDispatch, useSelector } from 'react-redux';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/src/components/ui/button';
-import {
-  VocabularyWord,
-  VocabularyWordWithId,
-  Noun,
-  Verb,
-  Adjective,
-  Pronoun,
-} from '@/src/types/vocabulary/vocabulary-new';
+import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary/vocabulary-new';
 import { EditingCell } from '@/src/types/admin-vocabulary';
 import { parseEditingCellValue, TABLE_TYPES, TableType } from '@/src/utils/vocabUtils';
-import { DeclensionTable } from './tables/DeclensionTable';
-import { AdjectiveDeclensionTable } from './tables/AdjectiveDeclensionTable';
-import { ConjugationTable } from './tables/ConjugationTable';
+import { SchemaTable } from './tables/SchemaTable';
+import { DeclensionTableSchema } from '@/src/types/vocabulary/schemas/declension';
+import { ConjugationTableSchema } from '@/src/types/vocabulary/schemas/verb-conjugation';
+import { DegreesTableSchema } from '@/src/types/vocabulary/schemas/adjective';
 import { BookOpen } from 'lucide-react';
-import {
-  BaseWordForm,
-  NounForm,
-  PronounForm,
-  AdjectiveForm,
-  VerbForm,
-  IndeclinableForm,
-  VocabularyFormValues,
-} from './forms';
+import { BaseWordForm, NounForm, PronounForm, AdjectiveForm, VerbForm, VocabularyFormValues } from './forms';
 import {
   getFormSchemaForPartOfSpeech,
   toFormDefaultValues,
   applyFormValuesToWord,
 } from '@/src/types/vocabulary/form-schemas/builder';
 import type { BaseWordFormValues } from '@/src/types/vocabulary/form-schemas/base';
+import {
+  clear as clearVocabularyEdit,
+  initFromWord,
+  selectConjugationTable,
+  selectDeclensionTable,
+  selectDegreesTable,
+  selectVocabularyPartOfSpeech,
+  setCell as setVocabularyTableCell,
+} from '@/src/store/slices/vocabularyEditSlice';
+import type { RootState } from '@/src/store';
 
 interface WordEditPanelProps {
   word: VocabularyWordWithId | null;
@@ -62,7 +59,30 @@ const EmptyState: React.FC = () => (
   </div>
 );
 
+const getValueFromTable = (table: Record<string, unknown>, path: string): unknown => {
+  if (!table) return undefined;
+  const segments = path.split('.').filter(Boolean);
+  let current: unknown = table;
+  for (const segment of segments) {
+    if (current === null || current === undefined || typeof current !== 'object') {
+      return undefined;
+    }
+    current = (current as Record<string, unknown>)[segment];
+  }
+  return current;
+};
+
+const cloneTableData = (value: unknown): Record<string, unknown> => {
+  if (value === undefined || value === null) return {};
+  try {
+    return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
+  } catch (error) {
+    return {};
+  }
+};
+
 export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, updating }) => {
+  const dispatch = useDispatch();
   const schema = useMemo(() => getFormSchemaForPartOfSpeech(word?.part_of_speech ?? 'noun'), [word?.part_of_speech]);
 
   const form = useForm<VocabularyFormValues>({
@@ -76,37 +96,44 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
   const [expandedEditTables, setExpandedEditTables] = useState<Set<string>>(
     new Set([TABLE_TYPES.DECLENSION, TABLE_TYPES.ADJECTIVE_DECLENSION, TABLE_TYPES.CONJUGATION])
   );
+  const [tableErrors, setTableErrors] = useState<string[]>([]);
+
+  const declensionTable = useSelector((state: RootState) => selectDeclensionTable(state));
+  const degreesTable = useSelector((state: RootState) => selectDegreesTable(state));
+  const conjugationTable = useSelector((state: RootState) => selectConjugationTable(state));
+  const currentPartOfSpeech = useSelector((state: RootState) => selectVocabularyPartOfSpeech(state));
 
   useEffect(() => {
     if (word) {
-      form.reset(toFormDefaultValues(word));
+      const formValues = toFormDefaultValues(word);
+      form.reset(formValues, { keepDefaultValues: false });
+      dispatch(initFromWord(word));
       setExpandedEditTables(
         new Set([TABLE_TYPES.DECLENSION, TABLE_TYPES.ADJECTIVE_DECLENSION, TABLE_TYPES.CONJUGATION])
       );
     } else {
-      form.reset(EMPTY_FORM_VALUES as VocabularyFormValues);
+      form.reset(EMPTY_FORM_VALUES as VocabularyFormValues, { keepDefaultValues: false });
+      dispatch(clearVocabularyEdit());
     }
     setEditingCell(null);
     setEditingCellValue('');
-  }, [word, form]);
-
-  const buildFieldPath = (tableType: TableType, cellKey: string): Path<VocabularyFormValues> | null => {
-    if (tableType === TABLE_TYPES.DECLENSION) {
-      return `declension_table.${cellKey}` as Path<VocabularyFormValues>;
-    }
-    if (tableType === TABLE_TYPES.ADJECTIVE_DECLENSION) {
-      return `adjective_declension_table.${cellKey}` as Path<VocabularyFormValues>;
-    }
-    if (tableType === TABLE_TYPES.CONJUGATION) {
-      return `conjugation_table.${cellKey}` as Path<VocabularyFormValues>;
-    }
-    return null;
-  };
+    setTableErrors([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [word?.id, dispatch]);
 
   const handleCellDoubleClick = (rowIndex: number, cellKey: string, tableType: string, displayValue: string) => {
-    const fieldPath = buildFieldPath(tableType as TableType, cellKey);
-    const value = fieldPath ? form.getValues(fieldPath) : undefined;
-    const normalized = Array.isArray(value) ? value.join(', ') : displayValue === '—' ? '' : displayValue;
+    const tableData =
+      tableType === TABLE_TYPES.DECLENSION
+        ? declensionTable
+        : tableType === TABLE_TYPES.ADJECTIVE_DECLENSION
+          ? degreesTable
+          : conjugationTable;
+    const existingValue = getValueFromTable(tableData, cellKey);
+    const normalized = Array.isArray(existingValue)
+      ? existingValue.join(', ')
+      : displayValue === '—'
+        ? ''
+        : displayValue;
     setEditingCell({ rowIndex, cellKey, tableType });
     setEditingCellValue(normalized);
   };
@@ -115,10 +142,8 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
     if (!editingCell) return;
     const { cellKey, tableType } = editingCell;
     const newValue = parseEditingCellValue(editingCellValue);
-    const fieldPath = buildFieldPath(tableType as TableType, cellKey);
-    if (fieldPath) {
-      form.setValue(fieldPath, newValue, { shouldDirty: true, shouldTouch: true });
-    }
+    const valueForStore = newValue.length > 0 ? newValue : null;
+    dispatch(setVocabularyTableCell({ tableType: tableType as TableType, path: cellKey, value: valueForStore }));
     setEditingCell(null);
     setEditingCellValue('');
   };
@@ -142,56 +167,74 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
 
   const isEditTableExpanded = (tableType: string) => expandedEditTables.has(tableType);
 
-  const handleSubmit = form.handleSubmit(async values => {
-    if (!word) return;
-    const updatedWord = applyFormValuesToWord(word, values);
-    const { id: discardedId, ...payload } = updatedWord;
-    void discardedId;
-    const success = await onSave(payload);
-    if (success) {
-      form.reset(toFormDefaultValues(updatedWord));
-      setEditingCell(null);
-      setEditingCellValue('');
+  const handleSubmit = form.handleSubmit(
+    async values => {
+      if (!word) return;
+      const newTableErrors: string[] = [];
+
+      if (currentPartOfSpeech === 'noun' || currentPartOfSpeech === 'pronoun') {
+        const result = DeclensionTableSchema.safeParse(declensionTable);
+        if (!result.success) {
+          newTableErrors.push(result.error.issues[0]?.message ?? 'Invalid declension table');
+        }
+      }
+
+      if (currentPartOfSpeech === 'adjective') {
+        const result = DegreesTableSchema.safeParse(degreesTable);
+        if (!result.success) {
+          newTableErrors.push(result.error.issues[0]?.message ?? 'Invalid degrees table');
+        }
+      }
+
+      if (currentPartOfSpeech === 'verb') {
+        const result = ConjugationTableSchema.safeParse(conjugationTable);
+        if (!result.success) {
+          newTableErrors.push(result.error.issues[0]?.message ?? 'Invalid conjugation table');
+        }
+      }
+
+      if (newTableErrors.length > 0) {
+        setTableErrors(newTableErrors);
+        return;
+      }
+
+      setTableErrors([]);
+
+      const updatedWord = applyFormValuesToWord(word, values);
+
+      if (currentPartOfSpeech === 'noun' || currentPartOfSpeech === 'pronoun') {
+        const clonedTable = cloneTableData(declensionTable);
+        (updatedWord as unknown as Record<string, unknown>).declension_table = clonedTable;
+      }
+
+      if (currentPartOfSpeech === 'adjective') {
+        const clonedTable = cloneTableData(degreesTable);
+        (updatedWord as unknown as Record<string, unknown>).degrees_table = clonedTable;
+      }
+
+      if (currentPartOfSpeech === 'verb') {
+        const clonedTable = cloneTableData(conjugationTable);
+        (updatedWord as unknown as Record<string, unknown>).conjugation_table = clonedTable;
+      }
+
+      const { id: discardedId, ...payload } = updatedWord;
+      void discardedId;
+
+      const success = await onSave(payload);
+      if (success) {
+        form.reset(toFormDefaultValues(updatedWord));
+        dispatch(initFromWord(updatedWord));
+        setEditingCell(null);
+        setEditingCellValue('');
+      }
+    },
+    errors => {
+      setTableErrors([]);
+      console.error('WordEditPanel submit errors', errors);
     }
-  });
+  );
 
   const watchedWord = form.watch('word');
-  const nounDeclension = form.watch('declension_table');
-  const adjectiveDeclension = form.watch('adjective_declension_table');
-  const conjugationTable = form.watch('conjugation_table');
-
-  const nounOrPronounWord = useMemo(() => {
-    if (!word) return null;
-    if (word.part_of_speech === 'noun' || word.part_of_speech === 'pronoun') {
-      return {
-        ...word,
-        declension_table: nounDeclension ?? {},
-      } as (Noun | Pronoun) & { id: string };
-    }
-    return null;
-  }, [word, nounDeclension]);
-
-  const adjectiveWord = useMemo(() => {
-    if (!word) return null;
-    if (word.part_of_speech === 'adjective') {
-      return {
-        ...word,
-        adjective_declension_table: adjectiveDeclension ?? {},
-      } as Adjective & { id: string };
-    }
-    return null;
-  }, [word, adjectiveDeclension]);
-
-  const verbWord = useMemo(() => {
-    if (!word) return null;
-    if (word.part_of_speech === 'verb') {
-      return {
-        ...word,
-        conjugation_table: conjugationTable ?? {},
-      } as Verb & { id: string };
-    }
-    return null;
-  }, [word, conjugationTable]);
 
   const renderPosForm = () => {
     if (!word) return null;
@@ -208,7 +251,7 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
       case 'preposition':
       case 'conjunction':
       case 'interjection':
-        return <IndeclinableForm />;
+        return null;
       default:
         return null;
     }
@@ -223,14 +266,34 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
   return (
     <FormProvider {...form}>
       <form onSubmit={handleSubmit} className="flex flex-col h-full overflow-hidden bg-white border-l border-gray-200">
-        <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
-          <div className="min-w-0 flex-1">
-            <h2 className="text-xl font-serif font-semibold text-roman-red truncate">{watchedWord || word.word}</h2>
-            <p className="text-sm text-gray-500 mt-0.5">{word.part_of_speech}</p>
+        <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-xl font-serif font-semibold text-roman-red truncate">{watchedWord || word.word}</h2>
+              <p className="text-sm text-gray-500 mt-0.5">{word.part_of_speech}</p>
+            </div>
+            <Button type="submit" disabled={updating || isSubmitting} className="ml-4">
+              {updating || isSubmitting ? 'Saving...' : 'Apply'}
+            </Button>
           </div>
-          <Button type="submit" disabled={updating || isSubmitting} className="ml-4">
-            {updating || isSubmitting ? 'Saving...' : 'Apply'}
-          </Button>
+          {Object.keys(form.formState.errors).length > 0 && (
+            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+              <div className="font-semibold mb-1">Validation Errors:</div>
+              <pre className="text-xs overflow-auto">{JSON.stringify(form.formState.errors, null, 2)}</pre>
+            </div>
+          )}
+          {tableErrors.length > 0 && (
+            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+              <div className="font-semibold mb-1">Table Validation Errors:</div>
+              <ul className="list-disc list-inside space-y-1">
+                {tableErrors.map((error, index) => (
+                  <li key={index} className="text-xs">
+                    {error}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-4">
@@ -238,9 +301,13 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
             <BaseWordForm />
             {renderPosForm()}
 
-            {nounOrPronounWord && (
-              <DeclensionTable
-                word={nounOrPronounWord}
+            {(word?.part_of_speech === 'noun' || word?.part_of_speech === 'pronoun') && (
+              <SchemaTable
+                schema={DeclensionTableSchema}
+                data={declensionTable}
+                tableType={TABLE_TYPES.DECLENSION}
+                title="Declension Table"
+                color="text-blue-700"
                 isExpanded={isEditTableExpanded(TABLE_TYPES.DECLENSION)}
                 onToggle={() => toggleEditTableExpansion(TABLE_TYPES.DECLENSION)}
                 isEditMode={true}
@@ -253,9 +320,13 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
               />
             )}
 
-            {adjectiveWord && (
-              <AdjectiveDeclensionTable
-                word={adjectiveWord}
+            {word?.part_of_speech === 'adjective' && (
+              <SchemaTable
+                schema={DegreesTableSchema}
+                data={degreesTable}
+                tableType={TABLE_TYPES.ADJECTIVE_DECLENSION}
+                title="Degrees of Comparison"
+                color="text-purple-700"
                 isExpanded={isEditTableExpanded(TABLE_TYPES.ADJECTIVE_DECLENSION)}
                 onToggle={() => toggleEditTableExpansion(TABLE_TYPES.ADJECTIVE_DECLENSION)}
                 isEditMode={true}
@@ -268,9 +339,13 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
               />
             )}
 
-            {verbWord && (
-              <ConjugationTable
-                word={verbWord}
+            {word?.part_of_speech === 'verb' && (
+              <SchemaTable
+                schema={ConjugationTableSchema}
+                data={conjugationTable}
+                tableType={TABLE_TYPES.CONJUGATION}
+                title="Conjugation Table"
+                color="text-green-700"
                 isExpanded={isEditTableExpanded(TABLE_TYPES.CONJUGATION)}
                 onToggle={() => toggleEditTableExpansion(TABLE_TYPES.CONJUGATION)}
                 isEditMode={true}

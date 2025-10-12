@@ -125,7 +125,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
 export async function PUT(request: NextRequest): Promise<NextResponse> {
   try {
-    const { wordId, updates, collection = 'vocabulary_words_v2' } = await request.json();
+    const body = await request.json();
+    console.log('PUT /api/admin/words body', JSON.stringify(body));
+    const { wordId, updates, collection = 'vocabulary_words_v2' } = body;
 
     if (!wordId || !updates) {
       return NextResponse.json(
@@ -145,13 +147,18 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
       updatedAt: new Date(),
     };
 
+    console.log('Final update data:', JSON.stringify(updateData, null, 2));
+
     await adminDb.collection(collection).doc(wordId).update(updateData);
 
     console.log(`Word ${wordId} updated successfully in ${collection}`);
 
     const updatedDoc = await adminDb.collection(collection).doc(wordId).get();
-    const updatedData = serializeWord(updatedDoc.data() as Record<string, unknown>);
-    console.log('Updated document data:', JSON.stringify(updatedData, null, 2));
+    const updatedData = {
+      id: updatedDoc.id,
+      ...serializeWord(updatedDoc.data() as Record<string, unknown>),
+    };
+    console.log('Updated document data with id:', JSON.stringify(updatedData, null, 2));
 
     return NextResponse.json({
       success: true,

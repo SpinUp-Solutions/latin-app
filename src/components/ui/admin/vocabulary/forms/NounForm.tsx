@@ -3,7 +3,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/src/components/ui/form';
 import { VocabularyFormValues } from './types';
 import { WordFormInput } from './WordFormInput';
-
+import React from 'react';
 const genderOptions = [
   { value: 'masculine', label: 'Masculine' },
   { value: 'feminine', label: 'Feminine' },
@@ -32,7 +32,13 @@ export const NounForm = () => {
             <FormItem>
               <FormLabel>Gender (optional)</FormLabel>
               <FormControl>
-                <Select value={field.value ?? undefined} onValueChange={field.onChange}>
+                <Select
+                  value={field.value ?? undefined}
+                  onValueChange={value => {
+                    if (value && value.trim() !== '') {
+                      field.onChange(value);
+                    }
+                  }}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select gender" />
                   </SelectTrigger>
@@ -57,7 +63,13 @@ export const NounForm = () => {
             <FormItem>
               <FormLabel>Declension</FormLabel>
               <FormControl>
-                <Select value={field.value ?? undefined} onValueChange={field.onChange}>
+                <Select
+                  value={field.value ?? undefined}
+                  onValueChange={value => {
+                    if (value && value.trim() !== '') {
+                      field.onChange(value);
+                    }
+                  }}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select declension" />
                   </SelectTrigger>

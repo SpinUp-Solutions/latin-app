@@ -1,90 +1,57 @@
 import { z } from 'zod';
 import { CaseSchema, GenderSchema, NumberSchema, NounDeclensionSchema, AdjectiveDeclensionSchema } from './enums';
 
-export const DeclensionNumberFormsSchema = z
-  .object({
-    singular: z.array(z.string()),
-    plural: z.array(z.string()),
-  })
-  .nullable()
-  .optional();
+export const DeclensionNumberFormsSchema = z.object({
+  singular: z.array(z.string()).nullable(),
+  plural: z.array(z.string()).nullable(),
+});
 
-export const GenderFormsSchema = z
-  .object({
-    masculine: DeclensionNumberFormsSchema,
-    feminine: DeclensionNumberFormsSchema,
-    neuter: DeclensionNumberFormsSchema,
-  })
-  .nullable()
-  .optional();
+export const GenderFormsSchema = z.object({
+  masculine: DeclensionNumberFormsSchema,
+  feminine: DeclensionNumberFormsSchema,
+  neuter: DeclensionNumberFormsSchema,
+});
 
-export const DeclensionTableSchema = z
-  .object({
-    nominative: z
-      .object({
-        singular: z.array(z.string()),
-        plural: z.array(z.string()),
-      })
-      .nullable()
-      .optional(),
-    genitive: z
-      .object({
-        singular: z.array(z.string()),
-        plural: z.array(z.string()),
-      })
-      .nullable()
-      .optional(),
-    dative: z
-      .object({
-        singular: z.array(z.string()),
-        plural: z.array(z.string()),
-      })
-      .nullable()
-      .optional(),
-    accusative: z
-      .object({
-        singular: z.array(z.string()),
-        plural: z.array(z.string()),
-      })
-      .nullable()
-      .optional(),
-    ablative: z
-      .object({
-        singular: z.array(z.string()),
-        plural: z.array(z.string()),
-      })
-      .nullable()
-      .optional(),
-    vocative: z
-      .object({
-        singular: z.array(z.string()),
-        plural: z.array(z.string()),
-      })
-      .nullable()
-      .optional(),
-    locative: z
-      .object({
-        singular: z.array(z.string()),
-        plural: z.array(z.string()),
-      })
-      .nullable()
-      .optional(),
-  })
-  .nullable()
-  .optional();
+export const DeclensionTableSchema = z.object({
+  nominative: z.object({
+    singular: z.array(z.string()).nullable(),
+    plural: z.array(z.string()).nullable(),
+  }),
+  genitive: z.object({
+    singular: z.array(z.string()).nullable(),
+    plural: z.array(z.string()).nullable(),
+  }),
+  dative: z.object({
+    singular: z.array(z.string()).nullable(),
+    plural: z.array(z.string()).nullable(),
+  }),
+  accusative: z.object({
+    singular: z.array(z.string()).nullable(),
+    plural: z.array(z.string()).nullable(),
+  }),
+  ablative: z.object({
+    singular: z.array(z.string()).nullable(),
+    plural: z.array(z.string()).nullable(),
+  }),
+  vocative: z.object({
+    singular: z.array(z.string()).nullable(),
+    plural: z.array(z.string()).nullable(),
+  }),
+  locative: z.object({
+    singular: z.array(z.string()).nullable(),
+    plural: z.array(z.string()).nullable(),
+  }),
+});
 
-export const AdjectiveDeclensionTableSchema = z
-  .object({
-    nominative: GenderFormsSchema,
-    genitive: GenderFormsSchema,
-    dative: GenderFormsSchema,
-    accusative: GenderFormsSchema,
-    ablative: GenderFormsSchema,
-    vocative: GenderFormsSchema,
-    locative: GenderFormsSchema,
-  })
-  .nullable()
-  .optional();
+export const AdjectiveDeclensionTableSchema = z.object({
+  nominative: GenderFormsSchema,
+  genitive: GenderFormsSchema,
+  dative: GenderFormsSchema,
+  accusative: GenderFormsSchema,
+  ablative: GenderFormsSchema,
+  vocative: GenderFormsSchema,
+  locative: GenderFormsSchema,
+});
 
 export const DeclensionTableRowSchema = z.object({
   case: CaseSchema,

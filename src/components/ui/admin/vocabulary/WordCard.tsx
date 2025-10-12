@@ -3,17 +3,7 @@ import { Button } from '@/src/components/ui/button';
 import { Badge } from '@/src/components/ui/badge';
 import { ChevronDown, ChevronRight, Volume2, List, ChevronUp } from 'lucide-react';
 import { VocabularyWordWithId } from '@/src/types/vocabulary/vocabulary-new';
-import { DeclensionTable } from './tables/DeclensionTable';
-import { AdjectiveDeclensionTable } from './tables/AdjectiveDeclensionTable';
-import { ConjugationTable } from './tables/ConjugationTable';
-import {
-  getWordTypeColor,
-  hasConjugationTable,
-  hasDeclensionTable,
-  hasAdjectiveDeclensionTable,
-  TABLE_TYPES,
-  isVerb,
-} from '@/src/utils/vocabUtils';
+import { getWordTypeColor, isVerb } from '@/src/utils/vocabUtils';
 
 interface WordCardProps {
   word: VocabularyWordWithId;
@@ -65,29 +55,6 @@ const ExpandableDefinitions: React.FC<{ definitions: string[] }> = ({ definition
 
 export const WordCard: React.FC<WordCardProps> = ({ word, onSelect, isSelected = false, isLast = false }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [expandedTables, setExpandedTables] = useState<Set<string>>(new Set());
-
-  const toggleTableExpansion = (tableType: string) => {
-    const key = `${word.id}-${tableType}`;
-    setExpandedTables(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(key)) {
-        newSet.delete(key);
-      } else {
-        newSet.add(key);
-      }
-      return newSet;
-    });
-  };
-
-  const isTableExpanded = (tableType: string) => {
-    return expandedTables.has(`${word.id}-${tableType}`);
-  };
-
-  const hasTables =
-    (hasDeclensionTable(word) && word.declension_table) ||
-    (hasAdjectiveDeclensionTable(word) && word.adjective_declension_table) ||
-    (hasConjugationTable(word) && word.conjugation_table);
 
   return (
     <div
@@ -112,9 +79,7 @@ export const WordCard: React.FC<WordCardProps> = ({ word, onSelect, isSelected =
           </button>
 
           <div className="flex items-center gap-2">
-            <Badge className={getWordTypeColor(word.part_of_speech)} shrink-0>
-              {word.part_of_speech}
-            </Badge>
+            <Badge className={`${getWordTypeColor(word.part_of_speech)} shrink-0`}>{word.part_of_speech}</Badge>
 
             {word.part_of_speech === 'noun' && word.declension && (
               <Badge variant="outline" className="text-xs">
@@ -216,34 +181,6 @@ export const WordCard: React.FC<WordCardProps> = ({ word, onSelect, isSelected =
               <div>
                 <span className="text-sm font-medium text-gray-700">Etymology:</span>
                 <p className="text-sm text-gray-600 italic mt-1">{word.etymology}</p>
-              </div>
-            )}
-
-            {hasTables && (
-              <div className="border-t pt-3 mt-4">
-                {hasDeclensionTable(word) && word.declension_table && (
-                  <DeclensionTable
-                    word={word}
-                    isExpanded={isTableExpanded(TABLE_TYPES.DECLENSION)}
-                    onToggle={() => toggleTableExpansion(TABLE_TYPES.DECLENSION)}
-                  />
-                )}
-
-                {hasAdjectiveDeclensionTable(word) && word.adjective_declension_table && (
-                  <AdjectiveDeclensionTable
-                    word={word}
-                    isExpanded={isTableExpanded(TABLE_TYPES.ADJECTIVE_DECLENSION)}
-                    onToggle={() => toggleTableExpansion(TABLE_TYPES.ADJECTIVE_DECLENSION)}
-                  />
-                )}
-
-                {hasConjugationTable(word) && word.conjugation_table && (
-                  <ConjugationTable
-                    word={word}
-                    isExpanded={isTableExpanded(TABLE_TYPES.CONJUGATION)}
-                    onToggle={() => toggleTableExpansion(TABLE_TYPES.CONJUGATION)}
-                  />
-                )}
               </div>
             )}
           </div>

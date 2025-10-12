@@ -5,6 +5,7 @@ import lessonEditorReducer from './slices/lessonEditorSlice';
 import clipboardReducer from './slices/clipboardSlice';
 import vocabularyPoolsReducer from './slices/vocabularyPoolSlice';
 import vocabularyReducer from './slices/vocabularySlice';
+import vocabularyEditReducer from './slices/vocabularyEditSlice';
 import { lessonApi } from './api/lessonApi';
 import { vocabularyPoolApi } from './api/vocabularyPoolApi';
 import { vocabularyApi } from './api/vocabularyApi';
@@ -17,6 +18,7 @@ export const store = configureStore({
     clipboard: clipboardReducer,
     vocabularyPools: vocabularyPoolsReducer,
     vocabulary: vocabularyReducer,
+    vocabularyEdit: vocabularyEditReducer,
     [lessonApi.reducerPath]: lessonApi.reducer,
     [vocabularyPoolApi.reducerPath]: vocabularyPoolApi.reducer,
     [vocabularyApi.reducerPath]: vocabularyApi.reducer,
