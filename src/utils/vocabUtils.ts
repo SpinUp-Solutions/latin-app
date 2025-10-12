@@ -1,4 +1,4 @@
-import { VocabularyWord, Noun, Verb, Adjective, Pronoun } from '@/src/types/vocabulary/vocabulary-new';
+import { VocabularyWord, Noun, Verb, Adjective, Pronoun } from '@/src/types/vocabulary/index';
 
 export const TABLE_TYPES = {
   DECLENSION: 'declension',

@@ -1,4 +1,4 @@
-import type { VocabularyWord, VocabularyWordWithId } from '../vocabulary-new';
+import type { VocabularyWord, VocabularyWordWithId } from '../index';
 import { BaseWordFormSchema, BaseWordFormValues } from './base';
 import { NounFormSchema, NounFormValues } from './noun';
 import { PronounFormSchema, PronounFormValues } from './pronoun';

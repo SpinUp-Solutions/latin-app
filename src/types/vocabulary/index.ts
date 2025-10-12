@@ -9,4 +9,15 @@ export * from './schemas/pronoun';
 export * from './schemas/adjective';
 export * from './schemas/indeclinable-words';
 
-export type { VocabularyWord, VocabularyWordWithId } from './vocabulary-new';
+export type {
+  VocabularyWord,
+  VocabularyWordWithId,
+  Noun,
+  Verb,
+  Pronoun,
+  Adjective,
+  Adverb,
+  Preposition,
+  Conjunction,
+  Interjection,
+} from './schemas';

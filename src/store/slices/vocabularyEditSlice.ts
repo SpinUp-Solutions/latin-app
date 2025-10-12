@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import type { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary/vocabulary-new';
+import type { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary/index';
 
 type TableType = 'declension' | 'adjective-declension' | 'conjugation';
 

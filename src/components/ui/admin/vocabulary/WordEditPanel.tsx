@@ -3,7 +3,7 @@ import { useForm, FormProvider, Resolver } from 'react-hook-form';
 import { useDispatch, useSelector } from 'react-redux';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/src/components/ui/button';
-import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary/vocabulary-new';
+import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary/index';
 import { EditingCell } from '@/src/types/admin-vocabulary';
 import { parseEditingCellValue, TABLE_TYPES, TableType } from '@/src/utils/vocabUtils';
 import { SchemaTable } from './tables/SchemaTable';

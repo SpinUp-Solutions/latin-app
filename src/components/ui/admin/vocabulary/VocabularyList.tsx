@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card, CardContent } from '@/src/components/ui/card';
 import { Loader2, Search } from 'lucide-react';
-import { VocabularyWordWithId } from '@/src/types/vocabulary/vocabulary-new';
+import { VocabularyWordWithId } from '@/src/types/vocabulary/index';
 import { WordCard } from './WordCard';
 import { useInfiniteScroll } from '@/src/hooks/useInfiniteScroll';
 

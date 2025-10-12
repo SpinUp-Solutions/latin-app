@@ -6,7 +6,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { Button } from '@/src/components/ui/button';
 import { ArrowLeft, BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
-import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary/vocabulary-new';
+import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary/index';
 import { useGetWordsQuery, useGetWordTypeCountsQuery, useUpdateWordMutation } from '@/src/store/api/vocabularyApi';
 import {
   updateFilters as updateFiltersAction,
