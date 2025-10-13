@@ -13,11 +13,15 @@ const serializeWord = (data: Record<string, unknown>) => {
   const serialized: Record<string, unknown> = { ...data };
   if ('createdAt' in serialized) {
     const createdAt = serializeTimestamp(serialized.createdAt);
-    if (createdAt) serialized.createdAt = createdAt;
+    if (createdAt) {
+      serialized.createdAt = createdAt;
+    }
   }
   if ('updatedAt' in serialized) {
     const updatedAt = serializeTimestamp(serialized.updatedAt);
-    if (updatedAt) serialized.updatedAt = updatedAt;
+    if (updatedAt) {
+      serialized.updatedAt = updatedAt;
+    }
   }
   return serialized;
 };
@@ -33,8 +37,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const search = searchParams.get('search');
     const countsOnly = searchParams.get('countsOnly') === 'true';
     const collection = searchParams.get('collection') || 'vocabulary_words_v2';
-
-    console.log('Fetching words with filters:', { wordType, limit, lastWordId, search, countsOnly, collection });
 
     if (countsOnly) {
       const wordTypeCounts = await getWordTypeCounts(collection);
@@ -104,7 +106,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 export async function PUT(request: NextRequest): Promise<NextResponse> {
   try {
     const body = await request.json();
-    console.log('PUT /api/admin/words body', JSON.stringify(body));
     const { wordId, updates, collection = 'vocabulary_words_v2' } = body;
 
     if (!wordId || !updates) {
@@ -117,26 +118,18 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    console.log('Updating word:', wordId, 'in collection:', collection);
-    console.log('Updates data:', JSON.stringify(updates, null, 2));
-
     const updateData = {
       ...updates,
       updatedAt: new Date(),
     };
 
-    console.log('Final update data:', JSON.stringify(updateData, null, 2));
-
     await adminDb.collection(collection).doc(wordId).update(updateData);
-
-    console.log(`Word ${wordId} updated successfully in ${collection}`);
 
     const updatedDoc = await adminDb.collection(collection).doc(wordId).get();
     const updatedData = {
       id: updatedDoc.id,
       ...serializeWord(updatedDoc.data() as Record<string, unknown>),
     };
-    console.log('Updated document data with id:', JSON.stringify(updatedData, null, 2));
 
     return NextResponse.json({
       success: true,

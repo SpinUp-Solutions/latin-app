@@ -51,8 +51,9 @@ export const vocabularyApi = createApi({
       transformResponse: (response: WordsResponse) => {
         const validatedWords = response.data.words.flatMap((word: unknown) => {
           const result = VocabularyWordWithIdSchema.safeParse(word);
-          if (result.success) return [result.data as VocabularyWordWithId];
-          console.warn('Vocabulary validation skipped invalid item:', result.error.issues);
+          if (result.success) {
+            return [result.data as VocabularyWordWithId];
+          }
           return [] as VocabularyWordWithId[];
         });
         return {
@@ -130,23 +131,9 @@ export const vocabularyApi = createApi({
       },
       transformResponse: (response: { success: boolean; updatedData: VocabularyWordWithId }) => {
         try {
-          console.log('API transformResponse - validating updatedData:', JSON.stringify(response.updatedData, null, 2));
-          const result = VocabularyWordWithIdSchema.parse(response.updatedData);
-          console.log('API validation PASSED');
-          return result as VocabularyWordWithId;
+          return VocabularyWordWithIdSchema.parse(response.updatedData) as VocabularyWordWithId;
         } catch (error) {
           if (error instanceof ZodError) {
-            console.error('API Vocabulary validation error DETAILS:');
-            error.issues.forEach((issue, index) => {
-              console.error(`  Issue ${index + 1}:`, {
-                path: issue.path.join('.'),
-                message: issue.message,
-                code: issue.code,
-                received: 'received' in issue ? issue.received : undefined,
-              });
-            });
-            console.error('Failed data structure:', Object.keys(response.updatedData));
-            console.error('Missing id?', !('id' in response.updatedData));
             throw new Error(
               `Invalid vocabulary data: ${error.issues.map((e: ZodIssue) => `${e.path.join('.')}: ${e.message}`).join(', ')}`
             );
