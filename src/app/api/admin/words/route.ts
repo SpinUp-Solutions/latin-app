@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { Query } from 'firebase-admin/firestore';
+import { VocabularyWordSchema } from '@/src/types/vocabulary/schemas';
 
 const serializeTimestamp = (value: unknown): string | undefined => {
   if (value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function') {
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const lastWordId = searchParams.get('lastWordId');
     const search = searchParams.get('search');
     const countsOnly = searchParams.get('countsOnly') === 'true';
-    const collection = searchParams.get('collection') || 'vocabulary_words_v2';
+    const collection = searchParams.get('collection') || 'vocabulary_words_v4';
 
     if (countsOnly) {
       const wordTypeCounts = await getWordTypeCounts(collection);
@@ -103,10 +104,95 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 }
 
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  try {
+    const body = await request.json();
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Invalid request body',
+        },
+        { status: 400 }
+      );
+    }
+
+    const {
+      collection: providedCollection,
+      id: unusedId,
+      ...wordPayload
+    } = body as Record<string, unknown> & {
+      collection?: string;
+      id?: string;
+    };
+    void unusedId;
+
+    const collection =
+      typeof providedCollection === 'string' && providedCollection.trim() !== ''
+        ? providedCollection
+        : 'vocabulary_words_v4';
+
+    const now = new Date();
+    const isoTimestamp = now.toISOString();
+
+    const validationResult = VocabularyWordSchema.safeParse({
+      ...wordPayload,
+      createdAt: isoTimestamp,
+      updatedAt: isoTimestamp,
+    });
+
+    if (!validationResult.success) {
+      const errorMessage = validationResult.error.issues
+        .map(issue => `${issue.path.join('.') || 'root'}: ${issue.message}`)
+        .join('; ');
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Invalid word data: ${errorMessage}`,
+        },
+        { status: 400 }
+      );
+    }
+
+    const { createdAt, updatedAt, ...validatedWord } = validationResult.data;
+    void createdAt;
+    void updatedAt;
+
+    const firestorePayload = {
+      ...validatedWord,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const docRef = await adminDb.collection(collection).add(firestorePayload);
+    const createdSnapshot = await docRef.get();
+    const createdWord = {
+      id: createdSnapshot.id,
+      ...serializeWord(createdSnapshot.data() as Record<string, unknown>),
+    };
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        word: createdWord,
+      },
+    });
+  } catch (error) {
+    console.error('Error creating word:', error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+      },
+      { status: 500 }
+    );
+  }
+}
+
 export async function PUT(request: NextRequest): Promise<NextResponse> {
   try {
     const body = await request.json();
-    const { wordId, updates, collection = 'vocabulary_words_v2' } = body;
+    const { wordId, updates, collection = 'vocabulary_words_v4' } = body;
 
     if (!wordId || !updates) {
       return NextResponse.json(

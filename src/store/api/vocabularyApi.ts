@@ -183,12 +183,15 @@ export const vocabularyApi = createApi({
       ],
     }),
 
-    createWord: builder.mutation<VocabularyWordWithId, Omit<VocabularyWord, 'createdAt' | 'updatedAt'>>({
-      query: wordData => {
+    createWord: builder.mutation<
+      VocabularyWordWithId,
+      { wordData: Omit<VocabularyWord, 'createdAt' | 'updatedAt'>; collection?: string }
+    >({
+      query: ({ wordData, collection = 'vocabulary_words_v4' }) => {
         return {
           url: '/admin/words',
           method: 'POST',
-          body: wordData,
+          body: { ...wordData, collection },
         };
       },
       transformResponse: (response: { success: boolean; data: { word: VocabularyWordWithId } }) => {

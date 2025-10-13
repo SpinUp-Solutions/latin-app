@@ -7,7 +7,12 @@ import { Button } from '@/src/components/ui/button';
 import { ArrowLeft, BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
 import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary/index';
-import { useGetWordsQuery, useGetWordTypeCountsQuery, useUpdateWordMutation } from '@/src/store/api/vocabularyApi';
+import {
+  useGetWordsQuery,
+  useGetWordTypeCountsQuery,
+  useUpdateWordMutation,
+  useCreateWordMutation,
+} from '@/src/store/api/vocabularyApi';
 import {
   updateFilters as updateFiltersAction,
   resetFilters as resetFiltersAction,
@@ -18,6 +23,12 @@ import { WordEditPanel } from '@/src/components/ui/admin/vocabulary/WordEditPane
 import { VocabularyFiltersComponent } from '@/src/components/ui/admin/vocabulary/VocabularyFilters';
 import { VocabularyList } from '@/src/components/ui/admin/vocabulary/VocabularyList';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
+import { PartOfSpeechSchema, type PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
+import { buildEmptyWord, isPlaceholderWord } from '@/src/utils/vocabulary-defaults';
+
+const EMPTY_WORDS: VocabularyWordWithId[] = [];
+const PART_OF_SPEECH_OPTIONS = PartOfSpeechSchema.options;
 
 function AdminVocabularyPage() {
   const router = useRouter();
@@ -27,6 +38,7 @@ function AdminVocabularyPage() {
 
   const [lastWordId, setLastWordId] = useState<string | null>(null);
   const [selectedWordId, setSelectedWordId] = useState<string | null>(null);
+  const [creatingWord, setCreatingWord] = useState<VocabularyWordWithId | null>(null);
   const TARGET_COLLECTION = 'vocabulary_words_v4';
 
   const queryArgs = {
@@ -41,6 +53,8 @@ function AdminVocabularyPage() {
     collection: TARGET_COLLECTION,
   });
   const [updateWord, { isLoading: updating }] = useUpdateWordMutation();
+  const [createWord, { isLoading: creating }] = useCreateWordMutation();
+  const words = data?.words ?? EMPTY_WORDS;
 
   useEffect(() => {
     setLastWordId(null);
@@ -80,7 +94,13 @@ function AdminVocabularyPage() {
   }, []);
 
   const handleSelectWord = (word: VocabularyWordWithId) => {
+    setCreatingWord(null);
     setSelectedWordId(word.id);
+  };
+
+  const handleStartCreate = () => {
+    setCreatingWord(buildEmptyWord('verb'));
+    setSelectedWordId(null);
   };
 
   const handleUpdateWord = async (updates: Partial<VocabularyWord>) => {
@@ -108,6 +128,43 @@ function AdminVocabularyPage() {
     }
   };
 
+  const handleSaveWord = async (updates: Partial<VocabularyWord>) => {
+    if (isPlaceholderWord(creatingWord)) {
+      try {
+        const cleanedUpdates = Object.fromEntries(
+          Object.entries(updates).filter(([, value]) => {
+            if (value === undefined) return false;
+            return true;
+          })
+        );
+
+        const { createdAt, updatedAt, ...wordData } = cleanedUpdates as VocabularyWord & {
+          createdAt?: VocabularyWord['createdAt'];
+          updatedAt?: VocabularyWord['updatedAt'];
+        };
+        void createdAt;
+        void updatedAt;
+
+        const created = await createWord({
+          wordData: wordData as Omit<VocabularyWord, 'createdAt' | 'updatedAt'>,
+          collection: TARGET_COLLECTION,
+        }).unwrap();
+
+        toast.success('Word created successfully');
+        setCreatingWord(null);
+        setSelectedWordId(created.id);
+        return true;
+      } catch (error) {
+        console.error('Create word error:', error);
+        const message = error instanceof Error ? error.message : 'Error creating word';
+        toast.error(message);
+        return false;
+      }
+    }
+
+    return handleUpdateWord(updates);
+  };
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
   };
@@ -126,10 +183,14 @@ function AdminVocabularyPage() {
     dispatch(resetFiltersAction());
   };
 
-  const words = data?.words ?? [];
   const hasMore = data?.hasMore ?? false;
   const loadingMore = isFetching && lastWordId !== null;
-  const selectedWord = selectedWordId ? words.find(w => w.id === selectedWordId) || null : null;
+  const selectedWord = creatingWord ?? (selectedWordId ? words.find(w => w.id === selectedWordId) || null : null);
+
+  const handleCreatePartOfSpeechChange = (nextPart: PartOfSpeech) => {
+    setCreatingWord(buildEmptyWord(nextPart));
+    setSelectedWordId(null);
+  };
 
   return (
     <div className="h-screen flex flex-col bg-roman-marble">
@@ -150,6 +211,25 @@ function AdminVocabularyPage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          {isPlaceholderWord(creatingWord) && (
+            <Select
+              value={creatingWord?.part_of_speech}
+              onValueChange={value => handleCreatePartOfSpeechChange(value as PartOfSpeech)}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="Part of speech" />
+              </SelectTrigger>
+              <SelectContent>
+                {PART_OF_SPEECH_OPTIONS.map(option => (
+                  <SelectItem key={option} value={option}>
+                    {option.charAt(0).toUpperCase() + option.slice(1)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <Button onClick={handleStartCreate} disabled={creating || isPlaceholderWord(creatingWord)}>
+            {creating ? 'Creating...' : 'Create Word'}
+          </Button>
           <div className="text-sm text-roman-stone">{words.length} words loaded</div>
         </div>
       </header>
@@ -180,7 +260,7 @@ function AdminVocabularyPage() {
           </div>
         </div>
 
-        <WordEditPanel word={selectedWord} onSave={handleUpdateWord} updating={updating} />
+        <WordEditPanel word={selectedWord} onSave={handleSaveWord} updating={updating || creating} />
       </main>
     </div>
   );
