@@ -2,32 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { Query } from 'firebase-admin/firestore';
 
-type TimestampLike = {
-  seconds?: number;
-  nanoseconds?: number;
-  _seconds?: number;
-  _nanoseconds?: number;
-  toDate?: () => Date;
-};
-
-const serializeTimestamp = (value: unknown) => {
-  const ts = value as TimestampLike | undefined;
-  if (!ts) return undefined;
-
-  if (typeof ts.seconds === 'number' && typeof ts.nanoseconds === 'number') {
-    return {
-      seconds: ts.seconds,
-      nanoseconds: ts.nanoseconds,
-    };
+const serializeTimestamp = (value: unknown): string | undefined => {
+  if (value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function') {
+    return value.toDate().toISOString();
   }
-
-  if (typeof ts._seconds === 'number' && typeof ts._nanoseconds === 'number') {
-    return {
-      seconds: ts._seconds,
-      nanoseconds: ts._nanoseconds,
-    };
-  }
-
   return undefined;
 };
 

@@ -313,10 +313,12 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
                 isEditMode={true}
                 editingCell={editingCell}
                 editingCellValue={editingCellValue}
-                onCellDoubleClick={handleCellDoubleClick}
-                onCellEditSave={handleCellEditSave}
-                onCellEditCancel={handleCellEditCancel}
-                onEditingCellValueChange={setEditingCellValue}
+                editCallbacks={{
+                  onCellDoubleClick: handleCellDoubleClick,
+                  onCellEditSave: handleCellEditSave,
+                  onCellEditCancel: handleCellEditCancel,
+                  onEditingCellValueChange: setEditingCellValue,
+                }}
               />
             )}
 
@@ -332,10 +334,12 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
                 isEditMode={true}
                 editingCell={editingCell}
                 editingCellValue={editingCellValue}
-                onCellDoubleClick={handleCellDoubleClick}
-                onCellEditSave={handleCellEditSave}
-                onCellEditCancel={handleCellEditCancel}
-                onEditingCellValueChange={setEditingCellValue}
+                editCallbacks={{
+                  onCellDoubleClick: handleCellDoubleClick,
+                  onCellEditSave: handleCellEditSave,
+                  onCellEditCancel: handleCellEditCancel,
+                  onEditingCellValueChange: setEditingCellValue,
+                }}
               />
             )}
 
@@ -351,10 +355,12 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
                 isEditMode={true}
                 editingCell={editingCell}
                 editingCellValue={editingCellValue}
-                onCellDoubleClick={handleCellDoubleClick}
-                onCellEditSave={handleCellEditSave}
-                onCellEditCancel={handleCellEditCancel}
-                onEditingCellValueChange={setEditingCellValue}
+                editCallbacks={{
+                  onCellDoubleClick: handleCellDoubleClick,
+                  onCellEditSave: handleCellEditSave,
+                  onCellEditCancel: handleCellEditCancel,
+                  onEditingCellValueChange: setEditingCellValue,
+                }}
               />
             )}
           </div>

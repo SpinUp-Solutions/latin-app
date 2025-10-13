@@ -1,10 +1,7 @@
 import { z } from 'zod';
 import { PartOfSpeechSchema, WordTypeSchema } from './enums';
 
-export const FirestoreTimestampSchema = z.object({
-  seconds: z.number(),
-  nanoseconds: z.number(),
-});
+export const FirestoreTimestampSchema = z.string();
 
 export const BaseWordSchema = z.object({
   word: z.string(),

@@ -150,10 +150,7 @@ function AdminVocabularyPage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <div className="text-sm text-roman-stone">
-            {words.length} words loaded
-            {countsLoading && ' (loading counts...)'}
-          </div>
+          <div className="text-sm text-roman-stone">{words.length} words loaded</div>
         </div>
       </header>
 

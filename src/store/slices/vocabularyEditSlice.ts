@@ -68,13 +68,7 @@ export const vocabularyEditSlice = createSlice({
           ? cloneTable((word as unknown as Record<string, unknown>).conjugation_table)
           : {};
     },
-    clear: state => {
-      state.wordId = emptyState.wordId;
-      state.partOfSpeech = emptyState.partOfSpeech;
-      state.declensionTable = emptyState.declensionTable;
-      state.degreesTable = emptyState.degreesTable;
-      state.conjugationTable = emptyState.conjugationTable;
-    },
+    clear: () => emptyState,
     setCell: (state, action: PayloadAction<{ tableType: TableType; path: string; value: string[] | null }>) => {
       const { tableType, path, value } = action.payload;
 

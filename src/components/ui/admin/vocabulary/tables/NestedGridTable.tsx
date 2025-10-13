@@ -2,6 +2,7 @@ import React from 'react';
 import type { NestedTableGrid, TableGrid } from '@/src/types/schema-introspection';
 import type { EditingCell } from '@/src/types/admin-vocabulary';
 import { GridTable } from './GridTable';
+import type { EditCallbacks } from './EditableArrayCell';
 
 interface NestedGridTableProps {
   nestedGrid: NestedTableGrid;
@@ -9,10 +10,7 @@ interface NestedGridTableProps {
   isEditMode?: boolean;
   editingCell?: EditingCell | null;
   editingCellValue?: string;
-  onCellDoubleClick?: (rowIndex: number, cellKey: string, tableType: string, currentValue: string) => void;
-  onCellEditSave?: () => void;
-  onCellEditCancel?: () => void;
-  onEditingCellValueChange?: (value: string) => void;
+  editCallbacks?: EditCallbacks;
 }
 
 export const NestedGridTable: React.FC<NestedGridTableProps> = ({
@@ -21,10 +19,7 @@ export const NestedGridTable: React.FC<NestedGridTableProps> = ({
   isEditMode = false,
   editingCell,
   editingCellValue = '',
-  onCellDoubleClick,
-  onCellEditSave,
-  onCellEditCancel,
-  onEditingCellValueChange,
+  editCallbacks,
 }) => {
   const { sections } = nestedGrid;
 
@@ -49,10 +44,7 @@ export const NestedGridTable: React.FC<NestedGridTableProps> = ({
                   isEditMode={isEditMode}
                   editingCell={editingCell}
                   editingCellValue={editingCellValue}
-                  onCellDoubleClick={onCellDoubleClick}
-                  onCellEditSave={onCellEditSave}
-                  onCellEditCancel={onCellEditCancel}
-                  onEditingCellValueChange={onEditingCellValueChange}
+                  editCallbacks={editCallbacks}
                 />
               ) : (
                 <GridTable
@@ -61,10 +53,7 @@ export const NestedGridTable: React.FC<NestedGridTableProps> = ({
                   isEditMode={isEditMode}
                   editingCell={editingCell}
                   editingCellValue={editingCellValue}
-                  onCellDoubleClick={onCellDoubleClick}
-                  onCellEditSave={onCellEditSave}
-                  onCellEditCancel={onCellEditCancel}
-                  onEditingCellValueChange={onEditingCellValueChange}
+                  editCallbacks={editCallbacks}
                 />
               )}
             </div>
