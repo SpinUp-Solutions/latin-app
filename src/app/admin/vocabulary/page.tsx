@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSelector, useDispatch } from 'react-redux';
 import { Button } from '@/src/components/ui/button';
-import { ArrowLeft, BookOpen } from 'lucide-react';
+import { ArrowLeft, BookOpen, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary/index';
 import {
@@ -12,6 +12,7 @@ import {
   useGetWordTypeCountsQuery,
   useUpdateWordMutation,
   useCreateWordMutation,
+  useDeleteWordMutation,
 } from '@/src/store/api/vocabularyApi';
 import {
   updateFilters as updateFiltersAction,
@@ -39,6 +40,7 @@ function AdminVocabularyPage() {
   const [lastWordId, setLastWordId] = useState<string | null>(null);
   const [selectedWordId, setSelectedWordId] = useState<string | null>(null);
   const [creatingWord, setCreatingWord] = useState<VocabularyWordWithId | null>(null);
+  const [deletingWordId, setDeletingWordId] = useState<string | null>(null);
   const TARGET_COLLECTION = 'vocabulary_words_v4';
 
   const queryArgs = {
@@ -54,6 +56,7 @@ function AdminVocabularyPage() {
   });
   const [updateWord, { isLoading: updating }] = useUpdateWordMutation();
   const [createWord, { isLoading: creating }] = useCreateWordMutation();
+  const [deleteWord] = useDeleteWordMutation();
   const words = data?.words ?? EMPTY_WORDS;
 
   useEffect(() => {
@@ -192,6 +195,29 @@ function AdminVocabularyPage() {
     setSelectedWordId(null);
   };
 
+  const handleDeleteWord = async (word: VocabularyWordWithId) => {
+    setDeletingWordId(word.id);
+    try {
+      await deleteWord(word.id).unwrap();
+      toast.success(`Word "${word.word}" deleted successfully`);
+      if (selectedWordId === word.id) {
+        setSelectedWordId(null);
+      }
+    } catch (error) {
+      console.error('Delete word error:', error);
+      const message = error instanceof Error ? error.message : 'Error deleting word';
+      toast.error(message);
+    } finally {
+      setDeletingWordId(null);
+    }
+  };
+
+  const handleBackup = () => {
+    const url = `/api/admin/words/backup?collection=${TARGET_COLLECTION}`;
+    window.open(url, '_blank');
+    toast.success('Backup download started');
+  };
+
   return (
     <div className="h-screen flex flex-col bg-roman-marble">
       <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between flex-shrink-0">
@@ -230,7 +256,10 @@ function AdminVocabularyPage() {
           <Button onClick={handleStartCreate} disabled={creating || isPlaceholderWord(creatingWord)}>
             {creating ? 'Creating...' : 'Create Word'}
           </Button>
-          <div className="text-sm text-roman-stone">{words.length} words loaded</div>
+          <Button variant="outline" onClick={handleBackup}>
+            <Download className="h-4 w-4 mr-2" />
+            Backup
+          </Button>
         </div>
       </header>
 
@@ -255,7 +284,9 @@ function AdminVocabularyPage() {
               hasMore={hasMore}
               onLoadMore={handleLoadMore}
               onSelectWord={handleSelectWord}
+              onDeleteWord={handleDeleteWord}
               selectedWordId={selectedWordId}
+              deletingWordId={deletingWordId}
             />
           </div>
         </div>
