@@ -1,0 +1,205 @@
+'use client';
+
+import React, { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useSelector, useDispatch } from 'react-redux';
+import { Button } from '@/src/components/ui/button';
+import { ArrowLeft, Filter } from 'lucide-react';
+import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
+import { useGetAdvancedWordsQuery } from '@/src/store/api/advancedVocabularyApi';
+import {
+  selectAdvancedFilters,
+  selectAdvancedPagination,
+  selectAdvancedSelection,
+  updateFilters,
+  resetFilters,
+  setLastWordId,
+  toggleCellPath,
+  addCellPaths,
+  removeCellPaths,
+  clearSelection,
+} from '@/src/store/slices/advancedFiltersSlice';
+import { AdvancedFiltersPanel } from '@/src/components/ui/admin/vocabulary/AdvancedFiltersPanel';
+import { AdvancedResultsList } from '@/src/components/ui/admin/vocabulary/AdvancedResultsList';
+import { FormSelectionTable } from '@/src/components/ui/admin/vocabulary/FormSelectionTable';
+import { useDebounce } from '@/src/hooks/useDebounce';
+import { getAllPathsFromGrid, getAllPathsFromNestedGrid } from '@/src/utils/selection-helpers';
+import type { TableGrid, NestedTableGrid } from '@/src/types/schema-introspection';
+import { ConjugationTableSchema } from '@/src/types/vocabulary/schemas/verb-conjugation';
+import { DeclensionTableSchema, DegreesTableSchema } from '@/src/types/vocabulary/schemas';
+import { introspectSchema } from '@/src/utils/schema-introspector';
+import { buildTableGrid } from '@/src/utils/table-builder';
+import { buildEmptyFromSchema } from '@/src/utils/schema-defaults';
+
+const TARGET_COLLECTION = 'vocabulary_words_v4';
+
+function AdvancedFiltersPage() {
+  const router = useRouter();
+  const dispatch = useDispatch();
+  const filters = useSelector(selectAdvancedFilters);
+  const pagination = useSelector(selectAdvancedPagination);
+  const selection = useSelector(selectAdvancedSelection);
+  const debouncedSearch = useDebounce(filters.search, 300);
+
+  const queryArgs = {
+    collection: TARGET_COLLECTION,
+    partOfSpeech: filters.partOfSpeech !== 'all' ? filters.partOfSpeech : undefined,
+    search: debouncedSearch || undefined,
+    lastWordId: pagination.lastWordId,
+    verbConjugation:
+      filters.partOfSpeech === 'verb' && filters.verbConjugation !== 'all' ? filters.verbConjugation : undefined,
+    isDeponent: filters.partOfSpeech === 'verb' && filters.isDeponent !== 'both' ? filters.isDeponent : undefined,
+    nounDeclension:
+      filters.partOfSpeech === 'noun' && filters.nounDeclension !== 'all' ? filters.nounDeclension : undefined,
+    adjectiveDeclension:
+      filters.partOfSpeech === 'adjective' && filters.adjectiveDeclension !== 'all'
+        ? filters.adjectiveDeclension
+        : undefined,
+    limit: 30,
+  };
+
+  const { data, isLoading, isFetching, isError } = useGetAdvancedWordsQuery(queryArgs);
+  const words = data?.words ?? [];
+  const hasMore = data?.hasMore ?? false;
+  const loadingMore = isFetching && pagination.lastWordId !== null;
+
+  useEffect(() => {
+    dispatch(setLastWordId(null));
+  }, [
+    filters.partOfSpeech,
+    debouncedSearch,
+    filters.verbConjugation,
+    filters.isDeponent,
+    filters.nounDeclension,
+    filters.adjectiveDeclension,
+    dispatch,
+  ]);
+
+  const handleFiltersChange = (updates: Partial<typeof filters>) => {
+    dispatch(updateFilters(updates));
+  };
+
+  const handleReset = () => {
+    dispatch(resetFilters());
+  };
+
+  const handleApply = () => {
+    dispatch(setLastWordId(null));
+  };
+
+  const handleLoadMore = () => {
+    if (data?.lastWordId) {
+      dispatch(setLastWordId(data.lastWordId));
+    }
+  };
+
+  const handleToggleCell = (path: string) => {
+    dispatch(toggleCellPath(path));
+  };
+
+  const handleTogglePaths = (paths: string[]) => {
+    const selectedSet = new Set(selection.selectedCellPaths);
+    const allSelected = paths.every(p => selectedSet.has(p));
+
+    if (allSelected) {
+      dispatch(removeCellPaths(paths));
+    } else {
+      dispatch(addCellPaths(paths));
+    }
+  };
+
+  const handleSelectAll = () => {
+    if (filters.partOfSpeech === 'verb') {
+      const emptyData = buildEmptyFromSchema(ConjugationTableSchema);
+      const schemaNode = introspectSchema(ConjugationTableSchema);
+      const grid = buildTableGrid(schemaNode, emptyData);
+      const allPaths = getAllPathsFromNestedGrid(grid as NestedTableGrid);
+      dispatch(addCellPaths(allPaths));
+    } else if (filters.partOfSpeech === 'noun') {
+      const emptyData = buildEmptyFromSchema(DeclensionTableSchema);
+      const schemaNode = introspectSchema(DeclensionTableSchema);
+      const grid = buildTableGrid(schemaNode, emptyData);
+      const allPaths = getAllPathsFromGrid(grid as TableGrid);
+      dispatch(addCellPaths(allPaths));
+    } else if (filters.partOfSpeech === 'adjective') {
+      const emptyData = buildEmptyFromSchema(DegreesTableSchema);
+      const schemaNode = introspectSchema(DegreesTableSchema);
+      const grid = buildTableGrid(schemaNode, emptyData);
+      const allPaths = getAllPathsFromNestedGrid(grid as NestedTableGrid);
+      dispatch(addCellPaths(allPaths));
+    }
+  };
+
+  const handleClearSelection = () => {
+    dispatch(clearSelection());
+  };
+
+  return (
+    <div className="h-screen flex flex-col bg-roman-marble">
+      <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between flex-shrink-0">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" onClick={() => router.push('/admin/vocabulary')}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Vocabulary
+          </Button>
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 rounded-full bg-roman-red flex items-center justify-center text-white">
+              <Filter className="h-5 w-5" />
+            </div>
+            <div>
+              <h1 className="text-xl font-serif tracking-wide">Advanced Filters</h1>
+              <p className="text-sm text-roman-stone">Query vocabulary with advanced criteria</p>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="flex-1 grid grid-cols-[35%_65%] overflow-hidden">
+        <div className="flex flex-col overflow-hidden border-r border-gray-200 bg-roman-marble">
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <AdvancedFiltersPanel
+              filters={filters}
+              onFiltersChange={handleFiltersChange}
+              onReset={handleReset}
+              onApply={handleApply}
+              isLoading={isFetching}
+            />
+
+            {filters.partOfSpeech !== 'all' && (
+              <FormSelectionTable
+                partOfSpeech={filters.partOfSpeech}
+                selectedCellPaths={selection.selectedCellPaths}
+                onToggleCell={handleToggleCell}
+                onSelectAll={handleSelectAll}
+                onClearSelection={handleClearSelection}
+                onTogglePaths={handleTogglePaths}
+              />
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-col overflow-hidden bg-white">
+          <div className="flex-1 overflow-y-auto p-6">
+            {isError && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-800 mb-6">
+                Failed to load words. Please try again.
+              </div>
+            )}
+
+            <AdvancedResultsList
+              words={words}
+              isLoading={isLoading}
+              loadingMore={loadingMore}
+              hasMore={hasMore}
+              onLoadMore={handleLoadMore}
+              selectedTableType={selection.selectedTableType}
+              selectedCellPaths={selection.selectedCellPaths}
+            />
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+export default withAdminAuth(AdvancedFiltersPage);

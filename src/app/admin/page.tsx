@@ -3,7 +3,7 @@
 import React from 'react';
 import { Button } from '@/src/components/ui/button';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
-import { ArrowLeft, Shield, Plus, BookOpen, Globe } from 'lucide-react';
+import { ArrowLeft, Shield, Plus, BookOpen, Globe, Filter } from 'lucide-react';
 import Link from 'next/link';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 
@@ -84,6 +84,12 @@ function AdminPage() {
                   <Link href="/admin/vocabulary">
                     <BookOpen className="h-4 w-4 mr-2" />
                     View All Words
+                  </Link>
+                </Button>
+                <Button asChild className="w-full justify-start" variant="outline">
+                  <Link href="/admin/vocabulary/advanced">
+                    <Filter className="h-4 w-4 mr-2" />
+                    Advanced Filters
                   </Link>
                 </Button>
                 <Button asChild className="w-full justify-start" variant="outline">

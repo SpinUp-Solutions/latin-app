@@ -38,6 +38,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const search = searchParams.get('search');
     const countsOnly = searchParams.get('countsOnly') === 'true';
     const collection = searchParams.get('collection') || 'vocabulary_words_v4';
+    const verbConjugation = searchParams.get('verbConjugation');
+    const isDeponent = searchParams.get('isDeponent');
+    const nounDeclension = searchParams.get('nounDeclension');
+    const adjectiveDeclension = searchParams.get('adjectiveDeclension');
 
     if (countsOnly) {
       const wordTypeCounts = await getWordTypeCounts(collection);
@@ -57,6 +61,21 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     if (search) {
       query = query.where('word', '>=', search).where('word', '<=', search + '\uf8ff');
+    }
+
+    if (wordType === 'verb') {
+      if (verbConjugation) {
+        query = query.where('conjugation', '==', verbConjugation);
+      }
+      if (isDeponent === 'true') {
+        query = query.where('is_deponent', '==', true);
+      } else if (isDeponent === 'false') {
+        query = query.where('is_deponent', '==', false);
+      }
+    } else if (wordType === 'noun' && nounDeclension) {
+      query = query.where('declension', '==', nounDeclension);
+    } else if (wordType === 'adjective' && adjectiveDeclension) {
+      query = query.where('declension', '==', adjectiveDeclension);
     }
 
     if (lastWordId) {
