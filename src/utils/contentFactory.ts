@@ -312,6 +312,31 @@ export const createNewContent = (type: string): RenderableContentItem => {
           minimumCorrect: undefined,
         },
       };
+    case 'generated-translation':
+      return {
+        id: baseId,
+        type: 'generated-translation',
+        title: 'Generated Translation Exercise',
+        instructions: 'Translate the Latin words into English.',
+        audioPath: null,
+        itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
+        feedbackConfig: createDefaultFeedbackConfig(),
+        data: {
+          generatorConfig: {
+            collection: 'vocabulary_words_v4',
+            filters: {
+              partOfSpeech: 'all',
+              search: '',
+              verbConjugation: 'all',
+              isDeponent: 'both',
+              nounDeclension: 'all',
+              adjectiveDeclension: 'all',
+            },
+            formSelection: undefined,
+            count: 5,
+          },
+        },
+      };
     default:
       throw new Error(`Unknown content type: ${type}`);
   }

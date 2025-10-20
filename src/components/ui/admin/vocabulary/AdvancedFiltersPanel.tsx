@@ -22,6 +22,7 @@ interface AdvancedFiltersPanelProps {
     isDeponent: 'true' | 'false' | 'both';
     nounDeclension: NounDeclension | 'all';
     adjectiveDeclension: AdjectiveDeclension | 'all';
+    limit?: number;
   };
   onFiltersChange: (updates: Partial<AdvancedFiltersPanelProps['filters']>) => void;
   onReset: () => void;
@@ -64,7 +65,7 @@ export const AdvancedFiltersPanel: React.FC<AdvancedFiltersPanelProps> = ({
       </CardHeader>
 
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="space-y-2">
             <Label htmlFor="part-of-speech">Part of Speech</Label>
             <Select value={filters.partOfSpeech} onValueChange={handlePartOfSpeechChange}>
@@ -89,6 +90,19 @@ export const AdvancedFiltersPanel: React.FC<AdvancedFiltersPanelProps> = ({
               placeholder="Search by word..."
               value={filters.search}
               onChange={e => onFiltersChange({ search: e.target.value })}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="limit">Limit</Label>
+            <Input
+              id="limit"
+              type="number"
+              placeholder="Number of results"
+              min={1}
+              max={100}
+              value={filters.limit || 20}
+              onChange={e => onFiltersChange({ limit: parseInt(e.target.value) || 20 })}
             />
           </div>
         </div>

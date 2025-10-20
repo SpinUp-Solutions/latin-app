@@ -55,7 +55,7 @@ function AdvancedFiltersPage() {
       filters.partOfSpeech === 'adjective' && filters.adjectiveDeclension !== 'all'
         ? filters.adjectiveDeclension
         : undefined,
-    limit: 30,
+    limit: filters.limit,
     cellPaths: selection.selectedCellPaths.length > 0 ? selection.selectedCellPaths : undefined,
     tableType: selection.selectedTableType || undefined,
   };
@@ -76,6 +76,7 @@ function AdvancedFiltersPage() {
     filters.isDeponent,
     filters.nounDeclension,
     filters.adjectiveDeclension,
+    filters.limit,
     dispatch,
   ]);
 

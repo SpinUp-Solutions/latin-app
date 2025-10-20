@@ -74,3 +74,24 @@ export interface BaseExercise extends ContentItem {
   itemProgressionDelay?: number;
   feedbackConfig: FeedbackConfig;
 }
+
+export interface GeneratorFilters {
+  partOfSpeech?: string;
+  verbConjugation?: string;
+  isDeponent?: string;
+  nounDeclension?: string;
+  adjectiveDeclension?: string;
+  search?: string;
+}
+
+export interface FormSelection {
+  tableType: 'conjugation' | 'declension' | 'adjective-declension';
+  selectedCellPaths: string[];
+}
+
+export interface GeneratorConfigBase {
+  collection: string;
+  filters: GeneratorFilters;
+  formSelection?: FormSelection;
+  count: number;
+}

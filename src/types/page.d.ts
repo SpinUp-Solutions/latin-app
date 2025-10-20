@@ -10,6 +10,7 @@ import {
   OddOneOutExercise,
   TableFillExercise,
   ClickOnMultipleWordsExercise,
+  GeneratedFillExercise,
 } from './exercises';
 
 export type RenderableContentItem =
@@ -26,7 +27,8 @@ export type RenderableContentItem =
   | MultipleChoiceExercise
   | OddOneOutExercise
   | TableFillExercise
-  | ClickOnMultipleWordsExercise;
+  | ClickOnMultipleWordsExercise
+  | GeneratedFillExercise;
 
 export interface BasePage {
   id: string;

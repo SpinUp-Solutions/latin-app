@@ -1,0 +1,211 @@
+'use client';
+
+import React, { useState, useMemo } from 'react';
+import { GeneratedTranslationExercise } from '@/src/types/exercises';
+import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
+import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
+import { useGeneratedExerciseQuery } from '@/src/hooks/useGeneratedExerciseQuery';
+import { ExerciseInput, FeedbackDisplay } from '../feedback';
+import { ExerciseProgress } from './exercise-progress';
+import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
+import { SimpleRichDisplay } from '../core/simple-rich-display';
+import { useGetAdvancedWordsQuery } from '@/src/store/api/advancedVocabularyApi';
+import { Card, CardContent } from '../card';
+import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
+
+interface Props {
+  exercise: GeneratedTranslationExercise;
+  onComplete?: (score: number) => void;
+}
+
+interface ExerciseItem {
+  text: string;
+  acceptedAnswers: string[];
+  hint?: string;
+}
+
+const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
+  const [userAnswer, setUserAnswer] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [correctAnswers, setCorrectAnswers] = useState(0);
+
+  const config = exercise.data.generatorConfig;
+  const { queryArgs } = useGeneratedExerciseQuery('generated-translation', config);
+
+  const { data, isLoading, isError } = useGetAdvancedWordsQuery(queryArgs);
+
+  const items: ExerciseItem[] = useMemo(() => {
+    if (!data?.words) return [];
+
+    const words = data.words as ExerciseWordResponse[];
+
+    console.log('[Generated Translation] API Response:', data);
+    console.log('[Generated Translation] First word:', words[0]);
+
+    return words.map(word => {
+      const translations = word.translation ? word.translation.split(',').map(t => t.trim()) : [];
+      const definitionsText = word.definitions && word.definitions.length > 0
+        ? word.definitions.join(', ')
+        : '';
+
+      console.log('[Generated Translation] Processing word:', {
+        selected_form: word.selected_form,
+        translation: word.translation,
+        acceptedAnswers: translations,
+      });
+
+      return {
+        text: word.selected_form,
+        acceptedAnswers: translations,
+        hint: definitionsText,
+      };
+    });
+  }, [data]);
+
+  const { currentIndex, isLastItem, autoAdvanceIfEnabled } = useExerciseProgression({
+    totalItems: items.length,
+    itemProgressionDelay: exercise.itemProgressionDelay,
+    progressionRules: exercise.feedbackConfig.progressionRules,
+  });
+
+  const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
+    exercise.feedbackConfig
+  );
+
+  const handleSubmit = () => {
+    if (isProcessing || items.length === 0) return;
+
+    const currentItem = items[currentIndex];
+    const normalize = (s: string) => s.trim().toLowerCase().replace(/[.,;:!?]/g, '').replace(/\s+/g, ' ');
+    const stripInfinitive = (s: string) => s.replace(/^to\s+/, '');
+    const input = stripInfinitive(normalize(userAnswer));
+    const answers = currentItem.acceptedAnswers.map(a => stripInfinitive(normalize(a)));
+    const validation = { isCorrect: answers.includes(input) };
+
+    setIsProcessing(true);
+
+    if (validation.isCorrect) {
+      const newCorrectAnswers = correctAnswers + 1;
+      setCorrectAnswers(newCorrectAnswers);
+      handleCorrect(isLastItem);
+
+      if (isLastItem) {
+        const finalScore = Math.round((newCorrectAnswers / items.length) * 100);
+        onComplete?.(finalScore);
+
+        autoAdvanceIfEnabled(() => {
+          setUserAnswer('');
+          reset();
+          setIsProcessing(false);
+        });
+      } else {
+        autoAdvanceIfEnabled(() => {
+          setUserAnswer('');
+          reset();
+          setIsProcessing(false);
+        });
+      }
+    } else {
+      handleIncorrect();
+      setIsProcessing(false);
+    }
+  };
+
+  const handleAnswerChange = (value: string) => {
+    setUserAnswer(value);
+  };
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red mr-3"></div>
+            <div className="text-gray-600">Loading exercise...</div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center text-red-600">
+            <div className="font-medium">Error loading exercise</div>
+            <div className="text-sm mt-2">
+              Unable to fetch vocabulary words. Please try again later.
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center text-amber-600">
+            <div className="font-medium">No vocabulary found</div>
+            <div className="text-sm mt-2">
+              No words match the configured filters for this exercise.
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const currentItem = items[currentIndex];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-start">
+        {exercise.title && (
+          <h3 className="text-lg font-serif text-roman-red mb-2">
+            <SimpleRichDisplay content={exercise.title} />
+          </h3>
+        )}
+        {exercise.audioPath && <AudioPlayButton audioPath={exercise.audioPath} />}
+      </div>
+
+      {exercise.instructions && (
+        <p className="text-roman-stone">
+          <SimpleRichDisplay content={exercise.instructions} />
+        </p>
+      )}
+
+      <ExerciseProgress current={currentIndex} total={items.length} />
+
+      <Card>
+        <CardContent className="p-6 space-y-4">
+          <div className="text-lg font-medium">
+            <SimpleRichDisplay content={currentItem.text} />
+          </div>
+
+          <ExerciseInput
+            value={userAnswer}
+            onChange={handleAnswerChange}
+            onSubmit={handleSubmit}
+            disabled={isProcessing}
+            placeholder="Type your answer..."
+            showHint={Boolean(level?.showHint && currentItem.hint)}
+            hint={currentItem.hint}
+          />
+
+          <FeedbackDisplay
+            isCorrect={isCorrect}
+            message={message}
+            showAnswer={Boolean(level?.showAnswer)}
+            answer={currentItem.acceptedAnswers.join(' OR ')}
+            explanation={undefined}
+          />
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+export default GeneratedTranslationExerciseComponent;

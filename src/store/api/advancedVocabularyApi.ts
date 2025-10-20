@@ -15,6 +15,7 @@ interface GetAdvancedWordsArgs {
   limit?: number;
   cellPaths?: string[];
   tableType?: 'conjugation' | 'declension' | 'adjective-declension';
+  select?: string[];
 }
 
 interface GetAdvancedWordsResponse {
@@ -62,17 +63,12 @@ export const advancedVocabularyApi = createApi({
           console.log('[RTK Query] Adding tableType:', args.tableType);
         }
 
-        const selectFields = [
-          'word',
-          'part_of_speech',
-          'conjugation',
-          'declension',
-          'definitions',
-          'conjugation_table',
-          'declension_table',
-          'degrees_table',
-        ];
-        params.append('select', selectFields.join(','));
+        if (args.select && args.select.length > 0) {
+          params.append('select', args.select.join(','));
+          console.log('[RTK Query] Adding select fields:', args.select);
+        }
+
+        // randomize intentionally not set here (exercise generator decides server-side or via explicit config)
 
         if (args.partOfSpeech === 'verb') {
           if (args.verbConjugation && args.verbConjugation !== 'all') {
@@ -112,6 +108,7 @@ export const advancedVocabularyApi = createApi({
           limit: queryArgs.limit,
           cellPaths: queryArgs.cellPaths,
           tableType: queryArgs.tableType,
+          select: queryArgs.select,
         };
       },
       merge: (currentCache, newData, { arg }) => {

@@ -11,6 +11,7 @@ interface AdvancedFiltersState {
     isDeponent: 'true' | 'false' | 'both';
     nounDeclension: NounDeclension | 'all';
     adjectiveDeclension: AdjectiveDeclension | 'all';
+    limit: number;
   };
   pagination: {
     lastWordId: string | null;
@@ -29,6 +30,7 @@ const initialState: AdvancedFiltersState = {
     isDeponent: 'both',
     nounDeclension: 'all',
     adjectiveDeclension: 'all',
+    limit: 20,
   },
   pagination: {
     lastWordId: null,

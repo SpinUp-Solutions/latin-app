@@ -11,6 +11,7 @@ import MultipleChoiceExercise from '../exercises/multiple-choice-exercise';
 import OddOneOutExercise from '../exercises/odd-one-out-exercise';
 import TableFillExercise from '../exercises/table-fill-exercise';
 import ClickOnMultipleWordsExercise from '../exercises/click-on-multiple-words';
+import GeneratedTranslationExercise from '../exercises/generated-translation-exercise';
 import { ContentItem, TextContent, TableContent, VocabularyContent, VocabularyPoolContent } from '@/src/types/lesson';
 import {
   MatchingExercise,
@@ -22,7 +23,8 @@ import {
   OddOneOutExercise as OddOneOutExerciseType,
   TableFillExercise as TableFillExerciseType,
   ClickOnMultipleWordsExercise as ClickOnMultipleWordsExerciseType,
-} from '@/src/types/exercise';
+  GeneratedTranslationExercise as GeneratedTranslationExerciseType,
+} from '@/src/types/exercises';
 import { VocabularyViewer } from './VocabularyViewer';
 import { VocabularyPoolViewer } from './VocabularyPoolViewer';
 import TextComponent from './text-component';
@@ -99,6 +101,9 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onCom
       return (
         <ClickOnMultipleWordsExercise exercise={content as ClickOnMultipleWordsExerciseType} onComplete={onComplete} />
       );
+
+    case 'generated-translation':
+      return <GeneratedTranslationExercise exercise={content as GeneratedTranslationExerciseType} onComplete={onComplete} />;
 
     default:
       return (
