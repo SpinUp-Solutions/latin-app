@@ -56,7 +56,11 @@ function AdvancedFiltersPage() {
         ? filters.adjectiveDeclension
         : undefined,
     limit: 30,
+    cellPaths: selection.selectedCellPaths.length > 0 ? selection.selectedCellPaths : undefined,
+    tableType: selection.selectedTableType || undefined,
   };
+
+  console.log('[AdvancedFiltersPage] Query args:', queryArgs);
 
   const { data, isLoading, isFetching, isError } = useGetAdvancedWordsQuery(queryArgs);
   const words = data?.words ?? [];

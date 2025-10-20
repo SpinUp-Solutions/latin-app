@@ -1,13 +1,11 @@
 import React from 'react';
 import { Card, CardContent } from '@/src/components/ui/card';
 import { Loader2, Search } from 'lucide-react';
-import { VocabularyWordWithId } from '@/src/types/vocabulary/index';
 import { AdvancedWordCard } from './AdvancedWordCard';
 import { useInfiniteScroll } from '@/src/hooks/useInfiniteScroll';
-import { pickRandomForm } from '@/src/utils/form-selection';
 
 interface AdvancedResultsListProps {
-  words: VocabularyWordWithId[];
+  words: any[];
   isLoading: boolean;
   loadingMore: boolean;
   hasMore: boolean;
@@ -76,6 +74,9 @@ export const AdvancedResultsList: React.FC<AdvancedResultsListProps> = ({
   selectedTableType,
   selectedCellPaths,
 }) => {
+  console.log('[AdvancedResultsList] Rendering with words:', words.length);
+  console.log('[AdvancedResultsList] Sample word:', words[0]);
+
   const sentinelRef = useInfiniteScroll({
     onLoadMore,
     hasMore,
@@ -101,24 +102,9 @@ export const AdvancedResultsList: React.FC<AdvancedResultsListProps> = ({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {words
-          .map(word => {
-            const result =
-              selectedTableType && selectedCellPaths.length > 0
-                ? pickRandomForm(word, selectedTableType, selectedCellPaths)
-                : { form: word.word, path: null };
-
-            return { word, result };
-          })
-          .filter(({ result }) => result !== null)
-          .map(({ word, result }) => (
-            <AdvancedWordCard
-              key={word.id}
-              word={word}
-              selectedForm={result?.form || null}
-              formPath={result?.path || null}
-            />
-          ))}
+        {words.map((word, index) => (
+          <AdvancedWordCard key={word.root_word || index} word={word} />
+        ))}
       </div>
 
       <InfiniteScrollSentinel sentinelRef={sentinelRef} loadingMore={loadingMore} hasMore={hasMore} />

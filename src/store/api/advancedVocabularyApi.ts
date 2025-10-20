@@ -13,6 +13,8 @@ interface GetAdvancedWordsArgs {
   nounDeclension?: string;
   adjectiveDeclension?: string;
   limit?: number;
+  cellPaths?: string[];
+  tableType?: 'conjugation' | 'declension' | 'adjective-declension';
 }
 
 interface GetAdvancedWordsResponse {
@@ -51,6 +53,26 @@ export const advancedVocabularyApi = createApi({
         if (args.limit) {
           params.append('limit', String(args.limit));
         }
+        if (args.cellPaths && args.cellPaths.length > 0) {
+          params.append('cellPaths', args.cellPaths.join(','));
+          console.log('[RTK Query] Adding cellPaths:', args.cellPaths.join(','));
+        }
+        if (args.tableType) {
+          params.append('tableType', args.tableType);
+          console.log('[RTK Query] Adding tableType:', args.tableType);
+        }
+
+        const selectFields = [
+          'word',
+          'part_of_speech',
+          'conjugation',
+          'declension',
+          'definitions',
+          'conjugation_table',
+          'declension_table',
+          'degrees_table',
+        ];
+        params.append('select', selectFields.join(','));
 
         if (args.partOfSpeech === 'verb') {
           if (args.verbConjugation && args.verbConjugation !== 'all') {
@@ -74,21 +96,9 @@ export const advancedVocabularyApi = createApi({
         };
       },
       transformResponse: (response: GetAdvancedWordsResponse) => {
-        try {
-          const validatedWords = response.data.words.map(
-            word => VocabularyWordWithIdSchema.parse(word) as VocabularyWordWithId
-          );
-          return {
-            ...response.data,
-            words: validatedWords,
-          };
-        } catch (error) {
-          if (error instanceof ZodError) {
-            console.error('Advanced vocabulary validation error:', error.issues);
-            throw new Error(`Invalid vocabulary data: ${error.issues.map((e: ZodIssue) => e.message).join(', ')}`);
-          }
-          throw error;
-        }
+        console.log('[RTK Query] Transform response - received words:', response.data.words.length);
+        console.log('[RTK Query] Sample word:', response.data.words[0]);
+        return response.data;
       },
       serializeQueryArgs: ({ queryArgs }) => {
         return {
@@ -100,6 +110,8 @@ export const advancedVocabularyApi = createApi({
           nounDeclension: queryArgs.nounDeclension,
           adjectiveDeclension: queryArgs.adjectiveDeclension,
           limit: queryArgs.limit,
+          cellPaths: queryArgs.cellPaths,
+          tableType: queryArgs.tableType,
         };
       },
       merge: (currentCache, newData, { arg }) => {

@@ -42,6 +42,25 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const isDeponent = searchParams.get('isDeponent');
     const nounDeclension = searchParams.get('nounDeclension');
     const adjectiveDeclension = searchParams.get('adjectiveDeclension');
+    const cellPaths = searchParams.get('cellPaths');
+    const tableType = searchParams.get('tableType');
+    const selectFields = searchParams.get('select');
+
+    console.log('[API] GET /api/admin/words - Query params:', {
+      wordType,
+      limit,
+      lastWordId,
+      search,
+      countsOnly,
+      collection,
+      verbConjugation,
+      isDeponent,
+      nounDeclension,
+      adjectiveDeclension,
+      cellPaths,
+      tableType,
+      selectFields,
+    });
 
     if (countsOnly) {
       const wordTypeCounts = await getWordTypeCounts(collection);
@@ -53,7 +72,19 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       });
     }
 
-    let query: Query = adminDb.collection(collection).orderBy('word');
+    let query: Query = adminDb.collection(collection);
+
+    if (selectFields) {
+      const fields = selectFields.split(',').map(f => f.trim()).filter(f => f.length > 0);
+      if (fields.length > 0) {
+        query = query.select(...fields);
+        console.log('[API] Firestore query - Selected fields:', fields);
+      }
+    } else {
+      console.log('[API] Firestore query - Fetching all fields (no select parameter)');
+    }
+
+    query = query.orderBy('word');
 
     if (wordType) {
       query = query.where('part_of_speech', '==', wordType);
@@ -89,12 +120,51 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     const snapshot = await query.get();
 
+    console.log('[API] Firestore query executed - Document count:', snapshot.docs.length);
+
     const words = snapshot.docs.map(doc => {
       const data = doc.data();
-      return {
-        id: doc.id,
-        ...serializeWord(data as Record<string, unknown>),
-      };
+      const serialized = serializeWord(data as Record<string, unknown>);
+
+      console.log('[API] Processing document:', doc.id, 'Keys:', Object.keys(serialized));
+
+      const isExerciseMode = !!(cellPaths && tableType);
+
+      if (isExerciseMode) {
+        let selectedForm = serialized.word as string;
+        let formPath: Record<string, string> | null = null;
+
+        const paths = cellPaths.split(',').map(p => p.trim());
+        console.log('[API] Exercise mode - Attempting form selection - paths:', paths, 'tableType:', tableType);
+
+        const formResult = pickRandomFormServer(serialized, tableType, paths);
+        if (formResult) {
+          selectedForm = formResult.form;
+          formPath = parseFormPath(formResult.path, tableType);
+          console.log('[API] Form selected successfully:', { selectedForm, formPath });
+        } else {
+          console.log('[API] Form selection failed, using root word');
+        }
+
+        const result = {
+          root_word: serialized.word,
+          conjugation: serialized.conjugation || null,
+          selected_form: selectedForm,
+          form_path: formPath,
+          definitions: serialized.definitions || [],
+        };
+
+        console.log('[API] Final word result (exercise mode):', result);
+        return result;
+      } else {
+        const result = {
+          id: doc.id,
+          ...serialized,
+        };
+
+        console.log('[API] Final word result (normal mode):', result);
+        return result;
+      }
     });
 
     const hasMore = snapshot.docs.length === limit;
@@ -251,6 +321,142 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
       { status: 500 }
     );
   }
+}
+
+function parseFormPath(
+  path: string,
+  tableType: string
+): Record<string, string> | null {
+  if (!path) return null;
+
+  const parts = path.split('.');
+  console.log('[API] parseFormPath - Input:', { path, tableType, parts });
+
+  if (tableType === 'conjugation') {
+    if (parts.length === 5) {
+      const parsed = {
+        tense: parts[0],
+        voice: parts[1],
+        mood: parts[2],
+        person: parts[3],
+        number: parts[4],
+      };
+      console.log('[API] parseFormPath - Conjugation parsed:', parsed);
+      return parsed;
+    }
+  } else if (tableType === 'declension') {
+    if (parts.length === 2) {
+      const parsed = {
+        number: parts[0],
+        case: parts[1],
+      };
+      console.log('[API] parseFormPath - Declension parsed:', parsed);
+      return parsed;
+    }
+  } else if (tableType === 'adjective-declension') {
+    if (parts.length === 4) {
+      const parsed = {
+        degree: parts[0],
+        gender: parts[1],
+        number: parts[2],
+        case: parts[3],
+      };
+      console.log('[API] parseFormPath - Adjective (4 parts) parsed:', parsed);
+      return parsed;
+    } else if (parts.length === 2) {
+      const parsed = {
+        number: parts[0],
+        case: parts[1],
+      };
+      console.log('[API] parseFormPath - Adjective (2 parts) parsed:', parsed);
+      return parsed;
+    }
+  }
+
+  console.log('[API] parseFormPath - Could not parse, returning raw object');
+  return { raw: path };
+}
+
+function getCellValueAtPathServer(obj: Record<string, unknown>, path: string): string[] {
+  const keys = path.split('.');
+  let value: unknown = obj;
+
+  console.log('[API] getCellValueAtPathServer - Navigating path:', path);
+
+  for (const key of keys) {
+    if (value && typeof value === 'object' && key in value) {
+      value = (value as Record<string, unknown>)[key];
+      console.log('[API] getCellValueAtPathServer - Found key:', key, 'value type:', typeof value);
+    } else {
+      console.log('[API] getCellValueAtPathServer - Key not found:', key);
+      return [];
+    }
+  }
+
+  if (value === null || value === undefined) {
+    console.log('[API] getCellValueAtPathServer - Value is null/undefined');
+    return [];
+  }
+
+  if (typeof value === 'string') {
+    console.log('[API] getCellValueAtPathServer - Found string value:', value);
+    return [value];
+  }
+
+  if (Array.isArray(value)) {
+    const filtered = value.filter((v): v is string => v !== null && v !== undefined && typeof v === 'string');
+    console.log('[API] getCellValueAtPathServer - Found array, filtered to:', filtered);
+    return filtered;
+  }
+
+  console.log('[API] getCellValueAtPathServer - Unexpected value type:', typeof value);
+  return [];
+}
+
+function pickRandomFormServer(
+  word: Record<string, unknown>,
+  tableType: string,
+  selectedPaths: string[]
+): { form: string; path: string } | null {
+  console.log('[API] pickRandomFormServer - Input:', { tableType, selectedPaths, wordKeys: Object.keys(word) });
+
+  const rootFieldMap: Record<string, string> = {
+    conjugation: 'conjugation_table',
+    declension: 'declension_table',
+    'adjective-declension': 'degrees_table',
+  };
+
+  const rootField = rootFieldMap[tableType];
+  if (!rootField) {
+    console.log('[API] pickRandomFormServer - No root field found for tableType:', tableType);
+    return null;
+  }
+
+  console.log('[API] pickRandomFormServer - Using root field:', rootField);
+
+  const formsWithPaths: Array<{ form: string; path: string }> = [];
+
+  for (const path of selectedPaths) {
+    const fullPath = `${rootField}.${path}`;
+    console.log('[API] pickRandomFormServer - Checking path:', fullPath);
+    const forms = getCellValueAtPathServer(word, fullPath);
+
+    for (const form of forms) {
+      formsWithPaths.push({ form, path });
+      console.log('[API] pickRandomFormServer - Added form:', { form, path });
+    }
+  }
+
+  console.log('[API] pickRandomFormServer - Total forms collected:', formsWithPaths.length);
+
+  if (formsWithPaths.length === 0) {
+    console.log('[API] pickRandomFormServer - No forms found, returning null');
+    return null;
+  }
+
+  const selected = formsWithPaths[Math.floor(Math.random() * formsWithPaths.length)];
+  console.log('[API] pickRandomFormServer - Selected form:', selected);
+  return selected;
 }
 
 async function getWordTypeCounts(collection: string) {
