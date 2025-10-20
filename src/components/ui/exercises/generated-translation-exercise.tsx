@@ -12,6 +12,7 @@ import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { useGetAdvancedWordsQuery } from '@/src/store/api/advancedVocabularyApi';
 import { Card, CardContent } from '../card';
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
+import { validateGeneratedTranslationExercise } from '@/src/utils/exercises/generatedTranslationExercise';
 
 interface Props {
   exercise: GeneratedTranslationExercise;
@@ -37,16 +38,14 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
   const items: ExerciseItem[] = useMemo(() => {
     if (!data?.words) return [];
 
-    const words = data.words as ExerciseWordResponse[];
+    const words = data.words as unknown as ExerciseWordResponse[];
 
     console.log('[Generated Translation] API Response:', data);
     console.log('[Generated Translation] First word:', words[0]);
 
     return words.map(word => {
       const translations = word.translation ? word.translation.split(',').map(t => t.trim()) : [];
-      const definitionsText = word.definitions && word.definitions.length > 0
-        ? word.definitions.join(', ')
-        : '';
+      const definitionsText = word.definitions && word.definitions.length > 0 ? word.definitions.join(', ') : '';
 
       console.log('[Generated Translation] Processing word:', {
         selected_form: word.selected_form,
@@ -68,7 +67,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
     progressionRules: exercise.feedbackConfig.progressionRules,
   });
 
-  const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
+  const { isCorrect, message, level, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
     exercise.feedbackConfig
   );
 
@@ -76,11 +75,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
     if (isProcessing || items.length === 0) return;
 
     const currentItem = items[currentIndex];
-    const normalize = (s: string) => s.trim().toLowerCase().replace(/[.,;:!?]/g, '').replace(/\s+/g, ' ');
-    const stripInfinitive = (s: string) => s.replace(/^to\s+/, '');
-    const input = stripInfinitive(normalize(userAnswer));
-    const answers = currentItem.acceptedAnswers.map(a => stripInfinitive(normalize(a)));
-    const validation = { isCorrect: answers.includes(input) };
+    const validation = validateGeneratedTranslationExercise(userAnswer, currentItem);
 
     setIsProcessing(true);
 
@@ -134,9 +129,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
         <CardContent className="p-6">
           <div className="text-center text-red-600">
             <div className="font-medium">Error loading exercise</div>
-            <div className="text-sm mt-2">
-              Unable to fetch vocabulary words. Please try again later.
-            </div>
+            <div className="text-sm mt-2">Unable to fetch vocabulary words. Please try again later.</div>
           </div>
         </CardContent>
       </Card>
@@ -149,9 +142,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
         <CardContent className="p-6">
           <div className="text-center text-amber-600">
             <div className="font-medium">No vocabulary found</div>
-            <div className="text-sm mt-2">
-              No words match the configured filters for this exercise.
-            </div>
+            <div className="text-sm mt-2">No words match the configured filters for this exercise.</div>
           </div>
         </CardContent>
       </Card>
@@ -189,18 +180,15 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
             value={userAnswer}
             onChange={handleAnswerChange}
             onSubmit={handleSubmit}
-            disabled={isProcessing}
             placeholder="Type your answer..."
-            showHint={Boolean(level?.showHint && currentItem.hint)}
-            hint={currentItem.hint}
           />
 
           <FeedbackDisplay
             isCorrect={isCorrect}
             message={message}
-            showAnswer={Boolean(level?.showAnswer)}
-            answer={currentItem.acceptedAnswers.join(' OR ')}
-            explanation={undefined}
+            level={level}
+            hint={currentItem.hint}
+            correctAnswer={currentItem.acceptedAnswers.join(' OR ')}
           />
         </CardContent>
       </Card>

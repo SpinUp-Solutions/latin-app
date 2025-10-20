@@ -103,7 +103,9 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onCom
       );
 
     case 'generated-translation':
-      return <GeneratedTranslationExercise exercise={content as GeneratedTranslationExerciseType} onComplete={onComplete} />;
+      return (
+        <GeneratedTranslationExercise exercise={content as GeneratedTranslationExerciseType} onComplete={onComplete} />
+      );
 
     default:
       return (

@@ -4,14 +4,19 @@ import { Loader2, Search } from 'lucide-react';
 import { AdvancedWordCard } from './AdvancedWordCard';
 import { useInfiniteScroll } from '@/src/hooks/useInfiniteScroll';
 
+interface Word {
+  root_word?: string;
+  [key: string]: unknown;
+}
+
 interface AdvancedResultsListProps {
-  words: any[];
+  words: Word[];
   isLoading: boolean;
   loadingMore: boolean;
   hasMore: boolean;
   onLoadMore: () => void;
-  selectedTableType: 'conjugation' | 'declension' | 'adjective-declension' | null;
-  selectedCellPaths: string[];
+  selectedTableType?: 'conjugation' | 'declension' | 'adjective-declension' | null;
+  selectedCellPaths?: string[];
 }
 
 const LoadingSkeleton: React.FC = () => (
@@ -71,8 +76,6 @@ export const AdvancedResultsList: React.FC<AdvancedResultsListProps> = ({
   loadingMore,
   hasMore,
   onLoadMore,
-  selectedTableType,
-  selectedCellPaths,
 }) => {
   console.log('[AdvancedResultsList] Rendering with words:', words.length);
   console.log('[AdvancedResultsList] Sample word:', words[0]);

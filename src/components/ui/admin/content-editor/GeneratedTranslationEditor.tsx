@@ -8,33 +8,37 @@ import { SimpleInput, SimpleTextarea } from '@/src/components/ui/form-components
 import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
 import { AdvancedFiltersPanel } from '../vocabulary/AdvancedFiltersPanel';
+import { FormSelectionTable } from '../vocabulary/FormSelectionTable';
 import { useGetAdvancedWordsQuery } from '@/src/store/api/advancedVocabularyApi';
 import { useGeneratedExerciseQuery } from '@/src/hooks/useGeneratedExerciseQuery';
+import { useFormSelection } from '@/src/hooks/useFormSelection';
 import type { GeneratorFilters } from '@/src/types/exercises/base';
 import type { PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
 
 export const GeneratedTranslationEditor: React.FC = () => {
   const dispatch = useAppDispatch();
-  const editingContent = useAppSelector(state => state.lessonEditor.editingContent?.content as GeneratedTranslationExercise);
+  const editingContent = useAppSelector(
+    state => state.lessonEditor.editingContent?.content as GeneratedTranslationExercise
+  );
 
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const formSelection = useFormSelection();
+
+  const config = editingContent?.data?.generatorConfig;
+  const { queryArgs, selectFields } = useGeneratedExerciseQuery(
+    'generated-translation',
+    config || { collection: '', count: 5, filters: { partOfSpeech: 'all', search: '' } },
+    Math.min(config?.count || 5, 5)
+  );
+
+  const { data: previewData, isFetching: isPreviewFetching } = useGetAdvancedWordsQuery(queryArgs, {
+    skip: !isPreviewOpen,
+  });
 
   if (!editingContent) {
     return <div>No content selected for editing</div>;
   }
-
-  const config = editingContent.data.generatorConfig;
-  const { queryArgs, selectFields } = useGeneratedExerciseQuery(
-    'generated-translation',
-    config,
-    Math.min(config.count, 5)
-  );
-
-  const { data: previewData, isFetching: isPreviewFetching } = useGetAdvancedWordsQuery(
-    queryArgs,
-    { skip: !isPreviewOpen }
-  );
 
   const updateContent = (updates: Partial<GeneratedTranslationExercise>) => {
     dispatch(updateEditingContent({ ...editingContent, ...updates }));
@@ -52,12 +56,26 @@ export const GeneratedTranslationEditor: React.FC = () => {
   };
 
   const handleFiltersChange = (filterUpdates: Partial<GeneratorFilters>) => {
-    updateConfig({
+    const updates: Partial<typeof config> = {
       filters: {
         ...config.filters,
         ...filterUpdates,
       },
-    });
+    };
+
+    if ('partOfSpeech' in filterUpdates) {
+      const newPos = filterUpdates.partOfSpeech;
+      if (newPos === 'all') {
+        updates.formSelection = undefined;
+      } else {
+        updates.formSelection = {
+          tableType: getTableType(newPos),
+          selectedCellPaths: [],
+        };
+      }
+    }
+
+    updateConfig(updates);
   };
 
   const handleResetFilters = () => {
@@ -70,7 +88,54 @@ export const GeneratedTranslationEditor: React.FC = () => {
         nounDeclension: 'all',
         adjectiveDeclension: 'all',
       },
+      formSelection: undefined,
     });
+  };
+
+  const handleToggleCell = (path: string) => {
+    const newPaths = formSelection.toggleCell(path, config.formSelection?.selectedCellPaths || []);
+    updateConfig({
+      formSelection: {
+        tableType: config.formSelection?.tableType || getTableType(config.filters.partOfSpeech),
+        selectedCellPaths: newPaths,
+      },
+    });
+  };
+
+  const handleTogglePaths = (paths: string[]) => {
+    const newPaths = formSelection.togglePaths(paths, config.formSelection?.selectedCellPaths || []);
+    updateConfig({
+      formSelection: {
+        tableType: config.formSelection?.tableType || getTableType(config.filters.partOfSpeech),
+        selectedCellPaths: newPaths,
+      },
+    });
+  };
+
+  const handleSelectAll = () => {
+    const allPaths = formSelection.getAllPaths(config.filters.partOfSpeech || 'all');
+    updateConfig({
+      formSelection: {
+        tableType: getTableType(config.filters.partOfSpeech),
+        selectedCellPaths: allPaths,
+      },
+    });
+  };
+
+  const handleClearSelection = () => {
+    updateConfig({
+      formSelection: {
+        tableType: config.formSelection?.tableType || getTableType(config.filters.partOfSpeech),
+        selectedCellPaths: [],
+      },
+    });
+  };
+
+  const getTableType = (partOfSpeech?: string): 'conjugation' | 'declension' | 'adjective-declension' => {
+    if (partOfSpeech === 'verb') return 'conjugation';
+    if (partOfSpeech === 'noun') return 'declension';
+    if (partOfSpeech === 'adjective') return 'adjective-declension';
+    return 'conjugation';
   };
 
   const previewWords = previewData?.words as ExerciseWordResponse[] | undefined;
@@ -106,13 +171,13 @@ export const GeneratedTranslationEditor: React.FC = () => {
           filters={{
             partOfSpeech: (config.filters.partOfSpeech || 'all') as PartOfSpeech | 'all',
             search: config.filters.search || '',
-            verbConjugation: config.filters.verbConjugation || 'all',
-            isDeponent: config.filters.isDeponent || 'both',
-            nounDeclension: config.filters.nounDeclension || 'all',
-            adjectiveDeclension: config.filters.adjectiveDeclension || 'all',
+            verbConjugation: (config.filters.verbConjugation || 'all') as '1' | '2' | '3' | '3io' | '4' | 'all',
+            isDeponent: (config.filters.isDeponent || 'both') as 'true' | 'false' | 'both',
+            nounDeclension: (config.filters.nounDeclension || 'all') as '1' | '2' | '3' | '3-istem' | '4' | '5' | 'all',
+            adjectiveDeclension: (config.filters.adjectiveDeclension || 'all') as '1-2' | '3' | 'all',
             limit: config.count,
           }}
-          onFiltersChange={(updates) => {
+          onFiltersChange={updates => {
             if ('limit' in updates && updates.limit !== undefined) {
               updateConfig({ count: updates.limit });
             } else {
@@ -124,6 +189,17 @@ export const GeneratedTranslationEditor: React.FC = () => {
           isLoading={isPreviewFetching}
         />
       </div>
+
+      {config.filters.partOfSpeech !== 'all' && (
+        <FormSelectionTable
+          partOfSpeech={config.filters.partOfSpeech as PartOfSpeech}
+          selectedCellPaths={config.formSelection?.selectedCellPaths || []}
+          onToggleCell={handleToggleCell}
+          onSelectAll={handleSelectAll}
+          onClearSelection={handleClearSelection}
+          onTogglePaths={handleTogglePaths}
+        />
+      )}
 
       <div>
         <label className="block text-sm font-medium mb-3">Preview</label>
@@ -142,12 +218,11 @@ export const GeneratedTranslationEditor: React.FC = () => {
                   return (
                     <Card key={index}>
                       <CardContent className="p-3 space-y-1">
-                        <div className="font-medium">
-                          {word.root_word}
-                        </div>
-                        <div className="text-sm text-gray-600">
-                          Accepted answers: {translations.join(' OR ')}
-                        </div>
+                        <div className="font-medium">{word.selected_form}</div>
+                        {word.selected_form !== word.root_word && (
+                          <div className="text-xs text-gray-500">Root: {word.root_word}</div>
+                        )}
+                        <div className="text-sm text-gray-600">Accepted answers: {translations.join(' OR ')}</div>
                       </CardContent>
                     </Card>
                   );
@@ -178,6 +253,11 @@ export const GeneratedTranslationEditor: React.FC = () => {
               <div>
                 <strong>Part of Speech:</strong> {config.filters.partOfSpeech || 'All'}
               </div>
+              {config.formSelection && config.formSelection.selectedCellPaths.length > 0 && (
+                <div>
+                  <strong>Selected Forms:</strong> {config.formSelection.selectedCellPaths.length} form(s)
+                </div>
+              )}
               <div>
                 <strong>API Fields:</strong> {selectFields.join(', ')}
               </div>

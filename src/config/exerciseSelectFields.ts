@@ -1,7 +1,5 @@
 export const EXERCISE_SELECT_FIELDS = {
-  'generated-translation': [
-    'translation',
-  ],
+  'generated-translation': ['translation'],
 } as const;
 
 export type GeneratedExerciseType = keyof typeof EXERCISE_SELECT_FIELDS;

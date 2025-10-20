@@ -1,7 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import { type VocabularyWordWithId } from '@/src/types/vocabulary/index';
-import { VocabularyWordWithIdSchema } from '@/src/types/vocabulary/schemas';
-import { ZodError, type ZodIssue } from 'zod';
 
 interface GetAdvancedWordsArgs {
   collection?: string;

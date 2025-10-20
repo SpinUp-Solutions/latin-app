@@ -38,6 +38,7 @@ export type ExerciseWordResponse =
       conjugation?: string;
       definitions?: string[];
       is_deponent?: boolean;
+      translation?: string;
     }
   | {
       id: string;
@@ -48,6 +49,7 @@ export type ExerciseWordResponse =
       declension?: string;
       definitions?: string[];
       gender?: string;
+      translation?: string;
     }
   | {
       id: string;
@@ -57,6 +59,7 @@ export type ExerciseWordResponse =
       form_path: AdjectiveFormPath | null;
       declension?: string;
       definitions?: string[];
+      translation?: string;
     }
   | {
       id: string;
@@ -65,6 +68,7 @@ export type ExerciseWordResponse =
       part_of_speech: 'pronoun';
       form_path: PronounFormPath | null;
       definitions?: string[];
+      translation?: string;
     }
   | {
       id: string;
@@ -73,6 +77,7 @@ export type ExerciseWordResponse =
       part_of_speech: 'adverb';
       form_path: AdverbFormPath | null;
       definitions?: string[];
+      translation?: string;
     }
   | {
       id: string;
@@ -81,4 +86,5 @@ export type ExerciseWordResponse =
       part_of_speech: 'preposition' | 'conjunction' | 'interjection';
       form_path: null;
       definitions?: string[];
+      translation?: string;
     };

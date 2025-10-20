@@ -20,10 +20,7 @@ export const createVerbFormPath = (
   number,
 });
 
-export const createNounFormPath = (
-  number: string,
-  caseValue: string
-): NounFormPath => ({
+export const createNounFormPath = (number: string, caseValue: string): NounFormPath => ({
   number,
   case: caseValue,
 });
@@ -40,19 +37,13 @@ export const createAdjectiveFormPath = (
   case: caseValue,
 });
 
-export const createPronounFormPath = (
-  gender: string,
-  number: string,
-  caseValue: string
-): PronounFormPath => ({
+export const createPronounFormPath = (gender: string, number: string, caseValue: string): PronounFormPath => ({
   gender,
   number,
   case: caseValue,
 });
 
-export const createAdverbFormPath = (
-  degree: string
-): AdverbFormPath => ({
+export const createAdverbFormPath = (degree: string): AdverbFormPath => ({
   degree,
 });
 
@@ -92,5 +83,7 @@ export const parseFormPathFromString = (
 
 export const formatFormPath = (formPath: FormPath | null): string => {
   if (!formPath) return '';
-  return Object.values(formPath).filter(v => v).join(' ');
+  return Object.values(formPath)
+    .filter(v => v)
+    .join(' ');
 };

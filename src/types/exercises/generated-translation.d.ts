@@ -6,4 +6,3 @@ export interface GeneratedTranslationExercise extends BaseExercise {
     generatorConfig: GeneratorConfigBase;
   };
 }
-

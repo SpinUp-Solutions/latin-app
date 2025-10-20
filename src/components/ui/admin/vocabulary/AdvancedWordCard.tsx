@@ -1,7 +1,7 @@
 import React from 'react';
 
 interface AdvancedWordCardProps {
-  word: any;
+  word: Record<string, unknown>;
 }
 
 export const AdvancedWordCard: React.FC<AdvancedWordCardProps> = ({ word }) => {
