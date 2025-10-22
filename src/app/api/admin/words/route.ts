@@ -1,6 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { Query } from 'firebase-admin/firestore';
+import { VocabularyWordSchema } from '@/src/types/vocabulary/schemas';
+
+const serializeTimestamp = (value: unknown): string | undefined => {
+  if (value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function') {
+    return value.toDate().toISOString();
+  }
+  return undefined;
+};
+
+const serializeWord = (data: Record<string, unknown>) => {
+  const serialized: Record<string, unknown> = { ...data };
+  if ('createdAt' in serialized) {
+    const createdAt = serializeTimestamp(serialized.createdAt);
+    if (createdAt) {
+      serialized.createdAt = createdAt;
+    }
+  }
+  if ('updatedAt' in serialized) {
+    const updatedAt = serializeTimestamp(serialized.updatedAt);
+    if (updatedAt) {
+      serialized.updatedAt = updatedAt;
+    }
+  }
+  return serialized;
+};
 
 export const dynamic = 'force-dynamic';
 
@@ -12,11 +37,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const lastWordId = searchParams.get('lastWordId');
     const search = searchParams.get('search');
     const countsOnly = searchParams.get('countsOnly') === 'true';
-
-    console.log('Fetching words with filters:', { wordType, limit, lastWordId, search, countsOnly });
+    const collection = searchParams.get('collection') || 'vocabulary_words_v4';
 
     if (countsOnly) {
-      const wordTypeCounts = await getWordTypeCounts();
+      const wordTypeCounts = await getWordTypeCounts(collection);
       return NextResponse.json({
         success: true,
         data: {
@@ -25,7 +49,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       });
     }
 
-    let query: Query = adminDb.collection('vocabulary_words').orderBy('word');
+    let query: Query = adminDb.collection(collection).orderBy('word');
 
     if (wordType) {
       query = query.where('part_of_speech', '==', wordType);
@@ -36,7 +60,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
 
     if (lastWordId) {
-      const lastDocSnapshot = await adminDb.collection('vocabulary_words').doc(lastWordId).get();
+      const lastDocSnapshot = await adminDb.collection(collection).doc(lastWordId).get();
       if (lastDocSnapshot.exists) {
         query = query.startAfter(lastDocSnapshot);
       }
@@ -46,10 +70,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     const snapshot = await query.get();
 
-    const words = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+    const words = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...serializeWord(data as Record<string, unknown>),
+      };
+    });
 
     const hasMore = snapshot.docs.length === limit;
     const lastDoc = snapshot.docs[snapshot.docs.length - 1];
@@ -62,6 +89,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         lastWordId: lastDoc?.id || null,
         limit,
         filters: { wordType, search },
+        collection,
       },
     });
   } catch (error) {
@@ -76,9 +104,95 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 }
 
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  try {
+    const body = await request.json();
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Invalid request body',
+        },
+        { status: 400 }
+      );
+    }
+
+    const {
+      collection: providedCollection,
+      id: unusedId,
+      ...wordPayload
+    } = body as Record<string, unknown> & {
+      collection?: string;
+      id?: string;
+    };
+    void unusedId;
+
+    const collection =
+      typeof providedCollection === 'string' && providedCollection.trim() !== ''
+        ? providedCollection
+        : 'vocabulary_words_v4';
+
+    const now = new Date();
+    const isoTimestamp = now.toISOString();
+
+    const validationResult = VocabularyWordSchema.safeParse({
+      ...wordPayload,
+      createdAt: isoTimestamp,
+      updatedAt: isoTimestamp,
+    });
+
+    if (!validationResult.success) {
+      const errorMessage = validationResult.error.issues
+        .map(issue => `${issue.path.join('.') || 'root'}: ${issue.message}`)
+        .join('; ');
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Invalid word data: ${errorMessage}`,
+        },
+        { status: 400 }
+      );
+    }
+
+    const { createdAt, updatedAt, ...validatedWord } = validationResult.data;
+    void createdAt;
+    void updatedAt;
+
+    const firestorePayload = {
+      ...validatedWord,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const docRef = await adminDb.collection(collection).add(firestorePayload);
+    const createdSnapshot = await docRef.get();
+    const createdWord = {
+      id: createdSnapshot.id,
+      ...serializeWord(createdSnapshot.data() as Record<string, unknown>),
+    };
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        word: createdWord,
+      },
+    });
+  } catch (error) {
+    console.error('Error creating word:', error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+      },
+      { status: 500 }
+    );
+  }
+}
+
 export async function PUT(request: NextRequest): Promise<NextResponse> {
   try {
-    const { wordId, updates } = await request.json();
+    const body = await request.json();
+    const { wordId, updates, collection = 'vocabulary_words_v4' } = body;
 
     if (!wordId || !updates) {
       return NextResponse.json(
@@ -90,21 +204,18 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    console.log('Updating word:', wordId);
-    console.log('Updates data:', JSON.stringify(updates, null, 2));
-
     const updateData = {
       ...updates,
       updatedAt: new Date(),
     };
 
-    await adminDb.collection('vocabulary_words').doc(wordId).update(updateData);
+    await adminDb.collection(collection).doc(wordId).update(updateData);
 
-    console.log(`Word ${wordId} updated successfully`);
-
-    const updatedDoc = await adminDb.collection('vocabulary_words').doc(wordId).get();
-    const updatedData = updatedDoc.data();
-    console.log('Updated document data:', JSON.stringify(updatedData, null, 2));
+    const updatedDoc = await adminDb.collection(collection).doc(wordId).get();
+    const updatedData = {
+      id: updatedDoc.id,
+      ...serializeWord(updatedDoc.data() as Record<string, unknown>),
+    };
 
     return NextResponse.json({
       success: true,
@@ -123,9 +234,9 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
   }
 }
 
-async function getWordTypeCounts() {
+async function getWordTypeCounts(collection: string) {
   try {
-    const snapshot = await adminDb.collection('vocabulary_words').limit(1000).get();
+    const snapshot = await adminDb.collection(collection).limit(1000).get();
 
     const counts = {
       noun: 0,

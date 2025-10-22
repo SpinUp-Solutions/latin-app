@@ -1,4 +1,4 @@
-export type { ConjugationTable, DeclensionTableRow, AdjectiveDeclensionTableRow } from './vocabulary-new';
+export type { ConjugationTable, DeclensionTableRow, AdjectiveDeclensionTableRow } from './vocabulary/index';
 
 export interface Word {
   id: string;
