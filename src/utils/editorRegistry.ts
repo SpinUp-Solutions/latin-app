@@ -41,6 +41,8 @@ export const getEditorTitle = (contentType: string): string => {
       return 'Edit Click On Multiple Words Exercise';
     case 'generated-translation':
       return 'Edit Generated Translation Exercise';
+    case 'generated-form-identification':
+      return 'Edit Generated Form Identification Exercise';
     default:
       return `Edit ${contentType} Content`;
   }
