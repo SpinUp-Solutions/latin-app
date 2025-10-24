@@ -1,15 +1,8 @@
 import type { VocabularyWordWithId } from '@/src/types/vocabulary/index';
-
-type TableType = 'conjugation' | 'declension' | 'adjective-declension';
+import { type TableType, getTableFieldName } from '@/src/utils/schema-helpers';
 
 export function getCellValueAtPath(word: VocabularyWordWithId, tableType: TableType, path: string): string[] {
-  const rootFieldMap: Record<TableType, string> = {
-    conjugation: 'conjugation_table',
-    declension: 'declension_table',
-    'adjective-declension': 'degrees_table',
-  };
-
-  const rootField = rootFieldMap[tableType];
+  const rootField = getTableFieldName(tableType);
   const fullPath = `${rootField}.${path}`;
 
   const keys = fullPath.split('.');

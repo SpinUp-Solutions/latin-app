@@ -5,6 +5,7 @@ import type {
   PronounFormPath,
   AdverbFormPath,
 } from '@/src/types/api/exercise-word-responses';
+import type { TableType } from '@/src/utils/schema-helpers';
 
 export const createVerbFormPath = (
   tense: string,
@@ -51,7 +52,7 @@ type FormPath = VerbFormPath | NounFormPath | AdjectiveFormPath | PronounFormPat
 
 export const parseFormPathFromString = (
   path: string,
-  tableType: 'conjugation' | 'declension' | 'adjective-declension'
+  tableType: TableType
 ): VerbFormPath | NounFormPath | AdjectiveFormPath | null => {
   if (!path) return null;
 

@@ -15,6 +15,7 @@ import { useFormSelection } from '@/src/hooks/useFormSelection';
 import type { GeneratorFilters } from '@/src/types/exercises/base';
 import type { PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
+import { deriveTableTypeFromPOS } from '@/src/utils/generated/tableType';
 
 export const GeneratedTranslationEditor: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -68,10 +69,13 @@ export const GeneratedTranslationEditor: React.FC = () => {
       if (newPos === 'all') {
         updates.formSelection = undefined;
       } else {
-        updates.formSelection = {
-          tableType: getTableType(newPos),
-          selectedCellPaths: [],
-        };
+        const tableType = deriveTableTypeFromPOS(newPos);
+        if (tableType) {
+          updates.formSelection = {
+            tableType,
+            selectedCellPaths: [],
+          };
+        }
       }
     }
 
@@ -94,48 +98,53 @@ export const GeneratedTranslationEditor: React.FC = () => {
 
   const handleToggleCell = (path: string) => {
     const newPaths = formSelection.toggleCell(path, config.formSelection?.selectedCellPaths || []);
-    updateConfig({
-      formSelection: {
-        tableType: config.formSelection?.tableType || getTableType(config.filters.partOfSpeech),
-        selectedCellPaths: newPaths,
-      },
-    });
+    const tableType = config.formSelection?.tableType || deriveTableTypeFromPOS(config.filters.partOfSpeech);
+    if (tableType) {
+      updateConfig({
+        formSelection: {
+          tableType,
+          selectedCellPaths: newPaths,
+        },
+      });
+    }
   };
 
   const handleTogglePaths = (paths: string[]) => {
     const newPaths = formSelection.togglePaths(paths, config.formSelection?.selectedCellPaths || []);
-    updateConfig({
-      formSelection: {
-        tableType: config.formSelection?.tableType || getTableType(config.filters.partOfSpeech),
-        selectedCellPaths: newPaths,
-      },
-    });
+    const tableType = config.formSelection?.tableType || deriveTableTypeFromPOS(config.filters.partOfSpeech);
+    if (tableType) {
+      updateConfig({
+        formSelection: {
+          tableType,
+          selectedCellPaths: newPaths,
+        },
+      });
+    }
   };
 
   const handleSelectAll = () => {
     const allPaths = formSelection.getAllPaths(config.filters.partOfSpeech || 'all');
-    updateConfig({
-      formSelection: {
-        tableType: getTableType(config.filters.partOfSpeech),
-        selectedCellPaths: allPaths,
-      },
-    });
+    const tableType = deriveTableTypeFromPOS(config.filters.partOfSpeech);
+    if (tableType) {
+      updateConfig({
+        formSelection: {
+          tableType,
+          selectedCellPaths: allPaths,
+        },
+      });
+    }
   };
 
   const handleClearSelection = () => {
-    updateConfig({
-      formSelection: {
-        tableType: config.formSelection?.tableType || getTableType(config.filters.partOfSpeech),
-        selectedCellPaths: [],
-      },
-    });
-  };
-
-  const getTableType = (partOfSpeech?: string): 'conjugation' | 'declension' | 'adjective-declension' => {
-    if (partOfSpeech === 'verb') return 'conjugation';
-    if (partOfSpeech === 'noun') return 'declension';
-    if (partOfSpeech === 'adjective') return 'adjective-declension';
-    return 'conjugation';
+    const tableType = config.formSelection?.tableType || deriveTableTypeFromPOS(config.filters.partOfSpeech);
+    if (tableType) {
+      updateConfig({
+        formSelection: {
+          tableType,
+          selectedCellPaths: [],
+        },
+      });
+    }
   };
 
   const previewWords = previewData?.words as ExerciseWordResponse[] | undefined;

@@ -4,6 +4,7 @@ import { Query } from 'firebase-admin/firestore';
 import { VocabularyWordSchema } from '@/src/types/vocabulary/schemas';
 import { parseFormPathFromString } from '@/src/utils/exerciseFormPaths';
 import type { VerbFormPath, NounFormPath, AdjectiveFormPath } from '@/src/types/api/exercise-word-responses';
+import { TABLE_TYPE_CONFIG } from '@/src/utils/schema-helpers';
 
 const DEFAULT_COLLECTION = 'vocabulary_words_v4';
 const TABLE_FIELDS = ['word', 'conjugation_table', 'declension_table', 'degrees_table'] as const;
@@ -317,12 +318,6 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
   }
 }
 
-const ROOT_FIELD_MAP: Record<string, string> = {
-  conjugation: 'conjugation_table',
-  declension: 'declension_table',
-  'adjective-declension': 'degrees_table',
-} as const;
-
 function getCellValueAtPathServer(obj: Record<string, unknown>, path: string): string[] {
   const keys = path.split('.');
   let value: unknown = obj;
@@ -355,7 +350,7 @@ function pickRandomFormServer(
   tableType: 'conjugation' | 'declension' | 'adjective-declension',
   selectedPaths: string[]
 ): { form: string; path: string } | null {
-  const rootField = ROOT_FIELD_MAP[tableType];
+  const rootField = TABLE_TYPE_CONFIG[tableType];
   if (!rootField) {
     return null;
   }

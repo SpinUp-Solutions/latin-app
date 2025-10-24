@@ -3,6 +3,7 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import type { RootState } from '../index';
 import type { PartOfSpeech, NounDeclension, AdjectiveDeclension } from '@/src/types/vocabulary/schemas/enums';
 import type { VerbConjugation } from '@/src/types/vocabulary/schemas/verb-conjugation';
+import type { TableType } from '@/src/utils/schema-helpers';
 
 interface AdvancedFiltersState {
   filters: {
@@ -18,7 +19,7 @@ interface AdvancedFiltersState {
     lastWordId: string | null;
   };
   selection: {
-    selectedTableType: 'conjugation' | 'declension' | 'adjective-declension' | null;
+    selectedTableType: TableType | null;
     selectedCellPaths: string[];
   };
 }

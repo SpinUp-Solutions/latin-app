@@ -1,4 +1,5 @@
 import { ContentItem } from '../content';
+import type { TableType } from '@/src/utils/schema-helpers';
 
 export interface FeedbackLevel {
   /** Custom message shown at this level (optional). */
@@ -85,7 +86,7 @@ export interface GeneratorFilters {
 }
 
 export interface FormSelection {
-  tableType: 'conjugation' | 'declension' | 'adjective-declension';
+  tableType: TableType;
   selectedCellPaths: string[];
 }
 

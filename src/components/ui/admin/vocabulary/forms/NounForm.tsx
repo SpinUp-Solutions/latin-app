@@ -3,21 +3,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/src/components/ui/form';
 import { VocabularyFormValues } from './types';
 import { WordFormInput } from './WordFormInput';
+import { genderOptions, nounDeclensionOptions } from '@/src/utils/vocabulary/formOptions';
 import React from 'react';
-const genderOptions = [
-  { value: 'masculine', label: 'Masculine' },
-  { value: 'feminine', label: 'Feminine' },
-  { value: 'neuter', label: 'Neuter' },
-];
-
-const declensionOptions = [
-  { value: '1', label: 'First' },
-  { value: '2', label: 'Second' },
-  { value: '3', label: 'Third' },
-  { value: '3-istem', label: 'Third i-stem' },
-  { value: '4', label: 'Fourth' },
-  { value: '5', label: 'Fifth' },
-];
 
 export const NounForm = () => {
   const form = useFormContext<VocabularyFormValues>();
@@ -74,7 +61,7 @@ export const NounForm = () => {
                     <SelectValue placeholder="Select declension" />
                   </SelectTrigger>
                   <SelectContent>
-                    {declensionOptions.map(option => (
+                    {nounDeclensionOptions.map(option => (
                       <SelectItem key={option.value} value={option.value}>
                         {option.label}
                       </SelectItem>

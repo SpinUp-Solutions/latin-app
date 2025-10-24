@@ -3,6 +3,7 @@ import { Card, CardContent } from '@/src/components/ui/card';
 import { Loader2, Search } from 'lucide-react';
 import { AdvancedWordCard } from './AdvancedWordCard';
 import { useInfiniteScroll } from '@/src/hooks/useInfiniteScroll';
+import type { TableType } from '@/src/utils/schema-helpers';
 
 interface Word {
   root_word?: string;
@@ -15,7 +16,7 @@ interface AdvancedResultsListProps {
   loadingMore: boolean;
   hasMore: boolean;
   onLoadMore: () => void;
-  selectedTableType?: 'conjugation' | 'declension' | 'adjective-declension' | null;
+  selectedTableType?: TableType | null;
   selectedCellPaths?: string[];
 }
 

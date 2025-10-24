@@ -1,5 +1,6 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import { type VocabularyWordWithId } from '@/src/types/vocabulary/index';
+import type { TableType } from '@/src/utils/schema-helpers';
 
 interface GetAdvancedWordsArgs {
   collection?: string;
@@ -12,7 +13,7 @@ interface GetAdvancedWordsArgs {
   adjectiveDeclension?: string;
   limit?: number;
   cellPaths?: string[];
-  tableType?: 'conjugation' | 'declension' | 'adjective-declension';
+  tableType?: TableType;
   select?: string[];
 }
 
