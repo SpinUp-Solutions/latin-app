@@ -8,13 +8,13 @@ import { VocabularyPoolSelector } from '../vocabulary-pools/VocabularyPoolSelect
 
 interface LessonInfoFormProps {
   lesson: Lesson;
-  onUpdateInfo: (updates: Partial<Pick<Lesson, 'id' | 'title' | 'description' | 'vocabulary_pool'>>) => void;
+  onUpdateInfo: (updates: Partial<Pick<Lesson, 'id' | 'title' | 'description' | 'type' | 'vocabulary_pool'>>) => void;
+  isNewLesson?: boolean;
 }
 
-export const LessonInfoForm: React.FC<LessonInfoFormProps> = ({ lesson, onUpdateInfo }) => {
+export const LessonInfoForm: React.FC<LessonInfoFormProps> = ({ lesson, onUpdateInfo, isNewLesson = false }) => {
   return (
     <div className="space-y-4">
-      {/* Lesson Basic Information */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -42,6 +42,36 @@ export const LessonInfoForm: React.FC<LessonInfoFormProps> = ({ lesson, onUpdate
               onChange={e => onUpdateInfo({ title: e.target.value })}
               placeholder="Enter lesson title..."
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Type</label>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="lessonType"
+                  value="normal"
+                  checked={lesson.type === 'normal'}
+                  onChange={e => onUpdateInfo({ type: e.target.value as 'normal' | 'vocab' })}
+                  disabled={!isNewLesson}
+                  className="w-4 h-4"
+                />
+                <span className={!isNewLesson ? 'text-gray-500' : ''}>Normal</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="lessonType"
+                  value="vocab"
+                  checked={lesson.type === 'vocab'}
+                  onChange={e => onUpdateInfo({ type: e.target.value as 'normal' | 'vocab' })}
+                  disabled={!isNewLesson}
+                  className="w-4 h-4"
+                />
+                <span className={!isNewLesson ? 'text-gray-500' : ''}>Vocab</span>
+              </label>
+            </div>
+            {!isNewLesson && <p className="text-xs text-gray-500 mt-1">Lesson type cannot be changed after creation</p>}
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Description</label>

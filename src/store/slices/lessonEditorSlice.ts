@@ -79,6 +79,7 @@ const lessonEditorSlice = createSlice({
         id: `lesson-${Date.now()}`,
         title: 'New Lesson',
         description: '',
+        type: 'normal',
         pages: [],
         isLive: false,
         liveOrder: null,
@@ -88,7 +89,10 @@ const lessonEditorSlice = createSlice({
       state.error = null;
     },
 
-    updateLessonInfo: (state, action: PayloadAction<Partial<Pick<Lesson, 'id' | 'title' | 'description'>>>) => {
+    updateLessonInfo: (
+      state,
+      action: PayloadAction<Partial<Pick<Lesson, 'id' | 'title' | 'description' | 'type' | 'vocabulary_pool'>>>
+    ) => {
       if (state.currentLesson) {
         Object.assign(state.currentLesson, action.payload);
       }

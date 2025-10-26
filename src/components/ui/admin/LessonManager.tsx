@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/src/components/ui/tabs';
 import { BookOpen, Edit, Trash2, Calendar, Eye, FileText, Clock } from 'lucide-react';
 import { Lesson } from '@/src/types/lesson';
 import { toast } from 'sonner';
@@ -30,6 +31,9 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
     description: string;
     onConfirm: () => void;
   } | null>(null);
+
+  const normalLessons = lessons.filter(l => l.type === 'normal');
+  const vocabLessons = lessons.filter(l => l.type === 'vocab');
 
   useEffect(() => {
     dispatch(loadDrafts());
@@ -84,6 +88,84 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
       hour: '2-digit',
       minute: '2-digit',
     });
+  };
+
+  const renderLessonGrid = (lessonsList: Lesson[]) => {
+    if (lessonsList.length === 0) {
+      return (
+        <div className="text-center text-gray-500 py-8">No lessons found in this category.</div>
+      );
+    }
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {lessonsList.map(lesson => (
+          <Card key={lesson.id} className="hover:shadow-lg transition-shadow">
+            <CardHeader>
+              <CardTitle className="flex items-start justify-between">
+                <div className="flex items-center gap-2">
+                  <BookOpen className="h-5 w-5 text-blue-600" />
+                  <div className="truncate">
+                    <SimpleRichDisplay content={lesson.title} />
+                  </div>
+                </div>
+                {lesson.isLive && (
+                  <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Live</span>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p
+                className="text-sm text-gray-600 overflow-hidden text-ellipsis"
+                style={{
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical' as const,
+                }}>
+                <SimpleRichDisplay content={lesson.description || 'No description provided'} />
+              </p>
+
+              <div className="text-xs text-gray-500 space-y-1">
+                <div className="flex items-center gap-1">
+                  <Calendar className="h-3 w-3" />
+                  {formatDate(lesson.updatedAt || lesson.createdAt)}
+                </div>
+                <div>v{lesson.version || 1}</div>
+              </div>
+
+              <div className="flex justify-between text-xs text-gray-600">
+                <span>{lesson.pages.length} total pages</span>
+                <span>
+                  {lesson.pages.reduce(
+                    (count, page) => count + page.items.filter(item => isExerciseType(item.type)).length,
+                    0
+                  )}{' '}
+                  exercises
+                </span>
+                <span>{lesson.pages.reduce((count, page) => count + page.items.length, 0)} items</span>
+              </div>
+
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={() => setSelectedLesson(lesson)} className="flex-1">
+                  <Eye className="h-4 w-4 mr-1" />
+                  View
+                </Button>
+                <Button size="sm" onClick={() => onEditLesson(lesson)} className="flex-1">
+                  <Edit className="h-4 w-4 mr-1" />
+                  Edit
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => handleDeleteLesson(lesson.id, lesson.title)}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
   };
 
   if (loading) {
@@ -252,7 +334,6 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
         </section>
       )}
 
-      {/* Saved Lessons Section */}
       <section>
         <h2 className="text-xl font-serif text-gray-800 border-b pb-2 mb-4">Saved Lessons ({lessons.length})</h2>
         {lessons.length === 0 && Object.keys(drafts).length === 0 ? (
@@ -268,75 +349,14 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
             No saved lessons yet. Continue with your drafts or create a new lesson.
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {lessons.map(lesson => {
-              return (
-                <Card key={lesson.id} className="hover:shadow-lg transition-shadow">
-                  <CardHeader>
-                    <CardTitle className="flex items-start justify-between">
-                      <div className="flex items-center gap-2">
-                        <BookOpen className="h-5 w-5 text-blue-600" />
-                        <div className="truncate">
-                          <SimpleRichDisplay content={lesson.title} />
-                        </div>
-                      </div>
-                      {lesson.isLive && (
-                        <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Live</span>
-                      )}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <p
-                      className="text-sm text-gray-600 overflow-hidden text-ellipsis"
-                      style={{
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical' as const,
-                      }}>
-                      <SimpleRichDisplay content={lesson.description || 'No description provided'} />
-                    </p>
-
-                    <div className="text-xs text-gray-500 space-y-1">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        {formatDate(lesson.updatedAt || lesson.createdAt)}
-                      </div>
-                      <div>v{lesson.version || 1}</div>
-                    </div>
-
-                    <div className="flex justify-between text-xs text-gray-600">
-                      <span>{lesson.pages.length} total pages</span>
-                      <span>
-                        {lesson.pages.reduce(
-                          (count, page) => count + page.items.filter(item => isExerciseType(item.type)).length,
-                          0
-                        )}{' '}
-                        exercises
-                      </span>
-                      <span>{lesson.pages.reduce((count, page) => count + page.items.length, 0)} items</span>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" onClick={() => setSelectedLesson(lesson)} className="flex-1">
-                        <Eye className="h-4 w-4 mr-1" />
-                        View
-                      </Button>
-                      <Button size="sm" onClick={() => onEditLesson(lesson)} className="flex-1">
-                        <Edit className="h-4 w-4 mr-1" />
-                        Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => handleDeleteLesson(lesson.id, lesson.title)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+          <Tabs defaultValue="normal" className="w-full">
+            <TabsList>
+              <TabsTrigger value="normal">Normal Lessons ({normalLessons.length})</TabsTrigger>
+              <TabsTrigger value="vocab">Vocab Lessons ({vocabLessons.length})</TabsTrigger>
+            </TabsList>
+            <TabsContent value="normal">{renderLessonGrid(normalLessons)}</TabsContent>
+            <TabsContent value="vocab">{renderLessonGrid(vocabLessons)}</TabsContent>
+          </Tabs>
         )}
       </section>
       <ConfirmationDialog
