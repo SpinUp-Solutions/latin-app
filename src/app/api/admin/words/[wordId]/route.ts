@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { wordId: string } }
-): Promise<NextResponse> {
+export async function DELETE(request: NextRequest, { params }: { params: { wordId: string } }): Promise<NextResponse> {
   try {
     const { wordId } = params;
     const { searchParams } = new URL(request.url);

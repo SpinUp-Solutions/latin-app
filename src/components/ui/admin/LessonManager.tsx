@@ -92,9 +92,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
 
   const renderLessonGrid = (lessonsList: Lesson[]) => {
     if (lessonsList.length === 0) {
-      return (
-        <div className="text-center text-gray-500 py-8">No lessons found in this category.</div>
-      );
+      return <div className="text-center text-gray-500 py-8">No lessons found in this category.</div>;
     }
 
     return (
@@ -109,9 +107,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
                     <SimpleRichDisplay content={lesson.title} />
                   </div>
                 </div>
-                {lesson.isLive && (
-                  <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Live</span>
-                )}
+                {lesson.isLive && <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Live</span>}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -154,10 +150,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
                   <Edit className="h-4 w-4 mr-1" />
                   Edit
                 </Button>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => handleDeleteLesson(lesson.id, lesson.title)}>
+                <Button size="sm" variant="destructive" onClick={() => handleDeleteLesson(lesson.id, lesson.title)}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
