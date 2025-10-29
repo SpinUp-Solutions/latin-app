@@ -6,6 +6,8 @@ import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/src/
 import { VocabularyFormValues } from './types';
 import { Plus, Trash2 } from 'lucide-react';
 import React from 'react';
+import { useAIFieldStatus } from '@/src/hooks/useAIFieldStatus';
+import { cn } from '@/src/lib/utils';
 
 export const BaseWordForm = () => {
   const form = useFormContext<VocabularyFormValues>();
@@ -48,15 +50,26 @@ export const BaseWordForm = () => {
       <FormField
         control={form.control}
         name="translation"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Translation</FormLabel>
-            <FormControl>
-              <Textarea rows={2} {...field} />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
+        render={({ field }) => {
+          const aiStatus = useAIFieldStatus('translation');
+          return (
+            <FormItem>
+              <FormLabel>Translation</FormLabel>
+              <FormControl>
+                <Textarea
+                  rows={2}
+                  {...field}
+                  className={cn(
+                    aiStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
+                    aiStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
+                    'focus:bg-white'
+                  )}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          );
+        }}
       />
 
       <div className="space-y-2">
@@ -95,43 +108,77 @@ export const BaseWordForm = () => {
       <FormField
         control={form.control}
         name="etymology"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Etymology</FormLabel>
-            <FormControl>
-              <Textarea rows={2} {...field} value={field.value ?? ''} />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
+        render={({ field }) => {
+          const aiStatus = useAIFieldStatus('etymology');
+          return (
+            <FormItem>
+              <FormLabel>Etymology</FormLabel>
+              <FormControl>
+                <Textarea
+                  rows={2}
+                  {...field}
+                  value={field.value ?? ''}
+                  className={cn(
+                    aiStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
+                    aiStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
+                    'focus:bg-white'
+                  )}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          );
+        }}
       />
 
       <FormField
         control={form.control}
         name="pronunciation"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Pronunciation</FormLabel>
-            <FormControl>
-              <Input {...field} value={field.value ?? ''} />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
+        render={({ field }) => {
+          const aiStatus = useAIFieldStatus('pronunciation');
+          return (
+            <FormItem>
+              <FormLabel>Pronunciation</FormLabel>
+              <FormControl>
+                <Input
+                  {...field}
+                  value={field.value ?? ''}
+                  className={cn(
+                    aiStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
+                    aiStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
+                    'focus:bg-white'
+                  )}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          );
+        }}
       />
 
       <FormField
         control={form.control}
         name="alternate_form"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Alternate Form</FormLabel>
-            <FormControl>
-              <Input {...field} value={field.value ?? ''} />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
+        render={({ field }) => {
+          const aiStatus = useAIFieldStatus('alternate_form');
+          return (
+            <FormItem>
+              <FormLabel>Alternate Form</FormLabel>
+              <FormControl>
+                <Input
+                  {...field}
+                  value={field.value ?? ''}
+                  className={cn(
+                    aiStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
+                    aiStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
+                    'focus:bg-white'
+                  )}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          );
+        }}
       />
     </div>
   );

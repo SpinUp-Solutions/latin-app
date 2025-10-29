@@ -1,0 +1,55 @@
+import { VocabularyWord } from '@/src/types/vocabulary/schemas';
+import { PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
+
+export interface AIAutocompleteRequest {
+  word: string;
+  part_of_speech: PartOfSpeech;
+  existingData?: Partial<VocabularyWord>;
+  fieldsToComplete?: AICompletableField[];
+  overwriteExisting?: boolean;
+}
+
+export type AICompletableField =
+  | 'translation'
+  | 'definitions'
+  | 'etymology'
+  | 'pronunciation'
+  | 'gender'
+  | 'declension'
+  | 'declension_table'
+  | 'conjugation'
+  | 'conjugation_table'
+  | 'principal_parts'
+  | 'is_deponent'
+  | 'degrees_table'
+  | 'alternate_form'
+  | 'pronoun_type'
+  | 'dictionary_forms'
+  | 'nominative_singular'
+  | 'genitive_singular';
+
+export interface TokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+export interface CostBreakdown {
+  inputCost: number;
+  outputCost: number;
+  totalCost: number;
+  tokens: TokenUsage;
+}
+
+export interface AIAutocompleteResponse {
+  success: boolean;
+  data?: Partial<VocabularyWord>;
+  error?: string;
+  tokensUsed?: number;
+  model?: string;
+  cost?: CostBreakdown;
+  fieldStatus?: Record<string, 'filled' | 'missing'>;
+  notes?: string;
+}
+
+export type OpenAIStructuredOutput = Partial<VocabularyWord>;

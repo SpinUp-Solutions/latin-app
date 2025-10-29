@@ -7,6 +7,8 @@ import { PrincipalPartsEditor } from './PrincipalPartsEditor';
 import { VerbConjugationSchema } from '@/src/types/vocabulary/schemas/enums';
 import type { z } from 'zod';
 import React from 'react';
+import { useAIFieldStatus } from '@/src/hooks/useAIFieldStatus';
+import { cn } from '@/src/lib/utils';
 
 type VerbConjugationValue = z.infer<typeof VerbConjugationSchema>;
 
@@ -24,6 +26,7 @@ export const VerbForm = () => {
           render={({ field }) => {
             const selectValue =
               field.value && typeof field.value === 'string' && field.value.trim() !== '' ? field.value : undefined;
+            const aiStatus = useAIFieldStatus('conjugation');
             return (
               <FormItem>
                 <FormLabel>Conjugation</FormLabel>
@@ -35,7 +38,12 @@ export const VerbForm = () => {
                         field.onChange(value);
                       }
                     }}>
-                    <SelectTrigger>
+                    <SelectTrigger
+                      className={cn(
+                        aiStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
+                        aiStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
+                        'focus:bg-white'
+                      )}>
                       <SelectValue placeholder="Select conjugation" />
                     </SelectTrigger>
                     <SelectContent>
@@ -56,15 +64,25 @@ export const VerbForm = () => {
         <FormField
           control={form.control}
           name="is_deponent"
-          render={({ field }) => (
-            <FormItem className="flex flex-col justify-end">
-              <FormLabel>Deponent</FormLabel>
-              <FormControl>
-                <Switch checked={!!field.value} onCheckedChange={checked => field.onChange(checked)} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+          render={({ field }) => {
+            const aiStatus = useAIFieldStatus('is_deponent');
+            return (
+              <FormItem className="flex flex-col justify-end">
+                <FormLabel>Deponent</FormLabel>
+                <FormControl>
+                  <div
+                    className={cn(
+                      'inline-block p-2 rounded transition-colors',
+                      aiStatus === 'filled' && 'bg-green-50 border border-green-300',
+                      aiStatus === 'missing' && 'bg-red-50 border border-red-300'
+                    )}>
+                    <Switch checked={!!field.value} onCheckedChange={checked => field.onChange(checked)} />
+                  </div>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            );
+          }}
         />
       </div>
 
