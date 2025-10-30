@@ -1,10 +1,10 @@
 'use client';
 
 import { Button } from '@/src/components/ui/button';
-import { useAIAutocomplete } from '@/src/hooks/useAIAutocomplete';
+import { useAIAutocomplete, ErrorInfo } from '@/src/hooks/useAIAutocomplete';
 import { VocabularyWord } from '@/src/types/vocabulary/schemas';
 import { PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
-import { Loader2, Sparkles, AlertCircle } from 'lucide-react';
+import { Loader2, Sparkles, AlertCircle, XCircle, Copy, RotateCcw } from 'lucide-react';
 import { useToast } from '@/src/hooks/use-toast';
 import { Popover, PopoverContent, PopoverTrigger } from '@/src/components/ui/popover';
 import { useState } from 'react';
@@ -26,11 +26,13 @@ export function AIAutocompleteButton({
 }: AIAutocompleteButtonProps) {
   const { toast } = useToast();
   const [aiNotes, setAiNotes] = useState<string | undefined>(undefined);
+  const [errorDetails, setErrorDetails] = useState<ErrorInfo | null>(null);
 
   const { autocomplete, isLoading, cost } = useAIAutocomplete({
     onSuccess: (data, costInfo, fieldStatus, notes) => {
       onAutocomplete(data, fieldStatus);
       setAiNotes(notes);
+      setErrorDetails(null);
       const costMessage = costInfo
         ? `Cost: $${costInfo.totalCost.toFixed(4)} (${costInfo.tokens.totalTokens.toLocaleString()} tokens)`
         : '';
@@ -39,7 +41,8 @@ export function AIAutocompleteButton({
         description: `Form fields have been populated. Review and apply changes. ${costMessage}`,
       });
     },
-    onError: error => {
+    onError: (error, errorInfo) => {
+      setErrorDetails(errorInfo || null);
       toast({
         title: 'AI Autocomplete Failed',
         description: error,
@@ -58,12 +61,47 @@ export function AIAutocompleteButton({
       return;
     }
 
+    setErrorDetails(null);
     await autocomplete({
       word,
       part_of_speech: partOfSpeech,
       existingData,
       overwriteExisting: false,
     });
+  };
+
+  const handleCopyError = () => {
+    if (!errorDetails) return;
+
+    const errorText = `AI Autocomplete Error
+Time: ${new Date(errorDetails.timestamp).toLocaleString()}
+Word: ${errorDetails.requestData?.word}
+Part of Speech: ${errorDetails.requestData?.part_of_speech}
+
+Error Message:
+${errorDetails.message}
+
+${
+  errorDetails.details
+    ? `
+Technical Details:
+Type: ${errorDetails.details.type || 'Unknown'}
+${errorDetails.details.details || ''}
+${errorDetails.details.stack ? `\nStack Trace:\n${errorDetails.details.stack}` : ''}
+`
+    : ''
+}`;
+
+    navigator.clipboard.writeText(errorText);
+    toast({
+      title: 'Error Copied',
+      description: 'Error details copied to clipboard',
+    });
+  };
+
+  const handleRetry = () => {
+    setErrorDetails(null);
+    handleAutocomplete();
   };
 
   return (
@@ -99,6 +137,66 @@ export function AIAutocompleteButton({
               <div className="space-y-2">
                 <h4 className="font-medium text-sm">AI Notes</h4>
                 <p className="text-sm text-gray-700 whitespace-pre-wrap">{aiNotes}</p>
+              </div>
+            </PopoverContent>
+          </Popover>
+        )}
+        {errorDetails && !isLoading && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0">
+                <XCircle className="h-4 w-4 text-red-600" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-96 max-h-80 overflow-y-auto bg-white">
+              <div className="space-y-3">
+                <div className="flex items-start justify-between">
+                  <h4 className="font-medium text-sm text-red-600">Error Details</h4>
+                  <span className="text-xs text-gray-500">{new Date(errorDetails.timestamp).toLocaleTimeString()}</span>
+                </div>
+                <div className="space-y-2">
+                  <div>
+                    <p className="text-xs font-medium text-gray-500">Error Message:</p>
+                    <p className="text-sm text-gray-900 mt-1">{errorDetails.message}</p>
+                  </div>
+                  {errorDetails.requestData && (
+                    <div>
+                      <p className="text-xs font-medium text-gray-500">Request:</p>
+                      <p className="text-xs text-gray-700 mt-1">
+                        Word: {errorDetails.requestData.word} ({errorDetails.requestData.part_of_speech})
+                      </p>
+                    </div>
+                  )}
+                  {errorDetails.details && (
+                    <div>
+                      <p className="text-xs font-medium text-gray-500">Technical Details:</p>
+                      <div className="text-xs text-gray-700 mt-1 space-y-1">
+                        {errorDetails.details.type && <p>Type: {errorDetails.details.type}</p>}
+                        {errorDetails.details.details && (
+                          <p className="whitespace-pre-wrap break-words">{errorDetails.details.details}</p>
+                        )}
+                        {errorDetails.details.stack && (
+                          <details className="mt-2">
+                            <summary className="cursor-pointer text-xs font-medium text-gray-500">Stack Trace</summary>
+                            <pre className="text-xs mt-1 overflow-x-auto bg-gray-50 p-2 rounded">
+                              {errorDetails.details.stack}
+                            </pre>
+                          </details>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="flex gap-2 pt-2 border-t">
+                  <Button type="button" variant="outline" size="sm" onClick={handleCopyError} className="flex-1 gap-2">
+                    <Copy className="h-3 w-3" />
+                    Copy Details
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={handleRetry} className="flex-1 gap-2">
+                    <RotateCcw className="h-3 w-3" />
+                    Retry
+                  </Button>
+                </div>
               </div>
             </PopoverContent>
           </Popover>

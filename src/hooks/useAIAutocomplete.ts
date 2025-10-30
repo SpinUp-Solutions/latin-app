@@ -1,7 +1,17 @@
 import { useState } from 'react';
-import { AIAutocompleteResponse, CostBreakdown } from '@/src/lib/openai/types';
+import { AIAutocompleteResponse, CostBreakdown, ErrorDetails } from '@/src/lib/openai/types';
 import { VocabularyWord } from '@/src/types/vocabulary/schemas';
 import { PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
+
+export interface ErrorInfo {
+  message: string;
+  details?: ErrorDetails;
+  timestamp: string;
+  requestData?: {
+    word: string;
+    part_of_speech: PartOfSpeech;
+  };
+}
 
 interface UseAIAutocompleteOptions {
   onSuccess?: (
@@ -10,12 +20,13 @@ interface UseAIAutocompleteOptions {
     fieldStatus?: Record<string, 'filled' | 'missing'>,
     notes?: string
   ) => void;
-  onError?: (error: string) => void;
+  onError?: (error: string, errorInfo?: ErrorInfo) => void;
 }
 
 export function useAIAutocomplete(options?: UseAIAutocompleteOptions) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorInfo, setErrorInfo] = useState<ErrorInfo | null>(null);
   const [data, setData] = useState<Partial<VocabularyWord> | null>(null);
   const [cost, setCost] = useState<CostBreakdown | null>(null);
 
@@ -28,6 +39,7 @@ export function useAIAutocomplete(options?: UseAIAutocompleteOptions) {
   }) => {
     setIsLoading(true);
     setError(null);
+    setErrorInfo(null);
     setData(null);
 
     try {
@@ -43,8 +55,18 @@ export function useAIAutocomplete(options?: UseAIAutocompleteOptions) {
 
       if (!result.success) {
         const errorMessage = result.error || 'Failed to autocomplete word';
+        const errInfo: ErrorInfo = {
+          message: errorMessage,
+          details: result.errorDetails,
+          timestamp: new Date().toISOString(),
+          requestData: {
+            word: request.word,
+            part_of_speech: request.part_of_speech,
+          },
+        };
         setError(errorMessage);
-        options?.onError?.(errorMessage);
+        setErrorInfo(errInfo);
+        options?.onError?.(errorMessage, errInfo);
         return null;
       }
 
@@ -57,8 +79,25 @@ export function useAIAutocomplete(options?: UseAIAutocompleteOptions) {
       return result.data || null;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      const errInfo: ErrorInfo = {
+        message: errorMessage,
+        details:
+          err instanceof Error
+            ? {
+                message: err.message,
+                type: err.name,
+                stack: err.stack,
+              }
+            : undefined,
+        timestamp: new Date().toISOString(),
+        requestData: {
+          word: request.word,
+          part_of_speech: request.part_of_speech,
+        },
+      };
       setError(errorMessage);
-      options?.onError?.(errorMessage);
+      setErrorInfo(errInfo);
+      options?.onError?.(errorMessage, errInfo);
       return null;
     } finally {
       setIsLoading(false);
@@ -69,6 +108,7 @@ export function useAIAutocomplete(options?: UseAIAutocompleteOptions) {
     autocomplete,
     isLoading,
     error,
+    errorInfo,
     data,
     cost,
   };

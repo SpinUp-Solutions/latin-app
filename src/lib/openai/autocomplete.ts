@@ -278,6 +278,12 @@ export async function autocompleteVocabularyWord(request: AIAutocompleteRequest)
     console.error('[Autocomplete] Error stack:', error instanceof Error ? error.stack : 'No stack');
 
     const message = error instanceof Error ? error.message : 'Unknown error while requesting autocomplete';
-    return { success: false, error: message };
+    const errorDetails = {
+      message,
+      type: error?.constructor?.name || typeof error,
+      stack: error instanceof Error ? error.stack : undefined,
+      details: error instanceof Error ? String(error) : String(error),
+    };
+    return { success: false, error: message, errorDetails };
   }
 }

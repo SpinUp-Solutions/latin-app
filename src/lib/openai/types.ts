@@ -41,10 +41,18 @@ export interface CostBreakdown {
   tokens: TokenUsage;
 }
 
+export interface ErrorDetails {
+  message: string;
+  type?: string;
+  stack?: string;
+  details?: string;
+}
+
 export interface AIAutocompleteResponse {
   success: boolean;
   data?: Partial<VocabularyWord>;
   error?: string;
+  errorDetails?: ErrorDetails;
   tokensUsed?: number;
   model?: string;
   cost?: CostBreakdown;

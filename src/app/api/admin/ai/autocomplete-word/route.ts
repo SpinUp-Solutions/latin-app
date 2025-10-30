@@ -68,7 +68,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       {
         success: false,
         error: errorMessage,
-        details: process.env.NODE_ENV === 'development' ? errorDetails : undefined,
+        errorDetails,
       },
       { status: 500 }
     );
