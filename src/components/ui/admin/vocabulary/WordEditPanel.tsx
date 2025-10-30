@@ -122,6 +122,7 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
     setEditingCell(null);
     setEditingCellValue('');
     setTableErrors([]);
+    setAiFieldStatus(new Map());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [word?.id, dispatch]);
 
@@ -171,7 +172,7 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
 
   const isEditTableExpanded = (tableType: string) => expandedEditTables.has(tableType);
 
-  const findNullPaths = (obj: any, path = ''): string[] => {
+  const findNullPaths = (obj: unknown, path = ''): string[] => {
     const nullPaths: string[] = [];
 
     if (obj === null || obj === undefined) {
@@ -186,16 +187,17 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
     }
 
     if (typeof obj === 'object') {
-      for (const key in obj) {
+      const objRecord = obj as Record<string, unknown>;
+      for (const key in objRecord) {
         const newPath = path ? `${path}.${key}` : key;
-        nullPaths.push(...findNullPaths(obj[key], newPath));
+        nullPaths.push(...findNullPaths(objRecord[key], newPath));
       }
     }
 
     return nullPaths;
   };
 
-  const deepMergeNullValues = (existing: any, aiGenerated: any): any => {
+  const deepMergeNullValues = (existing: unknown, aiGenerated: unknown): unknown => {
     if (aiGenerated === null || aiGenerated === undefined) {
       return existing;
     }
@@ -205,16 +207,22 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
     }
 
     if (Array.isArray(aiGenerated)) {
-      if (!Array.isArray(existing) || existing.length === 0 || existing.every(item => item === null || item === undefined || item === '')) {
+      if (
+        !Array.isArray(existing) ||
+        existing.length === 0 ||
+        existing.every(item => item === null || item === undefined || item === '')
+      ) {
         return aiGenerated;
       }
       return existing;
     }
 
     if (typeof aiGenerated === 'object' && typeof existing === 'object') {
-      const merged = { ...existing };
-      for (const key in aiGenerated) {
-        merged[key] = deepMergeNullValues(existing[key], aiGenerated[key]);
+      const existingRecord = existing as Record<string, unknown>;
+      const aiGeneratedRecord = aiGenerated as Record<string, unknown>;
+      const merged = { ...existingRecord };
+      for (const key in aiGeneratedRecord) {
+        merged[key] = deepMergeNullValues(existingRecord[key], aiGeneratedRecord[key]);
       }
       return merged;
     }
@@ -226,7 +234,10 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
     return existing;
   };
 
-  const handleAIAutocomplete = (aiData: Partial<VocabularyWord>, apiFieldStatus?: Record<string, 'filled' | 'missing'>) => {
+  const handleAIAutocomplete = (
+    aiData: Partial<VocabularyWord>,
+    apiFieldStatus?: Record<string, 'filled' | 'missing'>
+  ) => {
     console.log('[WordEditPanel] AI Autocomplete data received:', aiData);
     console.log('[WordEditPanel] Field status from API:', apiFieldStatus);
 
@@ -283,12 +294,15 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
       }
     }
 
-    if (aiDataRecord.declension_table && currentPartOfSpeech && (currentPartOfSpeech === 'noun' || currentPartOfSpeech === 'pronoun')) {
+    if (
+      aiDataRecord.declension_table &&
+      currentPartOfSpeech &&
+      (currentPartOfSpeech === 'noun' || currentPartOfSpeech === 'pronoun')
+    ) {
       console.log('[WordEditPanel] Declension table received:', aiDataRecord.declension_table);
       console.log('[WordEditPanel] Current declension table:', declensionTable);
 
       const nullPathsBefore = declensionTable ? findNullPaths(declensionTable) : [];
-      const nullPathsInAI = findNullPaths(aiDataRecord.declension_table);
 
       const mergedDeclensionTable = declensionTable
         ? deepMergeNullValues(declensionTable, aiDataRecord.declension_table)
@@ -321,7 +335,6 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
       console.log('[WordEditPanel] Current degrees table:', degreesTable);
 
       const nullPathsBefore = degreesTable ? findNullPaths(degreesTable) : [];
-      const nullPathsInAI = findNullPaths(aiDataRecord.degrees_table);
 
       const mergedDegreesTable = degreesTable
         ? deepMergeNullValues(degreesTable, aiDataRecord.degrees_table)
@@ -453,116 +466,118 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
   return (
     <FormProvider {...form}>
       <AIFilledFieldsContext.Provider value={aiFieldStatus}>
-        <form onSubmit={handleSubmit} className="flex flex-col h-full overflow-hidden bg-white border-l border-gray-200">
-        <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <div className="min-w-0 flex-1">
-              <h2 className="text-xl font-serif font-semibold text-roman-red truncate">{watchedWord || word.word}</h2>
-              <p className="text-sm text-gray-500 mt-0.5">{word.part_of_speech}</p>
+        <form
+          onSubmit={handleSubmit}
+          className="flex flex-col h-full overflow-hidden bg-white border-l border-gray-200">
+          <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <div className="min-w-0 flex-1">
+                <h2 className="text-xl font-serif font-semibold text-roman-red truncate">{watchedWord || word.word}</h2>
+                <p className="text-sm text-gray-500 mt-0.5">{word.part_of_speech}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <AIAutocompleteButton
+                  word={watchedWord || word.word}
+                  partOfSpeech={word.part_of_speech}
+                  existingData={form.getValues() as Partial<VocabularyWord>}
+                  onAutocomplete={handleAIAutocomplete}
+                  disabled={updating || isSubmitting}
+                />
+                <Button type="submit" disabled={updating || isSubmitting}>
+                  {updating || isSubmitting ? 'Saving...' : 'Apply'}
+                </Button>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <AIAutocompleteButton
-                word={watchedWord || word.word}
-                partOfSpeech={word.part_of_speech}
-                existingData={form.getValues() as Partial<VocabularyWord>}
-                onAutocomplete={handleAIAutocomplete}
-                disabled={updating || isSubmitting}
-              />
-              <Button type="submit" disabled={updating || isSubmitting}>
-                {updating || isSubmitting ? 'Saving...' : 'Apply'}
-              </Button>
-            </div>
-          </div>
-          {Object.keys(form.formState.errors).length > 0 && (
-            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
-              <div className="font-semibold mb-1">Validation Errors:</div>
-              <pre className="text-xs overflow-auto">{JSON.stringify(form.formState.errors, null, 2)}</pre>
-            </div>
-          )}
-          {tableErrors.length > 0 && (
-            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
-              <div className="font-semibold mb-1">Table Validation Errors:</div>
-              <ul className="list-disc list-inside space-y-1">
-                {tableErrors.map((error, index) => (
-                  <li key={index} className="text-xs">
-                    {error}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-6 py-4">
-          <div className="space-y-6">
-            <BaseWordForm />
-            {renderPosForm()}
-
-            {(word?.part_of_speech === 'noun' || word?.part_of_speech === 'pronoun') && (
-              <SchemaTable
-                schema={DeclensionTableSchema}
-                data={declensionTable}
-                tableType={TABLE_TYPES.DECLENSION}
-                title="Declension Table"
-                color="text-blue-700"
-                isExpanded={isEditTableExpanded(TABLE_TYPES.DECLENSION)}
-                onToggle={() => toggleEditTableExpansion(TABLE_TYPES.DECLENSION)}
-                isEditMode={true}
-                editingCell={editingCell}
-                editingCellValue={editingCellValue}
-                editCallbacks={{
-                  onCellDoubleClick: handleCellDoubleClick,
-                  onCellEditSave: handleCellEditSave,
-                  onCellEditCancel: handleCellEditCancel,
-                  onEditingCellValueChange: setEditingCellValue,
-                }}
-              />
+            {Object.keys(form.formState.errors).length > 0 && (
+              <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                <div className="font-semibold mb-1">Validation Errors:</div>
+                <pre className="text-xs overflow-auto">{JSON.stringify(form.formState.errors, null, 2)}</pre>
+              </div>
             )}
-
-            {word?.part_of_speech === 'adjective' && (
-              <SchemaTable
-                schema={DegreesTableSchema}
-                data={degreesTable}
-                tableType={TABLE_TYPES.ADJECTIVE_DECLENSION}
-                title="Degrees of Comparison"
-                color="text-purple-700"
-                isExpanded={isEditTableExpanded(TABLE_TYPES.ADJECTIVE_DECLENSION)}
-                onToggle={() => toggleEditTableExpansion(TABLE_TYPES.ADJECTIVE_DECLENSION)}
-                isEditMode={true}
-                editingCell={editingCell}
-                editingCellValue={editingCellValue}
-                editCallbacks={{
-                  onCellDoubleClick: handleCellDoubleClick,
-                  onCellEditSave: handleCellEditSave,
-                  onCellEditCancel: handleCellEditCancel,
-                  onEditingCellValueChange: setEditingCellValue,
-                }}
-              />
-            )}
-
-            {word?.part_of_speech === 'verb' && (
-              <SchemaTable
-                schema={ConjugationTableSchema}
-                data={conjugationTable}
-                tableType={TABLE_TYPES.CONJUGATION}
-                title="Conjugation Table"
-                color="text-green-700"
-                isExpanded={isEditTableExpanded(TABLE_TYPES.CONJUGATION)}
-                onToggle={() => toggleEditTableExpansion(TABLE_TYPES.CONJUGATION)}
-                isEditMode={true}
-                editingCell={editingCell}
-                editingCellValue={editingCellValue}
-                editCallbacks={{
-                  onCellDoubleClick: handleCellDoubleClick,
-                  onCellEditSave: handleCellEditSave,
-                  onCellEditCancel: handleCellEditCancel,
-                  onEditingCellValueChange: setEditingCellValue,
-                }}
-              />
+            {tableErrors.length > 0 && (
+              <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                <div className="font-semibold mb-1">Table Validation Errors:</div>
+                <ul className="list-disc list-inside space-y-1">
+                  {tableErrors.map((error, index) => (
+                    <li key={index} className="text-xs">
+                      {error}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
           </div>
-        </div>
-      </form>
+
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+            <div className="space-y-6">
+              <BaseWordForm />
+              {renderPosForm()}
+
+              {(word?.part_of_speech === 'noun' || word?.part_of_speech === 'pronoun') && (
+                <SchemaTable
+                  schema={DeclensionTableSchema}
+                  data={declensionTable}
+                  tableType={TABLE_TYPES.DECLENSION}
+                  title="Declension Table"
+                  color="text-blue-700"
+                  isExpanded={isEditTableExpanded(TABLE_TYPES.DECLENSION)}
+                  onToggle={() => toggleEditTableExpansion(TABLE_TYPES.DECLENSION)}
+                  isEditMode={true}
+                  editingCell={editingCell}
+                  editingCellValue={editingCellValue}
+                  editCallbacks={{
+                    onCellDoubleClick: handleCellDoubleClick,
+                    onCellEditSave: handleCellEditSave,
+                    onCellEditCancel: handleCellEditCancel,
+                    onEditingCellValueChange: setEditingCellValue,
+                  }}
+                />
+              )}
+
+              {word?.part_of_speech === 'adjective' && (
+                <SchemaTable
+                  schema={DegreesTableSchema}
+                  data={degreesTable}
+                  tableType={TABLE_TYPES.ADJECTIVE_DECLENSION}
+                  title="Degrees of Comparison"
+                  color="text-purple-700"
+                  isExpanded={isEditTableExpanded(TABLE_TYPES.ADJECTIVE_DECLENSION)}
+                  onToggle={() => toggleEditTableExpansion(TABLE_TYPES.ADJECTIVE_DECLENSION)}
+                  isEditMode={true}
+                  editingCell={editingCell}
+                  editingCellValue={editingCellValue}
+                  editCallbacks={{
+                    onCellDoubleClick: handleCellDoubleClick,
+                    onCellEditSave: handleCellEditSave,
+                    onCellEditCancel: handleCellEditCancel,
+                    onEditingCellValueChange: setEditingCellValue,
+                  }}
+                />
+              )}
+
+              {word?.part_of_speech === 'verb' && (
+                <SchemaTable
+                  schema={ConjugationTableSchema}
+                  data={conjugationTable}
+                  tableType={TABLE_TYPES.CONJUGATION}
+                  title="Conjugation Table"
+                  color="text-green-700"
+                  isExpanded={isEditTableExpanded(TABLE_TYPES.CONJUGATION)}
+                  onToggle={() => toggleEditTableExpansion(TABLE_TYPES.CONJUGATION)}
+                  isEditMode={true}
+                  editingCell={editingCell}
+                  editingCellValue={editingCellValue}
+                  editCallbacks={{
+                    onCellDoubleClick: handleCellDoubleClick,
+                    onCellEditSave: handleCellEditSave,
+                    onCellEditCancel: handleCellEditCancel,
+                    onEditingCellValueChange: setEditingCellValue,
+                  }}
+                />
+              )}
+            </div>
+          </div>
+        </form>
       </AIFilledFieldsContext.Provider>
     </FormProvider>
   );

@@ -1,7 +1,7 @@
 import { zodResponseFormat } from 'openai/helpers/zod';
 import { openai, DEFAULT_MODEL, DEFAULT_TEMPERATURE, MAX_TOKENS } from './client';
 import { getPromptForPartOfSpeech, SYSTEM_PROMPT } from './prompts';
-import { AIAutocompleteRequest, AIAutocompleteResponse, AICompletableField, CostBreakdown, TokenUsage } from './types';
+import { AIAutocompleteRequest, AIAutocompleteResponse, AICompletableField, CostBreakdown } from './types';
 import { PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
 import { VocabularyWord } from '@/src/types/vocabulary/schemas';
 import {
@@ -198,8 +198,8 @@ export async function autocompleteVocabularyWord(request: AIAutocompleteRequest)
     console.log('[Autocomplete] Structured output received:', Object.keys(structured));
     console.log('[Autocomplete] Full structured output:', JSON.stringify(structured, null, 2));
 
-    if ((structured as any).conjugation_table) {
-      const participles = (structured as any).conjugation_table?.nonFinite?.participle;
+    if ('conjugation_table' in structured && structured.conjugation_table) {
+      const participles = structured.conjugation_table?.nonFinite?.participle;
       console.log('[Autocomplete] Participles in AI response:', JSON.stringify(participles, null, 2));
       console.log('[Autocomplete] Present active participle:', participles?.present?.active);
       console.log('[Autocomplete] Perfect passive participle:', participles?.perfect?.passive);
@@ -237,17 +237,19 @@ export async function autocompleteVocabularyWord(request: AIAutocompleteRequest)
       const structuredValue = (structured as Record<string, unknown>)[field];
 
       // Check if field was empty
-      const wasEmpty = existingValue === undefined ||
-                       existingValue === null ||
-                       existingValue === '' ||
-                       (Array.isArray(existingValue) && existingValue.length === 0);
+      const wasEmpty =
+        existingValue === undefined ||
+        existingValue === null ||
+        existingValue === '' ||
+        (Array.isArray(existingValue) && existingValue.length === 0);
 
       if (wasEmpty) {
         // Check if AI provided a value
-        const aiProvidedValue = structuredValue !== undefined &&
-                                structuredValue !== null &&
-                                structuredValue !== '' &&
-                                !(Array.isArray(structuredValue) && structuredValue.length === 0);
+        const aiProvidedValue =
+          structuredValue !== undefined &&
+          structuredValue !== null &&
+          structuredValue !== '' &&
+          !(Array.isArray(structuredValue) && structuredValue.length === 0);
 
         fieldStatus[field] = aiProvidedValue ? 'filled' : 'missing';
       }

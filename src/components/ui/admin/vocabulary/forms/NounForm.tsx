@@ -10,6 +10,8 @@ import { cn } from '@/src/lib/utils';
 
 export const NounForm = () => {
   const form = useFormContext<VocabularyFormValues>();
+  const genderAIStatus = useAIFieldStatus('gender');
+  const declensionAIStatus = useAIFieldStatus('declension');
 
   return (
     <div className="space-y-6">
@@ -18,7 +20,6 @@ export const NounForm = () => {
           control={form.control}
           name="gender"
           render={({ field }) => {
-            const aiStatus = useAIFieldStatus('gender');
             return (
               <FormItem>
                 <FormLabel>Gender (optional)</FormLabel>
@@ -32,8 +33,8 @@ export const NounForm = () => {
                     }}>
                     <SelectTrigger
                       className={cn(
-                        aiStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
-                        aiStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
+                        genderAIStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
+                        genderAIStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
                         'focus:bg-white'
                       )}>
                       <SelectValue placeholder="Select gender" />
@@ -57,7 +58,6 @@ export const NounForm = () => {
           control={form.control}
           name="declension"
           render={({ field }) => {
-            const aiStatus = useAIFieldStatus('declension');
             return (
               <FormItem>
                 <FormLabel>Declension</FormLabel>
@@ -71,8 +71,8 @@ export const NounForm = () => {
                     }}>
                     <SelectTrigger
                       className={cn(
-                        aiStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
-                        aiStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
+                        declensionAIStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
+                        declensionAIStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
                         'focus:bg-white'
                       )}>
                       <SelectValue placeholder="Select declension" />

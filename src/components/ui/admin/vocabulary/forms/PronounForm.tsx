@@ -9,6 +9,7 @@ import { cn } from '@/src/lib/utils';
 
 export const PronounForm = () => {
   const form = useFormContext<VocabularyFormValues>();
+  const pronounTypeAIStatus = useAIFieldStatus('pronoun_type');
 
   return (
     <div className="space-y-6">
@@ -16,7 +17,6 @@ export const PronounForm = () => {
         control={form.control}
         name="pronoun_type"
         render={({ field }) => {
-          const aiStatus = useAIFieldStatus('pronoun_type');
           return (
             <FormItem>
               <FormLabel>Pronoun Type</FormLabel>
@@ -30,8 +30,8 @@ export const PronounForm = () => {
                   }}>
                   <SelectTrigger
                     className={cn(
-                      aiStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
-                      aiStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
+                      pronounTypeAIStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
+                      pronounTypeAIStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
                       'focus:bg-white'
                     )}>
                     <SelectValue placeholder="Select pronoun type" />

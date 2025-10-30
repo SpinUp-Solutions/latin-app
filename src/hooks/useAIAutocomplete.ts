@@ -1,10 +1,15 @@
 import { useState } from 'react';
-import { AIAutocompleteRequest, AIAutocompleteResponse, CostBreakdown } from '@/src/lib/openai/types';
+import { AIAutocompleteResponse, CostBreakdown } from '@/src/lib/openai/types';
 import { VocabularyWord } from '@/src/types/vocabulary/schemas';
 import { PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
 
 interface UseAIAutocompleteOptions {
-  onSuccess?: (data: Partial<VocabularyWord>, cost?: CostBreakdown, fieldStatus?: Record<string, 'filled' | 'missing'>, notes?: string) => void;
+  onSuccess?: (
+    data: Partial<VocabularyWord>,
+    cost?: CostBreakdown,
+    fieldStatus?: Record<string, 'filled' | 'missing'>,
+    notes?: string
+  ) => void;
   onError?: (error: string) => void;
 }
 

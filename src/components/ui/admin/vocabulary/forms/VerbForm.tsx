@@ -16,6 +16,8 @@ const conjugationValues = VerbConjugationSchema.options as readonly VerbConjugat
 
 export const VerbForm = () => {
   const form = useFormContext<VocabularyFormValues>();
+  const conjugationAIStatus = useAIFieldStatus('conjugation');
+  const isDeponentAIStatus = useAIFieldStatus('is_deponent');
 
   return (
     <div className="space-y-6">
@@ -26,7 +28,6 @@ export const VerbForm = () => {
           render={({ field }) => {
             const selectValue =
               field.value && typeof field.value === 'string' && field.value.trim() !== '' ? field.value : undefined;
-            const aiStatus = useAIFieldStatus('conjugation');
             return (
               <FormItem>
                 <FormLabel>Conjugation</FormLabel>
@@ -40,8 +41,8 @@ export const VerbForm = () => {
                     }}>
                     <SelectTrigger
                       className={cn(
-                        aiStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
-                        aiStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
+                        conjugationAIStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
+                        conjugationAIStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
                         'focus:bg-white'
                       )}>
                       <SelectValue placeholder="Select conjugation" />
@@ -65,7 +66,6 @@ export const VerbForm = () => {
           control={form.control}
           name="is_deponent"
           render={({ field }) => {
-            const aiStatus = useAIFieldStatus('is_deponent');
             return (
               <FormItem className="flex flex-col justify-end">
                 <FormLabel>Deponent</FormLabel>
@@ -73,8 +73,8 @@ export const VerbForm = () => {
                   <div
                     className={cn(
                       'inline-block p-2 rounded transition-colors',
-                      aiStatus === 'filled' && 'bg-green-50 border border-green-300',
-                      aiStatus === 'missing' && 'bg-red-50 border border-red-300'
+                      isDeponentAIStatus === 'filled' && 'bg-green-50 border border-green-300',
+                      isDeponentAIStatus === 'missing' && 'bg-red-50 border border-red-300'
                     )}>
                     <Switch checked={!!field.value} onCheckedChange={checked => field.onChange(checked)} />
                   </div>

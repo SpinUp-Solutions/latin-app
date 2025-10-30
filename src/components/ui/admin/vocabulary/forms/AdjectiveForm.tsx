@@ -9,6 +9,7 @@ import { cn } from '@/src/lib/utils';
 
 export const AdjectiveForm = () => {
   const form = useFormContext<VocabularyFormValues>();
+  const declensionAIStatus = useAIFieldStatus('declension');
 
   return (
     <div className="space-y-6">
@@ -16,7 +17,6 @@ export const AdjectiveForm = () => {
         control={form.control}
         name="declension"
         render={({ field }) => {
-          const aiStatus = useAIFieldStatus('declension');
           return (
             <FormItem>
               <FormLabel>Declension (optional)</FormLabel>
@@ -30,8 +30,8 @@ export const AdjectiveForm = () => {
                   }}>
                   <SelectTrigger
                     className={cn(
-                      aiStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
-                      aiStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
+                      declensionAIStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
+                      declensionAIStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
                       'focus:bg-white'
                     )}>
                     <SelectValue placeholder="Select declension" />

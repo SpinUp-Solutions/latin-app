@@ -12,6 +12,10 @@ import { cn } from '@/src/lib/utils';
 export const BaseWordForm = () => {
   const form = useFormContext<VocabularyFormValues>();
   const definitions = form.watch('definitions') || [];
+  const translationAIStatus = useAIFieldStatus('translation');
+  const etymologyAIStatus = useAIFieldStatus('etymology');
+  const pronunciationAIStatus = useAIFieldStatus('pronunciation');
+  const alternateFormAIStatus = useAIFieldStatus('alternate_form');
 
   const addDefinition = () => {
     form.setValue('definitions', [...definitions, '']);
@@ -51,7 +55,6 @@ export const BaseWordForm = () => {
         control={form.control}
         name="translation"
         render={({ field }) => {
-          const aiStatus = useAIFieldStatus('translation');
           return (
             <FormItem>
               <FormLabel>Translation</FormLabel>
@@ -60,8 +63,8 @@ export const BaseWordForm = () => {
                   rows={2}
                   {...field}
                   className={cn(
-                    aiStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
-                    aiStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
+                    translationAIStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
+                    translationAIStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
                     'focus:bg-white'
                   )}
                 />
@@ -109,7 +112,6 @@ export const BaseWordForm = () => {
         control={form.control}
         name="etymology"
         render={({ field }) => {
-          const aiStatus = useAIFieldStatus('etymology');
           return (
             <FormItem>
               <FormLabel>Etymology</FormLabel>
@@ -119,8 +121,8 @@ export const BaseWordForm = () => {
                   {...field}
                   value={field.value ?? ''}
                   className={cn(
-                    aiStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
-                    aiStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
+                    etymologyAIStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
+                    etymologyAIStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
                     'focus:bg-white'
                   )}
                 />
@@ -135,7 +137,6 @@ export const BaseWordForm = () => {
         control={form.control}
         name="pronunciation"
         render={({ field }) => {
-          const aiStatus = useAIFieldStatus('pronunciation');
           return (
             <FormItem>
               <FormLabel>Pronunciation</FormLabel>
@@ -144,8 +145,8 @@ export const BaseWordForm = () => {
                   {...field}
                   value={field.value ?? ''}
                   className={cn(
-                    aiStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
-                    aiStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
+                    pronunciationAIStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
+                    pronunciationAIStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
                     'focus:bg-white'
                   )}
                 />
@@ -160,7 +161,6 @@ export const BaseWordForm = () => {
         control={form.control}
         name="alternate_form"
         render={({ field }) => {
-          const aiStatus = useAIFieldStatus('alternate_form');
           return (
             <FormItem>
               <FormLabel>Alternate Form</FormLabel>
@@ -169,8 +169,8 @@ export const BaseWordForm = () => {
                   {...field}
                   value={field.value ?? ''}
                   className={cn(
-                    aiStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
-                    aiStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
+                    alternateFormAIStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
+                    alternateFormAIStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
                     'focus:bg-white'
                   )}
                 />

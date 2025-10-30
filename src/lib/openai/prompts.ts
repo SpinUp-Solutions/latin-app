@@ -18,6 +18,12 @@ IMPORTANT - Notes field:
 - If you found everything, set notes to null or omit it
 - Be concise but informative
 
+IMPORTANT - Macrons for long vowels:
+- ALWAYS use macrons to mark long vowels in Latin words
+- Use the following characters for long vowels: ā, ē, ī, ō, ū, ȳ
+- Apply macrons consistently across all Latin text including inflection tables, conjugation tables, declension tables, etymology, and all word forms
+- For example: write "amō" (long o), "laudāre" (long a), "dīcere" (long i)
+
 Be accurate and comprehensive. Draw from classical Latin sources.`;
 
 export const NOUN_PROMPT = `Analyze the Latin noun "{word}" (part of speech: noun).
@@ -83,14 +89,21 @@ Return a JSON object with this structure:
   "conjugation_table": {
     "indicative": {
       "active": {
-        "present": { "singular": { "first": ["form"], "second": ["form"], "third": ["form"] }, "plural": { "first": ["form"], "second": ["form"], "third": ["form"] } },
-        "imperfect": { ... },
-        "future": { ... },
-        "perfect": { ... },
-        "pluperfect": { ... },
-        "future_perfect": { ... }
+        "present": { "singular": { "first": ["amō"], "second": ["amās"], "third": ["amat"] }, "plural": { "first": ["amāmus"], "second": ["amātis"], "third": ["amant"] } },
+        "imperfect": { "singular": { "first": ["amābam"], "second": ["amābās"], "third": ["amābat"] }, "plural": { "first": ["amābāmus"], "second": ["amābātis"], "third": ["amābant"] } },
+        "future": { "singular": { "first": ["amābō"], "second": ["amābis"], "third": ["amābit"] }, "plural": { "first": ["amābimus"], "second": ["amābitis"], "third": ["amābunt"] } },
+        "perfect": { "singular": { "first": ["amāvī"], "second": ["amāvistī"], "third": ["amāvit"] }, "plural": { "first": ["amāvimus"], "second": ["amāvistis"], "third": ["amāvērunt", "amāvēre"] } },
+        "pluperfect": { "singular": { "first": ["amāveram"], "second": ["amāverās"], "third": ["amāverat"] }, "plural": { "first": ["amāverāmus"], "second": ["amāverātis"], "third": ["amāverant"] } },
+        "future_perfect": { "singular": { "first": ["amāverō"], "second": ["amāveris"], "third": ["amāverit"] }, "plural": { "first": ["amāverimus"], "second": ["amāveritis"], "third": ["amāverint"] } }
       },
-      "passive": { ... similar structure ... }
+      "passive": {
+        "present": { "singular": { "first": ["amor"], "second": ["amāris", "amāre"], "third": ["amātur"] }, "plural": { "first": ["amāmur"], "second": ["amāminī"], "third": ["amantur"] } },
+        "imperfect": { "singular": { "first": ["amābar"], "second": ["amābāris", "amābāre"], "third": ["amābātur"] }, "plural": { "first": ["amābāmur"], "second": ["amābāminī"], "third": ["amābantur"] } },
+        "future": { "singular": { "first": ["amābor"], "second": ["amāberis", "amābere"], "third": ["amābitur"] }, "plural": { "first": ["amābimur"], "second": ["amābiminī"], "third": ["amābuntur"] } },
+        "perfect": { "singular": { "first": ["amātus sum"], "second": ["amātus es"], "third": ["amātus est"] }, "plural": { "first": ["amātī sumus"], "second": ["amātī estis"], "third": ["amātī sunt"] } },
+        "pluperfect": { "singular": { "first": ["amātus eram"], "second": ["amātus erās"], "third": ["amātus erat"] }, "plural": { "first": ["amātī erāmus"], "second": ["amātī erātis"], "third": ["amātī erant"] } },
+        "future_perfect": { "singular": { "first": ["amātus erō"], "second": ["amātus eris"], "third": ["amātus erit"] }, "plural": { "first": ["amātī erimus"], "second": ["amātī eritis"], "third": ["amātī erunt"] } }
+      }
     },
     "subjunctive": {
       "active": {

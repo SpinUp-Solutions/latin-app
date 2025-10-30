@@ -75,8 +75,7 @@ export function AIAutocompleteButton({
           size="sm"
           onClick={handleAutocomplete}
           disabled={disabled || isLoading || !word}
-          className="gap-2"
-        >
+          className="gap-2">
           {isLoading ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -96,7 +95,7 @@ export function AIAutocompleteButton({
                 <AlertCircle className="h-4 w-4 text-amber-600" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-80 max-h-60 overflow-y-auto">
+            <PopoverContent className="w-80 max-h-60 overflow-y-auto bg-white">
               <div className="space-y-2">
                 <h4 className="font-medium text-sm">AI Notes</h4>
                 <p className="text-sm text-gray-700 whitespace-pre-wrap">{aiNotes}</p>
