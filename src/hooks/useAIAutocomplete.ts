@@ -43,6 +43,8 @@ export function useAIAutocomplete(options?: UseAIAutocompleteOptions) {
     setData(null);
 
     try {
+      console.log('[useAIAutocomplete] Making request to API:', request);
+
       const response = await fetch('/api/admin/ai/autocomplete-word', {
         method: 'POST',
         headers: {
@@ -51,7 +53,24 @@ export function useAIAutocomplete(options?: UseAIAutocompleteOptions) {
         body: JSON.stringify(request),
       });
 
-      const result: AIAutocompleteResponse = await response.json();
+      console.log('[useAIAutocomplete] Response received:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+      });
+
+      const responseText = await response.text();
+      console.log('[useAIAutocomplete] Response body (raw):', responseText.substring(0, 500));
+
+      let result: AIAutocompleteResponse;
+      try {
+        result = JSON.parse(responseText);
+        console.log('[useAIAutocomplete] Parsed JSON successfully');
+      } catch (parseError) {
+        console.error('[useAIAutocomplete] JSON parse error:', parseError);
+        console.error('[useAIAutocomplete] Response was:', responseText);
+        throw new Error(`Failed to parse API response: ${parseError instanceof Error ? parseError.message : 'Unknown error'}. Response: ${responseText.substring(0, 200)}`);
+      }
 
       if (!result.success) {
         const errorMessage = result.error || 'Failed to autocomplete word';

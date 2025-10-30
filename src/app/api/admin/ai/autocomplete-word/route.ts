@@ -4,11 +4,13 @@ import { AIAutocompleteRequest } from '@/src/lib/openai/types';
 import { PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   console.log('[AI Autocomplete API] Request received');
 
   try {
+    console.log('[AI Autocomplete API] Parsing request body...');
     const body = await request.json();
     console.log('[AI Autocomplete API] Request body:', JSON.stringify(body, null, 2));
 
@@ -35,13 +37,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     };
 
     console.log('[AI Autocomplete API] Calling autocompleteVocabularyWord...');
+    const startTime = Date.now();
     const result = await autocompleteVocabularyWord(autocompleteRequest);
-    console.log('[AI Autocomplete API] Result received:', {
+    const endTime = Date.now();
+    console.log('[AI Autocomplete API] Result received in', endTime - startTime, 'ms');
+    console.log('[AI Autocomplete API] Result:', {
       success: result.success,
       error: result.error,
       hasData: !!result.data,
       tokensUsed: result.tokensUsed,
       cost: result.cost?.totalCost,
+      hasErrorDetails: !!result.errorDetails,
     });
 
     if (!result.success) {

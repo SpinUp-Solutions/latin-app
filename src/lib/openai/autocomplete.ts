@@ -152,6 +152,13 @@ export async function autocompleteVocabularyWord(request: AIAutocompleteRequest)
 
   try {
     console.log('[Autocomplete] Calling OpenAI API...');
+    console.log('[Autocomplete] Request details:', {
+      model: DEFAULT_MODEL,
+      maxTokens: MAX_TOKENS,
+      schemaName: `${request.part_of_speech}_structured_output`,
+    });
+
+    const startTime = Date.now();
     const response = await openai.chat.completions.parse({
       model: DEFAULT_MODEL,
       reasoning_effort: 'low',
@@ -162,11 +169,14 @@ export async function autocompleteVocabularyWord(request: AIAutocompleteRequest)
       ],
       response_format: zodResponseFormat(config.schema, `${request.part_of_speech}_structured_output`),
     });
+    const endTime = Date.now();
 
-    console.log('[Autocomplete] OpenAI API response received');
-    console.log('[Autocomplete] Response status:', response.id ? 'Success' : 'No ID');
-    console.log('[Autocomplete] Choices:', response.choices?.length || 0);
-    console.log('[Autocomplete] Usage:', response.usage);
+    console.log('[Autocomplete] OpenAI API response received in', endTime - startTime, 'ms');
+    console.log('[Autocomplete] Response ID:', response.id);
+    console.log('[Autocomplete] Response model:', response.model);
+    console.log('[Autocomplete] Choices count:', response.choices?.length || 0);
+    console.log('[Autocomplete] Usage:', JSON.stringify(response.usage, null, 2));
+    console.log('[Autocomplete] Full response object keys:', Object.keys(response));
 
     const choice = response.choices[0];
     if (!choice) {
