@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { autocompleteVocabularyWord } from '@/src/lib/openai/autocomplete';
-import { AIAutocompleteRequest } from '@/src/lib/openai/types';
-import { PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
+import { autocompleteVocabularyWord } from '@/shared/openai/autocomplete';
+import { AIAutocompleteRequest } from '@/shared/openai/types';
+import { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const apiStartTime = Date.now();
   console.log('[AI Autocomplete API] Request received');
 
   try {
@@ -51,13 +52,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     });
 
     if (!result.success) {
+      const apiEndTime = Date.now();
+      const totalApiTime = ((apiEndTime - apiStartTime) / 1000).toFixed(2);
       console.error('[AI Autocomplete API] Autocomplete failed:', result.error);
+      console.error(`[AI Autocomplete API] ❌ TOTAL API TIME: ${totalApiTime}s`);
       return NextResponse.json(result, { status: 500 });
     }
 
+    const apiEndTime = Date.now();
+    const totalApiTime = ((apiEndTime - apiStartTime) / 1000).toFixed(2);
     console.log('[AI Autocomplete API] Success! Returning result');
+    console.log(`[AI Autocomplete API] ✅ TOTAL API TIME: ${totalApiTime}s`);
     return NextResponse.json(result, { status: 200 });
   } catch (error) {
+    const apiEndTime = Date.now();
+    const totalApiTime = ((apiEndTime - apiStartTime) / 1000).toFixed(2);
     console.error('[AI Autocomplete API] Unexpected error:', error);
     console.error('[AI Autocomplete API] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
 
@@ -69,6 +78,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     };
 
     console.error('[AI Autocomplete API] Error details:', JSON.stringify(errorDetails, null, 2));
+    console.error(`[AI Autocomplete API] ❌ TOTAL API TIME (with exception): ${totalApiTime}s`);
 
     return NextResponse.json(
       {

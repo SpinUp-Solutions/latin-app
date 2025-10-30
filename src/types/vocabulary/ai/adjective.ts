@@ -18,6 +18,5 @@ export const AdjectiveStructuredOutputSchema = AdjectiveStructuredOutputBaseSche
   alternate_form: AdjectiveSchema.shape.alternate_form.nullable(),
   declension: AdjectiveSchema.shape.declension.nullable(),
   dictionary_forms: AdjectiveSchema.shape.dictionary_forms.nullable(),
-  notes: z.string().nullable(),
 }).strict();
 export type AdjectiveStructuredOutput = z.infer<typeof AdjectiveStructuredOutputSchema>;

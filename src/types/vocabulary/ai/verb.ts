@@ -11,8 +11,6 @@ const VerbStructuredOutputBaseSchema = VerbSchema.pick({
   conjugation_table: true,
   principal_parts: true,
   is_deponent: true,
-}).extend({
-  notes: z.string().nullable(),
 });
 
 export const VerbStructuredOutputSchema = VerbStructuredOutputBaseSchema.strict();

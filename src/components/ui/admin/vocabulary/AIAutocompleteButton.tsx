@@ -1,10 +1,10 @@
 'use client';
 
 import { Button } from '@/src/components/ui/button';
-import { useAIAutocomplete, ErrorInfo } from '@/src/hooks/useAIAutocomplete';
-import { VocabularyWord } from '@/src/types/vocabulary/schemas';
-import { PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
-import { Loader2, Sparkles, AlertCircle, XCircle, Copy, RotateCcw } from 'lucide-react';
+import { useFirebaseAutocomplete, ErrorInfo } from '@/src/hooks/useFirebaseAutocomplete';
+import { VocabularyWord } from '@/shared/types/vocabulary/schemas';
+import { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
+import { Loader2, Sparkles, XCircle, Copy, RotateCcw, Info } from 'lucide-react';
 import { useToast } from '@/src/hooks/use-toast';
 import { Popover, PopoverContent, PopoverTrigger } from '@/src/components/ui/popover';
 import { useState } from 'react';
@@ -25,14 +25,16 @@ export function AIAutocompleteButton({
   disabled = false,
 }: AIAutocompleteButtonProps) {
   const { toast } = useToast();
-  const [aiNotes, setAiNotes] = useState<string | undefined>(undefined);
   const [errorDetails, setErrorDetails] = useState<ErrorInfo | null>(null);
+  const [notesContent, setNotesContent] = useState<string | null>(null);
+  const [notesTimestamp, setNotesTimestamp] = useState<string | null>(null);
 
-  const { autocomplete, isLoading, cost } = useAIAutocomplete({
+  const { autocomplete, isLoading, cost } = useFirebaseAutocomplete({
     onSuccess: (data, costInfo, fieldStatus, notes) => {
       onAutocomplete(data, fieldStatus);
-      setAiNotes(notes);
       setErrorDetails(null);
+      setNotesContent(notes || null);
+      setNotesTimestamp(notes ? new Date().toISOString() : null);
       const costMessage = costInfo
         ? `Cost: $${costInfo.totalCost.toFixed(4)} (${costInfo.tokens.totalTokens.toLocaleString()} tokens)`
         : '';
@@ -62,6 +64,8 @@ export function AIAutocompleteButton({
     }
 
     setErrorDetails(null);
+    setNotesContent(null);
+    setNotesTimestamp(null);
     await autocomplete({
       word,
       part_of_speech: partOfSpeech,
@@ -126,21 +130,6 @@ ${errorDetails.details.stack ? `\nStack Trace:\n${errorDetails.details.stack}` :
             </>
           )}
         </Button>
-        {aiNotes && !isLoading && (
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0">
-                <AlertCircle className="h-4 w-4 text-amber-600" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-80 max-h-60 overflow-y-auto bg-white">
-              <div className="space-y-2">
-                <h4 className="font-medium text-sm">AI Notes</h4>
-                <p className="text-sm text-gray-700 whitespace-pre-wrap">{aiNotes}</p>
-              </div>
-            </PopoverContent>
-          </Popover>
-        )}
         {errorDetails && !isLoading && (
           <Popover>
             <PopoverTrigger asChild>
@@ -196,6 +185,28 @@ ${errorDetails.details.stack ? `\nStack Trace:\n${errorDetails.details.stack}` :
                     <RotateCcw className="h-3 w-3" />
                     Retry
                   </Button>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+        )}
+        {notesContent && !isLoading && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0">
+                <Info className="h-4 w-4 text-blue-600" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-96 max-h-80 overflow-y-auto bg-white">
+              <div className="space-y-3">
+                <div className="flex items-start justify-between">
+                  <h4 className="font-medium text-sm text-blue-600">AI Notes</h4>
+                  <span className="text-xs text-gray-500">
+                    {notesTimestamp ? new Date(notesTimestamp).toLocaleTimeString() : ''}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-900 whitespace-pre-wrap">{notesContent}</p>
                 </div>
               </div>
             </PopoverContent>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { AIAutocompleteResponse, CostBreakdown, ErrorDetails } from '@/src/lib/openai/types';
-import { VocabularyWord } from '@/src/types/vocabulary/schemas';
-import { PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
+import { AIAutocompleteResponse, CostBreakdown, ErrorDetails } from '@/shared/openai/types';
+import { VocabularyWord } from '@/shared/types/vocabulary/schemas';
+import { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 
 export interface ErrorInfo {
   message: string;
@@ -17,8 +17,7 @@ interface UseAIAutocompleteOptions {
   onSuccess?: (
     data: Partial<VocabularyWord>,
     cost?: CostBreakdown,
-    fieldStatus?: Record<string, 'filled' | 'missing'>,
-    notes?: string
+    fieldStatus?: Record<string, 'filled' | 'missing'>
   ) => void;
   onError?: (error: string, errorInfo?: ErrorInfo) => void;
 }
@@ -42,6 +41,8 @@ export function useAIAutocomplete(options?: UseAIAutocompleteOptions) {
     setErrorInfo(null);
     setData(null);
 
+    const startTime = performance.now();
+
     try {
       console.log('[useAIAutocomplete] Making request to API:', request);
 
@@ -53,7 +54,9 @@ export function useAIAutocomplete(options?: UseAIAutocompleteOptions) {
         body: JSON.stringify(request),
       });
 
-      console.log('[useAIAutocomplete] Response received:', {
+      const fetchEndTime = performance.now();
+      console.log('[useAIAutocomplete] Response received in', (fetchEndTime - startTime).toFixed(2), 'ms');
+      console.log('[useAIAutocomplete] Response details:', {
         status: response.status,
         statusText: response.statusText,
         headers: Object.fromEntries(response.headers.entries()),
@@ -69,7 +72,9 @@ export function useAIAutocomplete(options?: UseAIAutocompleteOptions) {
       } catch (parseError) {
         console.error('[useAIAutocomplete] JSON parse error:', parseError);
         console.error('[useAIAutocomplete] Response was:', responseText);
-        throw new Error(`Failed to parse API response: ${parseError instanceof Error ? parseError.message : 'Unknown error'}. Response: ${responseText.substring(0, 200)}`);
+        throw new Error(
+          `Failed to parse API response: ${parseError instanceof Error ? parseError.message : 'Unknown error'}. Response: ${responseText.substring(0, 200)}`
+        );
       }
 
       if (!result.success) {
@@ -92,11 +97,18 @@ export function useAIAutocomplete(options?: UseAIAutocompleteOptions) {
       setData(result.data || null);
       setCost(result.cost || null);
       if (result.data) {
-        options?.onSuccess?.(result.data, result.cost, result.fieldStatus, result.notes);
+        options?.onSuccess?.(result.data, result.cost, result.fieldStatus);
       }
+
+      const totalEndTime = performance.now();
+      const totalTime = (totalEndTime - startTime) / 1000;
+      console.log(`[useAIAutocomplete] ✅ TOTAL REQUEST TIME: ${totalTime.toFixed(2)}s`);
 
       return result.data || null;
     } catch (err) {
+      const errorEndTime = performance.now();
+      const totalTime = (errorEndTime - startTime) / 1000;
+      console.log(`[useAIAutocomplete] ❌ TOTAL REQUEST TIME (with error): ${totalTime.toFixed(2)}s`);
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       const errInfo: ErrorInfo = {
         message: errorMessage,
