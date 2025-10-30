@@ -1,1 +1,0 @@
-{"version":3,"file":"pronoun.js","sourceRoot":"","sources":["../../../../../../shared/types/vocabulary/schemas/pronoun.ts"],"names":[],"mappings":";;;AAAA,6BAAwB;AACxB,2CAA6C;AAC7C,6CAAqD;AACrD,mCAA4C;AAE/B,QAAA,aAAa,GAAG,0BAAc,CAAC,MAAM,CAAC;IACjD,cAAc,EAAE,OAAC,CAAC,OAAO,CAAC,SAAS,CAAC;IACpC,YAAY,EAAE,yBAAiB,CAAC,QAAQ,EAAE;IAC1C,gBAAgB,EAAE,kCAAqB;CACxC,CAAC,CAAC"}
