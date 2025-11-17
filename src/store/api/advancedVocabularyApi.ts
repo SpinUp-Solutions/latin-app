@@ -16,6 +16,7 @@ interface GetAdvancedWordsArgs {
   tableType?: TableType;
   select?: string[];
   fetchAll?: boolean;
+  poolId?: string;
 }
 
 interface GetAdvancedWordsResponse {
@@ -71,6 +72,11 @@ export const advancedVocabularyApi = createApi({
           console.log('[RTK Query] Adding select fields:', args.select);
         }
 
+        if (args.poolId) {
+          params.append('poolId', args.poolId);
+          console.log('[RTK Query] Adding poolId:', args.poolId);
+        }
+
         // randomize intentionally not set here (exercise generator decides server-side or via explicit config)
 
         if (args.partOfSpeech === 'verb') {
@@ -113,6 +119,7 @@ export const advancedVocabularyApi = createApi({
           tableType: queryArgs.tableType,
           select: queryArgs.select,
           fetchAll: queryArgs.fetchAll,
+          poolId: queryArgs.poolId,
         };
       },
       merge: (currentCache, newData, { arg }) => {

@@ -9,6 +9,7 @@ import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
 import { AdvancedFiltersPanel } from '../vocabulary/AdvancedFiltersPanel';
 import { FormSelectionTable } from '../vocabulary/FormSelectionTable';
+import { VocabularyPoolSelector } from '../vocabulary-pools/VocabularyPoolSelector';
 import { useGetAdvancedWordsQuery } from '@/src/store/api/advancedVocabularyApi';
 import { useGeneratedExerciseQuery } from '@/src/hooks/useGeneratedExerciseQuery';
 import { useFormSelection } from '@/src/hooks/useFormSelection';
@@ -16,6 +17,9 @@ import type { GeneratorFilters } from '@/src/types/exercises/base';
 import type { PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
 import { deriveTableTypeFromPOS } from '@/src/utils/generated/tableType';
+import { Label } from '@/src/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/src/components/ui/radio-group';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import {
   FormIdentificationStep,
   FormIdentificationStepSchema,
@@ -93,14 +97,19 @@ export const GeneratedFormIdentificationEditor: React.FC = () => {
     })
   );
 
-  const config = editingContent?.data?.generatorConfig;
+  const rawConfig = editingContent?.data?.generatorConfig;
+  const config = {
+    collection: rawConfig?.collection || '',
+    wordSource: (rawConfig?.wordSource || 'filters') as 'filters' | 'pool',
+    filters: rawConfig?.filters || { partOfSpeech: 'all', search: '' },
+    poolId: rawConfig?.poolId || null,
+    formSelection: rawConfig?.formSelection,
+    count: rawConfig?.count || 5,
+  };
+
   const previewLimit =
-    config?.count === 'all' ? 'all' : Math.min(typeof config?.count === 'number' ? config.count : 5, 5);
-  const { queryArgs, selectFields } = useGeneratedExerciseQuery(
-    'generated-form-identification',
-    config || { collection: '', count: 5, filters: { partOfSpeech: 'all', search: '' } },
-    previewLimit
-  );
+    config.count === 'all' ? 'all' : Math.min(typeof config.count === 'number' ? config.count : 5, 5);
+  const { queryArgs, selectFields } = useGeneratedExerciseQuery('generated-form-identification', config, previewLimit);
 
   const { data: previewData, isFetching: isPreviewFetching } = useGetAdvancedWordsQuery(queryArgs, {
     skip: !isPreviewOpen,
@@ -304,33 +313,122 @@ export const GeneratedFormIdentificationEditor: React.FC = () => {
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-3">Vocabulary Filters</label>
-        <AdvancedFiltersPanel
-          filters={{
-            partOfSpeech: (config.filters.partOfSpeech || 'all') as PartOfSpeech | 'all',
-            search: config.filters.search || '',
-            verbConjugation: (config.filters.verbConjugation || 'all') as '1' | '2' | '3' | '3io' | '4' | 'all',
-            isDeponent: (config.filters.isDeponent || 'both') as 'true' | 'false' | 'both',
-            nounDeclension: (config.filters.nounDeclension || 'all') as '1' | '2' | '3' | '3-istem' | '4' | '5' | 'all',
-            adjectiveDeclension: (config.filters.adjectiveDeclension || 'all') as '1-2' | '3' | 'all',
-            limit: config.count,
-          }}
-          onFiltersChange={updates => {
-            if ('limit' in updates) {
-              const currentCount = config?.count ?? 5;
-              const nextCount = updates.limit === undefined ? currentCount : (updates.limit as typeof currentCount);
-              updateConfig({ count: nextCount });
-            } else {
-              handleFiltersChange(updates);
-            }
-          }}
-          onReset={handleResetFilters}
-          onApply={() => setIsPreviewOpen(true)}
-          isLoading={isPreviewFetching}
-        />
+        <label className="block text-sm font-medium mb-3">Word Source</label>
+        <Card>
+          <CardContent className="p-4">
+            <RadioGroup
+              value={config.wordSource || 'filters'}
+              onValueChange={(value: 'filters' | 'pool') => updateConfig({ wordSource: value })}>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="filters" id="word-source-filters" />
+                <Label htmlFor="word-source-filters">Custom Filters</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="pool" id="word-source-pool" />
+                <Label htmlFor="word-source-pool">Vocabulary Pool</Label>
+              </div>
+            </RadioGroup>
+          </CardContent>
+        </Card>
       </div>
 
-      {config.filters.partOfSpeech !== 'all' && (
+      {config.wordSource === 'filters' ? (
+        <div>
+          <label className="block text-sm font-medium mb-3">Vocabulary Filters</label>
+          <AdvancedFiltersPanel
+            filters={{
+              partOfSpeech: (config.filters.partOfSpeech || 'all') as PartOfSpeech | 'all',
+              search: config.filters.search || '',
+              verbConjugation: (config.filters.verbConjugation || 'all') as '1' | '2' | '3' | '3io' | '4' | 'all',
+              isDeponent: (config.filters.isDeponent || 'both') as 'true' | 'false' | 'both',
+              nounDeclension: (config.filters.nounDeclension || 'all') as
+                | '1'
+                | '2'
+                | '3'
+                | '3-istem'
+                | '4'
+                | '5'
+                | 'all',
+              adjectiveDeclension: (config.filters.adjectiveDeclension || 'all') as '1-2' | '3' | 'all',
+              limit: config.count,
+            }}
+            onFiltersChange={updates => {
+              if ('limit' in updates) {
+                const currentCount = config?.count ?? 5;
+                const nextCount = updates.limit === undefined ? currentCount : (updates.limit as typeof currentCount);
+                updateConfig({ count: nextCount });
+              } else {
+                handleFiltersChange(updates);
+              }
+            }}
+            onReset={handleResetFilters}
+            onApply={() => setIsPreviewOpen(true)}
+            isLoading={isPreviewFetching}
+          />
+        </div>
+      ) : (
+        <>
+          <div>
+            <label className="block text-sm font-medium mb-3">Vocabulary Pool</label>
+            <VocabularyPoolSelector
+              selectedPoolId={config.poolId || undefined}
+              onPoolSelect={poolId => updateConfig({ poolId: poolId || null })}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-3">Part of Speech (for form selection)</label>
+            <Card>
+              <CardContent className="p-4">
+                <Select
+                  value={config.filters.partOfSpeech || 'verb'}
+                  onValueChange={value => {
+                    const newPos = value as PartOfSpeech;
+                    const tableType = deriveTableTypeFromPOS(newPos);
+                    const updates: Partial<typeof config> = {
+                      filters: {
+                        ...config.filters,
+                        partOfSpeech: newPos,
+                      },
+                    };
+
+                    if (tableType) {
+                      updates.formSelection = {
+                        tableType,
+                        selectedCellPaths: [],
+                      };
+                    }
+
+                    const availableSteps = AVAILABLE_STEPS[newPos] || [];
+                    const currentSteps = editingContent.data.steps;
+                    const validSteps = currentSteps.filter(step => availableSteps.includes(step));
+
+                    updateConfig(updates);
+                    updateContent({
+                      data: {
+                        ...editingContent.data,
+                        steps: validSteps,
+                      },
+                    });
+                  }}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="verb">Verb</SelectItem>
+                    <SelectItem value="noun">Noun</SelectItem>
+                    <SelectItem value="adjective">Adjective</SelectItem>
+                    <SelectItem value="pronoun">Pronoun</SelectItem>
+                  </SelectContent>
+                </Select>
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
+
+      {(config.wordSource === 'filters' && config.filters.partOfSpeech !== 'all') ||
+      (config.wordSource === 'pool' && config.filters.partOfSpeech && config.filters.partOfSpeech !== 'all') ? (
         <>
           <div>
             <label className="block text-sm font-medium mb-3">Steps to Identify</label>
@@ -389,7 +487,18 @@ export const GeneratedFormIdentificationEditor: React.FC = () => {
             onTogglePaths={handleTogglePaths}
           />
         </>
-      )}
+      ) : config.wordSource === 'pool' ? (
+        <div>
+          <label className="block text-sm font-medium mb-3">Form Selection</label>
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-sm text-gray-600">
+                To configure form selection, first select a part of speech for this pool using the filter above.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
 
       <div>
         <label className="block text-sm font-medium mb-3">Preview</label>

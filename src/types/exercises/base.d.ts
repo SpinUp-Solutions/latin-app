@@ -92,7 +92,9 @@ export interface FormSelection {
 
 export interface GeneratorConfigBase {
   collection: string;
+  wordSource: 'filters' | 'pool';
   filters: GeneratorFilters;
+  poolId?: string | null;
   formSelection?: FormSelection;
   count: number | 'all';
 }
