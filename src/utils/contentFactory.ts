@@ -317,10 +317,11 @@ export const createNewContent = (type: string): RenderableContentItem => {
         id: baseId,
         type: 'generated-translation',
         title: 'Generated Translation Exercise',
-        instructions: 'Translate the Latin words into English.',
+        instructions: 'Translate between Latin and English based on the prompt.',
         audioPath: null,
         itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
         feedbackConfig: createDefaultFeedbackConfig(),
+        translationDirection: 'latin-to-english',
         data: {
           generatorConfig: {
             collection: 'vocabulary_words_v4',

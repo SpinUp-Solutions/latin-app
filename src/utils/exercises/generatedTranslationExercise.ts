@@ -1,10 +1,11 @@
 import { ValidationResult } from './types';
 import { stripHtmlTags } from './helpers';
 
-interface GeneratedTranslationItem {
+export interface GeneratedTranslationItem {
   text: string;
   acceptedAnswers: string[];
   hint?: string;
+  stripInfinitive?: boolean;
 }
 
 const normalize = (s: string): string => {
@@ -19,12 +20,18 @@ const stripInfinitive = (s: string): string => {
   return s.replace(/^to\s+/, '');
 };
 
+const transformValue = (value: string, shouldStripInfinitive: boolean): string => {
+  const normalized = normalize(value);
+  return shouldStripInfinitive ? stripInfinitive(normalized) : normalized;
+};
+
 export const validateGeneratedTranslationExercise = (
   userAnswer: string,
   currentItem: GeneratedTranslationItem
 ): ValidationResult => {
-  const input = stripInfinitive(normalize(userAnswer));
-  const normalizedAnswers = currentItem.acceptedAnswers.map(a => stripInfinitive(normalize(a)));
+  const shouldStripInfinitive = currentItem.stripInfinitive !== false;
+  const input = transformValue(userAnswer, shouldStripInfinitive);
+  const normalizedAnswers = currentItem.acceptedAnswers.map(answer => transformValue(answer, shouldStripInfinitive));
   const isCorrect = normalizedAnswers.includes(input);
 
   console.log('[Validation Debug]', {

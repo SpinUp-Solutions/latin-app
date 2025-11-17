@@ -5,6 +5,8 @@ import type { PartOfSpeech, NounDeclension, AdjectiveDeclension } from '@/src/ty
 import type { VerbConjugation } from '@/src/types/vocabulary/schemas/verb-conjugation';
 import type { TableType } from '@/src/utils/schema-helpers';
 
+type LimitValue = number | 'all';
+
 interface AdvancedFiltersState {
   filters: {
     partOfSpeech: PartOfSpeech | 'all';
@@ -13,7 +15,7 @@ interface AdvancedFiltersState {
     isDeponent: 'true' | 'false' | 'both';
     nounDeclension: NounDeclension | 'all';
     adjectiveDeclension: AdjectiveDeclension | 'all';
-    limit: number;
+    limit: LimitValue;
   };
   pagination: {
     lastWordId: string | null;

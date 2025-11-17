@@ -15,6 +15,7 @@ interface GetAdvancedWordsArgs {
   cellPaths?: string[];
   tableType?: TableType;
   select?: string[];
+  fetchAll?: boolean;
 }
 
 interface GetAdvancedWordsResponse {
@@ -23,9 +24,10 @@ interface GetAdvancedWordsResponse {
     words: VocabularyWordWithId[];
     hasMore: boolean;
     lastWordId: string | null;
-    limit: number;
+    limit: number | null;
     filters: Record<string, unknown>;
     collection: string;
+    totalCount?: number;
   };
 }
 
@@ -50,7 +52,9 @@ export const advancedVocabularyApi = createApi({
         if (args.lastWordId) {
           params.append('lastWordId', args.lastWordId);
         }
-        if (args.limit) {
+        if (args.fetchAll) {
+          params.append('fetchAll', 'true');
+        } else if (typeof args.limit === 'number') {
           params.append('limit', String(args.limit));
         }
         if (args.cellPaths && args.cellPaths.length > 0) {
@@ -108,10 +112,11 @@ export const advancedVocabularyApi = createApi({
           cellPaths: queryArgs.cellPaths,
           tableType: queryArgs.tableType,
           select: queryArgs.select,
+          fetchAll: queryArgs.fetchAll,
         };
       },
       merge: (currentCache, newData, { arg }) => {
-        if (!arg.lastWordId) {
+        if (arg.fetchAll || !arg.lastWordId) {
           return newData;
         }
 
@@ -126,6 +131,9 @@ export const advancedVocabularyApi = createApi({
         };
       },
       forceRefetch: ({ currentArg, previousArg }) => {
+        if (currentArg?.fetchAll || previousArg?.fetchAll) {
+          return currentArg?.fetchAll !== previousArg?.fetchAll;
+        }
         return currentArg?.lastWordId !== previousArg?.lastWordId;
       },
       providesTags: [{ type: 'AdvancedWordList', id: 'LIST' }],

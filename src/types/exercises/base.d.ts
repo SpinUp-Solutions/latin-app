@@ -94,5 +94,5 @@ export interface GeneratorConfigBase {
   collection: string;
   filters: GeneratorFilters;
   formSelection?: FormSelection;
-  count: number;
+  count: number | 'all';
 }

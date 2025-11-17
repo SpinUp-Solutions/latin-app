@@ -12,17 +12,14 @@ import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { useGetAdvancedWordsQuery } from '@/src/store/api/advancedVocabularyApi';
 import { Card, CardContent } from '../card';
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
-import { validateGeneratedTranslationExercise } from '@/src/utils/exercises/generatedTranslationExercise';
+import {
+  validateGeneratedTranslationExercise,
+  type GeneratedTranslationItem,
+} from '@/src/utils/exercises/generatedTranslationExercise';
 
 interface Props {
   exercise: GeneratedTranslationExercise;
   onComplete?: (score: number) => void;
-}
-
-interface ExerciseItem {
-  text: string;
-  acceptedAnswers: string[];
-  hint?: string;
 }
 
 const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
@@ -31,35 +28,52 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
   const [correctAnswers, setCorrectAnswers] = useState(0);
 
   const config = exercise.data.generatorConfig;
+  const translationDirection = exercise.translationDirection || 'latin-to-english';
   const { queryArgs } = useGeneratedExerciseQuery('generated-translation', config);
 
   const { data, isLoading, isError } = useGetAdvancedWordsQuery(queryArgs);
 
-  const items: ExerciseItem[] = useMemo(() => {
+  const items: GeneratedTranslationItem[] = useMemo(() => {
     if (!data?.words) return [];
 
     const words = data.words as unknown as ExerciseWordResponse[];
 
-    console.log('[Generated Translation] API Response:', data);
-    console.log('[Generated Translation] First word:', words[0]);
-
-    return words.map(word => {
-      const translations = word.translation ? word.translation.split(',').map(t => t.trim()) : [];
+    const mapped = words.map<GeneratedTranslationItem | null>(word => {
+      const translations = word.translation
+        ? word.translation
+            .split(',')
+            .map(t => t.trim())
+            .filter(Boolean)
+        : [];
       const definitionsText = word.definitions && word.definitions.length > 0 ? word.definitions.join(', ') : '';
 
-      console.log('[Generated Translation] Processing word:', {
-        selected_form: word.selected_form,
-        translation: word.translation,
-        acceptedAnswers: translations,
-      });
+      if (translationDirection === 'english-to-latin') {
+        if (translations.length === 0 || !word.root_word) {
+          return null;
+        }
+
+        return {
+          text: translations.join(', '),
+          acceptedAnswers: [word.root_word],
+          hint: definitionsText || undefined,
+          stripInfinitive: false,
+        };
+      }
+
+      if (translations.length === 0) {
+        return null;
+      }
 
       return {
         text: word.selected_form,
         acceptedAnswers: translations,
-        hint: definitionsText,
+        hint: definitionsText || undefined,
+        stripInfinitive: true,
       };
     });
-  }, [data]);
+
+    return mapped.filter((item): item is GeneratedTranslationItem => item !== null);
+  }, [data, translationDirection]);
 
   const { currentIndex, isLastItem, autoAdvanceIfEnabled } = useExerciseProgression({
     totalItems: items.length,
@@ -150,6 +164,8 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
   }
 
   const currentItem = items[currentIndex];
+  const inputPlaceholder =
+    translationDirection === 'english-to-latin' ? 'Type the Latin root word...' : 'Type your answer...';
 
   return (
     <div className="space-y-4">
@@ -180,7 +196,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
             value={userAnswer}
             onChange={handleAnswerChange}
             onSubmit={handleSubmit}
-            placeholder="Type your answer..."
+            placeholder={inputPlaceholder}
           />
 
           <FeedbackDisplay

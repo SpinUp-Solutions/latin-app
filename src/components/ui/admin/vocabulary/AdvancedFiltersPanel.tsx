@@ -4,6 +4,7 @@ import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
 import { Label } from '@/src/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
+import { Checkbox } from '@/src/components/ui/checkbox';
 import {
   PartOfSpeechSchema,
   NounDeclensionSchema,
@@ -22,7 +23,7 @@ interface AdvancedFiltersPanelProps {
     isDeponent: 'true' | 'false' | 'both';
     nounDeclension: NounDeclension | 'all';
     adjectiveDeclension: AdjectiveDeclension | 'all';
-    limit?: number;
+    limit?: number | 'all';
   };
   onFiltersChange: (updates: Partial<AdvancedFiltersPanelProps['filters']>) => void;
   onReset: () => void;
@@ -57,6 +58,10 @@ export const AdvancedFiltersPanel: React.FC<AdvancedFiltersPanelProps> = ({
       adjectiveDeclension: 'all',
     });
   };
+
+  const isAllLimit = filters.limit === 'all';
+  const numericLimitValue =
+    typeof filters.limit === 'number' && Number.isFinite(filters.limit) ? String(filters.limit) : '';
 
   return (
     <Card className="shadow-sm">
@@ -98,12 +103,27 @@ export const AdvancedFiltersPanel: React.FC<AdvancedFiltersPanelProps> = ({
             <Input
               id="limit"
               type="number"
-              placeholder="Number of results"
+              placeholder={isAllLimit ? 'Fetching all results' : 'Number of results'}
               min={1}
               max={100}
-              value={filters.limit || 20}
-              onChange={e => onFiltersChange({ limit: parseInt(e.target.value) || 20 })}
+              value={isAllLimit ? '' : numericLimitValue}
+              disabled={isAllLimit}
+              onChange={e => onFiltersChange({ limit: parseInt(e.target.value, 10) || 20 })}
             />
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="limit-all"
+                checked={isAllLimit}
+                onCheckedChange={checked => {
+                  const nextValue = checked === true ? 'all' : 20;
+                  onFiltersChange({ limit: nextValue });
+                }}
+                disabled={isLoading}
+              />
+              <Label htmlFor="limit-all" className="text-sm font-normal text-gray-700">
+                Fetch all results
+              </Label>
+            </div>
           </div>
         </div>
 

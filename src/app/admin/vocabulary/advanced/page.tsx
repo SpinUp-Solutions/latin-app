@@ -36,6 +36,9 @@ function AdvancedFiltersPage() {
   const debouncedSearch = useDebounce(filters.search, 300);
   const formSelection = useFormSelection();
 
+  const numericLimit = typeof filters.limit === 'number' ? filters.limit : undefined;
+  const fetchAll = filters.limit === 'all';
+
   const queryArgs = {
     collection: TARGET_COLLECTION,
     partOfSpeech: filters.partOfSpeech !== 'all' ? filters.partOfSpeech : undefined,
@@ -50,7 +53,8 @@ function AdvancedFiltersPage() {
       filters.partOfSpeech === 'adjective' && filters.adjectiveDeclension !== 'all'
         ? filters.adjectiveDeclension
         : undefined,
-    limit: filters.limit,
+    limit: fetchAll ? undefined : numericLimit,
+    fetchAll: fetchAll ? true : undefined,
     cellPaths: selection.selectedCellPaths.length > 0 ? selection.selectedCellPaths : undefined,
     tableType: selection.selectedTableType || undefined,
   };
@@ -59,8 +63,9 @@ function AdvancedFiltersPage() {
 
   const { data, isLoading, isFetching, isError } = useGetAdvancedWordsQuery(queryArgs);
   const words = data?.words ?? [];
-  const hasMore = data?.hasMore ?? false;
-  const loadingMore = isFetching && pagination.lastWordId !== null;
+  const totalCount = data?.totalCount;
+  const hasMore = fetchAll ? false : (data?.hasMore ?? false);
+  const loadingMore = fetchAll ? false : isFetching && pagination.lastWordId !== null;
 
   useEffect(() => {
     dispatch(setLastWordId(null));
@@ -88,6 +93,9 @@ function AdvancedFiltersPage() {
   };
 
   const handleLoadMore = () => {
+    if (fetchAll) {
+      return;
+    }
     if (data?.lastWordId) {
       dispatch(setLastWordId(data.lastWordId));
     }
@@ -177,6 +185,7 @@ function AdvancedFiltersPage() {
               onLoadMore={handleLoadMore}
               selectedTableType={selection.selectedTableType}
               selectedCellPaths={selection.selectedCellPaths}
+              totalCount={totalCount}
             />
           </div>
         </div>

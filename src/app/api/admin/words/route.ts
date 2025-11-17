@@ -59,7 +59,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const cellPaths = searchParams.get('cellPaths');
     const tableType = searchParams.get('tableType');
     const selectFields = searchParams.get('select');
-    const randomize = searchParams.get('randomize') === 'true';
+    const fetchAll = searchParams.get('fetchAll') === 'true';
+    const randomize = !fetchAll && searchParams.get('randomize') === 'true';
 
     if (countsOnly) {
       const wordTypeCounts = await getWordTypeCounts(collection);
@@ -103,15 +104,18 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       query = query.where('declension', '==', adjectiveDeclension);
     }
 
-    if (lastWordId) {
+    if (lastWordId && !fetchAll) {
       const lastDocSnapshot = await adminDb.collection(collection).doc(lastWordId).get();
       if (lastDocSnapshot.exists) {
         query = query.startAfter(lastDocSnapshot);
       }
     }
 
-    const fetchLimit = randomize ? Math.min(limit * 10, 200) : limit;
-    query = query.limit(fetchLimit);
+    let fetchLimit = limit;
+    if (!fetchAll) {
+      fetchLimit = randomize ? Math.min(limit * 10, 200) : limit;
+      query = query.limit(fetchLimit);
+    }
 
     const snapshot = await query.get();
 
@@ -167,8 +171,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }
     });
 
-    const hasMore = randomize ? false : snapshot.docs.length === fetchLimit;
-    const lastDoc = randomize ? null : docs[docs.length - 1];
+    const hasMore = fetchAll ? false : randomize ? false : snapshot.docs.length === fetchLimit;
+    const lastDoc = fetchAll || randomize ? null : docs[docs.length - 1];
 
     return NextResponse.json({
       success: true,
@@ -176,9 +180,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         words,
         hasMore,
         lastWordId: lastDoc?.id || null,
-        limit,
+        limit: fetchAll ? null : limit,
         filters: { wordType, search },
         collection,
+        totalCount: fetchAll ? docs.length : undefined,
       },
     });
   } catch (error) {

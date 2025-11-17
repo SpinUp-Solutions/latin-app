@@ -43,10 +43,12 @@ export const GeneratedFormIdentificationEditor: React.FC = () => {
   const formSelection = useFormSelection();
 
   const config = editingContent?.data?.generatorConfig;
+  const previewLimit =
+    config?.count === 'all' ? 'all' : Math.min(typeof config?.count === 'number' ? config.count : 5, 5);
   const { queryArgs, selectFields } = useGeneratedExerciseQuery(
     'generated-form-identification',
     config || { collection: '', count: 5, filters: { partOfSpeech: 'all', search: '' } },
-    Math.min(config?.count || 5, 5)
+    previewLimit
   );
 
   const { data: previewData, isFetching: isPreviewFetching } = useGetAdvancedWordsQuery(queryArgs, {
@@ -244,8 +246,10 @@ export const GeneratedFormIdentificationEditor: React.FC = () => {
             limit: config.count,
           }}
           onFiltersChange={updates => {
-            if ('limit' in updates && updates.limit !== undefined) {
-              updateConfig({ count: updates.limit });
+            if ('limit' in updates) {
+              const currentCount = config?.count ?? 5;
+              const nextCount = updates.limit === undefined ? currentCount : (updates.limit as typeof currentCount);
+              updateConfig({ count: nextCount });
             } else {
               handleFiltersChange(updates);
             }
@@ -356,13 +360,16 @@ export const GeneratedFormIdentificationEditor: React.FC = () => {
                 <strong>Collection:</strong> {config.collection}
               </div>
               <div>
-                <strong>Number of Words:</strong> {config.count}
+                <strong>Number of Words:</strong> {config.count === 'all' ? 'All matching words' : config.count}
               </div>
               <div>
                 <strong>Number of Steps:</strong> {editingContent.data.steps.length}
               </div>
               <div>
-                <strong>Total Items:</strong> {config.count * editingContent.data.steps.length}
+                <strong>Total Items:</strong>{' '}
+                {config.count === 'all'
+                  ? `All × ${editingContent.data.steps.length} steps`
+                  : config.count * editingContent.data.steps.length}
               </div>
               <div>
                 <strong>Part of Speech:</strong> {config.filters.partOfSpeech || 'All'}

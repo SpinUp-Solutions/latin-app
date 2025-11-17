@@ -4,7 +4,7 @@ import { Card, CardContent } from '@/src/components/ui/card';
 import { GeneratedTranslationExercise } from '@/src/types/exercises';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonEditorSlice';
-import { SimpleInput, SimpleTextarea } from '@/src/components/ui/form-components';
+import { SimpleInput, SimpleTextarea, SimpleSelect } from '@/src/components/ui/form-components';
 import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
 import { AdvancedFiltersPanel } from '../vocabulary/AdvancedFiltersPanel';
@@ -13,6 +13,7 @@ import { useGetAdvancedWordsQuery } from '@/src/store/api/advancedVocabularyApi'
 import { useGeneratedExerciseQuery } from '@/src/hooks/useGeneratedExerciseQuery';
 import { useFormSelection } from '@/src/hooks/useFormSelection';
 import type { GeneratorFilters } from '@/src/types/exercises/base';
+import type { TranslationDirection } from '@/src/types/exercises/generated-translation';
 import type { PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
 import { deriveTableTypeFromPOS } from '@/src/utils/generated/tableType';
@@ -27,10 +28,13 @@ export const GeneratedTranslationEditor: React.FC = () => {
   const formSelection = useFormSelection();
 
   const config = editingContent?.data?.generatorConfig;
+  const translationDirection = editingContent?.translationDirection || 'latin-to-english';
+  const previewLimit =
+    config?.count === 'all' ? 'all' : Math.min(typeof config?.count === 'number' ? config.count : 5, 5);
   const { queryArgs, selectFields } = useGeneratedExerciseQuery(
     'generated-translation',
     config || { collection: '', count: 5, filters: { partOfSpeech: 'all', search: '' } },
-    Math.min(config?.count || 5, 5)
+    previewLimit
   );
 
   const { data: previewData, isFetching: isPreviewFetching } = useGetAdvancedWordsQuery(queryArgs, {
@@ -80,6 +84,12 @@ export const GeneratedTranslationEditor: React.FC = () => {
     }
 
     updateConfig(updates);
+  };
+
+  const handleDirectionChange = (value: string) => {
+    const normalizedValue: TranslationDirection =
+      value === 'english-to-latin' ? 'english-to-latin' : 'latin-to-english';
+    updateContent({ translationDirection: normalizedValue });
   };
 
   const handleResetFilters = () => {
@@ -167,6 +177,17 @@ export const GeneratedTranslationEditor: React.FC = () => {
           rows={3}
         />
 
+        <SimpleSelect
+          label="Translation Direction"
+          value={translationDirection}
+          onChange={handleDirectionChange}
+          options={[
+            { value: 'latin-to-english', label: 'Latin → English' },
+            { value: 'english-to-latin', label: 'English → Latin' },
+          ]}
+          placeholder="Select direction"
+        />
+
         <AudioUploadSection
           audioPath={editingContent.audioPath}
           onAudioPathChange={audioPath => updateContent({ audioPath })}
@@ -187,8 +208,10 @@ export const GeneratedTranslationEditor: React.FC = () => {
             limit: config.count,
           }}
           onFiltersChange={updates => {
-            if ('limit' in updates && updates.limit !== undefined) {
-              updateConfig({ count: updates.limit });
+            if ('limit' in updates) {
+              const currentCount = config?.count ?? 5;
+              const nextCount = updates.limit === undefined ? currentCount : (updates.limit as typeof currentCount);
+              updateConfig({ count: nextCount });
             } else {
               handleFiltersChange(updates);
             }
@@ -257,7 +280,7 @@ export const GeneratedTranslationEditor: React.FC = () => {
                 <strong>Collection:</strong> {config.collection}
               </div>
               <div>
-                <strong>Number of Questions:</strong> {config.count}
+                <strong>Number of Questions:</strong> {config.count === 'all' ? 'All matching words' : config.count}
               </div>
               <div>
                 <strong>Part of Speech:</strong> {config.filters.partOfSpeech || 'All'}

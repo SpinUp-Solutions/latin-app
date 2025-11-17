@@ -18,6 +18,7 @@ interface AdvancedResultsListProps {
   onLoadMore: () => void;
   selectedTableType?: TableType | null;
   selectedCellPaths?: string[];
+  totalCount?: number;
 }
 
 const LoadingSkeleton: React.FC = () => (
@@ -77,6 +78,7 @@ export const AdvancedResultsList: React.FC<AdvancedResultsListProps> = ({
   loadingMore,
   hasMore,
   onLoadMore,
+  totalCount,
 }) => {
   console.log('[AdvancedResultsList] Rendering with words:', words.length);
   console.log('[AdvancedResultsList] Sample word:', words[0]);
@@ -96,13 +98,20 @@ export const AdvancedResultsList: React.FC<AdvancedResultsListProps> = ({
     return <EmptyState />;
   }
 
+  let summary = `Showing ${words.length} word${words.length !== 1 ? 's' : ''}`;
+  if (typeof totalCount === 'number') {
+    summary =
+      totalCount <= words.length
+        ? `Showing all ${totalCount} word${totalCount !== 1 ? 's' : ''}`
+        : `Showing ${words.length} of ${totalCount} words`;
+  } else if (hasMore) {
+    summary += ' (scroll down for more)';
+  }
+
   return (
     <div className="space-y-4">
       <div className="px-1">
-        <p className="text-sm text-gray-600">
-          Showing {words.length} word{words.length !== 1 ? 's' : ''}
-          {hasMore && ' (scroll down for more)'}
-        </p>
+        <p className="text-sm text-gray-600">{summary}</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
