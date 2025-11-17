@@ -60,7 +60,7 @@ export const parseFormPathFromString = (
 
   if (tableType === 'conjugation') {
     if (parts.length === 5) {
-      return createVerbFormPath(parts[0], parts[1], parts[2], parts[3], parts[4]);
+      return createVerbFormPath(parts[2], parts[1], parts[0], parts[4], parts[3]);
     }
   }
 

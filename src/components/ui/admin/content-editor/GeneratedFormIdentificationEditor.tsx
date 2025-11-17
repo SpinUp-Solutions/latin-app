@@ -21,6 +21,25 @@ import {
   FormIdentificationStepSchema,
 } from '@/src/types/exercises/schemas/form-identification';
 import { extractStepValue, getAcceptedAnswersForStep } from '@/src/utils/exercises/formIdentificationHelpers';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  KeyboardSensor,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+  sortableKeyboardCoordinates,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { restrictToVerticalAxis, restrictToParentElement } from '@dnd-kit/modifiers';
+import { GripVertical } from 'lucide-react';
 
 const AVAILABLE_STEPS: Record<PartOfSpeech, FormIdentificationStep[]> = {
   verb: ['conjugation', 'tense', 'voice', 'mood', 'person', 'number'],
@@ -33,6 +52,29 @@ const AVAILABLE_STEPS: Record<PartOfSpeech, FormIdentificationStep[]> = {
   interjection: [],
 };
 
+interface SortableStepItemProps {
+  step: FormIdentificationStep;
+}
+
+const SortableStepItem: React.FC<SortableStepItemProps> = ({ step }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: step });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-center gap-3 rounded border bg-white p-2 text-sm">
+      <div {...attributes} {...listeners} className="cursor-move">
+        <GripVertical className="h-4 w-4 text-gray-500" />
+      </div>
+      <span className="flex-1 capitalize">{step}</span>
+    </div>
+  );
+};
+
 export const GeneratedFormIdentificationEditor: React.FC = () => {
   const dispatch = useAppDispatch();
   const editingContent = useAppSelector(
@@ -41,6 +83,15 @@ export const GeneratedFormIdentificationEditor: React.FC = () => {
 
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const formSelection = useFormSelection();
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   const config = editingContent?.data?.generatorConfig;
   const previewLimit =
@@ -204,6 +255,25 @@ export const GeneratedFormIdentificationEditor: React.FC = () => {
     }
   };
 
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const steps = editingContent.data.steps;
+      const oldIndex = steps.indexOf(active.id as FormIdentificationStep);
+      const newIndex = steps.indexOf(over.id as FormIdentificationStep);
+
+      const reorderedSteps = arrayMove(steps, oldIndex, newIndex);
+
+      updateContent({
+        data: {
+          ...editingContent.data,
+          steps: reorderedSteps,
+        },
+      });
+    }
+  };
+
   const previewWords = previewData?.words as ExerciseWordResponse[] | undefined;
   const selectedPos = config.filters.partOfSpeech;
   const availableSteps = selectedPos && selectedPos !== 'all' ? AVAILABLE_STEPS[selectedPos as PartOfSpeech] : [];
@@ -287,6 +357,24 @@ export const GeneratedFormIdentificationEditor: React.FC = () => {
                 )}
                 {editingContent.data.steps.length > 0 && (
                   <div className="mt-3 text-sm text-gray-600">Selected: {editingContent.data.steps.join(', ')}</div>
+                )}
+                {editingContent.data.steps.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    <div className="text-sm font-medium">Drag to Reorder</div>
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={handleDragEnd}
+                      modifiers={[restrictToVerticalAxis, restrictToParentElement]}>
+                      <SortableContext items={editingContent.data.steps} strategy={verticalListSortingStrategy}>
+                        <div className="space-y-2">
+                          {editingContent.data.steps.map(step => (
+                            <SortableStepItem key={step} step={step} />
+                          ))}
+                        </div>
+                      </SortableContext>
+                    </DndContext>
+                  </div>
                 )}
               </CardContent>
             </Card>
