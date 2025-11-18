@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent } from '@/src/components/ui/card';
 import { GeneratedTranslationExercise } from '@/src/types/exercises';
@@ -12,36 +12,43 @@ import { FormSelectionTable } from '../vocabulary/FormSelectionTable';
 import { VocabularyPoolSelector } from '../vocabulary-pools/VocabularyPoolSelector';
 import { useGetAdvancedWordsQuery } from '@/src/store/api/advancedVocabularyApi';
 import { useGeneratedExerciseQuery } from '@/src/hooks/useGeneratedExerciseQuery';
-import { useFormSelection } from '@/src/hooks/useFormSelection';
+import { useFormSelectionControls } from '@/src/hooks/useFormSelection';
 import type { GeneratorFilters } from '@/src/types/exercises/base';
 import type { TranslationDirection } from '@/src/types/exercises/generated-translation';
 import type { PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
 import { deriveTableTypeFromPOS } from '@/src/utils/generated/tableType';
-import { Label } from '@/src/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/src/components/ui/radio-group';
+import { WordSourceSection } from './WordSourceSection';
+import { normalizeGeneratorConfig, mergeGeneratorConfig } from '@/src/utils/exercises/generatorConfigDefaults';
+import { usePoolPartOfSpeech } from '@/src/hooks/usePoolPartOfSpeech';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 
+const formatPartOfSpeechLabel = (value: PartOfSpeech) => value.charAt(0).toUpperCase() + value.slice(1);
+
 export const GeneratedTranslationEditor: React.FC = () => {
-  const dispatch = useAppDispatch();
   const editingContent = useAppSelector(
     state => state.lessonEditor.editingContent?.content as GeneratedTranslationExercise
   );
 
+  if (!editingContent) {
+    return <div>No content selected for editing</div>;
+  }
+
+  return <GeneratedTranslationEditorView editingContent={editingContent} />;
+};
+
+const GeneratedTranslationEditorView: React.FC<{ editingContent: GeneratedTranslationExercise }> = ({
+  editingContent,
+}) => {
+  const dispatch = useAppDispatch();
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-  const formSelection = useFormSelection();
 
-  const rawConfig = editingContent?.data?.generatorConfig;
-  const config = {
-    collection: rawConfig?.collection || '',
-    wordSource: (rawConfig?.wordSource || 'filters') as 'filters' | 'pool',
-    filters: rawConfig?.filters || { partOfSpeech: 'all', search: '' },
-    poolId: rawConfig?.poolId || null,
-    formSelection: rawConfig?.formSelection,
-    count: rawConfig?.count || 5,
-  };
+  const rawConfig = editingContent.data?.generatorConfig;
+  const config = useMemo(() => normalizeGeneratorConfig(rawConfig), [rawConfig]);
+  const isPoolWordSource = config.wordSource === 'pool';
+  const { uniquePartOfSpeech, availablePartOfSpeech } = usePoolPartOfSpeech(isPoolWordSource ? config.poolId : null);
 
-  const translationDirection = editingContent?.translationDirection || 'latin-to-english';
+  const translationDirection = editingContent.translationDirection || 'latin-to-english';
   const previewLimit =
     config.count === 'all' ? 'all' : Math.min(typeof config.count === 'number' ? config.count : 5, 5);
   const { queryArgs, selectFields } = useGeneratedExerciseQuery('generated-translation', config, previewLimit);
@@ -50,50 +57,110 @@ export const GeneratedTranslationEditor: React.FC = () => {
     skip: !isPreviewOpen,
   });
 
-  if (!editingContent) {
-    return <div>No content selected for editing</div>;
-  }
+  const updateContent = useCallback(
+    (updates: Partial<GeneratedTranslationExercise>) => {
+      dispatch(updateEditingContent({ ...editingContent, ...updates }));
+    },
+    [dispatch, editingContent]
+  );
 
-  const updateContent = (updates: Partial<GeneratedTranslationExercise>) => {
-    dispatch(updateEditingContent({ ...editingContent, ...updates }));
-  };
+  const updateConfig = useCallback(
+    (configUpdates: Partial<typeof config>) => {
+      const nextConfig = mergeGeneratorConfig(rawConfig, configUpdates);
+      dispatch(
+        updateEditingContent({
+          ...editingContent,
+          data: {
+            ...editingContent.data,
+            generatorConfig: nextConfig,
+          },
+        })
+      );
+    },
+    [dispatch, editingContent, rawConfig]
+  );
 
-  const updateConfig = (configUpdates: Partial<typeof config>) => {
-    updateContent({
-      data: {
-        generatorConfig: {
-          ...config,
-          ...configUpdates,
+  const handlePartOfSpeechChange = useCallback(
+    (newPos: GeneratorFilters['partOfSpeech']) => {
+      if (newPos === undefined) {
+        return;
+      }
+
+      if (newPos === 'all') {
+        updateConfig({
+          filters: {
+            ...config.filters,
+            partOfSpeech: 'all',
+          },
+          formSelection: undefined,
+        });
+        return;
+      }
+
+      const tableType = deriveTableTypeFromPOS(newPos);
+      const updates: Partial<typeof config> = {
+        filters: {
+          ...config.filters,
+          partOfSpeech: newPos,
         },
-      },
-    });
-  };
+      };
+
+      if (tableType) {
+        updates.formSelection = {
+          tableType,
+          selectedCellPaths: [],
+        };
+      }
+
+      updateConfig(updates);
+    },
+    [config.filters, updateConfig]
+  );
 
   const handleFiltersChange = (filterUpdates: Partial<GeneratorFilters>) => {
-    const updates: Partial<typeof config> = {
-      filters: {
-        ...config.filters,
-        ...filterUpdates,
-      },
-    };
-
-    if ('partOfSpeech' in filterUpdates) {
-      const newPos = filterUpdates.partOfSpeech;
-      if (newPos === 'all') {
-        updates.formSelection = undefined;
-      } else {
-        const tableType = deriveTableTypeFromPOS(newPos);
-        if (tableType) {
-          updates.formSelection = {
-            tableType,
-            selectedCellPaths: [],
-          };
-        }
-      }
+    const { partOfSpeech, ...rest } = filterUpdates;
+    if (Object.keys(rest).length > 0) {
+      updateConfig({
+        filters: {
+          ...config.filters,
+          ...rest,
+        },
+      });
     }
 
-    updateConfig(updates);
+    if (partOfSpeech !== undefined) {
+      handlePartOfSpeechChange(partOfSpeech);
+    }
   };
+
+  useEffect(() => {
+    if (!isPoolWordSource || !uniquePartOfSpeech) {
+      return;
+    }
+    if (config.filters.partOfSpeech === uniquePartOfSpeech) {
+      return;
+    }
+    handlePartOfSpeechChange(uniquePartOfSpeech);
+  }, [config.filters.partOfSpeech, handlePartOfSpeechChange, isPoolWordSource, uniquePartOfSpeech]);
+
+  useEffect(() => {
+    if (!isPoolWordSource || uniquePartOfSpeech || availablePartOfSpeech.length === 0) {
+      return;
+    }
+    const currentPartOfSpeech =
+      config.filters.partOfSpeech && config.filters.partOfSpeech !== 'all'
+        ? (config.filters.partOfSpeech as PartOfSpeech)
+        : undefined;
+    if (!currentPartOfSpeech || !availablePartOfSpeech.includes(currentPartOfSpeech)) {
+      handlePartOfSpeechChange(availablePartOfSpeech[0]);
+    }
+  }, [
+    availablePartOfSpeech,
+    config.filters.partOfSpeech,
+    handlePartOfSpeechChange,
+    isPoolWordSource,
+    uniquePartOfSpeech,
+  ]);
 
   const handleDirectionChange = (value: string) => {
     const normalizedValue: TranslationDirection =
@@ -115,56 +182,99 @@ export const GeneratedTranslationEditor: React.FC = () => {
     });
   };
 
-  const handleToggleCell = (path: string) => {
-    const newPaths = formSelection.toggleCell(path, config.formSelection?.selectedCellPaths || []);
-    const tableType = config.formSelection?.tableType || deriveTableTypeFromPOS(config.filters.partOfSpeech);
-    if (tableType) {
-      updateConfig({
-        formSelection: {
-          tableType,
-          selectedCellPaths: newPaths,
-        },
-      });
-    }
-  };
+  const { handleToggleCell, handleTogglePaths, handleSelectAll, handleClearSelection } = useFormSelectionControls(
+    config.filters.partOfSpeech,
+    config.formSelection,
+    formSelectionValue => updateConfig({ formSelection: formSelectionValue })
+  );
 
-  const handleTogglePaths = (paths: string[]) => {
-    const newPaths = formSelection.togglePaths(paths, config.formSelection?.selectedCellPaths || []);
-    const tableType = config.formSelection?.tableType || deriveTableTypeFromPOS(config.filters.partOfSpeech);
-    if (tableType) {
-      updateConfig({
-        formSelection: {
-          tableType,
-          selectedCellPaths: newPaths,
-        },
-      });
-    }
-  };
+  const poolPartOfSpeechContent = (
+    <div>
+      <label className="block text-sm font-medium mb-3">Part of Speech (for form selection)</label>
+      <Card>
+        <CardContent className="p-4 space-y-3">
+          {!config.poolId ? (
+            <p className="text-sm text-gray-600">Select a vocabulary pool to configure part of speech.</p>
+          ) : uniquePartOfSpeech ? (
+            <p className="text-sm text-gray-600">
+              This pool only contains {formatPartOfSpeechLabel(uniquePartOfSpeech)} entries. The part of speech is fixed
+              automatically.
+            </p>
+          ) : availablePartOfSpeech.length > 0 ? (
+            <>
+              <p className="text-sm text-gray-600">
+                This pool includes multiple parts of speech. Choose which one drives the form selection table.
+              </p>
+              <Select
+                value={
+                  config.filters.partOfSpeech && config.filters.partOfSpeech !== 'all'
+                    ? (config.filters.partOfSpeech as PartOfSpeech)
+                    : availablePartOfSpeech[0]
+                }
+                onValueChange={value => handlePartOfSpeechChange(value as PartOfSpeech)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select part of speech" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availablePartOfSpeech.map(pos => (
+                    <SelectItem key={pos} value={pos}>
+                      {formatPartOfSpeechLabel(pos)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </>
+          ) : (
+            <p className="text-sm text-gray-600">
+              This pool does not have recognized parts of speech yet. Add words to configure forms.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
 
-  const handleSelectAll = () => {
-    const allPaths = formSelection.getAllPaths(config.filters.partOfSpeech || 'all');
-    const tableType = deriveTableTypeFromPOS(config.filters.partOfSpeech);
-    if (tableType) {
-      updateConfig({
-        formSelection: {
-          tableType,
-          selectedCellPaths: allPaths,
-        },
-      });
-    }
-  };
+  const filtersContent = (
+    <div>
+      <label className="block text-sm font-medium mb-3">Vocabulary Filters</label>
+      <AdvancedFiltersPanel
+        filters={{
+          partOfSpeech: (config.filters.partOfSpeech || 'all') as PartOfSpeech | 'all',
+          search: config.filters.search || '',
+          verbConjugation: (config.filters.verbConjugation || 'all') as '1' | '2' | '3' | '3io' | '4' | 'all',
+          isDeponent: (config.filters.isDeponent || 'both') as 'true' | 'false' | 'both',
+          nounDeclension: (config.filters.nounDeclension || 'all') as '1' | '2' | '3' | '3-istem' | '4' | '5' | 'all',
+          adjectiveDeclension: (config.filters.adjectiveDeclension || 'all') as '1-2' | '3' | 'all',
+          limit: config.count,
+        }}
+        onFiltersChange={updates => {
+          if ('limit' in updates) {
+            const currentCount = config?.count ?? 5;
+            const nextCount = updates.limit === undefined ? currentCount : (updates.limit as typeof currentCount);
+            updateConfig({ count: nextCount });
+          } else {
+            handleFiltersChange(updates);
+          }
+        }}
+        onReset={handleResetFilters}
+        onApply={() => setIsPreviewOpen(true)}
+        isLoading={isPreviewFetching}
+      />
+    </div>
+  );
 
-  const handleClearSelection = () => {
-    const tableType = config.formSelection?.tableType || deriveTableTypeFromPOS(config.filters.partOfSpeech);
-    if (tableType) {
-      updateConfig({
-        formSelection: {
-          tableType,
-          selectedCellPaths: [],
-        },
-      });
-    }
-  };
+  const poolContent = (
+    <>
+      <div>
+        <label className="block text-sm font-medium mb-3">Vocabulary Pool</label>
+        <VocabularyPoolSelector
+          selectedPoolId={config.poolId || undefined}
+          onPoolSelect={poolId => updateConfig({ poolId: poolId || null })}
+        />
+      </div>
+      {poolPartOfSpeechContent}
+    </>
+  );
 
   const previewWords = previewData?.words as ExerciseWordResponse[] | undefined;
 
@@ -204,110 +314,12 @@ export const GeneratedTranslationEditor: React.FC = () => {
         />
       </div>
 
-      <div>
-        <label className="block text-sm font-medium mb-3">Word Source</label>
-        <Card>
-          <CardContent className="p-4">
-            <RadioGroup
-              value={config.wordSource || 'filters'}
-              onValueChange={(value: 'filters' | 'pool') => updateConfig({ wordSource: value })}>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="filters" id="word-source-filters" />
-                <Label htmlFor="word-source-filters">Custom Filters</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="pool" id="word-source-pool" />
-                <Label htmlFor="word-source-pool">Vocabulary Pool</Label>
-              </div>
-            </RadioGroup>
-          </CardContent>
-        </Card>
-      </div>
-
-      {config.wordSource === 'filters' ? (
-        <div>
-          <label className="block text-sm font-medium mb-3">Vocabulary Filters</label>
-          <AdvancedFiltersPanel
-            filters={{
-              partOfSpeech: (config.filters.partOfSpeech || 'all') as PartOfSpeech | 'all',
-              search: config.filters.search || '',
-              verbConjugation: (config.filters.verbConjugation || 'all') as '1' | '2' | '3' | '3io' | '4' | 'all',
-              isDeponent: (config.filters.isDeponent || 'both') as 'true' | 'false' | 'both',
-              nounDeclension: (config.filters.nounDeclension || 'all') as
-                | '1'
-                | '2'
-                | '3'
-                | '3-istem'
-                | '4'
-                | '5'
-                | 'all',
-              adjectiveDeclension: (config.filters.adjectiveDeclension || 'all') as '1-2' | '3' | 'all',
-              limit: config.count,
-            }}
-            onFiltersChange={updates => {
-              if ('limit' in updates) {
-                const currentCount = config?.count ?? 5;
-                const nextCount = updates.limit === undefined ? currentCount : (updates.limit as typeof currentCount);
-                updateConfig({ count: nextCount });
-              } else {
-                handleFiltersChange(updates);
-              }
-            }}
-            onReset={handleResetFilters}
-            onApply={() => setIsPreviewOpen(true)}
-            isLoading={isPreviewFetching}
-          />
-        </div>
-      ) : (
-        <>
-          <div>
-            <label className="block text-sm font-medium mb-3">Vocabulary Pool</label>
-            <VocabularyPoolSelector
-              selectedPoolId={config.poolId || undefined}
-              onPoolSelect={poolId => updateConfig({ poolId: poolId || null })}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-3">Part of Speech (for form selection)</label>
-            <Card>
-              <CardContent className="p-4">
-                <Select
-                  value={config.filters.partOfSpeech || 'verb'}
-                  onValueChange={value => {
-                    const newPos = value as PartOfSpeech;
-                    const tableType = deriveTableTypeFromPOS(newPos);
-                    const updates: Partial<typeof config> = {
-                      filters: {
-                        ...config.filters,
-                        partOfSpeech: newPos,
-                      },
-                    };
-
-                    if (tableType) {
-                      updates.formSelection = {
-                        tableType,
-                        selectedCellPaths: [],
-                      };
-                    }
-
-                    updateConfig(updates);
-                  }}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="verb">Verb</SelectItem>
-                    <SelectItem value="noun">Noun</SelectItem>
-                    <SelectItem value="adjective">Adjective</SelectItem>
-                    <SelectItem value="pronoun">Pronoun</SelectItem>
-                  </SelectContent>
-                </Select>
-              </CardContent>
-            </Card>
-          </div>
-        </>
-      )}
+      <WordSourceSection
+        value={config.wordSource}
+        onChange={value => updateConfig({ wordSource: value })}
+        filtersContent={filtersContent}
+        poolContent={poolContent}
+      />
 
       {(config.wordSource === 'filters' && config.filters.partOfSpeech !== 'all') ||
       (config.wordSource === 'pool' && config.filters.partOfSpeech && config.filters.partOfSpeech !== 'all') ? (

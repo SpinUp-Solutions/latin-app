@@ -1,11 +1,13 @@
 import { useCallback } from 'react';
 import type { TableGrid, NestedTableGrid } from '@/src/types/schema-introspection';
+import type { FormSelection } from '@/src/types/exercises/base';
 import { ConjugationTableSchema } from '@/src/types/vocabulary/schemas/verb-conjugation';
 import { DeclensionTableSchema, DegreesTableSchema } from '@/src/types/vocabulary/schemas';
 import { introspectSchema } from '@/src/utils/schema-introspector';
 import { buildTableGrid } from '@/src/utils/table-builder';
 import { buildEmptyFromSchema } from '@/src/utils/schema-defaults';
 import { getAllPathsFromGrid, getAllPathsFromNestedGrid } from '@/src/utils/selection-helpers';
+import { deriveTableTypeFromPOS } from '@/src/utils/generated/tableType';
 
 interface FormSelectionHelpers {
   toggleCell: (path: string, currentPaths: string[]) => string[];
@@ -52,5 +54,72 @@ export const useFormSelection = (): FormSelectionHelpers => {
     toggleCell,
     togglePaths,
     getAllPaths,
+  };
+};
+
+export const useFormSelectionControls = (
+  partOfSpeech: string | undefined,
+  formSelection: FormSelection | undefined,
+  onChange: (selection: FormSelection) => void
+) => {
+  const { toggleCell, togglePaths, getAllPaths } = useFormSelection();
+
+  const resolveTableType = useCallback(() => {
+    if (formSelection?.tableType) {
+      return formSelection.tableType;
+    }
+    if (!partOfSpeech || partOfSpeech === 'all') {
+      return undefined;
+    }
+    return deriveTableTypeFromPOS(partOfSpeech);
+  }, [formSelection?.tableType, partOfSpeech]);
+
+  const updateSelection = useCallback(
+    (paths: string[]) => {
+      const tableType = resolveTableType();
+      if (!tableType) {
+        return;
+      }
+      onChange({
+        tableType,
+        selectedCellPaths: paths,
+      });
+    },
+    [onChange, resolveTableType]
+  );
+
+  const handleToggleCell = useCallback(
+    (path: string) => {
+      const nextPaths = toggleCell(path, formSelection?.selectedCellPaths ?? []);
+      updateSelection(nextPaths);
+    },
+    [formSelection?.selectedCellPaths, toggleCell, updateSelection]
+  );
+
+  const handleTogglePaths = useCallback(
+    (paths: string[]) => {
+      const nextPaths = togglePaths(paths, formSelection?.selectedCellPaths ?? []);
+      updateSelection(nextPaths);
+    },
+    [formSelection?.selectedCellPaths, togglePaths, updateSelection]
+  );
+
+  const handleSelectAll = useCallback(() => {
+    if (!partOfSpeech || partOfSpeech === 'all') {
+      return;
+    }
+    const allPaths = getAllPaths(partOfSpeech);
+    updateSelection(allPaths);
+  }, [getAllPaths, partOfSpeech, updateSelection]);
+
+  const handleClearSelection = useCallback(() => {
+    updateSelection([]);
+  }, [updateSelection]);
+
+  return {
+    handleToggleCell,
+    handleTogglePaths,
+    handleSelectAll,
+    handleClearSelection,
   };
 };

@@ -2,6 +2,8 @@ import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import { type VocabularyWordWithId } from '@/src/types/vocabulary/index';
 import type { TableType } from '@/src/utils/schema-helpers';
 
+const isDev = process.env.NODE_ENV !== 'production';
+
 interface GetAdvancedWordsArgs {
   collection?: string;
   partOfSpeech?: string;
@@ -60,21 +62,29 @@ export const advancedVocabularyApi = createApi({
         }
         if (args.cellPaths && args.cellPaths.length > 0) {
           params.append('cellPaths', args.cellPaths.join(','));
-          console.log('[RTK Query] Adding cellPaths:', args.cellPaths.join(','));
+          if (isDev) {
+            console.log('[RTK Query] Adding cellPaths:', args.cellPaths.join(','));
+          }
         }
         if (args.tableType) {
           params.append('tableType', args.tableType);
-          console.log('[RTK Query] Adding tableType:', args.tableType);
+          if (isDev) {
+            console.log('[RTK Query] Adding tableType:', args.tableType);
+          }
         }
 
         if (args.select && args.select.length > 0) {
           params.append('select', args.select.join(','));
-          console.log('[RTK Query] Adding select fields:', args.select);
+          if (isDev) {
+            console.log('[RTK Query] Adding select fields:', args.select);
+          }
         }
 
         if (args.poolId) {
           params.append('poolId', args.poolId);
-          console.log('[RTK Query] Adding poolId:', args.poolId);
+          if (isDev) {
+            console.log('[RTK Query] Adding poolId:', args.poolId);
+          }
         }
 
         // randomize intentionally not set here (exercise generator decides server-side or via explicit config)
@@ -101,8 +111,10 @@ export const advancedVocabularyApi = createApi({
         };
       },
       transformResponse: (response: GetAdvancedWordsResponse) => {
-        console.log('[RTK Query] Transform response - received words:', response.data.words.length);
-        console.log('[RTK Query] Sample word:', response.data.words[0]);
+        if (isDev) {
+          console.log('[RTK Query] Transform response - received words:', response.data.words.length);
+          console.log('[RTK Query] Sample word:', response.data.words[0]);
+        }
         return response.data;
       },
       serializeQueryArgs: ({ queryArgs }) => {
