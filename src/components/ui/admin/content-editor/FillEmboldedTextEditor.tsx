@@ -1,6 +1,8 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent } from '@/src/components/ui/card';
+import { Textarea } from '@/src/components/ui/textarea';
+import { Input } from '@/src/components/ui/input';
 import { Trash2, Eye, AlertCircle, Zap, X, Check } from 'lucide-react';
 import { FillEmboldedTextExercise } from '@/src/types/exercise';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
@@ -16,20 +18,26 @@ export const FillEmboldedTextEditor: React.FC = () => {
     state => state.lessonEditor.editingContent?.content as FillEmboldedTextExercise
   );
 
+  const words = useMemo(() => editingContent?.data?.words || [], [editingContent]);
+  const passage = editingContent?.data?.passage || '';
+
   // New state for word popup
   const [wordPopup, setWordPopup] = useState<{
     wordIndex: number;
     position: { x: number; y: number };
-    correctPronoun: string;
+    correctAnswer: string;
+    question: string;
     hint: string;
     explanation: string;
     isEditing: boolean;
   } | null>(null);
+
   const passageRef = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
 
-  // Split passage into words once for reuse
-  const passageWords = editingContent?.data.passage ? editingContent.data.passage.trim().split(/\s+/) : [];
+  const passageWords = useMemo(() => {
+    return passage ? passage.trim().split(/\s+/) : [];
+  }, [passage]);
 
   const handleWordClickInPreview = useCallback(
     (wordIndex: number, event: React.MouseEvent) => {
@@ -40,33 +48,30 @@ export const FillEmboldedTextEditor: React.FC = () => {
 
       if (!passageRect) return;
 
-      // Find existing verb for this word index
-      const existingVerb = editingContent.data.verbs.find(v => v.wordIndex === wordIndex);
+      const existingWord = words.find(v => v.wordIndex === wordIndex);
 
-      // Simple positioning - just use the word's position
       const x = rect.left - passageRect.left + rect.width / 2;
       const y = rect.top - passageRect.top;
 
       setWordPopup({
         wordIndex,
         position: { x, y },
-        correctPronoun: existingVerb?.correctPronoun || '',
-        hint: existingVerb?.hint || '',
-        explanation: existingVerb?.explanation || '',
-        isEditing: !!existingVerb,
+        correctAnswer: existingWord?.correctAnswer || '',
+        question: existingWord?.question || '',
+        hint: existingWord?.hint || '',
+        explanation: existingWord?.explanation || '',
+        isEditing: !!existingWord,
       });
     },
-    [editingContent]
+    [editingContent, words]
   );
 
-  // Close popup when clicking outside
   const handleClickOutside = useCallback(
     (event: MouseEvent) => {
       if (!wordPopup) return;
 
       const target = event.target as Node;
 
-      // Skip closing when clicking inside the popup or the passage.
       if (popupRef.current?.contains(target) || passageRef.current?.contains(target)) {
         return;
       }
@@ -85,89 +90,128 @@ export const FillEmboldedTextEditor: React.FC = () => {
     }
   }, [wordPopup, handleClickOutside]);
 
-  if (!editingContent) {
-    return <div>No content selected for editing</div>;
-  }
+  const updateContent = useCallback(
+    (updates: Partial<FillEmboldedTextExercise>) => {
+      if (!editingContent) return;
+      dispatch(updateEditingContent({ ...editingContent, ...updates }));
+    },
+    [dispatch, editingContent]
+  );
 
-  const updateContent = (updates: Partial<FillEmboldedTextExercise>) => {
-    dispatch(updateEditingContent({ ...editingContent, ...updates }));
-  };
+  const updateData = useCallback(
+    (dataUpdates: Partial<FillEmboldedTextExercise['data']>) => {
+      if (!editingContent) return;
+      updateContent({
+        data: {
+          ...editingContent.data,
+          words: words, // Ensure words is preserved if not in dataUpdates, though spreads handle this usually
+          ...dataUpdates,
+        },
+      });
+    },
+    [editingContent, updateContent, words]
+  );
 
-  const updateData = (dataUpdates: Partial<FillEmboldedTextExercise['data']>) => {
+  const removeWord = useCallback(
+    (index: number) => {
+      // Safe filter
+      const newWords = words.filter((_, i) => i !== index);
+      updateData({ words: newWords });
+    },
+    [words, updateData]
+  );
+
+  const handlePassageChange = (newPassage: string) => {
+    const newWords = words.filter(w => {
+      const wordCount = newPassage.trim().split(/\s+/).length;
+      return w.wordIndex < wordCount;
+    });
+
     updateContent({
       data: {
         ...editingContent.data,
-        ...dataUpdates,
+        passage: newPassage,
+        words: newWords,
       },
     });
   };
 
-  const removeVerb = (index: number) => {
-    const newVerbs = editingContent.data.verbs.filter((_, i) => i !== index);
-    updateData({ verbs: newVerbs });
-  };
-
-  const closeWordPopup = () => {
+  const closeWordPopup = useCallback(() => {
     setWordPopup(null);
-  };
+  }, []);
 
-  const saveWordPopup = () => {
+  const saveWordPopup = useCallback(() => {
     if (!wordPopup) return;
 
-    const existingVerbIndex = editingContent.data.verbs.findIndex(v => v.wordIndex === wordPopup.wordIndex);
-    let newVerbs;
+    const existingWordIndex = words.findIndex(v => v.wordIndex === wordPopup.wordIndex);
+    let newWords;
 
-    if (existingVerbIndex >= 0) {
-      newVerbs = editingContent.data.verbs.map((verb, i) =>
-        i === existingVerbIndex
-          ? {
-              wordIndex: wordPopup.wordIndex,
-              correctPronoun: wordPopup.correctPronoun,
-              hint: wordPopup.hint || undefined,
-              explanation: wordPopup.explanation || undefined,
-            }
-          : verb
-      );
+    const wordData = {
+      wordIndex: wordPopup.wordIndex,
+      correctAnswer: wordPopup.correctAnswer,
+      question: wordPopup.question || undefined,
+      hint: wordPopup.hint || undefined,
+      explanation: wordPopup.explanation || undefined,
+    };
+
+    if (existingWordIndex >= 0) {
+      newWords = words.map((word, i) => (i === existingWordIndex ? wordData : word));
     } else {
-      newVerbs = [
-        ...editingContent.data.verbs,
-        {
-          wordIndex: wordPopup.wordIndex,
-          correctPronoun: wordPopup.correctPronoun,
-          hint: wordPopup.hint || undefined,
-          explanation: wordPopup.explanation || undefined,
-        },
-      ];
+      newWords = [...words, wordData];
     }
 
-    updateData({ verbs: newVerbs });
+    updateData({ words: newWords });
     closeWordPopup();
-  };
+  }, [wordPopup, words, updateData, closeWordPopup]);
 
-  const deleteWordVerb = () => {
+  const deleteWordFromPopup = useCallback(() => {
     if (!wordPopup) return;
 
-    const newVerbs = editingContent.data.verbs.filter(v => v.wordIndex !== wordPopup.wordIndex);
-    updateData({ verbs: newVerbs });
+    const newWords = words.filter(v => v.wordIndex !== wordPopup.wordIndex);
+    updateData({ words: newWords });
     closeWordPopup();
-  };
+  }, [wordPopup, words, updateData, closeWordPopup]);
+
+  // validation using useMemo
+  const warnings = useMemo(() => {
+    const warns = [];
+
+    if (!passage.trim()) {
+      warns.push('Passage is required');
+    }
+
+    if (words.length === 0) {
+      warns.push('At least one word is required');
+    }
+
+    words.forEach((word, index) => {
+      if (word.wordIndex < 0 || word.wordIndex >= passageWords.length) {
+        warns.push(`Word ${index + 1}: Invalid word index (${word.wordIndex})`);
+      }
+      if (!word.correctAnswer?.trim()) {
+        warns.push(`Word ${index + 1}: Correct answer is required`);
+      }
+    });
+
+    return warns;
+  }, [passage, words, passageWords]);
 
   const renderPassagePreview = () => {
-    if (!editingContent.data.passage) return null;
+    if (!passage) return null;
 
     return (
       <div ref={passageRef} className="font-serif text-lg leading-relaxed p-4 bg-gray-50 rounded border">
         {passageWords.map((word, index) => {
-          const isExistingVerb = editingContent.data.verbs.some(v => v.wordIndex === index);
+          const isExistingWord = words.some(v => v.wordIndex === index);
 
           return (
             <span
               key={index}
               onClick={e => handleWordClickInPreview(index, e)}
               className={`inline-block px-1 py-0.5 mx-0.5 rounded transition-colors relative group cursor-pointer ${
-                isExistingVerb ? 'bg-red-100 font-bold text-red-700 border border-red-200' : 'hover:bg-blue-100'
+                isExistingWord ? 'bg-red-100 font-bold text-red-700 border border-red-200' : 'hover:bg-blue-100'
               }`}
-              title={isExistingVerb ? `Click to edit verb: ${word}` : `Click to add verb: ${word} (index: ${index})`}>
+              title={isExistingWord ? `Click to edit word: ${word}` : `Click to add word: ${word} (index: ${index})`}>
               {word}
             </span>
           );
@@ -176,30 +220,9 @@ export const FillEmboldedTextEditor: React.FC = () => {
     );
   };
 
-  const validateContent = () => {
-    const warnings = [];
-
-    if (!editingContent.data.passage?.trim()) {
-      warnings.push('Passage is required');
-    }
-
-    if (editingContent.data.verbs.length === 0) {
-      warnings.push('At least one verb is required');
-    }
-
-    editingContent.data.verbs.forEach((verb, index) => {
-      if (verb.wordIndex < 0 || verb.wordIndex >= passageWords.length) {
-        warnings.push(`Verb ${index + 1}: Invalid word index (${verb.wordIndex})`);
-      }
-      if (!verb.correctPronoun?.trim()) {
-        warnings.push(`Verb ${index + 1}: Correct pronoun is required`);
-      }
-    });
-
-    return warnings;
-  };
-
-  const warnings = validateContent();
+  if (!editingContent) {
+    return <div>No content selected for editing</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -234,56 +257,48 @@ export const FillEmboldedTextEditor: React.FC = () => {
         />
       </div>
 
-      {/* Passage */}
       <div>
         <label className="block text-sm font-medium mb-2">Latin Text Passage</label>
-        <SimpleRichEditor
-          content={editingContent.data.passage || ''}
-          onChange={value => updateData({ passage: value })}
-          placeholder="Enter the Latin text that contains the verbs students will analyze..."
+        <Textarea
+          value={passage}
+          onChange={e => handlePassageChange(e.target.value)}
+          placeholder="Enter the Latin text passage..."
           rows={4}
           className="w-full font-serif text-base"
         />
-        <p className="text-xs text-gray-500 mt-1">
-          Students will click on verbs in this passage and enter the correct pronouns
-        </p>
+        <p className="text-xs text-gray-500 mt-1">Students will click on words in this passage and provide answers</p>
 
-        {editingContent.data.passage && (
+        {passage && (
           <div className="mt-3">
             <label className="block text-xs font-medium mb-2 flex items-center gap-1">
               <Eye className="h-3 w-3" />
-              Passage Preview (click on words to add/edit verbs):
+              Passage Preview (click on words to add/edit):
             </label>
             <p className="text-xs text-gray-500 mb-2">
-              • Click on any word to add it as a verb or edit existing verb answers • Existing verbs are highlighted in
-              red • A popup will appear above the clicked word for editing
+              • Click on any word to add it or edit existing answers • Existing words are highlighted in red • A popup
+              will appear above the clicked word for editing
             </p>
             {renderPassagePreview()}
           </div>
         )}
       </div>
 
-      {/* Verbs */}
       <div>
         <div className="mb-3">
           <label className="block text-sm font-medium flex items-center gap-1">
             <Zap className="h-4 w-4" />
-            Verbs to Analyze
+            Words to Fill
           </label>
-          <p className="text-xs text-gray-500 mt-1">Click on words in the passage above to add or edit verbs.</p>
+          <p className="text-xs text-gray-500 mt-1">Click on words in the passage above to add or edit them.</p>
         </div>
 
         <div className="space-y-4">
-          {editingContent.data.verbs.map((verb, index) => (
+          {words.map((word, index) => (
             <Card key={index}>
               <CardContent className="p-4">
                 <div className="flex items-start justify-between mb-3">
-                  <h4 className="font-medium">Verb {index + 1}</h4>
-                  <Button
-                    onClick={() => removeVerb(index)}
-                    size="sm"
-                    variant="ghost"
-                    disabled={editingContent.data.verbs.length <= 1}>
+                  <h4 className="font-medium">Word {index + 1}</h4>
+                  <Button onClick={() => removeWord(index)} size="sm" variant="ghost">
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
@@ -292,33 +307,42 @@ export const FillEmboldedTextEditor: React.FC = () => {
                   <div>
                     <label className="block text-xs font-medium mb-1">Selected Word</label>
                     <div className="w-full p-2 border rounded text-sm bg-gray-50">
-                      <span className="font-mono">{passageWords[verb.wordIndex] || 'Invalid index'}</span> (index:{' '}
-                      {verb.wordIndex})
+                      <span className="font-mono">{passageWords[word.wordIndex] || 'Invalid index'}</span> (index:{' '}
+                      {word.wordIndex})
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium mb-1">Correct Pronoun</label>
+                    <label className="block text-xs font-medium mb-1">Correct Answer</label>
                     <div className="w-full p-2 border rounded text-sm bg-gray-50">
-                      {verb.correctPronoun || 'Not set'}
+                      {word.correctAnswer || 'Not set'}
                     </div>
                   </div>
                 </div>
 
-                {verb.hint && (
+                {word.question && (
                   <div className="mt-3">
-                    <label className="block text-xs font-medium mb-1">Hint</label>
+                    <label className="block text-xs font-medium mb-1">Question</label>
                     <div className="w-full p-2 border rounded text-sm bg-gray-50">
-                      <SimpleRichDisplay content={verb.hint} />
+                      <SimpleRichDisplay content={word.question} />
                     </div>
                   </div>
                 )}
 
-                {verb.explanation && (
+                {word.hint && (
+                  <div className="mt-3">
+                    <label className="block text-xs font-medium mb-1">Hint</label>
+                    <div className="w-full p-2 border rounded text-sm bg-gray-50">
+                      <SimpleRichDisplay content={word.hint} />
+                    </div>
+                  </div>
+                )}
+
+                {word.explanation && (
                   <div className="mt-3">
                     <label className="block text-xs font-medium mb-1">Explanation</label>
                     <div className="w-full p-2 border rounded text-sm bg-gray-50">
-                      <SimpleRichDisplay content={verb.explanation} />
+                      <SimpleRichDisplay content={word.explanation} />
                     </div>
                   </div>
                 )}
@@ -328,7 +352,6 @@ export const FillEmboldedTextEditor: React.FC = () => {
         </div>
       </div>
 
-      {/* Feedback Configuration */}
       <ExerciseFeedbackSection
         feedbackConfig={editingContent.feedbackConfig}
         onChange={feedbackConfig => updateContent({ feedbackConfig })}
@@ -336,7 +359,6 @@ export const FillEmboldedTextEditor: React.FC = () => {
         onItemProgressionDelayChange={itemProgressionDelay => updateContent({ itemProgressionDelay })}
       />
 
-      {/* Summary and Validation */}
       <Card>
         <CardContent className="p-4">
           <h3 className="font-medium mb-3 flex items-center gap-2">
@@ -347,13 +369,10 @@ export const FillEmboldedTextEditor: React.FC = () => {
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
               <span className="text-gray-600">Passage length:</span>{' '}
-              <span className="font-medium">
-                {editingContent.data.passage ? editingContent.data.passage.split(' ').length : 0} words
-              </span>
+              <span className="font-medium">{passageWords.length} words</span>
             </div>
             <div>
-              <span className="text-gray-600">Verbs to analyze:</span>{' '}
-              <span className="font-medium">{editingContent.data.verbs.length}</span>
+              <span className="text-gray-600">Words to fill:</span> <span className="font-medium">{words.length}</span>
             </div>
           </div>
 
@@ -373,7 +392,6 @@ export const FillEmboldedTextEditor: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Word Popup Overlay */}
       {wordPopup && (
         <div className="fixed inset-0 z-50 pointer-events-none">
           <div
@@ -386,7 +404,7 @@ export const FillEmboldedTextEditor: React.FC = () => {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h4 className="font-medium text-sm">
-                  {wordPopup.isEditing ? 'Edit Verb' : 'Add Verb'}:
+                  {wordPopup.isEditing ? 'Edit Word' : 'Add Word'}:
                   <span className="font-mono ml-1 bg-gray-100 px-1 rounded">{passageWords[wordPopup.wordIndex]}</span>
                 </h4>
                 <Button onClick={closeWordPopup} size="sm" variant="ghost" className="p-1 h-6 w-6">
@@ -395,13 +413,23 @@ export const FillEmboldedTextEditor: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-medium mb-1">Correct Pronoun</label>
-                <SimpleRichEditor
-                  content={wordPopup.correctPronoun}
-                  onChange={value => setWordPopup(prev => (prev ? { ...prev, correctPronoun: value } : null))}
-                  placeholder="e.g., I, you, he/she/it..."
-                  singleLine={true}
+                <label className="block text-xs font-medium mb-1">Correct Answer</label>
+                <Input
+                  value={wordPopup.correctAnswer}
+                  onChange={e => setWordPopup(prev => (prev ? { ...prev, correctAnswer: e.target.value } : null))}
+                  placeholder="e.g., answer..."
                   className="w-full"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium mb-1">Question (optional)</label>
+                <SimpleRichEditor
+                  content={wordPopup.question}
+                  onChange={value => setWordPopup(prev => (prev ? { ...prev, question: value } : null))}
+                  placeholder="e.g., What is the correct answer?"
+                  rows={2}
+                  className="w-full text-sm"
                 />
               </div>
 
@@ -410,7 +438,7 @@ export const FillEmboldedTextEditor: React.FC = () => {
                 <SimpleRichEditor
                   content={wordPopup.hint}
                   onChange={value => setWordPopup(prev => (prev ? { ...prev, hint: value } : null))}
-                  placeholder="e.g., Look at the ending..."
+                  placeholder="e.g., Look at the context..."
                   rows={2}
                   className="w-full text-sm"
                 />
@@ -421,7 +449,7 @@ export const FillEmboldedTextEditor: React.FC = () => {
                 <SimpleRichEditor
                   content={wordPopup.explanation}
                   onChange={value => setWordPopup(prev => (prev ? { ...prev, explanation: value } : null))}
-                  placeholder="e.g., First person singular..."
+                  placeholder="e.g., This is the correct answer because..."
                   rows={2}
                   className="w-full text-sm"
                 />
@@ -429,7 +457,7 @@ export const FillEmboldedTextEditor: React.FC = () => {
 
               <div className="flex gap-2 justify-end">
                 {wordPopup.isEditing && (
-                  <Button onClick={deleteWordVerb} size="sm" variant="destructive" className="text-xs">
+                  <Button onClick={deleteWordFromPopup} size="sm" variant="destructive" className="text-xs">
                     <Trash2 className="h-3 w-3 mr-1" />
                     Delete
                   </Button>
@@ -440,7 +468,7 @@ export const FillEmboldedTextEditor: React.FC = () => {
                 <Button
                   onClick={saveWordPopup}
                   size="sm"
-                  disabled={!wordPopup.correctPronoun.trim()}
+                  disabled={!wordPopup.correctAnswer.trim()}
                   className="text-xs">
                   <Check className="h-3 w-3 mr-1" />
                   {wordPopup.isEditing ? 'Update' : 'Add'}
@@ -448,7 +476,6 @@ export const FillEmboldedTextEditor: React.FC = () => {
               </div>
             </div>
 
-            {/* Arrow pointing to the word */}
             <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-gray-300"></div>
           </div>
         </div>

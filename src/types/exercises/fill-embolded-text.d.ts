@@ -4,9 +4,10 @@ export interface FillEmboldedTextExercise extends BaseExercise {
   type: 'fill-embolded-text';
   data: {
     passage: string;
-    verbs: {
+    words: {
       wordIndex: number;
-      correctPronoun: string;
+      correctAnswer: string;
+      question?: string;
       explanation?: string;
       hint?: string;
     }[];

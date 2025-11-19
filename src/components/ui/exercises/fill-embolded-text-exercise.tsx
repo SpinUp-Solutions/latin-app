@@ -22,7 +22,7 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
   const [correctAnswers, setCorrectAnswers] = useState(0);
 
   const { currentIndex, isLastItem, autoAdvanceIfEnabled } = useExerciseProgression({
-    totalItems: exercise.data.verbs.length,
+    totalItems: exercise.data.words.length,
     itemProgressionDelay: exercise.itemProgressionDelay,
     progressionRules: exercise.feedbackConfig.progressionRules,
   });
@@ -31,20 +31,26 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
     exercise.feedbackConfig
   );
 
-  const currentVerb = exercise.data.verbs[currentIndex];
+  const currentWord = exercise.data.words[currentIndex];
 
   useEffect(() => {
-    setSelectedWordIndex(currentVerb.wordIndex);
-  }, [currentVerb.wordIndex]);
+    if (currentWord) {
+      setSelectedWordIndex(currentWord.wordIndex);
+    }
+  }, [currentWord]);
 
   const handleWordClick = (wordIndex: number) => {
-    if (wordIndex === currentVerb.wordIndex) {
+    if (currentWord && wordIndex === currentWord.wordIndex) {
       setSelectedWordIndex(wordIndex);
     }
   };
 
+  if (!currentWord) {
+    return <div>No words configured for this exercise.</div>;
+  }
+
   const handleSubmit = () => {
-    if (isProcessing) return; // Prevent multiple submissions
+    if (isProcessing) return;
 
     const validation = validateFillEmboldedTextExercise(userAnswer, exercise, currentIndex);
     setIsProcessing(true);
@@ -55,7 +61,7 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
       handleCorrect(isLastItem);
 
       if (isLastItem) {
-        const finalScore = Math.round((newCorrectAnswers / exercise.data.verbs.length) * 100);
+        const finalScore = Math.round((newCorrectAnswers / exercise.data.words.length) * 100);
 
         onComplete?.(finalScore);
 
@@ -81,7 +87,6 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
 
   const handleAnswerChange = (value: string) => {
     setUserAnswer(value);
-    // Reset feedback when user types
     if (isCorrect !== null) {
       reset();
     }
@@ -110,11 +115,10 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
         </div>
       )}
 
-      {/* Progress indicator */}
       <ExerciseProgress
         current={currentIndex}
-        total={exercise.data.verbs.length}
-        label="Verb"
+        total={exercise.data.words.length}
+        label="Word"
         showProgress={exercise.feedbackConfig.progressionRules?.showProgress !== false}
       />
 
@@ -126,7 +130,7 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
                 key={index}
                 onClick={() => handleWordClick(index)}
                 className={`cursor-pointer inline-block px-1 py-0.5 mx-0.5 rounded transition-colors ${
-                  index === currentVerb.wordIndex
+                  index === currentWord.wordIndex
                     ? 'bg-roman-red text-white font-bold'
                     : selectedWordIndex === index
                       ? 'bg-roman-parchment text-roman-red'
@@ -138,14 +142,15 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
           </div>
         </div>
 
-        {/* Always show input field for the current verb */}
         <div className="mb-4">
-          <p className="mb-4 text-gray-700">Enter the English pronoun that applies to this verb&apos;s ending:</p>
+          <div className="mb-4 text-gray-700">
+            <SimpleRichDisplay content={currentWord.question || 'Enter the correct answer for the highlighted word:'} />
+          </div>
           <ExerciseInput
             value={userAnswer}
             onChange={handleAnswerChange}
             onSubmit={handleSubmit}
-            placeholder="Enter pronoun (e.g., I, you, he, she, it, we, they)..."
+            placeholder="Enter your answer..."
           />
         </div>
 
@@ -153,9 +158,9 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
           isCorrect={isCorrect}
           message={message}
           level={level}
-          hint={currentVerb.hint}
-          correctAnswer={currentVerb.correctPronoun}
-          explanation={currentVerb.explanation}
+          hint={currentWord.hint}
+          correctAnswer={currentWord.correctAnswer}
+          explanation={currentWord.explanation}
           showExplanation={showExplanation}
         />
       </div>

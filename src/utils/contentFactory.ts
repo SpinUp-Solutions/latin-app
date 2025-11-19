@@ -129,19 +129,13 @@ export const createNewContent = (type: string): RenderableContentItem => {
         id: baseId,
         type: 'fill-embolded-text',
         title: 'Fill In Embolded Text Exercise',
-        instructions: 'Identify the embolded text and provide the answer.',
+        instructions: 'Click on the embolded words and provide the correct answer.',
         audioPath: null,
         itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
         feedbackConfig: createDefaultFeedbackConfig(),
         data: {
           passage: 'Passage with embolded text to analyze.',
-          verbs: [
-            {
-              wordIndex: 0,
-              correctPronoun: 'he/she/it',
-              explanation: 'This is the correct answer.',
-            },
-          ],
+          words: [],
         },
       };
     case 'sentence-diagramming':
