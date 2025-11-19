@@ -100,26 +100,22 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
         {lessonsList.map(lesson => (
           <Card key={lesson.id} className="hover:shadow-lg transition-shadow">
             <CardHeader>
-              <CardTitle className="flex items-start justify-between">
-                <div className="flex items-center gap-2">
-                  <BookOpen className="h-5 w-5 text-blue-600" />
-                  <div className="truncate">
-                    <SimpleRichDisplay content={lesson.title} />
+              <CardTitle className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <BookOpen className="h-5 w-5 text-blue-600 flex-shrink-0" />
+                  <div className="truncate min-w-0">
+                    <SimpleRichDisplay content={lesson.title} className="truncate" />
                   </div>
                 </div>
-                {lesson.isLive && <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Live</span>}
+                {lesson.isLive && (
+                  <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded flex-shrink-0">Live</span>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <p
-                className="text-sm text-gray-600 overflow-hidden text-ellipsis"
-                style={{
-                  display: '-webkit-box',
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: 'vertical' as const,
-                }}>
+              <div className="text-sm text-gray-600 line-clamp-3">
                 <SimpleRichDisplay content={lesson.description || 'No description provided'} />
-              </p>
+              </div>
 
               <div className="text-xs text-gray-500 space-y-1">
                 <div className="flex items-center gap-1">
@@ -266,26 +262,22 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
               .map(([lessonId, draft]) => (
                 <Card key={lessonId} className="hover:shadow-lg transition-shadow border-amber-300 bg-amber-50/50">
                   <CardHeader>
-                    <CardTitle className="flex items-start justify-between">
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-5 w-5 text-amber-600" />
-                        <div className="truncate">
-                          <SimpleRichDisplay content={draft.lesson.title} />
+                    <CardTitle className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <FileText className="h-5 w-5 text-amber-600 flex-shrink-0" />
+                        <div className="truncate min-w-0">
+                          <SimpleRichDisplay content={draft.lesson.title} className="truncate" />
                         </div>
                       </div>
-                      <span className="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded-full">Draft</span>
+                      <span className="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded-full flex-shrink-0">
+                        Draft
+                      </span>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <p
-                      className="text-sm text-gray-600 overflow-hidden text-ellipsis"
-                      style={{
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical' as const,
-                      }}>
+                    <div className="text-sm text-gray-600 line-clamp-3">
                       <SimpleRichDisplay content={draft.lesson.description || 'No description provided'} />
-                    </p>
+                    </div>
 
                     <div className="text-xs text-gray-500 space-y-1">
                       <div className="flex items-center gap-1">
