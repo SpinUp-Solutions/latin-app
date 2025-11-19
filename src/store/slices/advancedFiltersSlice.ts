@@ -1,7 +1,9 @@
+import { deriveTableTypeFromPOS } from '@/src/utils/generated/tableType';
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import type { RootState } from '../index';
 import type { PartOfSpeech, NounDeclension, AdjectiveDeclension } from '@/src/types/vocabulary/schemas/enums';
 import type { VerbConjugation } from '@/src/types/vocabulary/schemas/verb-conjugation';
+import type { TableType } from '@/src/utils/schema-helpers';
 
 interface AdvancedFiltersState {
   filters: {
@@ -11,12 +13,13 @@ interface AdvancedFiltersState {
     isDeponent: 'true' | 'false' | 'both';
     nounDeclension: NounDeclension | 'all';
     adjectiveDeclension: AdjectiveDeclension | 'all';
+    limit: number;
   };
   pagination: {
     lastWordId: string | null;
   };
   selection: {
-    selectedTableType: 'conjugation' | 'declension' | 'adjective-declension' | null;
+    selectedTableType: TableType | null;
     selectedCellPaths: string[];
   };
 }
@@ -29,6 +32,7 @@ const initialState: AdvancedFiltersState = {
     isDeponent: 'both',
     nounDeclension: 'all',
     adjectiveDeclension: 'all',
+    limit: 20,
   },
   pagination: {
     lastWordId: null,
@@ -49,15 +53,8 @@ const advancedFiltersSlice = createSlice({
       // Update selectedTableType if partOfSpeech is being changed
       if ('partOfSpeech' in action.payload) {
         const pos = action.payload.partOfSpeech;
-        if (pos === 'verb') {
-          state.selection.selectedTableType = 'conjugation';
-        } else if (pos === 'noun') {
-          state.selection.selectedTableType = 'declension';
-        } else if (pos === 'adjective') {
-          state.selection.selectedTableType = 'adjective-declension';
-        } else {
-          state.selection.selectedTableType = null;
-        }
+        const tableType = deriveTableTypeFromPOS(pos as string);
+        state.selection.selectedTableType = tableType ?? null;
         // Clear cell selection when part of speech changes
         state.selection.selectedCellPaths = [];
       }
@@ -69,15 +66,8 @@ const advancedFiltersSlice = createSlice({
       state.filters.nounDeclension = 'all';
       state.filters.adjectiveDeclension = 'all';
 
-      if (action.payload === 'verb') {
-        state.selection.selectedTableType = 'conjugation';
-      } else if (action.payload === 'noun') {
-        state.selection.selectedTableType = 'declension';
-      } else if (action.payload === 'adjective') {
-        state.selection.selectedTableType = 'adjective-declension';
-      } else {
-        state.selection.selectedTableType = null;
-      }
+      const tableType = deriveTableTypeFromPOS(action.payload as string);
+      state.selection.selectedTableType = tableType ?? null;
       state.selection.selectedCellPaths = [];
     },
     resetFilters: state => {

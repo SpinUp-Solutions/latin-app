@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { Query } from 'firebase-admin/firestore';
 import { VocabularyWordSchema } from '@/src/types/vocabulary/schemas';
+import { parseFormPathFromString } from '@/src/utils/exerciseFormPaths';
+import type { VerbFormPath, NounFormPath, AdjectiveFormPath } from '@/src/types/api/exercise-word-responses';
+import { TABLE_TYPE_CONFIG } from '@/src/utils/schema-helpers';
+
+const DEFAULT_COLLECTION = 'vocabulary_words_v4';
+const TABLE_FIELDS = ['word', 'conjugation_table', 'declension_table', 'degrees_table'] as const;
 
 const serializeTimestamp = (value: unknown): string | undefined => {
   if (value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function') {
@@ -10,21 +16,29 @@ const serializeTimestamp = (value: unknown): string | undefined => {
   return undefined;
 };
 
-const serializeWord = (data: Record<string, unknown>) => {
-  const serialized: Record<string, unknown> = { ...data };
-  if ('createdAt' in serialized) {
-    const createdAt = serializeTimestamp(serialized.createdAt);
-    if (createdAt) {
-      serialized.createdAt = createdAt;
-    }
-  }
-  if ('updatedAt' in serialized) {
-    const updatedAt = serializeTimestamp(serialized.updatedAt);
-    if (updatedAt) {
-      serialized.updatedAt = updatedAt;
-    }
-  }
+const serializeWord = (data: Record<string, unknown>): Record<string, unknown> => {
+  const serialized = { ...data };
+  const createdAt = serializeTimestamp(serialized.createdAt);
+  const updatedAt = serializeTimestamp(serialized.updatedAt);
+  if (createdAt) serialized.createdAt = createdAt;
+  if (updatedAt) serialized.updatedAt = updatedAt;
   return serialized;
+};
+
+const parseCellPaths = (cellPaths: string | null): string[] => {
+  if (!cellPaths) return [];
+  return cellPaths
+    .split(',')
+    .map(p => p.trim())
+    .filter(p => p.length > 0);
+};
+
+const parseSelectFields = (selectFields: string | null): string[] => {
+  if (!selectFields) return [];
+  return selectFields
+    .split(',')
+    .map(f => f.trim())
+    .filter(f => f.length > 0);
 };
 
 export const dynamic = 'force-dynamic';
@@ -37,11 +51,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const lastWordId = searchParams.get('lastWordId');
     const search = searchParams.get('search');
     const countsOnly = searchParams.get('countsOnly') === 'true';
-    const collection = searchParams.get('collection') || 'vocabulary_words_v4';
+    const collection = searchParams.get('collection') || DEFAULT_COLLECTION;
     const verbConjugation = searchParams.get('verbConjugation');
     const isDeponent = searchParams.get('isDeponent');
     const nounDeclension = searchParams.get('nounDeclension');
     const adjectiveDeclension = searchParams.get('adjectiveDeclension');
+    const cellPaths = searchParams.get('cellPaths');
+    const tableType = searchParams.get('tableType');
+    const selectFields = searchParams.get('select');
+    const randomize = searchParams.get('randomize') === 'true';
 
     if (countsOnly) {
       const wordTypeCounts = await getWordTypeCounts(collection);
@@ -53,7 +71,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       });
     }
 
-    let query: Query = adminDb.collection(collection).orderBy('word');
+    let query: Query = adminDb.collection(collection);
+
+    const fields = parseSelectFields(selectFields);
+    if (fields.length > 0) {
+      query = query.select(...fields);
+    }
+
+    query = query.orderBy('word');
 
     if (wordType) {
       query = query.where('part_of_speech', '==', wordType);
@@ -85,20 +110,65 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }
     }
 
-    query = query.limit(limit);
+    const fetchLimit = randomize ? Math.min(limit * 10, 200) : limit;
+    query = query.limit(fetchLimit);
 
     const snapshot = await query.get();
 
-    const words = snapshot.docs.map(doc => {
+    let docs = snapshot.docs;
+    if (randomize && docs.length > limit) {
+      const shuffled = [...docs].sort(() => Math.random() - 0.5);
+      docs = shuffled.slice(0, limit);
+    }
+
+    const words = docs.map(doc => {
       const data = doc.data();
-      return {
-        id: doc.id,
-        ...serializeWord(data as Record<string, unknown>),
-      };
+      const serialized = serializeWord(data as Record<string, unknown>);
+      const isExerciseMode = !!tableType;
+
+      if (isExerciseMode) {
+        let selectedForm = serialized.word as string;
+        let formPath: VerbFormPath | NounFormPath | AdjectiveFormPath | null = null;
+
+        const paths = parseCellPaths(cellPaths);
+        if (paths.length > 0 && tableType) {
+          const formResult = pickRandomFormServer(
+            serialized,
+            tableType as 'conjugation' | 'declension' | 'adjective-declension',
+            paths
+          );
+          if (formResult) {
+            selectedForm = formResult.form;
+            formPath = parseFormPathFromString(
+              formResult.path,
+              tableType as 'conjugation' | 'declension' | 'adjective-declension'
+            );
+          }
+        }
+
+        const result = {
+          ...serialized,
+          id: doc.id,
+          root_word: serialized.word,
+          selected_form: selectedForm,
+          form_path: formPath,
+        } as Record<string, unknown>;
+
+        for (const field of TABLE_FIELDS) {
+          delete result[field];
+        }
+
+        return result;
+      } else {
+        return {
+          id: doc.id,
+          ...serialized,
+        };
+      }
     });
 
-    const hasMore = snapshot.docs.length === limit;
-    const lastDoc = snapshot.docs[snapshot.docs.length - 1];
+    const hasMore = randomize ? false : snapshot.docs.length === fetchLimit;
+    const lastDoc = randomize ? null : docs[docs.length - 1];
 
     return NextResponse.json({
       success: true,
@@ -136,20 +206,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const {
-      collection: providedCollection,
-      id: unusedId,
-      ...wordPayload
-    } = body as Record<string, unknown> & {
+    const { collection: providedCollection, ...wordPayload } = body as Record<string, unknown> & {
       collection?: string;
       id?: string;
     };
-    void unusedId;
 
     const collection =
       typeof providedCollection === 'string' && providedCollection.trim() !== ''
         ? providedCollection
-        : 'vocabulary_words_v4';
+        : DEFAULT_COLLECTION;
 
     const now = new Date();
     const isoTimestamp = now.toISOString();
@@ -211,7 +276,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 export async function PUT(request: NextRequest): Promise<NextResponse> {
   try {
     const body = await request.json();
-    const { wordId, updates, collection = 'vocabulary_words_v4' } = body;
+    const { wordId, updates, collection = DEFAULT_COLLECTION } = body;
 
     if (!wordId || !updates) {
       return NextResponse.json(
@@ -239,7 +304,7 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({
       success: true,
       message: 'Word updated successfully',
-      updatedData: updatedData,
+      updatedData,
     });
   } catch (error) {
     console.error('Error updating word:', error);
@@ -251,6 +316,62 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
       { status: 500 }
     );
   }
+}
+
+function getCellValueAtPathServer(obj: Record<string, unknown>, path: string): string[] {
+  const keys = path.split('.');
+  let value: unknown = obj;
+
+  for (const key of keys) {
+    if (value && typeof value === 'object' && key in value) {
+      value = (value as Record<string, unknown>)[key];
+    } else {
+      return [];
+    }
+  }
+
+  if (value === null || value === undefined) {
+    return [];
+  }
+
+  if (typeof value === 'string') {
+    return [value];
+  }
+
+  if (Array.isArray(value)) {
+    const filtered = value.filter((v): v is string => v !== null && v !== undefined && typeof v === 'string');
+    return filtered;
+  }
+  return [];
+}
+
+function pickRandomFormServer(
+  word: Record<string, unknown>,
+  tableType: 'conjugation' | 'declension' | 'adjective-declension',
+  selectedPaths: string[]
+): { form: string; path: string } | null {
+  const rootField = TABLE_TYPE_CONFIG[tableType];
+  if (!rootField) {
+    return null;
+  }
+
+  const formsWithPaths: Array<{ form: string; path: string }> = [];
+
+  for (const path of selectedPaths) {
+    const fullPath = `${rootField}.${path}`;
+    const forms = getCellValueAtPathServer(word, fullPath);
+
+    for (const form of forms) {
+      formsWithPaths.push({ form, path });
+    }
+  }
+
+  if (formsWithPaths.length === 0) {
+    return null;
+  }
+
+  const selected = formsWithPaths[Math.floor(Math.random() * formsWithPaths.length)];
+  return selected;
 }
 
 async function getWordTypeCounts(collection: string) {

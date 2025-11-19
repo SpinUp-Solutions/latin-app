@@ -23,13 +23,7 @@ import { AdvancedFiltersPanel } from '@/src/components/ui/admin/vocabulary/Advan
 import { AdvancedResultsList } from '@/src/components/ui/admin/vocabulary/AdvancedResultsList';
 import { FormSelectionTable } from '@/src/components/ui/admin/vocabulary/FormSelectionTable';
 import { useDebounce } from '@/src/hooks/useDebounce';
-import { getAllPathsFromGrid, getAllPathsFromNestedGrid } from '@/src/utils/selection-helpers';
-import type { TableGrid, NestedTableGrid } from '@/src/types/schema-introspection';
-import { ConjugationTableSchema } from '@/src/types/vocabulary/schemas/verb-conjugation';
-import { DeclensionTableSchema, DegreesTableSchema } from '@/src/types/vocabulary/schemas';
-import { introspectSchema } from '@/src/utils/schema-introspector';
-import { buildTableGrid } from '@/src/utils/table-builder';
-import { buildEmptyFromSchema } from '@/src/utils/schema-defaults';
+import { useFormSelection } from '@/src/hooks/useFormSelection';
 
 const TARGET_COLLECTION = 'vocabulary_words_v4';
 
@@ -40,6 +34,7 @@ function AdvancedFiltersPage() {
   const pagination = useSelector(selectAdvancedPagination);
   const selection = useSelector(selectAdvancedSelection);
   const debouncedSearch = useDebounce(filters.search, 300);
+  const formSelection = useFormSelection();
 
   const queryArgs = {
     collection: TARGET_COLLECTION,
@@ -55,8 +50,12 @@ function AdvancedFiltersPage() {
       filters.partOfSpeech === 'adjective' && filters.adjectiveDeclension !== 'all'
         ? filters.adjectiveDeclension
         : undefined,
-    limit: 30,
+    limit: filters.limit,
+    cellPaths: selection.selectedCellPaths.length > 0 ? selection.selectedCellPaths : undefined,
+    tableType: selection.selectedTableType || undefined,
   };
+
+  console.log('[AdvancedFiltersPage] Query args:', queryArgs);
 
   const { data, isLoading, isFetching, isError } = useGetAdvancedWordsQuery(queryArgs);
   const words = data?.words ?? [];
@@ -72,6 +71,7 @@ function AdvancedFiltersPage() {
     filters.isDeponent,
     filters.nounDeclension,
     filters.adjectiveDeclension,
+    filters.limit,
     dispatch,
   ]);
 
@@ -109,25 +109,8 @@ function AdvancedFiltersPage() {
   };
 
   const handleSelectAll = () => {
-    if (filters.partOfSpeech === 'verb') {
-      const emptyData = buildEmptyFromSchema(ConjugationTableSchema);
-      const schemaNode = introspectSchema(ConjugationTableSchema);
-      const grid = buildTableGrid(schemaNode, emptyData);
-      const allPaths = getAllPathsFromNestedGrid(grid as NestedTableGrid);
-      dispatch(addCellPaths(allPaths));
-    } else if (filters.partOfSpeech === 'noun') {
-      const emptyData = buildEmptyFromSchema(DeclensionTableSchema);
-      const schemaNode = introspectSchema(DeclensionTableSchema);
-      const grid = buildTableGrid(schemaNode, emptyData);
-      const allPaths = getAllPathsFromGrid(grid as TableGrid);
-      dispatch(addCellPaths(allPaths));
-    } else if (filters.partOfSpeech === 'adjective') {
-      const emptyData = buildEmptyFromSchema(DegreesTableSchema);
-      const schemaNode = introspectSchema(DegreesTableSchema);
-      const grid = buildTableGrid(schemaNode, emptyData);
-      const allPaths = getAllPathsFromNestedGrid(grid as NestedTableGrid);
-      dispatch(addCellPaths(allPaths));
-    }
+    const allPaths = formSelection.getAllPaths(filters.partOfSpeech);
+    dispatch(addCellPaths(allPaths));
   };
 
   const handleClearSelection = () => {

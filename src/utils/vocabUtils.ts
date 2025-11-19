@@ -1,12 +1,7 @@
 import { VocabularyWord, Noun, Verb, Adjective, Pronoun } from '@/src/types/vocabulary/index';
+import { TABLE_TYPES, type TableType } from '@/src/utils/schema-helpers';
 
-export const TABLE_TYPES = {
-  DECLENSION: 'declension',
-  ADJECTIVE_DECLENSION: 'adjective-declension',
-  CONJUGATION: 'conjugation',
-} as const;
-
-export type TableType = (typeof TABLE_TYPES)[keyof typeof TABLE_TYPES];
+export { TABLE_TYPES, type TableType };
 
 export const getWordTypeColor = (wordType: string): string => {
   const colors = {

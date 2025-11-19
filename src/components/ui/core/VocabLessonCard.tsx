@@ -22,6 +22,11 @@ const statusConfig = {
     icon: Clock,
     text: 'In Progress',
   },
+  available: {
+    badge: 'bg-roman-gold text-white',
+    icon: Clock,
+    text: 'Ready to Practice',
+  },
 };
 
 export const VocabLessonCard = memo(({ lesson, onPracticeClick }: VocabLessonCardProps) => {

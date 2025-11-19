@@ -1,7 +1,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import type { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary/index';
-
-type TableType = 'declension' | 'adjective-declension' | 'conjugation';
+import type { TableType } from '@/src/utils/schema-helpers';
 
 type TableData = Record<string, unknown>;
 

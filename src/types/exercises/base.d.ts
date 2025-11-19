@@ -1,4 +1,5 @@
 import { ContentItem } from '../content';
+import type { TableType } from '@/src/utils/schema-helpers';
 
 export interface FeedbackLevel {
   /** Custom message shown at this level (optional). */
@@ -73,4 +74,25 @@ export interface BaseExercise extends ContentItem {
   instructions: string;
   itemProgressionDelay?: number;
   feedbackConfig: FeedbackConfig;
+}
+
+export interface GeneratorFilters {
+  partOfSpeech?: string;
+  verbConjugation?: string;
+  isDeponent?: string;
+  nounDeclension?: string;
+  adjectiveDeclension?: string;
+  search?: string;
+}
+
+export interface FormSelection {
+  tableType: TableType;
+  selectedCellPaths: string[];
+}
+
+export interface GeneratorConfigBase {
+  collection: string;
+  filters: GeneratorFilters;
+  formSelection?: FormSelection;
+  count: number;
 }

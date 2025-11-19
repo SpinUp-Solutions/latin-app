@@ -1,7 +1,6 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import { type VocabularyWordWithId } from '@/src/types/vocabulary/index';
-import { VocabularyWordWithIdSchema } from '@/src/types/vocabulary/schemas';
-import { ZodError, type ZodIssue } from 'zod';
+import type { TableType } from '@/src/utils/schema-helpers';
 
 interface GetAdvancedWordsArgs {
   collection?: string;
@@ -13,6 +12,9 @@ interface GetAdvancedWordsArgs {
   nounDeclension?: string;
   adjectiveDeclension?: string;
   limit?: number;
+  cellPaths?: string[];
+  tableType?: TableType;
+  select?: string[];
 }
 
 interface GetAdvancedWordsResponse {
@@ -51,6 +53,21 @@ export const advancedVocabularyApi = createApi({
         if (args.limit) {
           params.append('limit', String(args.limit));
         }
+        if (args.cellPaths && args.cellPaths.length > 0) {
+          params.append('cellPaths', args.cellPaths.join(','));
+          console.log('[RTK Query] Adding cellPaths:', args.cellPaths.join(','));
+        }
+        if (args.tableType) {
+          params.append('tableType', args.tableType);
+          console.log('[RTK Query] Adding tableType:', args.tableType);
+        }
+
+        if (args.select && args.select.length > 0) {
+          params.append('select', args.select.join(','));
+          console.log('[RTK Query] Adding select fields:', args.select);
+        }
+
+        // randomize intentionally not set here (exercise generator decides server-side or via explicit config)
 
         if (args.partOfSpeech === 'verb') {
           if (args.verbConjugation && args.verbConjugation !== 'all') {
@@ -74,21 +91,9 @@ export const advancedVocabularyApi = createApi({
         };
       },
       transformResponse: (response: GetAdvancedWordsResponse) => {
-        try {
-          const validatedWords = response.data.words.map(
-            word => VocabularyWordWithIdSchema.parse(word) as VocabularyWordWithId
-          );
-          return {
-            ...response.data,
-            words: validatedWords,
-          };
-        } catch (error) {
-          if (error instanceof ZodError) {
-            console.error('Advanced vocabulary validation error:', error.issues);
-            throw new Error(`Invalid vocabulary data: ${error.issues.map((e: ZodIssue) => e.message).join(', ')}`);
-          }
-          throw error;
-        }
+        console.log('[RTK Query] Transform response - received words:', response.data.words.length);
+        console.log('[RTK Query] Sample word:', response.data.words[0]);
+        return response.data;
       },
       serializeQueryArgs: ({ queryArgs }) => {
         return {
@@ -100,6 +105,9 @@ export const advancedVocabularyApi = createApi({
           nounDeclension: queryArgs.nounDeclension,
           adjectiveDeclension: queryArgs.adjectiveDeclension,
           limit: queryArgs.limit,
+          cellPaths: queryArgs.cellPaths,
+          tableType: queryArgs.tableType,
+          select: queryArgs.select,
         };
       },
       merge: (currentCache, newData, { arg }) => {

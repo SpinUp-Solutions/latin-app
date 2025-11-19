@@ -8,6 +8,8 @@ export type { MultipleChoiceExercise } from './multiple-choice';
 export type { OddOneOutExercise } from './odd-one-out';
 export type { TableFillExercise } from './table-fill';
 export type { ClickOnMultipleWordsExercise } from './click-on-multiple-words';
+export type { GeneratedTranslationExercise } from './generated-translation';
+export type { GeneratedFormIdentificationExercise } from './generated-form-identification';
 
 import type { MatchingExercise } from './matching';
 import type { FillExercise } from './fill';
@@ -18,6 +20,8 @@ import type { MultipleChoiceExercise } from './multiple-choice';
 import type { OddOneOutExercise } from './odd-one-out';
 import type { TableFillExercise } from './table-fill';
 import type { ClickOnMultipleWordsExercise } from './click-on-multiple-words';
+import type { GeneratedTranslationExercise } from './generated-translation';
+import type { GeneratedFormIdentificationExercise } from './generated-form-identification';
 
 export type Exercise =
   | MatchingExercise
@@ -28,4 +32,6 @@ export type Exercise =
   | MultipleChoiceExercise
   | OddOneOutExercise
   | TableFillExercise
-  | ClickOnMultipleWordsExercise;
+  | ClickOnMultipleWordsExercise
+  | GeneratedTranslationExercise
+  | GeneratedFormIdentificationExercise;

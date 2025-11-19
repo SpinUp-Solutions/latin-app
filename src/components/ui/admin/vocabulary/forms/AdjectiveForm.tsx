@@ -2,12 +2,8 @@ import { useFormContext } from 'react-hook-form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/src/components/ui/form';
 import { VocabularyFormValues } from './types';
+import { adjectiveDeclensionOptions } from '@/src/utils/vocabulary/formOptions';
 import React from 'react';
-
-const declensionOptions = [
-  { value: '1-2', label: 'First/Second' },
-  { value: '3', label: 'Third' },
-];
 
 export const AdjectiveForm = () => {
   const form = useFormContext<VocabularyFormValues>();
@@ -32,7 +28,7 @@ export const AdjectiveForm = () => {
                   <SelectValue placeholder="Select declension" />
                 </SelectTrigger>
                 <SelectContent>
-                  {declensionOptions.map(option => (
+                  {adjectiveDeclensionOptions.map(option => (
                     <SelectItem key={option.value} value={option.value}>
                       {option.label}
                     </SelectItem>
