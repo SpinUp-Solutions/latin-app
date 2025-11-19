@@ -1,0 +1,29 @@
+import { z } from 'zod';
+
+export const FormIdentificationStepSchema = z.enum([
+  'conjugation',
+  'declension',
+  'tense',
+  'voice',
+  'mood',
+  'person',
+  'number',
+  'case',
+  'gender',
+  'degree',
+]);
+
+export type FormIdentificationStep = z.infer<typeof FormIdentificationStepSchema>;
+
+export const FormIdentificationItemSchema = z.object({
+  id: z.string(),
+  word: z.string(),
+  root_word: z.string(),
+  selected_form: z.string(),
+  step: FormIdentificationStepSchema,
+  correctAnswer: z.string(),
+  acceptedAnswers: z.array(z.string()),
+  hint: z.string().optional(),
+});
+
+export type FormIdentificationItem = z.infer<typeof FormIdentificationItemSchema>;
