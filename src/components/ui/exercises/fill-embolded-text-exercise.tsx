@@ -5,7 +5,7 @@ import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { FillEmboldedTextExercise } from '@/src/types/exercise';
 import { ExerciseInput, FeedbackDisplay } from '../feedback';
-import { validateVerbAnalysisExercise } from '@/src/utils/exercises/verbAnalysisExercise';
+import { validateFillEmboldedTextExercise } from '@/src/utils/exercises/fillEmboldedTextExercise';
 import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
@@ -46,7 +46,7 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
   const handleSubmit = () => {
     if (isProcessing) return; // Prevent multiple submissions
 
-    const validation = validateVerbAnalysisExercise(userAnswer, exercise, currentIndex);
+    const validation = validateFillEmboldedTextExercise(userAnswer, exercise, currentIndex);
     setIsProcessing(true);
 
     if (validation.isCorrect) {

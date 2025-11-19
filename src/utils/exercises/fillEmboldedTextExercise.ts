@@ -9,7 +9,7 @@ import { isTextMatch } from './helpers';
 /**
  * Validates a fill embolded text exercise answer
  */
-export const validateVerbAnalysisExercise = (
+export const validateFillEmboldedTextExercise = (
   userAnswer: string,
   exercise: FillEmboldedTextExercise,
   currentIndex: number

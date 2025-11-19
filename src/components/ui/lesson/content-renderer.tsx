@@ -5,7 +5,7 @@ import MatchingTable from '../exercises/matching-table';
 import ConjugationTable from './conjugation-table';
 import FillExercise from '../exercises/fill-exercise';
 import TextSelectionExercise from '../exercises/text-selection-exercise';
-import FillEmboldedTextExercise from '../exercises/verb-analysis-exercise';
+import FillEmboldedTextExercise from '../exercises/fill-embolded-text-exercise';
 import { SentenceDiagrammingExercise } from '../exercises/sentence-diagramming-exercise';
 import MultipleChoiceExercise from '../exercises/multiple-choice-exercise';
 import OddOneOutExercise from '../exercises/odd-one-out-exercise';
