@@ -51,11 +51,36 @@ export async function POST(request: NextRequest, { params }: { params: { userId:
     const progressData = await request.json();
     const { exerciseId, score, currentPageIndex: directPageIndex, ...lessonProgressData } = progressData;
 
+    const lessonDoc = await adminDb.collection('lessons').doc(params.lessonId).get();
+    if (!lessonDoc.exists) {
+      return NextResponse.json({ error: 'Lesson not found' }, { status: 404 });
+    }
+
+    const lesson = { id: lessonDoc.id, ...lessonDoc.data() } as Lesson;
+    const isVocabLesson = lesson.type === 'vocab';
+
+    if (isVocabLesson && progressData.status === 'completed') {
+      await adminDb
+        .collection('userProgress')
+        .doc(`${params.userId}_${params.lessonId}`)
+        .set(
+          {
+            userId: params.userId,
+            lessonId: params.lessonId,
+            status: 'completed',
+            completedAt: new Date().toISOString(),
+            score: score || progressData.score,
+            lastAccessedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+
+      return NextResponse.json({ success: true });
+    }
+
     if (exerciseId && typeof score === 'number') {
-      const [progressDoc, lessonDoc] = await Promise.all([
-        adminDb.collection('userProgress').doc(`${params.userId}_${params.lessonId}`).get(),
-        adminDb.collection('lessons').doc(params.lessonId).get(),
-      ]);
+      const progressDoc = await adminDb.collection('userProgress').doc(`${params.userId}_${params.lessonId}`).get();
 
       const existingData = progressDoc.exists ? progressDoc.data() : {};
       const exerciseProgress = existingData?.exerciseProgress || [];
@@ -73,33 +98,26 @@ export async function POST(request: NextRequest, { params }: { params: { userId:
         exerciseProgress.push(newExerciseProgress);
       }
 
-      // Update currentPageIndex when advancing to new furthest page
       let currentPageIndex = existingData?.currentPageIndex || 0;
       const pageIndex = parsePageIndex(exerciseId);
-      if (pageIndex !== null && lessonDoc.exists) {
-        const lesson = { id: lessonDoc.id, ...lessonDoc.data() } as Lesson;
+      if (pageIndex !== null) {
         const totalExercisesOnPage = getExerciseCountForPage(lesson, pageIndex);
         const completedExercisesOnPage = getCompletedExercisesForPage(exerciseProgress, pageIndex);
 
         if (completedExercisesOnPage.length === totalExercisesOnPage && totalExercisesOnPage > 0) {
-          // All exercises on this page are complete, advance to next page
           const nextPageIndex = pageIndex + 1;
           currentPageIndex = Math.max(currentPageIndex, nextPageIndex);
         }
       }
 
-      let computedData = {};
-      if (lessonDoc.exists) {
-        const lesson = { id: lessonDoc.id, ...lessonDoc.data() } as Lesson;
-        const totalPages = lesson.pages.length;
-        const isComplete = isLessonComplete(currentPageIndex, totalPages);
+      const totalPages = lesson.pages.length;
+      const isComplete = isLessonComplete(currentPageIndex, totalPages);
 
-        computedData = {
-          currentPageIndex,
-          status: isComplete ? 'completed' : 'in-progress',
-          lastAccessedAt: new Date().toISOString(),
-        };
-      }
+      const computedData = {
+        currentPageIndex,
+        status: isComplete ? 'completed' : 'in-progress',
+        lastAccessedAt: new Date().toISOString(),
+      };
 
       await adminDb
         .collection('userProgress')
