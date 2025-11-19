@@ -19,6 +19,7 @@ import 'swiper/css';
 import 'swiper/css/navigation';
 import { SwiperNavigation } from '@/src/components/ui/core/swiper-nav';
 import { VocabularyPracticeWidget } from '@/src/components/ui/core/VocabularyPracticeWidget';
+import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 
 const statusConfig: Record<LessonStatus, { card: string }> = {
   completed: {
@@ -62,7 +63,9 @@ const LessonCard = memo(
           <div className="relative flex items-center justify-between">
             <div className="flex-1 pr-4 min-w-0">
               <h3 className="text-xl font-serif mb-2 text-gray-900 truncate">{lesson.title}</h3>
-              <p className="text-sm text-roman-stone line-clamp-2">{lesson.description}</p>
+              <div className="text-sm text-roman-stone line-clamp-2">
+                <SimpleRichDisplay content={lesson.description || ''} />
+              </div>
             </div>
             <div className="flex-shrink-0">
               <CircularProgressButton
