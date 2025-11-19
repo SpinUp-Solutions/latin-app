@@ -104,6 +104,7 @@ export const TableEditor: React.FC = () => {
           content={editingContent.tableData.title || ''}
           onChange={value =>
             updateContent({
+              title: value,
               tableData: { ...editingContent.tableData, title: value },
             })
           }
