@@ -39,6 +39,7 @@ export const LessonBuilder: React.FC<LessonBuilderProps> = ({ initialLesson, onS
   const dispatch = useAppDispatch();
   const { currentLesson, saving } = useAppSelector(state => state.lessonEditor);
   const { pasteBulk } = useClipboard();
+  const isNewLesson = !initialLesson;
 
   useEffect(() => {
     dispatch(setLesson(initialLesson));
@@ -126,7 +127,7 @@ export const LessonBuilder: React.FC<LessonBuilderProps> = ({ initialLesson, onS
           </div>
 
           {/* Lesson Info */}
-          <LessonInfoForm lesson={currentLesson} onUpdateInfo={handleUpdateLessonInfo} />
+          <LessonInfoForm lesson={currentLesson} onUpdateInfo={handleUpdateLessonInfo} isNewLesson={isNewLesson} />
 
           {/* Pages */}
           <PageSection

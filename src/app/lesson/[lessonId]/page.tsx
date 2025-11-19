@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useGetStudentLessonsQuery } from '@/src/store/api/lessonApi';
 import LessonPlayer from '@/src/components/ui/lesson/lesson-player';
 import LessonSidebar from '@/src/components/ui/lesson/lesson-sidebar';
+import VocabSidebar from '@/src/components/ui/lesson/vocab-sidebar';
 
 export default function DynamicLessonPage() {
   const params = useParams();
@@ -92,8 +93,8 @@ export default function DynamicLessonPage() {
   }
 
   return (
-    <div className="min-h-screen bg-roman-marble">
-      <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between">
+    <div className="h-screen flex flex-col bg-roman-marble">
+      <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-2">
           <div className="w-10 h-10 rounded-full bg-roman-red flex items-center justify-center text-white font-serif">
             <span className="text-xl">L</span>
@@ -102,14 +103,15 @@ export default function DynamicLessonPage() {
         </div>
       </header>
 
-      <div className="flex">
-        <LessonSidebar currentLessonId={lessonId} className="w-80 border-r border-border bg-white" />
-        <main className="flex-1 px-6 py-8">
+      <div className="flex flex-1 overflow-hidden">
+        <LessonSidebar currentLessonId={lessonId} />
+        <main className="flex-1 overflow-y-auto px-6 py-8">
           <div className="max-w-3xl mx-auto">
             <h2 className="text-2xl font-serif text-gray-800 mb-6">{currentLesson.title}</h2>
             <LessonPlayer lesson={currentLesson} />
           </div>
         </main>
+        <VocabSidebar currentLessonId={lessonId} />
       </div>
     </div>
   );
