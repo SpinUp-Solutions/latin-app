@@ -11,7 +11,8 @@ export interface MultipleChoiceExercise extends BaseExercise {
   data: {
     question: string;
     options: MultipleChoiceOption[];
-    hint?: string; // Optional hint shown on incorrect answers
-    explanation?: string; // Optional explanation shown after correct answer
+    hint?: string;
+    explanation?: string;
+    allowMultipleSelections: boolean;
   };
 }

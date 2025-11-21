@@ -220,6 +220,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
             },
           ],
           explanation: 'This explains why the correct answer is right.',
+          allowMultipleSelections: false,
         },
       };
     case 'odd-one-out':
