@@ -1,8 +1,11 @@
 import React from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent } from '@/src/components/ui/card';
+import { Label } from '@/src/components/ui/label';
+import { Input } from '@/src/components/ui/input';
 import { Trash2, HelpCircle } from 'lucide-react';
-import { SimpleInput, SimpleTextarea } from '@/src/components/ui/form-components';
+import { SimpleTextarea } from '@/src/components/ui/form-components';
+import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 
 interface FillItem {
   text: string;
@@ -47,12 +50,14 @@ export const FillItemCard: React.FC<FillItemCardProps> = ({ item, index, onUpdat
           </div>
 
           <div>
-            <SimpleInput
-              label="Correct Answer"
+            <Label htmlFor={`answer-${index}`}>Correct Answer</Label>
+            <Input
+              type="text"
               value={item.answer}
-              onChange={value => onUpdate('answer', value)}
+              onChange={e => onUpdate('answer', e.target.value)}
               placeholder="Enter the correct answer..."
               id={`answer-${index}`}
+              className="mt-1"
             />
             <p className="text-xs text-gray-500 mt-1">Students must type this exact answer (case-insensitive)</p>
           </div>
@@ -90,7 +95,9 @@ export const FillItemCard: React.FC<FillItemCardProps> = ({ item, index, onUpdat
           <div className="mt-3 p-3 bg-gray-50 rounded border">
             <label className="block text-xs font-medium mb-2">Preview:</label>
             <div className="text-sm">
-              <div className="mb-2">{item.text || 'Question/prompt will appear here'}</div>
+              <div className="mb-2">
+                {item.text ? <SimpleRichDisplay content={item.text} /> : 'Question/prompt will appear here'}
+              </div>
               <input
                 type="text"
                 placeholder={item.hint || 'Type your answer in Latin...'}

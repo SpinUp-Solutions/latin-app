@@ -104,6 +104,7 @@ export const TableEditor: React.FC = () => {
           content={editingContent.tableData.title || ''}
           onChange={value =>
             updateContent({
+              title: value,
               tableData: { ...editingContent.tableData, title: value },
             })
           }
@@ -122,7 +123,7 @@ export const TableEditor: React.FC = () => {
       <div>
         <label className="block text-sm font-medium mb-2">Table Data</label>
 
-        <div className="border rounded-md overflow-hidden">
+        <div className="border rounded-md overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>

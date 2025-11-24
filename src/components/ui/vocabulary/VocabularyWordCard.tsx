@@ -38,34 +38,42 @@ export const VocabularyWordCard: React.FC<VocabularyWordCardProps> = ({
           </p>
 
           <div className="flex items-center gap-2 flex-wrap">
-            {word.wordType && <Badge variant="secondary">{word.wordType}</Badge>}
+            {word.wordType && (
+              <Badge variant="secondary">
+                <SimpleRichDisplay content={word.wordType} />
+              </Badge>
+            )}
             {word.grammaticalInfo && (
               <Badge variant="outline" className="text-xs">
-                {word.grammaticalInfo}
+                <SimpleRichDisplay content={word.grammaticalInfo} />
               </Badge>
             )}
             {word.gender && (
               <Badge variant="outline" className="text-xs">
-                {word.gender}
+                <SimpleRichDisplay content={word.gender} />
               </Badge>
             )}
             {word.declensionClass && (
               <Badge variant="outline" className="text-xs">
-                Dec. {word.declensionClass}
+                <SimpleRichDisplay content={`Dec. ${word.declensionClass}`} />
               </Badge>
             )}
             {word.conjugationClass && (
               <Badge variant="outline" className="text-xs">
-                Conj. {word.conjugationClass}
+                <SimpleRichDisplay content={`Conj. ${word.conjugationClass}`} />
               </Badge>
             )}
           </div>
 
-          {showSection && word.section && <div className="text-xs text-gray-500">Section: {word.section}</div>}
+          {showSection && word.section && (
+            <div className="text-xs text-gray-500">
+              Section: <SimpleRichDisplay content={word.section} />
+            </div>
+          )}
 
           {!isLesson && word.pronunciation && (
             <div className="text-sm text-gray-600">
-              <span className="font-medium">Pronunciation:</span> {word.pronunciation}
+              <span className="font-medium">Pronunciation:</span> <SimpleRichDisplay content={word.pronunciation} />
             </div>
           )}
 
@@ -75,7 +83,7 @@ export const VocabularyWordCard: React.FC<VocabularyWordCardProps> = ({
               <div className="flex flex-wrap gap-1">
                 {word.principalParts.map((part, idx) => (
                   <Badge key={idx} variant="outline" className="text-xs">
-                    {part}
+                    <SimpleRichDisplay content={part} />
                   </Badge>
                 ))}
               </div>
