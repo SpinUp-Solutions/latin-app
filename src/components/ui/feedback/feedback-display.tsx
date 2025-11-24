@@ -64,7 +64,7 @@ export const FeedbackDisplay: React.FC<FeedbackDisplayProps> = ({
               <div className="flex items-start gap-2 mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-blue-800">
                 <Check className="h-4 w-4 flex-shrink-0 mt-0.5 text-blue-600" />
                 <span className="text-sm">
-                  <SimpleRichDisplay content={`Correct answer: ${correctAnswer as string}`} />
+                  Correct answer: <span className="font-mono">{correctAnswer as string}</span>
                 </span>
               </div>
             )}

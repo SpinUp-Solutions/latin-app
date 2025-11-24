@@ -2,14 +2,16 @@ import { createApi } from '@reduxjs/toolkit/query/react';
 import { VocabularyPool, VocabularyPoolWithWords, CreatePoolRequest } from '@/src/types/vocabulary-pool';
 import { Word } from '@/src/types/admin-vocabulary';
 import { createAuthenticatedBaseQuery } from './baseQuery';
+import { buildAdvancedFilterParams, POOL_WORD_FIELDS } from '@/src/utils/wordFilters';
+import type { PoolFilters } from '@/src/hooks/useWordFilters';
 
 export const vocabularyPoolApi = createApi({
   reducerPath: 'vocabularyPoolApi',
   baseQuery: createAuthenticatedBaseQuery(),
   tagTypes: ['Pool', 'PoolList', 'AvailableWords'],
   keepUnusedDataFor: 60 * 5,
-  refetchOnMountOrArgChange: 30,
-  refetchOnFocus: true,
+  refetchOnMountOrArgChange: 300,
+  refetchOnFocus: false,
   refetchOnReconnect: true,
   endpoints: builder => ({
     getPools: builder.query<
@@ -110,18 +112,41 @@ export const vocabularyPoolApi = createApi({
       invalidatesTags: (result, error, { poolId }) => [{ type: 'Pool', id: poolId }],
     }),
 
-    getAvailableWords: builder.query<Word[], { search?: string; wordType?: string; section?: string }>({
-      query: ({ search, wordType, section }) => {
-        const params = new URLSearchParams({ limit: '100' });
-
-        if (search) params.append('search', search);
-        if (wordType && wordType !== 'all') params.append('wordType', wordType);
-        if (section && section !== 'all') params.append('section', section);
-
+    getWordsForPoolSelection: builder.query<
+      { words: Word[]; hasMore: boolean; lastWordId: string | null },
+      { filters: PoolFilters; limit?: number; lastWordId?: string | null }
+    >({
+      query: ({ filters, limit = 50, lastWordId }) => {
+        const params = buildAdvancedFilterParams(filters, {
+          select: [...POOL_WORD_FIELDS],
+          limit,
+          lastWordId: lastWordId || undefined,
+        });
         return `/admin/words?${params}`;
       },
-      transformResponse: (response: { success: boolean; data: { words: Word[] } }) => response.data.words,
+      transformResponse: (response: {
+        success: boolean;
+        data: { words: Word[]; hasMore: boolean; lastWordId: string | null };
+      }) => response.data,
       providesTags: [{ type: 'AvailableWords', id: 'LIST' }],
+      serializeQueryArgs: ({ queryArgs }) => {
+        return {
+          filters: queryArgs.filters,
+        };
+      },
+      merge: (currentCache, newResponse, { arg }) => {
+        if (arg.lastWordId) {
+          return {
+            words: [...currentCache.words, ...newResponse.words],
+            hasMore: newResponse.hasMore,
+            lastWordId: newResponse.lastWordId,
+          };
+        }
+        return newResponse;
+      },
+      forceRefetch: ({ currentArg, previousArg }) => {
+        return currentArg?.lastWordId !== previousArg?.lastWordId;
+      },
     }),
   }),
 });
@@ -134,5 +159,5 @@ export const {
   useDeletePoolMutation,
   useAddWordsToPoolMutation,
   useRemoveWordsFromPoolMutation,
-  useGetAvailableWordsQuery,
+  useGetWordsForPoolSelectionQuery,
 } = vocabularyPoolApi;

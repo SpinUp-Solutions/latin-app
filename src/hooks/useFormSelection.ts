@@ -2,7 +2,11 @@ import { useCallback } from 'react';
 import type { TableGrid, NestedTableGrid } from '@/src/types/schema-introspection';
 import type { FormSelection } from '@/src/types/exercises/base';
 import { ConjugationTableSchema } from '@/src/types/vocabulary/schemas/verb-conjugation';
-import { DeclensionTableSchema, DegreesTableSchema } from '@/src/types/vocabulary/schemas';
+import {
+  DeclensionTableSchema,
+  AdjectiveDeclensionTableSchema,
+  DegreesTableSchema,
+} from '@/src/types/vocabulary/schemas';
 import { introspectSchema } from '@/src/utils/schema-introspector';
 import { buildTableGrid } from '@/src/utils/table-builder';
 import { buildEmptyFromSchema } from '@/src/utils/schema-defaults';
@@ -39,6 +43,11 @@ export const useFormSelection = (): FormSelectionHelpers => {
     } else if (partOfSpeech === 'noun') {
       const emptyData = buildEmptyFromSchema(DeclensionTableSchema);
       const schemaNode = introspectSchema(DeclensionTableSchema);
+      const grid = buildTableGrid(schemaNode, emptyData);
+      return getAllPathsFromGrid(grid as TableGrid);
+    } else if (partOfSpeech === 'pronoun') {
+      const emptyData = buildEmptyFromSchema(AdjectiveDeclensionTableSchema);
+      const schemaNode = introspectSchema(AdjectiveDeclensionTableSchema);
       const grid = buildTableGrid(schemaNode, emptyData);
       return getAllPathsFromGrid(grid as TableGrid);
     } else if (partOfSpeech === 'adjective') {

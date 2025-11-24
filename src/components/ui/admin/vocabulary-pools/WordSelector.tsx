@@ -79,6 +79,28 @@ export const WordSelector: React.FC<WordSelectorProps> = ({ selectedWordIds, onS
     onSelectionChange(selectedWordIds.filter(id => id !== wordId));
   };
 
+  const handleLoadMore = () => {
+    if (data?.lastWordId && !isFetching) {
+      setLastWordId(data.lastWordId);
+    }
+  };
+
+  const handleApplyFilters = () => {
+    setLastWordId(null);
+  };
+
+  const handleResetFilters = () => {
+    resetFilters();
+    setLastWordId(null);
+  };
+
+  const sentinelRef = useInfiniteScroll({
+    onLoadMore: handleLoadMore,
+    hasMore,
+    loading: isFetching,
+    rootMargin: '200px',
+  });
+
   return (
     <div className="space-y-6">
       <AdvancedFiltersPanel

@@ -12,7 +12,7 @@ import { VocabularyEditor } from './content-editor/VocabularyEditor';
 import { MatchingEditor } from './content-editor/MatchingEditor';
 import { FillEditor } from './content-editor/FillEditor';
 import { TextSelectionEditor } from './content-editor/TextSelectionEditor';
-import { FillEmboldedTextEditor } from './content-editor/VerbAnalysisEditor';
+import { FillEmboldedTextEditor } from './content-editor/FillEmboldedTextEditor';
 import { SentenceDiagrammingEditor } from './content-editor/SentenceDiagrammingEditor';
 import { MultipleChoiceEditor } from './content-editor/MultipleChoiceEditor';
 import { OddOneOutEditor } from './content-editor/OddOneOutEditor';

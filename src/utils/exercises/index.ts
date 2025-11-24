@@ -1,6 +1,6 @@
 export * from './fillExercise';
 export * from './textSelectionExercise';
-export * from './verbAnalysisExercise';
+export * from './fillEmboldedTextExercise';
 export * from './matchingExercise';
 export * from './multipleChoiceExercise';
 export * from './oddOneOutExercise';

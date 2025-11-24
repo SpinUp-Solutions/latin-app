@@ -91,7 +91,9 @@ export function VocabularyViewer({ content }: VocabularyViewerProps) {
                       <SimpleRichDisplay content={currentItem.latin} />
                     </h3>
                     {currentItem.pronunciation && (
-                      <p className="text-xs text-roman-stone italic">/{currentItem.pronunciation}/</p>
+                      <p className="text-xs text-roman-stone italic">
+                        /<SimpleRichDisplay content={currentItem.pronunciation} />/
+                      </p>
                     )}
                     {currentItem.audioPath && (
                       <AudioPlayButton audioPath={currentItem.audioPath} variant="vocabulary" size="sm" />
@@ -108,7 +110,7 @@ export function VocabularyViewer({ content }: VocabularyViewerProps) {
                     </h3>
                     {currentItem.partOfSpeech && (
                       <Badge variant="secondary" className="text-xs">
-                        {currentItem.partOfSpeech}
+                        <SimpleRichDisplay content={currentItem.partOfSpeech} />
                       </Badge>
                     )}
                     {currentItem.example && (
@@ -164,14 +166,22 @@ export function VocabularyViewer({ content }: VocabularyViewerProps) {
                 <h3 className="text-xl font-serif text-roman-red">
                   <SimpleRichDisplay content={item.latin} />
                 </h3>
-                {item.pronunciation && <span className="text-sm text-roman-stone italic">/{item.pronunciation}/</span>}
+                {item.pronunciation && (
+                  <span className="text-sm text-roman-stone italic">
+                    /<SimpleRichDisplay content={item.pronunciation} />/
+                  </span>
+                )}
                 {item.audioPath && <AudioPlayButton audioPath={item.audioPath} variant="vocabulary" size="sm" />}
               </div>
               <p className="text-lg text-gray-800">
                 <SimpleRichDisplay content={item.english} />
               </p>
               <div className="flex items-center gap-2">
-                {item.partOfSpeech && <Badge variant="secondary">{item.partOfSpeech}</Badge>}
+                {item.partOfSpeech && (
+                  <Badge variant="secondary">
+                    <SimpleRichDisplay content={item.partOfSpeech} />
+                  </Badge>
+                )}
               </div>
               {item.example && (
                 <p className="text-sm text-roman-stone italic">
