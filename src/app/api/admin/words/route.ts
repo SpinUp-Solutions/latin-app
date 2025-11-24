@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
-import { Query } from 'firebase-admin/firestore';
+import { Query, FieldPath } from 'firebase-admin/firestore';
 import { VocabularyWordSchema } from '@/src/types/vocabulary/schemas';
 import { parseFormPathFromString } from '@/src/utils/exerciseFormPaths';
 import type { VerbFormPath, NounFormPath, AdjectiveFormPath } from '@/src/types/api/exercise-word-responses';
@@ -41,6 +41,24 @@ const parseSelectFields = (selectFields: string | null): string[] => {
     .filter(f => f.length > 0);
 };
 
+const shuffleArray = <T>(items: T[]): T[] => {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+};
+
+const pickPoolWordIds = (wordDocIds: string[], limitCount: number, fetchAllWords: boolean): string[] => {
+  if (fetchAllWords || limitCount >= wordDocIds.length) {
+    return [...wordDocIds];
+  }
+  const sampleSize = Math.max(1, Math.min(limitCount, wordDocIds.length));
+  const shuffled = shuffleArray(wordDocIds);
+  return shuffled.slice(0, sampleSize);
+};
+
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -61,6 +79,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const selectFields = searchParams.get('select');
     const fetchAll = searchParams.get('fetchAll') === 'true';
     const randomize = !fetchAll && searchParams.get('randomize') === 'true';
+    const poolId = searchParams.get('poolId');
 
     if (countsOnly) {
       const wordTypeCounts = await getWordTypeCounts(collection);
@@ -72,55 +91,105 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       });
     }
 
-    let query: Query = adminDb.collection(collection);
-
-    const fields = parseSelectFields(selectFields);
-    if (fields.length > 0) {
-      query = query.select(...fields);
-    }
-
-    query = query.orderBy('word');
-
-    if (wordType) {
-      query = query.where('part_of_speech', '==', wordType);
-    }
-
-    if (search) {
-      query = query.where('word', '>=', search).where('word', '<=', search + '\uf8ff');
-    }
-
-    if (wordType === 'verb') {
-      if (verbConjugation) {
-        query = query.where('conjugation', '==', verbConjugation);
-      }
-      if (isDeponent === 'true') {
-        query = query.where('is_deponent', '==', true);
-      } else if (isDeponent === 'false') {
-        query = query.where('is_deponent', '==', false);
-      }
-    } else if (wordType === 'noun' && nounDeclension) {
-      query = query.where('declension', '==', nounDeclension);
-    } else if (wordType === 'adjective' && adjectiveDeclension) {
-      query = query.where('declension', '==', adjectiveDeclension);
-    }
-
-    if (lastWordId && !fetchAll) {
-      const lastDocSnapshot = await adminDb.collection(collection).doc(lastWordId).get();
-      if (lastDocSnapshot.exists) {
-        query = query.startAfter(lastDocSnapshot);
-      }
-    }
-
+    let snapshot;
     let fetchLimit = limit;
-    if (!fetchAll) {
-      fetchLimit = randomize ? Math.min(limit * 10, 200) : limit;
-      query = query.limit(fetchLimit);
-    }
+    let poolSourceMeta: { totalIds: number; requestedCount: number } | null = null;
 
-    const snapshot = await query.get();
+    if (poolId) {
+      const poolDoc = await adminDb.collection('vocabulary_pools').doc(poolId).get();
+      if (!poolDoc.exists) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Pool not found',
+          },
+          { status: 404 }
+        );
+      }
+
+      const poolData = poolDoc.data();
+      const wordDocIds = (poolData?.wordDocIds || []) as string[];
+
+      if (wordDocIds.length === 0) {
+        snapshot = { docs: [], size: 0, empty: true };
+        poolSourceMeta = { totalIds: 0, requestedCount: 0 };
+      } else {
+        const idsToFetch = pickPoolWordIds(wordDocIds, limit, fetchAll);
+        poolSourceMeta = { totalIds: wordDocIds.length, requestedCount: idsToFetch.length };
+
+        if (idsToFetch.length === 0) {
+          snapshot = { docs: [], size: 0, empty: true };
+        } else {
+          const fields = parseSelectFields(selectFields);
+          const batches = [];
+          for (let i = 0; i < idsToFetch.length; i += 10) {
+            const chunk = idsToFetch.slice(i, i + 10);
+            let batchQuery: Query = adminDb.collection(collection).where(FieldPath.documentId(), 'in', chunk);
+            if (fields.length > 0) {
+              batchQuery = batchQuery.select(...fields);
+            }
+            batches.push(batchQuery.get());
+          }
+
+          const batchResults = await Promise.all(batches);
+          const docsFromPool = batchResults.flatMap(result => result.docs);
+          snapshot = {
+            docs: docsFromPool,
+            size: docsFromPool.length,
+            empty: docsFromPool.length === 0,
+          };
+        }
+      }
+    } else {
+      let query: Query = adminDb.collection(collection);
+
+      const fields = parseSelectFields(selectFields);
+      if (fields.length > 0) {
+        query = query.select(...fields);
+      }
+
+      query = query.orderBy('word');
+
+      if (wordType) {
+        query = query.where('part_of_speech', '==', wordType);
+      }
+
+      if (search) {
+        query = query.where('word', '>=', search).where('word', '<=', search + '\uf8ff');
+      }
+
+      if (wordType === 'verb') {
+        if (verbConjugation) {
+          query = query.where('conjugation', '==', verbConjugation);
+        }
+        if (isDeponent === 'true') {
+          query = query.where('is_deponent', '==', true);
+        } else if (isDeponent === 'false') {
+          query = query.where('is_deponent', '==', false);
+        }
+      } else if (wordType === 'noun' && nounDeclension) {
+        query = query.where('declension', '==', nounDeclension);
+      } else if (wordType === 'adjective' && adjectiveDeclension) {
+        query = query.where('declension', '==', adjectiveDeclension);
+      }
+
+      if (lastWordId && !fetchAll) {
+        const lastDocSnapshot = await adminDb.collection(collection).doc(lastWordId).get();
+        if (lastDocSnapshot.exists) {
+          query = query.startAfter(lastDocSnapshot);
+        }
+      }
+
+      if (!fetchAll) {
+        fetchLimit = randomize ? Math.min(limit * 10, 200) : limit;
+        query = query.limit(fetchLimit);
+      }
+
+      snapshot = await query.get();
+    }
 
     let docs = snapshot.docs;
-    if (randomize && docs.length > limit) {
+    if (!poolId && randomize && docs.length > limit) {
       const shuffled = [...docs].sort(() => Math.random() - 0.5);
       docs = shuffled.slice(0, limit);
     }
@@ -171,8 +240,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }
     });
 
-    const hasMore = fetchAll ? false : randomize ? false : snapshot.docs.length === fetchLimit;
-    const lastDoc = fetchAll || randomize ? null : docs[docs.length - 1];
+    const hasMore = fetchAll
+      ? false
+      : poolId
+        ? !!poolSourceMeta && poolSourceMeta.requestedCount < poolSourceMeta.totalIds
+        : randomize
+          ? false
+          : snapshot.docs.length === fetchLimit;
+    const lastDoc = fetchAll || poolId || randomize ? null : docs[docs.length - 1];
 
     return NextResponse.json({
       success: true,

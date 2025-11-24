@@ -33,7 +33,7 @@ export const VocabularyPoolSelector: React.FC<VocabularyPoolSelectorProps> = ({
 }) => {
   const dispatch = useAppDispatch();
   const filters = useAppSelector(state => state.vocabularyPools.filters);
-  const { data, isLoading: loading } = useGetPoolsQuery({ filters }, { skip: !selectedPoolId });
+  const { data, isLoading: loading } = useGetPoolsQuery({ filters });
   const pools = data?.pools ?? [];
   const [selectedPool, setSelectedPool] = useState<VocabularyPool | null>(null);
   const [showPoolPicker, setShowPoolPicker] = useState(false);

@@ -103,11 +103,7 @@ export default function AddWordsPage({ params }: AddWordsPageProps) {
         </RomanCard>
 
         {/* Word Selector */}
-        <WordSelector
-          selectedWordIds={selectedWordIds}
-          onSelectionChange={setSelectedWordIds}
-          excludeWordIds={pool.wordDocIds}
-        />
+        <WordSelector selectedWordIds={selectedWordIds} onSelectionChange={setSelectedWordIds} />
 
         {/* Action Buttons */}
         <RomanCard>

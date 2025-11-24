@@ -23,6 +23,18 @@ export const useGeneratedExerciseQuery = (
     const fetchAll = effectiveLimit === 'all';
     const numericLimit = typeof effectiveLimit === 'number' ? effectiveLimit : undefined;
 
+    if (config.wordSource === 'pool' && config.poolId) {
+      return {
+        collection: config.collection,
+        poolId: config.poolId,
+        cellPaths: config.formSelection?.selectedCellPaths || [],
+        tableType,
+        limit: fetchAll ? undefined : numericLimit,
+        fetchAll: fetchAll ? true : undefined,
+        select: selectFields,
+      };
+    }
+
     return {
       collection: config.collection,
       partOfSpeech: config.filters.partOfSpeech,
