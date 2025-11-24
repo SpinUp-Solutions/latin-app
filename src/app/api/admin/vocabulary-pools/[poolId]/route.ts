@@ -36,7 +36,24 @@ export async function GET(request: NextRequest, { params }: { params: { poolId: 
       const batches = [];
       for (let i = 0; i < wordIds.length; i += 10) {
         const batch = wordIds.slice(i, i + 10);
-        batches.push(adminDb.collection('words').where(FieldPath.documentId(), 'in', batch).get());
+        batches.push(
+          adminDb
+            .collection('words')
+            .where(FieldPath.documentId(), 'in', batch)
+            .select(
+              'word',
+              'translation',
+              'part_of_speech',
+              'gender',
+              'declension',
+              'conjugation',
+              'is_deponent',
+              'section',
+              'createdAt',
+              'updatedAt'
+            )
+            .get()
+        );
       }
 
       const batchResults = await Promise.all(batches);

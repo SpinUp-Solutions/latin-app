@@ -7,7 +7,7 @@ import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary/ind
 import { EditingCell } from '@/src/types/admin-vocabulary';
 import { parseEditingCellValue, TABLE_TYPES, TableType } from '@/src/utils/vocabUtils';
 import { SchemaTable } from './tables/SchemaTable';
-import { DeclensionTableSchema } from '@/src/types/vocabulary/schemas/declension';
+import { DeclensionTableSchema, AdjectiveDeclensionTableSchema } from '@/src/types/vocabulary/schemas/declension';
 import { ConjugationTableSchema } from '@/src/types/vocabulary/schemas/verb-conjugation';
 import { DegreesTableSchema } from '@/src/types/vocabulary/schemas/adjective';
 import { BookOpen } from 'lucide-react';
@@ -294,11 +294,7 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
       }
     }
 
-    if (
-      aiDataRecord.declension_table &&
-      currentPartOfSpeech &&
-      (currentPartOfSpeech === 'noun' || currentPartOfSpeech === 'pronoun')
-    ) {
+    if (aiDataRecord.declension_table && currentPartOfSpeech === 'noun') {
       console.log('[WordEditPanel] Declension table received:', aiDataRecord.declension_table);
       console.log('[WordEditPanel] Current declension table:', declensionTable);
 
@@ -312,6 +308,38 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
 
       console.log('[WordEditPanel] Merged declension table:', mergedDeclensionTable);
       console.log('[WordEditPanel] Dispatching initFromWord with merged declension table');
+      dispatch(initFromWord({ ...word, declension_table: mergedDeclensionTable } as VocabularyWordWithId));
+
+      const nullPathsBeforeSet = new Set(nullPathsBefore);
+      const nullPathsAfterSet = new Set(nullPathsAfter);
+
+      for (const path of nullPathsBefore) {
+        if (!nullPathsAfterSet.has(path)) {
+          fieldStatus.set(`declension_table.${path}`, 'filled');
+        }
+      }
+
+      for (const path of nullPathsAfter) {
+        if (nullPathsBeforeSet.has(path)) {
+          fieldStatus.set(`declension_table.${path}`, 'missing');
+        }
+      }
+    }
+
+    if (aiDataRecord.declension_table && currentPartOfSpeech === 'pronoun') {
+      console.log('[WordEditPanel] Pronoun declension table received:', aiDataRecord.declension_table);
+      console.log('[WordEditPanel] Current pronoun declension table:', declensionTable);
+
+      const nullPathsBefore = declensionTable ? findNullPaths(declensionTable) : [];
+
+      const mergedDeclensionTable = declensionTable
+        ? deepMergeNullValues(declensionTable, aiDataRecord.declension_table)
+        : aiDataRecord.declension_table;
+
+      const nullPathsAfter = findNullPaths(mergedDeclensionTable);
+
+      console.log('[WordEditPanel] Merged pronoun declension table:', mergedDeclensionTable);
+      console.log('[WordEditPanel] Dispatching initFromWord with merged pronoun declension table');
       dispatch(initFromWord({ ...word, declension_table: mergedDeclensionTable } as VocabularyWordWithId));
 
       const nullPathsBeforeSet = new Set(nullPathsBefore);
@@ -371,10 +399,17 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
       if (!word) return;
       const newTableErrors: string[] = [];
 
-      if (currentPartOfSpeech === 'noun' || currentPartOfSpeech === 'pronoun') {
+      if (currentPartOfSpeech === 'noun') {
         const result = DeclensionTableSchema.safeParse(declensionTable);
         if (!result.success) {
           newTableErrors.push(result.error.issues[0]?.message ?? 'Invalid declension table');
+        }
+      }
+
+      if (currentPartOfSpeech === 'pronoun') {
+        const result = AdjectiveDeclensionTableSchema.safeParse(declensionTable);
+        if (!result.success) {
+          newTableErrors.push(result.error.issues[0]?.message ?? 'Invalid pronoun declension table');
         }
       }
 
@@ -513,13 +548,34 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
               <BaseWordForm />
               {renderPosForm()}
 
-              {(word?.part_of_speech === 'noun' || word?.part_of_speech === 'pronoun') && (
+              {word?.part_of_speech === 'noun' && (
                 <SchemaTable
                   schema={DeclensionTableSchema}
                   data={declensionTable}
                   tableType={TABLE_TYPES.DECLENSION}
                   title="Declension Table"
                   color="text-blue-700"
+                  isExpanded={isEditTableExpanded(TABLE_TYPES.DECLENSION)}
+                  onToggle={() => toggleEditTableExpansion(TABLE_TYPES.DECLENSION)}
+                  isEditMode={true}
+                  editingCell={editingCell}
+                  editingCellValue={editingCellValue}
+                  editCallbacks={{
+                    onCellDoubleClick: handleCellDoubleClick,
+                    onCellEditSave: handleCellEditSave,
+                    onCellEditCancel: handleCellEditCancel,
+                    onEditingCellValueChange: setEditingCellValue,
+                  }}
+                />
+              )}
+
+              {word?.part_of_speech === 'pronoun' && (
+                <SchemaTable
+                  schema={AdjectiveDeclensionTableSchema}
+                  data={declensionTable}
+                  tableType={TABLE_TYPES.DECLENSION}
+                  title="Pronoun Declension Table"
+                  color="text-indigo-700"
                   isExpanded={isEditTableExpanded(TABLE_TYPES.DECLENSION)}
                   onToggle={() => toggleEditTableExpansion(TABLE_TYPES.DECLENSION)}
                   isEditMode={true}

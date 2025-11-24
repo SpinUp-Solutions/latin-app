@@ -110,12 +110,6 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
           </div>
 
           <div className="mb-6">
-            <div className="text-xs text-gray-400 mb-2">
-              <div>Page ID: {currentPage.id}</div>
-              <div>Audio path: {currentPage.audioPath || 'none'}</div>
-              <div>Playing: {isPlaying ? 'Yes' : 'No'}</div>
-            </div>
-
             <div className="lesson-content">
               <AnimatePresence mode="wait">
                 <PageTemplate

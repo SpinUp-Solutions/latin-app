@@ -1,12 +1,14 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Button } from '@/src/components/ui/button';
-import { Input } from '@/src/components/ui/input';
 import { Label } from '@/src/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { Card, CardContent } from '@/src/components/ui/card';
 import { Badge } from '@/src/components/ui/badge';
-import { Search, Plus, X } from 'lucide-react';
+import { Plus, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
+import { AdvancedFiltersPanel } from '@/src/components/ui/admin/vocabulary/AdvancedFiltersPanel';
+import { useWordFilters } from '@/src/hooks/useWordFilters';
+import { useGetWordsForPoolSelectionQuery } from '@/src/store/api/vocabularyPoolApi';
+import { useInfiniteScroll } from '@/src/hooks/useInfiniteScroll';
 import type { Word } from '@/src/types/admin-vocabulary';
 
 interface WordSelectorProps {
@@ -22,53 +24,38 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
   excludeWordIds = [],
   maxSelection,
 }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [wordTypeFilter, setWordTypeFilter] = useState('all');
-  const [availableWords, setAvailableWords] = useState<Word[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [filtersExpanded, setFiltersExpanded] = useState(true);
+  const [lastWordId, setLastWordId] = useState<string | null>(null);
 
-  const searchWords = async () => {
-    setLoading(true);
-    setError(null);
+  const { filters, debouncedFilters, updateFilters, resetFilters } = useWordFilters();
 
-    try {
-      const params = new URLSearchParams({ limit: '100' });
+  const { data, isLoading, isFetching } = useGetWordsForPoolSelectionQuery({
+    filters: debouncedFilters,
+    limit: 50,
+    lastWordId,
+  });
 
-      if (searchQuery.trim()) {
-        params.append('search', searchQuery.trim());
+  const availableWords = useMemo(() => data?.words || [], [data?.words]);
+  const hasMore = data?.hasMore || false;
+
+  const filteredWords = useMemo(
+    () => availableWords.filter(word => !excludeWordIds.includes(word.id) && !selectedWordIds.includes(word.id)),
+    [availableWords, excludeWordIds, selectedWordIds]
+  );
+
+  const selectedWordsMap = useMemo(() => {
+    const map = new Map<string, Word>();
+    availableWords.forEach(word => {
+      if (selectedWordIds.includes(word.id)) {
+        map.set(word.id, word);
       }
-
-      if (wordTypeFilter && wordTypeFilter !== 'all') {
-        params.append('wordType', wordTypeFilter);
-      }
-
-      const response = await fetch(`/api/admin/words?${params}`);
-      const data = await response.json();
-
-      if (data.success) {
-        setAvailableWords(data.data.words);
-      } else {
-        setError(data.error || 'Failed to load words');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    searchWords();
-  }, [searchQuery, wordTypeFilter]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const filteredWords = useMemo(() => {
-    return availableWords.filter(word => !excludeWordIds.includes(word.id) && !selectedWordIds.includes(word.id));
-  }, [availableWords, excludeWordIds, selectedWordIds]);
+    });
+    return map;
+  }, [availableWords, selectedWordIds]);
 
   const selectedWords = useMemo(() => {
-    return availableWords.filter(word => selectedWordIds.includes(word.id));
-  }, [availableWords, selectedWordIds]);
+    return selectedWordIds.map(id => selectedWordsMap.get(id)).filter((word): word is Word => word !== undefined);
+  }, [selectedWordIds, selectedWordsMap]);
 
   const handleAddWord = (wordId: string) => {
     if (maxSelection && selectedWordIds.length >= maxSelection) {
@@ -81,55 +68,67 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
     onSelectionChange(selectedWordIds.filter(id => id !== wordId));
   };
 
+  const handleLoadMore = () => {
+    if (data?.lastWordId && !isFetching) {
+      setLastWordId(data.lastWordId);
+    }
+  };
+
+  const handleApplyFilters = () => {
+    setLastWordId(null);
+  };
+
+  const handleResetFilters = () => {
+    resetFilters();
+    setLastWordId(null);
+  };
+
+  const sentinelRef = useInfiniteScroll({
+    onLoadMore: handleLoadMore,
+    hasMore,
+    loading: isFetching,
+    rootMargin: '200px',
+  });
+
   return (
     <div className="space-y-6">
-      {/* Search Section */}
       <RomanCard>
         <RomanCardContent className="p-4">
           <div className="space-y-4">
-            <Label className="text-base font-medium">Search Words</Label>
-
-            <div className="space-y-4">
-              <div className="flex gap-4">
-                <div className="flex-1 relative">
-                  <Search className="h-4 w-4 absolute left-3 top-3 text-gray-400" />
-                  <Input
-                    placeholder="Search by word or translation..."
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-
-                <Select value={wordTypeFilter} onValueChange={setWordTypeFilter}>
-                  <SelectTrigger className="w-48">
-                    <SelectValue placeholder="All Types" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Types</SelectItem>
-                    <SelectItem value="noun">Noun</SelectItem>
-                    <SelectItem value="verb">Verb</SelectItem>
-                    <SelectItem value="adjective">Adjective</SelectItem>
-                    <SelectItem value="adverb">Adverb</SelectItem>
-                    <SelectItem value="preposition">Preposition</SelectItem>
-                    <SelectItem value="pronoun">Pronoun</SelectItem>
-                    <SelectItem value="conjunction">Conjunction</SelectItem>
-                    <SelectItem value="interjection">Interjection</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="flex items-center justify-between">
+              <Label className="text-base font-medium">Filters</Label>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setFiltersExpanded(!filtersExpanded)}
+                className="text-gray-600">
+                {filtersExpanded ? (
+                  <>
+                    <ChevronUp className="h-4 w-4 mr-1" />
+                    Collapse
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="h-4 w-4 mr-1" />
+                    Expand
+                  </>
+                )}
+              </Button>
             </div>
 
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                <p className="text-red-600 text-sm">{error}</p>
-              </div>
+            {filtersExpanded && (
+              <AdvancedFiltersPanel
+                filters={filters}
+                onFiltersChange={updateFilters}
+                onReset={handleResetFilters}
+                onApply={handleApplyFilters}
+                isLoading={isLoading}
+              />
             )}
           </div>
         </RomanCardContent>
       </RomanCard>
 
-      {/* Available Words */}
       <RomanCard>
         <RomanCardContent className="p-4">
           <div className="space-y-4">
@@ -142,7 +141,7 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
               )}
             </div>
 
-            {loading ? (
+            {isLoading && !isFetching && lastWordId === null ? (
               <div className="text-center py-8">
                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-roman-red mx-auto mb-2" />
                 <p className="text-sm text-gray-600">Loading words...</p>
@@ -152,42 +151,51 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
                 <p>No words found matching your criteria.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-64 overflow-y-auto">
-                {filteredWords.map(word => (
-                  <Card
-                    key={word.id}
-                    className="cursor-pointer hover:bg-gray-50 transition-colors"
-                    onClick={() => handleAddWord(word.id)}>
-                    <CardContent className="p-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm truncate">{word.word}</div>
-                          <div className="text-xs text-gray-600 truncate">{word.translation}</div>
-                          <Badge variant="outline" className="text-xs mt-1">
-                            {word.wordType}
-                          </Badge>
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-96 overflow-y-auto">
+                  {filteredWords.map(word => (
+                    <Card
+                      key={word.id}
+                      className="cursor-pointer hover:bg-gray-50 transition-colors"
+                      onClick={() => handleAddWord(word.id)}>
+                      <CardContent className="p-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm truncate">{word.word}</div>
+                            <div className="text-xs text-gray-600 truncate">{word.translation}</div>
+                            <Badge variant="outline" className="text-xs mt-1">
+                              {word.wordType}
+                            </Badge>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={e => {
+                              e.stopPropagation();
+                              handleAddWord(word.id);
+                            }}
+                            disabled={maxSelection ? selectedWordIds.length >= maxSelection : false}>
+                            <Plus className="h-3 w-3" />
+                          </Button>
                         </div>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={e => {
-                            e.stopPropagation();
-                            handleAddWord(word.id);
-                          }}
-                          disabled={maxSelection ? selectedWordIds.length >= maxSelection : false}>
-                          <Plus className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                {hasMore && <div ref={sentinelRef} className="h-4" />}
+
+                {isFetching && lastWordId && (
+                  <div className="flex justify-center pt-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-roman-red" />
+                  </div>
+                )}
+              </>
             )}
           </div>
         </RomanCardContent>
       </RomanCard>
 
-      {/* Selected Words */}
       {selectedWordIds.length > 0 && (
         <RomanCard>
           <RomanCardContent className="p-4">

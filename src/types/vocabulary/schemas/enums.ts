@@ -16,7 +16,6 @@ export const WordTypeSchema = z.enum(['core']);
 export const PronounTypeSchema = z.enum([
   'personal',
   'reflexive',
-  'possessive',
   'demonstrative',
   'intensive',
   'relative',
