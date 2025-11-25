@@ -66,16 +66,16 @@ export const parseFormPathFromString = (
 
   if (tableType === 'declension') {
     if (parts.length === 2) {
-      return createNounFormPath(parts[0], parts[1]);
+      return createNounFormPath(parts[1], parts[0]);
     }
   }
 
   if (tableType === 'adjective-declension') {
     if (parts.length === 4) {
-      return createAdjectiveFormPath(parts[0], parts[1], parts[2], parts[3]);
+      return createAdjectiveFormPath(parts[0], parts[2], parts[3], parts[1]);
     }
     if (parts.length === 2) {
-      return createNounFormPath(parts[0], parts[1]);
+      return createNounFormPath(parts[1], parts[0]);
     }
   }
 
