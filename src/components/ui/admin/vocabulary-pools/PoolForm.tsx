@@ -8,10 +8,10 @@ import { Badge } from '@/src/components/ui/badge';
 import { X, BookOpen } from 'lucide-react';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { WordSelector } from './WordSelector';
-import type { CreatePoolRequest, VocabularyPool } from '@/src/types/vocabulary-pool';
+import type { CreatePoolRequest, VocabularyPool, VocabularyPoolWithWords } from '@/src/types/vocabulary-pool';
 
 interface PoolFormProps {
-  initialData?: Partial<VocabularyPool>;
+  initialData?: Partial<VocabularyPool> | VocabularyPoolWithWords;
   onSubmit: (data: CreatePoolRequest) => Promise<boolean>;
   onCancel: () => void;
   isLoading: boolean;
@@ -181,6 +181,7 @@ export const PoolForm: React.FC<PoolFormProps> = ({ initialData, onSubmit, onCan
             <WordSelector
               selectedWordIds={formData.wordDocIds}
               onSelectionChange={wordIds => setFormData(prev => ({ ...prev, wordDocIds: wordIds }))}
+              initialSelectedWords={initialData && 'words' in initialData ? initialData.words : undefined}
             />
           </div>
 

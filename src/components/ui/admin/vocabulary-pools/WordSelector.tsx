@@ -16,6 +16,7 @@ interface WordSelectorProps {
   onSelectionChange: (wordIds: string[]) => void;
   excludeWordIds?: string[];
   maxSelection?: number;
+  initialSelectedWords?: Word[];
 }
 
 export const WordSelector: React.FC<WordSelectorProps> = ({
@@ -23,6 +24,7 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
   onSelectionChange,
   excludeWordIds = [],
   maxSelection,
+  initialSelectedWords = [],
 }) => {
   const [filtersExpanded, setFiltersExpanded] = useState(true);
   const [lastWordId, setLastWordId] = useState<string | null>(null);
@@ -38,7 +40,11 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
   const availableWords = useMemo(() => data?.words || [], [data?.words]);
   const hasMore = data?.hasMore || false;
 
-  const [selectedWordsCache, setSelectedWordsCache] = useState<Map<string, Word>>(new Map());
+  const [selectedWordsCache, setSelectedWordsCache] = useState<Map<string, Word>>(() => {
+    const cache = new Map<string, Word>();
+    initialSelectedWords.forEach(word => cache.set(word.id, word));
+    return cache;
+  });
 
   const filteredWords = useMemo(
     () => availableWords.filter(word => !excludeWordIds.includes(word.id) && !selectedWordIds.includes(word.id)),

@@ -155,6 +155,17 @@ export async function PUT(request: NextRequest, { params }: { params: { poolId: 
       updateData['metadata.tags'] = updates.tags.map((tag: string) => tag.toLowerCase().trim()).filter(Boolean);
     }
 
+    if (updates.metadata) {
+      if (updates.metadata.difficulty) {
+        updateData['metadata.difficulty'] = updates.metadata.difficulty;
+      }
+      delete updateData.metadata;
+    }
+
+    if (updates.difficulty) {
+      updateData['metadata.difficulty'] = updates.difficulty;
+    }
+
     await adminDb.collection('vocabulary_pools').doc(poolId).update(updateData);
 
     // Fetch updated document
