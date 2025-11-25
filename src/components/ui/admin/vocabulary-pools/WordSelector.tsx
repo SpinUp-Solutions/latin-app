@@ -46,9 +46,7 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
   );
 
   const selectedWords = useMemo(() => {
-    return selectedWordIds
-      .map(id => selectedWordsCache.get(id))
-      .filter((word): word is Word => word !== undefined);
+    return selectedWordIds.map(id => selectedWordsCache.get(id)).filter((word): word is Word => word !== undefined);
   }, [selectedWordIds, selectedWordsCache]);
 
   const handleAddWord = (wordId: string) => {

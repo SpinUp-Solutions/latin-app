@@ -1,10 +1,12 @@
 import React from 'react';
 import { EditorContent } from '@tiptap/react';
 import { TooltipEditorDialog } from './tooltip-editor-dialog';
+import { HyperlinkDialog } from './hyperlink-dialog';
 import { ToolbarFactory } from './toolbar-factory';
 import { useToolbarConfig } from '@/src/hooks/useToolbarConfig';
 import { useTipTapEditor } from '@/src/hooks/useTipTapEditor';
 import { useTooltipManager } from '@/src/hooks/useTooltipManager';
+import { useHyperlinkManager } from '@/src/hooks/useHyperlinkManager';
 import { getAdminExtensions } from '@/src/utils/tiptapExtensions';
 
 interface RichTextEditorProps {
@@ -22,11 +24,13 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ content, onChange, clas
   });
 
   const tooltipManager = useTooltipManager({ editor });
+  const hyperlinkManager = useHyperlinkManager({ editor });
 
   const toolbarConfig = useToolbarConfig({
     type: 'rich-text',
     editor,
     onAddTooltip: tooltipManager.handleAddTooltip,
+    onAddHyperlink: hyperlinkManager.handleAddHyperlink,
   });
 
   return (
@@ -40,6 +44,14 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ content, onChange, clas
         onRemove={tooltipManager.editingTooltip ? tooltipManager.handleRemoveTooltip : undefined}
         selectedText={tooltipManager.selectedText}
         initialData={tooltipManager.editingTooltip}
+      />
+      <HyperlinkDialog
+        isOpen={hyperlinkManager.isDialogOpen}
+        onClose={hyperlinkManager.handleCloseDialog}
+        onSave={hyperlinkManager.handleSaveHyperlink}
+        onRemove={hyperlinkManager.existingHref ? hyperlinkManager.handleRemoveHyperlink : undefined}
+        initialHref={hyperlinkManager.existingHref}
+        selectedText={hyperlinkManager.selectedText}
       />
     </div>
   );

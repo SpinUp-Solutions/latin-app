@@ -29,6 +29,7 @@ const createDefaultFormData = (word = ''): TooltipFormData => ({
   conjugationClass: '',
   grammaticalInfo: '',
   principalParts: [],
+  link: '',
 });
 
 export const transformToFormData = (data: TooltipData | null, selectedText = ''): TooltipFormData => {
@@ -50,6 +51,7 @@ export const transformToFormData = (data: TooltipData | null, selectedText = '')
     conjugationClass: data.conjugationClass || '',
     grammaticalInfo: data.grammaticalInfo || '',
     principalParts: data.principalParts || [],
+    link: data.link || '',
   };
 };
 
@@ -160,6 +162,7 @@ export const extractTooltipDataFromElement = (element: Element): TooltipData | n
     conjugationClass: element.getAttribute('conjugationClass') || '',
     grammaticalInfo: element.getAttribute('grammaticalInfo') || '',
     principalParts: principalParts ? principalParts.split(',').map(part => part.trim()) : [],
+    link: element.getAttribute('link') || '',
   };
 
   if (tooltipData.word || tooltipData.translation) {
