@@ -20,6 +20,7 @@ import {
   selectPaginationCursor,
   selectFiltersExpanded,
 } from '@/src/store/selectors/vocabularyPoolSelectors';
+import { cascadeFilterUpdates } from '@/src/utils/wordFilters';
 import type { Word } from '@/src/types/admin-vocabulary';
 import type { PoolFilters } from '@/src/types/pool-filters';
 
@@ -78,9 +79,10 @@ export const useWordSelection = () => {
 
   const handleUpdateFilters = useCallback(
     (updates: Partial<PoolFilters>) => {
-      dispatch(updateWordFilters(updates));
+      const cleanedFilters = cascadeFilterUpdates(filters, updates);
+      dispatch(updateWordFilters(cleanedFilters));
     },
-    [dispatch]
+    [dispatch, filters]
   );
 
   const handleResetFilters = useCallback(() => {

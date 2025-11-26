@@ -1,5 +1,27 @@
 import type { PoolFilters } from '@/src/types/pool-filters';
 
+export function cascadeFilterUpdates(currentFilters: PoolFilters, updates: Partial<PoolFilters>): PoolFilters {
+  if (!('partOfSpeech' in updates)) {
+    return { ...currentFilters, ...updates };
+  }
+
+  const newPos = updates.partOfSpeech;
+  const cleanedUpdates = { ...updates };
+
+  if (newPos !== 'verb') {
+    cleanedUpdates.verbConjugation = 'all';
+    cleanedUpdates.isDeponent = 'both';
+  }
+  if (newPos !== 'noun') {
+    cleanedUpdates.nounDeclension = 'all';
+  }
+  if (newPos !== 'adjective') {
+    cleanedUpdates.adjectiveDeclension = 'all';
+  }
+
+  return { ...currentFilters, ...cleanedUpdates };
+}
+
 export const POOL_WORD_FIELDS = [
   'word',
   'translation',

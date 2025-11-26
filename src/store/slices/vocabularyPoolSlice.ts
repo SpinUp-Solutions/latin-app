@@ -109,24 +109,8 @@ const vocabularyPoolSlice = createSlice({
       state.wordSelection.paginationCursor = action.payload;
     },
 
-    updateWordFilters: (state, action: PayloadAction<Partial<PoolFilters>>) => {
-      const updates = action.payload;
-      state.wordFilters = { ...state.wordFilters, ...updates };
-
-      if ('partOfSpeech' in updates) {
-        const pos = updates.partOfSpeech;
-        if (pos !== 'verb') {
-          state.wordFilters.verbConjugation = 'all';
-          state.wordFilters.isDeponent = 'both';
-        }
-        if (pos !== 'noun') {
-          state.wordFilters.nounDeclension = 'all';
-        }
-        if (pos !== 'adjective') {
-          state.wordFilters.adjectiveDeclension = 'all';
-        }
-      }
-
+    updateWordFilters: (state, action: PayloadAction<PoolFilters>) => {
+      state.wordFilters = action.payload;
       state.wordSelection.paginationCursor = null;
     },
 

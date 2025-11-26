@@ -1,15 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { skipToken } from '@reduxjs/toolkit/query';
+import { produce } from 'immer';
 import { useAppDispatch } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonEditorSlice';
 import { useGetMultiPosWordsQuery } from '@/src/store/api/advancedVocabularyApi';
 import { useFormSelectionControls } from '@/src/hooks/useFormSelection';
 import { usePoolPOSSummary } from '@/src/hooks/usePoolPOSSummary';
-import {
-  normalizeGeneratorConfig,
-  mergeGeneratorConfig,
-  DEFAULT_POS_FILTERS,
-} from '@/src/utils/exercises/generatorConfigDefaults';
+import { ensureGeneratorConfig, DEFAULT_POS_FILTERS } from '@/src/utils/exercises/generatorConfigDefaults';
 import { deriveTableTypeFromPOS } from '@/src/utils/generated/tableType';
 import { AVAILABLE_STEPS } from '@/src/config/formIdentificationSteps';
 import type {
@@ -40,7 +37,7 @@ interface GeneratedExercise extends BaseExercise {
 
 export interface UseGeneratedExerciseEditorReturn<T extends GeneratedExercise> {
   editingContent: T;
-  config: ReturnType<typeof normalizeGeneratorConfig>;
+  config: ReturnType<typeof ensureGeneratorConfig>;
   activePOS: PartOfSpeech | undefined;
   derivedFilters: GeneratorFilters;
   derivedFormSelection: FormSelection | undefined;
@@ -49,7 +46,7 @@ export interface UseGeneratedExerciseEditorReturn<T extends GeneratedExercise> {
   setIsPreviewOpen: (open: boolean) => void;
   posSummary: ReturnType<typeof usePoolPOSSummary>;
   updateContent: (updates: Partial<T>) => void;
-  updateConfig: (configUpdates: Partial<ReturnType<typeof normalizeGeneratorConfig>>) => void;
+  updateConfig: (configUpdates: Partial<ReturnType<typeof ensureGeneratorConfig>>) => void;
   handlePartOfSpeechChange: (pos: GeneratorFilters['partOfSpeech']) => void;
   handleFiltersChange: (updates: Partial<GeneratorFilters>) => void;
   handleResetFilters: () => void;
@@ -76,7 +73,7 @@ export function useGeneratedExerciseEditor<T extends GeneratedExercise>(
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   const rawConfig = editingContent.data?.generatorConfig;
-  const config = useMemo(() => normalizeGeneratorConfig(rawConfig), [rawConfig]);
+  const config = useMemo(() => ensureGeneratorConfig(rawConfig), [rawConfig]);
   const isPoolWordSource = config.wordSource === 'pool';
 
   const posSummary = usePoolPOSSummary(isPoolWordSource ? config.poolId || null : null);
@@ -138,15 +135,12 @@ export function useGeneratedExerciseEditor<T extends GeneratedExercise>(
 
   const updateConfig = useCallback(
     (configUpdates: Partial<typeof config>) => {
-      const nextConfig = mergeGeneratorConfig(rawConfig, configUpdates);
-      updateContent({
-        data: {
-          ...editingContent.data,
-          generatorConfig: nextConfig,
-        },
-      } as Partial<T>);
+      const nextContent = produce(editingContent, draft => {
+        draft.data.generatorConfig = ensureGeneratorConfig({ ...rawConfig, ...configUpdates });
+      });
+      updateContent(nextContent);
     },
-    [editingContent.data, rawConfig, updateContent]
+    [editingContent, rawConfig, updateContent]
   );
 
   const handlePartOfSpeechChange = useCallback(
@@ -155,51 +149,48 @@ export function useGeneratedExerciseEditor<T extends GeneratedExercise>(
         return;
       }
 
-      const currentConfigs = editingContent.data.posConfigs ?? {};
+      const nextContent = produce(editingContent, draft => {
+        const currentConfigs = draft.data.posConfigs ?? {};
 
-      if (newPos === 'all' || !newPos) {
-        const newPosConfigs = Object.fromEntries(
-          Object.entries(currentConfigs).map(([pos, cfg]) => [pos, { ...cfg, enabled: false }])
-        );
-        updateContent({
-          data: { ...editingContent.data, posConfigs: newPosConfigs },
-        } as Partial<T>);
-        return;
-      }
-
-      const tableType = deriveTableTypeFromPOS(newPos);
-      const newPosConfigs = { ...currentConfigs };
-
-      Object.keys(newPosConfigs).forEach(pos => {
-        if (pos !== newPos) {
-          newPosConfigs[pos] = { ...newPosConfigs[pos], enabled: false };
+        if (newPos === 'all' || !newPos) {
+          Object.keys(currentConfigs).forEach(pos => {
+            currentConfigs[pos] = { ...currentConfigs[pos], enabled: false };
+          });
+          draft.data.posConfigs = currentConfigs;
+          return;
         }
-      });
 
-      const existingConfig = newPosConfigs[newPos];
+        const tableType = deriveTableTypeFromPOS(newPos);
 
-      const baseConfig = {
-        enabled: true,
-        filters: existingConfig?.filters ?? { ...DEFAULT_POS_FILTERS },
-        formSelection: tableType ? { tableType, selectedCellPaths: [] } : undefined,
-      };
+        Object.keys(currentConfigs).forEach(pos => {
+          if (pos !== newPos) {
+            currentConfigs[pos] = { ...currentConfigs[pos], enabled: false };
+          }
+        });
 
-      if (options.exerciseType === 'generated-form-identification') {
-        const existingSteps = existingConfig && 'steps' in existingConfig ? existingConfig.steps : undefined;
-        const defaultSteps = AVAILABLE_STEPS[newPos as PartOfSpeech];
-        newPosConfigs[newPos] = {
-          ...baseConfig,
-          steps: existingSteps ?? (defaultSteps ? [...defaultSteps] : []),
+        const existingConfig = currentConfigs[newPos];
+        const baseConfig = {
+          enabled: true,
+          filters: existingConfig?.filters ?? { ...DEFAULT_POS_FILTERS },
+          formSelection: tableType ? { tableType, selectedCellPaths: [] } : undefined,
         };
-      } else {
-        newPosConfigs[newPos] = baseConfig;
-      }
 
-      updateContent({
-        data: { ...editingContent.data, posConfigs: newPosConfigs },
-      } as Partial<T>);
+        if (options.exerciseType === 'generated-form-identification') {
+          const existingSteps = existingConfig && 'steps' in existingConfig ? existingConfig.steps : undefined;
+          const defaultSteps = AVAILABLE_STEPS[newPos as PartOfSpeech];
+          currentConfigs[newPos] = {
+            ...baseConfig,
+            steps: existingSteps ?? (defaultSteps ? [...defaultSteps] : []),
+          };
+        } else {
+          currentConfigs[newPos] = baseConfig;
+        }
+
+        draft.data.posConfigs = currentConfigs;
+      });
+      updateContent(nextContent);
     },
-    [editingContent.data, updateContent, options.exerciseType]
+    [editingContent, updateContent, options.exerciseType]
   );
 
   useEffect(() => {
@@ -235,41 +226,34 @@ export function useGeneratedExerciseEditor<T extends GeneratedExercise>(
 
   const handleUpdatePosConfig = useCallback(
     (pos: PartOfSpeech, updates: Partial<PosGeneratorConfig> | Partial<FormIdentificationPosConfig>) => {
-      const currentConfigs = editingContent.data.posConfigs ?? {};
       const isFormIdExercise = options.exerciseType === 'generated-form-identification';
       const tableType = deriveTableTypeFromPOS(pos);
 
-      const currentConfig =
-        currentConfigs[pos] ||
-        (isFormIdExercise
-          ? {
-              enabled: false,
-              filters: { ...DEFAULT_POS_FILTERS },
-              formSelection: tableType ? { tableType, selectedCellPaths: [] } : undefined,
-              steps: [],
-            }
-          : {
-              enabled: false,
-              filters: { ...DEFAULT_POS_FILTERS },
-              formSelection: tableType ? { tableType, selectedCellPaths: [] } : undefined,
-            });
+      const nextContent = produce(editingContent, draft => {
+        if (!draft.data.posConfigs) {
+          draft.data.posConfigs = {};
+        }
 
-      const newConfig = {
-        ...currentConfig,
-        ...updates,
-      };
+        const currentConfig =
+          draft.data.posConfigs[pos] ||
+          (isFormIdExercise
+            ? {
+                enabled: false,
+                filters: { ...DEFAULT_POS_FILTERS },
+                formSelection: tableType ? { tableType, selectedCellPaths: [] } : undefined,
+                steps: [],
+              }
+            : {
+                enabled: false,
+                filters: { ...DEFAULT_POS_FILTERS },
+                formSelection: tableType ? { tableType, selectedCellPaths: [] } : undefined,
+              });
 
-      updateContent({
-        data: {
-          ...editingContent.data,
-          posConfigs: {
-            ...currentConfigs,
-            [pos]: newConfig,
-          },
-        },
-      } as Partial<T>);
+        draft.data.posConfigs[pos] = { ...currentConfig, ...updates };
+      });
+      updateContent(nextContent);
     },
-    [editingContent.data, updateContent, options.exerciseType]
+    [editingContent, updateContent, options.exerciseType]
   );
 
   const handleTogglePOS = useCallback(
@@ -332,12 +316,10 @@ export function useGeneratedExerciseEditor<T extends GeneratedExercise>(
       }
     });
 
-    updateContent({
-      data: {
-        ...editingContent.data,
-        posConfigs: initialConfigs,
-      },
-    } as Partial<T>);
+    const nextContent = produce(editingContent, draft => {
+      draft.data.posConfigs = initialConfigs;
+    });
+    updateContent(nextContent);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPoolWordSource, posSummary.availablePOS, editingContent.data.posConfigs, updateContent, options.exerciseType]);
 
