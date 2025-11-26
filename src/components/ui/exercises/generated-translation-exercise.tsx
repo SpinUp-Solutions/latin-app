@@ -4,12 +4,11 @@ import React, { useState, useMemo } from 'react';
 import { GeneratedTranslationExercise } from '@/src/types/exercises';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
-import { useGeneratedExerciseQuery } from '@/src/hooks/useGeneratedExerciseQuery';
 import { ExerciseInput, FeedbackDisplay } from '../feedback';
 import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
-import { useGetAdvancedWordsQuery } from '@/src/store/api/advancedVocabularyApi';
+import { useGetMultiPosWordsQuery } from '@/src/store/api/advancedVocabularyApi';
 import { Card, CardContent } from '../card';
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
 import {
@@ -29,9 +28,15 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
 
   const config = exercise.data.generatorConfig;
   const translationDirection = exercise.translationDirection || 'latin-to-english';
-  const { queryArgs } = useGeneratedExerciseQuery('generated-translation', config);
 
-  const { data, isLoading, isError } = useGetAdvancedWordsQuery(queryArgs);
+  const { data, isLoading, isError } = useGetMultiPosWordsQuery({
+    exerciseType: 'generated-translation',
+    collection: config.collection,
+    wordSource: config.wordSource,
+    poolId: config.poolId,
+    count: config.count,
+    posConfigs: exercise.data.posConfigs,
+  });
 
   const items: GeneratedTranslationItem[] = useMemo(() => {
     if (!data?.words) return [];

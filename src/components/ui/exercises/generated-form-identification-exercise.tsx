@@ -4,14 +4,14 @@ import React, { useState, useMemo } from 'react';
 import { GeneratedFormIdentificationExercise } from '@/src/types/exercises/generated-form-identification';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
-import { useGeneratedExerciseQuery } from '@/src/hooks/useGeneratedExerciseQuery';
 import { ExerciseInput, FeedbackDisplay } from '../feedback';
 import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
-import { useGetAdvancedWordsQuery } from '@/src/store/api/advancedVocabularyApi';
+import { useGetMultiPosWordsQuery } from '@/src/store/api/advancedVocabularyApi';
 import { Card, CardContent } from '../card';
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
+import type { PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
 import {
   FormIdentificationItemSchema,
   type FormIdentificationItem,
@@ -34,9 +34,15 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
   const [correctAnswers, setCorrectAnswers] = useState(0);
 
   const config = exercise.data.generatorConfig;
-  const { queryArgs } = useGeneratedExerciseQuery('generated-form-identification', config);
 
-  const { data, isLoading, isError } = useGetAdvancedWordsQuery(queryArgs);
+  const { data, isLoading, isError } = useGetMultiPosWordsQuery({
+    exerciseType: 'generated-form-identification',
+    collection: config.collection,
+    wordSource: config.wordSource,
+    poolId: config.poolId,
+    count: config.count,
+    posConfigs: exercise.data.posConfigs,
+  });
 
   const items: FormIdentificationItem[] = useMemo(() => {
     if (!data?.words) return [];
@@ -44,7 +50,9 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
     const words = data.words as unknown as ExerciseWordResponse[];
 
     return words.flatMap(word => {
-      return exercise.data.steps.map(step => {
+      const steps = exercise.data.posConfigs[word.part_of_speech as PartOfSpeech]?.steps || [];
+
+      return steps.map(step => {
         const correctAnswer = extractStepValue(word, step);
         const acceptedAnswers = getAcceptedAnswersForStep(correctAnswer);
         const hint = getHintForStep(word, step);
@@ -61,7 +69,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
         };
       });
     });
-  }, [data?.words, exercise.data.steps]);
+  }, [data?.words, exercise.data]);
 
   const validatedItems = useMemo(() => {
     try {

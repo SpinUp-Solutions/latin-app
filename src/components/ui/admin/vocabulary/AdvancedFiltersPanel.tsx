@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/src/components/ui/card';
 import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
@@ -27,7 +27,7 @@ interface AdvancedFiltersPanelProps {
   };
   onFiltersChange: (updates: Partial<AdvancedFiltersPanelProps['filters']>) => void;
   onReset: () => void;
-  onApply: () => void;
+  onApply?: () => void;
   isLoading?: boolean;
 }
 
@@ -49,6 +49,16 @@ export const AdvancedFiltersPanel: React.FC<AdvancedFiltersPanelProps> = ({
   onApply,
   isLoading = false,
 }) => {
+  const isAllLimit = filters.limit === 'all';
+  const externalLimitValue =
+    typeof filters.limit === 'number' && Number.isFinite(filters.limit) ? String(filters.limit) : '';
+
+  const [localLimitValue, setLocalLimitValue] = useState(externalLimitValue);
+
+  useEffect(() => {
+    setLocalLimitValue(externalLimitValue);
+  }, [externalLimitValue]);
+
   const handlePartOfSpeechChange = (value: string) => {
     onFiltersChange({
       partOfSpeech: value as PartOfSpeech | 'all',
@@ -59,9 +69,18 @@ export const AdvancedFiltersPanel: React.FC<AdvancedFiltersPanelProps> = ({
     });
   };
 
-  const isAllLimit = filters.limit === 'all';
-  const numericLimitValue =
-    typeof filters.limit === 'number' && Number.isFinite(filters.limit) ? String(filters.limit) : '';
+  const handleLimitBlur = () => {
+    if (localLimitValue === '') {
+      onFiltersChange({ limit: 5 });
+    } else {
+      const parsed = parseInt(localLimitValue, 10);
+      if (!isNaN(parsed) && parsed > 0) {
+        onFiltersChange({ limit: parsed });
+      } else {
+        onFiltersChange({ limit: 5 });
+      }
+    }
+  };
 
   return (
     <Card className="shadow-sm">
@@ -106,9 +125,10 @@ export const AdvancedFiltersPanel: React.FC<AdvancedFiltersPanelProps> = ({
               placeholder={isAllLimit ? 'Fetching all results' : 'Number of results'}
               min={1}
               max={100}
-              value={isAllLimit ? '' : numericLimitValue}
+              value={isAllLimit ? '' : localLimitValue}
               disabled={isAllLimit}
-              onChange={e => onFiltersChange({ limit: parseInt(e.target.value, 10) || 20 })}
+              onChange={e => setLocalLimitValue(e.target.value)}
+              onBlur={handleLimitBlur}
             />
             <div className="flex items-center gap-2">
               <Checkbox
@@ -212,10 +232,12 @@ export const AdvancedFiltersPanel: React.FC<AdvancedFiltersPanelProps> = ({
         )}
 
         <div className="flex items-center gap-2 pt-4 border-t border-gray-200">
-          <Button onClick={onApply} disabled={isLoading} className="flex-1 bg-roman-red hover:bg-roman-red/90">
-            {isLoading ? 'Loading...' : 'Apply Filters'}
-          </Button>
-          <Button onClick={onReset} variant="ghost" disabled={isLoading}>
+          {onApply && (
+            <Button onClick={onApply} disabled={isLoading} className="flex-1 bg-roman-red hover:bg-roman-red/90">
+              {isLoading ? 'Loading...' : 'Apply Filters'}
+            </Button>
+          )}
+          <Button onClick={onReset} variant="ghost" disabled={isLoading} className={onApply ? '' : 'flex-1'}>
             Reset
           </Button>
         </div>

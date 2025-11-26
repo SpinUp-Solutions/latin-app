@@ -1,6 +1,12 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import { type VocabularyWordWithId } from '@/src/types/vocabulary/index';
 import type { TableType } from '@/src/utils/schema-helpers';
+import type { PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
+import type { PosConfigs, FormIdentificationPosConfigs, PosGeneratorConfig } from '@/src/types/exercises/base';
+import type { GeneratedExerciseType } from '@/src/config/exerciseSelectFields';
+import { getExerciseAdditionalFields } from '@/src/config/exerciseSelectFields';
+import { composeSelectFields } from '@/src/utils/generated/selectComposer';
+import { deriveTableTypeFromPOS } from '@/src/utils/generated/tableType';
 
 const isDev = process.env.NODE_ENV !== 'production';
 
@@ -21,17 +27,35 @@ interface GetAdvancedWordsArgs {
   poolId?: string;
 }
 
-interface GetAdvancedWordsResponse {
+export interface GetAdvancedWordsResponse {
   success: boolean;
   data: {
     words: VocabularyWordWithId[];
     hasMore: boolean;
     lastWordId: string | null;
     limit: number | null;
-    filters: Record<string, unknown>;
+    filters: Record<string, string | number | boolean>;
     collection: string;
     totalCount?: number;
   };
+}
+
+interface MultiPosQueryArgs {
+  exerciseType: GeneratedExerciseType;
+  collection: string;
+  wordSource: 'filters' | 'pool';
+  poolId?: string | null;
+  count?: number | 'all';
+  posConfigs: PosConfigs | FormIdentificationPosConfigs;
+}
+
+function shuffleArray<T>(array: T[]): T[] {
+  const result = [...array];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
 }
 
 export const advancedVocabularyApi = createApi({
@@ -158,7 +182,115 @@ export const advancedVocabularyApi = createApi({
       providesTags: [{ type: 'AdvancedWordList', id: 'LIST' }],
       keepUnusedDataFor: 60,
     }),
+    getMultiPosWords: builder.query<GetAdvancedWordsResponse['data'], MultiPosQueryArgs>({
+      async queryFn(arg, _api, _extraOptions, baseQuery) {
+        const { exerciseType, collection, wordSource, poolId, count, posConfigs } = arg;
+
+        const enabledEntries = Object.entries(posConfigs).filter(
+          (entry): entry is [PartOfSpeech, PosGeneratorConfig] => {
+            const [, cfg] = entry;
+            return cfg?.enabled === true;
+          }
+        );
+
+        if (enabledEntries.length === 0) {
+          return { data: { words: [], hasMore: false, lastWordId: null, limit: null, filters: {}, collection } };
+        }
+
+        const additionalFields = getExerciseAdditionalFields(exerciseType);
+
+        const results = await Promise.all(
+          enabledEntries.map(async ([pos, cfg]) => {
+            const selectFields = composeSelectFields(additionalFields, {
+              formSelection: cfg.formSelection,
+            });
+            const tableType = deriveTableTypeFromPOS(pos);
+
+            const params = new URLSearchParams();
+            params.append('collection', collection);
+            params.append('wordType', pos);
+
+            if (wordSource === 'pool') {
+              params.append('fetchAll', 'true');
+            } else if (count === 'all') {
+              params.append('fetchAll', 'true');
+            } else if (typeof count === 'number') {
+              params.append('limit', String(count));
+            }
+
+            if (cfg.formSelection?.selectedCellPaths && cfg.formSelection.selectedCellPaths.length > 0) {
+              params.append('cellPaths', cfg.formSelection.selectedCellPaths.join(','));
+            }
+            if (tableType) {
+              params.append('tableType', tableType);
+            }
+            if (selectFields.length > 0) {
+              params.append('select', selectFields.join(','));
+            }
+
+            console.log('[getMultiPosWords]', {
+              pos,
+              formSelection: cfg.formSelection,
+              cellPaths: cfg.formSelection?.selectedCellPaths,
+              tableType,
+              url: `/admin/words?${params.toString()}`,
+            });
+
+            if (wordSource === 'pool' && poolId) {
+              params.append('poolId', poolId);
+            } else {
+              if (pos === 'verb') {
+                if (cfg.filters.verbConjugation && cfg.filters.verbConjugation !== 'all')
+                  params.append('verbConjugation', cfg.filters.verbConjugation);
+                if (cfg.filters.isDeponent && cfg.filters.isDeponent !== 'both')
+                  params.append('isDeponent', cfg.filters.isDeponent);
+              } else if (pos === 'noun') {
+                if (cfg.filters.nounDeclension && cfg.filters.nounDeclension !== 'all')
+                  params.append('nounDeclension', cfg.filters.nounDeclension);
+              } else if (pos === 'adjective') {
+                if (cfg.filters.adjectiveDeclension && cfg.filters.adjectiveDeclension !== 'all')
+                  params.append('adjectiveDeclension', cfg.filters.adjectiveDeclension);
+              }
+              if (cfg.filters.search) params.append('search', cfg.filters.search);
+            }
+
+            return baseQuery({
+              url: `/admin/words?${params.toString()}`,
+            });
+          })
+        );
+
+        const errorResult = results.find(r => r.error);
+        if (errorResult?.error) {
+          return { error: errorResult.error };
+        }
+
+        const allWords: VocabularyWordWithId[] = [];
+        for (const result of results) {
+          if (result.data) {
+            const responseData = result.data as GetAdvancedWordsResponse;
+            allWords.push(...responseData.data.words);
+          }
+        }
+
+        const shuffled = shuffleArray(allWords);
+
+        return {
+          data: {
+            words: shuffled,
+            hasMore: false,
+            lastWordId: null,
+            limit: null,
+            filters: {},
+            collection,
+          },
+        };
+      },
+      serializeQueryArgs: ({ queryArgs }) => JSON.stringify(queryArgs),
+      providesTags: [{ type: 'AdvancedWordList', id: 'MULTI_POS' }],
+      keepUnusedDataFor: 60,
+    }),
   }),
 });
 
-export const { useGetAdvancedWordsQuery } = advancedVocabularyApi;
+export const { useGetAdvancedWordsQuery, useGetMultiPosWordsQuery } = advancedVocabularyApi;

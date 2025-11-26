@@ -15,13 +15,40 @@ export default function CreatePoolPage() {
   const [createPoolMutation, { isLoading: creating }] = useCreatePoolMutation();
 
   const handleCreatePool = async (poolData: CreatePoolRequest) => {
+    console.log('[CREATE POOL FRONTEND] Submitting pool data:', {
+      name: poolData.name,
+      descriptionLength: poolData.description.length,
+      wordCount: poolData.wordDocIds?.length || 0,
+      difficulty: poolData.difficulty,
+      tags: poolData.tags,
+    });
+
     try {
-      await createPoolMutation(poolData).unwrap();
+      const result = await createPoolMutation(poolData).unwrap();
+      console.log('[CREATE POOL FRONTEND] ✓ Pool created successfully:', result);
       toast.success('Vocabulary pool created successfully');
       router.push('/admin/vocabulary-pools');
       return true;
-    } catch {
-      toast.error('Failed to create vocabulary pool');
+    } catch (error: unknown) {
+      console.error('[CREATE POOL FRONTEND] ✗ Failed to create pool:', {
+        error,
+        errorType: error?.constructor?.name,
+        errorMessage: error && typeof error === 'object' && 'message' in error ? error.message : 'Unknown',
+        data: error && typeof error === 'object' && 'data' in error ? error.data : undefined,
+        status: error && typeof error === 'object' && 'status' in error ? error.status : undefined,
+      });
+
+      // Extract error message from RTK Query error response
+      let errorMessage = 'Failed to create vocabulary pool';
+      if (error && typeof error === 'object') {
+        if ('data' in error && error.data && typeof error.data === 'object' && 'error' in error.data) {
+          errorMessage = String(error.data.error);
+        } else if ('message' in error && typeof error.message === 'string') {
+          errorMessage = error.message;
+        }
+      }
+
+      toast.error(errorMessage);
       return false;
     }
   };

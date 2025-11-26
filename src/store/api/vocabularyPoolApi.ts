@@ -3,7 +3,14 @@ import { VocabularyPool, VocabularyPoolWithWords, CreatePoolRequest } from '@/sr
 import { Word } from '@/src/types/admin-vocabulary';
 import { createAuthenticatedBaseQuery } from './baseQuery';
 import { buildAdvancedFilterParams, POOL_WORD_FIELDS } from '@/src/utils/wordFilters';
-import type { PoolFilters } from '@/src/hooks/useWordFilters';
+import type { PoolFilters } from '@/src/types/pool-filters';
+import type { PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
+
+interface POSSummaryData {
+  summary: Record<PartOfSpeech, number>;
+  totalWords: number;
+  poolId: string;
+}
 
 export const vocabularyPoolApi = createApi({
   reducerPath: 'vocabularyPoolApi',
@@ -58,6 +65,12 @@ export const vocabularyPoolApi = createApi({
       providesTags: (result, error, poolId) => [{ type: 'Pool', id: poolId }],
     }),
 
+    getPoolPOSSummary: builder.query<POSSummaryData, string>({
+      query: poolId => `/admin/vocabulary-pools/${poolId}/pos-summary`,
+      transformResponse: (response: { success: boolean; data: POSSummaryData }) => response.data,
+      providesTags: (result, error, poolId) => [{ type: 'Pool', id: `${poolId}-pos-summary` }],
+    }),
+
     createPool: builder.mutation<VocabularyPool, CreatePoolRequest>({
       query: poolData => ({
         url: '/admin/vocabulary-pools',
@@ -99,7 +112,10 @@ export const vocabularyPoolApi = createApi({
         body: { wordDocIds },
       }),
       transformResponse: (response: { success: boolean; data: { pool: VocabularyPool } }) => response.data,
-      invalidatesTags: (result, error, { poolId }) => [{ type: 'Pool', id: poolId }],
+      invalidatesTags: (result, error, { poolId }) => [
+        { type: 'Pool', id: poolId },
+        { type: 'AvailableWords', id: 'LIST' },
+      ],
     }),
 
     removeWordsFromPool: builder.mutation<{ pool: VocabularyPool }, { poolId: string; wordDocIds: string[] }>({
@@ -109,7 +125,10 @@ export const vocabularyPoolApi = createApi({
         body: { wordDocIds },
       }),
       transformResponse: (response: { success: boolean; data: { pool: VocabularyPool } }) => response.data,
-      invalidatesTags: (result, error, { poolId }) => [{ type: 'Pool', id: poolId }],
+      invalidatesTags: (result, error, { poolId }) => [
+        { type: 'Pool', id: poolId },
+        { type: 'AvailableWords', id: 'LIST' },
+      ],
     }),
 
     getWordsForPoolSelection: builder.query<
@@ -132,12 +151,16 @@ export const vocabularyPoolApi = createApi({
       serializeQueryArgs: ({ queryArgs }) => {
         return {
           filters: queryArgs.filters,
+          limit: queryArgs.limit,
         };
       },
       merge: (currentCache, newResponse, { arg }) => {
         if (arg.lastWordId) {
+          const existingIds = new Set(currentCache.words.map(w => w.id));
+          const newWords = newResponse.words.filter(w => !existingIds.has(w.id));
+
           return {
-            words: [...currentCache.words, ...newResponse.words],
+            words: [...currentCache.words, ...newWords],
             hasMore: newResponse.hasMore,
             lastWordId: newResponse.lastWordId,
           };
@@ -145,6 +168,11 @@ export const vocabularyPoolApi = createApi({
         return newResponse;
       },
       forceRefetch: ({ currentArg, previousArg }) => {
+        if (!previousArg) return true;
+
+        const filtersChanged = JSON.stringify(currentArg?.filters) !== JSON.stringify(previousArg?.filters);
+        if (filtersChanged) return true;
+
         return currentArg?.lastWordId !== previousArg?.lastWordId;
       },
     }),
@@ -154,6 +182,7 @@ export const vocabularyPoolApi = createApi({
 export const {
   useGetPoolsQuery,
   useGetPoolQuery,
+  useGetPoolPOSSummaryQuery,
   useCreatePoolMutation,
   useUpdatePoolMutation,
   useDeletePoolMutation,

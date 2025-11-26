@@ -132,7 +132,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           }
 
           const batchResults = await Promise.all(batches);
-          const docsFromPool = batchResults.flatMap(result => result.docs);
+          let docsFromPool = batchResults.flatMap(result => result.docs);
+
+          if (wordType && wordType !== 'all') {
+            docsFromPool = docsFromPool.filter(doc => {
+              const data = doc.data();
+              return data.part_of_speech === wordType;
+            });
+          }
+
           snapshot = {
             docs: docsFromPool,
             size: docsFromPool.length,
@@ -216,6 +224,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
               formResult.path,
               tableType as 'conjugation' | 'declension' | 'adjective-declension'
             );
+            console.log('[API] Form path created:', {
+              wordId: serialized.word,
+              tableType,
+              formResultPath: formResult.path,
+              parsedFormPath: formPath,
+            });
           }
         }
 
@@ -441,16 +455,38 @@ function pickRandomFormServer(
     const fullPath = `${rootField}.${path}`;
     const forms = getCellValueAtPathServer(word, fullPath);
 
+    console.log('[pickRandomFormServer]', {
+      wordId: word.word,
+      tableType,
+      path,
+      fullPath,
+      formsFound: forms.length,
+      forms: forms.slice(0, 3),
+    });
+
     for (const form of forms) {
       formsWithPaths.push({ form, path });
     }
   }
 
   if (formsWithPaths.length === 0) {
+    console.log('[pickRandomFormServer] No forms found!', {
+      wordId: word.word,
+      tableType,
+      selectedPaths,
+      rootField,
+      hasRootField: !!word[rootField],
+    });
     return null;
   }
 
   const selected = formsWithPaths[Math.floor(Math.random() * formsWithPaths.length)];
+  console.log('[pickRandomFormServer] Selected:', {
+    wordId: word.word,
+    selectedForm: selected.form,
+    selectedPath: selected.path,
+    totalOptions: formsWithPaths.length,
+  });
   return selected;
 }
 

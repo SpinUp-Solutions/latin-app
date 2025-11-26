@@ -5,11 +5,11 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { useGetPoolQuery, useUpdatePoolMutation } from '@/src/store/api/vocabularyPoolApi';
 import { PoolForm } from '@/src/components/ui/admin/vocabulary-pools/PoolForm';
-import { PoolNotFoundPage } from '@/src/components/ui/admin/vocabulary-pools/PoolNotFoundPage';
 import { AdminLoadingPage } from '@/src/components/ui/admin/AdminLoadingPage';
 import { Button } from '@/src/components/ui/button';
-import { ArrowLeft, Library } from 'lucide-react';
+import { ArrowLeft, Library, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
+import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import type { CreatePoolRequest } from '@/src/types/vocabulary-pool';
 
 interface EditPoolPageProps {
@@ -36,7 +36,7 @@ export default function EditPoolPage({ params }: EditPoolPageProps) {
 
       await updatePoolMutation({ id: poolId, data: updateData }).unwrap();
       toast.success('Vocabulary pool updated successfully');
-      router.push(`/admin/vocabulary-pools/${poolId}`);
+      router.push('/admin/vocabulary-pools');
       return true;
     } catch {
       toast.error('Failed to update vocabulary pool');
@@ -45,7 +45,7 @@ export default function EditPoolPage({ params }: EditPoolPageProps) {
   };
 
   const handleCancel = () => {
-    router.push(`/admin/vocabulary-pools/${poolId}`);
+    router.push('/admin/vocabulary-pools');
   };
 
   if (loading) {
@@ -53,7 +53,32 @@ export default function EditPoolPage({ params }: EditPoolPageProps) {
   }
 
   if (error || !pool) {
-    return <PoolNotFoundPage poolId={poolId} error={error ? String(error) : null} />;
+    return (
+      <div className="min-h-screen bg-roman-marble">
+        <header className="bg-white border-b border-border px-4 py-3">
+          <Button asChild variant="ghost">
+            <Link href="/admin/vocabulary-pools">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Vocabulary Pools
+            </Link>
+          </Button>
+        </header>
+        <main className="container mx-auto py-6 px-4">
+          <RomanCard>
+            <RomanCardContent className="p-12 text-center">
+              <AlertCircle className="h-12 w-12 mx-auto text-red-500 mb-4" />
+              <h2 className="text-xl font-serif mb-2">Pool Not Found</h2>
+              <p className="text-gray-600 mb-4">
+                The vocabulary pool you are looking for does not exist or you do not have permission to access it.
+              </p>
+              <Button asChild>
+                <Link href="/admin/vocabulary-pools">Go to Vocabulary Pools</Link>
+              </Button>
+            </RomanCardContent>
+          </RomanCard>
+        </main>
+      </div>
+    );
   }
 
   return (
@@ -61,9 +86,9 @@ export default function EditPoolPage({ params }: EditPoolPageProps) {
       <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Button asChild variant="ghost">
-            <Link href={`/admin/vocabulary-pools/${poolId}`}>
+            <Link href="/admin/vocabulary-pools">
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Pool Details
+              Back to Vocabulary Pools
             </Link>
           </Button>
           <div className="flex items-center gap-2">

@@ -1,5 +1,7 @@
 import { ContentItem } from '../content';
 import type { TableType } from '@/src/utils/schema-helpers';
+import type { PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
+import type { FormIdentificationStep } from './schemas/form-identification';
 
 export interface FeedbackLevel {
   /** Custom message shown at this level (optional). */
@@ -93,8 +95,19 @@ export interface FormSelection {
 export interface GeneratorConfigBase {
   collection: string;
   wordSource: 'filters' | 'pool';
-  filters: GeneratorFilters;
   poolId?: string | null;
-  formSelection?: FormSelection;
   count: number | 'all';
 }
+
+export interface PosGeneratorConfig {
+  enabled: boolean;
+  filters: Omit<GeneratorFilters, 'partOfSpeech'>;
+  formSelection?: FormSelection;
+}
+
+export interface FormIdentificationPosConfig extends PosGeneratorConfig {
+  steps: FormIdentificationStep[];
+}
+
+export type PosConfigs = Partial<Record<PartOfSpeech, PosGeneratorConfig>>;
+export type FormIdentificationPosConfigs = Partial<Record<PartOfSpeech, FormIdentificationPosConfig>>;

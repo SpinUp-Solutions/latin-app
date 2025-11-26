@@ -85,40 +85,35 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
-    const { name, description, wordDocIds = [], difficulty, tags = [] }: CreatePoolRequest = await request.json();
+    const requestBody = await request.json();
+    console.log('[CREATE POOL] Received request body:', JSON.stringify(requestBody, null, 2));
 
-    // Validation
+    const { name, description, wordDocIds = [], difficulty, tags = [] }: CreatePoolRequest = requestBody;
+
+    console.log('[CREATE POOL] Parsed fields:', {
+      name,
+      description: description?.substring(0, 50) + '...',
+      wordDocIdsCount: wordDocIds.length,
+      difficulty,
+      tagsCount: tags.length,
+    });
+
     if (!name?.trim() || !description?.trim()) {
+      console.error('[CREATE POOL] Validation failed: Missing name or description');
       return NextResponse.json({ success: false, error: 'Name and description are required' }, { status: 400 });
     }
 
     if (name.length > 100) {
+      console.error('[CREATE POOL] Validation failed: Name too long', { length: name.length });
       return NextResponse.json({ success: false, error: 'Name must be less than 100 characters' }, { status: 400 });
     }
 
     if (description.length > 500) {
+      console.error('[CREATE POOL] Validation failed: Description too long', { length: description.length });
       return NextResponse.json(
         { success: false, error: 'Description must be less than 500 characters' },
         { status: 400 }
       );
-    }
-
-    // Validate word document IDs exist (if provided)
-    if (wordDocIds.length > 0) {
-      const validationPromises = wordDocIds.map(async wordId => {
-        const wordDoc = await adminDb.collection('words').doc(wordId).get();
-        return { id: wordId, exists: wordDoc.exists };
-      });
-
-      const validationResults = await Promise.all(validationPromises);
-      const invalidIds = validationResults.filter(result => !result.exists).map(result => result.id);
-
-      if (invalidIds.length > 0) {
-        return NextResponse.json(
-          { success: false, error: `Invalid word IDs: ${invalidIds.join(', ')}` },
-          { status: 400 }
-        );
-      }
     }
 
     const now = new Date();
@@ -138,9 +133,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
     };
 
+    console.log('[CREATE POOL] Attempting to write to Firestore:', {
+      name: poolData.name,
+      wordCount: poolData.metadata.wordCount,
+      difficulty: poolData.metadata.difficulty,
+      tagsCount: poolData.metadata.tags.length,
+    });
+
     const docRef = await adminDb.collection('vocabulary_pools').add(poolData);
 
-    console.log(`Vocabulary pool "${name}" created successfully`);
+    console.log(`[CREATE POOL] ✓ Successfully created pool "${name}" with ID: ${docRef.id}`);
 
     return NextResponse.json({
       success: true,
@@ -152,7 +154,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
     });
   } catch (error) {
-    console.error('Error creating vocabulary pool:', error);
+    console.error('[CREATE POOL] ✗ Error creating vocabulary pool:', {
+      error,
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      type: error?.constructor?.name,
+    });
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }

@@ -3,6 +3,8 @@ import { adminDb } from '@/src/services/firebase-admin';
 import { FieldPath } from 'firebase-admin/firestore';
 import type { Word } from '@/src/types/admin-vocabulary';
 
+const WORDS_COLLECTION = 'vocabulary_words_v4';
+
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest, { params }: { params: { poolId: string } }): Promise<NextResponse> {
@@ -38,7 +40,7 @@ export async function GET(request: NextRequest, { params }: { params: { poolId: 
         const batch = wordIds.slice(i, i + 10);
         batches.push(
           adminDb
-            .collection('words')
+            .collection(WORDS_COLLECTION)
             .where(FieldPath.documentId(), 'in', batch)
             .select(
               'word',
@@ -63,6 +65,7 @@ export async function GET(request: NextRequest, { params }: { params: { poolId: 
           words.push({
             id: doc.id,
             ...data,
+            wordType: data.part_of_speech,
             createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
             updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt,
           } as Word);
@@ -101,13 +104,6 @@ export async function PUT(request: NextRequest, { params }: { params: { poolId: 
     const { poolId } = params;
     const updates = await request.json();
 
-    // Check if pool exists
-    const poolDoc = await adminDb.collection('vocabulary_pools').doc(poolId).get();
-    if (!poolDoc.exists) {
-      return NextResponse.json({ success: false, error: 'Pool not found' }, { status: 404 });
-    }
-
-    // Validate updates
     if (updates.name && updates.name.length > 100) {
       return NextResponse.json({ success: false, error: 'Name must be less than 100 characters' }, { status: 400 });
     }
@@ -117,26 +113,6 @@ export async function PUT(request: NextRequest, { params }: { params: { poolId: 
         { success: false, error: 'Description must be less than 500 characters' },
         { status: 400 }
       );
-    }
-
-    // If updating wordDocIds, validate they exist
-    if (updates.wordDocIds && Array.isArray(updates.wordDocIds)) {
-      if (updates.wordDocIds.length > 0) {
-        const validationPromises = updates.wordDocIds.map(async (wordId: string) => {
-          const wordDoc = await adminDb.collection('words').doc(wordId).get();
-          return { id: wordId, exists: wordDoc.exists };
-        });
-
-        const validationResults = await Promise.all(validationPromises);
-        const invalidIds = validationResults.filter(result => !result.exists).map(result => result.id);
-
-        if (invalidIds.length > 0) {
-          return NextResponse.json(
-            { success: false, error: `Invalid word IDs: ${invalidIds.join(', ')}` },
-            { status: 400 }
-          );
-        }
-      }
     }
 
     const updateData: Record<string, unknown> = {
@@ -168,27 +144,14 @@ export async function PUT(request: NextRequest, { params }: { params: { poolId: 
 
     await adminDb.collection('vocabulary_pools').doc(poolId).update(updateData);
 
-    // Fetch updated document
-    const updatedDoc = await adminDb.collection('vocabulary_pools').doc(poolId).get();
-    const updatedData = updatedDoc.data();
-
-    if (!updatedData) {
-      return NextResponse.json({ success: false, error: 'Pool data not found' }, { status: 404 });
-    }
-
     console.log(`Vocabulary pool ${poolId} updated successfully`);
 
     return NextResponse.json({
       success: true,
       data: {
         pool: {
-          id: updatedDoc.id,
-          ...updatedData,
-          metadata: {
-            ...updatedData.metadata,
-            createdAt: updatedData.metadata.createdAt.toDate(),
-            updatedAt: updatedData.metadata.updatedAt.toDate(),
-          },
+          id: poolId,
+          ...updates,
         },
       },
     });
@@ -205,13 +168,6 @@ export async function DELETE(request: NextRequest, { params }: { params: { poolI
   try {
     const { poolId } = params;
 
-    // Check if pool exists
-    const poolDoc = await adminDb.collection('vocabulary_pools').doc(poolId).get();
-    if (!poolDoc.exists) {
-      return NextResponse.json({ success: false, error: 'Pool not found' }, { status: 404 });
-    }
-
-    // Check if pool is used by any lessons
     const lessonsQuery = await adminDb.collection('lessons').where('vocabulary_pool', '==', poolId).limit(1).get();
 
     if (!lessonsQuery.empty) {

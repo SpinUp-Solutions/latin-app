@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect } from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Label } from '@/src/components/ui/label';
 import { Card, CardContent } from '@/src/components/ui/card';
@@ -6,107 +6,58 @@ import { Badge } from '@/src/components/ui/badge';
 import { Plus, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { AdvancedFiltersPanel } from '@/src/components/ui/admin/vocabulary/AdvancedFiltersPanel';
-import { useWordFilters } from '@/src/hooks/useWordFilters';
-import { useGetWordsForPoolSelectionQuery } from '@/src/store/api/vocabularyPoolApi';
+import { useWordSelection } from '@/src/hooks/useWordSelection';
 import { useInfiniteScroll } from '@/src/hooks/useInfiniteScroll';
 import type { Word } from '@/src/types/admin-vocabulary';
 
 interface WordSelectorProps {
-  selectedWordIds: string[];
-  onSelectionChange: (wordIds: string[]) => void;
-  excludeWordIds?: string[];
   maxSelection?: number;
   initialSelectedWords?: Word[];
+  initialSelectedIds?: string[];
 }
 
 export const WordSelector: React.FC<WordSelectorProps> = ({
-  selectedWordIds,
-  onSelectionChange,
-  excludeWordIds = [],
   maxSelection,
   initialSelectedWords = [],
+  initialSelectedIds = [],
 }) => {
-  const [filtersExpanded, setFiltersExpanded] = useState(true);
-  const [lastWordId, setLastWordId] = useState<string | null>(null);
+  const {
+    selectedIds,
+    selectedWords,
+    availableWords,
+    filters,
+    filtersExpanded,
+    hasMore,
+    isLoading,
+    isFetching,
+    addWord,
+    addAllVisible,
+    removeWord,
+    loadMore,
+    updateFilters,
+    resetFilters,
+    initialize,
+    toggleFilters,
+  } = useWordSelection();
 
-  const { filters, debouncedFilters, updateFilters, resetFilters } = useWordFilters();
-
-  const { data, isLoading, isFetching } = useGetWordsForPoolSelectionQuery({
-    filters: debouncedFilters,
-    limit: 50,
-    lastWordId,
-  });
-
-  const availableWords = useMemo(() => data?.words || [], [data?.words]);
-  const hasMore = data?.hasMore || false;
-
-  const [selectedWordsCache, setSelectedWordsCache] = useState<Map<string, Word>>(() => {
-    const cache = new Map<string, Word>();
-    initialSelectedWords.forEach(word => cache.set(word.id, word));
-    return cache;
-  });
-
-  const filteredWords = useMemo(
-    () => availableWords.filter(word => !excludeWordIds.includes(word.id) && !selectedWordIds.includes(word.id)),
-    [availableWords, excludeWordIds, selectedWordIds]
-  );
-
-  const selectedWords = useMemo(() => {
-    return selectedWordIds.map(id => selectedWordsCache.get(id)).filter((word): word is Word => word !== undefined);
-  }, [selectedWordIds, selectedWordsCache]);
-
-  const handleAddWord = (wordId: string) => {
-    if (!selectedWordIds.includes(wordId)) {
-      const word = availableWords.find(w => w.id === wordId);
-      if (word) {
-        setSelectedWordsCache(prev => new Map(prev).set(wordId, word));
-      }
-      onSelectionChange([...selectedWordIds, wordId]);
+  useEffect(() => {
+    if (initialSelectedIds.length > 0 || initialSelectedWords.length > 0) {
+      initialize(
+        initialSelectedIds.length > 0 ? initialSelectedIds : initialSelectedWords.map(w => w.id),
+        initialSelectedWords
+      );
     }
-  };
-
-  const handleAddAllWords = () => {
-    const newWords = filteredWords.filter(w => !selectedWordIds.includes(w.id));
-    if (newWords.length > 0) {
-      setSelectedWordsCache(prev => {
-        const next = new Map(prev);
-        newWords.forEach(word => next.set(word.id, word));
-        return next;
-      });
-      onSelectionChange([...selectedWordIds, ...newWords.map(w => w.id)]);
-    }
-  };
-
-  const handleRemoveWord = (wordId: string) => {
-    setSelectedWordsCache(prev => {
-      const next = new Map(prev);
-      next.delete(wordId);
-      return next;
-    });
-    onSelectionChange(selectedWordIds.filter(id => id !== wordId));
-  };
-
-  const handleLoadMore = () => {
-    if (data?.lastWordId && !isFetching) {
-      setLastWordId(data.lastWordId);
-    }
-  };
-
-  const handleApplyFilters = () => {
-    setLastWordId(null);
-  };
-
-  const handleResetFilters = () => {
-    resetFilters();
-    setLastWordId(null);
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const sentinelRef = useInfiniteScroll({
-    onLoadMore: handleLoadMore,
+    onLoadMore: loadMore,
     hasMore,
     loading: isFetching,
     rootMargin: '200px',
   });
+
+  const canAddMore = !maxSelection || selectedIds.length < maxSelection;
 
   return (
     <div className="space-y-6">
@@ -115,11 +66,7 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <Label className="text-base font-medium">Filters</Label>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setFiltersExpanded(!filtersExpanded)}
-                className="text-gray-600">
+              <Button variant="ghost" size="sm" onClick={toggleFilters} className="text-gray-600">
                 {filtersExpanded ? (
                   <>
                     <ChevronUp className="h-4 w-4 mr-1" />
@@ -138,8 +85,7 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
               <AdvancedFiltersPanel
                 filters={filters}
                 onFiltersChange={updateFilters}
-                onReset={handleResetFilters}
-                onApply={handleApplyFilters}
+                onReset={resetFilters}
                 isLoading={isLoading}
               />
             )}
@@ -151,31 +97,31 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
         <RomanCardContent className="p-4">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <Label className="text-base font-medium">Filtered Results ({filteredWords.length})</Label>
-              {filteredWords.length > 0 && (
-                <Button onClick={handleAddAllWords} size="sm" variant="outline">
+              <Label className="text-base font-medium">Filtered Results ({availableWords.length})</Label>
+              {availableWords.length > 0 && canAddMore && (
+                <Button onClick={addAllVisible} size="sm" variant="outline">
                   Add All Results
                 </Button>
               )}
             </div>
 
-            {isLoading && !isFetching && lastWordId === null ? (
+            {isLoading && !isFetching ? (
               <div className="text-center py-8">
                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-roman-red mx-auto mb-2" />
                 <p className="text-sm text-gray-600">Loading words...</p>
               </div>
-            ) : filteredWords.length === 0 ? (
+            ) : availableWords.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 <p>No words found matching your criteria.</p>
               </div>
             ) : (
               <div className="max-h-96 overflow-y-auto">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {filteredWords.map(word => (
+                  {availableWords.map(word => (
                     <Card
                       key={word.id}
                       className="cursor-pointer hover:bg-gray-50 transition-colors"
-                      onClick={() => handleAddWord(word.id)}>
+                      onClick={() => canAddMore && addWord(word)}>
                       <CardContent className="p-3">
                         <div className="flex items-center justify-between">
                           <div className="flex-1 min-w-0">
@@ -190,9 +136,9 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
                             variant="ghost"
                             onClick={e => {
                               e.stopPropagation();
-                              handleAddWord(word.id);
+                              if (canAddMore) addWord(word);
                             }}
-                            disabled={maxSelection ? selectedWordIds.length >= maxSelection : false}>
+                            disabled={!canAddMore}>
                             <Plus className="h-3 w-3" />
                           </Button>
                         </div>
@@ -201,7 +147,7 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
                   ))}
                 </div>
                 {hasMore && <div ref={sentinelRef} className="h-4" />}
-                {isFetching && lastWordId && (
+                {isFetching && (
                   <div className="flex justify-center pt-4">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-roman-red" />
                   </div>
@@ -212,11 +158,11 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
         </RomanCardContent>
       </RomanCard>
 
-      {selectedWordIds.length > 0 && (
+      {selectedIds.length > 0 && (
         <RomanCard>
           <RomanCardContent className="p-4">
             <div className="space-y-4">
-              <Label className="text-base font-medium">Pool Words ({selectedWordIds.length})</Label>
+              <Label className="text-base font-medium">Pool Words ({selectedIds.length})</Label>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-48 overflow-y-auto">
                 {selectedWords.map(word => (
@@ -233,7 +179,7 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => handleRemoveWord(word.id)}
+                          onClick={() => removeWord(word.id)}
                           className="text-red-600 hover:text-red-700">
                           <X className="h-3 w-3" />
                         </Button>

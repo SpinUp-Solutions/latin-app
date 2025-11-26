@@ -1,4 +1,4 @@
-import type { PoolFilters } from '@/src/hooks/useWordFilters';
+import type { PoolFilters } from '@/src/types/pool-filters';
 
 export const POOL_WORD_FIELDS = [
   'word',

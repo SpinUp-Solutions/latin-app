@@ -1,4 +1,12 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import type { Word } from '@/src/types/admin-vocabulary';
+import type { PoolFilters } from '@/src/types/pool-filters';
+
+interface WordSelectionState {
+  selectedIds: string[];
+  selectedWordsMap: Record<string, Word>;
+  paginationCursor: string | null;
+}
 
 interface VocabularyPoolState {
   filters: {
@@ -10,9 +18,10 @@ interface VocabularyPoolState {
     sortOrder: 'asc' | 'desc';
   };
   wordSearchQuery: string;
-  wordFilters: {
-    wordType: string;
-    section: string;
+  wordFilters: PoolFilters;
+  wordSelection: WordSelectionState;
+  ui: {
+    filtersExpanded: boolean;
   };
 }
 
@@ -27,8 +36,20 @@ const initialState: VocabularyPoolState = {
   },
   wordSearchQuery: '',
   wordFilters: {
-    wordType: 'all',
-    section: 'all',
+    partOfSpeech: 'all',
+    search: '',
+    verbConjugation: 'all',
+    isDeponent: 'both',
+    nounDeclension: 'all',
+    adjectiveDeclension: 'all',
+  },
+  wordSelection: {
+    selectedIds: [],
+    selectedWordsMap: {},
+    paginationCursor: null,
+  },
+  ui: {
+    filtersExpanded: true,
   },
 };
 
@@ -42,17 +63,97 @@ const vocabularyPoolSlice = createSlice({
     setWordSearchQuery: (state, action: PayloadAction<string>) => {
       state.wordSearchQuery = action.payload;
     },
-    updateWordFilters: (state, action: PayloadAction<Partial<VocabularyPoolState['wordFilters']>>) => {
-      state.wordFilters = { ...state.wordFilters, ...action.payload };
-    },
     resetFilters: state => {
       state.filters = initialState.filters;
       state.wordSearchQuery = initialState.wordSearchQuery;
       state.wordFilters = initialState.wordFilters;
     },
+
+    addWord: (state, action: PayloadAction<Word>) => {
+      const word = action.payload;
+      if (!state.wordSelection.selectedIds.includes(word.id)) {
+        state.wordSelection.selectedIds.push(word.id);
+        state.wordSelection.selectedWordsMap[word.id] = word;
+      }
+    },
+
+    addWords: (state, action: PayloadAction<Word[]>) => {
+      action.payload.forEach(word => {
+        if (!state.wordSelection.selectedIds.includes(word.id)) {
+          state.wordSelection.selectedIds.push(word.id);
+          state.wordSelection.selectedWordsMap[word.id] = word;
+        }
+      });
+    },
+
+    removeWord: (state, action: PayloadAction<string>) => {
+      const id = action.payload;
+      state.wordSelection.selectedIds = state.wordSelection.selectedIds.filter(i => i !== id);
+      delete state.wordSelection.selectedWordsMap[id];
+    },
+
+    initializeSelection: (state, action: PayloadAction<{ ids: string[]; words: Word[] }>) => {
+      state.wordSelection.selectedIds = action.payload.ids;
+      state.wordSelection.selectedWordsMap = {};
+      action.payload.words.forEach(word => {
+        state.wordSelection.selectedWordsMap[word.id] = word;
+      });
+    },
+
+    clearSelection: state => {
+      state.wordSelection.selectedIds = [];
+      state.wordSelection.selectedWordsMap = {};
+    },
+
+    setPaginationCursor: (state, action: PayloadAction<string | null>) => {
+      state.wordSelection.paginationCursor = action.payload;
+    },
+
+    updateWordFilters: (state, action: PayloadAction<Partial<PoolFilters>>) => {
+      const updates = action.payload;
+      state.wordFilters = { ...state.wordFilters, ...updates };
+
+      if ('partOfSpeech' in updates) {
+        const pos = updates.partOfSpeech;
+        if (pos !== 'verb') {
+          state.wordFilters.verbConjugation = 'all';
+          state.wordFilters.isDeponent = 'both';
+        }
+        if (pos !== 'noun') {
+          state.wordFilters.nounDeclension = 'all';
+        }
+        if (pos !== 'adjective') {
+          state.wordFilters.adjectiveDeclension = 'all';
+        }
+      }
+
+      state.wordSelection.paginationCursor = null;
+    },
+
+    resetWordFilters: state => {
+      state.wordFilters = initialState.wordFilters;
+      state.wordSelection.paginationCursor = null;
+    },
+
+    setFiltersExpanded: (state, action: PayloadAction<boolean>) => {
+      state.ui.filtersExpanded = action.payload;
+    },
   },
 });
 
-export const { updateFilters, setWordSearchQuery, updateWordFilters, resetFilters } = vocabularyPoolSlice.actions;
+export const {
+  updateFilters,
+  setWordSearchQuery,
+  resetFilters,
+  addWord,
+  addWords,
+  removeWord,
+  initializeSelection,
+  clearSelection,
+  setPaginationCursor,
+  updateWordFilters,
+  resetWordFilters,
+  setFiltersExpanded,
+} = vocabularyPoolSlice.actions;
 
 export default vocabularyPoolSlice.reducer;

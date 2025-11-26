@@ -1,10 +1,9 @@
-import type { BaseExercise, GeneratorConfigBase } from './base';
-import type { FormIdentificationStep } from './schemas/form-identification';
+import type { BaseExercise, GeneratorConfigBase, FormIdentificationPosConfigs } from './base';
 
 export interface GeneratedFormIdentificationExercise extends BaseExercise {
   type: 'generated-form-identification';
   data: {
     generatorConfig: GeneratorConfigBase;
-    steps: FormIdentificationStep[];
+    posConfigs: FormIdentificationPosConfigs;
   };
 }

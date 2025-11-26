@@ -1,4 +1,4 @@
-import type { BaseExercise, GeneratorConfigBase } from './base';
+import type { BaseExercise, GeneratorConfigBase, PosConfigs } from './base';
 
 export type TranslationDirection = 'latin-to-english' | 'english-to-latin';
 
@@ -7,5 +7,6 @@ export interface GeneratedTranslationExercise extends BaseExercise {
   translationDirection?: TranslationDirection;
   data: {
     generatorConfig: GeneratorConfigBase;
+    posConfigs: PosConfigs;
   };
 }

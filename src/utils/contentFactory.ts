@@ -320,17 +320,11 @@ export const createNewContent = (type: string): RenderableContentItem => {
         data: {
           generatorConfig: {
             collection: 'vocabulary_words_v4',
-            filters: {
-              partOfSpeech: 'all',
-              search: '',
-              verbConjugation: 'all',
-              isDeponent: 'both',
-              nounDeclension: 'all',
-              adjectiveDeclension: 'all',
-            },
-            formSelection: undefined,
+            wordSource: 'filters',
+            poolId: null,
             count: 5,
           },
+          posConfigs: {},
         },
       };
     case 'generated-form-identification':
@@ -345,18 +339,11 @@ export const createNewContent = (type: string): RenderableContentItem => {
         data: {
           generatorConfig: {
             collection: 'vocabulary_words_v4',
-            filters: {
-              partOfSpeech: 'all',
-              search: '',
-              verbConjugation: 'all',
-              isDeponent: 'both',
-              nounDeclension: 'all',
-              adjectiveDeclension: 'all',
-            },
-            formSelection: undefined,
+            wordSource: 'filters',
+            poolId: null,
             count: 5,
           },
-          steps: [],
+          posConfigs: {},
         },
       };
     default:
