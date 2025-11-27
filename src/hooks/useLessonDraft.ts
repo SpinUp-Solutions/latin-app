@@ -1,9 +1,6 @@
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 
 export const useBeforeUnload = (hasDraft: boolean, onNavigateAway?: () => void) => {
-  const router = useRouter();
-
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (hasDraft) {

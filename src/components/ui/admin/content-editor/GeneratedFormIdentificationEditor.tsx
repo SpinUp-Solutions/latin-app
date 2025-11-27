@@ -245,10 +245,11 @@ const GeneratedFormIdentificationEditorView: React.FC<{
                   let optionalAnswersDisplay = '';
 
                   if (isSingleField) {
-                    const basePrimaryPaths = (word.primary_form_paths || (word.form_path ? [word.form_path] : [])) as Array<
+                    const basePrimaryPaths = (word.primary_form_paths ||
+                      (word.form_path ? [word.form_path] : [])) as Array<Record<string, string | undefined>>;
+                    const baseOptionalPaths = (word.optional_form_paths || []) as Array<
                       Record<string, string | undefined>
                     >;
-                    const baseOptionalPaths = (word.optional_form_paths || []) as Array<Record<string, string | undefined>>;
 
                     const enrichPath = (path: Record<string, string | undefined>) => {
                       const enrichedPath: Record<string, string | undefined> = { ...path };

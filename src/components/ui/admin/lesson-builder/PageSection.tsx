@@ -128,7 +128,12 @@ const SortablePage: React.FC<SortablePageProps> = ({
         <PasteZone pageIndex={pageIndex} />
         <div className="flex flex-wrap gap-1.5">
           {contentTypes.map(({ type, icon: ContentIcon, label }) => (
-            <Button key={type} variant="outline" size="sm" className="h-7 text-xs px-2" onClick={() => handleAddContent(type)}>
+            <Button
+              key={type}
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs px-2"
+              onClick={() => handleAddContent(type)}>
               <ContentIcon className="h-3 w-3 mr-1" />
               {label}
             </Button>
