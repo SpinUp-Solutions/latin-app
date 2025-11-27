@@ -118,9 +118,7 @@ export function filterPathsByPreviousAnswers<T extends Record<string, string | u
       const pathValue = path[step];
       if (!pathValue) return false;
 
-      const acceptedVariants = getAcceptedAnswersForStep(pathValue).map(v =>
-        v.toLowerCase().trim()
-      );
+      const acceptedVariants = getAcceptedAnswersForStep(pathValue).map(v => v.toLowerCase().trim());
       const normalizedUserAnswer = userAnswer.toLowerCase().trim();
 
       if (!acceptedVariants.includes(normalizedUserAnswer)) return false;

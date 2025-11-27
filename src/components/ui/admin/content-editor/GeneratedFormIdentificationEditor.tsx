@@ -33,9 +33,18 @@ export const GeneratedFormIdentificationEditor: React.FC = () => {
 const GeneratedFormIdentificationEditorView: React.FC<{
   editingContent: GeneratedFormIdentificationExercise;
 }> = ({ editingContent }) => {
+  const isSingleField = editingContent.data.mode === 'single-field';
+
   const editor = useGeneratedExerciseEditor(editingContent, {
     exerciseType: 'generated-form-identification',
   });
+
+  const handleModeToggle = () => {
+    const newMode = isSingleField ? 'step-by-step' : 'single-field';
+    editor.updateContent({
+      data: { ...editingContent.data, mode: newMode },
+    });
+  };
 
   const filtersContent = (
     <div>
@@ -97,6 +106,35 @@ const GeneratedFormIdentificationEditorView: React.FC<{
 
   return (
     <div className="space-y-6">
+      <Card>
+        <CardContent className="p-4">
+          <div className="space-y-2">
+            <label className="block text-sm font-medium">Exercise Mode</label>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant={!isSingleField ? 'default' : 'outline'}
+                size="sm"
+                onClick={handleModeToggle}>
+                Step-by-Step
+              </Button>
+              <Button
+                type="button"
+                variant={isSingleField ? 'default' : 'outline'}
+                size="sm"
+                onClick={handleModeToggle}>
+                Single Field
+              </Button>
+            </div>
+            <p className="text-xs text-gray-500">
+              {isSingleField
+                ? 'Students answer all steps in one field, separated by semicolons'
+                : 'Students answer one step at a time'}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="space-y-4">
         <SimpleInput
           label="Exercise Title"
@@ -202,6 +240,47 @@ const GeneratedFormIdentificationEditorView: React.FC<{
                 {previewWords.map((word, index) => {
                   const wordWithPath = word;
                   const wordSteps = editingContent.data.posConfigs[word.part_of_speech as PartOfSpeech]?.steps || [];
+
+                  let primaryAnswersDisplay = '';
+                  let optionalAnswersDisplay = '';
+
+                  if (isSingleField) {
+                    const basePrimaryPaths = (word.primary_form_paths || (word.form_path ? [word.form_path] : [])) as Array<
+                      Record<string, string | undefined>
+                    >;
+                    const baseOptionalPaths = (word.optional_form_paths || []) as Array<Record<string, string | undefined>>;
+
+                    const enrichPath = (path: Record<string, string | undefined>) => {
+                      const enrichedPath: Record<string, string | undefined> = { ...path };
+                      wordSteps.forEach(step => {
+                        if (!enrichedPath[step]) {
+                          enrichedPath[step] = extractStepValue(wordWithPath, step);
+                        }
+                      });
+                      return enrichedPath;
+                    };
+
+                    const enrichedPrimaryPaths = basePrimaryPaths.map(enrichPath);
+                    const enrichedOptionalPaths = baseOptionalPaths.map(enrichPath);
+
+                    const primaryDisplays = enrichedPrimaryPaths
+                      .map(path => {
+                        const pathValues = wordSteps.map(step => path[step]).filter(Boolean);
+                        return pathValues.join(';');
+                      })
+                      .filter(display => display.length > 0);
+
+                    const optionalDisplays = enrichedOptionalPaths
+                      .map(path => {
+                        const pathValues = wordSteps.map(step => path[step]).filter(Boolean);
+                        return pathValues.join(';');
+                      })
+                      .filter(display => display.length > 0);
+
+                    primaryAnswersDisplay = primaryDisplays.join(' OR ');
+                    optionalAnswersDisplay = optionalDisplays.join(' OR ');
+                  }
+
                   return (
                     <Card key={index}>
                       <CardContent className="p-3 space-y-1">
@@ -210,19 +289,32 @@ const GeneratedFormIdentificationEditorView: React.FC<{
                           <div className="text-xs text-gray-500">Root: {word.root_word}</div>
                         )}
                         <div className="text-sm space-y-0.5">
-                          {wordSteps.map(step => {
-                            const stepValue = extractStepValue(wordWithPath, step);
-                            if (!stepValue) return null;
-
-                            const answers = getAcceptedAnswersForStep(stepValue);
-
-                            return (
-                              <div key={step} className="text-gray-600">
-                                <strong className="capitalize">{step}:</strong> {stepValue}{' '}
-                                {answers.length > 1 && `(or ${answers.join(', ')})`}
+                          {isSingleField ? (
+                            <>
+                              <div className="text-gray-600">
+                                <strong>Answer:</strong> {primaryAnswersDisplay}
                               </div>
-                            );
-                          })}
+                              {optionalAnswersDisplay && (
+                                <div className="text-gray-500 text-xs">
+                                  <strong>Optional:</strong> {optionalAnswersDisplay}
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            wordSteps.map(step => {
+                              const stepValue = extractStepValue(wordWithPath, step);
+                              if (!stepValue) return null;
+
+                              const answers = getAcceptedAnswersForStep(stepValue);
+
+                              return (
+                                <div key={step} className="text-gray-600">
+                                  <strong className="capitalize">{step}:</strong> {stepValue}{' '}
+                                  {answers.length > 1 && `(or ${answers.join(', ')})`}
+                                </div>
+                              );
+                            })
+                          )}
                         </div>
                       </CardContent>
                     </Card>

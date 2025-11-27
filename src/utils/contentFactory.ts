@@ -337,6 +337,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
         itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
         feedbackConfig: createDefaultFeedbackConfig(),
         data: {
+          mode: 'step-by-step',
           generatorConfig: {
             collection: 'vocabulary_words_v4',
             wordSource: 'filters',

@@ -15,8 +15,13 @@ import type { PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
 import {
   FormIdentificationItemSchema,
   type FormIdentificationItem,
+  SingleFieldFormIdentificationItemSchema,
+  type SingleFieldFormIdentificationItem,
 } from '@/src/types/exercises/schemas/form-identification';
-import { validateGeneratedFormIdentificationExercise } from '@/src/utils/exercises/generatedFormIdentificationExercise';
+import {
+  validateGeneratedFormIdentificationExercise,
+  validateSingleFieldFormIdentificationExercise,
+} from '@/src/utils/exercises/generatedFormIdentificationExercise';
 import {
   extractStepValue,
   getHintForStep,
@@ -38,6 +43,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
   const [wordAnswers, setWordAnswers] = useState<Record<string, Record<string, string>>>({});
 
   const config = exercise.data.generatorConfig;
+  const isSingleField = exercise.data.mode === 'single-field';
 
   const { data, isLoading, isError } = useGetMultiPosWordsQuery({
     exerciseType: 'generated-form-identification',
@@ -48,16 +54,72 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
     posConfigs: exercise.data.posConfigs,
   });
 
-  const items: FormIdentificationItem[] = useMemo(() => {
+  const items: (FormIdentificationItem | SingleFieldFormIdentificationItem)[] = useMemo(() => {
     if (!data?.words) return [];
 
     const words = data.words as unknown as ExerciseWordResponse[];
+
+    if (isSingleField) {
+      return words.map(word => {
+        const posConfig = exercise.data.posConfigs[word.part_of_speech as PartOfSpeech];
+        const steps = posConfig?.steps || [];
+
+        const basePrimaryPaths = (word.primary_form_paths || (word.form_path ? [word.form_path] : [])) as Array<
+          Record<string, string | undefined>
+        >;
+        const baseOptionalPaths = (word.optional_form_paths || []) as Array<Record<string, string | undefined>>;
+
+        const enrichedPrimaryPaths = basePrimaryPaths.map(path => {
+          const enrichedPath: Record<string, string | undefined> = { ...path };
+          steps.forEach(step => {
+            if (!enrichedPath[step]) {
+              enrichedPath[step] = extractStepValue(word, step);
+            }
+          });
+          return enrichedPath;
+        });
+
+        const enrichedOptionalPaths = baseOptionalPaths.map(path => {
+          const enrichedPath: Record<string, string | undefined> = { ...path };
+          steps.forEach(step => {
+            if (!enrichedPath[step]) {
+              enrichedPath[step] = extractStepValue(word, step);
+            }
+          });
+          return enrichedPath;
+        });
+
+        const pathDisplays = enrichedPrimaryPaths
+          .map(path => {
+            const pathValues = steps.map(step => path[step]).filter(Boolean);
+            return pathValues.join(';');
+          })
+          .filter(display => display.length > 0);
+
+        const correctAnswerDisplay = pathDisplays.join(' OR ');
+
+        return {
+          id: word.id,
+          wordId: word.id,
+          word: word.root_word,
+          root_word: word.root_word,
+          selected_form: word.selected_form,
+          steps,
+          correctAnswerDisplay,
+          hint: word.definitions?.join('; '),
+          primaryFormPaths: enrichedPrimaryPaths,
+          optionalFormPaths: enrichedOptionalPaths,
+        } as SingleFieldFormIdentificationItem;
+      });
+    }
 
     return words.flatMap(word => {
       const posConfig = exercise.data.posConfigs[word.part_of_speech as PartOfSpeech];
       const steps = posConfig?.steps || [];
 
-      const basePrimaryPaths = (word.primary_form_paths || (word.form_path ? [word.form_path] : [])) as Array<Record<string, string | undefined>>;
+      const basePrimaryPaths = (word.primary_form_paths || (word.form_path ? [word.form_path] : [])) as Array<
+        Record<string, string | undefined>
+      >;
       const baseOptionalPaths = (word.optional_form_paths || []) as Array<Record<string, string | undefined>>;
 
       const previousAnswers = wordAnswers[word.id] || {};
@@ -85,19 +147,22 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
           hint: getHintForStep(word, step),
           primaryFormPaths: filteredPrimaryPaths,
           optionalFormPaths: filteredOptionalPaths,
-        };
+        } as FormIdentificationItem;
       });
     });
-  }, [data?.words, exercise.data, wordAnswers]);
+  }, [data?.words, exercise.data, wordAnswers, isSingleField]);
 
   const validatedItems = useMemo(() => {
     try {
+      if (isSingleField) {
+        return items.map(item => SingleFieldFormIdentificationItemSchema.parse(item));
+      }
       return items.map(item => FormIdentificationItemSchema.parse(item));
     } catch (error) {
       console.error('[Form Identification] Validation error:', error);
       return [];
     }
-  }, [items]);
+  }, [items, isSingleField]);
 
   const { currentIndex, isLastItem, autoAdvanceIfEnabled } = useExerciseProgression({
     totalItems: validatedItems.length,
@@ -113,18 +178,23 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
     if (isProcessing || validatedItems.length === 0) return;
 
     const currentItem = validatedItems[currentIndex];
-    const validation = validateGeneratedFormIdentificationExercise(userAnswer, currentItem);
+    const validation = isSingleField
+      ? validateSingleFieldFormIdentificationExercise(userAnswer, currentItem as SingleFieldFormIdentificationItem)
+      : validateGeneratedFormIdentificationExercise(userAnswer, currentItem as FormIdentificationItem);
 
     setIsProcessing(true);
 
     if (validation.isCorrect) {
-      setWordAnswers(prev => ({
-        ...prev,
-        [currentItem.wordId]: {
-          ...(prev[currentItem.wordId] || {}),
-          [currentItem.step]: userAnswer.trim(),
-        },
-      }));
+      if (!isSingleField) {
+        const stepItem = currentItem as FormIdentificationItem;
+        setWordAnswers(prev => ({
+          ...prev,
+          [stepItem.wordId]: {
+            ...(prev[stepItem.wordId] || {}),
+            [stepItem.step]: userAnswer.trim(),
+          },
+        }));
+      }
 
       const newCorrectAnswers = correctAnswers + 1;
       setCorrectAnswers(newCorrectAnswers);
@@ -219,23 +289,37 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
       <Card>
         <CardContent className="p-6 space-y-4">
           <div className="space-y-2">
-            <div className="text-sm text-gray-500">
-              Step: <span className="font-medium capitalize">{currentItem.step}</span>
-            </div>
+            {!isSingleField && (
+              <div className="text-sm text-gray-500">
+                Step: <span className="font-medium capitalize">{(currentItem as FormIdentificationItem).step}</span>
+              </div>
+            )}
             <div className="text-lg font-medium">
               <SimpleRichDisplay content={currentItem.selected_form} />
             </div>
           </div>
 
           <div className="text-sm text-gray-600">
-            <strong>Question:</strong> What is the <span className="font-medium">{currentItem.step}</span> of this word?
+            {isSingleField ? (
+              <>
+                <strong>Question:</strong> Identify the:{' '}
+                <span className="font-medium">
+                  {(currentItem as SingleFieldFormIdentificationItem).steps.join('; ')}
+                </span>
+              </>
+            ) : (
+              <>
+                <strong>Question:</strong> What is the{' '}
+                <span className="font-medium">{(currentItem as FormIdentificationItem).step}</span> of this word?
+              </>
+            )}
           </div>
 
           <ExerciseInput
             value={userAnswer}
             onChange={handleAnswerChange}
             onSubmit={handleSubmit}
-            placeholder="Type your answer..."
+            placeholder={isSingleField ? 'Enter answers separated by semicolons...' : 'Type your answer...'}
           />
 
           <FeedbackDisplay
@@ -243,7 +327,11 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
             message={message}
             level={level}
             hint={currentItem.hint}
-            correctAnswer={currentItem.correctAnswer}
+            correctAnswer={
+              isSingleField
+                ? (currentItem as SingleFieldFormIdentificationItem).correctAnswerDisplay
+                : (currentItem as FormIdentificationItem).correctAnswer
+            }
           />
         </CardContent>
       </Card>
