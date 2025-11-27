@@ -183,7 +183,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
         {exercise.audioPath && <AudioPlayButton audioPath={exercise.audioPath} />}
       </div>
 
-      {exercise.instructions && (
+      {exercise.instructions && exercise.instructions.replace(/<[^>]*>/g, '').trim() !== '' && (
         <p className="text-roman-stone">
           <SimpleRichDisplay content={exercise.instructions} />
         </p>

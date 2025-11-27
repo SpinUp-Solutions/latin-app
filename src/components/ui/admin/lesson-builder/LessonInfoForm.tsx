@@ -14,39 +14,40 @@ interface LessonInfoFormProps {
 
 export const LessonInfoForm: React.FC<LessonInfoFormProps> = ({ lesson, onUpdateInfo, isNewLesson = false }) => {
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BookOpen className="h-5 w-5" />
+        <CardHeader className="py-3 px-4">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <BookOpen className="h-4 w-4" />
             Lesson Information
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3 px-4 py-3">
           <div>
-            <label className="block text-sm font-medium mb-1">ID</label>
+            <label className="block text-xs font-medium mb-1 text-gray-600">ID</label>
             <input
               type="text"
               value={lesson.id}
               onChange={e => onUpdateInfo({ id: e.target.value })}
-              className="w-full p-2 border rounded-md bg-gray-100 cursor-not-allowed"
+              className="w-full px-2 py-1.5 text-sm border rounded bg-gray-100 cursor-not-allowed"
               placeholder="lesson-1"
               disabled
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Title</label>
+            <label className="block text-xs font-medium mb-1 text-gray-600">Title</label>
             <Input
               type="text"
               value={lesson.title}
               onChange={e => onUpdateInfo({ title: e.target.value })}
               placeholder="Enter lesson title..."
+              className="h-8 text-sm"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Type</label>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2 cursor-pointer">
+            <label className="block text-xs font-medium mb-1 text-gray-600">Type</label>
+            <div className="flex gap-3">
+              <label className="flex items-center gap-1.5 cursor-pointer">
                 <input
                   type="radio"
                   name="lessonType"
@@ -54,11 +55,11 @@ export const LessonInfoForm: React.FC<LessonInfoFormProps> = ({ lesson, onUpdate
                   checked={lesson.type === 'normal'}
                   onChange={e => onUpdateInfo({ type: e.target.value as 'normal' | 'vocab' })}
                   disabled={!isNewLesson}
-                  className="w-4 h-4"
+                  className="w-3 h-3"
                 />
-                <span className={!isNewLesson ? 'text-gray-500' : ''}>Normal</span>
+                <span className={`text-sm ${!isNewLesson ? 'text-gray-500' : ''}`}>Normal</span>
               </label>
-              <label className="flex items-center gap-2 cursor-pointer">
+              <label className="flex items-center gap-1.5 cursor-pointer">
                 <input
                   type="radio"
                   name="lessonType"
@@ -66,35 +67,34 @@ export const LessonInfoForm: React.FC<LessonInfoFormProps> = ({ lesson, onUpdate
                   checked={lesson.type === 'vocab'}
                   onChange={e => onUpdateInfo({ type: e.target.value as 'normal' | 'vocab' })}
                   disabled={!isNewLesson}
-                  className="w-4 h-4"
+                  className="w-3 h-3"
                 />
-                <span className={!isNewLesson ? 'text-gray-500' : ''}>Vocab</span>
+                <span className={`text-sm ${!isNewLesson ? 'text-gray-500' : ''}`}>Vocab</span>
               </label>
             </div>
-            {!isNewLesson && <p className="text-xs text-gray-500 mt-1">Lesson type cannot be changed after creation</p>}
+            {!isNewLesson && <p className="text-xs text-gray-500 mt-1">Type cannot be changed</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Description</label>
+            <label className="block text-xs font-medium mb-1 text-gray-600">Description</label>
             <SimpleRichEditor
               content={lesson.description || ''}
               onChange={value => onUpdateInfo({ description: value })}
               placeholder="Enter lesson description..."
               rows={2}
-              className="w-full"
+              className="w-full text-sm"
             />
           </div>
         </CardContent>
       </Card>
 
-      {/* Vocabulary Pool Assignment */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Library className="h-5 w-5" />
+        <CardHeader className="py-3 px-4">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <Library className="h-4 w-4" />
             Vocabulary Pool
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-4 py-3">
           <VocabularyPoolSelector
             selectedPoolId={lesson.vocabulary_pool}
             onPoolSelect={poolId => onUpdateInfo({ vocabulary_pool: poolId })}

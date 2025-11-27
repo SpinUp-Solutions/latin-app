@@ -100,11 +100,16 @@ export const FillItemCard: React.FC<FillItemCardProps> = ({ item, index, onUpdat
               </div>
               <input
                 type="text"
-                placeholder={item.hint || 'Type your answer in Latin...'}
+                placeholder="Type your answer in Latin..."
                 className="w-full p-2 border rounded text-sm bg-white"
                 disabled
                 value=""
               />
+              {item.hint && (
+                <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-2">
+                  <strong>Hint:</strong> <SimpleRichDisplay content={item.hint} />
+                </div>
+              )}
               <div className="text-xs text-gray-500 mt-1">
                 Expected answer: <span className="font-mono">{item.answer || 'answer'}</span>
               </div>

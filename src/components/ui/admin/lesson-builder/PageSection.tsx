@@ -83,30 +83,30 @@ const SortablePage: React.FC<SortablePageProps> = ({
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="border rounded-lg p-4 space-y-3 bg-white hover:shadow-sm">
+    <div ref={setNodeRef} style={style} className="border rounded p-3 space-y-2 bg-white hover:shadow-sm">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 flex-1">
           <Button
             variant="ghost"
             size="sm"
-            className="cursor-grab active:cursor-grabbing p-1 text-gray-400 hover:text-gray-600"
+            className="cursor-grab active:cursor-grabbing p-0.5 h-6 w-6 text-gray-400 hover:text-gray-600"
             {...attributes}
             {...listeners}>
-            <GripVertical className="h-4 w-4" />
+            <GripVertical className="h-3.5 w-3.5" />
           </Button>
-          <span className="px-2 py-1 text-xs font-medium bg-roman-red/10 text-roman-red rounded">
-            Page {pageIndex + 1}
+          <span className="px-1.5 py-0.5 text-xs font-medium bg-roman-red/10 text-roman-red rounded">
+            {pageIndex + 1}
           </span>
           <SimpleRichEditor
             content={page.title || ''}
             onChange={value => onUpdatePageTitle(pageIndex, value)}
-            className="text-lg font-medium bg-transparent border-none outline-none flex-1"
+            className="text-sm font-medium bg-transparent border-none outline-none flex-1"
             placeholder="Page title..."
             singleLine={true}
           />
         </div>
-        <Button variant="ghost" size="sm" onClick={() => onRemovePage(pageIndex)}>
-          <Trash2 className="h-4 w-4" />
+        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => onRemovePage(pageIndex)}>
+          <Trash2 className="h-3.5 w-3.5" />
         </Button>
       </div>
 
@@ -124,12 +124,12 @@ const SortablePage: React.FC<SortablePageProps> = ({
         onToggle={onToggleAutoAdvance}
       />
 
-      <div className="space-y-3 pt-2 border-t">
+      <div className="space-y-2 pt-2 border-t">
         <PasteZone pageIndex={pageIndex} />
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5">
           {contentTypes.map(({ type, icon: ContentIcon, label }) => (
-            <Button key={type} variant="outline" size="sm" onClick={() => handleAddContent(type)}>
-              <ContentIcon className="h-4 w-4 mr-1" />
+            <Button key={type} variant="outline" size="sm" className="h-7 text-xs px-2" onClick={() => handleAddContent(type)}>
+              <ContentIcon className="h-3 w-3 mr-1" />
               {label}
             </Button>
           ))}
@@ -191,19 +191,19 @@ export const PageSection: React.FC<PageSectionProps> = ({
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between">
+      <CardHeader className="py-3 px-4">
+        <CardTitle className="flex items-center justify-between text-sm">
           <span className="flex items-center gap-2">
-            <Icon className="h-5 w-5" />
+            <Icon className="h-4 w-4" />
             {title} ({pages.length})
           </span>
-          <Button onClick={onAddPage} size="sm">
-            <Plus className="h-4 w-4 mr-1" />
+          <Button onClick={onAddPage} size="sm" className="h-7 text-xs px-2">
+            <Plus className="h-3 w-3 mr-1" />
             Add Page
           </Button>
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-3 px-4 py-3">
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}

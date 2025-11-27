@@ -103,20 +103,20 @@ export const LessonBuilder: React.FC<LessonBuilderProps> = ({ initialLesson, onS
 
   return (
     <>
-      <div className="flex h-full bg-roman-marble">
+      <div className="flex h-full bg-gray-50">
         {/* Left Panel - Editor */}
-        <div className="w-1/2 overflow-y-auto p-6 space-y-6">
+        <div className="w-1/2 overflow-y-auto p-4 space-y-4">
           {/* Header */}
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between bg-white border rounded-md p-3">
             <div>
-              <h1 className="text-3xl font-serif text-gray-800">Lesson Builder</h1>
-              <p className="text-roman-stone">Create and edit lesson content</p>
+              <h1 className="text-lg font-semibold text-gray-900">Lesson Builder</h1>
+              <p className="text-xs text-gray-500">Create and edit lesson content</p>
             </div>
             <div className="flex gap-2">
-              <Button onClick={handleSaveLesson} disabled={saving}>
+              <Button onClick={handleSaveLesson} disabled={saving} size="sm">
                 {saving ? (
                   <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2"></div>
                     Saving...
                   </>
                 ) : (
