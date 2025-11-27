@@ -19,8 +19,11 @@ import {
 import { validateGeneratedFormIdentificationExercise } from '@/src/utils/exercises/generatedFormIdentificationExercise';
 import {
   extractStepValue,
-  getAcceptedAnswersForStep,
   getHintForStep,
+  extractStepValuesFromPaths,
+  getAcceptedAnswersForMultipleValues,
+  formatPrimaryAnswersDisplay,
+  filterPathsByPreviousAnswers,
 } from '@/src/utils/exercises/formIdentificationHelpers';
 
 interface Props {
@@ -32,6 +35,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
   const [userAnswer, setUserAnswer] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [correctAnswers, setCorrectAnswers] = useState(0);
+  const [wordAnswers, setWordAnswers] = useState<Record<string, Record<string, string>>>({});
 
   const config = exercise.data.generatorConfig;
 
@@ -50,26 +54,41 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
     const words = data.words as unknown as ExerciseWordResponse[];
 
     return words.flatMap(word => {
-      const steps = exercise.data.posConfigs[word.part_of_speech as PartOfSpeech]?.steps || [];
+      const posConfig = exercise.data.posConfigs[word.part_of_speech as PartOfSpeech];
+      const steps = posConfig?.steps || [];
+
+      const basePrimaryPaths = (word.primary_form_paths || (word.form_path ? [word.form_path] : [])) as Array<Record<string, string | undefined>>;
+      const baseOptionalPaths = (word.optional_form_paths || []) as Array<Record<string, string | undefined>>;
+
+      const previousAnswers = wordAnswers[word.id] || {};
 
       return steps.map(step => {
-        const correctAnswer = extractStepValue(word, step);
-        const acceptedAnswers = getAcceptedAnswersForStep(correctAnswer);
-        const hint = getHintForStep(word, step);
+        const filteredPrimaryPaths = filterPathsByPreviousAnswers(basePrimaryPaths, previousAnswers);
+        const filteredOptionalPaths = filterPathsByPreviousAnswers(baseOptionalPaths, previousAnswers);
+
+        const primaryValues = extractStepValuesFromPaths(filteredPrimaryPaths, step);
+        const optionalValues = extractStepValuesFromPaths(filteredOptionalPaths, step);
+
+        const allCorrectValues = Array.from(new Set([...primaryValues, ...optionalValues]));
+        const acceptedAnswers = getAcceptedAnswersForMultipleValues(allCorrectValues);
+        const correctAnswer = formatPrimaryAnswersDisplay(filteredPrimaryPaths, step) || extractStepValue(word, step);
 
         return {
           id: `${word.id}-${step}`,
+          wordId: word.id,
           word: word.root_word,
           root_word: word.root_word,
           selected_form: word.selected_form,
           step,
           correctAnswer,
-          acceptedAnswers,
-          hint,
+          acceptedAnswers: acceptedAnswers.length > 0 ? acceptedAnswers : [correctAnswer],
+          hint: getHintForStep(word, step),
+          primaryFormPaths: filteredPrimaryPaths,
+          optionalFormPaths: filteredOptionalPaths,
         };
       });
     });
-  }, [data?.words, exercise.data]);
+  }, [data?.words, exercise.data, wordAnswers]);
 
   const validatedItems = useMemo(() => {
     try {
@@ -99,6 +118,14 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
     setIsProcessing(true);
 
     if (validation.isCorrect) {
+      setWordAnswers(prev => ({
+        ...prev,
+        [currentItem.wordId]: {
+          ...(prev[currentItem.wordId] || {}),
+          [currentItem.step]: userAnswer.trim(),
+        },
+      }));
+
       const newCorrectAnswers = correctAnswers + 1;
       setCorrectAnswers(newCorrectAnswers);
       handleCorrect(isLastItem);
@@ -216,7 +243,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
             message={message}
             level={level}
             hint={currentItem.hint}
-            correctAnswer={currentItem.acceptedAnswers.join(' OR ')}
+            correctAnswer={currentItem.correctAnswer}
           />
         </CardContent>
       </Card>

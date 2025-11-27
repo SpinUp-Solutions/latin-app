@@ -35,6 +35,8 @@ export type ExerciseWordResponse =
       selected_form: string;
       part_of_speech: 'verb';
       form_path: VerbFormPath | null;
+      primary_form_paths?: VerbFormPath[];
+      optional_form_paths?: VerbFormPath[];
       conjugation?: string;
       definitions?: string[];
       is_deponent?: boolean;
@@ -46,6 +48,8 @@ export type ExerciseWordResponse =
       selected_form: string;
       part_of_speech: 'noun';
       form_path: NounFormPath | null;
+      primary_form_paths?: NounFormPath[];
+      optional_form_paths?: NounFormPath[];
       declension?: string;
       definitions?: string[];
       gender?: string;
@@ -57,6 +61,8 @@ export type ExerciseWordResponse =
       selected_form: string;
       part_of_speech: 'adjective';
       form_path: AdjectiveFormPath | null;
+      primary_form_paths?: AdjectiveFormPath[];
+      optional_form_paths?: AdjectiveFormPath[];
       declension?: string;
       definitions?: string[];
       translation?: string;
@@ -67,6 +73,8 @@ export type ExerciseWordResponse =
       selected_form: string;
       part_of_speech: 'pronoun';
       form_path: PronounFormPath | null;
+      primary_form_paths?: PronounFormPath[];
+      optional_form_paths?: PronounFormPath[];
       definitions?: string[];
       translation?: string;
     }
@@ -76,6 +84,8 @@ export type ExerciseWordResponse =
       selected_form: string;
       part_of_speech: 'adverb';
       form_path: AdverbFormPath | null;
+      primary_form_paths?: AdverbFormPath[];
+      optional_form_paths?: AdverbFormPath[];
       definitions?: string[];
       translation?: string;
     }
@@ -85,6 +95,8 @@ export type ExerciseWordResponse =
       selected_form: string;
       part_of_speech: 'preposition' | 'conjunction' | 'interjection';
       form_path: null;
+      primary_form_paths?: never;
+      optional_form_paths?: never;
       definitions?: string[];
       translation?: string;
     };

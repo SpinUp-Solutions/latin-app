@@ -5,6 +5,7 @@ import { VocabularyWordSchema } from '@/src/types/vocabulary/schemas';
 import { parseFormPathFromString } from '@/src/utils/exerciseFormPaths';
 import type { VerbFormPath, NounFormPath, AdjectiveFormPath } from '@/src/types/api/exercise-word-responses';
 import { TABLE_TYPE_CONFIG } from '@/src/utils/schema-helpers';
+import { scanTableForMatchingForms, categorizeMatchingPaths } from '@/src/utils/tableScanner';
 
 const DEFAULT_COLLECTION = 'vocabulary_words_v4';
 const TABLE_FIELDS = ['word', 'conjugation_table', 'declension_table', 'degrees_table'] as const;
@@ -210,6 +211,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       if (isExerciseMode) {
         let selectedForm = serialized.word as string;
         let formPath: VerbFormPath | NounFormPath | AdjectiveFormPath | null = null;
+        let primaryFormPaths: Array<VerbFormPath | NounFormPath | AdjectiveFormPath> = [];
+        let optionalFormPaths: Array<VerbFormPath | NounFormPath | AdjectiveFormPath> = [];
 
         const paths = parseCellPaths(cellPaths);
         if (paths.length > 0 && tableType) {
@@ -219,17 +222,19 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             paths
           );
           if (formResult) {
-            selectedForm = formResult.form;
+            selectedForm = formResult.selectedForm;
             formPath = parseFormPathFromString(
-              formResult.path,
+              formResult.selectedPath,
               tableType as 'conjugation' | 'declension' | 'adjective-declension'
             );
-            console.log('[API] Form path created:', {
-              wordId: serialized.word,
-              tableType,
-              formResultPath: formResult.path,
-              parsedFormPath: formPath,
-            });
+
+            primaryFormPaths = formResult.primaryPaths
+              .map(p => parseFormPathFromString(p, tableType as 'conjugation' | 'declension' | 'adjective-declension'))
+              .filter((fp): fp is NonNullable<typeof fp> => fp !== null);
+
+            optionalFormPaths = formResult.optionalPaths
+              .map(p => parseFormPathFromString(p, tableType as 'conjugation' | 'declension' | 'adjective-declension'))
+              .filter((fp): fp is NonNullable<typeof fp> => fp !== null);
           }
         }
 
@@ -239,6 +244,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           root_word: serialized.word,
           selected_form: selectedForm,
           form_path: formPath,
+          primary_form_paths: primaryFormPaths.length > 0 ? primaryFormPaths : undefined,
+          optional_form_paths: optionalFormPaths.length > 0 ? optionalFormPaths : undefined,
         } as Record<string, unknown>;
 
         for (const field of TABLE_FIELDS) {
@@ -439,13 +446,25 @@ function getCellValueAtPathServer(obj: Record<string, unknown>, path: string): s
   return [];
 }
 
+interface FormSelectionResult {
+  selectedForm: string;
+  selectedPath: string;
+  primaryPaths: string[];
+  optionalPaths: string[];
+}
+
 function pickRandomFormServer(
   word: Record<string, unknown>,
   tableType: 'conjugation' | 'declension' | 'adjective-declension',
   selectedPaths: string[]
-): { form: string; path: string } | null {
+): FormSelectionResult | null {
   const rootField = TABLE_TYPE_CONFIG[tableType];
   if (!rootField) {
+    return null;
+  }
+
+  const table = word[rootField];
+  if (!table) {
     return null;
   }
 
@@ -455,39 +474,31 @@ function pickRandomFormServer(
     const fullPath = `${rootField}.${path}`;
     const forms = getCellValueAtPathServer(word, fullPath);
 
-    console.log('[pickRandomFormServer]', {
-      wordId: word.word,
-      tableType,
-      path,
-      fullPath,
-      formsFound: forms.length,
-      forms: forms.slice(0, 3),
-    });
-
     for (const form of forms) {
       formsWithPaths.push({ form, path });
     }
   }
 
   if (formsWithPaths.length === 0) {
-    console.log('[pickRandomFormServer] No forms found!', {
-      wordId: word.word,
-      tableType,
-      selectedPaths,
-      rootField,
-      hasRootField: !!word[rootField],
-    });
     return null;
   }
 
   const selected = formsWithPaths[Math.floor(Math.random() * formsWithPaths.length)];
-  console.log('[pickRandomFormServer] Selected:', {
-    wordId: word.word,
+
+  const allMatchingPaths = scanTableForMatchingForms(table, selected.form, tableType);
+
+  const { primaryPaths, optionalPaths } = categorizeMatchingPaths(allMatchingPaths, selectedPaths);
+
+  if (!primaryPaths.includes(selected.path)) {
+    primaryPaths.unshift(selected.path);
+  }
+
+  return {
     selectedForm: selected.form,
     selectedPath: selected.path,
-    totalOptions: formsWithPaths.length,
-  });
-  return selected;
+    primaryPaths,
+    optionalPaths,
+  };
 }
 
 async function getWordTypeCounts(collection: string) {

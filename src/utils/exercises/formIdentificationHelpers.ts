@@ -90,6 +90,72 @@ export const extractStepValue = (word: ExerciseWordResponse, step: FormIdentific
   return '';
 };
 
+export function extractStepValuesFromPaths<T extends { [key: string]: string | undefined }>(
+  formPaths: T[],
+  step: FormIdentificationStep
+): string[] {
+  const values: string[] = [];
+
+  for (const formPath of formPaths) {
+    const value = formPath[step as keyof T];
+    if (value && typeof value === 'string' && !values.includes(value)) {
+      values.push(value);
+    }
+  }
+
+  return values;
+}
+
+export function filterPathsByPreviousAnswers<T extends Record<string, string | undefined>>(
+  paths: T[],
+  previousAnswers: Record<string, string>
+): T[] {
+  const previousEntries = Object.entries(previousAnswers);
+  if (previousEntries.length === 0) return paths;
+
+  return paths.filter(path => {
+    for (const [step, userAnswer] of previousEntries) {
+      const pathValue = path[step];
+      if (!pathValue) return false;
+
+      const acceptedVariants = getAcceptedAnswersForStep(pathValue).map(v =>
+        v.toLowerCase().trim()
+      );
+      const normalizedUserAnswer = userAnswer.toLowerCase().trim();
+
+      if (!acceptedVariants.includes(normalizedUserAnswer)) return false;
+    }
+    return true;
+  });
+}
+
+export function getAcceptedAnswersForMultipleValues(correctValues: string[]): string[] {
+  const allVariants: string[] = [];
+
+  for (const value of correctValues) {
+    const variants = getAcceptedAnswersForStep(value);
+    for (const variant of variants) {
+      if (!allVariants.includes(variant)) {
+        allVariants.push(variant);
+      }
+    }
+  }
+
+  return allVariants;
+}
+
+export function formatPrimaryAnswersDisplay(
+  primaryFormPaths: Array<{ [key: string]: string | undefined }>,
+  step: FormIdentificationStep
+): string {
+  const values = extractStepValuesFromPaths(primaryFormPaths, step);
+
+  if (values.length === 0) return '';
+  if (values.length === 1) return values[0];
+
+  return values.join(' OR ');
+}
+
 const createVariantMap = () => {
   const variants: Record<string, string[]> = {};
 

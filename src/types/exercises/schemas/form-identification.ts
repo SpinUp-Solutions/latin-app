@@ -17,6 +17,7 @@ export type FormIdentificationStep = z.infer<typeof FormIdentificationStepSchema
 
 export const FormIdentificationItemSchema = z.object({
   id: z.string(),
+  wordId: z.string(),
   word: z.string(),
   root_word: z.string(),
   selected_form: z.string(),
@@ -24,6 +25,8 @@ export const FormIdentificationItemSchema = z.object({
   correctAnswer: z.string(),
   acceptedAnswers: z.array(z.string()),
   hint: z.string().optional(),
+  primaryFormPaths: z.array(z.record(z.string(), z.string().optional())),
+  optionalFormPaths: z.array(z.record(z.string(), z.string().optional())),
 });
 
 export type FormIdentificationItem = z.infer<typeof FormIdentificationItemSchema>;
