@@ -56,7 +56,7 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({ page, pageIndex, onE
       className="space-y-6">
       {page.title && (
         <h2 className="text-xl font-serif text-roman-red mb-4">
-          <SimpleRichDisplay content={page.title} />
+          <SimpleRichDisplay key={page.title} content={page.title} />
         </h2>
       )}
 

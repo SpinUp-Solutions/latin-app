@@ -94,6 +94,9 @@ const SortablePage: React.FC<SortablePageProps> = ({
             {...listeners}>
             <GripVertical className="h-4 w-4" />
           </Button>
+          <span className="px-2 py-1 text-xs font-medium bg-roman-red/10 text-roman-red rounded">
+            Page {pageIndex + 1}
+          </span>
           <SimpleRichEditor
             content={page.title || ''}
             onChange={value => onUpdatePageTitle(pageIndex, value)}

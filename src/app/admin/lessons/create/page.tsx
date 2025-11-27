@@ -133,8 +133,8 @@ function CreateLessonPage() {
   };
 
   return (
-    <div className="min-h-screen bg-roman-marble">
-      <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between">
+    <div className="h-screen flex flex-col bg-roman-marble">
+      <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-4">
           <Button variant="ghost" onClick={handleBackToAdmin} disabled={saving}>
             <ArrowLeft className="h-4 w-4 mr-2" />
@@ -174,9 +174,11 @@ function CreateLessonPage() {
         </div>
       </header>
 
-      <ClipboardProvider>
-        <LessonBuilder onSave={handleSaveLesson} />
-      </ClipboardProvider>
+      <div className="flex-1 overflow-hidden">
+        <ClipboardProvider>
+          <LessonBuilder onSave={handleSaveLesson} />
+        </ClipboardProvider>
+      </div>
 
       <UnifiedDialog
         isOpen={dialogState?.isOpen || false}

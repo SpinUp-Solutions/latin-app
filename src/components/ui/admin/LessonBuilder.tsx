@@ -103,7 +103,7 @@ export const LessonBuilder: React.FC<LessonBuilderProps> = ({ initialLesson, onS
 
   return (
     <>
-      <div className="flex h-screen bg-roman-marble">
+      <div className="flex h-full bg-roman-marble">
         {/* Left Panel - Editor */}
         <div className="w-1/2 overflow-y-auto p-6 space-y-6">
           {/* Header */}
