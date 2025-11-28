@@ -1,8 +1,8 @@
 import { deriveTableTypeFromPOS } from '@/src/utils/generated/tableType';
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import type { RootState } from '../index';
-import type { PartOfSpeech, NounDeclension, AdjectiveDeclension } from '@/src/types/vocabulary/schemas/enums';
-import type { VerbConjugation } from '@/src/types/vocabulary/schemas/verb-conjugation';
+import type { PartOfSpeech, NounDeclension, AdjectiveDeclension } from '@/shared/types/vocabulary/schemas/enums';
+import type { VerbConjugation } from '@/shared/types/vocabulary/schemas/verb-conjugation';
 import type { TableType } from '@/src/utils/schema-helpers';
 
 type LimitValue = number | 'all';

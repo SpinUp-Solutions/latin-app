@@ -12,8 +12,8 @@ import {
   type PartOfSpeech,
   type NounDeclension,
   type AdjectiveDeclension,
-} from '@/src/types/vocabulary/schemas/enums';
-import { VerbConjugationSchema, type VerbConjugation } from '@/src/types/vocabulary/schemas/verb-conjugation';
+} from '@/shared/types/vocabulary/schemas/enums';
+import { VerbConjugationSchema, type VerbConjugation } from '@/shared/types/vocabulary/schemas/verb-conjugation';
 
 interface AdvancedFiltersPanelProps {
   filters: {

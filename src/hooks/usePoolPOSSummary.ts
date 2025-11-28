@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { skipToken } from '@reduxjs/toolkit/query';
 import { useGetPoolPOSSummaryQuery } from '@/src/store/api/vocabularyPoolApi';
-import type { PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
+import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 
 export interface UsePoolPOSSummaryReturn {
   isLoading: boolean;

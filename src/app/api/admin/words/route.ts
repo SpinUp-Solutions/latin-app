@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { Query, FieldPath } from 'firebase-admin/firestore';
-import { VocabularyWordSchema } from '@/src/types/vocabulary/schemas';
+import { VocabularyWordSchema } from '@/shared/types/vocabulary/schemas';
 import { parseFormPathFromString } from '@/src/utils/exerciseFormPaths';
 import type { VerbFormPath, NounFormPath, AdjectiveFormPath } from '@/src/types/api/exercise-word-responses';
 import { TABLE_TYPE_CONFIG } from '@/src/utils/schema-helpers';

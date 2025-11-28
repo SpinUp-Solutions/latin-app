@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
-import type { PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
+import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 
 interface POSSummaryResponse {
   success: boolean;

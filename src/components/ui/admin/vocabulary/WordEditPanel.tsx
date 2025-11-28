@@ -7,9 +7,9 @@ import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary/ind
 import { EditingCell } from '@/src/types/admin-vocabulary';
 import { parseEditingCellValue, TABLE_TYPES, TableType } from '@/src/utils/vocabUtils';
 import { SchemaTable } from './tables/SchemaTable';
-import { DeclensionTableSchema, AdjectiveDeclensionTableSchema } from '@/src/types/vocabulary/schemas/declension';
-import { ConjugationTableSchema } from '@/src/types/vocabulary/schemas/verb-conjugation';
-import { DegreesTableSchema } from '@/src/types/vocabulary/schemas/adjective';
+import { DeclensionTableSchema, AdjectiveDeclensionTableSchema } from '@/shared/types/vocabulary/schemas/declension';
+import { ConjugationTableSchema } from '@/shared/types/vocabulary/schemas/verb-conjugation';
+import { DegreesTableSchema } from '@/shared/types/vocabulary/schemas/adjective';
 import { BookOpen } from 'lucide-react';
 import { BaseWordForm, NounForm, PronounForm, AdjectiveForm, VerbForm, VocabularyFormValues } from './forms';
 import { AIAutocompleteButton } from './AIAutocompleteButton';

@@ -5,7 +5,7 @@ import {
   DeclensionTableSchema,
   AdjectiveDeclensionTableSchema,
   DegreesTableSchema,
-} from '@/src/types/vocabulary/schemas';
+} from '@/shared/types/vocabulary/schemas';
 
 type ConjugationTable = z.infer<typeof ConjugationTableSchema>;
 type DeclensionTable = z.infer<typeof DeclensionTableSchema>;

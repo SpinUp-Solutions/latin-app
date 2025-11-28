@@ -16,7 +16,7 @@ import { WordSourceSection } from './WordSourceSection';
 import { MultiPosConfigSection } from './MultiPosConfigSection';
 import { useGeneratedExerciseEditor } from '@/src/hooks/useGeneratedExerciseEditor';
 import { AVAILABLE_STEPS } from '@/src/config/formIdentificationSteps';
-import type { PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
+import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 
 export const GeneratedFormIdentificationEditor: React.FC = () => {
   const editingContent = useAppSelector(

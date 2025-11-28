@@ -1,6 +1,6 @@
 import { ContentItem } from '../content';
 import type { TableType } from '@/src/utils/schema-helpers';
-import type { PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
+import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 import type { FormIdentificationStep } from './schemas/form-identification';
 
 export interface FeedbackLevel {

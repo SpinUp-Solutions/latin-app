@@ -25,7 +25,7 @@ import { VocabularyFiltersComponent } from '@/src/components/ui/admin/vocabulary
 import { VocabularyList } from '@/src/components/ui/admin/vocabulary/VocabularyList';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
-import { PartOfSpeechSchema, type PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
+import { PartOfSpeechSchema, type PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 import { buildEmptyWord, isPlaceholderWord } from '@/src/utils/vocabulary-defaults';
 
 const EMPTY_WORDS: VocabularyWordWithId[] = [];

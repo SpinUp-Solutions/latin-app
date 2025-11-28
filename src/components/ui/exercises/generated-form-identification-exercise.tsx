@@ -11,7 +11,7 @@ import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { useGetMultiPosWordsQuery } from '@/src/store/api/advancedVocabularyApi';
 import { Card, CardContent } from '../card';
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
-import type { PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
+import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 import {
   FormIdentificationItemSchema,
   type FormIdentificationItem,

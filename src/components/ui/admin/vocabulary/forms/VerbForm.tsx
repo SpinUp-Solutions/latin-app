@@ -4,7 +4,7 @@ import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/src/
 import { Switch } from '@/src/components/ui/switch';
 import { VocabularyFormValues } from './types';
 import { PrincipalPartsEditor } from './PrincipalPartsEditor';
-import { VerbConjugationSchema } from '@/src/types/vocabulary/schemas/enums';
+import { VerbConjugationSchema } from '@/shared/types/vocabulary/schemas/enums';
 import type { z } from 'zod';
 import React from 'react';
 import { useAIFieldStatus } from '@/src/hooks/useAIFieldStatus';

@@ -1,5 +1,5 @@
 import { TableType } from '@/src/utils/schema-helpers';
-import type { PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
+import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 
 export type { TableType };
 

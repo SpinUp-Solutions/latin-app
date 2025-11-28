@@ -11,7 +11,7 @@ import {
   VoiceSchema,
   PersonSchema,
   GrammaticalNumberSchema,
-} from '@/src/types/vocabulary/schemas';
+} from '@/shared/types/vocabulary/schemas';
 
 type VerbWordResponse = Extract<ExerciseWordResponse, { part_of_speech: 'verb' }>;
 type NounWordResponse = Extract<ExerciseWordResponse, { part_of_speech: 'noun' }>;

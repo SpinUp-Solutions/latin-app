@@ -1,4 +1,4 @@
-import type { PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
+import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 import type { FormIdentificationStep } from '@/src/types/exercises/schemas/form-identification';
 
 export const AVAILABLE_STEPS: Readonly<Record<PartOfSpeech, readonly FormIdentificationStep[]>> = {

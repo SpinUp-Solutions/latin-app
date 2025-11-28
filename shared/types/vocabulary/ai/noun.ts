@@ -22,6 +22,5 @@ export const NounStructuredOutputSchema = NounStructuredOutputBaseSchema.extend(
   declension: NounSchema.shape.declension.nullable(),
   nominative_singular: NounSchema.shape.nominative_singular.nullable(),
   genitive_singular: NounSchema.shape.genitive_singular.nullable(),
-  notes: z.string().min(1),
 }).strict();
 export type NounStructuredOutput = z.infer<typeof NounStructuredOutputSchema>;

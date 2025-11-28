@@ -3,7 +3,7 @@ import {
   NounDeclensionSchema,
   AdjectiveDeclensionSchema,
   PronounTypeSchema,
-} from '@/src/types/vocabulary/schemas/enums';
+} from '@/shared/types/vocabulary/schemas/enums';
 import { formatEnumLabel } from '@/src/utils/schema-helpers';
 
 export const genderOptions = GenderSchema.options.map(value => ({

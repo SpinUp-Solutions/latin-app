@@ -1,8 +1,8 @@
 import type { VocabularyWordWithId } from '@/src/types/vocabulary/index';
-import type { PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
-import { DeclensionTableSchema, AdjectiveDeclensionTableSchema } from '@/src/types/vocabulary/schemas/declension';
-import { DegreesTableSchema } from '@/src/types/vocabulary/schemas/adjective';
-import { ConjugationTableSchema } from '@/src/types/vocabulary/schemas/verb-conjugation';
+import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
+import { DeclensionTableSchema, AdjectiveDeclensionTableSchema } from '@/shared/types/vocabulary/schemas/declension';
+import { DegreesTableSchema } from '@/shared/types/vocabulary/schemas/adjective';
+import { ConjugationTableSchema } from '@/shared/types/vocabulary/schemas/verb-conjugation';
 import { buildEmptyFromSchema } from '@/src/utils/schema-defaults';
 
 const ZERO_TIMESTAMP = new Date(0).toISOString();

@@ -1,10 +1,10 @@
-import type { VocabularyWord, VocabularyWordWithId } from '../index';
+import type { VocabularyWord, VocabularyWordWithId } from '@/shared/types/vocabulary/schemas';
 import { BaseWordFormSchema, BaseWordFormValues } from './base';
 import { NounFormSchema, NounFormValues } from './noun';
 import { PronounFormSchema, PronounFormValues } from './pronoun';
 import { AdjectiveFormSchema, AdjectiveFormValues } from './adjective';
 import { VerbFormSchema, VerbFormValues } from './verb';
-import { VerbConjugationSchema } from '../schemas/enums';
+import { VerbConjugationSchema } from '@/shared/types/vocabulary/schemas/enums';
 import type { z } from 'zod';
 
 type SpecificSchema =

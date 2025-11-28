@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { PronounSchema } from '../schemas/pronoun';
+import { PronounSchema } from '@/shared/types/vocabulary/schemas/pronoun';
 
 export const PronounFormSchema = PronounSchema.omit({
   part_of_speech: true,

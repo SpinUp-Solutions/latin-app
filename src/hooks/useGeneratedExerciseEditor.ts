@@ -18,7 +18,7 @@ import type {
 } from '@/src/types/exercises/base';
 import type { FormIdentificationPosConfig } from '@/src/types/exercises/base';
 import type { GeneratedExerciseType } from '@/src/config/exerciseSelectFields';
-import type { PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
+import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 import type { GetAdvancedWordsResponse } from '@/src/store/api/advancedVocabularyApi';
 
 interface UseGeneratedExerciseEditorOptions {

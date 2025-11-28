@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AdjectiveSchema } from '../schemas/adjective';
+import { AdjectiveSchema } from '@/shared/types/vocabulary/schemas/adjective';
 
 export const AdjectiveFormSchema = AdjectiveSchema.omit({
   part_of_speech: true,

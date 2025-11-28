@@ -1,7 +1,7 @@
 import React from 'react';
 import { Badge } from '@/src/components/ui/badge';
 import { Button } from '@/src/components/ui/button';
-import type { PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
+import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 
 interface PosConfigTabsProps {
   availablePartOfSpeech: PartOfSpeech[];

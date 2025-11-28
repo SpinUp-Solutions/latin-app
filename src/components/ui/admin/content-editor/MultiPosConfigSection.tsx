@@ -3,7 +3,7 @@ import { Card, CardContent } from '@/src/components/ui/card';
 import { Button } from '@/src/components/ui/button';
 import { PosConfigTabs } from './PosConfigTabs';
 import { FormSelectionTable } from '../vocabulary/FormSelectionTable';
-import type { PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
+import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 import type { FormIdentificationPosConfig, PosGeneratorConfig } from '@/src/types/exercises/base';
 import type { FormIdentificationStep } from '@/src/types/exercises/schemas/form-identification';
 import { deriveTableTypeFromPOS } from '@/src/utils/generated/tableType';

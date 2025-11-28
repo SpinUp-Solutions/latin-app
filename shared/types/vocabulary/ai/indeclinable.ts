@@ -27,7 +27,6 @@ function buildIndeclinableSchema(schema: IndeclinableSchema) {
       etymology: schema.shape.etymology.nullable(),
       pronunciation: schema.shape.pronunciation.nullable(),
       alternate_form: schema.shape.alternate_form.nullable(),
-      notes: z.string().min(1),
     })
     .strict();
 }

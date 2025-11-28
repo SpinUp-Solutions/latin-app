@@ -16,7 +16,6 @@ export const PronounStructuredOutputSchema = PronounStructuredOutputBaseSchema.e
   pronunciation: PronounSchema.shape.pronunciation.nullable(),
   alternate_form: PronounSchema.shape.alternate_form.nullable(),
   pronoun_type: PronounSchema.shape.pronoun_type.nullable(),
-  notes: z.string().min(1),
 }).strict();
 
 export type PronounStructuredOutput = z.infer<typeof PronounStructuredOutputSchema>;

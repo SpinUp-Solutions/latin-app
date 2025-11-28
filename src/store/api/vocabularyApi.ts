@@ -1,7 +1,7 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
 import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary/index';
 import { createAuthenticatedBaseQuery } from './baseQuery';
-import { VocabularyWordWithIdSchema } from '@/src/types/vocabulary/schemas';
+import { VocabularyWordWithIdSchema } from '@/shared/types/vocabulary/schemas';
 import { ZodError, ZodIssue } from 'zod';
 
 interface WordsResponse {

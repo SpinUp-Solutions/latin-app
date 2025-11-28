@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { DeclensionTableSchema } from '@/src/types/vocabulary/schemas/declension';
-import { DegreesTableSchema } from '@/src/types/vocabulary/schemas/adjective';
-import { ConjugationTableSchema } from '@/src/types/vocabulary/schemas/verb-conjugation';
-import type { DeclensionTable } from '@/src/types/vocabulary/schemas/declension';
-import type { ConjugationTable } from '@/src/types/vocabulary/schemas/verb-conjugation';
+import { DeclensionTableSchema } from '@/shared/types/vocabulary/schemas/declension';
+import { DegreesTableSchema } from '@/shared/types/vocabulary/schemas/adjective';
+import { ConjugationTableSchema } from '@/shared/types/vocabulary/schemas/verb-conjugation';
+import type { DeclensionTable } from '@/shared/types/vocabulary/schemas/declension';
+import type { ConjugationTable } from '@/shared/types/vocabulary/schemas/verb-conjugation';
 
 type DegreesTable = z.infer<typeof DegreesTableSchema>;
 

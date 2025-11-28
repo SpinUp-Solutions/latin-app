@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { BaseWordSchema } from '../schemas/base-word';
+import { BaseWordSchema } from '@/shared/types/vocabulary/schemas/base-word';
 
 export const BaseWordFormSchema = BaseWordSchema.omit({
   part_of_speech: true,

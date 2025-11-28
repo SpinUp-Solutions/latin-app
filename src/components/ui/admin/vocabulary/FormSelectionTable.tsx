@@ -2,14 +2,14 @@ import React, { useMemo } from 'react';
 import { Card, CardHeader, CardContent } from '@/src/components/ui/card';
 import { Button } from '@/src/components/ui/button';
 import { Badge } from '@/src/components/ui/badge';
-import type { PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
+import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 import type { TableGrid, NestedTableGrid } from '@/src/types/schema-introspection';
-import { ConjugationTableSchema } from '@/src/types/vocabulary/schemas/verb-conjugation';
+import { ConjugationTableSchema } from '@/shared/types/vocabulary/schemas/verb-conjugation';
 import {
   DeclensionTableSchema,
   AdjectiveDeclensionTableSchema,
   DegreesTableSchema,
-} from '@/src/types/vocabulary/schemas';
+} from '@/shared/types/vocabulary/schemas';
 import { introspectSchema } from '@/src/utils/schema-introspector';
 import { buildTableGrid } from '@/src/utils/table-builder';
 import { buildEmptyFromSchema } from '@/src/utils/schema-defaults';

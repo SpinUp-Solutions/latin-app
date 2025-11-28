@@ -322,10 +322,6 @@ export async function autocompleteVocabularyWord(request: AIAutocompleteRequest)
       console.log('[Autocomplete] Alternate form in AI response:', JSON.stringify(structured.alternate_form, null, 2));
     }
 
-    if ('notes' in structured) {
-      console.log('[Autocomplete] Notes in AI response:', structured.notes);
-    }
-
     if ('conjugation_table' in structured && structured.conjugation_table) {
       const participles = structured.conjugation_table?.nonFinite?.participle;
       console.log('[Autocomplete] Participles in AI response:', JSON.stringify(participles, null, 2));
@@ -383,8 +379,6 @@ export async function autocompleteVocabularyWord(request: AIAutocompleteRequest)
       }
     }
 
-    const notes = 'notes' in structured ? (structured as any).notes : undefined;
-
     console.log('[Autocomplete] Field status:', fieldStatus);
     console.log('[Autocomplete] Success! Generated fields:', Object.keys(data));
     console.log('[Autocomplete] Data being returned to client:', JSON.stringify(data, null, 2));
@@ -399,7 +393,6 @@ export async function autocompleteVocabularyWord(request: AIAutocompleteRequest)
       model: response.model,
       cost,
       fieldStatus,
-      notes,
     };
   } catch (error) {
     console.error('[Autocomplete] Error caught:', error);
