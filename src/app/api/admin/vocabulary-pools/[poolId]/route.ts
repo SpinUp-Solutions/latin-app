@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { FieldPath } from 'firebase-admin/firestore';
 import type { Word } from '@/src/types/admin-vocabulary';
-
-const WORDS_COLLECTION = 'vocabulary_words_v4';
+import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,7 +39,7 @@ export async function GET(request: NextRequest, { params }: { params: { poolId: 
         const batch = wordIds.slice(i, i + 10);
         batches.push(
           adminDb
-            .collection(WORDS_COLLECTION)
+            .collection(VOCABULARY_WORDS_COLLECTION)
             .where(FieldPath.documentId(), 'in', batch)
             .select(
               'word',

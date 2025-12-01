@@ -277,6 +277,28 @@ export const MatchingEditor: React.FC = () => {
                 <div className="text-amber-600">⚠️ Some left items don&apos;t have answer mappings</div>
               )}
               {editingContent.data.hint && <div className="text-green-600">✓ Has hint</div>}
+              {(() => {
+                const rightItemUsage = Object.values(editingContent.data.answers).reduce(
+                  (acc, rightId) => {
+                    acc[rightId] = (acc[rightId] || 0) + 1;
+                    return acc;
+                  },
+                  {} as Record<string, number>
+                );
+                const multiUse = Object.entries(rightItemUsage)
+                  .filter(([, count]) => count > 1)
+                  .map(([rightId, count]) => ({
+                    value: editingContent.data.rightColumn.find(item => item.id === rightId)?.value,
+                    count,
+                  }));
+                return (
+                  multiUse.length > 0 && (
+                    <div className="text-blue-600">
+                      ℹ️ Many-to-one: {multiUse.map(m => `"${m.value}" (${m.count}x)`).join(', ')}
+                    </div>
+                  )
+                );
+              })()}
             </div>
           </CardContent>
         </Card>

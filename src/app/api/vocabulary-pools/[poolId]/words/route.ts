@@ -3,8 +3,7 @@ import { adminDb } from '@/src/services/firebase-admin';
 import { FieldPath } from 'firebase-admin/firestore';
 import type { VocabularyPool } from '@/src/types/vocabulary-pool';
 import type { Word } from '@/src/types/admin-vocabulary';
-
-const WORDS_COLLECTION = 'vocabulary_words_v4';
+import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,7 +40,7 @@ export async function GET(request: NextRequest, { params }: { params: { poolId: 
 
     for (let i = 0; i < pool.wordDocIds.length; i += 10) {
       const batch = pool.wordDocIds.slice(i, i + 10);
-      batches.push(adminDb.collection(WORDS_COLLECTION).where(FieldPath.documentId(), 'in', batch).get());
+      batches.push(adminDb.collection(VOCABULARY_WORDS_COLLECTION).where(FieldPath.documentId(), 'in', batch).get());
     }
 
     const batchResults = await Promise.all(batches);

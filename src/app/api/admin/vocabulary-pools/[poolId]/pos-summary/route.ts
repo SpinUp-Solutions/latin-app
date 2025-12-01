@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
+import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 
 interface POSSummaryResponse {
   success: boolean;
@@ -54,7 +55,7 @@ export async function GET(
     for (let i = 0; i < wordDocIds.length; i += 10) {
       const chunk = wordDocIds.slice(i, i + 10);
       const batchQuery = adminDb
-        .collection('vocabulary_words_v4')
+        .collection(VOCABULARY_WORDS_COLLECTION)
         .where('__name__', 'in', chunk)
         .select('part_of_speech');
       batches.push(batchQuery.get());

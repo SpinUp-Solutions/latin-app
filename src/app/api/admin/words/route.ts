@@ -27,6 +27,10 @@ const serializeWord = (data: Record<string, unknown>): Record<string, unknown> =
   return serialized;
 };
 
+const stripMacrons = (str: string): string => {
+  return str.normalize('NFD').replace(/[\u0304]/g, '').normalize('NFC');
+};
+
 const parseCellPaths = (cellPaths: string | null): string[] => {
   if (!cellPaths) return [];
   return cellPaths
@@ -81,6 +85,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const selectFields = searchParams.get('select');
     const fetchAll = searchParams.get('fetchAll') === 'true';
     const randomize = !fetchAll && searchParams.get('randomize') === 'true';
+    const randomStart = searchParams.get('randomStart');
     const poolId = searchParams.get('poolId');
 
     if (countsOnly) {
@@ -151,6 +156,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         }
       }
     } else {
+      console.log('[VOCAB API] Querying collection:', collection);
       let query: Query = adminDb.collection(collection);
 
       const fields = parseSelectFields(selectFields);
@@ -158,14 +164,27 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         query = query.select(...fields);
       }
 
-      query = query.orderBy('word');
+      // Determine if using random ordering (for exercise generation)
+      const useRandomOrder = randomStart !== null && !search && !lastWordId;
+      const randomThreshold = useRandomOrder ? parseFloat(randomStart) : null;
+
+      if (useRandomOrder && randomThreshold !== null) {
+        console.log('[VOCAB API] Using random ordering with threshold:', randomThreshold);
+        query = query.orderBy('random_index');
+        query = query.where('random_index', '>=', randomThreshold);
+      } else {
+        console.log('[VOCAB API] Ordering by: sort_key');
+        query = query.orderBy('sort_key');
+      }
 
       if (wordType) {
+        console.log('[VOCAB API] Filtering by part_of_speech:', wordType);
         query = query.where('part_of_speech', '==', wordType);
       }
 
       if (search) {
-        query = query.where('word', '>=', search).where('word', '<=', search + '\uf8ff');
+        const searchKey = stripMacrons(search);
+        query = query.where('sort_key', '>=', searchKey).where('sort_key', '<=', searchKey + '\uf8ff');
       }
 
       if (wordType === 'verb') {
@@ -195,7 +214,51 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         query = query.limit(fetchLimit);
       }
 
+      console.log('[VOCAB API] Executing query...');
       snapshot = await query.get();
+      console.log('[VOCAB API] Query returned', snapshot.size, 'documents');
+
+      // Wrap-around: if using random order and didn't get enough results, fetch from beginning
+      if (useRandomOrder && randomThreshold !== null && !fetchAll && snapshot.docs.length < limit) {
+        const remaining = limit - snapshot.docs.length;
+        console.log('[VOCAB API] Wrap-around: need', remaining, 'more words from beginning');
+
+        let wrapQuery: Query = adminDb.collection(collection);
+        if (fields.length > 0) {
+          wrapQuery = wrapQuery.select(...fields);
+        }
+        wrapQuery = wrapQuery.orderBy('random_index');
+        wrapQuery = wrapQuery.where('random_index', '<', randomThreshold);
+
+        if (wordType) {
+          wrapQuery = wrapQuery.where('part_of_speech', '==', wordType);
+        }
+        if (wordType === 'verb') {
+          if (verbConjugation) {
+            wrapQuery = wrapQuery.where('conjugation', '==', verbConjugation);
+          }
+          if (isDeponent === 'true') {
+            wrapQuery = wrapQuery.where('is_deponent', '==', true);
+          } else if (isDeponent === 'false') {
+            wrapQuery = wrapQuery.where('is_deponent', '==', false);
+          }
+        } else if (wordType === 'noun' && nounDeclension) {
+          wrapQuery = wrapQuery.where('declension', '==', nounDeclension);
+        } else if (wordType === 'adjective' && adjectiveDeclension) {
+          wrapQuery = wrapQuery.where('declension', '==', adjectiveDeclension);
+        }
+
+        wrapQuery = wrapQuery.limit(remaining);
+        const wrapSnapshot = await wrapQuery.get();
+        console.log('[VOCAB API] Wrap-around query returned', wrapSnapshot.size, 'documents');
+
+        // Combine results
+        snapshot = {
+          docs: [...snapshot.docs, ...wrapSnapshot.docs],
+          size: snapshot.size + wrapSnapshot.size,
+          empty: snapshot.empty && wrapSnapshot.empty,
+        };
+      }
     }
 
     let docs = snapshot.docs;
@@ -203,6 +266,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       const shuffled = [...docs].sort(() => Math.random() - 0.5);
       docs = shuffled.slice(0, limit);
     }
+
+    console.log('[VOCAB API] Processing', docs.length, 'documents');
 
     const words = docs.map(doc => {
       const data = doc.data();
@@ -262,14 +327,27 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }
     });
 
+    console.log('[VOCAB API] Mapped to', words.length, 'words');
+    if (words.length > 0) {
+      console.log('[VOCAB API] First word:', {
+        id: words[0].id,
+        word: words[0].word,
+        sort_key: words[0].sort_key,
+        part_of_speech: words[0].part_of_speech,
+      });
+    }
+
+    const useRandomOrder = randomStart !== null && !search && !lastWordId;
     const hasMore = fetchAll
       ? false
       : poolId
         ? !!poolSourceMeta && poolSourceMeta.requestedCount < poolSourceMeta.totalIds
-        : randomize
+        : randomize || useRandomOrder
           ? false
           : snapshot.docs.length === fetchLimit;
-    const lastDoc = fetchAll || poolId || randomize ? null : docs[docs.length - 1];
+    const lastDoc = fetchAll || poolId || randomize || useRandomOrder ? null : docs[docs.length - 1];
+
+    console.log('[VOCAB API] Returning response with', words.length, 'words, hasMore:', hasMore);
 
     return NextResponse.json({
       success: true,
@@ -321,8 +399,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const now = new Date();
     const isoTimestamp = now.toISOString();
 
+    const wordValue = typeof wordPayload.word === 'string' ? wordPayload.word : '';
+    const sortKey = stripMacrons(wordValue);
+    const randomIndex = Math.random();
+
     const validationResult = VocabularyWordSchema.safeParse({
       ...wordPayload,
+      sort_key: sortKey,
+      random_index: randomIndex,
       createdAt: isoTimestamp,
       updatedAt: isoTimestamp,
     });
@@ -390,10 +474,14 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const updateData = {
+    const updateData: Record<string, unknown> = {
       ...updates,
       updatedAt: new Date(),
     };
+
+    if (typeof updates.word === 'string') {
+      updateData.sort_key = stripMacrons(updates.word);
+    }
 
     await adminDb.collection(collection).doc(wordId).update(updateData);
 

@@ -49,7 +49,7 @@ const FieldSelect: React.FC<FieldSelectProps> = ({
               showIncorrect && isSelected
                 ? 'bg-red-50 border border-red-500 text-red-700 animate-pulse'
                 : isMatched
-                  ? 'bg-roman-green/10 border border-roman-green text-roman-green'
+                  ? 'bg-gray-100 border border-gray-300 text-gray-400 opacity-50 cursor-not-allowed'
                   : isSelected
                     ? 'bg-roman-gold/10 border border-roman-gold'
                     : 'bg-white border border-gray-200 hover:border-roman-red/50'

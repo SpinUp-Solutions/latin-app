@@ -216,6 +216,8 @@ export const advancedVocabularyApi = createApi({
               params.append('fetchAll', 'true');
             } else if (typeof count === 'number') {
               params.append('limit', String(count));
+              // Use random starting point for true randomization in filter mode
+              params.append('randomStart', String(Math.random()));
             }
 
             if (cfg.formSelection?.selectedCellPaths && cfg.formSelection.selectedCellPaths.length > 0) {

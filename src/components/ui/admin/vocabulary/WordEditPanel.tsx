@@ -11,7 +11,7 @@ import { DeclensionTableSchema, AdjectiveDeclensionTableSchema } from '@/shared/
 import { ConjugationTableSchema } from '@/shared/types/vocabulary/schemas/verb-conjugation';
 import { DegreesTableSchema } from '@/shared/types/vocabulary/schemas/adjective';
 import { BookOpen } from 'lucide-react';
-import { BaseWordForm, NounForm, PronounForm, AdjectiveForm, VerbForm, VocabularyFormValues } from './forms';
+import { BaseWordForm, NounForm, PronounForm, AdjectiveForm, VerbForm, PrepositionForm, VocabularyFormValues } from './forms';
 import { AIAutocompleteButton } from './AIAutocompleteButton';
 import {
   getFormSchemaForPartOfSpeech,
@@ -46,6 +46,9 @@ const EMPTY_FORM_VALUES: BaseWordFormValues = {
   pronunciation: '',
   type: 'core',
   alternate_form: '',
+  dictionary_entry: null,
+  sort_key: '',
+  random_index: 0,
 };
 
 const EmptyState: React.FC = () => (
@@ -482,8 +485,9 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
         return <AdjectiveForm />;
       case 'verb':
         return <VerbForm />;
-      case 'adverb':
       case 'preposition':
+        return <PrepositionForm />;
+      case 'adverb':
       case 'conjunction':
       case 'interjection':
         return null;

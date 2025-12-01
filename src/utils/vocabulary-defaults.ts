@@ -22,6 +22,9 @@ const buildBaseWord = (partOfSpeech: PartOfSpeech) => ({
   pronunciation: null,
   type: 'core' as const,
   alternate_form: null,
+  dictionary_entry: null,
+  sort_key: '',
+  random_index: 0,
   createdAt: ZERO_TIMESTAMP,
   updatedAt: ZERO_TIMESTAMP,
 });
@@ -65,9 +68,18 @@ export const buildEmptyWord = (partOfSpeech: PartOfSpeech): VocabularyWordWithId
         is_deponent: null,
       };
     case 'adverb':
-    case 'preposition':
     case 'conjunction':
     case 'interjection':
+      return {
+        ...base,
+        part_of_speech: partOfSpeech,
+      };
+    case 'preposition':
+      return {
+        ...base,
+        part_of_speech: 'preposition',
+        case: 'accusative' as const,
+      };
     default:
       return {
         ...base,

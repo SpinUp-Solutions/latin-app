@@ -4,6 +4,7 @@ import { NounFormSchema, NounFormValues } from './noun';
 import { PronounFormSchema, PronounFormValues } from './pronoun';
 import { AdjectiveFormSchema, AdjectiveFormValues } from './adjective';
 import { VerbFormSchema, VerbFormValues } from './verb';
+import { PrepositionFormSchema, PrepositionFormValues } from './preposition';
 import { VerbConjugationSchema } from '@/shared/types/vocabulary/schemas/enums';
 import type { z } from 'zod';
 
@@ -12,6 +13,7 @@ type SpecificSchema =
   | typeof PronounFormSchema
   | typeof AdjectiveFormSchema
   | typeof VerbFormSchema
+  | typeof PrepositionFormSchema
   | typeof BaseWordFormSchema;
 
 const schemaMap: Record<VocabularyWord['part_of_speech'], SpecificSchema> = {
@@ -20,7 +22,7 @@ const schemaMap: Record<VocabularyWord['part_of_speech'], SpecificSchema> = {
   adjective: AdjectiveFormSchema,
   verb: VerbFormSchema,
   adverb: BaseWordFormSchema,
-  preposition: BaseWordFormSchema,
+  preposition: PrepositionFormSchema,
   conjunction: BaseWordFormSchema,
   interjection: BaseWordFormSchema,
 };
@@ -50,6 +52,7 @@ export type VocabularyFormValues =
   | (BaseWordFormValues & PronounFormValues)
   | (BaseWordFormValues & AdjectiveFormValues)
   | (BaseWordFormValues & VerbFormValues)
+  | (BaseWordFormValues & PrepositionFormValues)
   | BaseWordFormValues;
 
 export const toFormDefaultValues = (word: VocabularyWordWithId): VocabularyFormValues => {
@@ -61,6 +64,9 @@ export const toFormDefaultValues = (word: VocabularyWordWithId): VocabularyFormV
     pronunciation: word.pronunciation ?? '',
     type: word.type,
     alternate_form: word.alternate_form ?? '',
+    dictionary_entry: word.dictionary_entry,
+    sort_key: word.sort_key,
+    random_index: word.random_index,
   };
 
   if (word.part_of_speech === 'noun') {
@@ -94,6 +100,13 @@ export const toFormDefaultValues = (word: VocabularyWordWithId): VocabularyFormV
       conjugation: conjugationValue,
       is_deponent: word.is_deponent ?? null,
       principal_parts: word.principal_parts ?? [],
+    };
+  }
+
+  if (word.part_of_speech === 'preposition') {
+    return {
+      ...base,
+      case: word.case,
     };
   }
 
@@ -160,6 +173,14 @@ export const applyFormValuesToWord = (
       is_deponent: verbValues.is_deponent ?? word.is_deponent,
       principal_parts: verbValues.principal_parts ?? word.principal_parts,
       conjugation_table: word.conjugation_table,
+    } as VocabularyWordWithId;
+  }
+
+  if (word.part_of_speech === 'preposition') {
+    const prepositionValues = values as BaseWordFormValues & PrepositionFormValues;
+    return {
+      ...baseApplied,
+      case: prepositionValues.case,
     } as VocabularyWordWithId;
   }
 

@@ -16,6 +16,7 @@ export const BaseWordForm = () => {
   const etymologyAIStatus = useAIFieldStatus('etymology');
   const pronunciationAIStatus = useAIFieldStatus('pronunciation');
   const alternateFormAIStatus = useAIFieldStatus('alternate_form');
+  const dictionaryEntryAIStatus = useAIFieldStatus('dictionary_entry');
 
   const addDefinition = () => {
     form.setValue('definitions', [...definitions, '']);
@@ -171,6 +172,31 @@ export const BaseWordForm = () => {
                   className={cn(
                     alternateFormAIStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
                     alternateFormAIStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
+                    'focus:bg-white'
+                  )}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          );
+        }}
+      />
+
+      <FormField
+        control={form.control}
+        name="dictionary_entry"
+        render={({ field }) => {
+          return (
+            <FormItem>
+              <FormLabel>Dictionary Entry</FormLabel>
+              <FormControl>
+                <Input
+                  {...field}
+                  value={field.value ?? ''}
+                  placeholder="e.g., amō, amāre, amāvī, amātum"
+                  className={cn(
+                    dictionaryEntryAIStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
+                    dictionaryEntryAIStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
                     'focus:bg-white'
                   )}
                 />
