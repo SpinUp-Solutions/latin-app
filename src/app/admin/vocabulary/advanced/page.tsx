@@ -24,8 +24,9 @@ import { AdvancedResultsList } from '@/src/components/ui/admin/vocabulary/Advanc
 import { FormSelectionTable } from '@/src/components/ui/admin/vocabulary/FormSelectionTable';
 import { useDebounce } from '@/src/hooks/useDebounce';
 import { useFormSelection } from '@/src/hooks/useFormSelection';
+import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 
-const TARGET_COLLECTION = 'vocabulary_words_v4';
+const TARGET_COLLECTION = VOCABULARY_WORDS_COLLECTION;
 
 function AdvancedFiltersPage() {
   const router = useRouter();

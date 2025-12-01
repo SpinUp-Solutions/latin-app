@@ -6,8 +6,9 @@ import { parseFormPathFromString } from '@/src/utils/exerciseFormPaths';
 import type { VerbFormPath, NounFormPath, AdjectiveFormPath } from '@/src/types/api/exercise-word-responses';
 import { TABLE_TYPE_CONFIG } from '@/src/utils/schema-helpers';
 import { scanTableForMatchingForms, categorizeMatchingPaths } from '@/src/utils/tableScanner';
+import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 
-const DEFAULT_COLLECTION = 'vocabulary_words_v4';
+const DEFAULT_COLLECTION = VOCABULARY_WORDS_COLLECTION;
 const TABLE_FIELDS = ['word', 'conjugation_table', 'declension_table', 'degrees_table'] as const;
 
 const serializeTimestamp = (value: unknown): string | undefined => {

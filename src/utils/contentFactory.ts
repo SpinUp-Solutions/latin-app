@@ -1,5 +1,6 @@
 import { RenderableContentItem } from '@/src/types/page';
 import { createDefaultFeedbackConfig, DEFAULT_ITEM_PROGRESSION_DELAY } from './feedbackDefaults';
+import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 
 export const generateId = (prefix?: string): string => {
   const timestamp = Date.now();
@@ -319,7 +320,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
         translationDirection: 'latin-to-english',
         data: {
           generatorConfig: {
-            collection: 'vocabulary_words_v4',
+            collection: VOCABULARY_WORDS_COLLECTION,
             wordSource: 'filters',
             poolId: null,
             count: 5,
@@ -339,7 +340,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
         data: {
           mode: 'step-by-step',
           generatorConfig: {
-            collection: 'vocabulary_words_v4',
+            collection: VOCABULARY_WORDS_COLLECTION,
             wordSource: 'filters',
             poolId: null,
             count: 5,

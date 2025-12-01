@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
+import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 
 const serializeTimestamp = (value: unknown): string | undefined => {
   if (value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function') {
@@ -30,7 +31,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     const { searchParams } = new URL(request.url);
-    const collection = searchParams.get('collection') || 'vocabulary_words_v4';
+    const collection = searchParams.get('collection') || VOCABULARY_WORDS_COLLECTION;
 
     const snapshot = await adminDb.collection(collection).get();
 

@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
+import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 
 export async function DELETE(request: NextRequest, { params }: { params: { wordId: string } }): Promise<NextResponse> {
   try {
     const { wordId } = params;
     const { searchParams } = new URL(request.url);
-    const collection = searchParams.get('collection') || 'vocabulary_words_v4';
+    const collection = searchParams.get('collection') || VOCABULARY_WORDS_COLLECTION;
 
     if (!wordId) {
       return NextResponse.json(

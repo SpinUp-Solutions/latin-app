@@ -27,6 +27,7 @@ import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { PartOfSpeechSchema, type PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 import { buildEmptyWord, isPlaceholderWord } from '@/src/utils/vocabulary-defaults';
+import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 
 const EMPTY_WORDS: VocabularyWordWithId[] = [];
 const PART_OF_SPEECH_OPTIONS = PartOfSpeechSchema.options;
@@ -41,7 +42,7 @@ function AdminVocabularyPage() {
   const [selectedWordId, setSelectedWordId] = useState<string | null>(null);
   const [creatingWord, setCreatingWord] = useState<VocabularyWordWithId | null>(null);
   const [deletingWordId, setDeletingWordId] = useState<string | null>(null);
-  const TARGET_COLLECTION = 'vocabulary_words_v4';
+  const TARGET_COLLECTION = VOCABULARY_WORDS_COLLECTION;
 
   const queryArgs = {
     wordType: filters.wordType,
