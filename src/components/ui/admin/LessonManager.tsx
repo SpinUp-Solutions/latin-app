@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/src/components/ui/tabs';
 import { BookOpen, Edit, Trash2, Calendar, Eye, FileText, Clock } from 'lucide-react';
 import { Lesson } from '@/src/types/lesson';
 import { toast } from 'sonner';
@@ -19,17 +21,20 @@ interface LessonManagerProps {
 }
 
 export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onContinueDraft }) => {
+  const router = useRouter();
   const dispatch = useAppDispatch();
   const { data: lessons = [], isLoading: loading, error } = useGetLessonsQuery();
   const [deleteLesson] = useDeleteLessonMutation();
   const { drafts } = useAppSelector(state => state.lessonEditor);
-  const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [dialogState, setDialogState] = useState<{
     isOpen: boolean;
     title: string;
     description: string;
     onConfirm: () => void;
   } | null>(null);
+
+  const normalLessons = lessons.filter(l => l.type === 'normal');
+  const vocabLessons = lessons.filter(l => l.type === 'vocab');
 
   useEffect(() => {
     dispatch(loadDrafts());
@@ -86,92 +91,81 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
     });
   };
 
+  const renderLessonGrid = (lessonsList: Lesson[]) => {
+    if (lessonsList.length === 0) {
+      return <div className="text-center text-gray-500 py-8">No lessons found in this category.</div>;
+    }
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {lessonsList.map(lesson => (
+          <Card key={lesson.id} className="hover:shadow-lg transition-shadow">
+            <CardHeader>
+              <CardTitle className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <BookOpen className="h-5 w-5 text-blue-600 flex-shrink-0" />
+                  <div className="truncate min-w-0">
+                    <SimpleRichDisplay content={lesson.title} className="truncate" />
+                  </div>
+                </div>
+                {lesson.isLive && (
+                  <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded flex-shrink-0">Live</span>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="text-sm text-gray-600 line-clamp-3">
+                <SimpleRichDisplay content={lesson.description || 'No description provided'} />
+              </div>
+
+              <div className="text-xs text-gray-500 space-y-1">
+                <div className="flex items-center gap-1">
+                  <Calendar className="h-3 w-3" />
+                  {formatDate(lesson.updatedAt || lesson.createdAt)}
+                </div>
+                <div>v{lesson.version || 1}</div>
+              </div>
+
+              <div className="flex justify-between text-xs text-gray-600">
+                <span>{lesson.pages.length} total pages</span>
+                <span>
+                  {lesson.pages.reduce(
+                    (count, page) => count + page.items.filter(item => isExerciseType(item.type)).length,
+                    0
+                  )}{' '}
+                  exercises
+                </span>
+                <span>{lesson.pages.reduce((count, page) => count + page.items.length, 0)} items</span>
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => router.push(`/admin/lessons/preview/${lesson.id}`)}
+                  className="flex-1">
+                  <Eye className="h-4 w-4 mr-1" />
+                  View
+                </Button>
+                <Button size="sm" onClick={() => onEditLesson(lesson)} className="flex-1">
+                  <Edit className="h-4 w-4 mr-1" />
+                  Edit
+                </Button>
+                <Button size="sm" variant="destructive" onClick={() => handleDeleteLesson(lesson.id, lesson.title)}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>
-      </div>
-    );
-  }
-
-  if (selectedLesson) {
-    const totalPages = selectedLesson.pages.length;
-    const totalItems = selectedLesson.pages.reduce((count, page) => count + page.items.length, 0);
-    const totalExercises = selectedLesson.pages.reduce(
-      (count, page) => count + page.items.filter(item => isExerciseType(item.type)).length,
-      0
-    );
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-serif text-gray-800">Lesson Details</h2>
-            <p className="text-roman-stone">View lesson information and content</p>
-          </div>
-          <div className="flex gap-2">
-            <Button onClick={() => setSelectedLesson(null)} variant="outline">
-              Back to List
-            </Button>
-            <Button onClick={() => onEditLesson(selectedLesson)}>
-              <Edit className="h-4 w-4 mr-2" />
-              Edit Lesson
-            </Button>
-          </div>
-        </div>
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5" />
-              <SimpleRichDisplay content={selectedLesson.title} />
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <h4 className="font-medium text-gray-700 mb-1">Description</h4>
-              <div className="text-gray-600">
-                <SimpleRichDisplay content={selectedLesson.description || 'No description provided'} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <h4 className="font-medium text-gray-700 mb-1">Lesson ID</h4>
-                <p className="text-gray-600 font-mono text-sm">{selectedLesson.id}</p>
-              </div>
-              <div>
-                <h4 className="font-medium text-gray-700 mb-1">Version</h4>
-                <p className="text-gray-600">{selectedLesson.version || 1}</p>
-              </div>
-              <div>
-                <h4 className="font-medium text-gray-700 mb-1">Created</h4>
-                <p className="text-gray-600 text-sm">{formatDate(selectedLesson.createdAt)}</p>
-              </div>
-              <div>
-                <h4 className="font-medium text-gray-700 mb-1">Last Updated</h4>
-                <p className="text-gray-600 text-sm">{formatDate(selectedLesson.updatedAt)}</p>
-              </div>
-            </div>
-            <div>
-              <h4 className="font-medium text-gray-700 mb-2">Content Summary</h4>
-              <div className="grid grid-cols-3 gap-4 text-center">
-                <div className="bg-blue-50 p-3 rounded">
-                  <div className="text-2xl font-bold text-blue-600">{totalPages}</div>
-                  <div className="text-sm text-blue-700">Total Pages</div>
-                  <div className="text-xs text-gray-500">All lesson pages</div>
-                </div>
-                <div className="bg-green-50 p-3 rounded">
-                  <div className="text-2xl font-bold text-green-600">{totalExercises}</div>
-                  <div className="text-sm text-green-700">Total Exercises</div>
-                  <div className="text-xs text-gray-500">Exercise content items</div>
-                </div>
-                <div className="bg-purple-50 p-3 rounded">
-                  <div className="text-2xl font-bold text-purple-600">{totalItems}</div>
-                  <div className="text-sm text-purple-700">Total Content Items</div>
-                  <div className="text-xs text-gray-500">Across all pages</div>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     );
   }
@@ -191,26 +185,22 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
               .map(([lessonId, draft]) => (
                 <Card key={lessonId} className="hover:shadow-lg transition-shadow border-amber-300 bg-amber-50/50">
                   <CardHeader>
-                    <CardTitle className="flex items-start justify-between">
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-5 w-5 text-amber-600" />
-                        <div className="truncate">
-                          <SimpleRichDisplay content={draft.lesson.title} />
+                    <CardTitle className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <FileText className="h-5 w-5 text-amber-600 flex-shrink-0" />
+                        <div className="truncate min-w-0">
+                          <SimpleRichDisplay content={draft.lesson.title} className="truncate" />
                         </div>
                       </div>
-                      <span className="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded-full">Draft</span>
+                      <span className="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded-full flex-shrink-0">
+                        Draft
+                      </span>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <p
-                      className="text-sm text-gray-600 overflow-hidden text-ellipsis"
-                      style={{
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical' as const,
-                      }}>
+                    <div className="text-sm text-gray-600 line-clamp-3">
                       <SimpleRichDisplay content={draft.lesson.description || 'No description provided'} />
-                    </p>
+                    </div>
 
                     <div className="text-xs text-gray-500 space-y-1">
                       <div className="flex items-center gap-1">
@@ -252,7 +242,6 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
         </section>
       )}
 
-      {/* Saved Lessons Section */}
       <section>
         <h2 className="text-xl font-serif text-gray-800 border-b pb-2 mb-4">Saved Lessons ({lessons.length})</h2>
         {lessons.length === 0 && Object.keys(drafts).length === 0 ? (
@@ -268,75 +257,14 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
             No saved lessons yet. Continue with your drafts or create a new lesson.
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {lessons.map(lesson => {
-              return (
-                <Card key={lesson.id} className="hover:shadow-lg transition-shadow">
-                  <CardHeader>
-                    <CardTitle className="flex items-start justify-between">
-                      <div className="flex items-center gap-2">
-                        <BookOpen className="h-5 w-5 text-blue-600" />
-                        <div className="truncate">
-                          <SimpleRichDisplay content={lesson.title} />
-                        </div>
-                      </div>
-                      {lesson.isLive && (
-                        <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Live</span>
-                      )}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <p
-                      className="text-sm text-gray-600 overflow-hidden text-ellipsis"
-                      style={{
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical' as const,
-                      }}>
-                      <SimpleRichDisplay content={lesson.description || 'No description provided'} />
-                    </p>
-
-                    <div className="text-xs text-gray-500 space-y-1">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        {formatDate(lesson.updatedAt || lesson.createdAt)}
-                      </div>
-                      <div>v{lesson.version || 1}</div>
-                    </div>
-
-                    <div className="flex justify-between text-xs text-gray-600">
-                      <span>{lesson.pages.length} total pages</span>
-                      <span>
-                        {lesson.pages.reduce(
-                          (count, page) => count + page.items.filter(item => isExerciseType(item.type)).length,
-                          0
-                        )}{' '}
-                        exercises
-                      </span>
-                      <span>{lesson.pages.reduce((count, page) => count + page.items.length, 0)} items</span>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" onClick={() => setSelectedLesson(lesson)} className="flex-1">
-                        <Eye className="h-4 w-4 mr-1" />
-                        View
-                      </Button>
-                      <Button size="sm" onClick={() => onEditLesson(lesson)} className="flex-1">
-                        <Edit className="h-4 w-4 mr-1" />
-                        Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => handleDeleteLesson(lesson.id, lesson.title)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+          <Tabs defaultValue="normal" className="w-full">
+            <TabsList>
+              <TabsTrigger value="normal">Normal Lessons ({normalLessons.length})</TabsTrigger>
+              <TabsTrigger value="vocab">Vocab Lessons ({vocabLessons.length})</TabsTrigger>
+            </TabsList>
+            <TabsContent value="normal">{renderLessonGrid(normalLessons)}</TabsContent>
+            <TabsContent value="vocab">{renderLessonGrid(vocabLessons)}</TabsContent>
+          </Tabs>
         )}
       </section>
       <ConfirmationDialog

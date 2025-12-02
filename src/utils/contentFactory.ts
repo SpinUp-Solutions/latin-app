@@ -1,5 +1,6 @@
 import { RenderableContentItem } from '@/src/types/page';
 import { createDefaultFeedbackConfig, DEFAULT_ITEM_PROGRESSION_DELAY } from './feedbackDefaults';
+import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 
 export const generateId = (prefix?: string): string => {
   const timestamp = Date.now();
@@ -129,19 +130,13 @@ export const createNewContent = (type: string): RenderableContentItem => {
         id: baseId,
         type: 'fill-embolded-text',
         title: 'Fill In Embolded Text Exercise',
-        instructions: 'Identify the embolded text and provide the answer.',
+        instructions: 'Click on the embolded words and provide the correct answer.',
         audioPath: null,
         itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
         feedbackConfig: createDefaultFeedbackConfig(),
         data: {
           passage: 'Passage with embolded text to analyze.',
-          verbs: [
-            {
-              wordIndex: 0,
-              correctPronoun: 'he/she/it',
-              explanation: 'This is the correct answer.',
-            },
-          ],
+          words: [],
         },
       };
     case 'sentence-diagramming':
@@ -226,6 +221,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
             },
           ],
           explanation: 'This explains why the correct answer is right.',
+          allowMultipleSelections: false,
         },
       };
     case 'odd-one-out':
@@ -310,6 +306,46 @@ export const createNewContent = (type: string): RenderableContentItem => {
           explanation: 'Adjectives are words that modify nouns and add descriptive information.',
           allowOverSelection: false,
           minimumCorrect: undefined,
+        },
+      };
+    case 'generated-translation':
+      return {
+        id: baseId,
+        type: 'generated-translation',
+        title: 'Generated Translation Exercise',
+        instructions: 'Translate between Latin and English based on the prompt.',
+        audioPath: null,
+        itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
+        feedbackConfig: createDefaultFeedbackConfig(),
+        translationDirection: 'latin-to-english',
+        data: {
+          generatorConfig: {
+            collection: VOCABULARY_WORDS_COLLECTION,
+            wordSource: 'filters',
+            poolId: null,
+            count: 5,
+          },
+          posConfigs: {},
+        },
+      };
+    case 'generated-form-identification':
+      return {
+        id: baseId,
+        type: 'generated-form-identification',
+        title: 'Generated Form Identification Exercise',
+        instructions: 'Identify the grammatical features of each Latin word.',
+        audioPath: null,
+        itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
+        feedbackConfig: createDefaultFeedbackConfig(),
+        data: {
+          mode: 'step-by-step',
+          generatorConfig: {
+            collection: VOCABULARY_WORDS_COLLECTION,
+            wordSource: 'filters',
+            poolId: null,
+            count: 5,
+          },
+          posConfigs: {},
         },
       };
     default:

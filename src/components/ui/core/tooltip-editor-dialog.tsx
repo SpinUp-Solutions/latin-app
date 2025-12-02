@@ -12,6 +12,16 @@ import { TooltipData, TooltipFormData } from '@/src/types/tooltip';
 import { WordLookupService, WordLookupResult } from '@/src/services/wordLookupService';
 import { transformToFormData, cleanFormData, getEmptyFormData } from '@/src/utils/tooltipUtils';
 
+const extractPath = (url: string): string => {
+  if (!url.trim()) return '';
+  try {
+    const parsed = new URL(url, window.location.origin);
+    return parsed.pathname;
+  } catch {
+    return url.startsWith('/') ? url : `/${url}`;
+  }
+};
+
 interface SearchState {
   isSearching: boolean;
   searchResult: WordLookupResult | null;
@@ -60,6 +70,11 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
 
   const handleInputChange = (field: keyof TooltipFormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleLinkChange = (value: string) => {
+    const path = extractPath(value);
+    setFormData(prev => ({ ...prev, link: path }));
   };
 
   const handleWordSearch = async () => {
@@ -134,7 +149,6 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
 
   const handleSave = () => {
     const cleanedData = cleanFormData(formData);
-    // Ensure required fields are present
     const completeData: TooltipFormData = {
       word: cleanedData.word || formData.word,
       translation: cleanedData.translation,
@@ -149,6 +163,7 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
       conjugationClass: cleanedData.conjugationClass,
       grammaticalInfo: cleanedData.grammaticalInfo,
       principalParts: cleanedData.principalParts,
+      link: cleanedData.link,
     };
     onSave(completeData);
     onClose();
@@ -326,6 +341,13 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
                 onChange={value => handleInputChange('etymology', value)}
                 placeholder="Word origin and history"
                 rows={2}
+              />
+
+              <SimpleInput
+                label="Link"
+                value={formData.link || ''}
+                onChange={handleLinkChange}
+                placeholder="Paste URL or path (e.g., /words/puella)"
               />
             </TabsContent>
 

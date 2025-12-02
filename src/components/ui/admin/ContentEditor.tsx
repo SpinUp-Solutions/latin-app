@@ -12,12 +12,14 @@ import { VocabularyEditor } from './content-editor/VocabularyEditor';
 import { MatchingEditor } from './content-editor/MatchingEditor';
 import { FillEditor } from './content-editor/FillEditor';
 import { TextSelectionEditor } from './content-editor/TextSelectionEditor';
-import { FillEmboldedTextEditor } from './content-editor/VerbAnalysisEditor';
+import { FillEmboldedTextEditor } from './content-editor/FillEmboldedTextEditor';
 import { SentenceDiagrammingEditor } from './content-editor/SentenceDiagrammingEditor';
 import { MultipleChoiceEditor } from './content-editor/MultipleChoiceEditor';
 import { OddOneOutEditor } from './content-editor/OddOneOutEditor';
 import { TableFillEditor } from './content-editor/TableFillEditor';
 import { ClickOnMultipleWordsEditor } from './content-editor/ClickOnMultipleWordsEditor';
+import { GeneratedTranslationEditor } from './content-editor/GeneratedTranslationEditor';
+import { GeneratedFormIdentificationEditor } from './content-editor/GeneratedFormIdentificationEditor';
 
 import { getEditorTitle } from '@/src/utils/editorRegistry';
 
@@ -65,6 +67,10 @@ export const ContentEditor: React.FC = () => {
         return <TableFillEditor />;
       case 'click-on-multiple-words':
         return <ClickOnMultipleWordsEditor />;
+      case 'generated-translation':
+        return <GeneratedTranslationEditor />;
+      case 'generated-form-identification':
+        return <GeneratedFormIdentificationEditor />;
       default:
         return (
           <div className="p-8 text-center text-gray-500">

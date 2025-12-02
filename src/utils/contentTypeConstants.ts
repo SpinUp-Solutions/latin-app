@@ -12,6 +12,8 @@ import {
   Filter,
   TableProperties,
   MousePointerClick,
+  Sparkles,
+  Fingerprint,
 } from 'lucide-react';
 
 export const ALL_CONTENT_TYPES = [
@@ -29,6 +31,8 @@ export const ALL_CONTENT_TYPES = [
   { type: 'sentence-diagramming', icon: Pencil, label: 'Sentence Diagramming' },
   { type: 'table-fill', icon: TableProperties, label: 'Table Fill Exercise' },
   { type: 'click-on-multiple-words', icon: MousePointerClick, label: 'Click On Multiple Words' },
+  { type: 'generated-translation', icon: Sparkles, label: 'Generated Translation Exercise' },
+  { type: 'generated-form-identification', icon: Fingerprint, label: 'Generated Form Identification Exercise' },
 ] as const;
 
 export const CONTENT_TYPES = [
@@ -49,4 +53,6 @@ export const EXERCISE_TYPES = [
   { type: 'sentence-diagramming', icon: Pencil, label: 'Sentence Diagramming' },
   { type: 'table-fill', icon: TableProperties, label: 'Table Fill Exercise' },
   { type: 'click-on-multiple-words', icon: MousePointerClick, label: 'Click On Multiple Words' },
+  { type: 'generated-translation', icon: Sparkles, label: 'Generated Translation Exercise' },
+  { type: 'generated-form-identification', icon: Fingerprint, label: 'Generated Form Identification Exercise' },
 ] as const;

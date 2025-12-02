@@ -46,9 +46,8 @@ export async function POST(request: NextRequest) {
 
     const lesson: Lesson = await request.json();
 
-    // Validate required fields
-    if (!lesson.id || !lesson.title) {
-      return NextResponse.json({ error: 'Lesson ID and title are required' }, { status: 400 });
+    if (!lesson.id || !lesson.title || !lesson.type) {
+      return NextResponse.json({ error: 'Lesson ID, title, and type are required' }, { status: 400 });
     }
 
     // Check if lesson ID already exists
@@ -106,9 +105,8 @@ export async function PUT(request: NextRequest) {
 
     const lesson: Lesson = await request.json();
 
-    // Validate required fields
-    if (!lesson.id || !lesson.title) {
-      return NextResponse.json({ error: 'Lesson ID and title are required' }, { status: 400 });
+    if (!lesson.id || !lesson.title || !lesson.type) {
+      return NextResponse.json({ error: 'Lesson ID, title, and type are required' }, { status: 400 });
     }
 
     // Check if lesson exists

@@ -83,7 +83,6 @@ function VocabularyPoolsPage() {
           hasMore={pagination.hasMore}
           onLoadMore={() => {}}
           onEdit={pool => router.push(`/admin/vocabulary-pools/${pool.id}/edit`)}
-          onView={pool => router.push(`/admin/vocabulary-pools/${pool.id}`)}
           onDelete={handleDeletePool}
         />
       </main>

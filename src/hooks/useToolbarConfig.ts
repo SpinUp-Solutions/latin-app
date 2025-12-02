@@ -9,6 +9,7 @@ import {
   Heading3,
   List,
   MessageSquare,
+  Link,
   Parentheses,
   Brackets,
   Circle,
@@ -31,6 +32,7 @@ interface UseToolbarConfigProps {
   onAnnotationClick?: (type: AnnotationType) => void;
   onClearAnnotations?: () => void;
   onAddTooltip?: () => void;
+  onAddHyperlink?: () => void;
   disabled?: boolean;
 }
 
@@ -40,6 +42,7 @@ export const useToolbarConfig = ({
   onAnnotationClick,
   onClearAnnotations,
   onAddTooltip,
+  onAddHyperlink,
   disabled = false,
 }: UseToolbarConfigProps): ToolbarConfig | null => {
   const { createButton, createSection, createConfig } = useToolbarFactory();
@@ -83,6 +86,9 @@ export const useToolbarConfig = ({
           createSection('Tools', [
             createButton('tooltip', MessageSquare, 'Add Tooltip', {
               action: onAddTooltip,
+            }),
+            createButton('hyperlink', Link, 'Add Link', {
+              action: onAddHyperlink,
             }),
           ]),
         ],
@@ -237,6 +243,7 @@ export const useToolbarConfig = ({
     onAnnotationClick,
     onClearAnnotations,
     onAddTooltip,
+    onAddHyperlink,
     disabled,
     createButton,
     createSection,

@@ -53,14 +53,7 @@ export const MultipleChoiceEditor: React.FC = () => {
   ) => {
     const newOptions = editingContent.data.options.map((option, i) => {
       if (i === index) {
-        // If setting this option as correct, unset all others
-        if (field === 'isCorrect' && value === true) {
-          return { ...option, [field]: value };
-        }
         return { ...option, [field]: value };
-      } else if (field === 'isCorrect' && value === true) {
-        // Unset other correct options when setting one as correct
-        return { ...option, isCorrect: false };
       }
       return option;
     });
@@ -123,6 +116,29 @@ export const MultipleChoiceEditor: React.FC = () => {
           rows={3}
           className="w-full"
         />
+      </div>
+
+      {/* Allow Multiple Selections */}
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="allowMultipleSelections"
+          checked={getCorrectOptionCount() > 1 || editingContent.data.allowMultipleSelections}
+          onChange={e => updateData({ allowMultipleSelections: e.target.checked })}
+          disabled={getCorrectOptionCount() > 1}
+          className="h-4 w-4 rounded border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+        />
+        <label
+          htmlFor="allowMultipleSelections"
+          className={cn(
+            'text-sm font-medium',
+            getCorrectOptionCount() > 1 ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'
+          )}>
+          Allow students to select multiple options
+          {getCorrectOptionCount() > 1 && (
+            <span className="ml-2 text-xs text-gray-500">(automatically enabled with multiple correct answers)</span>
+          )}
+        </label>
       </div>
 
       {/* Options */}
@@ -243,9 +259,6 @@ export const MultipleChoiceEditor: React.FC = () => {
                 <strong>Correct Options:</strong> {getCorrectOptionCount()}
               </div>
               {getCorrectOptionCount() === 0 && <div className="text-red-600">❌ No correct answer selected</div>}
-              {getCorrectOptionCount() > 1 && (
-                <div className="text-amber-600">⚠️ Multiple correct answers selected (only one should be correct)</div>
-              )}
               {editingContent.data.options.length < 2 && (
                 <div className="text-amber-600">⚠️ Need at least 2 options</div>
               )}

@@ -54,33 +54,33 @@ export const ContentItem: React.FC<ContentItemProps> = ({ item, onEdit, onRemove
     <div
       ref={setNodeRef}
       style={style}
-      className="flex items-center justify-between bg-gray-50 p-3 rounded border hover:bg-gray-100">
-      <div className="flex items-center gap-2">
+      className="flex items-center justify-between bg-gray-50 p-2 rounded border hover:bg-gray-100">
+      <div className="flex items-center gap-1.5">
         {isDraggable && (
           <Button
             variant="ghost"
             size="sm"
-            className="cursor-grab active:cursor-grabbing p-1 text-gray-400 hover:text-gray-600"
+            className="cursor-grab active:cursor-grabbing p-0.5 h-5 w-5 text-gray-400 hover:text-gray-600"
             {...attributes}
             {...listeners}>
-            <GripVertical className="h-4 w-4" />
+            <GripVertical className="h-3 w-3" />
           </Button>
         )}
-        <Icon className="h-4 w-4" />
-        <span className="font-medium">
+        <Icon className="h-3.5 w-3.5 text-gray-600" />
+        <span className="text-sm font-medium">
           <SimpleRichDisplay content={item.title || ''} />
         </span>
-        <span className="text-sm text-gray-500">({item.type})</span>
+        <span className="text-xs text-gray-500">({item.type})</span>
       </div>
-      <div className="flex gap-1">
-        <Button variant="ghost" size="sm" onClick={handleCopy} title="Copy content">
-          <Copy className="h-4 w-4" />
+      <div className="flex gap-0.5">
+        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleCopy} title="Copy content">
+          <Copy className="h-3 w-3" />
         </Button>
-        <Button variant="ghost" size="sm" onClick={onEdit}>
-          <Edit className="h-4 w-4" />
+        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={onEdit}>
+          <Edit className="h-3 w-3" />
         </Button>
-        <Button variant="ghost" size="sm" onClick={onRemove}>
-          <Trash2 className="h-4 w-4" />
+        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={onRemove}>
+          <Trash2 className="h-3 w-3" />
         </Button>
       </div>
     </div>

@@ -1,3 +1,8 @@
+import { VocabularyWord, Noun, Verb, Adjective, Pronoun } from '@/src/types/vocabulary/index';
+import { TABLE_TYPES, type TableType } from '@/src/utils/schema-helpers';
+
+export { TABLE_TYPES, type TableType };
+
 export const getWordTypeColor = (wordType: string): string => {
   const colors = {
     noun: 'bg-blue-100 text-blue-800',
@@ -35,3 +40,31 @@ export const parseEditingCellValue = (value: string): string[] => {
 export const formatCellValue = (value: string[]): string => {
   return Array.isArray(value) ? value.join(', ') : value;
 };
+
+export function isNoun(word: VocabularyWord): word is Noun {
+  return word.part_of_speech === 'noun';
+}
+
+export function isVerb(word: VocabularyWord): word is Verb {
+  return word.part_of_speech === 'verb';
+}
+
+export function isAdjective(word: VocabularyWord): word is Adjective {
+  return word.part_of_speech === 'adjective';
+}
+
+export function isPronoun(word: VocabularyWord): word is Pronoun {
+  return word.part_of_speech === 'pronoun';
+}
+
+export function hasConjugationTable(word: VocabularyWord): word is Verb {
+  return word.part_of_speech === 'verb';
+}
+
+export function hasDeclensionTable(word: VocabularyWord): word is Noun | Pronoun {
+  return word.part_of_speech === 'noun' || word.part_of_speech === 'pronoun';
+}
+
+export function hasAdjectiveDeclensionTable(word: VocabularyWord): word is Adjective {
+  return word.part_of_speech === 'adjective';
+}

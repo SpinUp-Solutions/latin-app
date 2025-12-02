@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/src/components/ui/button';
-import { X, ArrowRight, Shuffle } from 'lucide-react';
+import { X, Shuffle } from 'lucide-react';
 import { MatchingExercise } from '@/src/types/exercise';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { FeedbackDisplay } from '../feedback';
@@ -28,7 +27,6 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
   const [selectedRight, setSelectedRight] = useState<MatchingItem | null>(null);
   const [matches, setMatches] = useState<Record<string, string>>({}); // leftId -> rightId
   const [matchedLeftIds, setMatchedLeftIds] = useState<Set<string>>(new Set());
-  const [matchedRightIds, setMatchedRightIds] = useState<Set<string>>(new Set());
   const [showIncorrectFlash, setShowIncorrectFlash] = useState(false);
 
   const [shuffledLeftColumn, setShuffledLeftColumn] = useState<MatchingItem[]>(leftColumn);
@@ -46,13 +44,15 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
     setSelectedRight(null);
     setMatches({});
     setMatchedLeftIds(new Set());
-    setMatchedRightIds(new Set());
     setShowIncorrectFlash(false);
     reset();
   }, [leftColumn, rightColumn, finalAnswer, reset]);
 
   const handleLeftSelect = (item: string, index?: number) => {
-    const matchingItem = getUnmatchedLeftItems()[index!];
+    const matchingItem = shuffledLeftColumn[index!];
+    if (matchedLeftIds.has(matchingItem?.id)) {
+      return;
+    }
     if (selectedLeft?.id === matchingItem?.id) {
       setSelectedLeft(null);
       return;
@@ -63,7 +63,7 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
   };
 
   const handleRightSelect = (item: string, index?: number) => {
-    const matchingItem = getUnmatchedRightItems()[index!];
+    const matchingItem = shuffledRightColumn[index!];
     if (selectedRight?.id === matchingItem?.id) {
       setSelectedRight(null);
       return;
@@ -82,10 +82,6 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
         const newMatchedLeftIds = new Set(matchedLeftIds);
         newMatchedLeftIds.add(selectedLeft.id);
         setMatchedLeftIds(newMatchedLeftIds);
-
-        const newMatchedRightIds = new Set(matchedRightIds);
-        newMatchedRightIds.add(matchingItem.id);
-        setMatchedRightIds(newMatchedRightIds);
 
         const isLastMatch = Object.keys(newMatches).length === Object.keys(finalAnswer).length;
         handleCorrect(isLastMatch);
@@ -115,14 +111,6 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
     }
   };
 
-  const getUnmatchedLeftItems = () => {
-    return shuffledLeftColumn.filter(item => !matchedLeftIds.has(item.id));
-  };
-
-  const getUnmatchedRightItems = () => {
-    return shuffledRightColumn.filter(item => !matchedRightIds.has(item.id));
-  };
-
   const shuffleArray = <T,>(array: T[]): T[] => {
     const newArray = [...array];
     for (let i = newArray.length - 1; i > 0; i--) {
@@ -144,14 +132,6 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
     setSelectedRight(null);
   };
 
-  const getMatchedPairs = () => {
-    return Object.entries(matches).map(([leftId, rightId]) => {
-      const leftItem = shuffledLeftColumn.find(item => item.id === leftId);
-      const rightItem = shuffledRightColumn.find(item => item.id === rightId);
-      return { leftItem, rightItem, key: `${leftId}-${rightId}` };
-    });
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-start">
@@ -169,7 +149,7 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
           />
         )}
       </div>
-      {exercise.instructions && (
+      {exercise.instructions && exercise.instructions.replace(/<[^>]*>/g, '').trim() !== '' && (
         <div className="p-6 bg-roman-parchment rounded-lg mb-4">
           <SimpleRichDisplay content={exercise.instructions} className="whitespace-pre-wrap break-words" />
         </div>
@@ -202,16 +182,21 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
           <div className="space-y-2">
             <h4 className="font-medium text-gray-700 mb-3">Select from left column:</h4>
             <FieldSelect
-              items={getUnmatchedLeftItems().map(item => item.value)}
+              items={shuffledLeftColumn.map(item => item.value)}
               selectedItem={selectedLeft?.value || null}
-              selectedIndex={
-                selectedLeft ? getUnmatchedLeftItems().findIndex(item => item.id === selectedLeft.id) : null
-              }
+              selectedIndex={selectedLeft ? shuffledLeftColumn.findIndex(item => item.id === selectedLeft.id) : null}
               onSelect={handleLeftSelect}
               matches={{}}
               matchType="key"
               label=""
-              className={showIncorrectFlash ? 'animate-pulse bg-red-50 border-red-300' : ''}
+              matchedIndices={
+                new Set(
+                  shuffledLeftColumn
+                    .map((item, index) => (matchedLeftIds.has(item.id) ? index : -1))
+                    .filter(index => index !== -1)
+                )
+              }
+              showIncorrect={showIncorrectFlash}
             />
           </div>
 
@@ -219,42 +204,18 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
           <div className="space-y-2">
             <h4 className="font-medium text-gray-700 mb-3">Match with right column:</h4>
             <FieldSelect
-              items={getUnmatchedRightItems().map(item => item.value)}
+              items={shuffledRightColumn.map(item => item.value)}
               selectedItem={selectedRight?.value || null}
-              selectedIndex={
-                selectedRight ? getUnmatchedRightItems().findIndex(item => item.id === selectedRight.id) : null
-              }
+              selectedIndex={selectedRight ? shuffledRightColumn.findIndex(item => item.id === selectedRight.id) : null}
               onSelect={handleRightSelect}
               matches={{}}
               matchType="value"
               label=""
-              className={showIncorrectFlash ? 'animate-pulse bg-red-50 border-red-300' : ''}
+              matchedIndices={new Set()}
+              showIncorrect={showIncorrectFlash}
             />
           </div>
         </div>
-
-        {/* Selection status */}
-        {(selectedLeft || selectedRight) && (
-          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="text-sm">
-              {selectedLeft && (
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">Selected from left:</span>
-                  <SimpleRichDisplay content={selectedLeft.value} />
-                </div>
-              )}
-              {selectedRight && (
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">Selected from right:</span>
-                  <SimpleRichDisplay content={selectedRight.value} />
-                </div>
-              )}
-              {selectedLeft && !selectedRight && (
-                <div className="text-blue-600 mt-1">Now select an item from the right column to match.</div>
-              )}
-            </div>
-          </div>
-        )}
 
         {/* Feedback Display */}
         <FeedbackDisplay
@@ -264,33 +225,6 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
           hint={exercise.data.hint}
           showExplanation={showExplanation}
         />
-
-        {/* Matched pairs */}
-        {Object.keys(matches).length > 0 && (
-          <div className="mt-8">
-            <h4 className="font-medium text-gray-700 mb-4">Correct Matches:</h4>
-            <div className="space-y-2">
-              <AnimatePresence>
-                {getMatchedPairs().map(({ leftItem, rightItem, key }) => (
-                  <motion.div
-                    key={key}
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
-                    className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
-                    <div className="font-medium text-green-800">
-                      <SimpleRichDisplay content={leftItem?.value || ''} />
-                    </div>
-                    <ArrowRight className="h-4 w-4 text-green-600" />
-                    <div className="font-medium text-green-800">
-                      <SimpleRichDisplay content={rightItem?.value || ''} />
-                    </div>
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

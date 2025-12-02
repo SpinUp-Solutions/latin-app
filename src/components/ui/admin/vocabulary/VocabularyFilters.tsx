@@ -26,17 +26,6 @@ const WORD_TYPE_OPTIONS = [
   { value: 'pronoun', label: 'Pronouns' },
   { value: 'conjunction', label: 'Conjunctions' },
   { value: 'interjection', label: 'Interjections' },
-  { value: 'enclitic', label: 'Enclitics' },
-  { value: 'number', label: 'Numbers' },
-] as const;
-
-const SECTION_OPTIONS = [
-  { value: 'all', label: 'All Sections' },
-  { value: 'unit1', label: 'Unit 1' },
-  { value: 'unit2', label: 'Unit 2' },
-  { value: 'unit3', label: 'Unit 3' },
-  { value: 'unit4', label: 'Unit 4' },
-  { value: 'unit5', label: 'Unit 5' },
 ] as const;
 
 export const VocabularyFiltersComponent: React.FC<VocabularyFiltersProps> = ({
@@ -47,7 +36,7 @@ export const VocabularyFiltersComponent: React.FC<VocabularyFiltersProps> = ({
   onSearch,
   onReset,
 }) => {
-  const hasActiveFilters = filters.wordType !== 'all' || filters.section !== 'all' || filters.search !== '';
+  const hasActiveFilters = filters.wordType !== 'all' || filters.search !== '';
 
   return (
     <Card className="mb-6 bg-white shadow-sm border-gray-200">
@@ -58,8 +47,7 @@ export const VocabularyFiltersComponent: React.FC<VocabularyFiltersProps> = ({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Word Type Filter */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div className="space-y-2">
             <Label htmlFor="wordType" className="text-sm font-medium text-gray-700">
               Word Type
@@ -85,26 +73,6 @@ export const VocabularyFiltersComponent: React.FC<VocabularyFiltersProps> = ({
             </Select>
           </div>
 
-          {/* Section Filter */}
-          <div className="space-y-2">
-            <Label htmlFor="section" className="text-sm font-medium text-gray-700">
-              Section
-            </Label>
-            <Select value={filters.section} onValueChange={value => onFiltersChange({ section: value })}>
-              <SelectTrigger id="section" className="bg-white">
-                <SelectValue placeholder="Select section" />
-              </SelectTrigger>
-              <SelectContent className="bg-white">
-                {SECTION_OPTIONS.map(option => (
-                  <SelectItem key={option.value} value={option.value} className="cursor-pointer">
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Search Filter */}
           <div className="space-y-2">
             <Label htmlFor="search" className="text-sm font-medium text-gray-700">
               Search Words
@@ -123,13 +91,13 @@ export const VocabularyFiltersComponent: React.FC<VocabularyFiltersProps> = ({
             </form>
           </div>
 
-          {/* Reset Button */}
-          <div className="flex items-end">
+          <div className="space-y-2">
+            <Label className="text-sm font-medium text-gray-700 opacity-0">Actions</Label>
             <Button
               variant="outline"
               size="sm"
               onClick={onReset}
-              className={`flex items-center gap-2 transition-all ${
+              className={`flex items-center gap-2 transition-all w-full ${
                 hasActiveFilters
                   ? 'opacity-100 hover:bg-red-50 hover:border-red-200 hover:text-red-600'
                   : 'opacity-50 cursor-not-allowed'
@@ -153,17 +121,6 @@ export const VocabularyFiltersComponent: React.FC<VocabularyFiltersProps> = ({
                   <button
                     onClick={() => onFiltersChange({ wordType: 'all' })}
                     className="ml-1 hover:bg-blue-200 rounded-full p-0.5"
-                    title="Remove filter">
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
-              )}
-              {filters.section !== 'all' && (
-                <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full">
-                  Section: {SECTION_OPTIONS.find(opt => opt.value === filters.section)?.label}
-                  <button
-                    onClick={() => onFiltersChange({ section: 'all' })}
-                    className="ml-1 hover:bg-purple-200 rounded-full p-0.5"
                     title="Remove filter">
                     <X className="h-3 w-3" />
                   </button>

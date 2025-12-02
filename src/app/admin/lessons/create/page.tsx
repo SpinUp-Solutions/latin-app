@@ -32,6 +32,7 @@ function CreateLessonPage() {
   const [isContinuingDraft, setIsContinuingDraft] = useState(false);
   const [originalDraft, setOriginalDraft] = useState<Lesson | null>(null);
   const [lastSavedTime, setLastSavedTime] = useState<Date | null>(null);
+  const [isNavigating, setIsNavigating] = useState(false);
   const [dialogState, setDialogState] = useState<{
     isOpen: boolean;
     title: string;
@@ -44,7 +45,40 @@ function CreateLessonPage() {
 
   const hasDraft = useSelector((state: RootState) => (currentLesson ? selectHasDraft(state, currentLesson.id) : false));
 
-  useBeforeUnload(hasDraft);
+  const handleBrowserBackButton = () => {
+    if (!currentLesson) return;
+
+    setDialogState({
+      isOpen: true,
+      title: 'You have unsaved changes',
+      description: 'What would you like to do with your changes?',
+      confirmText: 'Save as Draft & Exit',
+      alternateText: isContinuingDraft ? 'Revert to Original & Exit' : 'Discard Changes & Exit',
+      onConfirm: () => {
+        setIsNavigating(true);
+        setDialogState(null);
+        setTimeout(() => {
+          dispatch(resetLessonState());
+          router.push('/admin');
+        }, 0);
+      },
+      onAlternate: () => {
+        if (isContinuingDraft && originalDraft) {
+          dispatch(saveDraft(originalDraft));
+        } else {
+          dispatch(clearDraft(currentLesson.id));
+        }
+        setIsNavigating(true);
+        setDialogState(null);
+        setTimeout(() => {
+          dispatch(resetLessonState());
+          router.push('/admin');
+        }, 0);
+      },
+    });
+  };
+
+  useBeforeUnload(hasDraft, handleBrowserBackButton);
 
   // Initialize page state
   useEffect(() => {
@@ -114,8 +148,11 @@ function CreateLessonPage() {
         confirmText: 'Save as Draft & Exit',
         alternateText: isContinuingDraft ? 'Revert to Original & Exit' : 'Discard Changes & Exit',
         onConfirm: () => {
-          dispatch(resetLessonState());
-          router.push('/admin');
+          setIsNavigating(true);
+          setTimeout(() => {
+            dispatch(resetLessonState());
+            router.push('/admin');
+          }, 0);
         },
         onAlternate: () => {
           if (isContinuingDraft && originalDraft) {
@@ -123,8 +160,11 @@ function CreateLessonPage() {
           } else {
             dispatch(clearDraft(currentLesson.id));
           }
-          dispatch(resetLessonState());
-          router.push('/admin');
+          setIsNavigating(true);
+          setTimeout(() => {
+            dispatch(resetLessonState());
+            router.push('/admin');
+          }, 0);
         },
       });
     } else {
@@ -132,9 +172,17 @@ function CreateLessonPage() {
     }
   };
 
+  if (isNavigating) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-roman-marble">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-roman-marble">
-      <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between">
+    <div className="h-screen flex flex-col bg-roman-marble">
+      <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-4">
           <Button variant="ghost" onClick={handleBackToAdmin} disabled={saving}>
             <ArrowLeft className="h-4 w-4 mr-2" />
@@ -174,9 +222,11 @@ function CreateLessonPage() {
         </div>
       </header>
 
-      <ClipboardProvider>
-        <LessonBuilder onSave={handleSaveLesson} />
-      </ClipboardProvider>
+      <div className="flex-1 overflow-hidden">
+        <ClipboardProvider>
+          <LessonBuilder onSave={handleSaveLesson} />
+        </ClipboardProvider>
+      </div>
 
       <UnifiedDialog
         isOpen={dialogState?.isOpen || false}

@@ -8,7 +8,7 @@ const RomanTable = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLT
         ref={ref}
         className={cn(
           'w-full caption-bottom border-collapse text-sm',
-          'bg-roman-parchment border border-roman-terracotta/20 rounded-lg overflow-hidden',
+          'bg-roman-parchment rounded-lg overflow-hidden',
           className
         )}
         {...props}

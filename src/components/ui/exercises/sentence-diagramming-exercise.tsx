@@ -119,7 +119,9 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
     <div className="sentence-diagramming-exercise space-y-4">
       <div className="bg-white p-4 rounded-lg border">
         <h3 className="text-lg font-semibold mb-2">{exercise.title}</h3>
-        <SimpleRichDisplay content={exercise.instructions} className="text-gray-600 mb-4" />
+        {exercise.instructions && exercise.instructions.replace(/<[^>]*>/g, '').trim() !== '' && (
+          <SimpleRichDisplay content={exercise.instructions} className="text-gray-600 mb-4" />
+        )}
 
         <div className="mb-4">
           <div className="text-sm font-medium text-gray-700 mb-1">Translation:</div>

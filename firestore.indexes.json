@@ -69,6 +69,262 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "vocabulary_words_v4",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "part_of_speech",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "conjugation",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "word",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "vocabulary_words_v4",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "part_of_speech",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "is_deponent",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "word",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "vocabulary_words_v4",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "part_of_speech",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "conjugation",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "is_deponent",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "word",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "vocabulary_words_v4",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "part_of_speech",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "declension",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "word",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "vocabulary_words_v5",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "part_of_speech",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sort_key",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "vocabulary_words_v5",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "part_of_speech",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "conjugation",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sort_key",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "vocabulary_words_v5",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "part_of_speech",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "is_deponent",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sort_key",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "vocabulary_words_v5",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "part_of_speech",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "conjugation",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "is_deponent",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sort_key",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "vocabulary_words_v5",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "part_of_speech",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "declension",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sort_key",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "vocabulary_words_v5",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "part_of_speech",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "random_index",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "vocabulary_words_v5",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "part_of_speech",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "declension",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "random_index",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "vocabulary_words_v5",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "part_of_speech",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "conjugation",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "random_index",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "vocabulary_words_v5",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "part_of_speech",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "is_deponent",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "random_index",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "vocabulary_words_v5",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "part_of_speech",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "conjugation",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "is_deponent",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "random_index",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

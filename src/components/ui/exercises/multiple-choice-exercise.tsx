@@ -16,30 +16,36 @@ interface Props {
 }
 
 const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
-  const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
+  const [selectedOptionIds, setSelectedOptionIds] = useState<string[]>([]);
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
+  const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect } = useExerciseFeedback(
     exercise.feedbackConfig
   );
 
   const handleOptionSelect = (optionId: string) => {
     if (hasSubmitted || isProcessing) return;
-    setSelectedOptionId(optionId);
-    // Reset feedback when user selects an option
-    if (isCorrect !== null) {
-      reset();
+
+    const hasMultipleCorrect = exercise.data.options.filter(opt => opt.isCorrect).length > 1;
+    const allowMultiple = hasMultipleCorrect || exercise.data.allowMultipleSelections;
+
+    if (allowMultiple) {
+      setSelectedOptionIds(prev =>
+        prev.includes(optionId) ? prev.filter(id => id !== optionId) : [...prev, optionId]
+      );
+    } else {
+      setSelectedOptionIds([optionId]);
     }
   };
 
   const handleSubmit = () => {
-    if (!selectedOptionId || isProcessing) return;
+    if (selectedOptionIds.length === 0 || isProcessing) return;
 
     setIsProcessing(true);
     setHasSubmitted(true);
 
-    const validation = validateMultipleChoiceExercise(selectedOptionId, exercise);
+    const validation = validateMultipleChoiceExercise(selectedOptionIds, exercise);
 
     if (validation.isCorrect) {
       handleCorrect(true);
@@ -54,24 +60,25 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
   };
 
   const handleReset = () => {
-    setSelectedOptionId(null);
+    setSelectedOptionIds([]);
     setHasSubmitted(false);
-    // Don't reset feedback state - preserve escalation level for next attempt
   };
 
   const getOptionClassName = (optionId: string) => {
     if (!hasSubmitted) {
-      return selectedOptionId === optionId ? 'bg-blue-50 border-blue-300 text-blue-900' : 'hover:bg-gray-50';
+      return selectedOptionIds.includes(optionId) ? 'bg-blue-50 border-blue-300 text-blue-900' : 'hover:bg-gray-50';
     }
 
     const option = exercise.data.options.find(opt => opt.id === optionId);
+    const isSelected = selectedOptionIds.includes(optionId);
+    const shouldRevealAnswers = isCorrect || level?.showAnswer;
 
-    if (selectedOptionId === optionId && option?.isCorrect) {
+    if (option?.isCorrect && shouldRevealAnswers) {
       return 'bg-green-50 border-green-300 text-green-900';
-    } else if (selectedOptionId === optionId && !option?.isCorrect) {
+    } else if (isSelected && !option?.isCorrect) {
       return 'bg-red-50 border-red-300 text-red-900';
     }
-    // All other options remain neutral
+
     return 'opacity-60';
   };
 
@@ -93,7 +100,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
         )}
       </div>
 
-      {exercise.instructions && (
+      {exercise.instructions && exercise.instructions.replace(/<[^>]*>/g, '').trim() !== '' && (
         <div className="p-4 bg-roman-parchment rounded-lg mb-4">
           <SimpleRichDisplay content={exercise.instructions} />
         </div>
@@ -124,7 +131,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
               <div
                 className={cn(
                   'w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0',
-                  selectedOptionId === option.id ? 'border-current' : 'border-gray-300'
+                  selectedOptionIds.includes(option.id) ? 'border-current' : 'border-gray-300'
                 )}>
                 <span className="text-sm font-medium">{String.fromCharCode(65 + index)}</span>
               </div>
@@ -135,10 +142,9 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
           ))}
         </div>
 
-        {/* Submit Button */}
         {!hasSubmitted && (
           <div className="flex justify-center">
-            <Button onClick={handleSubmit} disabled={!selectedOptionId || isProcessing} className="px-8">
+            <Button onClick={handleSubmit} disabled={selectedOptionIds.length === 0 || isProcessing} className="px-8">
               {isProcessing ? 'Submitting...' : 'Submit Answer'}
             </Button>
           </div>
@@ -153,13 +159,15 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
           </div>
         )}
 
-        {/* Feedback Display */}
         <FeedbackDisplay
           isCorrect={isCorrect}
           message={message}
           level={level}
           hint={exercise.data.hint}
-          correctAnswer={exercise.data.options.find(opt => opt.isCorrect)?.text}
+          correctAnswer={exercise.data.options
+            .filter(opt => opt.isCorrect)
+            .map(opt => opt.text)
+            .join(', ')}
           explanation={exercise.data.explanation}
           showExplanation={showExplanation}
         />

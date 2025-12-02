@@ -1,6 +1,7 @@
 import StarterKit from '@tiptap/starter-kit';
 import { Extensions } from '@tiptap/core';
 import { Tooltip } from '@/src/components/ui/core/tooltip-extension';
+import { Hyperlink } from '@/src/components/ui/core/hyperlink-extension';
 import { DiagrammingExtensions } from '@/src/components/ui/core/diagramming-extensions';
 
 export type EditorMode = 'admin' | 'student' | 'readonly' | 'simple';
@@ -8,6 +9,7 @@ export type EditorMode = 'admin' | 'student' | 'readonly' | 'simple';
 export interface ExtensionSetOptions {
   mode: EditorMode;
   enableTooltips?: boolean;
+  enableHyperlinks?: boolean;
   enableAnnotations?: boolean;
 }
 
@@ -55,16 +57,19 @@ const getStarterKitConfig = (mode: EditorMode) => {
 export const createExtensionSet = ({
   mode,
   enableTooltips = true,
+  enableHyperlinks = true,
   enableAnnotations = true,
 }: ExtensionSetOptions): Extensions => {
   const extensions: Extensions = [StarterKit.configure(getStarterKitConfig(mode))];
 
-  // Add tooltips for all modes except when explicitly disabled
   if (enableTooltips) {
     extensions.push(Tooltip);
   }
 
-  // Add diagramming annotations for admin and student modes
+  if (enableHyperlinks) {
+    extensions.push(Hyperlink);
+  }
+
   if (enableAnnotations && (mode === 'admin' || mode === 'student')) {
     extensions.push(...DiagrammingExtensions);
   }

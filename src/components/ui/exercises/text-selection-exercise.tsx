@@ -85,7 +85,7 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
           />
         )}
       </div>
-      {exercise.instructions && (
+      {exercise.instructions && exercise.instructions.replace(/<[^>]*>/g, '').trim() !== '' && (
         <div className="p-6 bg-roman-parchment rounded-lg mb-4">
           <SimpleRichDisplay content={exercise.instructions} className="whitespace-pre-wrap break-words" />
         </div>
