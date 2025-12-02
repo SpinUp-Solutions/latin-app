@@ -2,7 +2,7 @@ import React from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Badge } from '@/src/components/ui/badge';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
-import { Eye, Edit, Trash2, Library, Calendar, Hash } from 'lucide-react';
+import { Edit, Trash2, Library, Calendar, Hash } from 'lucide-react';
 import type { VocabularyPool } from '@/src/types/vocabulary-pool';
 
 interface PoolListProps {
@@ -10,20 +10,11 @@ interface PoolListProps {
   loading: boolean;
   hasMore: boolean;
   onLoadMore: () => void;
-  onView: (pool: VocabularyPool) => void;
   onEdit: (pool: VocabularyPool) => void;
   onDelete: (poolId: string, poolName: string) => void;
 }
 
-export const PoolList: React.FC<PoolListProps> = ({
-  pools,
-  loading,
-  hasMore,
-  onLoadMore,
-  onView,
-  onEdit,
-  onDelete,
-}) => {
+export const PoolList: React.FC<PoolListProps> = ({ pools, loading, hasMore, onLoadMore, onEdit, onDelete }) => {
   if (loading && pools.length === 0) {
     return (
       <div className="text-center py-12">
@@ -88,10 +79,6 @@ export const PoolList: React.FC<PoolListProps> = ({
               </div>
 
               <div className="flex items-center gap-2 ml-4">
-                <Button variant="outline" size="sm" onClick={() => onView(pool)}>
-                  <Eye className="h-4 w-4 mr-1" />
-                  View
-                </Button>
                 <Button variant="outline" size="sm" onClick={() => onEdit(pool)}>
                   <Edit className="h-4 w-4 mr-1" />
                   Edit

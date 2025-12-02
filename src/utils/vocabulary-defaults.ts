@@ -1,8 +1,8 @@
 import type { VocabularyWordWithId } from '@/src/types/vocabulary/index';
-import type { PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
-import { DeclensionTableSchema } from '@/src/types/vocabulary/schemas/declension';
-import { DegreesTableSchema } from '@/src/types/vocabulary/schemas/adjective';
-import { ConjugationTableSchema } from '@/src/types/vocabulary/schemas/verb-conjugation';
+import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
+import { DeclensionTableSchema, AdjectiveDeclensionTableSchema } from '@/shared/types/vocabulary/schemas/declension';
+import { DegreesTableSchema } from '@/shared/types/vocabulary/schemas/adjective';
+import { ConjugationTableSchema } from '@/shared/types/vocabulary/schemas/verb-conjugation';
 import { buildEmptyFromSchema } from '@/src/utils/schema-defaults';
 
 const ZERO_TIMESTAMP = new Date(0).toISOString();
@@ -22,6 +22,9 @@ const buildBaseWord = (partOfSpeech: PartOfSpeech) => ({
   pronunciation: null,
   type: 'core' as const,
   alternate_form: null,
+  dictionary_entry: null,
+  sort_key: '',
+  random_index: 0,
   createdAt: ZERO_TIMESTAMP,
   updatedAt: ZERO_TIMESTAMP,
 });
@@ -45,7 +48,7 @@ export const buildEmptyWord = (partOfSpeech: PartOfSpeech): VocabularyWordWithId
         ...base,
         part_of_speech: 'pronoun',
         pronoun_type: null,
-        declension_table: buildEmptyFromSchema(DeclensionTableSchema),
+        declension_table: buildEmptyFromSchema(AdjectiveDeclensionTableSchema),
       };
     case 'adjective':
       return {
@@ -65,9 +68,18 @@ export const buildEmptyWord = (partOfSpeech: PartOfSpeech): VocabularyWordWithId
         is_deponent: null,
       };
     case 'adverb':
-    case 'preposition':
     case 'conjunction':
     case 'interjection':
+      return {
+        ...base,
+        part_of_speech: partOfSpeech,
+      };
+    case 'preposition':
+      return {
+        ...base,
+        part_of_speech: 'preposition',
+        case: 'accusative' as const,
+      };
     default:
       return {
         ...base,

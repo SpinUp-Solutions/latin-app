@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { NounSchema } from '../schemas/noun';
+import { NounSchema } from '@/shared/types/vocabulary/schemas/noun';
 
 export const NounFormSchema = NounSchema.omit({
   part_of_speech: true,

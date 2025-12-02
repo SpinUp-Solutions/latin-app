@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { Lesson, Page } from '@/src/types/lesson';
 import { RenderableContentItem } from '@/src/types/page';
 import { TooltipData } from '@/src/types/tooltip';
+import { regeneratePageIds } from '@/src/utils/idUtils';
 
 interface LessonEditorState {
   currentLesson: Lesson | null;
@@ -79,6 +80,7 @@ const lessonEditorSlice = createSlice({
         id: `lesson-${Date.now()}`,
         title: 'New Lesson',
         description: '',
+        type: 'normal',
         pages: [],
         isLive: false,
         liveOrder: null,
@@ -88,7 +90,10 @@ const lessonEditorSlice = createSlice({
       state.error = null;
     },
 
-    updateLessonInfo: (state, action: PayloadAction<Partial<Pick<Lesson, 'id' | 'title' | 'description'>>>) => {
+    updateLessonInfo: (
+      state,
+      action: PayloadAction<Partial<Pick<Lesson, 'id' | 'title' | 'description' | 'type' | 'vocabulary_pool'>>>
+    ) => {
       if (state.currentLesson) {
         Object.assign(state.currentLesson, action.payload);
       }
@@ -181,6 +186,21 @@ const lessonEditorSlice = createSlice({
       const { pageIndex } = action.payload;
       if (state.currentLesson) {
         state.currentLesson.pages.splice(pageIndex, 1);
+      }
+    },
+
+    duplicatePage: (
+      state,
+      action: PayloadAction<{
+        pageIndex: number;
+      }>
+    ) => {
+      const { pageIndex } = action.payload;
+      if (state.currentLesson) {
+        const pageToDuplicate = state.currentLesson.pages[pageIndex];
+        const { page: newPage, tooltips: newTooltips } = regeneratePageIds(pageToDuplicate, state.tooltips);
+        state.currentLesson.pages.splice(pageIndex + 1, 0, newPage);
+        state.tooltips = { ...state.tooltips, ...newTooltips };
       }
     },
 
@@ -312,6 +332,7 @@ export const {
   updateContentItem,
   removeContent,
   removePage,
+  duplicatePage,
   startEditingContent,
   updateEditingContent,
   saveEditingContent,

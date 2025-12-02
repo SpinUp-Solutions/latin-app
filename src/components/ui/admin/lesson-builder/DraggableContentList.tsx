@@ -64,7 +64,7 @@ export const DraggableContentList: React.FC<DraggableContentListProps> = ({
       onDragEnd={handleDragEnd}
       modifiers={[restrictToVerticalAxis, restrictToParentElement]}>
       <SortableContext items={items.map(item => item.id)} strategy={verticalListSortingStrategy}>
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {items.map((item, itemIndex) => (
             <ContentItem
               key={item.id}

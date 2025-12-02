@@ -6,10 +6,17 @@ import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/src/
 import { VocabularyFormValues } from './types';
 import { Plus, Trash2 } from 'lucide-react';
 import React from 'react';
+import { useAIFieldStatus } from '@/src/hooks/useAIFieldStatus';
+import { cn } from '@/src/lib/utils';
 
 export const BaseWordForm = () => {
   const form = useFormContext<VocabularyFormValues>();
   const definitions = form.watch('definitions') || [];
+  const translationAIStatus = useAIFieldStatus('translation');
+  const etymologyAIStatus = useAIFieldStatus('etymology');
+  const pronunciationAIStatus = useAIFieldStatus('pronunciation');
+  const alternateFormAIStatus = useAIFieldStatus('alternate_form');
+  const dictionaryEntryAIStatus = useAIFieldStatus('dictionary_entry');
 
   const addDefinition = () => {
     form.setValue('definitions', [...definitions, '']);
@@ -48,15 +55,25 @@ export const BaseWordForm = () => {
       <FormField
         control={form.control}
         name="translation"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Translation</FormLabel>
-            <FormControl>
-              <Textarea rows={2} {...field} />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
+        render={({ field }) => {
+          return (
+            <FormItem>
+              <FormLabel>Translation</FormLabel>
+              <FormControl>
+                <Textarea
+                  rows={2}
+                  {...field}
+                  className={cn(
+                    translationAIStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
+                    translationAIStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
+                    'focus:bg-white'
+                  )}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          );
+        }}
       />
 
       <div className="space-y-2">
@@ -95,43 +112,99 @@ export const BaseWordForm = () => {
       <FormField
         control={form.control}
         name="etymology"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Etymology</FormLabel>
-            <FormControl>
-              <Textarea rows={2} {...field} value={field.value ?? ''} />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
+        render={({ field }) => {
+          return (
+            <FormItem>
+              <FormLabel>Etymology</FormLabel>
+              <FormControl>
+                <Textarea
+                  rows={2}
+                  {...field}
+                  value={field.value ?? ''}
+                  className={cn(
+                    etymologyAIStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
+                    etymologyAIStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
+                    'focus:bg-white'
+                  )}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          );
+        }}
       />
 
       <FormField
         control={form.control}
         name="pronunciation"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Pronunciation</FormLabel>
-            <FormControl>
-              <Input {...field} value={field.value ?? ''} />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
+        render={({ field }) => {
+          return (
+            <FormItem>
+              <FormLabel>Pronunciation</FormLabel>
+              <FormControl>
+                <Input
+                  {...field}
+                  value={field.value ?? ''}
+                  className={cn(
+                    pronunciationAIStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
+                    pronunciationAIStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
+                    'focus:bg-white'
+                  )}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          );
+        }}
       />
 
       <FormField
         control={form.control}
         name="alternate_form"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>Alternate Form</FormLabel>
-            <FormControl>
-              <Input {...field} value={field.value ?? ''} />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
+        render={({ field }) => {
+          return (
+            <FormItem>
+              <FormLabel>Alternate Form</FormLabel>
+              <FormControl>
+                <Input
+                  {...field}
+                  value={field.value ?? ''}
+                  className={cn(
+                    alternateFormAIStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
+                    alternateFormAIStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
+                    'focus:bg-white'
+                  )}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          );
+        }}
+      />
+
+      <FormField
+        control={form.control}
+        name="dictionary_entry"
+        render={({ field }) => {
+          return (
+            <FormItem>
+              <FormLabel>Dictionary Entry</FormLabel>
+              <FormControl>
+                <Input
+                  {...field}
+                  value={field.value ?? ''}
+                  placeholder="e.g., amō, amāre, amāvī, amātum"
+                  className={cn(
+                    dictionaryEntryAIStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
+                    dictionaryEntryAIStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
+                    'focus:bg-white'
+                  )}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          );
+        }}
       />
     </div>
   );

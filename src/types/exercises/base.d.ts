@@ -1,4 +1,7 @@
 import { ContentItem } from '../content';
+import type { TableType } from '@/src/utils/schema-helpers';
+import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
+import type { FormIdentificationStep } from './schemas/form-identification';
 
 export interface FeedbackLevel {
   /** Custom message shown at this level (optional). */
@@ -74,3 +77,37 @@ export interface BaseExercise extends ContentItem {
   itemProgressionDelay?: number;
   feedbackConfig: FeedbackConfig;
 }
+
+export interface GeneratorFilters {
+  partOfSpeech?: string;
+  verbConjugation?: string;
+  isDeponent?: string;
+  nounDeclension?: string;
+  adjectiveDeclension?: string;
+  search?: string;
+}
+
+export interface FormSelection {
+  tableType: TableType;
+  selectedCellPaths: string[];
+}
+
+export interface GeneratorConfigBase {
+  collection: string;
+  wordSource: 'filters' | 'pool';
+  poolId?: string | null;
+  count: number | 'all';
+}
+
+export interface PosGeneratorConfig {
+  enabled: boolean;
+  filters: Omit<GeneratorFilters, 'partOfSpeech'>;
+  formSelection?: FormSelection;
+}
+
+export interface FormIdentificationPosConfig extends PosGeneratorConfig {
+  steps: FormIdentificationStep[];
+}
+
+export type PosConfigs = Partial<Record<PartOfSpeech, PosGeneratorConfig>>;
+export type FormIdentificationPosConfigs = Partial<Record<PartOfSpeech, FormIdentificationPosConfig>>;

@@ -37,6 +37,8 @@ export interface VocabularyPoolResponse {
   success: boolean;
   data: {
     pool: VocabularyPoolWithWords;
+    missingWordIds?: string[];
+    actualWordCount: number;
   };
 }
 

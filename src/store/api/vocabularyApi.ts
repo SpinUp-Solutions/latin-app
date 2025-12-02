@@ -1,8 +1,9 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
 import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary/index';
 import { createAuthenticatedBaseQuery } from './baseQuery';
-import { VocabularyWordWithIdSchema } from '@/src/types/vocabulary/schemas';
+import { VocabularyWordWithIdSchema } from '@/shared/types/vocabulary/schemas';
 import { ZodError, ZodIssue } from 'zod';
+import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 
 interface WordsResponse {
   success: boolean;
@@ -38,7 +39,7 @@ export const vocabularyApi = createApi({
         collection?: string;
       }
     >({
-      query: ({ wordType, search, limit = 20, lastWordId, collection = 'vocabulary_words_v2' }) => {
+      query: ({ wordType, search, limit = 20, lastWordId, collection = VOCABULARY_WORDS_COLLECTION }) => {
         const params = new URLSearchParams({ limit: limit.toString() });
 
         if (wordType && wordType !== 'all') params.append('wordType', wordType);
@@ -54,6 +55,10 @@ export const vocabularyApi = createApi({
           if (result.success) {
             return [result.data as VocabularyWordWithId];
           }
+          console.error('[VocabularyAPI] Word validation failed:', {
+            word,
+            errors: result.error.issues,
+          });
           return [] as VocabularyWordWithId[];
         });
         return {
@@ -66,7 +71,7 @@ export const vocabularyApi = createApi({
         return {
           wordType: queryArgs.wordType,
           search: queryArgs.search,
-          collection: queryArgs.collection || 'vocabulary_words_v2',
+          collection: queryArgs.collection || VOCABULARY_WORDS_COLLECTION,
         };
       },
       merge: (currentCache, newData, { arg }) => {
@@ -95,7 +100,7 @@ export const vocabularyApi = createApi({
 
     getWordTypeCounts: builder.query<Record<string, number>, { collection?: string } | void>({
       query: arg => {
-        const collection = arg?.collection || 'vocabulary_words_v2';
+        const collection = arg?.collection || VOCABULARY_WORDS_COLLECTION;
         return `/admin/words?countsOnly=true&collection=${encodeURIComponent(collection)}`;
       },
       transformResponse: (response: WordsResponse) => response.data.wordTypeCounts || {},
@@ -122,7 +127,7 @@ export const vocabularyApi = createApi({
       VocabularyWordWithId,
       { wordId: string; updates: Partial<VocabularyWord>; collection?: string }
     >({
-      query: ({ wordId, updates, collection = 'vocabulary_words_v2' }) => {
+      query: ({ wordId, updates, collection = VOCABULARY_WORDS_COLLECTION }) => {
         return {
           url: '/admin/words',
           method: 'PUT',
@@ -187,7 +192,7 @@ export const vocabularyApi = createApi({
       VocabularyWordWithId,
       { wordData: Omit<VocabularyWord, 'createdAt' | 'updatedAt'>; collection?: string }
     >({
-      query: ({ wordData, collection = 'vocabulary_words_v4' }) => {
+      query: ({ wordData, collection = VOCABULARY_WORDS_COLLECTION }) => {
         return {
           url: '/admin/words',
           method: 'POST',

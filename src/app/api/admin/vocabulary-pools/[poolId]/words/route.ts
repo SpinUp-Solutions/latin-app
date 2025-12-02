@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
+import { FieldPath } from 'firebase-admin/firestore';
 import type { VocabularyPool, AddWordsRequest } from '@/src/types/vocabulary-pool';
+import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,34 +27,23 @@ export async function POST(request: NextRequest, { params }: { params: { poolId:
     const poolData = poolDoc.data() as VocabularyPool;
     const currentWordIds = poolData.wordDocIds || [];
 
-    // Validate word IDs exist
     const invalidIds: string[] = [];
     const validIds: string[] = [];
 
     console.log(`Validating ${wordDocIds.length} word IDs...`);
 
-    // Process in batches for better performance
-    const VALIDATION_BATCH_SIZE = 10;
-    for (let i = 0; i < wordDocIds.length; i += VALIDATION_BATCH_SIZE) {
-      const batchIds = wordDocIds.slice(i, i + VALIDATION_BATCH_SIZE);
-      const validationPromises = batchIds.map(async (wordId: string) => {
-        try {
-          const wordDoc = await adminDb.collection('words').doc(wordId).get();
-          return { id: wordId, exists: wordDoc.exists };
-        } catch (error) {
-          console.error(`Error validating word ${wordId}:`, error);
-          return { id: wordId, exists: false };
-        }
-      });
+    for (let i = 0; i < wordDocIds.length; i += 10) {
+      const batch = wordDocIds.slice(i, i + 10);
+      const snapshot = await adminDb
+        .collection(VOCABULARY_WORDS_COLLECTION)
+        .where(FieldPath.documentId(), 'in', batch)
+        .get();
 
-      const batchResults = await Promise.all(validationPromises);
-      batchResults.forEach(result => {
-        if (result.exists) {
-          validIds.push(result.id);
-        } else {
-          invalidIds.push(result.id);
-        }
-      });
+      const foundIds = snapshot.docs.map(doc => doc.id);
+      foundIds.forEach(id => validIds.push(id));
+
+      const missingIds = batch.filter(id => !foundIds.includes(id));
+      missingIds.forEach(id => invalidIds.push(id));
     }
 
     console.log(`Validation complete: ${validIds.length} valid, ${invalidIds.length} invalid`);

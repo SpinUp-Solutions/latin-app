@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
         id: doc.id,
         title: data.title,
         description: data.description,
+        type: data.type || 'normal',
         vocabulary_pool: data.vocabulary_pool,
         pages: data.pages || [],
         isLive: data.isLive,
@@ -64,57 +65,86 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const lessonsWithStatus: LessonWithProgress[] = allLessons.map((lesson, index) => {
-      const userProgress = userProgressMap[lesson.id];
-      let status = 'locked';
-      let progress = 0;
+    const normalLessons = allLessons.filter(l => l.type === 'normal');
+    const vocabLessons = allLessons.filter(l => l.type === 'vocab');
 
-      if (!currentUser) {
-        status = 'available';
-      } else if (index === 0) {
-        if (userProgress) {
-          const currentPageIndex = userProgress.currentPageIndex || 0;
-          const totalPages = lesson.pages.length;
-          progress = calculateProgressFromPageIndex(currentPageIndex, totalPages);
-          const isComplete = isLessonComplete(currentPageIndex, totalPages);
-          status = isComplete ? 'completed' : currentPageIndex > 0 ? 'in-progress' : 'available';
-        } else {
+    const processNormalLessons = (lessons: typeof allLessons): LessonWithProgress[] => {
+      return lessons.map((lesson, index) => {
+        const userProgress = userProgressMap[lesson.id];
+        let status = 'locked';
+        let progress = 0;
+
+        if (!currentUser) {
           status = 'available';
-        }
-      } else {
-        const previousLesson = allLessons[index - 1];
-        const previousProgress = userProgressMap[previousLesson.id];
+        } else if (index === 0) {
+          if (userProgress) {
+            const currentPageIndex = userProgress.currentPageIndex || 0;
+            const totalPages = lesson.pages.length;
+            progress = calculateProgressFromPageIndex(currentPageIndex, totalPages);
+            const isComplete = isLessonComplete(currentPageIndex, totalPages);
+            status = isComplete ? 'completed' : currentPageIndex > 0 ? 'in-progress' : 'available';
+          } else {
+            status = 'available';
+          }
+        } else {
+          const previousLesson = lessons[index - 1];
+          const previousProgress = userProgressMap[previousLesson.id];
 
-        if (previousProgress) {
-          const prevCurrentPageIndex = previousProgress.currentPageIndex || 0;
-          const prevTotalPages = previousLesson.pages.length;
-          const isPreviousComplete = isLessonComplete(prevCurrentPageIndex, prevTotalPages);
+          if (previousProgress) {
+            const prevCurrentPageIndex = previousProgress.currentPageIndex || 0;
+            const prevTotalPages = previousLesson.pages.length;
+            const isPreviousComplete = isLessonComplete(prevCurrentPageIndex, prevTotalPages);
 
-          if (isPreviousComplete) {
-            if (userProgress) {
-              const currentPageIndex = userProgress.currentPageIndex || 0;
-              const totalPages = lesson.pages.length;
-              progress = calculateProgressFromPageIndex(currentPageIndex, totalPages);
-              const isComplete = isLessonComplete(currentPageIndex, totalPages);
-              status = isComplete ? 'completed' : currentPageIndex > 0 ? 'in-progress' : 'available';
-            } else {
-              status = 'available';
+            if (isPreviousComplete) {
+              if (userProgress) {
+                const currentPageIndex = userProgress.currentPageIndex || 0;
+                const totalPages = lesson.pages.length;
+                progress = calculateProgressFromPageIndex(currentPageIndex, totalPages);
+                const isComplete = isLessonComplete(currentPageIndex, totalPages);
+                status = isComplete ? 'completed' : currentPageIndex > 0 ? 'in-progress' : 'available';
+              } else {
+                status = 'available';
+              }
             }
           }
         }
-      }
 
-      return {
-        ...lesson,
-        progress,
-        status,
-        currentPageIndex: userProgress?.currentPageIndex || 0,
-        exerciseProgress: userProgress?.exerciseProgress || [],
-        completedAt: userProgress?.completedAt,
-        score: userProgress?.score,
-        lastAccessedAt: userProgress?.lastAccessedAt,
-      } as LessonWithProgress;
-    });
+        return {
+          ...lesson,
+          progress,
+          status,
+          currentPageIndex: userProgress?.currentPageIndex || 0,
+          exerciseProgress: userProgress?.exerciseProgress || [],
+          completedAt: userProgress?.completedAt,
+          score: userProgress?.score,
+          lastAccessedAt: userProgress?.lastAccessedAt,
+        } as LessonWithProgress;
+      });
+    };
+
+    const processVocabLessons = (lessons: typeof allLessons): LessonWithProgress[] => {
+      return lessons.map(lesson => {
+        const userProgress = userProgressMap[lesson.id];
+        const status = userProgress?.status === 'completed' ? 'completed' : 'available';
+        const progress = status === 'completed' ? 100 : 0;
+
+        return {
+          ...lesson,
+          progress,
+          status,
+          currentPageIndex: 0,
+          exerciseProgress: [],
+          completedAt: userProgress?.completedAt,
+          score: userProgress?.score,
+          lastAccessedAt: userProgress?.lastAccessedAt,
+        } as LessonWithProgress;
+      });
+    };
+
+    const lessonsWithStatus: LessonWithProgress[] = [
+      ...processNormalLessons(normalLessons),
+      ...processVocabLessons(vocabLessons),
+    ];
 
     return NextResponse.json({ lessons: lessonsWithStatus });
   } catch (error) {

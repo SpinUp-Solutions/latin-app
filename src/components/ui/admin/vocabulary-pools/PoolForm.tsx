@@ -8,10 +8,11 @@ import { Badge } from '@/src/components/ui/badge';
 import { X, BookOpen } from 'lucide-react';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { WordSelector } from './WordSelector';
-import type { CreatePoolRequest, VocabularyPool } from '@/src/types/vocabulary-pool';
+import { useWordSelection } from '@/src/hooks/useWordSelection';
+import type { CreatePoolRequest, VocabularyPool, VocabularyPoolWithWords } from '@/src/types/vocabulary-pool';
 
 interface PoolFormProps {
-  initialData?: Partial<VocabularyPool>;
+  initialData?: Partial<VocabularyPool> | VocabularyPoolWithWords;
   onSubmit: (data: CreatePoolRequest) => Promise<boolean>;
   onCancel: () => void;
   isLoading: boolean;
@@ -19,12 +20,13 @@ interface PoolFormProps {
 }
 
 export const PoolForm: React.FC<PoolFormProps> = ({ initialData, onSubmit, onCancel, isLoading, mode }) => {
+  const { selectedIds, clear } = useWordSelection();
+
   const [formData, setFormData] = useState({
     name: initialData?.name || '',
     description: initialData?.description || '',
     difficulty: initialData?.metadata?.difficulty || 'beginner',
     tags: initialData?.metadata?.tags || [],
-    wordDocIds: initialData?.wordDocIds || [],
   });
 
   const [newTag, setNewTag] = useState('');
@@ -61,10 +63,13 @@ export const PoolForm: React.FC<PoolFormProps> = ({ initialData, onSubmit, onCan
       description: formData.description.trim(),
       difficulty: formData.difficulty as 'beginner' | 'intermediate' | 'advanced',
       tags: formData.tags,
-      wordDocIds: formData.wordDocIds,
+      wordDocIds: selectedIds,
     };
 
-    await onSubmit(submitData);
+    const success = await onSubmit(submitData);
+    if (success) {
+      clear();
+    }
   };
 
   const handleAddTag = () => {
@@ -179,8 +184,9 @@ export const PoolForm: React.FC<PoolFormProps> = ({ initialData, onSubmit, onCan
             </p>
 
             <WordSelector
-              selectedWordIds={formData.wordDocIds}
-              onSelectionChange={wordIds => setFormData(prev => ({ ...prev, wordDocIds: wordIds }))}
+              maxSelection={undefined}
+              initialSelectedWords={initialData && 'words' in initialData ? initialData.words : undefined}
+              initialSelectedIds={initialData?.wordDocIds}
             />
           </div>
 

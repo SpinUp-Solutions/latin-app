@@ -78,6 +78,9 @@ export const Tooltip = Mark.create<TooltipOptions>({
       principalParts: {
         default: null,
       },
+      link: {
+        default: null,
+      },
     };
   },
 

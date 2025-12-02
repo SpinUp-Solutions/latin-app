@@ -3,6 +3,7 @@ import { adminDb } from '@/src/services/firebase-admin';
 import { FieldPath } from 'firebase-admin/firestore';
 import type { VocabularyPool } from '@/src/types/vocabulary-pool';
 import type { Word } from '@/src/types/admin-vocabulary';
+import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,25 +35,24 @@ export async function GET(request: NextRequest, { params }: { params: { poolId: 
       });
     }
 
-    // Populate words using batch queries
     const words: Word[] = [];
     const batches = [];
 
-    // Firestore allows up to 10 docs per batch for 'in' queries
     for (let i = 0; i < pool.wordDocIds.length; i += 10) {
       const batch = pool.wordDocIds.slice(i, i + 10);
-      batches.push(adminDb.collection('words').where(FieldPath.documentId(), 'in', batch).get());
+      batches.push(adminDb.collection(VOCABULARY_WORDS_COLLECTION).where(FieldPath.documentId(), 'in', batch).get());
     }
 
     const batchResults = await Promise.all(batches);
     batchResults.forEach(snapshot => {
       snapshot.docs.forEach(doc => {
+        const data = doc.data();
         words.push({
           id: doc.id,
-          ...doc.data(),
-          // Convert timestamps if they exist
-          createdAt: doc.data().createdAt?.toDate(),
-          updatedAt: doc.data().updatedAt?.toDate(),
+          ...data,
+          wordType: data.part_of_speech,
+          createdAt: data.createdAt?.toDate(),
+          updatedAt: data.updatedAt?.toDate(),
         } as Word);
       });
     });

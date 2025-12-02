@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
 import { Save, X } from 'lucide-react';
 import { EditingCell } from '@/src/types/admin-vocabulary';
 import { formatCellValue } from '@/src/utils/vocabUtils';
+import { AIFilledFieldsContext } from '@/src/components/ui/admin/vocabulary/WordEditPanel';
+import { cn } from '@/src/lib/utils';
 
 interface EditableCellProps {
   value: string[];
@@ -30,8 +32,19 @@ export const EditableCell: React.FC<EditableCellProps> = ({
   onCellEditCancel,
   onEditingCellValueChange,
 }) => {
+  const aiFieldStatus = useContext(AIFilledFieldsContext);
   const isEditing =
     editingCell?.rowIndex === rowIndex && editingCell?.cellKey === cellKey && editingCell?.tableType === tableType;
+
+  const tableTypeToFieldName: Record<string, string> = {
+    conjugation: 'conjugation_table',
+    declension: 'declension_table',
+    'adjective-declension': 'degrees_table',
+  };
+
+  const fieldName = tableTypeToFieldName[tableType] || tableType;
+  const cellPath = `${fieldName}.${cellKey}`;
+  const aiStatus = aiFieldStatus.get(cellPath);
 
   if (isEditing) {
     return (
@@ -66,7 +79,11 @@ export const EditableCell: React.FC<EditableCellProps> = ({
 
   return (
     <span
-      className="cursor-pointer hover:bg-gray-100 p-2 rounded transition-colors block min-h-[2rem] flex items-center"
+      className={cn(
+        'cursor-pointer hover:bg-gray-100 p-2 rounded transition-colors block min-h-[2rem] flex items-center',
+        aiStatus === 'filled' && 'bg-green-50 hover:bg-green-100',
+        aiStatus === 'missing' && 'bg-red-50 hover:bg-red-100'
+      )}
       onDoubleClick={() => onCellDoubleClick(rowIndex, cellKey, tableType, displayValue)}
       title="Double-click to edit"
       role="button"

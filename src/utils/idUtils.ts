@@ -1,5 +1,6 @@
 import { RenderableContentItem } from '@/src/types/page';
 import { TooltipData } from '@/src/types/tooltip';
+import { Page } from '@/src/types/lesson';
 
 export const generateId = (prefix: string = 'item'): string => {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -121,6 +122,48 @@ export const regenerateContentAndTooltipIds = (
   return {
     content: newContent,
     tooltips: newTooltips,
+    idMapping,
+  };
+};
+
+export const regeneratePageIds = (
+  page: Page,
+  tooltips: Record<string, TooltipData>
+): {
+  page: Page;
+  tooltips: Record<string, TooltipData>;
+  idMapping: IdMapping;
+} => {
+  let idMapping: IdMapping = {};
+  let accumulatedTooltips: Record<string, TooltipData> = {};
+
+  const newPage: Page = JSON.parse(JSON.stringify(page));
+
+  const oldPageId = newPage.id;
+  const newPageId = generateId('page');
+  newPage.id = newPageId;
+  idMapping[oldPageId] = newPageId;
+
+  if (newPage.title) {
+    newPage.title = `${newPage.title} (Copy)`;
+  } else {
+    newPage.title = 'New Page (Copy)';
+  }
+
+  newPage.items = newPage.items.map(item => {
+    const {
+      content: newContent,
+      tooltips: newTooltips,
+      idMapping: itemIdMapping,
+    } = regenerateContentAndTooltipIds(item, tooltips);
+    idMapping = { ...idMapping, ...itemIdMapping };
+    accumulatedTooltips = { ...accumulatedTooltips, ...newTooltips };
+    return newContent;
+  });
+
+  return {
+    page: newPage,
+    tooltips: accumulatedTooltips,
     idMapping,
   };
 };

@@ -30,20 +30,20 @@ export const PasteZone: React.FC<PasteZoneProps> = ({ pageIndex, className = '' 
 
   return (
     <div
-      className={`border-2 border-dashed border-blue-300 rounded-lg p-3 bg-blue-50/50 hover:bg-blue-50 transition-colors ${className}`}>
+      className={`border-2 border-dashed border-blue-300 rounded p-2 bg-blue-50/50 hover:bg-blue-50 transition-colors ${className}`}>
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm text-blue-700">
-          <Clipboard className="h-4 w-4" />
-          <span>Paste: {displayText}</span>
+        <div className="flex items-center gap-1.5 text-xs text-blue-700">
+          <Clipboard className="h-3 w-3" />
+          <span>{displayText}</span>
         </div>
         <Button
           variant="outline"
           size="sm"
           onClick={handlePaste}
-          className="border-blue-300 text-blue-700 hover:bg-blue-100"
+          className="border-blue-300 text-blue-700 hover:bg-blue-100 h-6 text-xs px-2"
           disabled={!hasSelection && clipboardItems.length === 0}>
-          <Plus className="h-4 w-4 mr-1" />
-          {hasSelection ? `Paste Selected (${selectedCount})` : 'Paste Latest'}
+          <Plus className="h-3 w-3 mr-1" />
+          {hasSelection ? `Paste (${selectedCount})` : 'Paste'}
         </Button>
       </div>
     </div>

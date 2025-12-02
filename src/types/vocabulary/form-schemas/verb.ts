@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { VerbSchema } from '../schemas/verb';
+import { VerbSchema } from '@/shared/types/vocabulary/schemas/verb';
 
 export const VerbFormSchema = VerbSchema.omit({
   part_of_speech: true,

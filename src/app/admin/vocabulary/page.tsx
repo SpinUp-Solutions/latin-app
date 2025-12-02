@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSelector, useDispatch } from 'react-redux';
 import { Button } from '@/src/components/ui/button';
-import { ArrowLeft, BookOpen, Download } from 'lucide-react';
+import { ArrowLeft, BookOpen, Download, PlayCircle, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary/index';
 import {
@@ -25,8 +25,9 @@ import { VocabularyFiltersComponent } from '@/src/components/ui/admin/vocabulary
 import { VocabularyList } from '@/src/components/ui/admin/vocabulary/VocabularyList';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
-import { PartOfSpeechSchema, type PartOfSpeech } from '@/src/types/vocabulary/schemas/enums';
+import { PartOfSpeechSchema, type PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 import { buildEmptyWord, isPlaceholderWord } from '@/src/utils/vocabulary-defaults';
+import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 
 const EMPTY_WORDS: VocabularyWordWithId[] = [];
 const PART_OF_SPEECH_OPTIONS = PartOfSpeechSchema.options;
@@ -41,7 +42,8 @@ function AdminVocabularyPage() {
   const [selectedWordId, setSelectedWordId] = useState<string | null>(null);
   const [creatingWord, setCreatingWord] = useState<VocabularyWordWithId | null>(null);
   const [deletingWordId, setDeletingWordId] = useState<string | null>(null);
-  const TARGET_COLLECTION = 'vocabulary_words_v4';
+  const [migrating, setMigrating] = useState(false);
+  const TARGET_COLLECTION = VOCABULARY_WORDS_COLLECTION;
 
   const queryArgs = {
     wordType: filters.wordType,
@@ -218,6 +220,71 @@ function AdminVocabularyPage() {
     toast.success('Backup download started');
   };
 
+  const handleMigrationDryRun = async () => {
+    setMigrating(true);
+    try {
+      const response = await fetch('/api/admin/words/migrate?dryRun=true', {
+        method: 'POST',
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        const { data } = result;
+        toast.success(
+          `Dry Run Complete: ${data.successfulMigrations} words ready to migrate. Check console for details.`
+        );
+        console.log('Migration Dry Run Summary:', data);
+        console.log('Sample migrations:', data.sampleMigrations);
+        if (data.errors > 0) {
+          console.error('Migration errors:', data.errorDetails);
+          toast.warning(`${data.errors} errors found. Check console for details.`);
+        }
+      } else {
+        toast.error(`Dry run failed: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Dry run error:', error);
+      toast.error('Failed to run migration dry run');
+    } finally {
+      setMigrating(false);
+    }
+  };
+
+  const handleMigrationLive = async () => {
+    const confirmed = window.confirm(
+      'Are you sure you want to migrate all words to vocabulary_words_v5? This will create a new collection with the migrated data.'
+    );
+
+    if (!confirmed) return;
+
+    setMigrating(true);
+    try {
+      const response = await fetch('/api/admin/words/migrate?dryRun=false', {
+        method: 'POST',
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        const { data } = result;
+        toast.success(`Migration Complete: ${data.successfulMigrations} words migrated to vocabulary_words_v5`);
+        console.log('Migration Summary:', data);
+        if (data.errors > 0) {
+          console.error('Migration errors:', data.errorDetails);
+          toast.warning(`${data.errors} errors occurred. Check console for details.`);
+        }
+      } else {
+        toast.error(`Migration failed: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Migration error:', error);
+      toast.error('Failed to run migration');
+    } finally {
+      setMigrating(false);
+    }
+  };
+
   return (
     <div className="h-screen flex flex-col bg-roman-marble">
       <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between flex-shrink-0">
@@ -259,6 +326,14 @@ function AdminVocabularyPage() {
           <Button variant="outline" onClick={handleBackup}>
             <Download className="h-4 w-4 mr-2" />
             Backup
+          </Button>
+          <Button variant="outline" onClick={handleMigrationDryRun} disabled={migrating}>
+            <PlayCircle className="h-4 w-4 mr-2" />
+            {migrating ? 'Running...' : 'Dry Run'}
+          </Button>
+          <Button variant="default" onClick={handleMigrationLive} disabled={migrating}>
+            <Upload className="h-4 w-4 mr-2" />
+            {migrating ? 'Migrating...' : 'Migrate to v5'}
           </Button>
         </div>
       </header>

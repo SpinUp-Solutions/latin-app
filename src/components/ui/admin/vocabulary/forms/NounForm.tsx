@@ -3,24 +3,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/src/components/ui/form';
 import { VocabularyFormValues } from './types';
 import { WordFormInput } from './WordFormInput';
+import { genderOptions, nounDeclensionOptions } from '@/src/utils/vocabulary/formOptions';
 import React from 'react';
-const genderOptions = [
-  { value: 'masculine', label: 'Masculine' },
-  { value: 'feminine', label: 'Feminine' },
-  { value: 'neuter', label: 'Neuter' },
-];
-
-const declensionOptions = [
-  { value: '1', label: 'First' },
-  { value: '2', label: 'Second' },
-  { value: '3', label: 'Third' },
-  { value: '3-istem', label: 'Third i-stem' },
-  { value: '4', label: 'Fourth' },
-  { value: '5', label: 'Fifth' },
-];
+import { useAIFieldStatus } from '@/src/hooks/useAIFieldStatus';
+import { cn } from '@/src/lib/utils';
 
 export const NounForm = () => {
   const form = useFormContext<VocabularyFormValues>();
+  const genderAIStatus = useAIFieldStatus('gender');
+  const declensionAIStatus = useAIFieldStatus('declension');
 
   return (
     <div className="space-y-6">
@@ -28,63 +19,77 @@ export const NounForm = () => {
         <FormField
           control={form.control}
           name="gender"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Gender (optional)</FormLabel>
-              <FormControl>
-                <Select
-                  value={field.value ?? undefined}
-                  onValueChange={value => {
-                    if (value && value.trim() !== '') {
-                      field.onChange(value);
-                    }
-                  }}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select gender" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {genderOptions.map(option => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+          render={({ field }) => {
+            return (
+              <FormItem>
+                <FormLabel>Gender (optional)</FormLabel>
+                <FormControl>
+                  <Select
+                    value={field.value ?? undefined}
+                    onValueChange={value => {
+                      if (value && value.trim() !== '') {
+                        field.onChange(value);
+                      }
+                    }}>
+                    <SelectTrigger
+                      className={cn(
+                        genderAIStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
+                        genderAIStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
+                        'focus:bg-white'
+                      )}>
+                      <SelectValue placeholder="Select gender" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {genderOptions.map(option => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            );
+          }}
         />
 
         <FormField
           control={form.control}
           name="declension"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Declension</FormLabel>
-              <FormControl>
-                <Select
-                  value={field.value ?? undefined}
-                  onValueChange={value => {
-                    if (value && value.trim() !== '') {
-                      field.onChange(value);
-                    }
-                  }}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select declension" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {declensionOptions.map(option => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+          render={({ field }) => {
+            return (
+              <FormItem>
+                <FormLabel>Declension</FormLabel>
+                <FormControl>
+                  <Select
+                    value={field.value ?? undefined}
+                    onValueChange={value => {
+                      if (value && value.trim() !== '') {
+                        field.onChange(value);
+                      }
+                    }}>
+                    <SelectTrigger
+                      className={cn(
+                        declensionAIStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
+                        declensionAIStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
+                        'focus:bg-white'
+                      )}>
+                      <SelectValue placeholder="Select declension" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {nounDeclensionOptions.map(option => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            );
+          }}
         />
       </div>
 

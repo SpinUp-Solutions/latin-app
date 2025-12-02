@@ -19,6 +19,7 @@ import 'swiper/css';
 import 'swiper/css/navigation';
 import { SwiperNavigation } from '@/src/components/ui/core/swiper-nav';
 import { VocabularyPracticeWidget } from '@/src/components/ui/core/VocabularyPracticeWidget';
+import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 
 const statusConfig: Record<LessonStatus, { card: string }> = {
   completed: {
@@ -60,9 +61,11 @@ const LessonCard = memo(
         <RomanCardContent className="relative p-6">
           <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-3xl"></div>
           <div className="relative flex items-center justify-between">
-            <div className="flex-1 pr-4">
-              <h3 className="text-xl font-serif mb-2 text-gray-900">{lesson.title}</h3>
-              <p className="text-sm text-roman-stone">{lesson.description}</p>
+            <div className="flex-1 pr-4 min-w-0">
+              <h3 className="text-xl font-serif mb-2 text-gray-900 truncate">{lesson.title}</h3>
+              <div className="text-sm text-roman-stone line-clamp-2">
+                <SimpleRichDisplay content={lesson.description || ''} />
+              </div>
             </div>
             <div className="flex-shrink-0">
               <CircularProgressButton
@@ -91,41 +94,49 @@ export default function DashboardPage() {
     skip: !user?.uid,
   });
 
-  const lessons = useMemo(() => {
+  const normalLessons = useMemo(() => {
     if (!studentLessons) return [];
+    return studentLessons
+      .filter(lesson => lesson.type === 'normal')
+      .map(lesson => ({
+        ...lesson,
+        totalPages: lesson.pages.length,
+      }));
+  }, [studentLessons]);
 
-    return studentLessons.map(lesson => ({
-      ...lesson,
-      totalPages: lesson.pages.length,
-    }));
+  const vocabLessons = useMemo(() => {
+    if (!studentLessons) return [];
+    return studentLessons
+      .filter(lesson => lesson.type === 'vocab')
+      .map(lesson => ({
+        ...lesson,
+        totalPages: lesson.pages.length,
+      }));
   }, [studentLessons]);
 
   const completionStats = useMemo(() => {
-    if (lessons.length === 0) return { percentage: 0, completed: 0, total: 0 };
-    const completed = lessons.filter(l => l.status === 'completed').length;
-    const percentage = Math.round((completed / lessons.length) * 100);
-    return { percentage, completed, total: lessons.length };
-  }, [lessons]);
+    if (normalLessons.length === 0) return { percentage: 0, completed: 0, total: 0 };
+    const completed = normalLessons.filter(l => l.status === 'completed').length;
+    const percentage = Math.round((completed / normalLessons.length) * 100);
+    return { percentage, completed, total: normalLessons.length };
+  }, [normalLessons]);
 
   const getInitialSlideIndex = useMemo(() => {
-    if (lessons.length === 0) return 0;
+    if (normalLessons.length === 0) return 0;
 
-    const inProgressIndex = lessons.findIndex(lesson => lesson.status === 'in-progress');
+    const inProgressIndex = normalLessons.findIndex(lesson => lesson.status === 'in-progress');
     if (inProgressIndex !== -1) return inProgressIndex;
 
-    const availableIndex = lessons.findIndex(lesson => lesson.status === 'available');
+    const availableIndex = normalLessons.findIndex(lesson => lesson.status === 'available');
     if (availableIndex !== -1) return availableIndex;
 
     return 0;
-  }, [lessons]);
-
-  const vocabularyLessons = useMemo(() => {
-    return lessons.filter(lesson => lesson.status === 'completed' || lesson.status === 'in-progress');
-  }, [lessons]);
+  }, [normalLessons]);
 
   const handleLessonClick = useCallback(
     (lessonId: string) => {
-      const lesson = lessons.find(l => l.id === lessonId);
+      const allLessons = [...normalLessons, ...vocabLessons];
+      const lesson = allLessons.find(l => l.id === lessonId);
 
       if (lesson?.status === 'locked') {
         toast.error('Complete the previous lesson to unlock this one');
@@ -134,7 +145,7 @@ export default function DashboardPage() {
 
       router.push(`/lesson/${lessonId}`);
     },
-    [router, lessons]
+    [router, normalLessons, vocabLessons]
   );
 
   useEffect(() => {
@@ -256,7 +267,7 @@ export default function DashboardPage() {
                     Continue your journey through Latin mastery
                   </p>
                 </div>
-                {lessons.length > 0 && (
+                {normalLessons.length > 0 && (
                   <div className="text-right">
                     <div className="text-4xl font-serif text-transparent bg-clip-text bg-gradient-to-r from-roman-red to-roman-terracotta mb-2">
                       {completionStats.percentage}% Complete
@@ -268,7 +279,7 @@ export default function DashboardPage() {
                 )}
               </div>
 
-              {lessons.length === 0 ? (
+              {normalLessons.length === 0 ? (
                 <RomanCard>
                   <RomanCardContent className="p-12 text-center">
                     <BookOpen className="h-16 w-16 text-gray-300 mx-auto mb-4" />
@@ -296,7 +307,7 @@ export default function DashboardPage() {
                       <SwiperNavigation />
                     </div>
 
-                    {lessons.map(lesson => (
+                    {normalLessons.map(lesson => (
                       <SwiperSlide key={lesson.id} className="overflow-visible p-10 transition-transform duration-500">
                         {({ isActive }) => (
                           <div
@@ -311,10 +322,11 @@ export default function DashboardPage() {
               )}
             </section>
 
-            {/* Vocabulary Practice Section */}
-            <section className="mb-16">
-              <VocabularyPracticeWidget lessons={vocabularyLessons} />
-            </section>
+            {vocabLessons.length > 0 && (
+              <section className="mb-16">
+                <VocabularyPracticeWidget lessons={vocabLessons} />
+              </section>
+            )}
 
             {/* Progress Section */}
             <section className="mb-16">

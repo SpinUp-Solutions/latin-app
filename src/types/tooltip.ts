@@ -7,6 +7,7 @@ interface BaseTooltipFields {
   definition?: string;
   examples?: string[];
   etymology?: string;
+  link?: string;
 }
 
 interface GrammaticalFields {
