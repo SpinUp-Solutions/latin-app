@@ -43,6 +43,20 @@
       ]
     },
     {
+      "collectionGroup": "lessons",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "parentLessonId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "vocabulary_pools",
       "queryScope": "COLLECTION",
       "fields": [
@@ -67,82 +81,6 @@
         {
           "fieldPath": "metadata.createdAt",
           "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "vocabulary_words_v4",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "part_of_speech",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "conjugation",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "word",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "vocabulary_words_v4",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "part_of_speech",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "is_deponent",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "word",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "vocabulary_words_v4",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "part_of_speech",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "conjugation",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "is_deponent",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "word",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "vocabulary_words_v4",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "part_of_speech",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "declension",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "word",
-          "order": "ASCENDING"
         }
       ]
     },
