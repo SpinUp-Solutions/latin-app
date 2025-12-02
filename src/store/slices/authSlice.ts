@@ -1,11 +1,29 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { User } from 'firebase/auth';
+import { z } from 'zod';
 
-export type UserRole = 'student' | 'teacher' | 'admin';
+export const UserRoleSchema = z.enum(['student', 'teacher', 'admin']);
+export type UserRole = z.infer<typeof UserRoleSchema>;
+
+export const FirestoreUserDataSchema = z.object({
+  uid: z.string(),
+  email: z.string().email(),
+  role: UserRoleSchema,
+  username: z.string(),
+  firstName: z.string(),
+  lastName: z.string(),
+  dateOfBirth: z.string(),
+  createdAt: z.string(),
+});
+export type FirestoreUserData = z.infer<typeof FirestoreUserDataSchema>;
 
 export interface CustomUser extends Omit<User, 'uid'> {
   uid: string;
-  role?: UserRole;
+  role: UserRole;
+  username: string;
+  firstName: string;
+  lastName: string;
+  dateOfBirth: string;
 }
 
 interface AuthState {

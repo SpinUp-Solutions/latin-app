@@ -2,11 +2,10 @@
 
 import { useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSelector } from 'react-redux';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/src/services/firebase';
-import type { RootState } from '@/src/store';
 import { useGetStudentLessonsQuery } from '@/src/store/api/lessonApi';
+import { useAuth } from '@/src/hooks/useAuth';
 import { LessonStatus, LessonWithProgress } from '@/src/types/lesson';
 import { Button } from '@/src/components/ui/button';
 import { toast } from 'sonner';
@@ -88,7 +87,7 @@ LessonCard.displayName = 'LessonCard';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, loading } = useSelector((state: RootState) => state.auth);
+  const { user, loading, displayName } = useAuth();
 
   const { data: studentLessons, isLoading: lessonsLoading } = useGetStudentLessonsQuery(undefined, {
     skip: !user?.uid,
@@ -228,7 +227,7 @@ export default function DashboardPage() {
             <div>
               <h1 className="text-3xl font-serif tracking-wide text-gray-900 mb-1">Latin Learning</h1>
               <p className="text-lg text-roman-stone leading-relaxed">
-                Welcome back, {user.displayName || user.email?.split('@')[0]}
+                Welcome back, {displayName}
               </p>
             </div>
           </div>
