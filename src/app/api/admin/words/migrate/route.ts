@@ -5,7 +5,10 @@ const DEFAULT_SOURCE_COLLECTION = 'vocabulary_words_v4';
 const DEFAULT_TARGET_COLLECTION = 'vocabulary_words_v5';
 
 const stripMacrons = (str: string): string => {
-  return str.normalize('NFD').replace(/[\u0304]/g, '').normalize('NFC');
+  return str
+    .normalize('NFD')
+    .replace(/[\u0304]/g, '')
+    .normalize('NFC');
 };
 
 export const dynamic = 'force-dynamic';

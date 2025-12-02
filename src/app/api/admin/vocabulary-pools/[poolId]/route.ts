@@ -72,12 +72,24 @@ export async function GET(request: NextRequest, { params }: { params: { poolId: 
       });
 
       const wordMap = new Map(words.map(word => [word.id, word]));
-      const orderedWords = wordIds.map((id: string) => wordMap.get(id)).filter(Boolean);
+      const orderedWords: Word[] = [];
+      const missingWordIds: string[] = [];
+
+      wordIds.forEach((id: string) => {
+        const word = wordMap.get(id);
+        if (word) {
+          orderedWords.push(word);
+        } else {
+          missingWordIds.push(id);
+        }
+      });
 
       return NextResponse.json({
         success: true,
         data: {
           pool: { ...pool, words: orderedWords },
+          missingWordIds: missingWordIds.length > 0 ? missingWordIds : undefined,
+          actualWordCount: orderedWords.length,
         },
       });
     }
@@ -86,6 +98,7 @@ export async function GET(request: NextRequest, { params }: { params: { poolId: 
       success: true,
       data: {
         pool: { ...pool, words: [] },
+        actualWordCount: 0,
       },
     });
   } catch (error) {

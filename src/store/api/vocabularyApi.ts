@@ -55,6 +55,10 @@ export const vocabularyApi = createApi({
           if (result.success) {
             return [result.data as VocabularyWordWithId];
           }
+          console.error('[VocabularyAPI] Word validation failed:', {
+            word,
+            errors: result.error.issues,
+          });
           return [] as VocabularyWordWithId[];
         });
         return {

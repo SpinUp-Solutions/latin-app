@@ -34,7 +34,10 @@ export async function POST(request: NextRequest, { params }: { params: { poolId:
 
     for (let i = 0; i < wordDocIds.length; i += 10) {
       const batch = wordDocIds.slice(i, i + 10);
-      const snapshot = await adminDb.collection(VOCABULARY_WORDS_COLLECTION).where(FieldPath.documentId(), 'in', batch).get();
+      const snapshot = await adminDb
+        .collection(VOCABULARY_WORDS_COLLECTION)
+        .where(FieldPath.documentId(), 'in', batch)
+        .get();
 
       const foundIds = snapshot.docs.map(doc => doc.id);
       foundIds.forEach(id => validIds.push(id));

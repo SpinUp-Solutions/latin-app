@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
+import { FieldPath } from 'firebase-admin/firestore';
 import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 
@@ -56,7 +57,7 @@ export async function GET(
       const chunk = wordDocIds.slice(i, i + 10);
       const batchQuery = adminDb
         .collection(VOCABULARY_WORDS_COLLECTION)
-        .where('__name__', 'in', chunk)
+        .where(FieldPath.documentId(), 'in', chunk)
         .select('part_of_speech');
       batches.push(batchQuery.get());
     }

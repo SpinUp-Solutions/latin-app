@@ -184,19 +184,19 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
             <FieldSelect
               items={shuffledLeftColumn.map(item => item.value)}
               selectedItem={selectedLeft?.value || null}
-              selectedIndex={
-                selectedLeft ? shuffledLeftColumn.findIndex(item => item.id === selectedLeft.id) : null
-              }
+              selectedIndex={selectedLeft ? shuffledLeftColumn.findIndex(item => item.id === selectedLeft.id) : null}
               onSelect={handleLeftSelect}
               matches={{}}
               matchType="key"
               label=""
-              matchedIndices={new Set(
-                shuffledLeftColumn
-                  .map((item, index) => (matchedLeftIds.has(item.id) ? index : -1))
-                  .filter(index => index !== -1)
-              )}
-              className={showIncorrectFlash ? 'animate-pulse bg-red-50 border-red-300' : ''}
+              matchedIndices={
+                new Set(
+                  shuffledLeftColumn
+                    .map((item, index) => (matchedLeftIds.has(item.id) ? index : -1))
+                    .filter(index => index !== -1)
+                )
+              }
+              showIncorrect={showIncorrectFlash}
             />
           </div>
 
@@ -206,15 +206,13 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
             <FieldSelect
               items={shuffledRightColumn.map(item => item.value)}
               selectedItem={selectedRight?.value || null}
-              selectedIndex={
-                selectedRight ? shuffledRightColumn.findIndex(item => item.id === selectedRight.id) : null
-              }
+              selectedIndex={selectedRight ? shuffledRightColumn.findIndex(item => item.id === selectedRight.id) : null}
               onSelect={handleRightSelect}
               matches={{}}
               matchType="value"
               label=""
               matchedIndices={new Set()}
-              className={showIncorrectFlash ? 'animate-pulse bg-red-50 border-red-300' : ''}
+              showIncorrect={showIncorrectFlash}
             />
           </div>
         </div>

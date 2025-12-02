@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { Lesson, Page } from '@/src/types/lesson';
 import { RenderableContentItem } from '@/src/types/page';
 import { TooltipData } from '@/src/types/tooltip';
+import { regeneratePageIds } from '@/src/utils/idUtils';
 
 interface LessonEditorState {
   currentLesson: Lesson | null;
@@ -188,6 +189,21 @@ const lessonEditorSlice = createSlice({
       }
     },
 
+    duplicatePage: (
+      state,
+      action: PayloadAction<{
+        pageIndex: number;
+      }>
+    ) => {
+      const { pageIndex } = action.payload;
+      if (state.currentLesson) {
+        const pageToDuplicate = state.currentLesson.pages[pageIndex];
+        const { page: newPage, tooltips: newTooltips } = regeneratePageIds(pageToDuplicate, state.tooltips);
+        state.currentLesson.pages.splice(pageIndex + 1, 0, newPage);
+        state.tooltips = { ...state.tooltips, ...newTooltips };
+      }
+    },
+
     startEditingContent: (
       state,
       action: PayloadAction<{
@@ -316,6 +332,7 @@ export const {
   updateContentItem,
   removeContent,
   removePage,
+  duplicatePage,
   startEditingContent,
   updateEditingContent,
   saveEditingContent,

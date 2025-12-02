@@ -45,3 +45,22 @@ export const SingleFieldFormIdentificationItemSchema = z.object({
 });
 
 export type SingleFieldFormIdentificationItem = z.infer<typeof SingleFieldFormIdentificationItemSchema>;
+
+export const MultiAnswerFormIdentificationItemSchema = z.object({
+  id: z.string(),
+  wordId: z.string(),
+  word: z.string(),
+  root_word: z.string(),
+  selected_form: z.string(),
+  step: FormIdentificationStepSchema,
+  steps: z.array(FormIdentificationStepSchema),
+  stepIndex: z.number(),
+  totalSteps: z.number(),
+  primaryFormPaths: z.array(z.record(z.string(), z.string().optional())),
+  optionalFormPaths: z.array(z.record(z.string(), z.string().optional())),
+  hint: z.string().optional(),
+  expectedAnswerCount: z.number(),
+  correctAnswerDisplay: z.string(),
+});
+
+export type MultiAnswerFormIdentificationItem = z.infer<typeof MultiAnswerFormIdentificationItemSchema>;

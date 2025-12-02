@@ -28,7 +28,10 @@ const serializeWord = (data: Record<string, unknown>): Record<string, unknown> =
 };
 
 const stripMacrons = (str: string): string => {
-  return str.normalize('NFD').replace(/[\u0304]/g, '').normalize('NFC');
+  return str
+    .normalize('NFD')
+    .replace(/[\u0304]/g, '')
+    .normalize('NFC');
 };
 
 const parseCellPaths = (cellPaths: string | null): string[] => {

@@ -132,6 +132,27 @@ const GeneratedFormIdentificationEditorView: React.FC<{
                 : 'Students answer one step at a time'}
             </p>
           </div>
+          {!isSingleField && (
+            <div className="mt-4 pt-4 border-t space-y-2">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={!!editingContent.data.requireAllPrimaryAnswers}
+                  onChange={e =>
+                    editor.updateContent({
+                      data: { ...editingContent.data, requireAllPrimaryAnswers: e.target.checked },
+                    })
+                  }
+                  className="rounded border-gray-300"
+                />
+                Require all primary answers
+              </label>
+              <p className="text-xs text-gray-500 ml-6">
+                Students must enter all primary path answers for each step, separated by semicolons. Order must be
+                consistent across steps.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 

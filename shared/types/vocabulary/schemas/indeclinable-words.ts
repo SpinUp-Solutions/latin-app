@@ -8,7 +8,7 @@ export const AdverbSchema = BaseWordSchema.extend({
 
 export const PrepositionSchema = BaseWordSchema.extend({
   part_of_speech: z.literal('preposition'),
-  case: PrepositionCaseSchema,
+  case: PrepositionCaseSchema.optional(),
 });
 
 export const ConjunctionSchema = BaseWordSchema.extend({

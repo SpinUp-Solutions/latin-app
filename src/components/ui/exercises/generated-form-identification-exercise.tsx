@@ -17,10 +17,15 @@ import {
   type FormIdentificationItem,
   SingleFieldFormIdentificationItemSchema,
   type SingleFieldFormIdentificationItem,
+  MultiAnswerFormIdentificationItemSchema,
+  type MultiAnswerFormIdentificationItem,
 } from '@/src/types/exercises/schemas/form-identification';
 import {
   validateGeneratedFormIdentificationExercise,
   validateSingleFieldFormIdentificationExercise,
+  validateMultiAnswerStep,
+  validatePartialMultiAnswerPaths,
+  normalize,
 } from '@/src/utils/exercises/generatedFormIdentificationExercise';
 import {
   extractStepValue,
@@ -41,9 +46,12 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
   const [isProcessing, setIsProcessing] = useState(false);
   const [correctAnswers, setCorrectAnswers] = useState(0);
   const [wordAnswers, setWordAnswers] = useState<Record<string, Record<string, string>>>({});
+  const [multiAnswerSlots, setMultiAnswerSlots] = useState<Record<string, string[][]>>({});
 
   const config = exercise.data.generatorConfig;
   const isSingleField = exercise.data.mode === 'single-field';
+  const requireAllPrimaryAnswers = exercise.data.requireAllPrimaryAnswers ?? false;
+  const isMultiAnswerMode = !isSingleField && requireAllPrimaryAnswers;
 
   const { data, isLoading, isError } = useGetMultiPosWordsQuery({
     exerciseType: 'generated-form-identification',
@@ -54,7 +62,8 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
     posConfigs: exercise.data.posConfigs,
   });
 
-  const items: (FormIdentificationItem | SingleFieldFormIdentificationItem)[] = useMemo(() => {
+  type ItemType = FormIdentificationItem | SingleFieldFormIdentificationItem | MultiAnswerFormIdentificationItem;
+  const items: ItemType[] = useMemo(() => {
     if (!data?.words) return [];
 
     const words = data.words as unknown as ExerciseWordResponse[];
@@ -113,6 +122,62 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
       });
     }
 
+    if (isMultiAnswerMode) {
+      return words.flatMap(word => {
+        const posConfig = exercise.data.posConfigs[word.part_of_speech as PartOfSpeech];
+        const steps = posConfig?.steps || [];
+
+        const basePrimaryPaths = (word.primary_form_paths || (word.form_path ? [word.form_path] : [])) as Array<
+          Record<string, string | undefined>
+        >;
+        const baseOptionalPaths = (word.optional_form_paths || []) as Array<Record<string, string | undefined>>;
+
+        const enrichedPrimaryPaths = basePrimaryPaths.map(path => {
+          const enrichedPath: Record<string, string | undefined> = { ...path };
+          steps.forEach(step => {
+            if (!enrichedPath[step]) {
+              enrichedPath[step] = extractStepValue(word, step);
+            }
+          });
+          return enrichedPath;
+        });
+
+        const enrichedOptionalPaths = baseOptionalPaths.map(path => {
+          const enrichedPath: Record<string, string | undefined> = { ...path };
+          steps.forEach(step => {
+            if (!enrichedPath[step]) {
+              enrichedPath[step] = extractStepValue(word, step);
+            }
+          });
+          return enrichedPath;
+        });
+
+        const expectedAnswerCount = enrichedPrimaryPaths.length;
+
+        return steps.map((step, stepIndex) => {
+          const stepValues = extractStepValuesFromPaths(enrichedPrimaryPaths, step);
+          const correctAnswerDisplay = stepValues.join(';');
+
+          return {
+            id: `${word.id}-${step}`,
+            wordId: word.id,
+            word: word.root_word,
+            root_word: word.root_word,
+            selected_form: word.selected_form,
+            step,
+            steps,
+            stepIndex,
+            totalSteps: steps.length,
+            primaryFormPaths: enrichedPrimaryPaths,
+            optionalFormPaths: enrichedOptionalPaths,
+            hint: word.definitions?.join('; '),
+            expectedAnswerCount,
+            correctAnswerDisplay,
+          } as MultiAnswerFormIdentificationItem;
+        });
+      });
+    }
+
     return words.flatMap(word => {
       const posConfig = exercise.data.posConfigs[word.part_of_speech as PartOfSpeech];
       const steps = posConfig?.steps || [];
@@ -150,19 +215,22 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
         } as FormIdentificationItem;
       });
     });
-  }, [data?.words, exercise.data, wordAnswers, isSingleField]);
+  }, [data?.words, exercise.data, wordAnswers, isSingleField, isMultiAnswerMode]);
 
   const validatedItems = useMemo(() => {
     try {
       if (isSingleField) {
         return items.map(item => SingleFieldFormIdentificationItemSchema.parse(item));
       }
+      if (isMultiAnswerMode) {
+        return items.map(item => MultiAnswerFormIdentificationItemSchema.parse(item));
+      }
       return items.map(item => FormIdentificationItemSchema.parse(item));
     } catch (error) {
       console.error('[Form Identification] Validation error:', error);
       return [];
     }
-  }, [items, isSingleField]);
+  }, [items, isSingleField, isMultiAnswerMode]);
 
   const { currentIndex, isLastItem, autoAdvanceIfEnabled } = useExerciseProgression({
     totalItems: validatedItems.length,
@@ -178,11 +246,62 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
     if (isProcessing || validatedItems.length === 0) return;
 
     const currentItem = validatedItems[currentIndex];
+    setIsProcessing(true);
+
+    if (isMultiAnswerMode) {
+      const multiItem = currentItem as MultiAnswerFormIdentificationItem;
+      const stepValidation = validateMultiAnswerStep(userAnswer, multiItem);
+
+      if (!stepValidation.isCorrect) {
+        handleIncorrect();
+        setIsProcessing(false);
+        return;
+      }
+
+      const wordId = multiItem.wordId;
+      const stepIndex = multiItem.stepIndex;
+
+      const updatedSlots = [...(multiAnswerSlots[wordId] || [])];
+      updatedSlots[stepIndex] = stepValidation.answerSlots;
+
+      const stepsCompleted = multiItem.steps.slice(0, stepIndex + 1);
+      const partialValidation = validatePartialMultiAnswerPaths(
+        updatedSlots,
+        stepsCompleted,
+        multiItem.primaryFormPaths
+      );
+
+      if (!partialValidation.isCorrect) {
+        handleIncorrect();
+        setIsProcessing(false);
+        return;
+      }
+
+      setMultiAnswerSlots(prev => ({
+        ...prev,
+        [wordId]: updatedSlots,
+      }));
+
+      const newCorrectAnswers = correctAnswers + 1;
+      setCorrectAnswers(newCorrectAnswers);
+      handleCorrect(isLastItem);
+
+      if (isLastItem) {
+        const finalScore = Math.round((newCorrectAnswers / validatedItems.length) * 100);
+        onComplete?.(finalScore);
+      }
+
+      autoAdvanceIfEnabled(() => {
+        setUserAnswer('');
+        reset();
+        setIsProcessing(false);
+      });
+      return;
+    }
+
     const validation = isSingleField
       ? validateSingleFieldFormIdentificationExercise(userAnswer, currentItem as SingleFieldFormIdentificationItem)
       : validateGeneratedFormIdentificationExercise(userAnswer, currentItem as FormIdentificationItem);
-
-    setIsProcessing(true);
 
     if (validation.isCorrect) {
       if (!isSingleField) {
@@ -191,7 +310,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
           ...prev,
           [stepItem.wordId]: {
             ...(prev[stepItem.wordId] || {}),
-            [stepItem.step]: userAnswer.trim(),
+            [stepItem.step]: normalize(userAnswer),
           },
         }));
       }
@@ -291,7 +410,12 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
           <div className="space-y-2">
             {!isSingleField && (
               <div className="text-sm text-gray-500">
-                Step: <span className="font-medium capitalize">{(currentItem as FormIdentificationItem).step}</span>
+                Step:{' '}
+                <span className="font-medium capitalize">
+                  {isMultiAnswerMode
+                    ? (currentItem as MultiAnswerFormIdentificationItem).step
+                    : (currentItem as FormIdentificationItem).step}
+                </span>
               </div>
             )}
             <div className="text-lg font-medium">
@@ -307,6 +431,13 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
                   {(currentItem as SingleFieldFormIdentificationItem).steps.join('; ')}
                 </span>
               </>
+            ) : isMultiAnswerMode ? (
+              <>
+                <strong>Question:</strong> Identify the{' '}
+                <span className="font-medium capitalize">
+                  {(currentItem as MultiAnswerFormIdentificationItem).step}
+                </span>
+              </>
             ) : (
               <>
                 <strong>Question:</strong> What is the{' '}
@@ -319,7 +450,9 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
             value={userAnswer}
             onChange={handleAnswerChange}
             onSubmit={handleSubmit}
-            placeholder={isSingleField ? 'Enter answers separated by semicolons...' : 'Type your answer...'}
+            placeholder={
+              isSingleField || isMultiAnswerMode ? 'Enter answers separated by semicolons...' : 'Type your answer...'
+            }
           />
 
           <FeedbackDisplay
@@ -330,7 +463,9 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
             correctAnswer={
               isSingleField
                 ? (currentItem as SingleFieldFormIdentificationItem).correctAnswerDisplay
-                : (currentItem as FormIdentificationItem).correctAnswer
+                : isMultiAnswerMode
+                  ? (currentItem as MultiAnswerFormIdentificationItem).correctAnswerDisplay
+                  : (currentItem as FormIdentificationItem).correctAnswer
             }
           />
         </CardContent>

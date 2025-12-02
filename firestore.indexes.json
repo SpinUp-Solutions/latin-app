@@ -155,6 +155,20 @@
           "order": "ASCENDING"
         },
         {
+          "fieldPath": "sort_key",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "vocabulary_words_v5",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "part_of_speech",
+          "order": "ASCENDING"
+        },
+        {
           "fieldPath": "conjugation",
           "order": "ASCENDING"
         },

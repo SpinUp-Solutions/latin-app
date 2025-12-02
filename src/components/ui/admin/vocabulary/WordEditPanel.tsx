@@ -11,7 +11,15 @@ import { DeclensionTableSchema, AdjectiveDeclensionTableSchema } from '@/shared/
 import { ConjugationTableSchema } from '@/shared/types/vocabulary/schemas/verb-conjugation';
 import { DegreesTableSchema } from '@/shared/types/vocabulary/schemas/adjective';
 import { BookOpen } from 'lucide-react';
-import { BaseWordForm, NounForm, PronounForm, AdjectiveForm, VerbForm, PrepositionForm, VocabularyFormValues } from './forms';
+import {
+  BaseWordForm,
+  NounForm,
+  PronounForm,
+  AdjectiveForm,
+  VerbForm,
+  PrepositionForm,
+  VocabularyFormValues,
+} from './forms';
 import { AIAutocompleteButton } from './AIAutocompleteButton';
 import {
   getFormSchemaForPartOfSpeech,

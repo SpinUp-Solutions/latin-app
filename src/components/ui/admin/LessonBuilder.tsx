@@ -16,6 +16,7 @@ import {
   addContentToPage,
   removeContent,
   removePage,
+  duplicatePage,
   startEditingContent,
   loadTooltips,
 } from '@/src/store/slices/lessonEditorSlice';
@@ -91,6 +92,10 @@ export const LessonBuilder: React.FC<LessonBuilderProps> = ({ initialLesson, onS
     dispatch(addPage());
   };
 
+  const handleDuplicatePage = (pageIndex: number) => {
+    dispatch(duplicatePage({ pageIndex }));
+  };
+
   const handlePasteBulk = (selectedIndices: number[]) => {
     const targetPageIndex = 0;
 
@@ -137,6 +142,7 @@ export const LessonBuilder: React.FC<LessonBuilderProps> = ({ initialLesson, onS
             contentTypes={ALL_CONTENT_TYPES}
             onAddPage={handleAddPage}
             onRemovePage={handleRemovePage}
+            onDuplicatePage={handleDuplicatePage}
             onUpdatePageTitle={handleUpdatePageTitle}
             onAddContent={handleAddContent}
             onEditContent={handleEditContentWrapper}

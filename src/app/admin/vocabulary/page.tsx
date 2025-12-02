@@ -268,9 +268,7 @@ function AdminVocabularyPage() {
 
       if (result.success) {
         const { data } = result;
-        toast.success(
-          `Migration Complete: ${data.successfulMigrations} words migrated to vocabulary_words_v5`
-        );
+        toast.success(`Migration Complete: ${data.successfulMigrations} words migrated to vocabulary_words_v5`);
         console.log('Migration Summary:', data);
         if (data.errors > 0) {
           console.error('Migration errors:', data.errorDetails);

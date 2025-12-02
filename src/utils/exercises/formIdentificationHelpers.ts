@@ -1,5 +1,6 @@
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
 import type { FormIdentificationStep } from '@/src/types/exercises/schemas/form-identification';
+import { normalize } from './generatedFormIdentificationExercise';
 import {
   CaseSchema,
   GenderSchema,
@@ -17,6 +18,7 @@ type VerbWordResponse = Extract<ExerciseWordResponse, { part_of_speech: 'verb' }
 type NounWordResponse = Extract<ExerciseWordResponse, { part_of_speech: 'noun' }>;
 type AdjectiveWordResponse = Extract<ExerciseWordResponse, { part_of_speech: 'adjective' }>;
 type PronounWordResponse = Extract<ExerciseWordResponse, { part_of_speech: 'pronoun' }>;
+type AdverbWordResponse = Extract<ExerciseWordResponse, { part_of_speech: 'adverb' }>;
 
 export const extractStepValue = (word: ExerciseWordResponse, step: FormIdentificationStep): string => {
   if (word.part_of_speech === 'verb') {
@@ -87,6 +89,16 @@ export const extractStepValue = (word: ExerciseWordResponse, step: FormIdentific
     }
   }
 
+  if (word.part_of_speech === 'adverb') {
+    const adverbWord = word as AdverbWordResponse;
+    switch (step) {
+      case 'degree':
+        return adverbWord.form_path?.degree || '';
+      default:
+        return '';
+    }
+  }
+
   return '';
 };
 
@@ -118,8 +130,8 @@ export function filterPathsByPreviousAnswers<T extends Record<string, string | u
       const pathValue = path[step];
       if (!pathValue) return false;
 
-      const acceptedVariants = getAcceptedAnswersForStep(pathValue).map(v => v.toLowerCase().trim());
-      const normalizedUserAnswer = userAnswer.toLowerCase().trim();
+      const acceptedVariants = getAcceptedAnswersForStep(pathValue).map(normalize);
+      const normalizedUserAnswer = normalize(userAnswer);
 
       if (!acceptedVariants.includes(normalizedUserAnswer)) return false;
     }

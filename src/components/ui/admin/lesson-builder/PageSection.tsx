@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
-import { Plus, Trash2, GripVertical } from 'lucide-react';
+import { Plus, Trash2, GripVertical, Copy } from 'lucide-react';
 import { Page } from '@/src/types/lesson';
 import { RenderableContentItem } from '@/src/types/page';
 import { createNewContent } from '@/src/utils/contentFactory';
@@ -36,6 +36,7 @@ interface PageSectionProps {
   contentTypes: readonly { type: string; icon: React.ComponentType<{ className?: string }>; label: string }[];
   onAddPage: () => void;
   onRemovePage: (pageIndex: number) => void;
+  onDuplicatePage: (pageIndex: number) => void;
   onUpdatePageTitle: (pageIndex: number, title: string) => void;
   onAddContent: (pageIndex: number, content: RenderableContentItem) => void;
   onEditContent: (pageIndex: number, itemIndex: number) => void;
@@ -47,6 +48,7 @@ interface SortablePageProps {
   pageIndex: number;
   contentTypes: readonly { type: string; icon: React.ComponentType<{ className?: string }>; label: string }[];
   onRemovePage: (pageIndex: number) => void;
+  onDuplicatePage: (pageIndex: number) => void;
   onUpdatePageTitle: (pageIndex: number, title: string) => void;
   onAddContent: (pageIndex: number, content: RenderableContentItem) => void;
   onEditContent: (pageIndex: number, itemIndex: number) => void;
@@ -61,6 +63,7 @@ const SortablePage: React.FC<SortablePageProps> = ({
   pageIndex,
   contentTypes,
   onRemovePage,
+  onDuplicatePage,
   onUpdatePageTitle,
   onAddContent,
   onEditContent,
@@ -105,9 +108,14 @@ const SortablePage: React.FC<SortablePageProps> = ({
             singleLine={true}
           />
         </div>
-        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => onRemovePage(pageIndex)}>
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => onDuplicatePage(pageIndex)}>
+            <Copy className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => onRemovePage(pageIndex)}>
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
 
       <DraggableContentList
@@ -151,6 +159,7 @@ export const PageSection: React.FC<PageSectionProps> = ({
   contentTypes,
   onAddPage,
   onRemovePage,
+  onDuplicatePage,
   onUpdatePageTitle,
   onAddContent,
   onEditContent,
@@ -222,6 +231,7 @@ export const PageSection: React.FC<PageSectionProps> = ({
                 pageIndex={pageIndex}
                 contentTypes={contentTypes}
                 onRemovePage={onRemovePage}
+                onDuplicatePage={onDuplicatePage}
                 onUpdatePageTitle={onUpdatePageTitle}
                 onAddContent={onAddContent}
                 onEditContent={onEditContent}
