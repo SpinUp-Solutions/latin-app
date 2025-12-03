@@ -1,6 +1,6 @@
 import type { FormSelection } from '@/src/types/exercises/base';
 
-const BASE_FIELDS = ['word', 'part_of_speech'] as const;
+const BASE_FIELDS = ['word', 'part_of_speech', 'dictionary_entry'] as const;
 const TABLE_FIELDS = ['conjugation_table', 'declension_table', 'degrees_table'] as const;
 
 export interface SelectComposerOptions {

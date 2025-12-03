@@ -69,8 +69,13 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
         return null;
       }
 
+      // If no form selected, show dictionary_entry (if exists) or root_word
+      // If form selected, show the selected_form
+      const displayText =
+        word.selected_form === word.root_word ? word.dictionary_entry || word.selected_form : word.selected_form;
+
       return {
-        text: word.selected_form,
+        text: displayText,
         acceptedAnswers: translations,
         hint: definitionsText || undefined,
         stripInfinitive: true,

@@ -32,6 +32,7 @@ export type ExerciseWordResponse =
   | {
       id: string;
       root_word: string;
+      dictionary_entry: string | null;
       selected_form: string;
       part_of_speech: 'verb';
       form_path: VerbFormPath | null;
@@ -45,6 +46,7 @@ export type ExerciseWordResponse =
   | {
       id: string;
       root_word: string;
+      dictionary_entry: string | null;
       selected_form: string;
       part_of_speech: 'noun';
       form_path: NounFormPath | null;
@@ -58,6 +60,7 @@ export type ExerciseWordResponse =
   | {
       id: string;
       root_word: string;
+      dictionary_entry: string | null;
       selected_form: string;
       part_of_speech: 'adjective';
       form_path: AdjectiveFormPath | null;
@@ -70,6 +73,7 @@ export type ExerciseWordResponse =
   | {
       id: string;
       root_word: string;
+      dictionary_entry: string | null;
       selected_form: string;
       part_of_speech: 'pronoun';
       form_path: PronounFormPath | null;
@@ -81,6 +85,7 @@ export type ExerciseWordResponse =
   | {
       id: string;
       root_word: string;
+      dictionary_entry: string | null;
       selected_form: string;
       part_of_speech: 'adverb';
       form_path: AdverbFormPath | null;
@@ -92,6 +97,7 @@ export type ExerciseWordResponse =
   | {
       id: string;
       root_word: string;
+      dictionary_entry: string | null;
       selected_form: string;
       part_of_speech: 'preposition' | 'conjunction' | 'interjection';
       form_path: null;

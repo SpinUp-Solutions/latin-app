@@ -132,6 +132,7 @@ export const applyFormValuesToWord = (
     pronunciation: toNullableString(values.pronunciation),
     type: values.type,
     alternate_form: toNullableString(values.alternate_form),
+    dictionary_entry: toNullableString(values.dictionary_entry),
   } as VocabularyWordWithId;
 
   if (word.part_of_speech === 'noun') {

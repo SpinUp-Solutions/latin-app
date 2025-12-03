@@ -11,7 +11,7 @@ export const BaseWordSchema = z.object({
   etymology: z.string().min(1).nullable(),
   pronunciation: z.string().min(1).nullable(),
   type: WordTypeSchema,
-  alternate_form: z.string().min(1).nullable(),
+  alternate_form: z.string().nullable(),
   dictionary_entry: z.string().nullable(),
   sort_key: z.string().min(1),
   random_index: z.number().min(0).max(1),

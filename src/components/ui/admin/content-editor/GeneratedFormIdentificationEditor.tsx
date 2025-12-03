@@ -303,12 +303,17 @@ const GeneratedFormIdentificationEditorView: React.FC<{
                     optionalAnswersDisplay = optionalDisplays.join(' OR ');
                   }
 
+                  const displayWord =
+                    word.selected_form === word.root_word
+                      ? word.dictionary_entry || word.selected_form
+                      : word.selected_form;
+
                   return (
                     <Card key={index}>
                       <CardContent className="p-3 space-y-1">
-                        <div className="font-medium">{word.selected_form}</div>
+                        <div className="font-medium">{displayWord}</div>
                         {word.selected_form !== word.root_word && (
-                          <div className="text-xs text-gray-500">Root: {word.root_word}</div>
+                          <div className="text-xs text-gray-500">Root: {word.dictionary_entry || word.root_word}</div>
                         )}
                         <div className="text-sm space-y-0.5">
                           {isSingleField ? (
