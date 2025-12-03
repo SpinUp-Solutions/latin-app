@@ -55,6 +55,7 @@ export default function RegisterPage() {
   const [lastName, setLastName] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState<Date | undefined>(undefined);
   const [formLoading, setFormLoading] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   const { user, loading: authLoading } = useAuth();
 
@@ -186,7 +187,7 @@ export default function RegisterPage() {
                 required
                 className="bg-background"
               />
-              <Popover>
+              <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
                 <PopoverTrigger asChild>
                   <Button
                     type="button"
@@ -205,13 +206,13 @@ export default function RegisterPage() {
                       : 'Date of birth'}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 bg-white" align="start">
+                <PopoverContent className="w-auto p-0 bg-transparent border-none shadow-none" align="start">
                   <Calendar
-                    mode="single"
+                    variant="dob"
                     selected={dateOfBirth}
                     onSelect={setDateOfBirth}
                     disabled={date => date > new Date()}
-                    defaultMonth={new Date(2000, 0)}
+                    onClose={() => setCalendarOpen(false)}
                   />
                 </PopoverContent>
               </Popover>

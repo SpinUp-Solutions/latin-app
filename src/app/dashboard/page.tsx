@@ -226,9 +226,7 @@ export default function DashboardPage() {
             </div>
             <div>
               <h1 className="text-3xl font-serif tracking-wide text-gray-900 mb-1">Latin Learning</h1>
-              <p className="text-lg text-roman-stone leading-relaxed">
-                Welcome back, {displayName}
-              </p>
+              <p className="text-lg text-roman-stone leading-relaxed">Welcome back, {displayName}</p>
             </div>
           </div>
           <div className="flex items-center gap-4">
