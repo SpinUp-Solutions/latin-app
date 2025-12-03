@@ -7,6 +7,16 @@ import { toast } from 'sonner';
 export function useAuth() {
   const { user, loading } = useSelector((state: RootState) => state.auth);
 
+  const getDisplayName = (): string => {
+    if (!user) return '';
+    if (user.firstName && user.lastName) {
+      return `${user.firstName} ${user.lastName}`.trim();
+    }
+    if (user.firstName) return user.firstName;
+    if (user.username) return user.username;
+    return user.email?.split('@')[0] ?? '';
+  };
+
   return {
     user,
     loading,
@@ -14,6 +24,8 @@ export function useAuth() {
     isAdmin: user?.role === 'admin',
     isTeacher: user?.role === 'teacher',
     isStudent: user?.role === 'student',
+    displayName: getDisplayName(),
+    isProfileComplete: !!(user?.username && user?.firstName && user?.lastName && user?.dateOfBirth),
   };
 }
 

@@ -2,12 +2,11 @@
 
 import React, { useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSelector } from 'react-redux';
 import { useGetStudentLessonsQuery } from '@/src/store/api/lessonApi';
 import { LessonStatus } from '@/src/types/lesson';
 import { BookOpen, CheckCircle, Lock, Play } from 'lucide-react';
 import { toast } from 'sonner';
-import type { RootState } from '@/src/store';
+import { useAuth } from '@/src/hooks/useAuth';
 
 interface LessonSidebarProps {
   currentLessonId: string;
@@ -55,7 +54,7 @@ const sidebarStatusConfig: Record<
 
 export default function LessonSidebar({ currentLessonId }: LessonSidebarProps) {
   const router = useRouter();
-  const { user } = useSelector((state: RootState) => state.auth);
+  const { user } = useAuth();
 
   const { data: studentLessons, isLoading } = useGetStudentLessonsQuery(undefined, {
     skip: !user?.uid,
