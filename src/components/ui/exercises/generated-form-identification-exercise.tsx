@@ -112,6 +112,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
           wordId: word.id,
           word: word.root_word,
           root_word: word.root_word,
+          dictionary_entry: word.dictionary_entry ?? null,
           selected_form: word.selected_form,
           steps,
           correctAnswerDisplay,
@@ -163,6 +164,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
             wordId: word.id,
             word: word.root_word,
             root_word: word.root_word,
+            dictionary_entry: word.dictionary_entry ?? null,
             selected_form: word.selected_form,
             step,
             steps,
@@ -205,6 +207,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
           wordId: word.id,
           word: word.root_word,
           root_word: word.root_word,
+          dictionary_entry: word.dictionary_entry ?? null,
           selected_form: word.selected_form,
           step,
           correctAnswer,
@@ -419,7 +422,13 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
               </div>
             )}
             <div className="text-lg font-medium">
-              <SimpleRichDisplay content={currentItem.selected_form} />
+              <SimpleRichDisplay
+                content={
+                  currentItem.selected_form === currentItem.root_word
+                    ? currentItem.dictionary_entry || currentItem.selected_form
+                    : currentItem.selected_form
+                }
+              />
             </div>
           </div>
 

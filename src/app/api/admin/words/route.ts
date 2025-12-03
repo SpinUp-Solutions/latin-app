@@ -311,6 +311,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           ...serialized,
           id: doc.id,
           root_word: serialized.word,
+          dictionary_entry: (serialized.dictionary_entry as string) ?? null,
           selected_form: selectedForm,
           form_path: formPath,
           primary_form_paths: primaryFormPaths.length > 0 ? primaryFormPaths : undefined,

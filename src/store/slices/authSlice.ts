@@ -9,11 +9,11 @@ export const FirestoreUserDataSchema = z.object({
   uid: z.string(),
   email: z.string().email(),
   role: UserRoleSchema,
-  username: z.string(),
-  firstName: z.string(),
-  lastName: z.string(),
-  dateOfBirth: z.string(),
-  createdAt: z.string(),
+  username: z.string().optional().default(''),
+  firstName: z.string().optional().default(''),
+  lastName: z.string().optional().default(''),
+  dateOfBirth: z.string().optional().default(''),
+  createdAt: z.union([z.string(), z.any()]).optional(), // Allow timestamp or string
 });
 export type FirestoreUserData = z.infer<typeof FirestoreUserDataSchema>;
 

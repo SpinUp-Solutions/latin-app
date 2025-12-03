@@ -2,14 +2,9 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
-  if (request.nextUrl.pathname.startsWith('/admin')) {
-    const userRole = request.cookies.get('userRole')?.value;
-
-    if (!userRole || userRole !== 'admin') {
-      return NextResponse.redirect(new URL('/dashboard', request.url));
-    }
-  }
-
+  // Admin route protection is handled by:
+  // - withAdminAuth HOC (client-side)
+  // - verifyAdminAccess (API routes)
   return NextResponse.next();
 }
 
