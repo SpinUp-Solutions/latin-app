@@ -2,7 +2,9 @@ import { createApi } from '@reduxjs/toolkit/query/react';
 import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary/index';
 import { createAuthenticatedBaseQuery } from './baseQuery';
 import { VocabularyWordWithIdSchema } from '@/shared/types/vocabulary/schemas';
-import { ZodError, ZodIssue } from 'zod';
+import { z, ZodError } from 'zod';
+
+type ZodIssue = z.core.$ZodIssue;
 import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 
 interface WordsResponse {

@@ -7,7 +7,7 @@ export type UserRole = z.infer<typeof UserRoleSchema>;
 
 export const FirestoreUserDataSchema = z.object({
   uid: z.string(),
-  email: z.string().email(),
+  email: z.email(),
   role: UserRoleSchema,
   username: z.string().optional().default(''),
   firstName: z.string().optional().default(''),
