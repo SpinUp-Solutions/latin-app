@@ -12,6 +12,8 @@ import {
   VoiceSchema,
   PersonSchema,
   GrammaticalNumberSchema,
+  PronounTypeSchema,
+  PronounPersonSchema,
 } from '@/shared/types/vocabulary/schemas';
 
 type VerbWordResponse = Extract<ExerciseWordResponse, { part_of_speech: 'verb' }>;
@@ -78,6 +80,10 @@ export const extractStepValue = (word: ExerciseWordResponse, step: FormIdentific
   if (word.part_of_speech === 'pronoun') {
     const pronounWord = word as PronounWordResponse;
     switch (step) {
+      case 'pronoun_type':
+        return pronounWord.pronoun_type || '';
+      case 'person':
+        return pronounWord.person || '';
       case 'case':
         return pronounWord.form_path?.case || '';
       case 'number':
@@ -292,6 +298,32 @@ const createVariantMap = () => {
     variants[key] = value;
   });
 
+  // Pronoun type variants
+  PronounTypeSchema.options.forEach(pronounType => {
+    const abbrevMap: Record<string, string> = {
+      personal: 'pers',
+      reflexive: 'refl',
+      demonstrative: 'dem',
+      intensive: 'intens',
+      relative: 'rel',
+      interrogative: 'interr',
+      indefinite: 'indef',
+      possessive: 'poss',
+    };
+    const abbrev = abbrevMap[pronounType];
+    variants[pronounType] = abbrev ? [pronounType, `${abbrev}.`, abbrev] : [pronounType];
+  });
+
+  // Pronoun person variants (1st, 2nd, 3rd)
+  PronounPersonSchema.options.forEach(personValue => {
+    const displayMap: Record<string, string[]> = {
+      '1st': ['1st', 'first', '1', '1st person', 'first person'],
+      '2nd': ['2nd', 'second', '2', '2nd person', 'second person'],
+      '3rd': ['3rd', 'third', '3', '3rd person', 'third person'],
+    };
+    variants[personValue] = displayMap[personValue] || [personValue];
+  });
+
   return variants;
 };
 
@@ -318,6 +350,7 @@ export const getHintForStep = (word: ExerciseWordResponse, step: FormIdentificat
     case: 'Identify the grammatical case',
     gender: 'Determine the gender (masculine, feminine, or neuter)',
     degree: 'Identify the degree (positive, comparative, or superlative)',
+    pronoun_type: 'Identify the pronoun type (personal, demonstrative, relative, etc.)',
   };
 
   return stepGuideMap[step];

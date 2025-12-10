@@ -54,6 +54,9 @@ function AdvancedFiltersPage() {
       filters.partOfSpeech === 'adjective' && filters.adjectiveDeclension !== 'all'
         ? filters.adjectiveDeclension
         : undefined,
+    pronounType: filters.partOfSpeech === 'pronoun' && filters.pronounType !== 'all' ? filters.pronounType : undefined,
+    pronounPerson:
+      filters.partOfSpeech === 'pronoun' && filters.pronounPerson !== 'all' ? filters.pronounPerson : undefined,
     limit: fetchAll ? undefined : numericLimit,
     fetchAll: fetchAll ? true : undefined,
     cellPaths: selection.selectedCellPaths.length > 0 ? selection.selectedCellPaths : undefined,
@@ -77,6 +80,8 @@ function AdvancedFiltersPage() {
     filters.isDeponent,
     filters.nounDeclension,
     filters.adjectiveDeclension,
+    filters.pronounType,
+    filters.pronounPerson,
     filters.limit,
     dispatch,
   ]);
@@ -118,7 +123,7 @@ function AdvancedFiltersPage() {
   };
 
   const handleSelectAll = () => {
-    const allPaths = formSelection.getAllPaths(filters.partOfSpeech);
+    const allPaths = formSelection.getAllPaths(filters.partOfSpeech, filters.pronounType, filters.pronounPerson);
     dispatch(addCellPaths(allPaths));
   };
 
@@ -127,7 +132,7 @@ function AdvancedFiltersPage() {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-roman-marble">
+    <div className="h-screen flex flex-col overflow-hidden bg-roman-marble">
       <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-4">
           <Button variant="ghost" onClick={() => router.push('/admin/vocabulary')}>
@@ -147,8 +152,7 @@ function AdvancedFiltersPage() {
       </header>
 
       <main className="flex-1 grid grid-cols-[35%_65%] overflow-hidden">
-        <div className="flex flex-col overflow-hidden border-r border-gray-200 bg-roman-marble">
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className="overflow-y-auto overscroll-contain p-4 space-y-4 border-r border-gray-200 bg-roman-marble">
             <AdvancedFiltersPanel
               filters={filters}
               onFiltersChange={handleFiltersChange}
@@ -160,6 +164,8 @@ function AdvancedFiltersPage() {
             {filters.partOfSpeech !== 'all' && (
               <FormSelectionTable
                 partOfSpeech={filters.partOfSpeech}
+                pronounType={filters.pronounType}
+                pronounPerson={filters.pronounPerson}
                 selectedCellPaths={selection.selectedCellPaths}
                 onToggleCell={handleToggleCell}
                 onSelectAll={handleSelectAll}
@@ -167,11 +173,9 @@ function AdvancedFiltersPage() {
                 onTogglePaths={handleTogglePaths}
               />
             )}
-          </div>
         </div>
 
-        <div className="flex flex-col overflow-hidden bg-white">
-          <div className="flex-1 overflow-y-auto p-6">
+        <div className="overflow-y-auto overscroll-contain p-6 bg-white">
             {isError && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-800 mb-6">
                 Failed to load words. Please try again.
@@ -188,7 +192,6 @@ function AdvancedFiltersPage() {
               selectedCellPaths={selection.selectedCellPaths}
               totalCount={totalCount}
             />
-          </div>
         </div>
       </main>
     </div>

@@ -53,6 +53,16 @@ export const AdjectiveDeclensionTableSchema = z.object({
   locative: GenderFormsSchema,
 });
 
+export const PersonalPronounDeclensionTableSchema = z.object({
+  nominative: DeclensionNumberFormsSchema,
+  genitive: DeclensionNumberFormsSchema,
+  dative: DeclensionNumberFormsSchema,
+  accusative: DeclensionNumberFormsSchema,
+  ablative: DeclensionNumberFormsSchema,
+  vocative: DeclensionNumberFormsSchema,
+  locative: DeclensionNumberFormsSchema,
+});
+
 export const DeclensionTableRowSchema = z.object({
   case: CaseSchema,
   singular: z.array(z.string()),
@@ -72,5 +82,6 @@ export type DeclensionNumberForms = z.infer<typeof DeclensionNumberFormsSchema>;
 export type GenderForms = z.infer<typeof GenderFormsSchema>;
 export type DeclensionTable = z.infer<typeof DeclensionTableSchema>;
 export type AdjectiveDeclensionTable = z.infer<typeof AdjectiveDeclensionTableSchema>;
+export type PersonalPronounDeclensionTable = z.infer<typeof PersonalPronounDeclensionTableSchema>;
 export type DeclensionTableRow = z.infer<typeof DeclensionTableRowSchema>;
 export type AdjectiveDeclensionTableRow = z.infer<typeof AdjectiveDeclensionTableRowSchema>;

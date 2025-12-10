@@ -17,6 +17,8 @@ interface GetAdvancedWordsArgs {
   isDeponent?: string;
   nounDeclension?: string;
   adjectiveDeclension?: string;
+  pronounType?: string;
+  pronounPerson?: string;
   limit?: number;
   cellPaths?: string[];
   tableType?: TableType;
@@ -114,6 +116,13 @@ export const advancedVocabularyApi = createApi({
           if (args.adjectiveDeclension && args.adjectiveDeclension !== 'all') {
             params.append('adjectiveDeclension', args.adjectiveDeclension);
           }
+        } else if (args.partOfSpeech === 'pronoun') {
+          if (args.pronounType && args.pronounType !== 'all') {
+            params.append('pronounType', args.pronounType);
+          }
+          if (args.pronounType === 'personal' && args.pronounPerson && args.pronounPerson !== 'all') {
+            params.append('pronounPerson', args.pronounPerson);
+          }
         }
 
         return {
@@ -132,6 +141,8 @@ export const advancedVocabularyApi = createApi({
           isDeponent: queryArgs.isDeponent,
           nounDeclension: queryArgs.nounDeclension,
           adjectiveDeclension: queryArgs.adjectiveDeclension,
+          pronounType: queryArgs.pronounType,
+          pronounPerson: queryArgs.pronounPerson,
           limit: queryArgs.limit,
           cellPaths: queryArgs.cellPaths,
           tableType: queryArgs.tableType,
@@ -186,7 +197,7 @@ export const advancedVocabularyApi = createApi({
             const selectFields = composeSelectFields(additionalFields, {
               formSelection: cfg.formSelection,
             });
-            const tableType = deriveTableTypeFromPOS(pos);
+            const tableType = deriveTableTypeFromPOS(pos, cfg.filters?.pronounType, cfg.filters?.pronounPerson);
 
             const params = new URLSearchParams();
             params.append('collection', collection);
@@ -226,6 +237,15 @@ export const advancedVocabularyApi = createApi({
               } else if (pos === 'adjective') {
                 if (cfg.filters.adjectiveDeclension && cfg.filters.adjectiveDeclension !== 'all')
                   params.append('adjectiveDeclension', cfg.filters.adjectiveDeclension);
+              } else if (pos === 'pronoun') {
+                if (cfg.filters.pronounType && cfg.filters.pronounType !== 'all')
+                  params.append('pronounType', cfg.filters.pronounType);
+                if (
+                  cfg.filters.pronounType === 'personal' &&
+                  cfg.filters.pronounPerson &&
+                  cfg.filters.pronounPerson !== 'all'
+                )
+                  params.append('pronounPerson', cfg.filters.pronounPerson);
               }
               if (cfg.filters.search) params.append('search', cfg.filters.search);
             }

@@ -13,7 +13,7 @@ import { WordSourceSection } from './WordSourceSection';
 import { MultiPosConfigSection } from './MultiPosConfigSection';
 import { useGeneratedExerciseEditor } from '@/src/hooks/useGeneratedExerciseEditor';
 import type { TranslationDirection } from '@/src/types/exercises/generated-translation';
-import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
+import type { PartOfSpeech, PronounType, PronounPerson } from '@/shared/types/vocabulary/schemas/enums';
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
 
 export const GeneratedTranslationEditor: React.FC = () => {
@@ -64,6 +64,8 @@ const GeneratedTranslationEditorView: React.FC<{ editingContent: GeneratedTransl
             | '5'
             | 'all',
           adjectiveDeclension: (editor.derivedFilters.adjectiveDeclension || 'all') as '1-2' | '3' | 'all',
+          pronounType: (editor.derivedFilters.pronounType || 'all') as PronounType | 'all',
+          pronounPerson: (editor.derivedFilters.pronounPerson || 'all') as PronounPerson | 'all',
           limit: editor.config.count,
         }}
         onFiltersChange={updates => {
@@ -144,6 +146,8 @@ const GeneratedTranslationEditorView: React.FC<{ editingContent: GeneratedTransl
               <label className="block text-sm font-medium mb-3">Form Selection</label>
               <FormSelectionTable
                 partOfSpeech={editor.activePOS}
+                pronounType={(editor.derivedFilters.pronounType || 'all') as PronounType | 'all'}
+                pronounPerson={(editor.derivedFilters.pronounPerson || 'all') as PronounPerson | 'all'}
                 selectedCellPaths={editor.derivedFormSelection?.selectedCellPaths || []}
                 onToggleCell={editor.formSelectionControls.handleToggleCell}
                 onTogglePaths={editor.formSelectionControls.handleTogglePaths}

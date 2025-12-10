@@ -4,7 +4,7 @@ import { Query, FieldPath } from 'firebase-admin/firestore';
 import { VocabularyWordSchema } from '@/shared/types/vocabulary/schemas';
 import { parseFormPathFromString } from '@/src/utils/exerciseFormPaths';
 import type { VerbFormPath, NounFormPath, AdjectiveFormPath } from '@/src/types/api/exercise-word-responses';
-import { TABLE_TYPE_CONFIG } from '@/src/utils/schema-helpers';
+import { TABLE_TYPE_CONFIG, type TableType } from '@/src/utils/schema-helpers';
 import { scanTableForMatchingForms, categorizeMatchingPaths } from '@/src/utils/tableScanner';
 import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 
@@ -83,6 +83,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const isDeponent = searchParams.get('isDeponent');
     const nounDeclension = searchParams.get('nounDeclension');
     const adjectiveDeclension = searchParams.get('adjectiveDeclension');
+    const pronounType = searchParams.get('pronounType');
+    const pronounPerson = searchParams.get('pronounPerson');
     const cellPaths = searchParams.get('cellPaths');
     const tableType = searchParams.get('tableType');
     const selectFields = searchParams.get('select');
@@ -203,6 +205,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         query = query.where('declension', '==', nounDeclension);
       } else if (wordType === 'adjective' && adjectiveDeclension) {
         query = query.where('declension', '==', adjectiveDeclension);
+      } else if (wordType === 'pronoun') {
+        if (pronounType) {
+          query = query.where('pronoun_type', '==', pronounType);
+        }
+        if (pronounPerson) {
+          query = query.where('person', '==', pronounPerson);
+        }
       }
 
       if (lastWordId && !fetchAll) {
@@ -249,6 +258,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           wrapQuery = wrapQuery.where('declension', '==', nounDeclension);
         } else if (wordType === 'adjective' && adjectiveDeclension) {
           wrapQuery = wrapQuery.where('declension', '==', adjectiveDeclension);
+        } else if (wordType === 'pronoun') {
+          if (pronounType) {
+            wrapQuery = wrapQuery.where('pronoun_type', '==', pronounType);
+          }
+          if (pronounPerson) {
+            wrapQuery = wrapQuery.where('person', '==', pronounPerson);
+          }
         }
 
         wrapQuery = wrapQuery.limit(remaining);
@@ -285,11 +301,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
         const paths = parseCellPaths(cellPaths);
         if (paths.length > 0 && tableType) {
-          const formResult = pickRandomFormServer(
-            serialized,
-            tableType as 'conjugation' | 'declension' | 'adjective-declension',
-            paths
-          );
+          const formResult = pickRandomFormServer(serialized, tableType as TableType, paths);
           if (formResult) {
             selectedForm = formResult.selectedForm;
             formPath = parseFormPathFromString(
@@ -548,7 +560,7 @@ interface FormSelectionResult {
 
 function pickRandomFormServer(
   word: Record<string, unknown>,
-  tableType: 'conjugation' | 'declension' | 'adjective-declension',
+  tableType: TableType,
   selectedPaths: string[]
 ): FormSelectionResult | null {
   const rootField = TABLE_TYPE_CONFIG[tableType];

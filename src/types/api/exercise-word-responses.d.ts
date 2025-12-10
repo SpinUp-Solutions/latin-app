@@ -19,7 +19,7 @@ export type AdjectiveFormPath = {
 };
 
 export type PronounFormPath = {
-  gender: string;
+  gender?: string;
   number: string;
   case: string;
 };
@@ -79,6 +79,8 @@ export type ExerciseWordResponse =
       form_path: PronounFormPath | null;
       primary_form_paths?: PronounFormPath[];
       optional_form_paths?: PronounFormPath[];
+      pronoun_type: string;
+      person: string | null;
       definitions?: string[];
       translation?: string;
     }

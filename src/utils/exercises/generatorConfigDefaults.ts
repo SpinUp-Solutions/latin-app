@@ -6,6 +6,8 @@ export const DEFAULT_POS_FILTERS: Omit<GeneratorFilters, 'partOfSpeech'> = {
   isDeponent: 'both',
   nounDeclension: 'all',
   adjectiveDeclension: 'all',
+  pronounType: 'all',
+  pronounPerson: 'all',
 };
 
 export const DEFAULT_GENERATOR_CONFIG: GeneratorConfigBase = {

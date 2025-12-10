@@ -7,7 +7,12 @@ import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary/ind
 import { EditingCell } from '@/src/types/admin-vocabulary';
 import { parseEditingCellValue, TABLE_TYPES, TableType } from '@/src/utils/vocabUtils';
 import { SchemaTable } from './tables/SchemaTable';
-import { DeclensionTableSchema, AdjectiveDeclensionTableSchema } from '@/shared/types/vocabulary/schemas/declension';
+import {
+  DeclensionTableSchema,
+  AdjectiveDeclensionTableSchema,
+  PersonalPronounDeclensionTableSchema,
+} from '@/shared/types/vocabulary/schemas/declension';
+import type { PronounType, PronounPerson } from '@/shared/types/vocabulary/schemas/enums';
 import { ConjugationTableSchema } from '@/shared/types/vocabulary/schemas/verb-conjugation';
 import { DegreesTableSchema } from '@/shared/types/vocabulary/schemas/adjective';
 import { BookOpen } from 'lucide-react';
@@ -93,6 +98,33 @@ const cloneTableData = (value: unknown): Record<string, unknown> => {
   } catch (error) {
     return {};
   }
+};
+
+const getPronounTableSchema = (pronounType: PronounType | null, person: PronounPerson | null) => {
+  if (pronounType === 'personal' && (person === '1st' || person === '2nd')) {
+    return PersonalPronounDeclensionTableSchema;
+  }
+  return AdjectiveDeclensionTableSchema;
+};
+
+const getPronounTableTitle = (pronounType: PronounType | null, person: PronounPerson | null): string => {
+  if (!pronounType) return 'Pronoun Declension Table';
+
+  if (pronounType === 'personal' && person) {
+    return `${person} Person Personal Pronoun Declension Table`;
+  }
+
+  const typeLabels: Record<PronounType, string> = {
+    personal: 'Personal',
+    reflexive: 'Reflexive',
+    demonstrative: 'Demonstrative',
+    intensive: 'Intensive',
+    relative: 'Relative',
+    interrogative: 'Interrogative',
+    indefinite: 'Indefinite',
+    possessive: 'Possessive',
+  };
+  return `${typeLabels[pronounType]} Pronoun Declension Table`;
 };
 
 export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, updating }) => {
@@ -481,6 +513,8 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
   );
 
   const watchedWord = form.watch('word');
+  const watchedPronounType = form.watch('pronoun_type') as PronounType | null;
+  const watchedPerson = form.watch('person') as PronounPerson | null;
 
   const renderPosForm = () => {
     if (!word) return null;
@@ -555,7 +589,7 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
             )}
           </div>
 
-          <div className="flex-1 overflow-y-auto px-6 py-4">
+          <div className="flex-1 overflow-y-auto overscroll-contain px-6 py-4">
             <div className="space-y-6">
               <BaseWordForm />
               {renderPosForm()}
@@ -583,10 +617,10 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
 
               {word?.part_of_speech === 'pronoun' && (
                 <SchemaTable
-                  schema={AdjectiveDeclensionTableSchema}
+                  schema={getPronounTableSchema(watchedPronounType, watchedPerson)}
                   data={declensionTable}
                   tableType={TABLE_TYPES.DECLENSION}
-                  title="Pronoun Declension Table"
+                  title={getPronounTableTitle(watchedPronounType, watchedPerson)}
                   color="text-indigo-700"
                   isExpanded={isEditTableExpanded(TABLE_TYPES.DECLENSION)}
                   onToggle={() => toggleEditTableExpansion(TABLE_TYPES.DECLENSION)}
