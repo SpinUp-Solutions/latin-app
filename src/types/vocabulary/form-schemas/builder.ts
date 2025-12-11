@@ -83,6 +83,7 @@ export const toFormDefaultValues = (word: VocabularyWordWithId): VocabularyFormV
     return {
       ...base,
       pronoun_type: word.pronoun_type ?? null,
+      person: word.person ?? null,
     };
   }
 
@@ -152,6 +153,7 @@ export const applyFormValuesToWord = (
     return {
       ...baseApplied,
       pronoun_type: pronounValues.pronoun_type ?? word.pronoun_type,
+      person: pronounValues.person ?? word.person,
       declension_table: word.declension_table,
     } as VocabularyWordWithId;
   }

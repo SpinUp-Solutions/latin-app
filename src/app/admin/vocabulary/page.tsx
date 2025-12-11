@@ -220,7 +220,7 @@ function AdminVocabularyPage() {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-roman-marble">
+    <div className="h-screen flex flex-col overflow-hidden bg-roman-marble">
       <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-4">
           <Button variant="ghost" onClick={() => router.push('/admin')}>
@@ -277,7 +277,7 @@ function AdminVocabularyPage() {
             />
           </div>
 
-          <div className="flex-1 overflow-y-auto px-4 pb-4">
+          <div className="flex-1 overflow-y-auto overscroll-contain px-4 pb-4">
             <VocabularyList
               words={words}
               loading={isLoading}
@@ -292,7 +292,9 @@ function AdminVocabularyPage() {
           </div>
         </div>
 
-        <WordEditPanel word={selectedWord} onSave={handleSaveWord} updating={updating || creating} />
+        <div className="overflow-hidden">
+          <WordEditPanel word={selectedWord} onSave={handleSaveWord} updating={updating || creating} />
+        </div>
       </main>
     </div>
   );

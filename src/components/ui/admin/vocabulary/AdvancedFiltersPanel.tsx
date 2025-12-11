@@ -9,9 +9,13 @@ import {
   PartOfSpeechSchema,
   NounDeclensionSchema,
   AdjectiveDeclensionSchema,
+  PronounTypeSchema,
+  PronounPersonSchema,
   type PartOfSpeech,
   type NounDeclension,
   type AdjectiveDeclension,
+  type PronounType,
+  type PronounPerson,
 } from '@/shared/types/vocabulary/schemas/enums';
 import { VerbConjugationSchema, type VerbConjugation } from '@/shared/types/vocabulary/schemas/verb-conjugation';
 
@@ -23,6 +27,8 @@ interface AdvancedFiltersPanelProps {
     isDeponent: 'true' | 'false' | 'both';
     nounDeclension: NounDeclension | 'all';
     adjectiveDeclension: AdjectiveDeclension | 'all';
+    pronounType: PronounType | 'all';
+    pronounPerson: PronounPerson | 'all';
     limit?: number | 'all';
   };
   onFiltersChange: (updates: Partial<AdvancedFiltersPanelProps['filters']>) => void;
@@ -35,6 +41,8 @@ const PART_OF_SPEECH_OPTIONS = ['all', ...PartOfSpeechSchema.options] as const;
 const VERB_CONJUGATION_OPTIONS = ['all', ...VerbConjugationSchema.options] as const;
 const NOUN_DECLENSION_OPTIONS = ['all', ...NounDeclensionSchema.options] as const;
 const ADJECTIVE_DECLENSION_OPTIONS = ['all', ...AdjectiveDeclensionSchema.options] as const;
+const PRONOUN_TYPE_OPTIONS = ['all', ...PronounTypeSchema.options] as const;
+const PRONOUN_PERSON_OPTIONS = ['all', ...PronounPersonSchema.options] as const;
 
 const DEPONENT_OPTIONS = [
   { value: 'both', label: 'Both' },
@@ -66,6 +74,8 @@ export const AdvancedFiltersPanel: React.FC<AdvancedFiltersPanelProps> = ({
       isDeponent: 'both',
       nounDeclension: 'all',
       adjectiveDeclension: 'all',
+      pronounType: 'all',
+      pronounPerson: 'all',
     });
   };
 
@@ -228,6 +238,53 @@ export const AdvancedFiltersPanel: React.FC<AdvancedFiltersPanelProps> = ({
                 </SelectContent>
               </Select>
             </div>
+          </div>
+        )}
+
+        {filters.partOfSpeech === 'pronoun' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-gray-200">
+            <div className="space-y-2">
+              <Label htmlFor="pronoun-type">Pronoun Type</Label>
+              <Select
+                value={filters.pronounType}
+                onValueChange={value => {
+                  onFiltersChange({
+                    pronounType: value as PronounType | 'all',
+                    ...(value !== 'personal' ? { pronounPerson: 'all' } : {}),
+                  });
+                }}>
+                <SelectTrigger id="pronoun-type">
+                  <SelectValue placeholder="Select pronoun type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PRONOUN_TYPE_OPTIONS.map(option => (
+                    <SelectItem key={option} value={option}>
+                      {option === 'all' ? 'All' : option.charAt(0).toUpperCase() + option.slice(1)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {filters.pronounType === 'personal' && (
+              <div className="space-y-2">
+                <Label htmlFor="pronoun-person">Person</Label>
+                <Select
+                  value={filters.pronounPerson}
+                  onValueChange={value => onFiltersChange({ pronounPerson: value as PronounPerson | 'all' })}>
+                  <SelectTrigger id="pronoun-person">
+                    <SelectValue placeholder="Select person" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PRONOUN_PERSON_OPTIONS.map(option => (
+                      <SelectItem key={option} value={option}>
+                        {option === 'all' ? 'All' : `${option} Person`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
         )}
 

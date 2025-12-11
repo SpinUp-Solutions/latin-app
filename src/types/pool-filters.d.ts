@@ -1,4 +1,4 @@
-import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
+import type { PartOfSpeech, PronounType, PronounPerson } from '@/shared/types/vocabulary/schemas/enums';
 import type { VerbConjugation } from '@/shared/types/vocabulary/schemas/verb-conjugation';
 import type { NounDeclension } from '@/shared/types/vocabulary/schemas/enums';
 import type { AdjectiveDeclension } from '@/shared/types/vocabulary/schemas/enums';
@@ -10,6 +10,8 @@ export interface PoolFilters {
   isDeponent: 'true' | 'false' | 'both';
   nounDeclension: NounDeclension | 'all';
   adjectiveDeclension: AdjectiveDeclension | 'all';
+  pronounType: PronounType | 'all';
+  pronounPerson: PronounPerson | 'all';
 }
 
 export const DEFAULT_POOL_FILTERS: PoolFilters = {
@@ -19,4 +21,6 @@ export const DEFAULT_POOL_FILTERS: PoolFilters = {
   isDeponent: 'both',
   nounDeclension: 'all',
   adjectiveDeclension: 'all',
+  pronounType: 'all',
+  pronounPerson: 'all',
 };

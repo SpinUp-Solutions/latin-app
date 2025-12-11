@@ -84,6 +84,8 @@ export interface GeneratorFilters {
   isDeponent?: string;
   nounDeclension?: string;
   adjectiveDeclension?: string;
+  pronounType?: string;
+  pronounPerson?: string;
   search?: string;
 }
 

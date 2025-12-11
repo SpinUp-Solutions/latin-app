@@ -11,6 +11,7 @@ export const FormIdentificationStepSchema = z.enum([
   'case',
   'gender',
   'degree',
+  'pronoun_type',
 ]);
 
 export type FormIdentificationStep = z.infer<typeof FormIdentificationStepSchema>;

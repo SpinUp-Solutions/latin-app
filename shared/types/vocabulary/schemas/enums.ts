@@ -24,6 +24,8 @@ export const PronounTypeSchema = z.enum([
   'possessive',
 ]);
 
+export const PronounPersonSchema = z.enum(['1st', '2nd', '3rd']);
+
 export const CaseSchema = z.enum([
   'nominative',
   'genitive',
@@ -78,6 +80,7 @@ export const PrepositionCaseSchema = z.enum(['accusative', 'ablative', 'both']);
 export type PartOfSpeech = z.infer<typeof PartOfSpeechSchema>;
 export type WordType = z.infer<typeof WordTypeSchema>;
 export type PronounType = z.infer<typeof PronounTypeSchema>;
+export type PronounPerson = z.infer<typeof PronounPersonSchema>;
 export type Case = z.infer<typeof CaseSchema>;
 export type Gender = z.infer<typeof GenderSchema>;
 export type Number = z.infer<typeof NumberSchema>;

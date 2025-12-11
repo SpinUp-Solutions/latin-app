@@ -35,6 +35,35 @@ import {
   formatPrimaryAnswersDisplay,
   filterPathsByPreviousAnswers,
 } from '@/src/utils/exercises/formIdentificationHelpers';
+import type { FormIdentificationStep } from '@/src/types/exercises/schemas/form-identification';
+
+// Filter steps for pronouns based on pronoun_type and person
+const filterPronounSteps = (
+  steps: readonly FormIdentificationStep[],
+  word: ExerciseWordResponse
+): FormIdentificationStep[] => {
+  if (word.part_of_speech !== 'pronoun') {
+    return [...steps];
+  }
+
+  const pronounWord = word as Extract<ExerciseWordResponse, { part_of_speech: 'pronoun' }>;
+  const pronounType = pronounWord.pronoun_type;
+  const person = pronounWord.person;
+
+  return steps.filter(step => {
+    // Skip 'person' step if not a personal pronoun
+    if (step === 'person' && pronounType !== 'personal') {
+      return false;
+    }
+
+    // Skip 'gender' step if 1st/2nd person personal pronoun (they don't have gender)
+    if (step === 'gender' && pronounType === 'personal' && (person === '1st' || person === '2nd')) {
+      return false;
+    }
+
+    return true;
+  });
+};
 
 interface Props {
   exercise: GeneratedFormIdentificationExercise;
@@ -71,7 +100,8 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
     if (isSingleField) {
       return words.map(word => {
         const posConfig = exercise.data.posConfigs[word.part_of_speech as PartOfSpeech];
-        const steps = posConfig?.steps || [];
+        const configSteps = posConfig?.steps || [];
+        const steps = filterPronounSteps(configSteps, word);
 
         const basePrimaryPaths = (word.primary_form_paths || (word.form_path ? [word.form_path] : [])) as Array<
           Record<string, string | undefined>
@@ -126,7 +156,8 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
     if (isMultiAnswerMode) {
       return words.flatMap(word => {
         const posConfig = exercise.data.posConfigs[word.part_of_speech as PartOfSpeech];
-        const steps = posConfig?.steps || [];
+        const configSteps = posConfig?.steps || [];
+        const steps = filterPronounSteps(configSteps, word);
 
         const basePrimaryPaths = (word.primary_form_paths || (word.form_path ? [word.form_path] : [])) as Array<
           Record<string, string | undefined>
@@ -182,7 +213,8 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
 
     return words.flatMap(word => {
       const posConfig = exercise.data.posConfigs[word.part_of_speech as PartOfSpeech];
-      const steps = posConfig?.steps || [];
+      const configSteps = posConfig?.steps || [];
+      const steps = filterPronounSteps(configSteps, word);
 
       const basePrimaryPaths = (word.primary_form_paths || (word.form_path ? [word.form_path] : [])) as Array<
         Record<string, string | undefined>
