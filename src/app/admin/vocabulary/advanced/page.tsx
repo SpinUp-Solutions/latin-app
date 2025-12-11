@@ -153,45 +153,45 @@ function AdvancedFiltersPage() {
 
       <main className="flex-1 grid grid-cols-[35%_65%] overflow-hidden">
         <div className="overflow-y-auto overscroll-contain p-4 space-y-4 border-r border-gray-200 bg-roman-marble">
-            <AdvancedFiltersPanel
-              filters={filters}
-              onFiltersChange={handleFiltersChange}
-              onReset={handleReset}
-              onApply={handleApply}
-              isLoading={isFetching}
-            />
+          <AdvancedFiltersPanel
+            filters={filters}
+            onFiltersChange={handleFiltersChange}
+            onReset={handleReset}
+            onApply={handleApply}
+            isLoading={isFetching}
+          />
 
-            {filters.partOfSpeech !== 'all' && (
-              <FormSelectionTable
-                partOfSpeech={filters.partOfSpeech}
-                pronounType={filters.pronounType}
-                pronounPerson={filters.pronounPerson}
-                selectedCellPaths={selection.selectedCellPaths}
-                onToggleCell={handleToggleCell}
-                onSelectAll={handleSelectAll}
-                onClearSelection={handleClearSelection}
-                onTogglePaths={handleTogglePaths}
-              />
-            )}
+          {filters.partOfSpeech !== 'all' && (
+            <FormSelectionTable
+              partOfSpeech={filters.partOfSpeech}
+              pronounType={filters.pronounType}
+              pronounPerson={filters.pronounPerson}
+              selectedCellPaths={selection.selectedCellPaths}
+              onToggleCell={handleToggleCell}
+              onSelectAll={handleSelectAll}
+              onClearSelection={handleClearSelection}
+              onTogglePaths={handleTogglePaths}
+            />
+          )}
         </div>
 
         <div className="overflow-y-auto overscroll-contain p-6 bg-white">
-            {isError && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-800 mb-6">
-                Failed to load words. Please try again.
-              </div>
-            )}
+          {isError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-800 mb-6">
+              Failed to load words. Please try again.
+            </div>
+          )}
 
-            <AdvancedResultsList
-              words={words}
-              isLoading={isLoading}
-              loadingMore={loadingMore}
-              hasMore={hasMore}
-              onLoadMore={handleLoadMore}
-              selectedTableType={selection.selectedTableType}
-              selectedCellPaths={selection.selectedCellPaths}
-              totalCount={totalCount}
-            />
+          <AdvancedResultsList
+            words={words}
+            isLoading={isLoading}
+            loadingMore={loadingMore}
+            hasMore={hasMore}
+            onLoadMore={handleLoadMore}
+            selectedTableType={selection.selectedTableType}
+            selectedCellPaths={selection.selectedCellPaths}
+            totalCount={totalCount}
+          />
         </div>
       </main>
     </div>
