@@ -15,6 +15,9 @@ const serializeTimestamp = (value: unknown): string | undefined => {
   if (value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function') {
     return value.toDate().toISOString();
   }
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
   return undefined;
 };
 
@@ -497,6 +500,39 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
 
     if (typeof updates.word === 'string') {
       updateData.sort_key = stripMacrons(updates.word);
+    }
+
+    const existingRef = adminDb.collection(collection).doc(wordId);
+    const existingSnapshot = await existingRef.get();
+    if (!existingSnapshot.exists) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Word not found',
+        },
+        { status: 404 }
+      );
+    }
+
+    const existingSerialized = serializeWord(existingSnapshot.data() as Record<string, unknown>);
+    const validationCandidate: Record<string, unknown> = {
+      ...existingSerialized,
+      ...updates,
+      ...(typeof updateData.sort_key === 'string' ? { sort_key: updateData.sort_key } : {}),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const validationResult = VocabularyWordSchema.safeParse(validationCandidate);
+    if (!validationResult.success) {
+      console.error('[VOCAB API] Update validation failed', {
+        wordId,
+        collection,
+        part_of_speech: validationCandidate.part_of_speech,
+        issues: validationResult.error.issues.map(issue => ({
+          path: issue.path.join('.'),
+          message: issue.message,
+        })),
+      });
     }
 
     await adminDb.collection(collection).doc(wordId).update(updateData);

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm, FormProvider, Resolver } from 'react-hook-form';
 import { useDispatch, useSelector } from 'react-redux';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -27,11 +27,10 @@ import {
 } from './forms';
 import { AIAutocompleteButton } from './AIAutocompleteButton';
 import {
-  getFormSchemaForPartOfSpeech,
   toFormDefaultValues,
   applyFormValuesToWord,
+  VocabularyFormSchema,
 } from '@/src/types/vocabulary/form-schemas/builder';
-import type { BaseWordFormValues } from '@/src/types/vocabulary/form-schemas/base';
 import {
   clear as clearVocabularyEdit,
   initFromWord,
@@ -51,8 +50,9 @@ interface WordEditPanelProps {
   updating: boolean;
 }
 
-const EMPTY_FORM_VALUES: BaseWordFormValues = {
+const EMPTY_FORM_VALUES: VocabularyFormValues = {
   word: '',
+  part_of_speech: 'adverb',
   translation: '',
   definitions: [],
   etymology: '',
@@ -129,10 +129,9 @@ const getPronounTableTitle = (pronounType: PronounType | null, person: PronounPe
 
 export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, updating }) => {
   const dispatch = useDispatch();
-  const schema = useMemo(() => getFormSchemaForPartOfSpeech(word?.part_of_speech ?? 'noun'), [word?.part_of_speech]);
 
   const form = useForm<VocabularyFormValues>({
-    resolver: zodResolver(schema) as Resolver<VocabularyFormValues>,
+    resolver: zodResolver(VocabularyFormSchema) as Resolver<VocabularyFormValues>,
     defaultValues: word ? toFormDefaultValues(word) : (EMPTY_FORM_VALUES as VocabularyFormValues),
     mode: 'onSubmit',
   });

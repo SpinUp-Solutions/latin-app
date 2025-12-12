@@ -28,7 +28,7 @@ export const VocabularyWordSchema = z.discriminatedUnion('part_of_speech', [
   InterjectionSchema,
 ]);
 
-export const VocabularyWordWithIdSchema = z.union([
+export const VocabularyWordWithIdSchema = z.discriminatedUnion('part_of_speech', [
   NounSchema.extend({ id: z.string() }),
   VerbSchema.extend({ id: z.string() }),
   BasePronounSchema.extend({ id: z.string() }),
