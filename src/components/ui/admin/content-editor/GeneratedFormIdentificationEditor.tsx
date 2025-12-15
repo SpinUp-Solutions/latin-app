@@ -1,6 +1,8 @@
 import React from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent } from '@/src/components/ui/card';
+import { Checkbox } from '@/src/components/ui/checkbox';
+import { Label } from '@/src/components/ui/label';
 import { GeneratedFormIdentificationExercise } from '@/src/types/exercises/generated-form-identification';
 import { useAppSelector } from '@/src/store/hooks';
 import { SimpleInput, SimpleTextarea } from '@/src/components/ui/form-components';
@@ -21,6 +23,7 @@ import { useFormIdentificationEditor } from '@/src/hooks/useFormIdentificationEd
 import type { PartOfSpeech, PronounType, PronounPerson } from '@/shared/types/vocabulary/schemas/enums';
 import { deriveParadigm } from '@/src/utils/paradigm';
 import type { FormIdentificationStep } from '@/src/types/exercises/schemas/form-identification';
+import { Loader2 } from 'lucide-react';
 
 export const GeneratedFormIdentificationEditor: React.FC = () => {
   const editingContent = useAppSelector(
@@ -41,10 +44,22 @@ const GeneratedFormIdentificationEditorView: React.FC<{
 
   const editor = useFormIdentificationEditor(editingContent);
 
-  const handleModeToggle = () => {
-    const newMode = isSingleField ? 'step-by-step' : 'single-field';
+  const setMode = (mode: 'step-by-step' | 'single-field') => {
     editor.updateContent({
-      data: { ...editingContent.data, mode: newMode },
+      data: { ...editingContent.data, mode },
+    });
+  };
+
+  const handleResetFilters = () => {
+    editor.handleGlobalFiltersChange({
+      partOfSpeech: 'all',
+      search: '',
+      verbConjugation: 'all',
+      isDeponent: 'both',
+      nounDeclension: 'all',
+      adjectiveDeclension: 'all',
+      pronounType: 'all',
+      pronounPerson: 'all',
     });
   };
 
@@ -81,7 +96,7 @@ const GeneratedFormIdentificationEditorView: React.FC<{
             editor.handleGlobalFiltersChange(filterUpdates);
           }
         }}
-        onReset={() => {}}
+        onReset={handleResetFilters}
         onApply={() => editor.setIsPreviewOpen(true)}
         isLoading={editor.isPreviewFetching}
       />
@@ -119,14 +134,14 @@ const GeneratedFormIdentificationEditorView: React.FC<{
                 type="button"
                 variant={!isSingleField ? 'default' : 'outline'}
                 size="sm"
-                onClick={handleModeToggle}>
+                onClick={() => setMode('step-by-step')}>
                 Step-by-Step
               </Button>
               <Button
                 type="button"
                 variant={isSingleField ? 'default' : 'outline'}
                 size="sm"
-                onClick={handleModeToggle}>
+                onClick={() => setMode('single-field')}>
                 Single Field
               </Button>
             </div>
@@ -138,19 +153,20 @@ const GeneratedFormIdentificationEditorView: React.FC<{
           </div>
           {!isSingleField && (
             <div className="mt-4 pt-4 border-t space-y-2">
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="requireAllPrimaryAnswers"
                   checked={!!editingContent.data.requireAllPrimaryAnswers}
-                  onChange={e =>
+                  onCheckedChange={checked =>
                     editor.updateContent({
-                      data: { ...editingContent.data, requireAllPrimaryAnswers: e.target.checked },
+                      data: { ...editingContent.data, requireAllPrimaryAnswers: !!checked },
                     })
                   }
-                  className="rounded border-gray-300"
                 />
-                Require all primary answers
-              </label>
+                <Label htmlFor="requireAllPrimaryAnswers" className="text-sm cursor-pointer">
+                  Require all primary answers
+                </Label>
+              </div>
               <p className="text-xs text-gray-500 ml-6">
                 Students must enter all primary path answers for each step, separated by semicolons. Order must be
                 consistent across steps.
@@ -190,7 +206,14 @@ const GeneratedFormIdentificationEditorView: React.FC<{
         poolContent={poolContent}
       />
 
-      {editor.paradigmInfo.availableParadigms.length > 0 && (
+      {editor.paradigmInfo.isLoading ? (
+        <Card>
+          <CardContent className="p-6 flex items-center justify-center gap-2 text-gray-500">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Loading paradigm information...</span>
+          </CardContent>
+        </Card>
+      ) : editor.paradigmInfo.availableParadigms.length > 0 ? (
         <MultiParadigmConfigSection
           availableParadigms={editor.paradigmInfo.availableParadigms}
           paradigmWordCounts={editor.paradigmInfo.paradigmWordCounts}
@@ -198,6 +221,16 @@ const GeneratedFormIdentificationEditorView: React.FC<{
           onUpdateParadigmConfig={editor.handleUpdateParadigmConfig}
           onToggleParadigm={editor.handleToggleParadigm}
         />
+      ) : (
+        <Card>
+          <CardContent className="p-4 text-gray-500 text-sm">
+            {editor.config.wordSource === 'pool' && !editor.config.poolId
+              ? 'Select a vocabulary pool above to see available paradigms.'
+              : editor.config.wordSource === 'pool'
+                ? 'The selected pool has no words. Add words to the pool or choose a different one.'
+                : 'No paradigms available for the current filter settings.'}
+          </CardContent>
+        </Card>
       )}
 
       <div>
@@ -205,7 +238,9 @@ const GeneratedFormIdentificationEditorView: React.FC<{
         <Card>
           <CardContent className="p-4 space-y-4">
             <Button type="button" onClick={() => editor.setIsPreviewOpen(true)} disabled={editor.isPreviewFetching}>
-              {editor.isPreviewFetching ? 'Loading Preview...' : 'Preview Sample Items'}
+              {editor.isPreviewFetching
+                ? 'Loading Preview...'
+                : `Preview Sample Items${editor.config.count !== 'all' ? ` (${editor.config.count})` : ''}`}
             </Button>
 
             {editor.isPreviewOpen && previewWords && previewWords.length > 0 && (

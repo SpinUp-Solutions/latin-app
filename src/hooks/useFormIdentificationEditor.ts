@@ -132,22 +132,41 @@ export function useFormIdentificationEditor(editingContent: GeneratedFormIdentif
     const currentConfigs = editingContent.data.paradigmConfigs ?? {};
     const existingParadigms = Object.keys(currentConfigs);
     const newParadigms = paradigmInfo.availableParadigms.filter(p => !existingParadigms.includes(p));
+    const shouldAutoEnable = paradigmInfo.availableParadigms.length === 1;
+    const soleParadigm = shouldAutoEnable ? paradigmInfo.availableParadigms[0] : null;
 
-    if (newParadigms.length === 0) {
+    const needsNewConfigs = newParadigms.length > 0;
+    const needsAutoEnable =
+      shouldAutoEnable && soleParadigm && currentConfigs[soleParadigm] && !currentConfigs[soleParadigm].enabled;
+
+    if (!needsNewConfigs && !needsAutoEnable) {
       return;
     }
 
     const updatedConfigs: ParadigmConfigs = { ...currentConfigs };
+
     newParadigms.forEach(paradigm => {
       const tableType = PARADIGM_TABLE_TYPE[paradigm];
       const defaultSteps = PARADIGM_STEPS[paradigm];
       updatedConfigs[paradigm] = {
-        enabled: false,
+        enabled: shouldAutoEnable && paradigm === soleParadigm,
         filters: { ...DEFAULT_POS_FILTERS },
         formSelection: tableType ? { tableType, selectedCellPaths: [] } : undefined,
         steps: [...defaultSteps],
       };
     });
+
+    if (needsAutoEnable && soleParadigm && !newParadigms.includes(soleParadigm)) {
+      const existing = updatedConfigs[soleParadigm];
+      if (existing) {
+        updatedConfigs[soleParadigm] = {
+          enabled: true,
+          filters: existing.filters ?? { ...DEFAULT_POS_FILTERS },
+          formSelection: existing.formSelection,
+          steps: existing.steps ?? PARADIGM_STEPS[soleParadigm],
+        };
+      }
+    }
 
     updateContent({
       ...editingContent,
