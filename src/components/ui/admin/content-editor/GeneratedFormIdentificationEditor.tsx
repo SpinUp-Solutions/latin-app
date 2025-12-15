@@ -11,7 +11,12 @@ import { VocabularyPoolSelector } from '../vocabulary-pools/VocabularyPoolSelect
 import { FormSelectionTable } from '../vocabulary/FormSelectionTable';
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
 import { FormIdentificationStep } from '@/src/types/exercises/schemas/form-identification';
-import { extractStepValue, getAcceptedAnswersForStep } from '@/src/utils/exercises/formIdentificationHelpers';
+import {
+  extractStepValue,
+  getAcceptedAnswersForStep,
+  getDisplayForm,
+  enrichPathsWithSteps,
+} from '@/src/utils/exercises/formIdentificationHelpers';
 import { WordSourceSection } from './WordSourceSection';
 import { MultiPosConfigSection } from './MultiPosConfigSection';
 import { useGeneratedExerciseEditor } from '@/src/hooks/useGeneratedExerciseEditor';
@@ -276,35 +281,35 @@ const GeneratedFormIdentificationEditorView: React.FC<{
                       Record<string, string | undefined>
                     >;
 
-                    const enrichPath = (path: Record<string, string | undefined>) => {
-                      const enrichedPath: Record<string, string | undefined> = { ...path };
-                      wordSteps.forEach(step => {
-                        if (!enrichedPath[step]) {
-                          enrichedPath[step] = extractStepValue(wordWithPath, step);
-                        }
-                      });
-                      return enrichedPath;
-                    };
-
-                    const enrichedPrimaryPaths = basePrimaryPaths.map(enrichPath);
-                    const enrichedOptionalPaths = baseOptionalPaths.map(enrichPath);
+                    const enrichedPrimaryPaths = enrichPathsWithSteps(basePrimaryPaths, wordWithPath, wordSteps);
+                    const enrichedOptionalPaths = enrichPathsWithSteps(baseOptionalPaths, wordWithPath, wordSteps);
 
                     const primaryDisplays = enrichedPrimaryPaths
                       .map(path => {
-                        const pathValues = wordSteps.map(step => path[step]).filter(Boolean);
-                        return pathValues.join(';');
+                        const pathValues = wordSteps
+                          .map(step => {
+                            const val = path[step];
+                            return val ? getDisplayForm(val) : null;
+                          })
+                          .filter(Boolean);
+                        return pathValues.join(',');
                       })
                       .filter(display => display.length > 0);
 
                     const optionalDisplays = enrichedOptionalPaths
                       .map(path => {
-                        const pathValues = wordSteps.map(step => path[step]).filter(Boolean);
-                        return pathValues.join(';');
+                        const pathValues = wordSteps
+                          .map(step => {
+                            const val = path[step];
+                            return val ? getDisplayForm(val) : null;
+                          })
+                          .filter(Boolean);
+                        return pathValues.join(',');
                       })
                       .filter(display => display.length > 0);
 
-                    primaryAnswersDisplay = primaryDisplays.join(' OR ');
-                    optionalAnswersDisplay = optionalDisplays.join(' OR ');
+                    primaryAnswersDisplay = primaryDisplays.join(';');
+                    optionalAnswersDisplay = optionalDisplays.join(';');
                   }
 
                   const displayWord =
@@ -332,19 +337,50 @@ const GeneratedFormIdentificationEditorView: React.FC<{
                               )}
                             </>
                           ) : (
-                            wordSteps.map(step => {
-                              const stepValue = extractStepValue(wordWithPath, step);
-                              if (!stepValue) return null;
+                            (() => {
+                              const basePrimaryPaths = (word.primary_form_paths ||
+                                (word.form_path ? [word.form_path] : [])) as Array<Record<string, string | undefined>>;
+                              const baseOptionalPaths = (word.optional_form_paths || []) as Array<
+                                Record<string, string | undefined>
+                              >;
 
-                              const answers = getAcceptedAnswersForStep(stepValue);
+                              return wordSteps.map(step => {
+                                const primaryValues = basePrimaryPaths
+                                  .map(path => path[step])
+                                  .filter((v): v is string => !!v);
+                                const optionalValues = baseOptionalPaths
+                                  .map(path => path[step])
+                                  .filter((v): v is string => !!v);
 
-                              return (
-                                <div key={step} className="text-gray-600">
-                                  <strong className="capitalize">{step}:</strong> {stepValue}{' '}
-                                  {answers.length > 1 && `(or ${answers.join(', ')})`}
-                                </div>
-                              );
-                            })
+                                const uniquePrimaryValues = Array.from(new Set(primaryValues));
+                                const uniqueOptionalValues = Array.from(
+                                  new Set(optionalValues.filter(v => !uniquePrimaryValues.includes(v)))
+                                );
+
+                                const displayValue =
+                                  uniquePrimaryValues.length > 0
+                                    ? uniquePrimaryValues.join(' OR ')
+                                    : extractStepValue(wordWithPath, step);
+
+                                if (!displayValue) return null;
+
+                                const answers = getAcceptedAnswersForStep(
+                                  uniquePrimaryValues.length > 0 ? uniquePrimaryValues[0] : displayValue
+                                );
+
+                                return (
+                                  <div key={step} className="text-gray-600">
+                                    <strong className="capitalize">{step}:</strong> {displayValue}{' '}
+                                    {answers.length > 1 && `(or ${answers.slice(1).join(', ')})`}
+                                    {uniqueOptionalValues.length > 0 && (
+                                      <span className="text-gray-400 text-xs ml-1">
+                                        [optional: {uniqueOptionalValues.join(' OR ')}]
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              });
+                            })()
                           )}
                         </div>
                       </CardContent>

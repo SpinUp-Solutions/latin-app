@@ -34,36 +34,10 @@ import {
   getAcceptedAnswersForMultipleValues,
   formatPrimaryAnswersDisplay,
   filterPathsByPreviousAnswers,
+  getDisplayForm,
+  enrichPathsWithSteps,
+  filterPronounSteps,
 } from '@/src/utils/exercises/formIdentificationHelpers';
-import type { FormIdentificationStep } from '@/src/types/exercises/schemas/form-identification';
-
-// Filter steps for pronouns based on pronoun_type and person
-const filterPronounSteps = (
-  steps: readonly FormIdentificationStep[],
-  word: ExerciseWordResponse
-): FormIdentificationStep[] => {
-  if (word.part_of_speech !== 'pronoun') {
-    return [...steps];
-  }
-
-  const pronounWord = word as Extract<ExerciseWordResponse, { part_of_speech: 'pronoun' }>;
-  const pronounType = pronounWord.pronoun_type;
-  const person = pronounWord.person;
-
-  return steps.filter(step => {
-    // Skip 'person' step if not a personal pronoun
-    if (step === 'person' && pronounType !== 'personal') {
-      return false;
-    }
-
-    // Skip 'gender' step if 1st/2nd person personal pronoun (they don't have gender)
-    if (step === 'gender' && pronounType === 'personal' && (person === '1st' || person === '2nd')) {
-      return false;
-    }
-
-    return true;
-  });
-};
 
 interface Props {
   exercise: GeneratedFormIdentificationExercise;
@@ -108,34 +82,22 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
         >;
         const baseOptionalPaths = (word.optional_form_paths || []) as Array<Record<string, string | undefined>>;
 
-        const enrichedPrimaryPaths = basePrimaryPaths.map(path => {
-          const enrichedPath: Record<string, string | undefined> = { ...path };
-          steps.forEach(step => {
-            if (!enrichedPath[step]) {
-              enrichedPath[step] = extractStepValue(word, step);
-            }
-          });
-          return enrichedPath;
-        });
-
-        const enrichedOptionalPaths = baseOptionalPaths.map(path => {
-          const enrichedPath: Record<string, string | undefined> = { ...path };
-          steps.forEach(step => {
-            if (!enrichedPath[step]) {
-              enrichedPath[step] = extractStepValue(word, step);
-            }
-          });
-          return enrichedPath;
-        });
+        const enrichedPrimaryPaths = enrichPathsWithSteps(basePrimaryPaths, word, steps);
+        const enrichedOptionalPaths = enrichPathsWithSteps(baseOptionalPaths, word, steps);
 
         const pathDisplays = enrichedPrimaryPaths
           .map(path => {
-            const pathValues = steps.map(step => path[step]).filter(Boolean);
-            return pathValues.join(';');
+            const pathValues = steps
+              .map(step => {
+                const val = path[step];
+                return val ? getDisplayForm(val) : null;
+              })
+              .filter(Boolean);
+            return pathValues.join(',');
           })
           .filter(display => display.length > 0);
 
-        const correctAnswerDisplay = pathDisplays.join(' OR ');
+        const correctAnswerDisplay = pathDisplays.join(';');
 
         return {
           id: word.id,
@@ -164,25 +126,8 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
         >;
         const baseOptionalPaths = (word.optional_form_paths || []) as Array<Record<string, string | undefined>>;
 
-        const enrichedPrimaryPaths = basePrimaryPaths.map(path => {
-          const enrichedPath: Record<string, string | undefined> = { ...path };
-          steps.forEach(step => {
-            if (!enrichedPath[step]) {
-              enrichedPath[step] = extractStepValue(word, step);
-            }
-          });
-          return enrichedPath;
-        });
-
-        const enrichedOptionalPaths = baseOptionalPaths.map(path => {
-          const enrichedPath: Record<string, string | undefined> = { ...path };
-          steps.forEach(step => {
-            if (!enrichedPath[step]) {
-              enrichedPath[step] = extractStepValue(word, step);
-            }
-          });
-          return enrichedPath;
-        });
+        const enrichedPrimaryPaths = enrichPathsWithSteps(basePrimaryPaths, word, steps);
+        const enrichedOptionalPaths = enrichPathsWithSteps(baseOptionalPaths, word, steps);
 
         const expectedAnswerCount = enrichedPrimaryPaths.length;
 
