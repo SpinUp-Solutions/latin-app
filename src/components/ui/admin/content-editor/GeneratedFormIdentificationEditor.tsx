@@ -8,9 +8,7 @@ import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
 import { AdvancedFiltersPanel } from '../vocabulary/AdvancedFiltersPanel';
 import { VocabularyPoolSelector } from '../vocabulary-pools/VocabularyPoolSelector';
-import { FormSelectionTable } from '../vocabulary/FormSelectionTable';
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
-import { FormIdentificationStep } from '@/src/types/exercises/schemas/form-identification';
 import {
   extractStepValue,
   getAcceptedAnswersForStep,
@@ -18,10 +16,11 @@ import {
   enrichPathsWithSteps,
 } from '@/src/utils/exercises/formIdentificationHelpers';
 import { WordSourceSection } from './WordSourceSection';
-import { MultiPosConfigSection } from './MultiPosConfigSection';
-import { useGeneratedExerciseEditor } from '@/src/hooks/useGeneratedExerciseEditor';
-import { AVAILABLE_STEPS } from '@/src/config/formIdentificationSteps';
+import { MultiParadigmConfigSection } from './MultiParadigmConfigSection';
+import { useFormIdentificationEditor } from '@/src/hooks/useFormIdentificationEditor';
 import type { PartOfSpeech, PronounType, PronounPerson } from '@/shared/types/vocabulary/schemas/enums';
+import { deriveParadigm } from '@/src/utils/paradigm';
+import type { FormIdentificationStep } from '@/src/types/exercises/schemas/form-identification';
 
 export const GeneratedFormIdentificationEditor: React.FC = () => {
   const editingContent = useAppSelector(
@@ -40,9 +39,7 @@ const GeneratedFormIdentificationEditorView: React.FC<{
 }> = ({ editingContent }) => {
   const isSingleField = editingContent.data.mode === 'single-field';
 
-  const editor = useGeneratedExerciseEditor(editingContent, {
-    exerciseType: 'generated-form-identification',
-  });
+  const editor = useFormIdentificationEditor(editingContent);
 
   const handleModeToggle = () => {
     const newMode = isSingleField ? 'step-by-step' : 'single-field';
@@ -74,15 +71,17 @@ const GeneratedFormIdentificationEditorView: React.FC<{
           limit: editor.config.count,
         }}
         onFiltersChange={updates => {
-          if ('limit' in updates) {
-            const currentCount = editor.config?.count ?? 5;
-            const nextCount = updates.limit === undefined ? currentCount : (updates.limit as typeof currentCount);
-            editor.updateConfig({ count: nextCount });
-          } else {
-            editor.handleFiltersChange(updates);
+          const { limit, ...filterUpdates } = updates;
+
+          if (limit !== undefined) {
+            editor.updateConfig({ count: limit });
+          }
+
+          if (Object.keys(filterUpdates).length > 0) {
+            editor.handleGlobalFiltersChange(filterUpdates);
           }
         }}
-        onReset={editor.handleResetFilters}
+        onReset={() => {}}
         onApply={() => editor.setIsPreviewOpen(true)}
         isLoading={editor.isPreviewFetching}
       />
@@ -101,15 +100,13 @@ const GeneratedFormIdentificationEditorView: React.FC<{
 
   const previewWords = editor.previewData?.words as ExerciseWordResponse[] | undefined;
 
-  const availableStepsForSection: Record<PartOfSpeech, FormIdentificationStep[]> = Object.entries(
-    AVAILABLE_STEPS
-  ).reduce(
-    (acc, [pos, steps]) => {
-      acc[pos as PartOfSpeech] = [...steps];
-      return acc;
-    },
-    {} as Record<PartOfSpeech, FormIdentificationStep[]>
-  );
+  const getWordSteps = (word: ExerciseWordResponse): FormIdentificationStep[] => {
+    const pronounType = word.part_of_speech === 'pronoun' ? (word.pronoun_type as PronounType | undefined) : undefined;
+    const pronounPerson = word.part_of_speech === 'pronoun' ? (word.person as PronounPerson | undefined) : undefined;
+    const paradigm = deriveParadigm(word.part_of_speech as PartOfSpeech, pronounType, pronounPerson);
+    if (!paradigm) return [];
+    return editingContent.data.paradigmConfigs?.[paradigm]?.steps || [];
+  };
 
   return (
     <div className="space-y-6">
@@ -193,66 +190,13 @@ const GeneratedFormIdentificationEditorView: React.FC<{
         poolContent={poolContent}
       />
 
-      {!editor.isPoolWordSource && editor.activePOS && (
-        <Card>
-          <CardContent className="p-6 space-y-6">
-            <div>
-              <label className="block text-sm font-medium mb-3">Steps to Identify (in order)</label>
-              <div className="space-y-4">
-                <div className="flex flex-wrap gap-2">
-                  {editor.activePOS &&
-                    availableStepsForSection[editor.activePOS]?.map(step => {
-                      const activePOS = editor.activePOS!;
-                      const currentSteps = editingContent.data.posConfigs[activePOS]?.steps || [];
-                      const isSelected = currentSteps.includes(step);
-
-                      return (
-                        <Button
-                          key={step}
-                          type="button"
-                          variant={isSelected ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => {
-                            const newSteps = isSelected
-                              ? currentSteps.filter((s: FormIdentificationStep) => s !== step)
-                              : [...currentSteps, step];
-                            editor.handleUpdatePosConfig(activePOS, { steps: newSteps });
-                          }}
-                          className="capitalize">
-                          {step}
-                        </Button>
-                      );
-                    })}
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-3">Form Selection</label>
-              <FormSelectionTable
-                partOfSpeech={editor.activePOS}
-                pronounType={(editor.derivedFilters.pronounType || 'all') as PronounType | 'all'}
-                pronounPerson={(editor.derivedFilters.pronounPerson || 'all') as PronounPerson | 'all'}
-                selectedCellPaths={editor.derivedFormSelection?.selectedCellPaths || []}
-                onToggleCell={editor.formSelectionControls.handleToggleCell}
-                onTogglePaths={editor.formSelectionControls.handleTogglePaths}
-                onSelectAll={editor.formSelectionControls.handleSelectAll}
-                onClearSelection={editor.formSelectionControls.handleClearSelection}
-              />
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {editor.isPoolWordSource && editor.posSummary.availablePOS.length > 0 && editor.posSummary.summary && (
-        <MultiPosConfigSection
-          exerciseType="form-identification"
-          availablePartOfSpeech={editor.posSummary.availablePOS}
-          wordCountsByPOS={editor.posSummary.summary}
-          posConfigs={editingContent.data.posConfigs}
-          onUpdatePosConfig={editor.handleUpdatePosConfig}
-          onTogglePOS={editor.handleTogglePOS}
-          availableSteps={availableStepsForSection}
+      {editor.paradigmInfo.availableParadigms.length > 0 && (
+        <MultiParadigmConfigSection
+          availableParadigms={editor.paradigmInfo.availableParadigms}
+          paradigmWordCounts={editor.paradigmInfo.paradigmWordCounts}
+          paradigmConfigs={editingContent.data.paradigmConfigs ?? {}}
+          onUpdateParadigmConfig={editor.handleUpdateParadigmConfig}
+          onToggleParadigm={editor.handleToggleParadigm}
         />
       )}
 
@@ -269,7 +213,7 @@ const GeneratedFormIdentificationEditorView: React.FC<{
                 <label className="block text-sm font-medium">Preview ({previewWords.length} items)</label>
                 {previewWords.map((word, index) => {
                   const wordWithPath = word;
-                  const wordSteps = editingContent.data.posConfigs[word.part_of_speech as PartOfSpeech]?.steps || [];
+                  const wordSteps = getWordSteps(word);
 
                   let primaryAnswersDisplay = '';
                   let optionalAnswersDisplay = '';

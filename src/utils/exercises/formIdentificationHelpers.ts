@@ -139,28 +139,6 @@ export function enrichPathsWithSteps(
   });
 }
 
-export function filterPronounSteps(
-  steps: readonly FormIdentificationStep[],
-  word: ExerciseWordResponse
-): FormIdentificationStep[] {
-  if (!isPronoun(word)) {
-    return [...steps];
-  }
-
-  const pronounType = word.pronoun_type;
-  const person = word.person;
-
-  return steps.filter(step => {
-    if (step === 'person' && pronounType !== 'personal') {
-      return false;
-    }
-    if (step === 'gender' && pronounType === 'personal' && (person === '1st' || person === '2nd')) {
-      return false;
-    }
-    return true;
-  });
-}
-
 export function extractStepValuesFromPaths<T extends { [key: string]: string | undefined }>(
   formPaths: T[],
   step: FormIdentificationStep
@@ -408,11 +386,10 @@ export function hasValidFormData(word: ExerciseWordResponse, steps: FormIdentifi
     }
   }
 
-  const filteredSteps = filterPronounSteps(steps, word);
   const formPaths = primaryPaths || (formPath ? [formPath] : []);
 
   return formPaths.some(path => {
-    return filteredSteps.every(step => {
+    return steps.every(step => {
       const pathRecord = path as Record<string, string | undefined>;
       if (pathRecord[step]) return true;
 

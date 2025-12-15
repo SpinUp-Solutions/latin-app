@@ -212,7 +212,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           query = query.where('pronoun_type', '==', pronounType);
         }
         if (pronounPerson) {
-          query = query.where('person', '==', pronounPerson);
+          const persons = pronounPerson.split(',').map(p => p.trim());
+          if (persons.length === 1) {
+            query = query.where('person', '==', persons[0]);
+          } else {
+            query = query.where('person', 'in', persons);
+          }
         }
       }
 
@@ -265,7 +270,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             wrapQuery = wrapQuery.where('pronoun_type', '==', pronounType);
           }
           if (pronounPerson) {
-            wrapQuery = wrapQuery.where('person', '==', pronounPerson);
+            const persons = pronounPerson.split(',').map(p => p.trim());
+            if (persons.length === 1) {
+              wrapQuery = wrapQuery.where('person', '==', persons[0]);
+            } else {
+              wrapQuery = wrapQuery.where('person', 'in', persons);
+            }
           }
         }
 

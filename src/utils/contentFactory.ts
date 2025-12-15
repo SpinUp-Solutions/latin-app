@@ -345,7 +345,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
             poolId: null,
             count: 5,
           },
-          posConfigs: {},
+          paradigmConfigs: {},
         },
       };
     default:

@@ -8,10 +8,11 @@ import { ExerciseInput, FeedbackDisplay } from '../feedback';
 import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
-import { useGetMultiPosWordsQuery } from '@/src/store/api/advancedVocabularyApi';
+import { useGetMultiParadigmWordsQuery } from '@/src/store/api/advancedVocabularyApi';
+import { deriveParadigm } from '@/src/utils/paradigm';
 import { Card, CardContent } from '../card';
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
-import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
+import type { PartOfSpeech, PronounType, PronounPerson } from '@/shared/types/vocabulary/schemas/enums';
 import {
   FormIdentificationItemSchema,
   type FormIdentificationItem,
@@ -36,7 +37,6 @@ import {
   filterPathsByPreviousAnswers,
   getDisplayForm,
   enrichPathsWithSteps,
-  filterPronounSteps,
 } from '@/src/utils/exercises/formIdentificationHelpers';
 import { formatLabel } from '@/src/utils/label-formatter';
 
@@ -57,13 +57,13 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
   const requireAllPrimaryAnswers = exercise.data.requireAllPrimaryAnswers ?? false;
   const isMultiAnswerMode = !isSingleField && requireAllPrimaryAnswers;
 
-  const { data, isLoading, isError } = useGetMultiPosWordsQuery({
+  const { data, isLoading, isError } = useGetMultiParadigmWordsQuery({
     exerciseType: 'generated-form-identification',
     collection: config.collection,
     wordSource: config.wordSource,
     poolId: config.poolId,
     count: config.count,
-    posConfigs: exercise.data.posConfigs,
+    paradigmConfigs: exercise.data.paradigmConfigs ?? {},
   });
 
   type ItemType = FormIdentificationItem | SingleFieldFormIdentificationItem | MultiAnswerFormIdentificationItem;
@@ -74,9 +74,14 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
 
     if (isSingleField) {
       return words.map(word => {
-        const posConfig = exercise.data.posConfigs[word.part_of_speech as PartOfSpeech];
-        const configSteps = posConfig?.steps || [];
-        const steps = filterPronounSteps(configSteps, word);
+        const wordAny = word as Record<string, unknown>;
+        const paradigm = deriveParadigm(
+          word.part_of_speech as PartOfSpeech,
+          wordAny.pronoun_type as PronounType | undefined,
+          wordAny.person as PronounPerson | undefined
+        );
+        const paradigmConfig = paradigm ? exercise.data.paradigmConfigs?.[paradigm] : undefined;
+        const steps = paradigmConfig?.steps || [];
 
         const basePrimaryPaths = (word.primary_form_paths || (word.form_path ? [word.form_path] : [])) as Array<
           Record<string, string | undefined>
@@ -118,9 +123,14 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
 
     if (isMultiAnswerMode) {
       return words.flatMap(word => {
-        const posConfig = exercise.data.posConfigs[word.part_of_speech as PartOfSpeech];
-        const configSteps = posConfig?.steps || [];
-        const steps = filterPronounSteps(configSteps, word);
+        const wordAny = word as Record<string, unknown>;
+        const paradigm = deriveParadigm(
+          word.part_of_speech as PartOfSpeech,
+          wordAny.pronoun_type as PronounType | undefined,
+          wordAny.person as PronounPerson | undefined
+        );
+        const paradigmConfig = paradigm ? exercise.data.paradigmConfigs?.[paradigm] : undefined;
+        const steps = paradigmConfig?.steps || [];
 
         const basePrimaryPaths = (word.primary_form_paths || (word.form_path ? [word.form_path] : [])) as Array<
           Record<string, string | undefined>
@@ -158,9 +168,14 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
     }
 
     return words.flatMap(word => {
-      const posConfig = exercise.data.posConfigs[word.part_of_speech as PartOfSpeech];
-      const configSteps = posConfig?.steps || [];
-      const steps = filterPronounSteps(configSteps, word);
+      const wordAny = word as Record<string, unknown>;
+      const paradigm = deriveParadigm(
+        word.part_of_speech as PartOfSpeech,
+        wordAny.pronoun_type as PronounType | undefined,
+        wordAny.person as PronounPerson | undefined
+      );
+      const paradigmConfig = paradigm ? exercise.data.paradigmConfigs?.[paradigm] : undefined;
+      const steps = paradigmConfig?.steps || [];
 
       const basePrimaryPaths = (word.primary_form_paths || (word.form_path ? [word.form_path] : [])) as Array<
         Record<string, string | undefined>

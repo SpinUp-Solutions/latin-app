@@ -99,6 +99,7 @@ export interface GeneratorConfigBase {
   wordSource: 'filters' | 'pool';
   poolId?: string | null;
   count: number | 'all';
+  filters?: GeneratorFilters;
 }
 
 export interface PosGeneratorConfig {
