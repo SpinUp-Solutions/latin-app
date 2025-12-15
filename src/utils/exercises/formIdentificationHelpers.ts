@@ -45,52 +45,78 @@ function isAdverb(word: ExerciseWordResponse): word is AdverbWordResponse {
 export const extractStepValue = (word: ExerciseWordResponse, step: FormIdentificationStep): string => {
   if (isVerb(word)) {
     switch (step) {
-      case 'conjugation': return word.conjugation || '';
-      case 'tense': return word.form_path?.tense || '';
-      case 'voice': return word.form_path?.voice || '';
-      case 'mood': return word.form_path?.mood || '';
-      case 'person': return word.form_path?.person || '';
-      case 'number': return word.form_path?.number || '';
-      default: return '';
+      case 'conjugation':
+        return word.conjugation || '';
+      case 'tense':
+        return word.form_path?.tense || '';
+      case 'voice':
+        return word.form_path?.voice || '';
+      case 'mood':
+        return word.form_path?.mood || '';
+      case 'person':
+        return word.form_path?.person || '';
+      case 'number':
+        return word.form_path?.number || '';
+      default:
+        return '';
     }
   }
 
   if (isNoun(word)) {
     switch (step) {
-      case 'declension': return word.declension || '';
-      case 'case': return word.form_path?.case || '';
-      case 'number': return word.form_path?.number || '';
-      case 'gender': return word.gender || '';
-      default: return '';
+      case 'declension':
+        return word.declension || '';
+      case 'case':
+        return word.form_path?.case || '';
+      case 'number':
+        return word.form_path?.number || '';
+      case 'gender':
+        return word.gender || '';
+      default:
+        return '';
     }
   }
 
   if (isAdjective(word)) {
     switch (step) {
-      case 'declension': return word.declension || '';
-      case 'degree': return word.form_path?.degree || '';
-      case 'case': return word.form_path?.case || '';
-      case 'number': return word.form_path?.number || '';
-      case 'gender': return word.form_path?.gender || '';
-      default: return '';
+      case 'declension':
+        return word.declension || '';
+      case 'degree':
+        return word.form_path?.degree || '';
+      case 'case':
+        return word.form_path?.case || '';
+      case 'number':
+        return word.form_path?.number || '';
+      case 'gender':
+        return word.form_path?.gender || '';
+      default:
+        return '';
     }
   }
 
   if (isPronoun(word)) {
     switch (step) {
-      case 'pronoun_type': return word.pronoun_type || '';
-      case 'person': return word.person || '';
-      case 'case': return word.form_path?.case || '';
-      case 'number': return word.form_path?.number || '';
-      case 'gender': return word.form_path?.gender || '';
-      default: return '';
+      case 'pronoun_type':
+        return word.pronoun_type || '';
+      case 'person':
+        return word.person || '';
+      case 'case':
+        return word.form_path?.case || '';
+      case 'number':
+        return word.form_path?.number || '';
+      case 'gender':
+        return word.form_path?.gender || '';
+      default:
+        return '';
     }
   }
 
   if (isAdverb(word)) {
     switch (step) {
-      case 'degree': return word.form_path?.degree || '';
-      default: return '';
+      case 'degree':
+        return word.form_path?.degree || '';
+      default:
+        return '';
     }
   }
 
@@ -204,23 +230,24 @@ const createVariantMap = () => {
 
   CaseSchema.options.forEach(val => {
     const abbr: Record<string, string> = {
-      nominative: 'nom', genitive: 'gen', dative: 'dat', accusative: 'acc',
-      ablative: 'abl', locative: 'loc', vocative: 'voc',
+      nominative: 'nom',
+      genitive: 'gen',
+      dative: 'dat',
+      accusative: 'acc',
+      ablative: 'abl',
+      locative: 'loc',
+      vocative: 'voc',
     };
     const a = abbr[val];
     v[val] = a ? [val, `${a}.`, a] : [val];
   });
 
   NumberSchema.options.forEach(val => {
-    v[val] = val === 'singular'
-      ? ['singular', 'sg', 'sing', 's']
-      : ['plural', 'pl', 'plur', 'p'];
+    v[val] = val === 'singular' ? ['singular', 'sg', 'sing', 's'] : ['plural', 'pl', 'plur', 'p'];
   });
   GrammaticalNumberSchema.options.forEach(val => {
     if (!v[val]) {
-      v[val] = val === 'singular'
-        ? ['singular', 'sg', 'sing', 's']
-        : ['plural', 'pl', 'plur', 'p'];
+      v[val] = val === 'singular' ? ['singular', 'sg', 'sing', 's'] : ['plural', 'pl', 'plur', 'p'];
     }
   });
 
@@ -253,7 +280,9 @@ const createVariantMap = () => {
 
   DegreeSchema.options.forEach(val => {
     const abbr: Record<string, string> = {
-      positive: 'pos', comparative: 'comp', superlative: 'superl',
+      positive: 'pos',
+      comparative: 'comp',
+      superlative: 'superl',
     };
     const a = abbr[val];
     v[val] = a ? [val, `${a}.`, a] : [val];
@@ -267,7 +296,9 @@ const createVariantMap = () => {
     pluperfect: ['pluperfect', 'pluperf.', 'pluperf'],
     future_perfect: ['future perfect', 'fut. perf.', 'fut perf'],
   };
-  Object.entries(tenses).forEach(([k, arr]) => { v[k] = arr; });
+  Object.entries(tenses).forEach(([k, arr]) => {
+    v[k] = arr;
+  });
 
   const moods: Record<string, string[]> = {
     indicative: ['indicative', 'ind.', 'ind'],
@@ -276,13 +307,20 @@ const createVariantMap = () => {
     infinitive: ['infinitive', 'inf.', 'inf'],
     participle: ['participle', 'part.', 'part'],
   };
-  Object.entries(moods).forEach(([k, arr]) => { v[k] = arr; });
+  Object.entries(moods).forEach(([k, arr]) => {
+    v[k] = arr;
+  });
 
   PronounTypeSchema.options.forEach(val => {
     const abbr: Record<string, string> = {
-      personal: 'pers', reflexive: 'refl', demonstrative: 'dem',
-      intensive: 'intens', relative: 'rel', interrogative: 'interr',
-      indefinite: 'indef', possessive: 'poss',
+      personal: 'pers',
+      reflexive: 'refl',
+      demonstrative: 'dem',
+      intensive: 'intens',
+      relative: 'rel',
+      interrogative: 'interr',
+      indefinite: 'indef',
+      possessive: 'poss',
     };
     const a = abbr[val];
     v[val] = a ? [val, `${a}.`, a] : [val];
@@ -309,9 +347,7 @@ const createVariantMap = () => {
 
   VerbConjugationSchema.options.forEach(val => {
     const n = val.replace('io', '');
-    v[val] = val.includes('io')
-      ? [`${n} conjugation`, val, `${n}io`, `${n}-io`, n]
-      : [`${n} conjugation`, val, n];
+    v[val] = val.includes('io') ? [`${n} conjugation`, val, `${n}io`, `${n}-io`, n] : [`${n} conjugation`, val, n];
   });
 
   return v;
@@ -351,3 +387,37 @@ export const getHintForStep = (word: ExerciseWordResponse, step: FormIdentificat
 
   return stepGuideMap[step];
 };
+
+export function hasValidFormData(word: ExerciseWordResponse, steps: FormIdentificationStep[]): boolean {
+  const primaryPaths = word.primary_form_paths;
+  const formPath = word.form_path;
+
+  const hasFormPaths = formPath !== null || (primaryPaths !== undefined && primaryPaths.length > 0);
+
+  if (!hasFormPaths) {
+    return false;
+  }
+
+  if (isPronoun(word)) {
+    if (!word.pronoun_type) {
+      return false;
+    }
+
+    if (steps.includes('person') && word.pronoun_type === 'personal' && !word.person) {
+      return false;
+    }
+  }
+
+  const filteredSteps = filterPronounSteps(steps, word);
+  const formPaths = primaryPaths || (formPath ? [formPath] : []);
+
+  return formPaths.some(path => {
+    return filteredSteps.every(step => {
+      const pathRecord = path as Record<string, string | undefined>;
+      if (pathRecord[step]) return true;
+
+      const wordValue = extractStepValue(word, step);
+      return wordValue !== '';
+    });
+  });
+}

@@ -38,6 +38,7 @@ import {
   enrichPathsWithSteps,
   filterPronounSteps,
 } from '@/src/utils/exercises/formIdentificationHelpers';
+import { formatLabel } from '@/src/utils/label-formatter';
 
 interface Props {
   exercise: GeneratedFormIdentificationExercise;
@@ -391,10 +392,12 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
             {!isSingleField && (
               <div className="text-sm text-gray-500">
                 Step:{' '}
-                <span className="font-medium capitalize">
-                  {isMultiAnswerMode
-                    ? (currentItem as MultiAnswerFormIdentificationItem).step
-                    : (currentItem as FormIdentificationItem).step}
+                <span className="font-medium">
+                  {formatLabel(
+                    isMultiAnswerMode
+                      ? (currentItem as MultiAnswerFormIdentificationItem).step
+                      : (currentItem as FormIdentificationItem).step
+                  )}
                 </span>
               </div>
             )}
@@ -414,20 +417,21 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
               <>
                 <strong>Question:</strong> Identify the:{' '}
                 <span className="font-medium">
-                  {(currentItem as SingleFieldFormIdentificationItem).steps.join('; ')}
+                  {(currentItem as SingleFieldFormIdentificationItem).steps.map(formatLabel).join('; ')}
                 </span>
               </>
             ) : isMultiAnswerMode ? (
               <>
                 <strong>Question:</strong> Identify the{' '}
-                <span className="font-medium capitalize">
-                  {(currentItem as MultiAnswerFormIdentificationItem).step}
+                <span className="font-medium">
+                  {formatLabel((currentItem as MultiAnswerFormIdentificationItem).step)}
                 </span>
               </>
             ) : (
               <>
                 <strong>Question:</strong> What is the{' '}
-                <span className="font-medium">{(currentItem as FormIdentificationItem).step}</span> of this word?
+                <span className="font-medium">{formatLabel((currentItem as FormIdentificationItem).step)}</span> of this
+                word?
               </>
             )}
           </div>

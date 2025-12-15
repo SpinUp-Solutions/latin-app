@@ -53,7 +53,7 @@ type FormPath = VerbFormPath | NounFormPath | AdjectiveFormPath | PronounFormPat
 export const parseFormPathFromString = (
   path: string,
   tableType: TableType
-): VerbFormPath | NounFormPath | AdjectiveFormPath | null => {
+): VerbFormPath | NounFormPath | AdjectiveFormPath | PronounFormPath | null => {
   if (!path) return null;
 
   const parts = path.split('.');
@@ -73,6 +73,21 @@ export const parseFormPathFromString = (
   if (tableType === 'adjective-declension') {
     if (parts.length === 4) {
       return createAdjectiveFormPath(parts[0], parts[2], parts[3], parts[1]);
+    }
+    if (parts.length === 2) {
+      return createNounFormPath(parts[1], parts[0]);
+    }
+  }
+
+  if (tableType === 'pronoun-declension') {
+    if (parts.length === 2) {
+      return createNounFormPath(parts[1], parts[0]);
+    }
+  }
+
+  if (tableType === 'pronoun-adjective-declension') {
+    if (parts.length === 3) {
+      return createPronounFormPath(parts[1], parts[2], parts[0]);
     }
     if (parts.length === 2) {
       return createNounFormPath(parts[1], parts[0]);

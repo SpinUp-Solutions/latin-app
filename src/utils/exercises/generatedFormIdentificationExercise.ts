@@ -26,7 +26,16 @@ export const validateGeneratedFormIdentificationExercise = (
   const validatedItem = FormIdentificationItemSchema.parse(currentItem);
 
   const input = normalize(userAnswer);
-  const normalizedAnswers = validatedItem.acceptedAnswers.map(normalize);
+
+  if (!input) {
+    return {
+      isCorrect: false,
+      correctAnswer: validatedItem.correctAnswer,
+      hint: validatedItem.hint,
+    };
+  }
+
+  const normalizedAnswers = validatedItem.acceptedAnswers.map(normalize).filter(a => a !== '');
   const isCorrect = normalizedAnswers.includes(input);
 
   return {
@@ -41,6 +50,14 @@ export const validateSingleFieldFormIdentificationExercise = (
   currentItem: SingleFieldFormIdentificationItem
 ): ValidationResult => {
   const validatedItem = SingleFieldFormIdentificationItemSchema.parse(currentItem);
+
+  if (!normalize(userAnswer)) {
+    return {
+      isCorrect: false,
+      correctAnswer: validatedItem.correctAnswerDisplay,
+      hint: 'Please enter an answer',
+    };
+  }
 
   const userPaths = userAnswer.split(';').map(pathStr => pathStr.split(',').map(part => normalize(part)));
   const expectedPathCount = validatedItem.primaryFormPaths.length;
@@ -112,6 +129,15 @@ export const validateMultiAnswerStep = (
   currentItem: MultiAnswerFormIdentificationItem
 ): MultiAnswerStepValidationResult => {
   const validatedItem = MultiAnswerFormIdentificationItemSchema.parse(currentItem);
+
+  if (!normalize(userAnswer)) {
+    return {
+      isCorrect: false,
+      correctAnswer: validatedItem.correctAnswerDisplay,
+      hint: 'Please enter an answer',
+      answerSlots: [],
+    };
+  }
 
   const userParts = userAnswer.split(';').map(part => part.trim());
   const expectedCount = validatedItem.expectedAnswerCount;

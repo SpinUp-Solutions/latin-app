@@ -3,7 +3,6 @@ import { adminDb } from '@/src/services/firebase-admin';
 import { Query, FieldPath } from 'firebase-admin/firestore';
 import { VocabularyWordSchema } from '@/shared/types/vocabulary/schemas';
 import { parseFormPathFromString } from '@/src/utils/exerciseFormPaths';
-import type { VerbFormPath, NounFormPath, AdjectiveFormPath } from '@/src/types/api/exercise-word-responses';
 import { TABLE_TYPE_CONFIG, type TableType } from '@/src/utils/schema-helpers';
 import { scanTableForMatchingForms, categorizeMatchingPaths } from '@/src/utils/tableScanner';
 import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
@@ -291,60 +290,77 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     console.log('[VOCAB API] Processing', docs.length, 'documents');
 
-    const words = docs.map(doc => {
-      const data = doc.data();
-      const serialized = serializeWord(data as Record<string, unknown>);
-      const isExerciseMode = !!tableType;
+    const words = docs
+      .map(doc => {
+        const data = doc.data();
+        const serialized = serializeWord(data as Record<string, unknown>);
+        const isExerciseMode = !!tableType;
 
-      if (isExerciseMode) {
-        let selectedForm = serialized.word as string;
-        let formPath: VerbFormPath | NounFormPath | AdjectiveFormPath | null = null;
-        let primaryFormPaths: Array<VerbFormPath | NounFormPath | AdjectiveFormPath> = [];
-        let optionalFormPaths: Array<VerbFormPath | NounFormPath | AdjectiveFormPath> = [];
+        if (isExerciseMode) {
+          const paths = parseCellPaths(cellPaths);
 
-        const paths = parseCellPaths(cellPaths);
-        if (paths.length > 0 && tableType) {
-          const formResult = pickRandomFormServer(serialized, tableType as TableType, paths);
-          if (formResult) {
-            selectedForm = formResult.selectedForm;
-            formPath = parseFormPathFromString(
+          if (paths.length > 0 && tableType) {
+            const formResult = pickRandomFormServer(serialized, tableType as TableType, paths);
+
+            if (!formResult) {
+              return null;
+            }
+
+            const formPath = parseFormPathFromString(
               formResult.selectedPath,
               tableType as 'conjugation' | 'declension' | 'adjective-declension'
             );
 
-            primaryFormPaths = formResult.primaryPaths
+            const primaryFormPaths = formResult.primaryPaths
               .map(p => parseFormPathFromString(p, tableType as 'conjugation' | 'declension' | 'adjective-declension'))
               .filter((fp): fp is NonNullable<typeof fp> => fp !== null);
 
-            optionalFormPaths = formResult.optionalPaths
+            const optionalFormPaths = formResult.optionalPaths
               .map(p => parseFormPathFromString(p, tableType as 'conjugation' | 'declension' | 'adjective-declension'))
               .filter((fp): fp is NonNullable<typeof fp> => fp !== null);
+
+            const result = {
+              ...serialized,
+              id: doc.id,
+              root_word: serialized.word,
+              dictionary_entry: (serialized.dictionary_entry as string) ?? null,
+              selected_form: formResult.selectedForm,
+              form_path: formPath,
+              primary_form_paths: primaryFormPaths.length > 0 ? primaryFormPaths : undefined,
+              optional_form_paths: optionalFormPaths.length > 0 ? optionalFormPaths : undefined,
+            } as Record<string, unknown>;
+
+            for (const field of TABLE_FIELDS) {
+              delete result[field];
+            }
+
+            return result;
           }
+
+          const result = {
+            ...serialized,
+            id: doc.id,
+            root_word: serialized.word,
+            dictionary_entry: (serialized.dictionary_entry as string) ?? null,
+            selected_form: serialized.word as string,
+            form_path: null,
+            primary_form_paths: undefined,
+            optional_form_paths: undefined,
+          } as Record<string, unknown>;
+
+          for (const field of TABLE_FIELDS) {
+            delete result[field];
+          }
+
+          return result;
+        } else {
+          return {
+            id: doc.id,
+            ...serialized,
+          };
         }
-
-        const result = {
-          ...serialized,
-          id: doc.id,
-          root_word: serialized.word,
-          dictionary_entry: (serialized.dictionary_entry as string) ?? null,
-          selected_form: selectedForm,
-          form_path: formPath,
-          primary_form_paths: primaryFormPaths.length > 0 ? primaryFormPaths : undefined,
-          optional_form_paths: optionalFormPaths.length > 0 ? optionalFormPaths : undefined,
-        } as Record<string, unknown>;
-
-        for (const field of TABLE_FIELDS) {
-          delete result[field];
-        }
-
-        return result;
-      } else {
-        return {
-          id: doc.id,
-          ...serialized,
-        };
-      }
-    });
+      })
+      .filter((word): word is NonNullable<typeof word> => word !== null);
 
     console.log('[VOCAB API] Mapped to', words.length, 'words');
     if (words.length > 0) {

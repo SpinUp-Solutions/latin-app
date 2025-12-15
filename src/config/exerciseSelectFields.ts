@@ -1,6 +1,6 @@
 export const EXERCISE_SELECT_FIELDS = {
   'generated-translation': ['translation'],
-  'generated-form-identification': ['form_path', 'conjugation', 'declension', 'gender', 'is_deponent'],
+  'generated-form-identification': ['form_path', 'conjugation', 'declension', 'gender', 'is_deponent', 'pronoun_type', 'person'],
 } as const;
 
 export type GeneratedExerciseType = keyof typeof EXERCISE_SELECT_FIELDS;
