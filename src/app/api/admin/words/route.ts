@@ -559,6 +559,11 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
           message: issue.message,
         })),
       });
+
+      const errorMessage = validationResult.error.issues
+        .map(issue => `${issue.path.join('.')}: ${issue.message}`)
+        .join('; ');
+      return NextResponse.json({ success: false, error: `Invalid word data: ${errorMessage}` }, { status: 400 });
     }
 
     await adminDb.collection(collection).doc(wordId).update(updateData);

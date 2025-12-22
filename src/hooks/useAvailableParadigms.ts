@@ -23,6 +23,7 @@ export function useAvailableParadigms(
 
   const filtersParadigms = useMemo(() => {
     if (wordSource !== 'filters') return null;
+    if (!filters.partOfSpeech || filters.partOfSpeech === 'all') return [];
     return getParadigmsFromFilters(filters);
   }, [wordSource, filters]);
 

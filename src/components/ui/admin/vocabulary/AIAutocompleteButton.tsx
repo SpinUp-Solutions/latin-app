@@ -10,14 +10,20 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/src/components/ui/pop
 import { useState } from 'react';
 
 interface AIAutocompleteButtonProps {
+  wordId: string;
   word: string;
   partOfSpeech: PartOfSpeech;
   existingData?: Partial<VocabularyWord>;
-  onAutocomplete: (data: Partial<VocabularyWord>, fieldStatus?: Record<string, 'filled' | 'missing'>) => void;
+  onAutocomplete: (
+    data: Partial<VocabularyWord>,
+    fieldStatus?: Record<string, 'filled' | 'missing'>,
+    wordId?: string
+  ) => void;
   disabled?: boolean;
 }
 
 export function AIAutocompleteButton({
+  wordId,
   word,
   partOfSpeech,
   existingData,
@@ -31,7 +37,7 @@ export function AIAutocompleteButton({
 
   const { autocomplete, isLoading, cost } = useFirebaseAutocomplete({
     onSuccess: (data, costInfo, fieldStatus, notes) => {
-      onAutocomplete(data, fieldStatus);
+      onAutocomplete(data, fieldStatus, wordId);
       setErrorDetails(null);
       setNotesContent(notes || null);
       setNotesTimestamp(notes ? new Date().toISOString() : null);

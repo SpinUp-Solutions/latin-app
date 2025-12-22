@@ -19,7 +19,7 @@ export const AdjectiveForm = () => {
         render={({ field }) => {
           return (
             <FormItem>
-              <FormLabel>Declension (optional)</FormLabel>
+              <FormLabel>Declension</FormLabel>
               <FormControl>
                 <Select
                   value={field.value ?? undefined}

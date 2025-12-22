@@ -203,6 +203,7 @@ export const validatePartialMultiAnswerPaths = (
   }
 
   const failedSlots: number[] = [];
+  const matchedPathIndices = new Set<number>();
 
   for (let slotIndex = 0; slotIndex < slotCount; slotIndex++) {
     const partialPath: Record<string, string> = {};
@@ -211,17 +212,28 @@ export const validatePartialMultiAnswerPaths = (
       partialPath[step] = answerSlotsSoFar[stepIdx][slotIndex];
     }
 
-    const hasValidPath = primaryFormPaths.some(primaryPath => {
-      return stepsCompleted.every(step => {
+    let foundPathIndex = -1;
+    for (let pathIdx = 0; pathIdx < primaryFormPaths.length; pathIdx++) {
+      if (matchedPathIndices.has(pathIdx)) continue;
+
+      const primaryPath = primaryFormPaths[pathIdx];
+      const matches = stepsCompleted.every(step => {
         const userValue = normalize(partialPath[step] || '');
         const primaryValue = primaryPath[step];
         if (!primaryValue) return false;
         const acceptedVariants = getAcceptedAnswersForStep(primaryValue).map(normalize);
         return acceptedVariants.includes(userValue);
       });
-    });
 
-    if (!hasValidPath) {
+      if (matches) {
+        foundPathIndex = pathIdx;
+        break;
+      }
+    }
+
+    if (foundPathIndex >= 0) {
+      matchedPathIndices.add(foundPathIndex);
+    } else {
       failedSlots.push(slotIndex);
     }
   }

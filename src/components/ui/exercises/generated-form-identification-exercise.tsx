@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { GeneratedFormIdentificationExercise } from '@/src/types/exercises/generated-form-identification';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
@@ -214,25 +214,62 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
   }, [data?.words, exercise.data, wordAnswers, isSingleField, isMultiAnswerMode]);
 
   const validatedItems = useMemo(() => {
-    try {
-      if (isSingleField) {
-        return items.map(item => SingleFieldFormIdentificationItemSchema.parse(item));
-      }
-      if (isMultiAnswerMode) {
-        return items.map(item => MultiAnswerFormIdentificationItemSchema.parse(item));
-      }
-      return items.map(item => FormIdentificationItemSchema.parse(item));
-    } catch (error) {
-      console.error('[Form Identification] Validation error:', error);
-      return [];
+    if (isSingleField) {
+      return items
+        .map(item => SingleFieldFormIdentificationItemSchema.safeParse(item))
+        .filter((result): result is { success: true; data: SingleFieldFormIdentificationItem } => result.success)
+        .map(result => result.data);
     }
+
+    if (isMultiAnswerMode) {
+      const multiItems = items as MultiAnswerFormIdentificationItem[];
+      const wordGroups = new Map<string, MultiAnswerFormIdentificationItem[]>();
+
+      for (const item of multiItems) {
+        const existing = wordGroups.get(item.wordId) || [];
+        existing.push(item);
+        wordGroups.set(item.wordId, existing);
+      }
+
+      const validatedResults: MultiAnswerFormIdentificationItem[] = [];
+
+      for (const groupItems of wordGroups.values()) {
+        const parsedItems = groupItems.map(item => ({
+          item,
+          result: MultiAnswerFormIdentificationItemSchema.safeParse(item),
+        }));
+
+        const allValid = parsedItems.every(p => p.result.success);
+
+        if (allValid) {
+          for (const p of parsedItems) {
+            if (p.result.success) {
+              validatedResults.push(p.result.data);
+            }
+          }
+        }
+      }
+
+      return validatedResults;
+    }
+
+    return items
+      .map(item => FormIdentificationItemSchema.safeParse(item))
+      .filter((result): result is { success: true; data: FormIdentificationItem } => result.success)
+      .map(result => result.data);
   }, [items, isSingleField, isMultiAnswerMode]);
 
-  const { currentIndex, isLastItem, autoAdvanceIfEnabled } = useExerciseProgression({
+  const { currentIndex, isLastItem, autoAdvanceIfEnabled, resetIndex } = useExerciseProgression({
     totalItems: validatedItems.length,
     itemProgressionDelay: exercise.itemProgressionDelay,
     progressionRules: exercise.feedbackConfig.progressionRules,
   });
+
+  useEffect(() => {
+    if (validatedItems.length > 0 && currentIndex >= validatedItems.length) {
+      resetIndex();
+    }
+  }, [validatedItems.length, currentIndex, resetIndex]);
 
   const { isCorrect, message, level, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
     exercise.feedbackConfig
@@ -240,6 +277,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
 
   const handleSubmit = () => {
     if (isProcessing || validatedItems.length === 0) return;
+    if (currentIndex >= validatedItems.length) return;
 
     const currentItem = validatedItems[currentIndex];
     setIsProcessing(true);
@@ -380,7 +418,8 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
     );
   }
 
-  const currentItem = validatedItems[currentIndex];
+  const safeIndex = Math.min(currentIndex, Math.max(0, validatedItems.length - 1));
+  const currentItem = validatedItems[safeIndex];
 
   return (
     <div className="space-y-4">
@@ -399,7 +438,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
         </p>
       )}
 
-      <ExerciseProgress current={currentIndex} total={validatedItems.length} />
+      <ExerciseProgress current={safeIndex} total={validatedItems.length} />
 
       <Card>
         <CardContent className="p-6 space-y-4">
