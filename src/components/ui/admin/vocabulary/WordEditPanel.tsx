@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useForm, FormProvider, Resolver } from 'react-hook-form';
 import { useDispatch, useSelector } from 'react-redux';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -12,6 +12,7 @@ import {
   AdjectiveDeclensionTableSchema,
   PersonalPronounDeclensionTableSchema,
 } from '@/shared/types/vocabulary/schemas/declension';
+import { buildEmptyFromSchema } from '@/src/utils/schema-defaults';
 import type { PronounType, PronounPerson } from '@/shared/types/vocabulary/schemas/enums';
 import { ConjugationTableSchema } from '@/shared/types/vocabulary/schemas/verb-conjugation';
 import { DegreesTableSchema } from '@/shared/types/vocabulary/schemas/adjective';
@@ -27,11 +28,10 @@ import {
 } from './forms';
 import { AIAutocompleteButton } from './AIAutocompleteButton';
 import {
-  getFormSchemaForPartOfSpeech,
   toFormDefaultValues,
   applyFormValuesToWord,
+  VocabularyFormSchema,
 } from '@/src/types/vocabulary/form-schemas/builder';
-import type { BaseWordFormValues } from '@/src/types/vocabulary/form-schemas/base';
 import {
   clear as clearVocabularyEdit,
   initFromWord,
@@ -51,8 +51,9 @@ interface WordEditPanelProps {
   updating: boolean;
 }
 
-const EMPTY_FORM_VALUES: BaseWordFormValues = {
+const EMPTY_FORM_VALUES: VocabularyFormValues = {
   word: '',
+  part_of_speech: 'adverb',
   translation: '',
   definitions: [],
   etymology: '',
@@ -129,10 +130,9 @@ const getPronounTableTitle = (pronounType: PronounType | null, person: PronounPe
 
 export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, updating }) => {
   const dispatch = useDispatch();
-  const schema = useMemo(() => getFormSchemaForPartOfSpeech(word?.part_of_speech ?? 'noun'), [word?.part_of_speech]);
 
   const form = useForm<VocabularyFormValues>({
-    resolver: zodResolver(schema) as Resolver<VocabularyFormValues>,
+    resolver: zodResolver(VocabularyFormSchema) as Resolver<VocabularyFormValues>,
     defaultValues: word ? toFormDefaultValues(word) : (EMPTY_FORM_VALUES as VocabularyFormValues),
     mode: 'onSubmit',
   });
@@ -144,6 +144,10 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
   );
   const [aiFieldStatus, setAiFieldStatus] = useState<Map<string, 'filled' | 'missing'>>(new Map());
   const [tableErrors, setTableErrors] = useState<string[]>([]);
+  const [prevPronounSchemaType, setPrevPronounSchemaType] = useState<'personal' | 'adjective' | null>(null);
+
+  const wordRef = useRef(word);
+  wordRef.current = word;
 
   const declensionTable = useSelector((state: RootState) => selectDeclensionTable(state));
   const degreesTable = useSelector((state: RootState) => selectDegreesTable(state));
@@ -166,8 +170,44 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
     setEditingCellValue('');
     setTableErrors([]);
     setAiFieldStatus(new Map());
+    setPrevPronounSchemaType(null); // Reset so new word gets fresh schema detection
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [word?.id, dispatch]);
+
+  // Helper to determine which pronoun table schema is needed
+  const needsPersonalPronounSchema = (pronounType: PronounType | null, person: PronounPerson | null) =>
+    pronounType === 'personal' && (person === '1st' || person === '2nd');
+
+  // Watch for pronoun type/person changes and regenerate table if schema type changes
+  const currentPronounType = form.watch('pronoun_type') as PronounType | null;
+  const currentPronounPerson = form.watch('person') as PronounPerson | null;
+
+  useEffect(() => {
+    if (wordRef.current?.part_of_speech !== 'pronoun') {
+      setPrevPronounSchemaType(null);
+      return;
+    }
+
+    const currentSchemaType = needsPersonalPronounSchema(currentPronounType, currentPronounPerson)
+      ? 'personal'
+      : 'adjective';
+
+    // On first render for this word, just set the type without regenerating
+    if (prevPronounSchemaType === null) {
+      setPrevPronounSchemaType(currentSchemaType);
+      return;
+    }
+
+    // If schema type changed, regenerate the table with correct empty structure
+    if (prevPronounSchemaType !== currentSchemaType) {
+      console.log('[WordEditPanel] Pronoun schema type changed from', prevPronounSchemaType, 'to', currentSchemaType);
+      const newSchema =
+        currentSchemaType === 'personal' ? PersonalPronounDeclensionTableSchema : AdjectiveDeclensionTableSchema;
+      const emptyTable = buildEmptyFromSchema(newSchema);
+      dispatch(initFromWord({ ...wordRef.current, declension_table: emptyTable } as VocabularyWordWithId));
+      setPrevPronounSchemaType(currentSchemaType);
+    }
+  }, [currentPronounType, currentPronounPerson, prevPronounSchemaType, dispatch, word?.part_of_speech]);
 
   const handleCellDoubleClick = (rowIndex: number, cellKey: string, tableType: string, displayValue: string) => {
     const tableData =
@@ -279,8 +319,15 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
 
   const handleAIAutocomplete = (
     aiData: Partial<VocabularyWord>,
-    apiFieldStatus?: Record<string, 'filled' | 'missing'>
+    apiFieldStatus?: Record<string, 'filled' | 'missing'>,
+    requestWordId?: string
   ) => {
+    // Guard against stale AI responses
+    if (requestWordId && requestWordId !== word?.id) {
+      console.log('[WordEditPanel] Ignoring stale AI response for word:', requestWordId, 'current word:', word?.id);
+      return;
+    }
+
     console.log('[WordEditPanel] AI Autocomplete data received:', aiData);
     console.log('[WordEditPanel] Field status from API:', apiFieldStatus);
 
@@ -450,7 +497,10 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
       }
 
       if (currentPartOfSpeech === 'pronoun') {
-        const result = AdjectiveDeclensionTableSchema.safeParse(declensionTable);
+        const pronounType = form.getValues('pronoun_type') as PronounType | null;
+        const person = form.getValues('person') as PronounPerson | null;
+        const pronounSchema = getPronounTableSchema(pronounType, person);
+        const result = pronounSchema.safeParse(declensionTable);
         if (!result.success) {
           newTableErrors.push(result.error.issues[0]?.message ?? 'Invalid pronoun declension table');
         }
@@ -558,6 +608,7 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
               </div>
               <div className="flex items-center gap-2">
                 <AIAutocompleteButton
+                  wordId={word.id}
                   word={watchedWord || word.word}
                   partOfSpeech={word.part_of_speech}
                   existingData={form.getValues() as Partial<VocabularyWord>}

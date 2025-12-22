@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import type { ProgressionRules } from '@/src/types/exercises/base';
 
 interface ExerciseProgressionOptions {
@@ -14,6 +14,7 @@ interface ExerciseProgressionState {
 
 interface ExerciseProgressionActions {
   autoAdvanceIfEnabled: (afterAdvance: () => void) => void;
+  resetIndex: () => void;
 }
 
 export function useExerciseProgression({
@@ -22,22 +23,48 @@ export function useExerciseProgression({
   progressionRules,
 }: ExerciseProgressionOptions): ExerciseProgressionState & ExerciseProgressionActions {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearPendingTimer = useCallback(() => {
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    clearPendingTimer();
+    setCurrentIndex(0);
+  }, [totalItems, clearPendingTimer]);
+
+  useEffect(() => {
+    return () => {
+      clearPendingTimer();
+    };
+  }, [clearPendingTimer]);
 
   const isLastItem = currentIndex >= totalItems - 1;
 
   const nextItem = useCallback(() => {
-    if (currentIndex < totalItems - 1) {
-      setCurrentIndex(prev => prev + 1);
-    }
-  }, [currentIndex, totalItems]);
+    setCurrentIndex(prev => {
+      if (prev < totalItems - 1) {
+        return prev + 1;
+      }
+      return prev;
+    });
+  }, [totalItems]);
 
-  return {
-    currentIndex,
-    isLastItem,
-    autoAdvanceIfEnabled: (afterAdvance: () => void) => {
+  const resetIndex = useCallback(() => {
+    clearPendingTimer();
+    setCurrentIndex(0);
+  }, [clearPendingTimer]);
+
+  const autoAdvanceIfEnabled = useCallback(
+    (afterAdvance: () => void) => {
       if (progressionRules?.autoAdvance !== false) {
         const delay = itemProgressionDelay || 2000;
-        setTimeout(() => {
+        clearPendingTimer();
+        timerRef.current = setTimeout(() => {
           nextItem();
           afterAdvance();
         }, delay);
@@ -46,5 +73,13 @@ export function useExerciseProgression({
         afterAdvance();
       }
     },
+    [progressionRules?.autoAdvance, itemProgressionDelay, nextItem, clearPendingTimer]
+  );
+
+  return {
+    currentIndex,
+    isLastItem,
+    autoAdvanceIfEnabled,
+    resetIndex,
   };
 }

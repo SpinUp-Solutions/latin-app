@@ -22,84 +22,99 @@ type AdjectiveWordResponse = Extract<ExerciseWordResponse, { part_of_speech: 'ad
 type PronounWordResponse = Extract<ExerciseWordResponse, { part_of_speech: 'pronoun' }>;
 type AdverbWordResponse = Extract<ExerciseWordResponse, { part_of_speech: 'adverb' }>;
 
+function isVerb(word: ExerciseWordResponse): word is VerbWordResponse {
+  return word.part_of_speech === 'verb';
+}
+
+function isNoun(word: ExerciseWordResponse): word is NounWordResponse {
+  return word.part_of_speech === 'noun';
+}
+
+function isAdjective(word: ExerciseWordResponse): word is AdjectiveWordResponse {
+  return word.part_of_speech === 'adjective';
+}
+
+export function isPronoun(word: ExerciseWordResponse): word is PronounWordResponse {
+  return word.part_of_speech === 'pronoun';
+}
+
+function isAdverb(word: ExerciseWordResponse): word is AdverbWordResponse {
+  return word.part_of_speech === 'adverb';
+}
+
 export const extractStepValue = (word: ExerciseWordResponse, step: FormIdentificationStep): string => {
-  if (word.part_of_speech === 'verb') {
-    const verbWord = word as VerbWordResponse;
+  if (isVerb(word)) {
     switch (step) {
       case 'conjugation':
-        return verbWord.conjugation || '';
+        return word.conjugation || '';
       case 'tense':
-        return verbWord.form_path?.tense || '';
+        return word.form_path?.tense || '';
       case 'voice':
-        return verbWord.form_path?.voice || '';
+        return word.form_path?.voice || '';
       case 'mood':
-        return verbWord.form_path?.mood || '';
+        return word.form_path?.mood || '';
       case 'person':
-        return verbWord.form_path?.person || '';
+        return word.form_path?.person || '';
       case 'number':
-        return verbWord.form_path?.number || '';
+        return word.form_path?.number || '';
       default:
         return '';
     }
   }
 
-  if (word.part_of_speech === 'noun') {
-    const nounWord = word as NounWordResponse;
+  if (isNoun(word)) {
     switch (step) {
       case 'declension':
-        return nounWord.declension || '';
+        return word.declension || '';
       case 'case':
-        return nounWord.form_path?.case || '';
+        return word.form_path?.case || '';
       case 'number':
-        return nounWord.form_path?.number || '';
+        return word.form_path?.number || '';
       case 'gender':
-        return nounWord.gender || '';
+        return word.gender || '';
       default:
         return '';
     }
   }
 
-  if (word.part_of_speech === 'adjective') {
-    const adjWord = word as AdjectiveWordResponse;
+  if (isAdjective(word)) {
     switch (step) {
       case 'declension':
-        return adjWord.declension || '';
+        return word.declension || '';
       case 'degree':
-        return adjWord.form_path?.degree || '';
+        return word.form_path?.degree || '';
       case 'case':
-        return adjWord.form_path?.case || '';
+        return word.form_path?.case || '';
       case 'number':
-        return adjWord.form_path?.number || '';
+        return word.form_path?.number || '';
       case 'gender':
-        return adjWord.form_path?.gender || '';
+        return word.form_path?.gender || '';
       default:
         return '';
     }
   }
 
-  if (word.part_of_speech === 'pronoun') {
-    const pronounWord = word as PronounWordResponse;
+  if (isPronoun(word)) {
     switch (step) {
       case 'pronoun_type':
-        return pronounWord.pronoun_type || '';
+        return word.pronoun_type || '';
       case 'person':
-        return pronounWord.person || '';
+        return word.person || '';
       case 'case':
-        return pronounWord.form_path?.case || '';
+        return word.form_path?.case || '';
       case 'number':
-        return pronounWord.form_path?.number || '';
+        return word.form_path?.number || '';
       case 'gender':
-        return pronounWord.form_path?.gender || '';
+        return word.form_path?.gender || '';
       default:
         return '';
     }
   }
 
-  if (word.part_of_speech === 'adverb') {
-    const adverbWord = word as AdverbWordResponse;
+  if (isAdverb(word)) {
     switch (step) {
       case 'degree':
-        return adverbWord.form_path?.degree || '';
+        return word.form_path?.degree || '';
       default:
         return '';
     }
@@ -107,6 +122,22 @@ export const extractStepValue = (word: ExerciseWordResponse, step: FormIdentific
 
   return '';
 };
+
+export function enrichPathsWithSteps(
+  paths: Array<Record<string, string | undefined>>,
+  word: ExerciseWordResponse,
+  steps: FormIdentificationStep[]
+): Array<Record<string, string | undefined>> {
+  return paths.map(path => {
+    const enrichedPath: Record<string, string | undefined> = { ...path };
+    steps.forEach(step => {
+      if (!enrichedPath[step]) {
+        enrichedPath[step] = extractStepValue(word, step);
+      }
+    });
+    return enrichedPath;
+  });
+}
 
 export function extractStepValuesFromPaths<T extends { [key: string]: string | undefined }>(
   formPaths: T[],
@@ -173,10 +204,10 @@ export function formatPrimaryAnswersDisplay(
 }
 
 const createVariantMap = () => {
-  const variants: Record<string, string[]> = {};
+  const v: Record<string, string[]> = {};
 
-  CaseSchema.options.forEach(caseValue => {
-    const abbrevMap: Record<string, string> = {
+  CaseSchema.options.forEach(val => {
+    const abbr: Record<string, string> = {
       nominative: 'nom',
       genitive: 'gen',
       dative: 'dat',
@@ -185,97 +216,57 @@ const createVariantMap = () => {
       locative: 'loc',
       vocative: 'voc',
     };
-    const abbrev = abbrevMap[caseValue];
-    variants[caseValue] = abbrev ? [caseValue, `${abbrev}.`, abbrev] : [caseValue];
+    const a = abbr[val];
+    v[val] = a ? [val, `${a}.`, a] : [val];
   });
 
-  NumberSchema.options.forEach(numberValue => {
-    const abbrevMap: Record<string, string> = {
-      singular: 'sg',
-      plural: 'pl',
-    };
-    const abbrev = abbrevMap[numberValue];
-    variants[numberValue] = abbrev ? [numberValue, abbrev, numberValue.substring(0, 4)] : [numberValue];
+  NumberSchema.options.forEach(val => {
+    v[val] = val === 'singular' ? ['singular', 'sg', 'sing', 's'] : ['plural', 'pl', 'plur', 'p'];
   });
-
-  GrammaticalNumberSchema.options.forEach(numberValue => {
-    if (!variants[numberValue]) {
-      const abbrevMap: Record<string, string> = {
-        singular: 'sg',
-        plural: 'pl',
-      };
-      const abbrev = abbrevMap[numberValue];
-      variants[numberValue] = abbrev ? [numberValue, abbrev, numberValue.substring(0, 4)] : [numberValue];
+  GrammaticalNumberSchema.options.forEach(val => {
+    if (!v[val]) {
+      v[val] = val === 'singular' ? ['singular', 'sg', 'sing', 's'] : ['plural', 'pl', 'plur', 'p'];
     }
   });
 
-  VoiceSchema.options.forEach(voiceValue => {
-    const abbrevMap: Record<string, string> = {
-      active: 'act',
-      passive: 'pass',
+  GenderSchema.options.forEach(val => {
+    const map: Record<string, string[]> = {
+      masculine: ['masculine', 'masc.', 'masc', 'm'],
+      feminine: ['feminine', 'fem.', 'fem', 'f'],
+      neuter: ['neuter', 'neut.', 'neut', 'n'],
     };
-    const abbrev = abbrevMap[voiceValue];
-    variants[voiceValue] = abbrev ? [voiceValue, `${abbrev}.`, abbrev] : [voiceValue];
+    v[val] = map[val] || [val];
   });
 
-  PersonSchema.options.forEach(personValue => {
-    const displayMap: Record<string, string[]> = {
+  VoiceSchema.options.forEach(val => {
+    const map: Record<string, string[]> = {
+      active: ['active', 'act.', 'act'],
+      passive: ['passive', 'pass.', 'pass'],
+    };
+    v[val] = map[val] || [val];
+  });
+
+  PersonSchema.options.forEach(val => {
+    const map: Record<string, string[]> = {
       first: ['first', '1st', '1'],
       second: ['second', '2nd', '2'],
       third: ['third', '3rd', '3'],
     };
-    variants[personValue] = displayMap[personValue] || [personValue];
-    const withPerson = `${personValue} person`;
-    variants[withPerson] = displayMap[personValue]?.map(v => `${v} person`) || [withPerson];
+    v[val] = map[val] || [val];
+    v[`${val} person`] = map[val]?.map(x => `${x} person`) || [`${val} person`];
   });
 
-  GenderSchema.options.forEach(genderValue => {
-    const abbrevMap: Record<string, string> = {
-      masculine: 'm',
-      feminine: 'f',
-      neuter: 'n',
-    };
-    const fullAbbrevMap: Record<string, string> = {
-      masculine: 'masc',
-      feminine: 'fem',
-      neuter: 'neut',
-    };
-    const abbrev = abbrevMap[genderValue];
-    const fullAbbrev = fullAbbrevMap[genderValue];
-    variants[genderValue] = [genderValue, `${fullAbbrev}.`, fullAbbrev, abbrev];
-  });
-
-  DegreeSchema.options.forEach(degreeValue => {
-    const abbrevMap: Record<string, string> = {
+  DegreeSchema.options.forEach(val => {
+    const abbr: Record<string, string> = {
       positive: 'pos',
       comparative: 'comp',
       superlative: 'superl',
     };
-    const abbrev = abbrevMap[degreeValue];
-    variants[degreeValue] = abbrev ? [degreeValue, `${abbrev}.`, abbrev] : [degreeValue];
+    const a = abbr[val];
+    v[val] = a ? [val, `${a}.`, a] : [val];
   });
 
-  NounDeclensionSchema.options.forEach(declValue => {
-    const normalized = declValue.replace('-istem', '');
-    variants[declValue] = [declValue, normalized, `${normalized} declension`];
-    if (declValue.includes('-')) {
-      variants[declValue].push(declValue.replace('-istem', ' istem'));
-    }
-  });
-
-  AdjectiveDeclensionSchema.options.forEach(declValue => {
-    variants[declValue] = [declValue, declValue, `${declValue} declension`];
-  });
-
-  VerbConjugationSchema.options.forEach(conjValue => {
-    const normalized = conjValue.replace('io', '');
-    variants[conjValue] = [conjValue, normalized, `${normalized} conjugation`];
-    if (conjValue.includes('io')) {
-      variants[conjValue].push(`${normalized}io`, `${normalized}-io`);
-    }
-  });
-
-  const tenseVariants: Record<string, string[]> = {
+  const tenses: Record<string, string[]> = {
     present: ['present', 'pres.', 'pres'],
     imperfect: ['imperfect', 'imperf.', 'imperf'],
     future: ['future', 'fut.', 'fut'],
@@ -283,24 +274,23 @@ const createVariantMap = () => {
     pluperfect: ['pluperfect', 'pluperf.', 'pluperf'],
     future_perfect: ['future perfect', 'fut. perf.', 'fut perf'],
   };
-  Object.entries(tenseVariants).forEach(([key, value]) => {
-    variants[key] = value;
+  Object.entries(tenses).forEach(([k, arr]) => {
+    v[k] = arr;
   });
 
-  const moodVariants: Record<string, string[]> = {
+  const moods: Record<string, string[]> = {
     indicative: ['indicative', 'ind.', 'ind'],
     subjunctive: ['subjunctive', 'subj.', 'subj'],
     imperative: ['imperative', 'imp.', 'imp'],
     infinitive: ['infinitive', 'inf.', 'inf'],
     participle: ['participle', 'part.', 'part'],
   };
-  Object.entries(moodVariants).forEach(([key, value]) => {
-    variants[key] = value;
+  Object.entries(moods).forEach(([k, arr]) => {
+    v[k] = arr;
   });
 
-  // Pronoun type variants
-  PronounTypeSchema.options.forEach(pronounType => {
-    const abbrevMap: Record<string, string> = {
+  PronounTypeSchema.options.forEach(val => {
+    const abbr: Record<string, string> = {
       personal: 'pers',
       reflexive: 'refl',
       demonstrative: 'dem',
@@ -310,21 +300,35 @@ const createVariantMap = () => {
       indefinite: 'indef',
       possessive: 'poss',
     };
-    const abbrev = abbrevMap[pronounType];
-    variants[pronounType] = abbrev ? [pronounType, `${abbrev}.`, abbrev] : [pronounType];
+    const a = abbr[val];
+    v[val] = a ? [val, `${a}.`, a] : [val];
   });
 
-  // Pronoun person variants (1st, 2nd, 3rd)
-  PronounPersonSchema.options.forEach(personValue => {
-    const displayMap: Record<string, string[]> = {
+  PronounPersonSchema.options.forEach(val => {
+    const map: Record<string, string[]> = {
       '1st': ['1st', 'first', '1', '1st person', 'first person'],
       '2nd': ['2nd', 'second', '2', '2nd person', 'second person'],
       '3rd': ['3rd', 'third', '3', '3rd person', 'third person'],
     };
-    variants[personValue] = displayMap[personValue] || [personValue];
+    v[val] = map[val] || [val];
   });
 
-  return variants;
+  NounDeclensionSchema.options.forEach(val => {
+    const n = val.replace('-istem', '');
+    v[val] = [`${n} declension`, val, n];
+    if (val.includes('-')) v[val].push(val.replace('-istem', ' istem'));
+  });
+
+  AdjectiveDeclensionSchema.options.forEach(val => {
+    v[val] = [`${val} declension`, val];
+  });
+
+  VerbConjugationSchema.options.forEach(val => {
+    const n = val.replace('io', '');
+    v[val] = val.includes('io') ? [`${n} conjugation`, val, `${n}io`, `${n}-io`, n] : [`${n} conjugation`, val, n];
+  });
+
+  return v;
 };
 
 const ANSWER_VARIANTS = createVariantMap();
@@ -332,6 +336,12 @@ const ANSWER_VARIANTS = createVariantMap();
 export const getAcceptedAnswersForStep = (correctAnswer: string): string[] => {
   const normalized = correctAnswer.toLowerCase().trim();
   return ANSWER_VARIANTS[normalized] || [correctAnswer];
+};
+
+export const getDisplayForm = (value: string): string => {
+  const normalized = value.toLowerCase().trim();
+  const variants = ANSWER_VARIANTS[normalized];
+  return variants ? variants[variants.length - 1] : value;
 };
 
 export const getHintForStep = (word: ExerciseWordResponse, step: FormIdentificationStep): string | undefined => {
@@ -355,3 +365,36 @@ export const getHintForStep = (word: ExerciseWordResponse, step: FormIdentificat
 
   return stepGuideMap[step];
 };
+
+export function hasValidFormData(word: ExerciseWordResponse, steps: FormIdentificationStep[]): boolean {
+  const primaryPaths = word.primary_form_paths;
+  const formPath = word.form_path;
+
+  const hasFormPaths = formPath !== null || (primaryPaths !== undefined && primaryPaths.length > 0);
+
+  if (!hasFormPaths) {
+    return false;
+  }
+
+  if (isPronoun(word)) {
+    if (!word.pronoun_type) {
+      return false;
+    }
+
+    if (steps.includes('person') && word.pronoun_type === 'personal' && !word.person) {
+      return false;
+    }
+  }
+
+  const formPaths = primaryPaths || (formPath ? [formPath] : []);
+
+  return formPaths.some(path => {
+    return steps.every(step => {
+      const pathRecord = path as Record<string, string | undefined>;
+      if (pathRecord[step]) return true;
+
+      const wordValue = extractStepValue(word, step);
+      return wordValue !== '';
+    });
+  });
+}

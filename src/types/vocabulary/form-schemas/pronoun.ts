@@ -23,10 +23,10 @@ export const PronounFormSchema = BasePronounFormSchema.refine(
     if (data.pronoun_type === 'personal') {
       return data.person !== null;
     }
-    return true;
+    return data.person === null;
   },
   {
-    message: 'Person is required for personal pronouns',
+    message: 'Person is required for personal pronouns and must be null for other pronoun types',
     path: ['person'],
   }
 );

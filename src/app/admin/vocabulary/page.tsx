@@ -113,12 +113,15 @@ function AdminVocabularyPage() {
     try {
       const cleanedUpdates = Object.fromEntries(
         Object.entries(updates).filter(([, value]) => {
-          if (value === undefined || value === null) return false;
-          if (typeof value === 'string' && value.trim() === '') return false;
-          if (Array.isArray(value) && value.length === 0) return false;
+          if (value === undefined) return false;
           return true;
         })
       );
+
+      delete (cleanedUpdates as Record<string, unknown>).createdAt;
+      delete (cleanedUpdates as Record<string, unknown>).updatedAt;
+      delete (cleanedUpdates as Record<string, unknown>).sort_key;
+      delete (cleanedUpdates as Record<string, unknown>).random_index;
 
       console.debug('VocabularyPage cleaned updates', cleanedUpdates);
       await updateWord({ wordId: selectedWordId, updates: cleanedUpdates, collection: TARGET_COLLECTION }).unwrap();
@@ -293,7 +296,12 @@ function AdminVocabularyPage() {
         </div>
 
         <div className="overflow-hidden">
-          <WordEditPanel word={selectedWord} onSave={handleSaveWord} updating={updating || creating} />
+          <WordEditPanel
+            key={selectedWord?.id ?? 'no-selection'}
+            word={selectedWord}
+            onSave={handleSaveWord}
+            updating={updating || creating}
+          />
         </div>
       </main>
     </div>

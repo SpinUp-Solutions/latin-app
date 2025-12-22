@@ -1,4 +1,5 @@
-import type { BaseExercise, GeneratorConfigBase, FormIdentificationPosConfigs } from './base';
+import type { BaseExercise, GeneratorConfigBase } from './base';
+import type { ParadigmConfigs } from './paradigm';
 
 export interface GeneratedFormIdentificationExercise extends BaseExercise {
   type: 'generated-form-identification';
@@ -6,6 +7,6 @@ export interface GeneratedFormIdentificationExercise extends BaseExercise {
     mode: 'step-by-step' | 'single-field';
     requireAllPrimaryAnswers?: boolean;
     generatorConfig: GeneratorConfigBase;
-    posConfigs: FormIdentificationPosConfigs;
+    paradigmConfigs: ParadigmConfigs;
   };
 }
