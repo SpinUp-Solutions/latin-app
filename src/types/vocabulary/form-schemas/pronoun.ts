@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { PronounSchema } from '@/shared/types/vocabulary/schemas/pronoun';
+import { BasePronounSchema } from '@/shared/types/vocabulary/schemas/pronoun';
 
-export const PronounFormSchema = PronounSchema.omit({
+const BasePronounFormSchema = BasePronounSchema.omit({
   part_of_speech: true,
   word: true,
   translation: true,
@@ -10,9 +10,25 @@ export const PronounFormSchema = PronounSchema.omit({
   pronunciation: true,
   type: true,
   alternate_form: true,
+  dictionary_entry: true,
+  sort_key: true,
+  random_index: true,
   createdAt: true,
   updatedAt: true,
   declension_table: true,
 });
+
+export const PronounFormSchema = BasePronounFormSchema.refine(
+  data => {
+    if (data.pronoun_type === 'personal') {
+      return data.person !== null;
+    }
+    return data.person === null;
+  },
+  {
+    message: 'Person is required for personal pronouns and must be null for other pronoun types',
+    path: ['person'],
+  }
+);
 
 export type PronounFormValues = z.infer<typeof PronounFormSchema>;

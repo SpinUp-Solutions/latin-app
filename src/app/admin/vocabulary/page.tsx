@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSelector, useDispatch } from 'react-redux';
 import { Button } from '@/src/components/ui/button';
-import { ArrowLeft, BookOpen, Download, PlayCircle, Upload } from 'lucide-react';
+import { ArrowLeft, BookOpen, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary/index';
 import {
@@ -42,7 +42,6 @@ function AdminVocabularyPage() {
   const [selectedWordId, setSelectedWordId] = useState<string | null>(null);
   const [creatingWord, setCreatingWord] = useState<VocabularyWordWithId | null>(null);
   const [deletingWordId, setDeletingWordId] = useState<string | null>(null);
-  const [migrating, setMigrating] = useState(false);
   const TARGET_COLLECTION = VOCABULARY_WORDS_COLLECTION;
 
   const queryArgs = {
@@ -114,12 +113,15 @@ function AdminVocabularyPage() {
     try {
       const cleanedUpdates = Object.fromEntries(
         Object.entries(updates).filter(([, value]) => {
-          if (value === undefined || value === null) return false;
-          if (typeof value === 'string' && value.trim() === '') return false;
-          if (Array.isArray(value) && value.length === 0) return false;
+          if (value === undefined) return false;
           return true;
         })
       );
+
+      delete (cleanedUpdates as Record<string, unknown>).createdAt;
+      delete (cleanedUpdates as Record<string, unknown>).updatedAt;
+      delete (cleanedUpdates as Record<string, unknown>).sort_key;
+      delete (cleanedUpdates as Record<string, unknown>).random_index;
 
       console.debug('VocabularyPage cleaned updates', cleanedUpdates);
       await updateWord({ wordId: selectedWordId, updates: cleanedUpdates, collection: TARGET_COLLECTION }).unwrap();
@@ -220,73 +222,8 @@ function AdminVocabularyPage() {
     toast.success('Backup download started');
   };
 
-  const handleMigrationDryRun = async () => {
-    setMigrating(true);
-    try {
-      const response = await fetch('/api/admin/words/migrate?dryRun=true', {
-        method: 'POST',
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        const { data } = result;
-        toast.success(
-          `Dry Run Complete: ${data.successfulMigrations} words ready to migrate. Check console for details.`
-        );
-        console.log('Migration Dry Run Summary:', data);
-        console.log('Sample migrations:', data.sampleMigrations);
-        if (data.errors > 0) {
-          console.error('Migration errors:', data.errorDetails);
-          toast.warning(`${data.errors} errors found. Check console for details.`);
-        }
-      } else {
-        toast.error(`Dry run failed: ${result.error}`);
-      }
-    } catch (error) {
-      console.error('Dry run error:', error);
-      toast.error('Failed to run migration dry run');
-    } finally {
-      setMigrating(false);
-    }
-  };
-
-  const handleMigrationLive = async () => {
-    const confirmed = window.confirm(
-      'Are you sure you want to migrate all words to vocabulary_words_v5? This will create a new collection with the migrated data.'
-    );
-
-    if (!confirmed) return;
-
-    setMigrating(true);
-    try {
-      const response = await fetch('/api/admin/words/migrate?dryRun=false', {
-        method: 'POST',
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        const { data } = result;
-        toast.success(`Migration Complete: ${data.successfulMigrations} words migrated to vocabulary_words_v5`);
-        console.log('Migration Summary:', data);
-        if (data.errors > 0) {
-          console.error('Migration errors:', data.errorDetails);
-          toast.warning(`${data.errors} errors occurred. Check console for details.`);
-        }
-      } else {
-        toast.error(`Migration failed: ${result.error}`);
-      }
-    } catch (error) {
-      console.error('Migration error:', error);
-      toast.error('Failed to run migration');
-    } finally {
-      setMigrating(false);
-    }
-  };
-
   return (
-    <div className="h-screen flex flex-col bg-roman-marble">
+    <div className="h-screen flex flex-col overflow-hidden bg-roman-marble">
       <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-4">
           <Button variant="ghost" onClick={() => router.push('/admin')}>
@@ -327,14 +264,6 @@ function AdminVocabularyPage() {
             <Download className="h-4 w-4 mr-2" />
             Backup
           </Button>
-          <Button variant="outline" onClick={handleMigrationDryRun} disabled={migrating}>
-            <PlayCircle className="h-4 w-4 mr-2" />
-            {migrating ? 'Running...' : 'Dry Run'}
-          </Button>
-          <Button variant="default" onClick={handleMigrationLive} disabled={migrating}>
-            <Upload className="h-4 w-4 mr-2" />
-            {migrating ? 'Migrating...' : 'Migrate to v5'}
-          </Button>
         </div>
       </header>
 
@@ -351,7 +280,7 @@ function AdminVocabularyPage() {
             />
           </div>
 
-          <div className="flex-1 overflow-y-auto px-4 pb-4">
+          <div className="flex-1 overflow-y-auto overscroll-contain px-4 pb-4">
             <VocabularyList
               words={words}
               loading={isLoading}
@@ -366,7 +295,14 @@ function AdminVocabularyPage() {
           </div>
         </div>
 
-        <WordEditPanel word={selectedWord} onSave={handleSaveWord} updating={updating || creating} />
+        <div className="overflow-hidden">
+          <WordEditPanel
+            key={selectedWord?.id ?? 'no-selection'}
+            word={selectedWord}
+            onSave={handleSaveWord}
+            updating={updating || creating}
+          />
+        </div>
       </main>
     </div>
   );

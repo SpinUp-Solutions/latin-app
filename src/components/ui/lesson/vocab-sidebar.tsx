@@ -2,10 +2,9 @@
 
 import React, { useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSelector } from 'react-redux';
 import { useGetStudentLessonsQuery } from '@/src/store/api/lessonApi';
 import { BookOpen, CheckCircle, Play } from 'lucide-react';
-import type { RootState } from '@/src/store';
+import { useAuth } from '@/src/hooks/useAuth';
 
 interface VocabSidebarProps {
   currentLessonId: string;
@@ -39,7 +38,7 @@ const vocabStatusConfig: Record<
 
 export default function VocabSidebar({ currentLessonId }: VocabSidebarProps) {
   const router = useRouter();
-  const { user } = useSelector((state: RootState) => state.auth);
+  const { user } = useAuth();
 
   const { data: studentLessons, isLoading } = useGetStudentLessonsQuery(undefined, {
     skip: !user?.uid,

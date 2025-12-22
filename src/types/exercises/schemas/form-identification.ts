@@ -11,6 +11,7 @@ export const FormIdentificationStepSchema = z.enum([
   'case',
   'gender',
   'degree',
+  'pronoun_type',
 ]);
 
 export type FormIdentificationStep = z.infer<typeof FormIdentificationStepSchema>;
@@ -20,6 +21,7 @@ export const FormIdentificationItemSchema = z.object({
   wordId: z.string(),
   word: z.string(),
   root_word: z.string(),
+  dictionary_entry: z.string().nullable(),
   selected_form: z.string(),
   step: FormIdentificationStepSchema,
   correctAnswer: z.string(),
@@ -36,6 +38,7 @@ export const SingleFieldFormIdentificationItemSchema = z.object({
   wordId: z.string(),
   word: z.string(),
   root_word: z.string(),
+  dictionary_entry: z.string().nullable(),
   selected_form: z.string(),
   steps: z.array(FormIdentificationStepSchema),
   correctAnswerDisplay: z.string(),
@@ -51,6 +54,7 @@ export const MultiAnswerFormIdentificationItemSchema = z.object({
   wordId: z.string(),
   word: z.string(),
   root_word: z.string(),
+  dictionary_entry: z.string().nullable(),
   selected_form: z.string(),
   step: FormIdentificationStepSchema,
   steps: z.array(FormIdentificationStepSchema),

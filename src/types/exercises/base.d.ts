@@ -84,6 +84,8 @@ export interface GeneratorFilters {
   isDeponent?: string;
   nounDeclension?: string;
   adjectiveDeclension?: string;
+  pronounType?: string;
+  pronounPerson?: string;
   search?: string;
 }
 
@@ -97,6 +99,7 @@ export interface GeneratorConfigBase {
   wordSource: 'filters' | 'pool';
   poolId?: string | null;
   count: number | 'all';
+  filters?: GeneratorFilters;
 }
 
 export interface PosGeneratorConfig {

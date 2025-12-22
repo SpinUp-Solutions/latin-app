@@ -3,7 +3,7 @@ import { Card, CardContent } from '@/src/components/ui/card';
 import { Button } from '@/src/components/ui/button';
 import { PosConfigTabs } from './PosConfigTabs';
 import { FormSelectionTable } from '../vocabulary/FormSelectionTable';
-import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
+import type { PartOfSpeech, PronounType, PronounPerson } from '@/shared/types/vocabulary/schemas/enums';
 import type { FormIdentificationPosConfig, PosGeneratorConfig } from '@/src/types/exercises/base';
 import type { FormIdentificationStep } from '@/src/types/exercises/schemas/form-identification';
 import { deriveTableTypeFromPOS } from '@/src/utils/generated/tableType';
@@ -88,7 +88,9 @@ export const MultiPosConfigSection: React.FC<MultiPosConfigSectionProps> = ({
   );
 
   const currentConfig = activePOS ? posConfigs[activePOS] : undefined;
-  const tableType = activePOS ? deriveTableTypeFromPOS(activePOS) : undefined;
+  const pronounType = currentConfig?.filters?.pronounType as PronounType | 'all' | undefined;
+  const pronounPerson = currentConfig?.filters?.pronounPerson as PronounPerson | 'all' | undefined;
+  const tableType = activePOS ? deriveTableTypeFromPOS(activePOS, pronounType, pronounPerson) : undefined;
 
   const { handleToggleCell, handleTogglePaths, handleSelectAll, handleClearSelection } = useFormSelectionControls(
     activePOS,
@@ -97,7 +99,9 @@ export const MultiPosConfigSection: React.FC<MultiPosConfigSectionProps> = ({
       if (activePOS) {
         onUpdatePosConfig(activePOS, { formSelection: formSelectionValue });
       }
-    }
+    },
+    pronounType,
+    pronounPerson
   );
 
   const handleStepToggle = useCallback(
@@ -209,6 +213,8 @@ export const MultiPosConfigSection: React.FC<MultiPosConfigSectionProps> = ({
                     <label className="block text-sm font-medium mb-3">Form Selection</label>
                     <FormSelectionTable
                       partOfSpeech={activePOS}
+                      pronounType={pronounType}
+                      pronounPerson={pronounPerson}
                       selectedCellPaths={currentConfig.formSelection?.selectedCellPaths || []}
                       onToggleCell={handleToggleCell}
                       onTogglePaths={handleTogglePaths}

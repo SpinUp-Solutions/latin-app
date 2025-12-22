@@ -96,6 +96,8 @@ export function useGeneratedExerciseEditor<T extends GeneratedExercise>(
         isDeponent: 'both',
         nounDeclension: 'all',
         adjectiveDeclension: 'all',
+        pronounType: 'all',
+        pronounPerson: 'all',
       };
     }
     const posConfig = editingContent.data.posConfigs?.[activePOS];
@@ -331,7 +333,9 @@ export function useGeneratedExerciseEditor<T extends GeneratedExercise>(
       handleUpdatePosConfig(activePOS, {
         formSelection: formSelectionValue,
       });
-    }
+    },
+    derivedFilters.pronounType,
+    derivedFilters.pronounPerson
   );
 
   return {

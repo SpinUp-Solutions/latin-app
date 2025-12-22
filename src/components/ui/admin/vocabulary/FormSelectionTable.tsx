@@ -2,12 +2,13 @@ import React, { useMemo } from 'react';
 import { Card, CardHeader, CardContent } from '@/src/components/ui/card';
 import { Button } from '@/src/components/ui/button';
 import { Badge } from '@/src/components/ui/badge';
-import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
+import type { PartOfSpeech, PronounType, PronounPerson } from '@/shared/types/vocabulary/schemas/enums';
 import type { TableGrid, NestedTableGrid } from '@/src/types/schema-introspection';
 import { ConjugationTableSchema } from '@/shared/types/vocabulary/schemas/verb-conjugation';
 import {
   DeclensionTableSchema,
   AdjectiveDeclensionTableSchema,
+  PersonalPronounDeclensionTableSchema,
   DegreesTableSchema,
 } from '@/shared/types/vocabulary/schemas';
 import { introspectSchema } from '@/src/utils/schema-introspector';
@@ -16,9 +17,12 @@ import { buildEmptyFromSchema } from '@/src/utils/schema-defaults';
 import { SelectableGridTable } from './tables/SelectableGridTable';
 import { SelectableNestedGridTable } from './tables/SelectableNestedGridTable';
 import { getAllPathsFromRow, getAllPathsFromColumn } from '@/src/utils/selection-helpers';
+import { shouldUsePersonalPronounSchema } from '@/src/utils/generated/tableType';
 
 interface FormSelectionTableProps {
   partOfSpeech: PartOfSpeech | 'all';
+  pronounType?: PronounType | 'all';
+  pronounPerson?: PronounPerson | 'all';
   selectedCellPaths: string[];
   onToggleCell: (path: string) => void;
   onSelectAll: () => void;
@@ -32,6 +36,8 @@ function isNestedGrid(grid: TableGrid | NestedTableGrid): grid is NestedTableGri
 
 export const FormSelectionTable: React.FC<FormSelectionTableProps> = ({
   partOfSpeech,
+  pronounType,
+  pronounPerson,
   selectedCellPaths,
   onToggleCell,
   onSelectAll,
@@ -48,8 +54,11 @@ export const FormSelectionTable: React.FC<FormSelectionTableProps> = ({
       const schemaNode = introspectSchema(DeclensionTableSchema);
       return buildTableGrid(schemaNode, emptyData);
     } else if (partOfSpeech === 'pronoun') {
-      const emptyData = buildEmptyFromSchema(AdjectiveDeclensionTableSchema);
-      const schemaNode = introspectSchema(AdjectiveDeclensionTableSchema);
+      const schema = shouldUsePersonalPronounSchema(pronounType, pronounPerson)
+        ? PersonalPronounDeclensionTableSchema
+        : AdjectiveDeclensionTableSchema;
+      const emptyData = buildEmptyFromSchema(schema);
+      const schemaNode = introspectSchema(schema);
       return buildTableGrid(schemaNode, emptyData);
     } else if (partOfSpeech === 'adjective') {
       const emptyData = buildEmptyFromSchema(DegreesTableSchema);
@@ -57,7 +66,7 @@ export const FormSelectionTable: React.FC<FormSelectionTableProps> = ({
       return buildTableGrid(schemaNode, emptyData);
     }
     return null;
-  }, [partOfSpeech]);
+  }, [partOfSpeech, pronounType, pronounPerson]);
 
   if (!gridData || partOfSpeech === 'all') {
     return null;

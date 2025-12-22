@@ -4,14 +4,13 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { useSelector } from 'react-redux';
 import { auth } from '@/src/services/firebase';
 import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
-import { RootState } from '@/src/store';
+import { useAuth } from '@/src/hooks/useAuth';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -19,17 +18,17 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [formLoading, setFormLoading] = useState(false);
 
-  const { user, loading: authLoading } = useSelector((state: RootState) => state.auth);
+  const { user, loading: authLoading, isAdmin } = useAuth();
 
   useEffect(() => {
     if (user && !authLoading) {
-      if (user.role === 'admin') {
+      if (isAdmin) {
         router.replace('/admin');
       } else {
         router.replace('/dashboard');
       }
     }
-  }, [user, authLoading, router]);
+  }, [user, authLoading, isAdmin, router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

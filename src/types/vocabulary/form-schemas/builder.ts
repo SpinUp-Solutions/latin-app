@@ -6,7 +6,7 @@ import { AdjectiveFormSchema, AdjectiveFormValues } from './adjective';
 import { VerbFormSchema, VerbFormValues } from './verb';
 import { PrepositionFormSchema, PrepositionFormValues } from './preposition';
 import { VerbConjugationSchema } from '@/shared/types/vocabulary/schemas/enums';
-import type { z } from 'zod';
+import { z } from 'zod';
 
 type SpecificSchema =
   | typeof NounFormSchema
@@ -32,6 +32,32 @@ export const getFormSchemaForPartOfSpeech = (partOfSpeech: VocabularyWord['part_
   return BaseWordFormSchema.merge(specific);
 };
 
+const nounBranchSchema = BaseWordFormSchema.extend({ part_of_speech: z.literal('noun') }).merge(NounFormSchema);
+const pronounBranchSchema = BaseWordFormSchema.extend({ part_of_speech: z.literal('pronoun') }).merge(
+  PronounFormSchema
+);
+const adjectiveBranchSchema = BaseWordFormSchema.extend({ part_of_speech: z.literal('adjective') }).merge(
+  AdjectiveFormSchema
+);
+const verbBranchSchema = BaseWordFormSchema.extend({ part_of_speech: z.literal('verb') }).merge(VerbFormSchema);
+const adverbBranchSchema = BaseWordFormSchema.extend({ part_of_speech: z.literal('adverb') });
+const prepositionBranchSchema = BaseWordFormSchema.extend({ part_of_speech: z.literal('preposition') }).merge(
+  PrepositionFormSchema
+);
+const conjunctionBranchSchema = BaseWordFormSchema.extend({ part_of_speech: z.literal('conjunction') });
+const interjectionBranchSchema = BaseWordFormSchema.extend({ part_of_speech: z.literal('interjection') });
+
+export const VocabularyFormSchema = z.discriminatedUnion('part_of_speech', [
+  nounBranchSchema,
+  pronounBranchSchema,
+  adjectiveBranchSchema,
+  verbBranchSchema,
+  adverbBranchSchema,
+  prepositionBranchSchema,
+  conjunctionBranchSchema,
+  interjectionBranchSchema,
+]);
+
 const emptyWordForm = { full_form: '', shortened_form: '' } as const;
 
 type VerbConjugationValue = z.infer<typeof VerbConjugationSchema>;
@@ -47,13 +73,7 @@ const normalizeConjugation = (value: unknown): VerbConjugationValue | null => {
   return match ?? null;
 };
 
-export type VocabularyFormValues =
-  | (BaseWordFormValues & NounFormValues)
-  | (BaseWordFormValues & PronounFormValues)
-  | (BaseWordFormValues & AdjectiveFormValues)
-  | (BaseWordFormValues & VerbFormValues)
-  | (BaseWordFormValues & PrepositionFormValues)
-  | BaseWordFormValues;
+export type VocabularyFormValues = z.infer<typeof VocabularyFormSchema>;
 
 export const toFormDefaultValues = (word: VocabularyWordWithId): VocabularyFormValues => {
   const base: BaseWordFormValues = {
@@ -72,6 +92,7 @@ export const toFormDefaultValues = (word: VocabularyWordWithId): VocabularyFormV
   if (word.part_of_speech === 'noun') {
     return {
       ...base,
+      part_of_speech: 'noun',
       gender: word.gender ?? null,
       declension: word.declension ?? null,
       nominative_singular: word.nominative_singular ?? { ...emptyWordForm },
@@ -82,13 +103,16 @@ export const toFormDefaultValues = (word: VocabularyWordWithId): VocabularyFormV
   if (word.part_of_speech === 'pronoun') {
     return {
       ...base,
+      part_of_speech: 'pronoun',
       pronoun_type: word.pronoun_type ?? null,
+      person: word.person ?? null,
     };
   }
 
   if (word.part_of_speech === 'adjective') {
     return {
       ...base,
+      part_of_speech: 'adjective',
       declension: word.declension ?? null,
     };
   }
@@ -97,6 +121,7 @@ export const toFormDefaultValues = (word: VocabularyWordWithId): VocabularyFormV
     const conjugationValue = normalizeConjugation(word.conjugation);
     return {
       ...base,
+      part_of_speech: 'verb',
       conjugation: conjugationValue,
       is_deponent: word.is_deponent ?? null,
       principal_parts: word.principal_parts ?? [],
@@ -106,11 +131,12 @@ export const toFormDefaultValues = (word: VocabularyWordWithId): VocabularyFormV
   if (word.part_of_speech === 'preposition') {
     return {
       ...base,
+      part_of_speech: 'preposition',
       case: word.case,
     };
   }
 
-  return base;
+  return { ...base, part_of_speech: word.part_of_speech };
 };
 
 const toNullableString = (value: string | null | undefined) => {
@@ -132,6 +158,7 @@ export const applyFormValuesToWord = (
     pronunciation: toNullableString(values.pronunciation),
     type: values.type,
     alternate_form: toNullableString(values.alternate_form),
+    dictionary_entry: toNullableString(values.dictionary_entry),
   } as VocabularyWordWithId;
 
   if (word.part_of_speech === 'noun') {
@@ -151,6 +178,7 @@ export const applyFormValuesToWord = (
     return {
       ...baseApplied,
       pronoun_type: pronounValues.pronoun_type ?? word.pronoun_type,
+      person: pronounValues.person ?? word.person,
       declension_table: word.declension_table,
     } as VocabularyWordWithId;
   }

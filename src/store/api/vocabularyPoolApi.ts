@@ -5,9 +5,17 @@ import { createAuthenticatedBaseQuery } from './baseQuery';
 import { buildAdvancedFilterParams, POOL_WORD_FIELDS } from '@/src/utils/wordFilters';
 import type { PoolFilters } from '@/src/types/pool-filters';
 import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
+import type { FormParadigm } from '@/src/types/exercises/paradigm';
 
 interface POSSummaryData {
   summary: Record<PartOfSpeech, number>;
+  totalWords: number;
+  poolId: string;
+}
+
+interface ParadigmSummaryData {
+  paradigmSummary: Partial<Record<FormParadigm, number>>;
+  posSummary: Partial<Record<PartOfSpeech, number>>;
   totalWords: number;
   poolId: string;
 }
@@ -71,6 +79,12 @@ export const vocabularyPoolApi = createApi({
       providesTags: (result, error, poolId) => [{ type: 'Pool', id: `${poolId}-pos-summary` }],
     }),
 
+    getPoolParadigmSummary: builder.query<ParadigmSummaryData, string>({
+      query: poolId => `/admin/vocabulary-pools/${poolId}/paradigm-summary`,
+      transformResponse: (response: { success: boolean; data: ParadigmSummaryData }) => response.data,
+      providesTags: (result, error, poolId) => [{ type: 'Pool', id: `${poolId}-paradigm-summary` }],
+    }),
+
     createPool: builder.mutation<VocabularyPool, CreatePoolRequest>({
       query: poolData => ({
         url: '/admin/vocabulary-pools',
@@ -114,6 +128,7 @@ export const vocabularyPoolApi = createApi({
       transformResponse: (response: { success: boolean; data: { pool: VocabularyPool } }) => response.data,
       invalidatesTags: (result, error, { poolId }) => [
         { type: 'Pool', id: poolId },
+        { type: 'Pool', id: `${poolId}-paradigm-summary` },
         { type: 'AvailableWords', id: 'LIST' },
       ],
     }),
@@ -127,6 +142,7 @@ export const vocabularyPoolApi = createApi({
       transformResponse: (response: { success: boolean; data: { pool: VocabularyPool } }) => response.data,
       invalidatesTags: (result, error, { poolId }) => [
         { type: 'Pool', id: poolId },
+        { type: 'Pool', id: `${poolId}-paradigm-summary` },
         { type: 'AvailableWords', id: 'LIST' },
       ],
     }),
@@ -183,6 +199,7 @@ export const {
   useGetPoolsQuery,
   useGetPoolQuery,
   useGetPoolPOSSummaryQuery,
+  useGetPoolParadigmSummaryQuery,
   useCreatePoolMutation,
   useUpdatePoolMutation,
   useDeletePoolMutation,

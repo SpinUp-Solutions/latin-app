@@ -5,18 +5,19 @@ import { ConjugationTableSchema } from '@/shared/types/vocabulary/schemas/verb-c
 import {
   DeclensionTableSchema,
   AdjectiveDeclensionTableSchema,
+  PersonalPronounDeclensionTableSchema,
   DegreesTableSchema,
 } from '@/shared/types/vocabulary/schemas';
 import { introspectSchema } from '@/src/utils/schema-introspector';
 import { buildTableGrid } from '@/src/utils/table-builder';
 import { buildEmptyFromSchema } from '@/src/utils/schema-defaults';
 import { getAllPathsFromGrid, getAllPathsFromNestedGrid } from '@/src/utils/selection-helpers';
-import { deriveTableTypeFromPOS } from '@/src/utils/generated/tableType';
+import { deriveTableTypeFromPOS, shouldUsePersonalPronounSchema } from '@/src/utils/generated/tableType';
 
 interface FormSelectionHelpers {
   toggleCell: (path: string, currentPaths: string[]) => string[];
   togglePaths: (paths: string[], currentPaths: string[]) => string[];
-  getAllPaths: (partOfSpeech: string) => string[];
+  getAllPaths: (partOfSpeech: string, pronounType?: string, pronounPerson?: string) => string[];
 }
 
 export const useFormSelection = (): FormSelectionHelpers => {
@@ -34,7 +35,7 @@ export const useFormSelection = (): FormSelectionHelpers => {
       : [...currentPaths, ...paths.filter(p => !selectedSet.has(p))];
   }, []);
 
-  const getAllPaths = useCallback((partOfSpeech: string): string[] => {
+  const getAllPaths = useCallback((partOfSpeech: string, pronounType?: string, pronounPerson?: string): string[] => {
     if (partOfSpeech === 'verb') {
       const emptyData = buildEmptyFromSchema(ConjugationTableSchema);
       const schemaNode = introspectSchema(ConjugationTableSchema);
@@ -46,8 +47,11 @@ export const useFormSelection = (): FormSelectionHelpers => {
       const grid = buildTableGrid(schemaNode, emptyData);
       return getAllPathsFromGrid(grid as TableGrid);
     } else if (partOfSpeech === 'pronoun') {
-      const emptyData = buildEmptyFromSchema(AdjectiveDeclensionTableSchema);
-      const schemaNode = introspectSchema(AdjectiveDeclensionTableSchema);
+      const schema = shouldUsePersonalPronounSchema(pronounType, pronounPerson)
+        ? PersonalPronounDeclensionTableSchema
+        : AdjectiveDeclensionTableSchema;
+      const emptyData = buildEmptyFromSchema(schema);
+      const schemaNode = introspectSchema(schema);
       const grid = buildTableGrid(schemaNode, emptyData);
       return getAllPathsFromGrid(grid as TableGrid);
     } else if (partOfSpeech === 'adjective') {
@@ -69,7 +73,9 @@ export const useFormSelection = (): FormSelectionHelpers => {
 export const useFormSelectionControls = (
   partOfSpeech: string | undefined,
   formSelection: FormSelection | undefined,
-  onChange: (selection: FormSelection) => void
+  onChange: (selection: FormSelection) => void,
+  pronounType?: string,
+  pronounPerson?: string
 ) => {
   const { toggleCell, togglePaths, getAllPaths } = useFormSelection();
 
@@ -80,8 +86,8 @@ export const useFormSelectionControls = (
     if (!partOfSpeech || partOfSpeech === 'all') {
       return undefined;
     }
-    return deriveTableTypeFromPOS(partOfSpeech);
-  }, [formSelection?.tableType, partOfSpeech]);
+    return deriveTableTypeFromPOS(partOfSpeech, pronounType, pronounPerson);
+  }, [formSelection?.tableType, partOfSpeech, pronounType, pronounPerson]);
 
   const updateSelection = useCallback(
     (paths: string[]) => {
@@ -117,9 +123,9 @@ export const useFormSelectionControls = (
     if (!partOfSpeech || partOfSpeech === 'all') {
       return;
     }
-    const allPaths = getAllPaths(partOfSpeech);
+    const allPaths = getAllPaths(partOfSpeech, pronounType, pronounPerson);
     updateSelection(allPaths);
-  }, [getAllPaths, partOfSpeech, updateSelection]);
+  }, [getAllPaths, partOfSpeech, pronounType, pronounPerson, updateSelection]);
 
   const handleClearSelection = useCallback(() => {
     updateSelection([]);

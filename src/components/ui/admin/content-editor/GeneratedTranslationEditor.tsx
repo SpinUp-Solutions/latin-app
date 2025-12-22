@@ -13,7 +13,7 @@ import { WordSourceSection } from './WordSourceSection';
 import { MultiPosConfigSection } from './MultiPosConfigSection';
 import { useGeneratedExerciseEditor } from '@/src/hooks/useGeneratedExerciseEditor';
 import type { TranslationDirection } from '@/src/types/exercises/generated-translation';
-import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
+import type { PartOfSpeech, PronounType, PronounPerson } from '@/shared/types/vocabulary/schemas/enums';
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
 
 export const GeneratedTranslationEditor: React.FC = () => {
@@ -64,6 +64,8 @@ const GeneratedTranslationEditorView: React.FC<{ editingContent: GeneratedTransl
             | '5'
             | 'all',
           adjectiveDeclension: (editor.derivedFilters.adjectiveDeclension || 'all') as '1-2' | '3' | 'all',
+          pronounType: (editor.derivedFilters.pronounType || 'all') as PronounType | 'all',
+          pronounPerson: (editor.derivedFilters.pronounPerson || 'all') as PronounPerson | 'all',
           limit: editor.config.count,
         }}
         onFiltersChange={updates => {
@@ -144,6 +146,8 @@ const GeneratedTranslationEditorView: React.FC<{ editingContent: GeneratedTransl
               <label className="block text-sm font-medium mb-3">Form Selection</label>
               <FormSelectionTable
                 partOfSpeech={editor.activePOS}
+                pronounType={(editor.derivedFilters.pronounType || 'all') as PronounType | 'all'}
+                pronounPerson={(editor.derivedFilters.pronounPerson || 'all') as PronounPerson | 'all'}
                 selectedCellPaths={editor.derivedFormSelection?.selectedCellPaths || []}
                 onToggleCell={editor.formSelectionControls.handleToggleCell}
                 onTogglePaths={editor.formSelectionControls.handleTogglePaths}
@@ -180,12 +184,17 @@ const GeneratedTranslationEditorView: React.FC<{ editingContent: GeneratedTransl
                 {previewWords.map((word, index) => {
                   const translations = word.translation ? word.translation.split(',').map(t => t.trim()) : [];
 
+                  const displayWord =
+                    word.selected_form === word.root_word
+                      ? word.dictionary_entry || word.selected_form
+                      : word.selected_form;
+
                   return (
                     <Card key={index}>
                       <CardContent className="p-3 space-y-1">
-                        <div className="font-medium">{word.selected_form}</div>
+                        <div className="font-medium">{displayWord}</div>
                         {word.selected_form !== word.root_word && (
-                          <div className="text-xs text-gray-500">Root: {word.root_word}</div>
+                          <div className="text-xs text-gray-500">Root: {word.dictionary_entry || word.root_word}</div>
                         )}
                         <div className="text-sm text-gray-600">Accepted answers: {translations.join(' OR ')}</div>
                       </CardContent>
