@@ -42,6 +42,8 @@ const initialState: VocabularyPoolState = {
     isDeponent: 'both',
     nounDeclension: 'all',
     adjectiveDeclension: 'all',
+    pronounType: 'all',
+    pronounPerson: 'all',
   },
   wordSelection: {
     selectedIds: [],

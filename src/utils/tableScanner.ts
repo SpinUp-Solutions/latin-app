@@ -74,9 +74,12 @@ export function scanTableForMatchingForms(table: unknown, targetForm: string, ta
     case 'conjugation':
       return scanConjugationTable(table as ConjugationTable, targetForm);
     case 'declension':
+    case 'pronoun-declension':
       return scanDeclensionTable(table as DeclensionTable, targetForm);
     case 'adjective-declension':
       return scanDegreesTable(table as DegreesTable, targetForm);
+    case 'pronoun-adjective-declension':
+      return scanAdjectiveDeclensionTable(table as AdjectiveDeclensionTable, targetForm);
     default:
       return [];
   }

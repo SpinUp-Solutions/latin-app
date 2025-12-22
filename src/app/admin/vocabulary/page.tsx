@@ -113,12 +113,15 @@ function AdminVocabularyPage() {
     try {
       const cleanedUpdates = Object.fromEntries(
         Object.entries(updates).filter(([, value]) => {
-          if (value === undefined || value === null) return false;
-          if (typeof value === 'string' && value.trim() === '') return false;
-          if (Array.isArray(value) && value.length === 0) return false;
+          if (value === undefined) return false;
           return true;
         })
       );
+
+      delete (cleanedUpdates as Record<string, unknown>).createdAt;
+      delete (cleanedUpdates as Record<string, unknown>).updatedAt;
+      delete (cleanedUpdates as Record<string, unknown>).sort_key;
+      delete (cleanedUpdates as Record<string, unknown>).random_index;
 
       console.debug('VocabularyPage cleaned updates', cleanedUpdates);
       await updateWord({ wordId: selectedWordId, updates: cleanedUpdates, collection: TARGET_COLLECTION }).unwrap();
@@ -220,7 +223,7 @@ function AdminVocabularyPage() {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-roman-marble">
+    <div className="h-screen flex flex-col overflow-hidden bg-roman-marble">
       <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-4">
           <Button variant="ghost" onClick={() => router.push('/admin')}>
@@ -277,7 +280,7 @@ function AdminVocabularyPage() {
             />
           </div>
 
-          <div className="flex-1 overflow-y-auto px-4 pb-4">
+          <div className="flex-1 overflow-y-auto overscroll-contain px-4 pb-4">
             <VocabularyList
               words={words}
               loading={isLoading}
@@ -292,7 +295,14 @@ function AdminVocabularyPage() {
           </div>
         </div>
 
-        <WordEditPanel word={selectedWord} onSave={handleSaveWord} updating={updating || creating} />
+        <div className="overflow-hidden">
+          <WordEditPanel
+            key={selectedWord?.id ?? 'no-selection'}
+            word={selectedWord}
+            onSave={handleSaveWord}
+            updating={updating || creating}
+          />
+        </div>
       </main>
     </div>
   );

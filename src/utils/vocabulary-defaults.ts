@@ -1,6 +1,9 @@
 import type { VocabularyWordWithId } from '@/src/types/vocabulary/index';
 import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
-import { DeclensionTableSchema, AdjectiveDeclensionTableSchema } from '@/shared/types/vocabulary/schemas/declension';
+import {
+  DeclensionTableSchema,
+  PersonalPronounDeclensionTableSchema,
+} from '@/shared/types/vocabulary/schemas/declension';
 import { DegreesTableSchema } from '@/shared/types/vocabulary/schemas/adjective';
 import { ConjugationTableSchema } from '@/shared/types/vocabulary/schemas/verb-conjugation';
 import { buildEmptyFromSchema } from '@/src/utils/schema-defaults';
@@ -47,8 +50,9 @@ export const buildEmptyWord = (partOfSpeech: PartOfSpeech): VocabularyWordWithId
       return {
         ...base,
         part_of_speech: 'pronoun',
-        pronoun_type: null,
-        declension_table: buildEmptyFromSchema(AdjectiveDeclensionTableSchema),
+        pronoun_type: 'personal',
+        person: '1st',
+        declension_table: buildEmptyFromSchema(PersonalPronounDeclensionTableSchema),
       };
     case 'adjective':
       return {

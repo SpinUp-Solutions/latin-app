@@ -5,7 +5,7 @@ export const AVAILABLE_STEPS: Readonly<Record<PartOfSpeech, readonly FormIdentif
   verb: ['conjugation', 'tense', 'voice', 'mood', 'person', 'number'],
   noun: ['declension', 'case', 'number', 'gender'],
   adjective: ['declension', 'degree', 'gender', 'number', 'case'],
-  pronoun: ['gender', 'number', 'case'],
+  pronoun: ['pronoun_type', 'person', 'gender', 'number', 'case'],
   adverb: ['degree'],
   preposition: [],
   conjunction: [],

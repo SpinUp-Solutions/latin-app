@@ -1,7 +1,13 @@
 import { deriveTableTypeFromPOS } from '@/src/utils/generated/tableType';
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import type { RootState } from '../index';
-import type { PartOfSpeech, NounDeclension, AdjectiveDeclension } from '@/shared/types/vocabulary/schemas/enums';
+import type {
+  PartOfSpeech,
+  NounDeclension,
+  AdjectiveDeclension,
+  PronounType,
+  PronounPerson,
+} from '@/shared/types/vocabulary/schemas/enums';
 import type { VerbConjugation } from '@/shared/types/vocabulary/schemas/verb-conjugation';
 import type { TableType } from '@/src/utils/schema-helpers';
 
@@ -15,6 +21,8 @@ interface AdvancedFiltersState {
     isDeponent: 'true' | 'false' | 'both';
     nounDeclension: NounDeclension | 'all';
     adjectiveDeclension: AdjectiveDeclension | 'all';
+    pronounType: PronounType | 'all';
+    pronounPerson: PronounPerson | 'all';
     limit: LimitValue;
   };
   pagination: {
@@ -34,6 +42,8 @@ const initialState: AdvancedFiltersState = {
     isDeponent: 'both',
     nounDeclension: 'all',
     adjectiveDeclension: 'all',
+    pronounType: 'all',
+    pronounPerson: 'all',
     limit: 20,
   },
   pagination: {
@@ -60,6 +70,20 @@ const advancedFiltersSlice = createSlice({
         // Clear cell selection when part of speech changes
         state.selection.selectedCellPaths = [];
       }
+
+      // Reset pronounPerson when pronounType changes to non-personal
+      if ('pronounType' in action.payload && action.payload.pronounType !== 'personal') {
+        state.filters.pronounPerson = 'all';
+      }
+
+      // Clear cell selection and update table type when pronoun schema may change
+      if ('pronounType' in action.payload || 'pronounPerson' in action.payload) {
+        if (state.filters.partOfSpeech === 'pronoun') {
+          const tableType = deriveTableTypeFromPOS('pronoun', state.filters.pronounType, state.filters.pronounPerson);
+          state.selection.selectedTableType = tableType ?? null;
+          state.selection.selectedCellPaths = [];
+        }
+      }
     },
     setPartOfSpeech: (state, action: PayloadAction<PartOfSpeech | 'all'>) => {
       state.filters.partOfSpeech = action.payload;
@@ -67,6 +91,8 @@ const advancedFiltersSlice = createSlice({
       state.filters.isDeponent = 'both';
       state.filters.nounDeclension = 'all';
       state.filters.adjectiveDeclension = 'all';
+      state.filters.pronounType = 'all';
+      state.filters.pronounPerson = 'all';
 
       const tableType = deriveTableTypeFromPOS(action.payload as string);
       state.selection.selectedTableType = tableType ?? null;

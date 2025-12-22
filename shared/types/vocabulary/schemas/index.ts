@@ -13,14 +13,14 @@ export * from './indeclinable-words';
 
 import { NounSchema } from './noun';
 import { VerbSchema } from './verb';
-import { PronounSchema } from './pronoun';
+import { BasePronounSchema, PronounSchema } from './pronoun';
 import { AdjectiveSchema } from './adjective';
 import { AdverbSchema, PrepositionSchema, ConjunctionSchema, InterjectionSchema } from './indeclinable-words';
 
 export const VocabularyWordSchema = z.discriminatedUnion('part_of_speech', [
   NounSchema,
   VerbSchema,
-  PronounSchema,
+  BasePronounSchema,
   AdjectiveSchema,
   AdverbSchema,
   PrepositionSchema,
@@ -28,10 +28,10 @@ export const VocabularyWordSchema = z.discriminatedUnion('part_of_speech', [
   InterjectionSchema,
 ]);
 
-export const VocabularyWordWithIdSchema = z.union([
+export const VocabularyWordWithIdSchema = z.discriminatedUnion('part_of_speech', [
   NounSchema.extend({ id: z.string() }),
   VerbSchema.extend({ id: z.string() }),
-  PronounSchema.extend({ id: z.string() }),
+  BasePronounSchema.extend({ id: z.string() }),
   AdjectiveSchema.extend({ id: z.string() }),
   AdverbSchema.extend({ id: z.string() }),
   PrepositionSchema.extend({ id: z.string() }),

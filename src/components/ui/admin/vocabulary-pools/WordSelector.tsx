@@ -66,7 +66,7 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <Label className="text-base font-medium">Filters</Label>
-              <Button variant="ghost" size="sm" onClick={toggleFilters} className="text-gray-600">
+              <Button type="button" variant="ghost" size="sm" onClick={toggleFilters} className="text-gray-600">
                 {filtersExpanded ? (
                   <>
                     <ChevronUp className="h-4 w-4 mr-1" />
@@ -99,7 +99,7 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
             <div className="flex items-center justify-between">
               <Label className="text-base font-medium">Filtered Results ({availableWords.length})</Label>
               {availableWords.length > 0 && canAddMore && (
-                <Button onClick={addAllVisible} size="sm" variant="outline">
+                <Button type="button" onClick={addAllVisible} size="sm" variant="outline">
                   Add All Results
                 </Button>
               )}
@@ -132,6 +132,7 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
                             </Badge>
                           </div>
                           <Button
+                            type="button"
                             size="sm"
                             variant="ghost"
                             onClick={e => {
@@ -177,6 +178,7 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
                           </Badge>
                         </div>
                         <Button
+                          type="button"
                           size="sm"
                           variant="ghost"
                           onClick={() => removeWord(word.id)}

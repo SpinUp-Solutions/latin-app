@@ -26,7 +26,16 @@ export const validateGeneratedFormIdentificationExercise = (
   const validatedItem = FormIdentificationItemSchema.parse(currentItem);
 
   const input = normalize(userAnswer);
-  const normalizedAnswers = validatedItem.acceptedAnswers.map(normalize);
+
+  if (!input) {
+    return {
+      isCorrect: false,
+      correctAnswer: validatedItem.correctAnswer,
+      hint: validatedItem.hint,
+    };
+  }
+
+  const normalizedAnswers = validatedItem.acceptedAnswers.map(normalize).filter(a => a !== '');
   const isCorrect = normalizedAnswers.includes(input);
 
   return {
@@ -42,40 +51,72 @@ export const validateSingleFieldFormIdentificationExercise = (
 ): ValidationResult => {
   const validatedItem = SingleFieldFormIdentificationItemSchema.parse(currentItem);
 
-  const userParts = userAnswer.split(';').map(part => normalize(part));
-  const expectedStepCount = validatedItem.steps.length;
-
-  if (userParts.length !== expectedStepCount) {
+  if (!normalize(userAnswer)) {
     return {
       isCorrect: false,
       correctAnswer: validatedItem.correctAnswerDisplay,
-      hint: `Expected ${expectedStepCount} answers separated by semicolons`,
+      hint: 'Please enter an answer',
     };
   }
 
-  const allPaths = [...validatedItem.primaryFormPaths, ...validatedItem.optionalFormPaths];
+  const userPaths = userAnswer.split(';').map(pathStr => pathStr.split(',').map(part => normalize(part)));
+  const expectedPathCount = validatedItem.primaryFormPaths.length;
+  const expectedStepCount = validatedItem.steps.length;
 
-  for (const path of allPaths) {
-    const pathStepValues = validatedItem.steps.map(step => path[step]);
+  if (userPaths.length !== expectedPathCount) {
+    return {
+      isCorrect: false,
+      correctAnswer: validatedItem.correctAnswerDisplay,
+      hint: `Expected ${expectedPathCount} path${expectedPathCount > 1 ? 's' : ''} separated by semicolons`,
+    };
+  }
 
-    if (pathStepValues.some(v => !v)) continue;
-
-    const variantsPerStep = pathStepValues.map(value => getAcceptedAnswersForStep(value || '').map(normalize));
-
-    const matchesPath = userParts.every((userPart, index) => variantsPerStep[index].includes(userPart));
-
-    if (matchesPath) {
+  for (const userPath of userPaths) {
+    if (userPath.length !== expectedStepCount) {
       return {
-        isCorrect: true,
+        isCorrect: false,
         correctAnswer: validatedItem.correctAnswerDisplay,
+        hint: `Each path should have ${expectedStepCount} values separated by commas`,
+      };
+    }
+  }
+
+  const allPaths = [...validatedItem.primaryFormPaths, ...validatedItem.optionalFormPaths];
+  const matchedPathIndices = new Set<number>();
+
+  for (const userPath of userPaths) {
+    let foundMatch = false;
+
+    for (let pathIdx = 0; pathIdx < allPaths.length; pathIdx++) {
+      if (matchedPathIndices.has(pathIdx)) continue;
+
+      const path = allPaths[pathIdx];
+      const pathStepValues = validatedItem.steps.map(step => path[step]);
+
+      if (pathStepValues.some(v => !v)) continue;
+
+      const variantsPerStep = pathStepValues.map(value => getAcceptedAnswersForStep(value || '').map(normalize));
+      const matchesPath = userPath.every((userPart, index) => variantsPerStep[index].includes(userPart));
+
+      if (matchesPath) {
+        matchedPathIndices.add(pathIdx);
+        foundMatch = true;
+        break;
+      }
+    }
+
+    if (!foundMatch) {
+      return {
+        isCorrect: false,
+        correctAnswer: validatedItem.correctAnswerDisplay,
+        hint: validatedItem.hint,
       };
     }
   }
 
   return {
-    isCorrect: false,
+    isCorrect: true,
     correctAnswer: validatedItem.correctAnswerDisplay,
-    hint: validatedItem.hint,
   };
 };
 
@@ -88,6 +129,15 @@ export const validateMultiAnswerStep = (
   currentItem: MultiAnswerFormIdentificationItem
 ): MultiAnswerStepValidationResult => {
   const validatedItem = MultiAnswerFormIdentificationItemSchema.parse(currentItem);
+
+  if (!normalize(userAnswer)) {
+    return {
+      isCorrect: false,
+      correctAnswer: validatedItem.correctAnswerDisplay,
+      hint: 'Please enter an answer',
+      answerSlots: [],
+    };
+  }
 
   const userParts = userAnswer.split(';').map(part => part.trim());
   const expectedCount = validatedItem.expectedAnswerCount;
@@ -153,6 +203,7 @@ export const validatePartialMultiAnswerPaths = (
   }
 
   const failedSlots: number[] = [];
+  const matchedPathIndices = new Set<number>();
 
   for (let slotIndex = 0; slotIndex < slotCount; slotIndex++) {
     const partialPath: Record<string, string> = {};
@@ -161,17 +212,28 @@ export const validatePartialMultiAnswerPaths = (
       partialPath[step] = answerSlotsSoFar[stepIdx][slotIndex];
     }
 
-    const hasValidPath = primaryFormPaths.some(primaryPath => {
-      return stepsCompleted.every(step => {
+    let foundPathIndex = -1;
+    for (let pathIdx = 0; pathIdx < primaryFormPaths.length; pathIdx++) {
+      if (matchedPathIndices.has(pathIdx)) continue;
+
+      const primaryPath = primaryFormPaths[pathIdx];
+      const matches = stepsCompleted.every(step => {
         const userValue = normalize(partialPath[step] || '');
         const primaryValue = primaryPath[step];
         if (!primaryValue) return false;
         const acceptedVariants = getAcceptedAnswersForStep(primaryValue).map(normalize);
         return acceptedVariants.includes(userValue);
       });
-    });
 
-    if (!hasValidPath) {
+      if (matches) {
+        foundPathIndex = pathIdx;
+        break;
+      }
+    }
+
+    if (foundPathIndex >= 0) {
+      matchedPathIndices.add(foundPathIndex);
+    } else {
       failedSlots.push(slotIndex);
     }
   }

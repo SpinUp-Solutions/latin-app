@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { GeneratedFormIdentificationExercise } from '@/src/types/exercises/generated-form-identification';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
@@ -8,10 +8,11 @@ import { ExerciseInput, FeedbackDisplay } from '../feedback';
 import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
-import { useGetMultiPosWordsQuery } from '@/src/store/api/advancedVocabularyApi';
+import { useGetMultiParadigmWordsQuery } from '@/src/store/api/advancedVocabularyApi';
+import { deriveParadigm } from '@/src/utils/paradigm';
 import { Card, CardContent } from '../card';
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
-import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
+import type { PartOfSpeech, PronounType, PronounPerson } from '@/shared/types/vocabulary/schemas/enums';
 import {
   FormIdentificationItemSchema,
   type FormIdentificationItem,
@@ -34,7 +35,10 @@ import {
   getAcceptedAnswersForMultipleValues,
   formatPrimaryAnswersDisplay,
   filterPathsByPreviousAnswers,
+  getDisplayForm,
+  enrichPathsWithSteps,
 } from '@/src/utils/exercises/formIdentificationHelpers';
+import { formatLabel } from '@/src/utils/label-formatter';
 
 interface Props {
   exercise: GeneratedFormIdentificationExercise;
@@ -53,13 +57,13 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
   const requireAllPrimaryAnswers = exercise.data.requireAllPrimaryAnswers ?? false;
   const isMultiAnswerMode = !isSingleField && requireAllPrimaryAnswers;
 
-  const { data, isLoading, isError } = useGetMultiPosWordsQuery({
+  const { data, isLoading, isError } = useGetMultiParadigmWordsQuery({
     exerciseType: 'generated-form-identification',
     collection: config.collection,
     wordSource: config.wordSource,
     poolId: config.poolId,
     count: config.count,
-    posConfigs: exercise.data.posConfigs,
+    paradigmConfigs: exercise.data.paradigmConfigs ?? {},
   });
 
   type ItemType = FormIdentificationItem | SingleFieldFormIdentificationItem | MultiAnswerFormIdentificationItem;
@@ -70,42 +74,36 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
 
     if (isSingleField) {
       return words.map(word => {
-        const posConfig = exercise.data.posConfigs[word.part_of_speech as PartOfSpeech];
-        const steps = posConfig?.steps || [];
+        const wordAny = word as Record<string, unknown>;
+        const paradigm = deriveParadigm(
+          word.part_of_speech as PartOfSpeech,
+          wordAny.pronoun_type as PronounType | undefined,
+          wordAny.person as PronounPerson | undefined
+        );
+        const paradigmConfig = paradigm ? exercise.data.paradigmConfigs?.[paradigm] : undefined;
+        const steps = paradigmConfig?.steps || [];
 
         const basePrimaryPaths = (word.primary_form_paths || (word.form_path ? [word.form_path] : [])) as Array<
           Record<string, string | undefined>
         >;
         const baseOptionalPaths = (word.optional_form_paths || []) as Array<Record<string, string | undefined>>;
 
-        const enrichedPrimaryPaths = basePrimaryPaths.map(path => {
-          const enrichedPath: Record<string, string | undefined> = { ...path };
-          steps.forEach(step => {
-            if (!enrichedPath[step]) {
-              enrichedPath[step] = extractStepValue(word, step);
-            }
-          });
-          return enrichedPath;
-        });
-
-        const enrichedOptionalPaths = baseOptionalPaths.map(path => {
-          const enrichedPath: Record<string, string | undefined> = { ...path };
-          steps.forEach(step => {
-            if (!enrichedPath[step]) {
-              enrichedPath[step] = extractStepValue(word, step);
-            }
-          });
-          return enrichedPath;
-        });
+        const enrichedPrimaryPaths = enrichPathsWithSteps(basePrimaryPaths, word, steps);
+        const enrichedOptionalPaths = enrichPathsWithSteps(baseOptionalPaths, word, steps);
 
         const pathDisplays = enrichedPrimaryPaths
           .map(path => {
-            const pathValues = steps.map(step => path[step]).filter(Boolean);
-            return pathValues.join(';');
+            const pathValues = steps
+              .map(step => {
+                const val = path[step];
+                return val ? getDisplayForm(val) : null;
+              })
+              .filter(Boolean);
+            return pathValues.join(',');
           })
           .filter(display => display.length > 0);
 
-        const correctAnswerDisplay = pathDisplays.join(' OR ');
+        const correctAnswerDisplay = pathDisplays.join(';');
 
         return {
           id: word.id,
@@ -125,33 +123,22 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
 
     if (isMultiAnswerMode) {
       return words.flatMap(word => {
-        const posConfig = exercise.data.posConfigs[word.part_of_speech as PartOfSpeech];
-        const steps = posConfig?.steps || [];
+        const wordAny = word as Record<string, unknown>;
+        const paradigm = deriveParadigm(
+          word.part_of_speech as PartOfSpeech,
+          wordAny.pronoun_type as PronounType | undefined,
+          wordAny.person as PronounPerson | undefined
+        );
+        const paradigmConfig = paradigm ? exercise.data.paradigmConfigs?.[paradigm] : undefined;
+        const steps = paradigmConfig?.steps || [];
 
         const basePrimaryPaths = (word.primary_form_paths || (word.form_path ? [word.form_path] : [])) as Array<
           Record<string, string | undefined>
         >;
         const baseOptionalPaths = (word.optional_form_paths || []) as Array<Record<string, string | undefined>>;
 
-        const enrichedPrimaryPaths = basePrimaryPaths.map(path => {
-          const enrichedPath: Record<string, string | undefined> = { ...path };
-          steps.forEach(step => {
-            if (!enrichedPath[step]) {
-              enrichedPath[step] = extractStepValue(word, step);
-            }
-          });
-          return enrichedPath;
-        });
-
-        const enrichedOptionalPaths = baseOptionalPaths.map(path => {
-          const enrichedPath: Record<string, string | undefined> = { ...path };
-          steps.forEach(step => {
-            if (!enrichedPath[step]) {
-              enrichedPath[step] = extractStepValue(word, step);
-            }
-          });
-          return enrichedPath;
-        });
+        const enrichedPrimaryPaths = enrichPathsWithSteps(basePrimaryPaths, word, steps);
+        const enrichedOptionalPaths = enrichPathsWithSteps(baseOptionalPaths, word, steps);
 
         const expectedAnswerCount = enrichedPrimaryPaths.length;
 
@@ -181,8 +168,14 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
     }
 
     return words.flatMap(word => {
-      const posConfig = exercise.data.posConfigs[word.part_of_speech as PartOfSpeech];
-      const steps = posConfig?.steps || [];
+      const wordAny = word as Record<string, unknown>;
+      const paradigm = deriveParadigm(
+        word.part_of_speech as PartOfSpeech,
+        wordAny.pronoun_type as PronounType | undefined,
+        wordAny.person as PronounPerson | undefined
+      );
+      const paradigmConfig = paradigm ? exercise.data.paradigmConfigs?.[paradigm] : undefined;
+      const steps = paradigmConfig?.steps || [];
 
       const basePrimaryPaths = (word.primary_form_paths || (word.form_path ? [word.form_path] : [])) as Array<
         Record<string, string | undefined>
@@ -221,25 +214,62 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
   }, [data?.words, exercise.data, wordAnswers, isSingleField, isMultiAnswerMode]);
 
   const validatedItems = useMemo(() => {
-    try {
-      if (isSingleField) {
-        return items.map(item => SingleFieldFormIdentificationItemSchema.parse(item));
-      }
-      if (isMultiAnswerMode) {
-        return items.map(item => MultiAnswerFormIdentificationItemSchema.parse(item));
-      }
-      return items.map(item => FormIdentificationItemSchema.parse(item));
-    } catch (error) {
-      console.error('[Form Identification] Validation error:', error);
-      return [];
+    if (isSingleField) {
+      return items
+        .map(item => SingleFieldFormIdentificationItemSchema.safeParse(item))
+        .filter((result): result is { success: true; data: SingleFieldFormIdentificationItem } => result.success)
+        .map(result => result.data);
     }
+
+    if (isMultiAnswerMode) {
+      const multiItems = items as MultiAnswerFormIdentificationItem[];
+      const wordGroups = new Map<string, MultiAnswerFormIdentificationItem[]>();
+
+      for (const item of multiItems) {
+        const existing = wordGroups.get(item.wordId) || [];
+        existing.push(item);
+        wordGroups.set(item.wordId, existing);
+      }
+
+      const validatedResults: MultiAnswerFormIdentificationItem[] = [];
+
+      for (const groupItems of wordGroups.values()) {
+        const parsedItems = groupItems.map(item => ({
+          item,
+          result: MultiAnswerFormIdentificationItemSchema.safeParse(item),
+        }));
+
+        const allValid = parsedItems.every(p => p.result.success);
+
+        if (allValid) {
+          for (const p of parsedItems) {
+            if (p.result.success) {
+              validatedResults.push(p.result.data);
+            }
+          }
+        }
+      }
+
+      return validatedResults;
+    }
+
+    return items
+      .map(item => FormIdentificationItemSchema.safeParse(item))
+      .filter((result): result is { success: true; data: FormIdentificationItem } => result.success)
+      .map(result => result.data);
   }, [items, isSingleField, isMultiAnswerMode]);
 
-  const { currentIndex, isLastItem, autoAdvanceIfEnabled } = useExerciseProgression({
+  const { currentIndex, isLastItem, autoAdvanceIfEnabled, resetIndex } = useExerciseProgression({
     totalItems: validatedItems.length,
     itemProgressionDelay: exercise.itemProgressionDelay,
     progressionRules: exercise.feedbackConfig.progressionRules,
   });
+
+  useEffect(() => {
+    if (validatedItems.length > 0 && currentIndex >= validatedItems.length) {
+      resetIndex();
+    }
+  }, [validatedItems.length, currentIndex, resetIndex]);
 
   const { isCorrect, message, level, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
     exercise.feedbackConfig
@@ -247,6 +277,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
 
   const handleSubmit = () => {
     if (isProcessing || validatedItems.length === 0) return;
+    if (currentIndex >= validatedItems.length) return;
 
     const currentItem = validatedItems[currentIndex];
     setIsProcessing(true);
@@ -387,7 +418,8 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
     );
   }
 
-  const currentItem = validatedItems[currentIndex];
+  const safeIndex = Math.min(currentIndex, Math.max(0, validatedItems.length - 1));
+  const currentItem = validatedItems[safeIndex];
 
   return (
     <div className="space-y-4">
@@ -406,7 +438,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
         </p>
       )}
 
-      <ExerciseProgress current={currentIndex} total={validatedItems.length} />
+      <ExerciseProgress current={safeIndex} total={validatedItems.length} />
 
       <Card>
         <CardContent className="p-6 space-y-4">
@@ -414,10 +446,12 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
             {!isSingleField && (
               <div className="text-sm text-gray-500">
                 Step:{' '}
-                <span className="font-medium capitalize">
-                  {isMultiAnswerMode
-                    ? (currentItem as MultiAnswerFormIdentificationItem).step
-                    : (currentItem as FormIdentificationItem).step}
+                <span className="font-medium">
+                  {formatLabel(
+                    isMultiAnswerMode
+                      ? (currentItem as MultiAnswerFormIdentificationItem).step
+                      : (currentItem as FormIdentificationItem).step
+                  )}
                 </span>
               </div>
             )}
@@ -437,20 +471,21 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
               <>
                 <strong>Question:</strong> Identify the:{' '}
                 <span className="font-medium">
-                  {(currentItem as SingleFieldFormIdentificationItem).steps.join('; ')}
+                  {(currentItem as SingleFieldFormIdentificationItem).steps.map(formatLabel).join('; ')}
                 </span>
               </>
             ) : isMultiAnswerMode ? (
               <>
                 <strong>Question:</strong> Identify the{' '}
-                <span className="font-medium capitalize">
-                  {(currentItem as MultiAnswerFormIdentificationItem).step}
+                <span className="font-medium">
+                  {formatLabel((currentItem as MultiAnswerFormIdentificationItem).step)}
                 </span>
               </>
             ) : (
               <>
                 <strong>Question:</strong> What is the{' '}
-                <span className="font-medium">{(currentItem as FormIdentificationItem).step}</span> of this word?
+                <span className="font-medium">{formatLabel((currentItem as FormIdentificationItem).step)}</span> of this
+                word?
               </>
             )}
           </div>

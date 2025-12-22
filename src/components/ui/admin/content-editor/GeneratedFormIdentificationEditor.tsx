@@ -1,6 +1,8 @@
 import React from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent } from '@/src/components/ui/card';
+import { Checkbox } from '@/src/components/ui/checkbox';
+import { Label } from '@/src/components/ui/label';
 import { GeneratedFormIdentificationExercise } from '@/src/types/exercises/generated-form-identification';
 import { useAppSelector } from '@/src/store/hooks';
 import { SimpleInput, SimpleTextarea } from '@/src/components/ui/form-components';
@@ -8,15 +10,20 @@ import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
 import { AdvancedFiltersPanel } from '../vocabulary/AdvancedFiltersPanel';
 import { VocabularyPoolSelector } from '../vocabulary-pools/VocabularyPoolSelector';
-import { FormSelectionTable } from '../vocabulary/FormSelectionTable';
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
-import { FormIdentificationStep } from '@/src/types/exercises/schemas/form-identification';
-import { extractStepValue, getAcceptedAnswersForStep } from '@/src/utils/exercises/formIdentificationHelpers';
+import {
+  extractStepValue,
+  getAcceptedAnswersForStep,
+  getDisplayForm,
+  enrichPathsWithSteps,
+} from '@/src/utils/exercises/formIdentificationHelpers';
 import { WordSourceSection } from './WordSourceSection';
-import { MultiPosConfigSection } from './MultiPosConfigSection';
-import { useGeneratedExerciseEditor } from '@/src/hooks/useGeneratedExerciseEditor';
-import { AVAILABLE_STEPS } from '@/src/config/formIdentificationSteps';
-import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
+import { MultiParadigmConfigSection } from './MultiParadigmConfigSection';
+import { useFormIdentificationEditor } from '@/src/hooks/useFormIdentificationEditor';
+import type { PartOfSpeech, PronounType, PronounPerson } from '@/shared/types/vocabulary/schemas/enums';
+import { deriveParadigm } from '@/src/utils/paradigm';
+import type { FormIdentificationStep } from '@/src/types/exercises/schemas/form-identification';
+import { Loader2 } from 'lucide-react';
 
 export const GeneratedFormIdentificationEditor: React.FC = () => {
   const editingContent = useAppSelector(
@@ -35,14 +42,24 @@ const GeneratedFormIdentificationEditorView: React.FC<{
 }> = ({ editingContent }) => {
   const isSingleField = editingContent.data.mode === 'single-field';
 
-  const editor = useGeneratedExerciseEditor(editingContent, {
-    exerciseType: 'generated-form-identification',
-  });
+  const editor = useFormIdentificationEditor(editingContent);
 
-  const handleModeToggle = () => {
-    const newMode = isSingleField ? 'step-by-step' : 'single-field';
+  const setMode = (mode: 'step-by-step' | 'single-field') => {
     editor.updateContent({
-      data: { ...editingContent.data, mode: newMode },
+      data: { ...editingContent.data, mode },
+    });
+  };
+
+  const handleResetFilters = () => {
+    editor.handleGlobalFiltersChange({
+      partOfSpeech: 'all',
+      search: '',
+      verbConjugation: 'all',
+      isDeponent: 'both',
+      nounDeclension: 'all',
+      adjectiveDeclension: 'all',
+      pronounType: 'all',
+      pronounPerson: 'all',
     });
   };
 
@@ -64,18 +81,22 @@ const GeneratedFormIdentificationEditorView: React.FC<{
             | '5'
             | 'all',
           adjectiveDeclension: (editor.derivedFilters.adjectiveDeclension || 'all') as '1-2' | '3' | 'all',
+          pronounType: (editor.derivedFilters.pronounType || 'all') as PronounType | 'all',
+          pronounPerson: (editor.derivedFilters.pronounPerson || 'all') as PronounPerson | 'all',
           limit: editor.config.count,
         }}
         onFiltersChange={updates => {
-          if ('limit' in updates) {
-            const currentCount = editor.config?.count ?? 5;
-            const nextCount = updates.limit === undefined ? currentCount : (updates.limit as typeof currentCount);
-            editor.updateConfig({ count: nextCount });
-          } else {
-            editor.handleFiltersChange(updates);
+          const { limit, ...filterUpdates } = updates;
+
+          if (limit !== undefined) {
+            editor.updateConfig({ count: limit });
+          }
+
+          if (Object.keys(filterUpdates).length > 0) {
+            editor.handleGlobalFiltersChange(filterUpdates);
           }
         }}
-        onReset={editor.handleResetFilters}
+        onReset={handleResetFilters}
         onApply={() => editor.setIsPreviewOpen(true)}
         isLoading={editor.isPreviewFetching}
       />
@@ -94,15 +115,13 @@ const GeneratedFormIdentificationEditorView: React.FC<{
 
   const previewWords = editor.previewData?.words as ExerciseWordResponse[] | undefined;
 
-  const availableStepsForSection: Record<PartOfSpeech, FormIdentificationStep[]> = Object.entries(
-    AVAILABLE_STEPS
-  ).reduce(
-    (acc, [pos, steps]) => {
-      acc[pos as PartOfSpeech] = [...steps];
-      return acc;
-    },
-    {} as Record<PartOfSpeech, FormIdentificationStep[]>
-  );
+  const getWordSteps = (word: ExerciseWordResponse): FormIdentificationStep[] => {
+    const pronounType = word.part_of_speech === 'pronoun' ? (word.pronoun_type as PronounType | undefined) : undefined;
+    const pronounPerson = word.part_of_speech === 'pronoun' ? (word.person as PronounPerson | undefined) : undefined;
+    const paradigm = deriveParadigm(word.part_of_speech as PartOfSpeech, pronounType, pronounPerson);
+    if (!paradigm) return [];
+    return editingContent.data.paradigmConfigs?.[paradigm]?.steps || [];
+  };
 
   return (
     <div className="space-y-6">
@@ -115,14 +134,14 @@ const GeneratedFormIdentificationEditorView: React.FC<{
                 type="button"
                 variant={!isSingleField ? 'default' : 'outline'}
                 size="sm"
-                onClick={handleModeToggle}>
+                onClick={() => setMode('step-by-step')}>
                 Step-by-Step
               </Button>
               <Button
                 type="button"
                 variant={isSingleField ? 'default' : 'outline'}
                 size="sm"
-                onClick={handleModeToggle}>
+                onClick={() => setMode('single-field')}>
                 Single Field
               </Button>
             </div>
@@ -134,19 +153,20 @@ const GeneratedFormIdentificationEditorView: React.FC<{
           </div>
           {!isSingleField && (
             <div className="mt-4 pt-4 border-t space-y-2">
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="requireAllPrimaryAnswers"
                   checked={!!editingContent.data.requireAllPrimaryAnswers}
-                  onChange={e =>
+                  onCheckedChange={checked =>
                     editor.updateContent({
-                      data: { ...editingContent.data, requireAllPrimaryAnswers: e.target.checked },
+                      data: { ...editingContent.data, requireAllPrimaryAnswers: !!checked },
                     })
                   }
-                  className="rounded border-gray-300"
                 />
-                Require all primary answers
-              </label>
+                <Label htmlFor="requireAllPrimaryAnswers" className="text-sm cursor-pointer">
+                  Require all primary answers
+                </Label>
+              </div>
               <p className="text-xs text-gray-500 ml-6">
                 Students must enter all primary path answers for each step, separated by semicolons. Order must be
                 consistent across steps.
@@ -186,65 +206,31 @@ const GeneratedFormIdentificationEditorView: React.FC<{
         poolContent={poolContent}
       />
 
-      {!editor.isPoolWordSource && editor.activePOS && (
+      {editor.paradigmInfo.isLoading ? (
         <Card>
-          <CardContent className="p-6 space-y-6">
-            <div>
-              <label className="block text-sm font-medium mb-3">Steps to Identify (in order)</label>
-              <div className="space-y-4">
-                <div className="flex flex-wrap gap-2">
-                  {editor.activePOS &&
-                    availableStepsForSection[editor.activePOS]?.map(step => {
-                      const activePOS = editor.activePOS!;
-                      const currentSteps = editingContent.data.posConfigs[activePOS]?.steps || [];
-                      const isSelected = currentSteps.includes(step);
-
-                      return (
-                        <Button
-                          key={step}
-                          type="button"
-                          variant={isSelected ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => {
-                            const newSteps = isSelected
-                              ? currentSteps.filter((s: FormIdentificationStep) => s !== step)
-                              : [...currentSteps, step];
-                            editor.handleUpdatePosConfig(activePOS, { steps: newSteps });
-                          }}
-                          className="capitalize">
-                          {step}
-                        </Button>
-                      );
-                    })}
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-3">Form Selection</label>
-              <FormSelectionTable
-                partOfSpeech={editor.activePOS}
-                selectedCellPaths={editor.derivedFormSelection?.selectedCellPaths || []}
-                onToggleCell={editor.formSelectionControls.handleToggleCell}
-                onTogglePaths={editor.formSelectionControls.handleTogglePaths}
-                onSelectAll={editor.formSelectionControls.handleSelectAll}
-                onClearSelection={editor.formSelectionControls.handleClearSelection}
-              />
-            </div>
+          <CardContent className="p-6 flex items-center justify-center gap-2 text-gray-500">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Loading paradigm information...</span>
           </CardContent>
         </Card>
-      )}
-
-      {editor.isPoolWordSource && editor.posSummary.availablePOS.length > 0 && editor.posSummary.summary && (
-        <MultiPosConfigSection
-          exerciseType="form-identification"
-          availablePartOfSpeech={editor.posSummary.availablePOS}
-          wordCountsByPOS={editor.posSummary.summary}
-          posConfigs={editingContent.data.posConfigs}
-          onUpdatePosConfig={editor.handleUpdatePosConfig}
-          onTogglePOS={editor.handleTogglePOS}
-          availableSteps={availableStepsForSection}
+      ) : editor.paradigmInfo.availableParadigms.length > 0 ? (
+        <MultiParadigmConfigSection
+          availableParadigms={editor.paradigmInfo.availableParadigms}
+          paradigmWordCounts={editor.paradigmInfo.paradigmWordCounts}
+          paradigmConfigs={editingContent.data.paradigmConfigs ?? {}}
+          onUpdateParadigmConfig={editor.handleUpdateParadigmConfig}
+          onToggleParadigm={editor.handleToggleParadigm}
         />
+      ) : (
+        <Card>
+          <CardContent className="p-4 text-gray-500 text-sm">
+            {editor.config.wordSource === 'pool' && !editor.config.poolId
+              ? 'Select a vocabulary pool above to see available paradigms.'
+              : editor.config.wordSource === 'pool'
+                ? 'The selected pool has no words. Add words to the pool or choose a different one.'
+                : 'No paradigms available for the current filter settings.'}
+          </CardContent>
+        </Card>
       )}
 
       <div>
@@ -252,7 +238,9 @@ const GeneratedFormIdentificationEditorView: React.FC<{
         <Card>
           <CardContent className="p-4 space-y-4">
             <Button type="button" onClick={() => editor.setIsPreviewOpen(true)} disabled={editor.isPreviewFetching}>
-              {editor.isPreviewFetching ? 'Loading Preview...' : 'Preview Sample Items'}
+              {editor.isPreviewFetching
+                ? 'Loading Preview...'
+                : `Preview Sample Items${editor.config.count !== 'all' ? ` (${editor.config.count})` : ''}`}
             </Button>
 
             {editor.isPreviewOpen && previewWords && previewWords.length > 0 && (
@@ -260,7 +248,7 @@ const GeneratedFormIdentificationEditorView: React.FC<{
                 <label className="block text-sm font-medium">Preview ({previewWords.length} items)</label>
                 {previewWords.map((word, index) => {
                   const wordWithPath = word;
-                  const wordSteps = editingContent.data.posConfigs[word.part_of_speech as PartOfSpeech]?.steps || [];
+                  const wordSteps = getWordSteps(word);
 
                   let primaryAnswersDisplay = '';
                   let optionalAnswersDisplay = '';
@@ -272,35 +260,35 @@ const GeneratedFormIdentificationEditorView: React.FC<{
                       Record<string, string | undefined>
                     >;
 
-                    const enrichPath = (path: Record<string, string | undefined>) => {
-                      const enrichedPath: Record<string, string | undefined> = { ...path };
-                      wordSteps.forEach(step => {
-                        if (!enrichedPath[step]) {
-                          enrichedPath[step] = extractStepValue(wordWithPath, step);
-                        }
-                      });
-                      return enrichedPath;
-                    };
-
-                    const enrichedPrimaryPaths = basePrimaryPaths.map(enrichPath);
-                    const enrichedOptionalPaths = baseOptionalPaths.map(enrichPath);
+                    const enrichedPrimaryPaths = enrichPathsWithSteps(basePrimaryPaths, wordWithPath, wordSteps);
+                    const enrichedOptionalPaths = enrichPathsWithSteps(baseOptionalPaths, wordWithPath, wordSteps);
 
                     const primaryDisplays = enrichedPrimaryPaths
                       .map(path => {
-                        const pathValues = wordSteps.map(step => path[step]).filter(Boolean);
-                        return pathValues.join(';');
+                        const pathValues = wordSteps
+                          .map(step => {
+                            const val = path[step];
+                            return val ? getDisplayForm(val) : null;
+                          })
+                          .filter(Boolean);
+                        return pathValues.join(',');
                       })
                       .filter(display => display.length > 0);
 
                     const optionalDisplays = enrichedOptionalPaths
                       .map(path => {
-                        const pathValues = wordSteps.map(step => path[step]).filter(Boolean);
-                        return pathValues.join(';');
+                        const pathValues = wordSteps
+                          .map(step => {
+                            const val = path[step];
+                            return val ? getDisplayForm(val) : null;
+                          })
+                          .filter(Boolean);
+                        return pathValues.join(',');
                       })
                       .filter(display => display.length > 0);
 
-                    primaryAnswersDisplay = primaryDisplays.join(' OR ');
-                    optionalAnswersDisplay = optionalDisplays.join(' OR ');
+                    primaryAnswersDisplay = primaryDisplays.join(';');
+                    optionalAnswersDisplay = optionalDisplays.join(';');
                   }
 
                   const displayWord =
@@ -328,19 +316,50 @@ const GeneratedFormIdentificationEditorView: React.FC<{
                               )}
                             </>
                           ) : (
-                            wordSteps.map(step => {
-                              const stepValue = extractStepValue(wordWithPath, step);
-                              if (!stepValue) return null;
+                            (() => {
+                              const basePrimaryPaths = (word.primary_form_paths ||
+                                (word.form_path ? [word.form_path] : [])) as Array<Record<string, string | undefined>>;
+                              const baseOptionalPaths = (word.optional_form_paths || []) as Array<
+                                Record<string, string | undefined>
+                              >;
 
-                              const answers = getAcceptedAnswersForStep(stepValue);
+                              return wordSteps.map(step => {
+                                const primaryValues = basePrimaryPaths
+                                  .map(path => path[step])
+                                  .filter((v): v is string => !!v);
+                                const optionalValues = baseOptionalPaths
+                                  .map(path => path[step])
+                                  .filter((v): v is string => !!v);
 
-                              return (
-                                <div key={step} className="text-gray-600">
-                                  <strong className="capitalize">{step}:</strong> {stepValue}{' '}
-                                  {answers.length > 1 && `(or ${answers.join(', ')})`}
-                                </div>
-                              );
-                            })
+                                const uniquePrimaryValues = Array.from(new Set(primaryValues));
+                                const uniqueOptionalValues = Array.from(
+                                  new Set(optionalValues.filter(v => !uniquePrimaryValues.includes(v)))
+                                );
+
+                                const displayValue =
+                                  uniquePrimaryValues.length > 0
+                                    ? uniquePrimaryValues.join(' OR ')
+                                    : extractStepValue(wordWithPath, step);
+
+                                if (!displayValue) return null;
+
+                                const answers = getAcceptedAnswersForStep(
+                                  uniquePrimaryValues.length > 0 ? uniquePrimaryValues[0] : displayValue
+                                );
+
+                                return (
+                                  <div key={step} className="text-gray-600">
+                                    <strong className="capitalize">{step}:</strong> {displayValue}{' '}
+                                    {answers.length > 1 && `(or ${answers.slice(1).join(', ')})`}
+                                    {uniqueOptionalValues.length > 0 && (
+                                      <span className="text-gray-400 text-xs ml-1">
+                                        [optional: {uniqueOptionalValues.join(' OR ')}]
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              });
+                            })()
                           )}
                         </div>
                       </CardContent>
