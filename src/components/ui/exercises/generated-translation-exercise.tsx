@@ -57,9 +57,12 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
           return null;
         }
 
+        const answerToAccept =
+          word.selected_form === word.root_word ? word.dictionary_entry || word.root_word : word.selected_form;
+
         return {
           text: translations.join(', '),
-          acceptedAnswers: [word.root_word],
+          acceptedAnswers: [answerToAccept],
           hint: definitionsText || undefined,
           stripInfinitive: false,
         };
