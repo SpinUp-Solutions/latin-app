@@ -82,8 +82,8 @@ export const ImperativeTableSchema = z.object({
 });
 
 export const InfinitiveVoiceSchema = z.object({
-  active: z.string().min(1).nullable(),
-  passive: z.string().min(1).nullable(),
+  active: z.array(z.string().min(1)).min(1).nullable(),
+  passive: z.array(z.string().min(1)).min(1).nullable(),
 });
 
 export const InfinitiveTableSchema = z.object({
