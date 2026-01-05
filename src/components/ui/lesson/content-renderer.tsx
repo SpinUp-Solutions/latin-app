@@ -13,6 +13,7 @@ import TableFillExercise from '../exercises/table-fill-exercise';
 import ClickOnMultipleWordsExercise from '../exercises/click-on-multiple-words';
 import GeneratedTranslationExercise from '../exercises/generated-translation-exercise';
 import GeneratedFormIdentificationExercise from '../exercises/generated-form-identification-exercise';
+import TranslationGradingExercise from '../exercises/translation-grading-exercise';
 import { ContentItem, TextContent, TableContent, VocabularyContent, VocabularyPoolContent } from '@/src/types/lesson';
 import {
   MatchingExercise,
@@ -26,6 +27,7 @@ import {
   ClickOnMultipleWordsExercise as ClickOnMultipleWordsExerciseType,
   GeneratedTranslationExercise as GeneratedTranslationExerciseType,
   GeneratedFormIdentificationExercise as GeneratedFormIdentificationExerciseType,
+  TranslationGradingExercise as TranslationGradingExerciseType,
 } from '@/src/types/exercises';
 import { VocabularyViewer } from './VocabularyViewer';
 import { VocabularyPoolViewer } from './VocabularyPoolViewer';
@@ -115,6 +117,11 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onCom
           exercise={content as GeneratedFormIdentificationExerciseType}
           onComplete={onComplete}
         />
+      );
+
+    case 'translation-grading':
+      return (
+        <TranslationGradingExercise exercise={content as TranslationGradingExerciseType} onComplete={onComplete} />
       );
 
     default:

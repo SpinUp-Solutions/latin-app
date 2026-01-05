@@ -61,3 +61,18 @@ export interface AIAutocompleteResponse {
 }
 
 export type OpenAIStructuredOutput = Partial<VocabularyWord>;
+
+export interface TranslationGradingRequest {
+  latinText: string;
+  userTranslation: string;
+}
+
+export interface TranslationGradingResponse<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  errorDetails?: ErrorDetails;
+  tokensUsed?: number;
+  model?: string;
+  cost?: CostBreakdown;
+}

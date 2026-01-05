@@ -4,7 +4,8 @@ dotenv.config({ path: '.env.local' });
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import { autocompleteVocabularyWord } from '../../shared/openai/autocomplete';
-import { AIAutocompleteRequest } from '../../shared/openai/types';
+import { gradeTranslation } from '../../shared/openai/translation-grading';
+import { AIAutocompleteRequest, TranslationGradingRequest } from '../../shared/openai/types';
 
 const openaiApiKey = defineSecret('OPENAI_API_KEY');
 
@@ -47,6 +48,37 @@ export const autocompleteWord = onCall({
     const endTime = Date.now();
     console.error(`[Firebase Function] Error after ${endTime - startTime}ms:`, error);
 
+    throw new HttpsError(
+      'internal',
+      error instanceof Error ? error.message : 'Unknown error occurred'
+    );
+  }
+});
+
+export const gradeTranslationFn = onCall({
+  timeoutSeconds: 120,
+  memory: '512MiB',
+  region: 'us-central1',
+  secrets: [openaiApiKey],
+}, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'User must be authenticated');
+  }
+
+  const data = request.data as TranslationGradingRequest;
+
+  if (!data.latinText || typeof data.latinText !== 'string') {
+    throw new HttpsError('invalid-argument', 'latinText is required');
+  }
+
+  if (!data.userTranslation || typeof data.userTranslation !== 'string') {
+    throw new HttpsError('invalid-argument', 'userTranslation is required');
+  }
+
+  try {
+    const result = await gradeTranslation(data);
+    return result;
+  } catch (error) {
     throw new HttpsError(
       'internal',
       error instanceof Error ? error.message : 'Unknown error occurred'
