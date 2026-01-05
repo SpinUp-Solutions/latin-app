@@ -139,6 +139,37 @@ export function enrichPathsWithSteps(
   });
 }
 
+/**
+ * Deduplicates paths based on only the values of the requested steps.
+ *
+ * This handles syncretism cases where the same form appears at multiple paths
+ * that differ in fields NOT being asked about. For example:
+ * - Path 1: { tense: "perfect", mood: "subjunctive", person: "third", number: "plural" }
+ * - Path 2: { tense: "future_perfect", mood: "indicative", person: "third", number: "plural" }
+ *
+ * If steps = ['person', 'number'], both paths have identical values for those steps,
+ * so they should be deduplicated to avoid requiring duplicate answers.
+ */
+export function deduplicatePathsBySteps(
+  paths: Array<Record<string, string | undefined>>,
+  steps: FormIdentificationStep[]
+): Array<Record<string, string | undefined>> {
+  const seen = new Set<string>();
+  const result: Array<Record<string, string | undefined>> = [];
+
+  for (const path of paths) {
+    // Create a key from only the requested step values (normalized)
+    const key = steps.map(step => (path[step] || '').toLowerCase().trim()).join('|');
+
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push(path);
+    }
+  }
+
+  return result;
+}
+
 export function extractStepValuesFromPaths<T extends { [key: string]: string | undefined }>(
   formPaths: T[],
   step: FormIdentificationStep
@@ -240,7 +271,7 @@ const createVariantMap = () => {
 
   VoiceSchema.options.forEach(val => {
     const map: Record<string, string[]> = {
-      active: ['active', 'act.', 'act'],
+      active: ['active', 'act.', 'act', 'a'],
       passive: ['passive', 'pass.', 'pass'],
     };
     v[val] = map[val] || [val];

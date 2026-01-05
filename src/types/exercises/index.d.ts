@@ -10,6 +10,7 @@ export type { TableFillExercise } from './table-fill';
 export type { ClickOnMultipleWordsExercise } from './click-on-multiple-words';
 export type { GeneratedTranslationExercise } from './generated-translation';
 export type { GeneratedFormIdentificationExercise } from './generated-form-identification';
+export type { TranslationGradingExercise } from './translation-grading';
 
 import type { MatchingExercise } from './matching';
 import type { FillExercise } from './fill';
@@ -22,6 +23,7 @@ import type { TableFillExercise } from './table-fill';
 import type { ClickOnMultipleWordsExercise } from './click-on-multiple-words';
 import type { GeneratedTranslationExercise } from './generated-translation';
 import type { GeneratedFormIdentificationExercise } from './generated-form-identification';
+import type { TranslationGradingExercise } from './translation-grading';
 
 export type Exercise =
   | MatchingExercise
@@ -34,4 +36,5 @@ export type Exercise =
   | TableFillExercise
   | ClickOnMultipleWordsExercise
   | GeneratedTranslationExercise
-  | GeneratedFormIdentificationExercise;
+  | GeneratedFormIdentificationExercise
+  | TranslationGradingExercise;
