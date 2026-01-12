@@ -15,6 +15,12 @@ export function useTranslationGrading(options?: UseTranslationGradingOptions) {
   const [data, setData] = useState<TranslationGradingOutput | null>(null);
   const [cost, setCost] = useState<CostBreakdown | null>(null);
 
+  const reset = () => {
+    setError(null);
+    setData(null);
+    setCost(null);
+  };
+
   const grade = async (request: TranslationGradingRequest) => {
     setIsLoading(true);
     setError(null);
@@ -54,6 +60,7 @@ export function useTranslationGrading(options?: UseTranslationGradingOptions) {
 
   return {
     grade,
+    reset,
     isLoading,
     error,
     data,
