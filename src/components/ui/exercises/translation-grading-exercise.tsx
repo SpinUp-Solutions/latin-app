@@ -4,52 +4,27 @@ import React, { useState } from 'react';
 import { TranslationGradingExercise } from '@/src/types/exercises';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
+import { useTranslationGrading } from '@/src/hooks/useTranslationGrading';
 import { ExerciseInput } from '../feedback';
 import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { Card, CardContent } from '@/src/components/ui/card';
-import { Loader2 } from 'lucide-react';
+import { Button } from '@/src/components/ui/button';
+import { Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface Props {
   exercise: TranslationGradingExercise;
   onComplete?: (score: number) => void;
 }
 
-interface SimulatedGradingResult {
-  grade: string;
-  notes: string;
-  suggestedText: string;
-}
-
 const PASSING_GRADES = ['A+', 'A', 'A-', 'B+', 'B', 'B-'];
 
-const SIMULATED_RESPONSES: SimulatedGradingResult[] = [
-  {
-    grade: 'A',
-    notes: 'Excellent work! Your translation captures the meaning accurately with natural English phrasing.',
-    suggestedText: 'The girl sees the rose.',
-  },
-  {
-    grade: 'B+',
-    notes: 'Good translation! Minor article choice could be refined, but the meaning is clear and grammar is solid.',
-    suggestedText: 'The girl sees a rose.',
-  },
-  {
-    grade: 'C+',
-    notes: 'You understood the sentence structure well. Review vocabulary for "rosam" which means "rose".',
-    suggestedText: 'The girl sees the rose.',
-  },
-];
-
 const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
-  const [userAnswer, setUserAnswer] = useState('');
-  const [correctAnswers, setCorrectAnswers] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
-  const [data, setData] = useState<SimulatedGradingResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [userAnswers, setUserAnswers] = useState<Record<number, string>>({});
+  const [passedSentences, setPassedSentences] = useState<Set<number>>(new Set());
 
-  const { currentIndex, isLastItem, autoAdvanceIfEnabled } = useExerciseProgression({
+  const { currentIndex, isLastItem, isFirstItem, nextItem, previousItem, autoAdvanceIfEnabled } = useExerciseProgression({
     totalItems: exercise.data.items.length,
     itemProgressionDelay: exercise.itemProgressionDelay,
     progressionRules: exercise.feedbackConfig.progressionRules,
@@ -57,51 +32,51 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
 
   const { isCorrect, message, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(exercise.feedbackConfig);
 
-  const simulateGrading = (): Promise<SimulatedGradingResult> => {
-    return new Promise(resolve => {
-      setTimeout(() => {
-        const randomIndex = Math.floor(Math.random() * SIMULATED_RESPONSES.length);
-        resolve(SIMULATED_RESPONSES[randomIndex]);
-      }, 1500);
+  const { grade, reset: resetGrading, isLoading, data, error } = useTranslationGrading();
+
+  const currentAnswer = userAnswers[currentIndex] || '';
+
+  const handleSubmit = async () => {
+    if (isLoading || !currentAnswer.trim()) return;
+
+    const currentItem = exercise.data.items[currentIndex];
+    const result = await grade({
+      latinText: currentItem.latinText,
+      userTranslation: currentAnswer,
+    });
+
+    if (!result) return;
+
+    const passed = PASSING_GRADES.includes(result.grade);
+
+    if (passed) {
+      setPassedSentences(prev => new Set([...prev, currentIndex]));
+      handleCorrect(isLastItem);
+
+      if (isLastItem) {
+        const finalScore = Math.round(((passedSentences.size + 1) / exercise.data.items.length) * 100);
+        onComplete?.(finalScore);
+      }
+    } else {
+      handleIncorrect();
+    }
+  };
+
+  const handleContinue = () => {
+    autoAdvanceIfEnabled(() => {
+      resetGrading();
+      reset();
     });
   };
 
-  const handleSubmit = async () => {
-    if (isLoading || !userAnswer.trim()) return;
+  const handlePrevious = () => {
+    previousItem();
+    resetGrading();
+  };
 
-    setIsLoading(true);
-    setData(null);
-    setError(null);
-
-    try {
-      const result = await simulateGrading();
-      setData(result);
-
-      const passed = PASSING_GRADES.includes(result.grade);
-
-      if (passed) {
-        const newCorrectAnswers = correctAnswers + 1;
-        setCorrectAnswers(newCorrectAnswers);
-        handleCorrect(isLastItem);
-
-        if (isLastItem) {
-          const finalScore = Math.round((newCorrectAnswers / exercise.data.items.length) * 100);
-          onComplete?.(finalScore);
-        }
-
-        autoAdvanceIfEnabled(() => {
-          setUserAnswer('');
-          setData(null);
-          reset();
-        });
-      } else {
-        handleIncorrect();
-      }
-    } catch {
-      setError('Failed to grade translation. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
+  const handleNext = () => {
+    nextItem();
+    resetGrading();
   };
 
   const currentItem = exercise.data.items[currentIndex];
@@ -137,14 +112,25 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
       />
 
       <div className="p-4 bg-white rounded-lg border border-gray-200">
+        {currentItem.instructions && currentItem.instructions.trim() !== '' && (
+          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg mb-3">
+            <SimpleRichDisplay content={currentItem.instructions} />
+          </div>
+        )}
+
         <div className="mb-4 p-3 bg-gray-50 rounded-lg">
           <p className="text-sm text-gray-500 mb-1">Translate:</p>
           <p className="text-lg font-serif italic">{currentItem.latinText}</p>
         </div>
 
         <ExerciseInput
-          value={userAnswer}
-          onChange={setUserAnswer}
+          value={currentAnswer}
+          onChange={(value) => {
+            setUserAnswers(prev => ({
+              ...prev,
+              [currentIndex]: value
+            }));
+          }}
           onSubmit={handleSubmit}
           placeholder="Type your English translation..."
         />
@@ -182,6 +168,50 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
                 <p className="text-sm font-medium text-gray-700 mb-1">Suggested translation:</p>
                 <p className="text-sm text-gray-600 italic">{data.suggestedText}</p>
               </div>
+
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Detailed Breakdown:</p>
+                <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="border-b bg-gray-50">
+                        <th className="text-left p-3 font-medium text-gray-700">Latin Segment</th>
+                        <th className="text-left p-3 font-medium text-gray-700">Your Translation</th>
+                        <th className="text-left p-3 font-medium text-gray-700">Feedback</th>
+                        <th className="text-left p-3 font-medium text-gray-700 w-16">Type</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.breakdown.map((row, i) => (
+                        <tr key={i} className="border-b last:border-b-0 hover:bg-gray-50">
+                          <td className="p-3 italic font-serif">{row.latinSegment}</td>
+                          <td className="p-3">{row.yourTranslation}</td>
+                          <td className="p-3">{row.feedback}</td>
+                          <td className="p-3 text-center">{row.type}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="pt-2">
+                {PASSING_GRADES.includes(data.grade) ? (
+                  <Button onClick={handleContinue} className="w-full">
+                    {isLastItem ? 'Finish' : 'Continue'}
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => {
+                      resetGrading();
+                      reset();
+                    }}
+                    variant="outline"
+                    className="w-full">
+                    Try Again
+                  </Button>
+                )}
+              </div>
             </CardContent>
           </Card>
         )}
@@ -189,6 +219,39 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
         {isCorrect !== null && message && !data && (
           <div className={`mt-4 p-3 rounded-lg ${isCorrect ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
             {message}
+          </div>
+        )}
+
+        {exercise.feedbackConfig.progressionRules?.allowManualAdvance !== false && (
+          <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-200">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handlePrevious}
+              disabled={isFirstItem || isLoading}
+              className="rounded-full"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-500">
+                {currentIndex + 1} / {exercise.data.items.length}
+              </span>
+              {passedSentences.has(currentIndex) && (
+                <span className="text-green-600 text-sm">✓</span>
+              )}
+            </div>
+
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleNext}
+              disabled={isLastItem || isLoading}
+              className="rounded-full"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
           </div>
         )}
       </div>

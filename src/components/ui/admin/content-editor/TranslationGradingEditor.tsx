@@ -33,13 +33,13 @@ export const TranslationGradingEditor: React.FC = () => {
   };
 
   const addItem = () => {
-    const newItem = { latinText: '' };
+    const newItem = { latinText: '', instructions: '' };
     const newItems = [...editingContent.data.items, newItem];
     updateData({ items: newItems });
   };
 
-  const updateItem = (index: number, latinText: string) => {
-    const newItems = editingContent.data.items.map((item, i) => (i === index ? { latinText } : item));
+  const updateItem = (index: number, field: 'latinText' | 'instructions', value: string) => {
+    const newItems = editingContent.data.items.map((item, i) => (i === index ? { ...item, [field]: value } : item));
     updateData({ items: newItems });
   };
 
@@ -87,14 +87,30 @@ export const TranslationGradingEditor: React.FC = () => {
             <Card key={index}>
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
-                  <div className="flex-1">
+                  <div className="flex-1 space-y-3">
                     <SimpleTextarea
                       label={`Sentence ${index + 1}`}
                       value={item.latinText}
-                      onChange={value => updateItem(index, value)}
+                      onChange={value => updateItem(index, 'latinText', value)}
                       placeholder="Enter Latin sentence..."
                       rows={2}
                     />
+
+                    <div>
+                      <label className="block text-xs font-medium mb-1 text-blue-700">
+                        Instructions (optional)
+                      </label>
+                      <SimpleTextarea
+                        label=""
+                        value={item.instructions || ''}
+                        onChange={value => updateItem(index, 'instructions', value)}
+                        placeholder="Add context, grammar notes, or hints for this sentence..."
+                        rows={2}
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Displayed above the sentence to provide context or guidance
+                      </p>
+                    </div>
                   </div>
                   {editingContent.data.items.length > 1 && (
                     <Button variant="ghost" size="sm" onClick={() => removeItem(index)} className="text-red-500 mt-6">
@@ -126,6 +142,10 @@ export const TranslationGradingEditor: React.FC = () => {
               <div>
                 <strong>Completed:</strong>{' '}
                 {editingContent.data.items.filter(item => item.latinText.trim() !== '').length}
+              </div>
+              <div>
+                <strong>With Instructions:</strong>{' '}
+                {editingContent.data.items.filter(item => item.instructions && item.instructions.trim() !== '').length}
               </div>
               {editingContent.data.items.some(item => item.latinText.trim() === '') && (
                 <div className="text-amber-600">⚠️ Some sentences are empty</div>

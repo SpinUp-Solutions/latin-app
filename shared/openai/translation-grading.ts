@@ -1,5 +1,3 @@
-import { z } from 'zod';
-import { zodResponseFormat } from 'openai/helpers/zod';
 import { openai, DEFAULT_MODEL, MAX_TOKENS } from './client';
 import { TranslationGradingRequest, TranslationGradingResponse, CostBreakdown } from './types';
 
@@ -16,18 +14,78 @@ Use +/- for finer distinction. Be encouraging, not harsh.
 
 In notes: mention strengths first, then areas to improve. Keep it to 2-3 sentences.
 
-Provide a suggested translation.`;
+Provide a suggested translation.
 
-const LetterGradeSchema = z.enum(['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D', 'D-', 'F']);
+REQUIRED: You MUST provide a 'breakdown' array with segment-by-segment analysis:
+- Break the Latin text into logical segments (phrases/clauses)
+- Each segment must have these exact properties:
+  * latinSegment: The Latin phrase/clause
+  * yourTranslation: What the student wrote for this segment
+  * feedback: Specific instructive feedback (e.g., "Excellent. Correct partitive genitive.")
+  * type: Use "✓" for correct, "⚠" for issues, or descriptive text like "Grammar" or "Vocabulary"
+- Be specific and instructive in feedback for each segment
 
-const TranslationGradingOutputSchema = z.object({
-  grade: LetterGradeSchema,
-  notes: z.string(),
-  suggestedText: z.string(),
-});
+Example breakdown format:
+[
+  {
+    "latinSegment": "Si quid est in me ingeni",
+    "yourTranslation": "If there is any talent in me",
+    "feedback": "Excellent. Correct partitive genitive.",
+    "type": "✓"
+  },
+  {
+    "latinSegment": "prope suo iure",
+    "yourTranslation": "by his own right",
+    "feedback": "Missed 'prope' (almost/nearly). Should be 'almost by his own right'.",
+    "type": "⚠"
+  }
+]`;
 
-export type LetterGrade = z.infer<typeof LetterGradeSchema>;
-export type TranslationGradingOutput = z.infer<typeof TranslationGradingOutputSchema>;
+const LETTER_GRADES = ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D', 'D-', 'F'] as const;
+
+export type LetterGrade = (typeof LETTER_GRADES)[number];
+
+export interface BreakdownItem {
+  latinSegment: string;
+  yourTranslation: string;
+  feedback: string;
+  type: string;
+}
+
+export interface TranslationGradingOutput {
+  grade: LetterGrade;
+  notes: string;
+  suggestedText: string;
+  breakdown: BreakdownItem[];
+}
+
+const TRANSLATION_GRADING_JSON_SCHEMA = {
+  type: 'object',
+  properties: {
+    grade: {
+      type: 'string',
+      enum: LETTER_GRADES,
+    },
+    notes: { type: 'string' },
+    suggestedText: { type: 'string' },
+    breakdown: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          latinSegment: { type: 'string' },
+          yourTranslation: { type: 'string' },
+          feedback: { type: 'string' },
+          type: { type: 'string' },
+        },
+        required: ['latinSegment', 'yourTranslation', 'feedback', 'type'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['grade', 'notes', 'suggestedText', 'breakdown'],
+  additionalProperties: false,
+} as const;
 
 function calculateCost(usage: {
   prompt_tokens?: number;
@@ -67,11 +125,13 @@ export async function gradeTranslation(
 Latin: ${latinText}
 Student's translation: ${userTranslation}
 
-Provide a letter grade, notes with feedback, and a suggested translation.`;
+Provide:
+1. A letter grade
+2. Notes with overall feedback (2-3 sentences)
+3. A suggested translation
+4. A breakdown array analyzing the translation segment-by-segment`;
 
   try {
-    const responseFormat = zodResponseFormat(TranslationGradingOutputSchema, 'translation_grading_output');
-
     const response = await openai.responses.create({
       model: DEFAULT_MODEL,
       max_output_tokens: MAX_TOKENS,
@@ -81,9 +141,9 @@ Provide a letter grade, notes with feedback, and a suggested translation.`;
       text: {
         format: {
           type: 'json_schema',
-          name: responseFormat.json_schema.name,
-          schema: responseFormat.json_schema.schema as Record<string, unknown>,
-          strict: responseFormat.json_schema.strict ?? true,
+          name: 'translation_grading_output',
+          schema: TRANSLATION_GRADING_JSON_SCHEMA as Record<string, unknown>,
+          strict: true,
         },
       },
     });

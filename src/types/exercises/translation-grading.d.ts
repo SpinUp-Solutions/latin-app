@@ -5,6 +5,7 @@ export interface TranslationGradingExercise extends BaseExercise {
   data: {
     items: {
       latinText: string;
+      instructions?: string;
     }[];
   };
 }
