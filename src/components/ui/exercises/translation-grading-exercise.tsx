@@ -24,11 +24,12 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
   const [userAnswers, setUserAnswers] = useState<Record<number, string>>({});
   const [passedSentences, setPassedSentences] = useState<Set<number>>(new Set());
 
-  const { currentIndex, isLastItem, isFirstItem, nextItem, previousItem, autoAdvanceIfEnabled } = useExerciseProgression({
-    totalItems: exercise.data.items.length,
-    itemProgressionDelay: exercise.itemProgressionDelay,
-    progressionRules: exercise.feedbackConfig.progressionRules,
-  });
+  const { currentIndex, isLastItem, isFirstItem, nextItem, previousItem, autoAdvanceIfEnabled } =
+    useExerciseProgression({
+      totalItems: exercise.data.items.length,
+      itemProgressionDelay: exercise.itemProgressionDelay,
+      progressionRules: exercise.feedbackConfig.progressionRules,
+    });
 
   const { isCorrect, message, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(exercise.feedbackConfig);
 
@@ -125,10 +126,10 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
 
         <ExerciseInput
           value={currentAnswer}
-          onChange={(value) => {
+          onChange={value => {
             setUserAnswers(prev => ({
               ...prev,
-              [currentIndex]: value
+              [currentIndex]: value,
             }));
           }}
           onSubmit={handleSubmit}
@@ -229,8 +230,7 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
               size="icon"
               onClick={handlePrevious}
               disabled={isFirstItem || isLoading}
-              className="rounded-full"
-            >
+              className="rounded-full">
               <ChevronLeft className="h-4 w-4" />
             </Button>
 
@@ -238,9 +238,7 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
               <span className="text-sm text-gray-500">
                 {currentIndex + 1} / {exercise.data.items.length}
               </span>
-              {passedSentences.has(currentIndex) && (
-                <span className="text-green-600 text-sm">✓</span>
-              )}
+              {passedSentences.has(currentIndex) && <span className="text-green-600 text-sm">✓</span>}
             </div>
 
             <Button
@@ -248,8 +246,7 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
               size="icon"
               onClick={handleNext}
               disabled={isLastItem || isLoading}
-              className="rounded-full"
-            >
+              className="rounded-full">
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>

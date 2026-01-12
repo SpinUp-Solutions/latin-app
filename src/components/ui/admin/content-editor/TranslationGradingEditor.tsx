@@ -97,9 +97,7 @@ export const TranslationGradingEditor: React.FC = () => {
                     />
 
                     <div>
-                      <label className="block text-xs font-medium mb-1 text-blue-700">
-                        Instructions (optional)
-                      </label>
+                      <label className="block text-xs font-medium mb-1 text-blue-700">Instructions (optional)</label>
                       <SimpleTextarea
                         label=""
                         value={item.instructions || ''}
