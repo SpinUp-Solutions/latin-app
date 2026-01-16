@@ -8,12 +8,13 @@ import { gradeTranslation } from '../../shared/openai/translation-grading';
 import { AIAutocompleteRequest, TranslationGradingRequest } from '../../shared/openai/types';
 
 const openaiApiKey = defineSecret('OPENAI_API_KEY');
+const geminiApiKey = defineSecret('GEMINI_API_KEY');
 
 export const autocompleteWord = onCall({
   timeoutSeconds: 540,
   memory: '1GiB',
   region: 'us-central1',
-  secrets: [openaiApiKey],
+  secrets: [openaiApiKey, geminiApiKey],
 }, async (request) => {
   console.log('[Firebase Function] autocompleteWord called');
 
@@ -59,13 +60,20 @@ export const gradeTranslationFn = onCall({
   timeoutSeconds: 120,
   memory: '512MiB',
   region: 'us-central1',
-  secrets: [openaiApiKey],
+  secrets: [openaiApiKey, geminiApiKey],
 }, async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'User must be authenticated');
   }
 
   const data = request.data as TranslationGradingRequest;
+  const provider = data.provider || 'openai';
+
+  console.log(`[gradeTranslationFn] ========================================`);
+  console.log(`[gradeTranslationFn] Provider requested: ${provider.toUpperCase()}`);
+  console.log(`[gradeTranslationFn] OPENAI_API_KEY present: ${!!process.env.OPENAI_API_KEY}`);
+  console.log(`[gradeTranslationFn] GEMINI_API_KEY present: ${!!process.env.GEMINI_API_KEY}`);
+  console.log(`[gradeTranslationFn] Latin: "${data.latinText?.substring(0, 40)}..."`);
 
   if (!data.latinText || typeof data.latinText !== 'string') {
     throw new HttpsError('invalid-argument', 'latinText is required');
@@ -76,9 +84,18 @@ export const gradeTranslationFn = onCall({
   }
 
   try {
+    const startTime = Date.now();
     const result = await gradeTranslation(data);
+    const elapsed = Date.now() - startTime;
+
+    console.log(`[gradeTranslationFn] ✅ Completed in ${elapsed}ms`);
+    console.log(`[gradeTranslationFn] Model used: ${result.model}`);
+    console.log(`[gradeTranslationFn] Success: ${result.success}, Grade: ${result.data?.grade}`);
+    console.log(`[gradeTranslationFn] ========================================`);
+
     return result;
   } catch (error) {
+    console.error(`[gradeTranslationFn] ❌ Error:`, error);
     throw new HttpsError(
       'internal',
       error instanceof Error ? error.message : 'Unknown error occurred'

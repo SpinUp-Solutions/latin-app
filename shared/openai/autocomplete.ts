@@ -171,6 +171,10 @@ function mergeValue(existingValue: unknown, incomingValue: unknown, overwriteExi
     return incomingValue;
   }
 
+  if (Array.isArray(incomingValue) && !Array.isArray(existingValue)) {
+    return incomingValue;
+  }
+
   if (Array.isArray(existingValue) && Array.isArray(incomingValue)) {
     if (existingValue.length === 0) {
       return incomingValue;
