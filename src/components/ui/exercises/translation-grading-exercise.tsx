@@ -12,7 +12,6 @@ import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { Card, CardContent } from '@/src/components/ui/card';
 import { Button } from '@/src/components/ui/button';
 import { Loader2, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react';
-import { AIProvider } from '@/shared/openai/types';
 import { GrammaticalBreakdownItem } from '@/shared/openai/translation-grading';
 
 interface Props {
@@ -25,7 +24,6 @@ const PASSING_GRADES = ['A+', 'A', 'A-', 'B+', 'B', 'B-'];
 const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
   const [userAnswers, setUserAnswers] = useState<Record<number, string>>({});
   const [passedSentences, setPassedSentences] = useState<Set<number>>(new Set());
-  const [provider, setProvider] = useState<AIProvider>('openai');
   const [grammarExpanded, setGrammarExpanded] = useState(false);
 
   const { currentIndex, isLastItem, isFirstItem, nextItem, previousItem, autoAdvanceIfEnabled } =
@@ -48,7 +46,6 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
     const result = await grade({
       latinText: currentItem.latinText,
       userTranslation: currentAnswer,
-      provider,
     });
 
     if (!result) return;
@@ -96,19 +93,6 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
               <SimpleRichDisplay content={exercise.title} />
             </h3>
           )}
-          <div className="flex items-center gap-2 text-sm">
-            <span className="text-gray-500">AI:</span>
-            <button
-              onClick={() => setProvider(provider === 'openai' ? 'gemini' : 'openai')}
-              disabled={isLoading}
-              className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                provider === 'openai'
-                  ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                  : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-              } disabled:opacity-50`}>
-              {provider === 'openai' ? 'OpenAI' : 'Gemini'}
-            </button>
-          </div>
         </div>
         {exercise.audioPath && (
           <AudioPlayButton
@@ -230,63 +214,34 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
                       <table className="w-full text-sm border-collapse">
                         <thead>
                           <tr className="border-b bg-amber-50">
-                            <th className="text-left p-3 font-medium text-gray-700">Latin</th>
-                            <th className="text-left p-3 font-medium text-gray-700">Translation</th>
-                            <th className="text-left p-3 font-medium text-gray-700">Lemma</th>
-                            <th className="text-left p-3 font-medium text-gray-700">Part of Speech</th>
-                            <th className="text-left p-3 font-medium text-gray-700">Parsing</th>
-                            <th className="text-left p-3 font-medium text-gray-700">Function</th>
+                            <th className="text-left p-3 font-medium text-gray-700">Latin Segment</th>
+                            <th className="text-left p-3 font-medium text-gray-700">Syntactical Role</th>
+                            <th className="text-left p-3 font-medium text-gray-700">Key Grammatical Features</th>
+                            <th className="text-left p-3 font-medium text-gray-700">Notes</th>
                           </tr>
                         </thead>
                         <tbody>
                           {data.grammaticalBreakdown.map((item, i) => {
-                            // Build parsing string
-                            const parts: string[] = [];
-                            if (['verb', 'participle'].includes(item.partOfSpeech)) {
-                              if (item.person) parts.push(item.person);
-                              if (item.number) parts.push(item.number);
-                              if (item.tense) parts.push(item.tense.replace('_', ' '));
-                              if (item.mood) parts.push(item.mood);
-                              if (item.voice) parts.push(item.voice);
-                              if (item.partOfSpeech === 'participle') {
-                                if (item.case) parts.push(item.case);
-                                if (item.gender) parts.push(item.gender);
-                              }
-                            } else if (['noun', 'adjective', 'pronoun', 'gerund', 'gerundive'].includes(item.partOfSpeech)) {
-                              if (item.case) parts.push(item.case);
-                              if (item.number) parts.push(item.number);
-                              if (item.gender) parts.push(item.gender);
-                            } else if (item.partOfSpeech === 'infinitive') {
-                              if (item.tense) parts.push(item.tense.replace('_', ' '));
-                              if (item.voice) parts.push(item.voice);
-                            }
-                            const parsing = parts.length > 0 ? parts.join(', ') : '-';
-
-                            // Get color for syntactic function
-                            const fn = item.syntacticFunction;
-                            let fnColor = 'bg-gray-100 text-gray-800';
-                            if (fn === 'subject') fnColor = 'bg-blue-100 text-blue-800';
-                            else if (fn === 'direct_object') fnColor = 'bg-green-100 text-green-800';
-                            else if (fn === 'indirect_object') fnColor = 'bg-yellow-100 text-yellow-800';
-                            else if (fn === 'main_verb') fnColor = 'bg-purple-100 text-purple-800';
-                            else if (fn.startsWith('ablative_')) fnColor = 'bg-orange-100 text-orange-800';
-                            else if (fn.startsWith('genitive_')) fnColor = 'bg-pink-100 text-pink-800';
-                            else if (fn.startsWith('dative_')) fnColor = 'bg-teal-100 text-teal-800';
-                            else if (fn.includes('clause')) fnColor = 'bg-indigo-100 text-indigo-800';
+                            // Get color based on syntactical role
+                            const role = item.syntacticalRole.toLowerCase();
+                            let roleColor = 'bg-gray-100 text-gray-800';
+                            if (role.includes('protasis') || role.includes('condition')) roleColor = 'bg-blue-100 text-blue-800';
+                            else if (role.includes('apodosis') || role.includes('conclusion')) roleColor = 'bg-purple-100 text-purple-800';
+                            else if (role.includes('subject')) roleColor = 'bg-green-100 text-green-800';
+                            else if (role.includes('subordinate') || role.includes('relative')) roleColor = 'bg-indigo-100 text-indigo-800';
+                            else if (role.includes('participial')) roleColor = 'bg-orange-100 text-orange-800';
+                            else if (role.includes('object')) roleColor = 'bg-yellow-100 text-yellow-800';
 
                             return (
                               <tr key={i} className="border-b last:border-b-0 hover:bg-gray-50">
-                                <td className="p-3 font-serif italic font-medium">{item.latinPhrase}</td>
-                                <td className="p-3">{item.translation}</td>
-                                <td className="p-3 font-serif text-gray-600">{item.lemma}</td>
-                                <td className="p-3 capitalize">{item.partOfSpeech}</td>
-                                <td className="p-3 text-gray-600 capitalize">{parsing}</td>
+                                <td className="p-3 font-serif italic font-medium">{item.latinSegment}</td>
                                 <td className="p-3">
-                                  <span className={`px-2 py-1 rounded text-xs font-medium ${fnColor}`}>
-                                    {fn.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                                  <span className={`px-2 py-1 rounded text-xs font-medium ${roleColor}`}>
+                                    {item.syntacticalRole}
                                   </span>
-                                  {item.notes && <p className="text-xs text-gray-500 mt-1">{item.notes}</p>}
                                 </td>
+                                <td className="p-3 text-gray-700">{item.keyGrammaticalFeatures}</td>
+                                <td className="p-3 text-gray-500 text-xs">{item.notes}</td>
                               </tr>
                             );
                           })}
