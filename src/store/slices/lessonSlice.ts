@@ -24,15 +24,20 @@ const lessonSlice = createSlice({
       state.hasUnsavedChanges = action.payload;
     },
 
-    localReorderLiveLessons: (state, action: PayloadAction<{ fromIndex: number; toIndex: number }>) => {
-      const { fromIndex, toIndex } = action.payload;
-      const liveLessons = state.lessons.filter(l => l.isLive).sort((a, b) => (a.liveOrder || 0) - (b.liveOrder || 0));
+    localReorderLiveLessons: (
+      state,
+      action: PayloadAction<{ fromIndex: number; toIndex: number; lessonType: 'normal' | 'vocab' }>
+    ) => {
+      const { fromIndex, toIndex, lessonType } = action.payload;
+      const liveLessonsOfType = state.lessons
+        .filter(l => l.isLive && l.type === lessonType)
+        .sort((a, b) => (a.liveOrder || 0) - (b.liveOrder || 0));
 
-      if (fromIndex < liveLessons.length && toIndex < liveLessons.length) {
-        const [removed] = liveLessons.splice(fromIndex, 1);
-        liveLessons.splice(toIndex, 0, removed);
+      if (fromIndex < liveLessonsOfType.length && toIndex < liveLessonsOfType.length) {
+        const [removed] = liveLessonsOfType.splice(fromIndex, 1);
+        liveLessonsOfType.splice(toIndex, 0, removed);
 
-        liveLessons.forEach((lesson, index) => {
+        liveLessonsOfType.forEach((lesson, index) => {
           const lessonInState = state.lessons.find(l => l.id === lesson.id);
           if (lessonInState) {
             lessonInState.liveOrder = index;

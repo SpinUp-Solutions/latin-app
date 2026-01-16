@@ -111,7 +111,7 @@ function LiveLessonsPage() {
 
     if (oldIndex === -1 || newIndex === -1) return;
 
-    dispatch(localReorderLiveLessons({ fromIndex: oldIndex, toIndex: newIndex }));
+    dispatch(localReorderLiveLessons({ fromIndex: oldIndex, toIndex: newIndex, lessonType }));
   };
 
   const handleApplyLessonOrder = async () => {

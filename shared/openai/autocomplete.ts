@@ -1,5 +1,5 @@
 import { zodResponseFormat } from 'openai/helpers/zod';
-import { openai, DEFAULT_MODEL, DEFAULT_TEMPERATURE, MAX_TOKENS } from './client';
+import { openai, AUTOCOMPLETE_MODEL, DEFAULT_TEMPERATURE, MAX_TOKENS } from './client';
 import { getPromptForPartOfSpeech, SYSTEM_PROMPT } from './prompts';
 import { AIAutocompleteRequest, AIAutocompleteResponse, AICompletableField, CostBreakdown } from './types';
 import { PartOfSpeech } from '../types/vocabulary/schemas/enums';
@@ -140,11 +140,7 @@ function shouldOverwrite(existingValue: unknown, overwriteExisting?: boolean) {
 }
 
 function isWordForm(value: unknown): value is { full_form?: string; shortened_form?: string } {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    ('full_form' in value || 'shortened_form' in value)
-  );
+  return typeof value === 'object' && value !== null && ('full_form' in value || 'shortened_form' in value);
 }
 
 function isWordFormIncomplete(value: unknown): boolean {
@@ -168,6 +164,10 @@ function mergeWordForm(
 
 function mergeValue(existingValue: unknown, incomingValue: unknown, overwriteExisting?: boolean): unknown {
   if (overwriteExisting) {
+    return incomingValue;
+  }
+
+  if (Array.isArray(incomingValue) && !Array.isArray(existingValue)) {
     return incomingValue;
   }
 
@@ -235,14 +235,14 @@ export async function autocompleteVocabularyWord(request: AIAutocompleteRequest)
   }
 
   console.log('[Autocomplete] Using schema:', config.schema.constructor.name);
-  console.log('[Autocomplete] Model:', DEFAULT_MODEL);
+  console.log('[Autocomplete] Model:', AUTOCOMPLETE_MODEL);
   console.log('[Autocomplete] Temperature:', DEFAULT_TEMPERATURE);
   console.log('[Autocomplete] Max tokens:', MAX_TOKENS);
 
   try {
     console.log('[Autocomplete] Calling OpenAI API...');
     console.log('[Autocomplete] Request details:', {
-      model: DEFAULT_MODEL,
+      model: AUTOCOMPLETE_MODEL,
       maxTokens: MAX_TOKENS,
       schemaName: `${request.part_of_speech}_structured_output`,
     });
@@ -251,9 +251,8 @@ export async function autocompleteVocabularyWord(request: AIAutocompleteRequest)
 
     const startTime = Date.now();
     const response = await openai.responses.create({
-      model: DEFAULT_MODEL,
+        model: AUTOCOMPLETE_MODEL,
       reasoning: { effort: 'low' },
-      service_tier: 'priority',
       max_output_tokens: MAX_TOKENS,
       instructions: SYSTEM_PROMPT,
       input: getPromptForPartOfSpeech(request.part_of_speech, request.word),
@@ -307,15 +306,24 @@ export async function autocompleteVocabularyWord(request: AIAutocompleteRequest)
     console.log('[Autocomplete] Full structured output:', JSON.stringify(structured, null, 2));
 
     if ('principal_parts' in structured) {
-      console.log('[Autocomplete] Principal parts in AI response:', JSON.stringify(structured.principal_parts, null, 2));
+      console.log(
+        '[Autocomplete] Principal parts in AI response:',
+        JSON.stringify(structured.principal_parts, null, 2)
+      );
     }
 
     if ('nominative_singular' in structured) {
-      console.log('[Autocomplete] Nominative singular in AI response:', JSON.stringify(structured.nominative_singular, null, 2));
+      console.log(
+        '[Autocomplete] Nominative singular in AI response:',
+        JSON.stringify(structured.nominative_singular, null, 2)
+      );
     }
 
     if ('genitive_singular' in structured) {
-      console.log('[Autocomplete] Genitive singular in AI response:', JSON.stringify(structured.genitive_singular, null, 2));
+      console.log(
+        '[Autocomplete] Genitive singular in AI response:',
+        JSON.stringify(structured.genitive_singular, null, 2)
+      );
     }
 
     if ('alternate_form' in structured) {
@@ -349,11 +357,7 @@ export async function autocompleteVocabularyWord(request: AIAutocompleteRequest)
       const structuredValue = (structured as Record<string, unknown>)[field];
       const existingValue = (existing as Record<string, unknown>)[field];
 
-      (data as Record<string, unknown>)[field] = mergeValue(
-        existingValue,
-        structuredValue,
-        request.overwriteExisting
-      );
+      (data as Record<string, unknown>)[field] = mergeValue(existingValue, structuredValue, request.overwriteExisting);
     }
 
     const cost = response.usage ? calculateCost(response.usage) : undefined;
@@ -366,16 +370,20 @@ export async function autocompleteVocabularyWord(request: AIAutocompleteRequest)
       const structuredValue = (structured as Record<string, unknown>)[field];
       const mergedValue = (data as Record<string, unknown>)[field];
 
-      const wasIncompleteOrEmpty = isValueEmpty(existingValue) ||
+      const wasIncompleteOrEmpty =
+        isValueEmpty(existingValue) ||
         (Array.isArray(existingValue) && existingValue.some(item => isWordFormIncomplete(item))) ||
         isWordFormIncomplete(existingValue);
 
       if (wasIncompleteOrEmpty) {
-        const isNowComplete = !isValueEmpty(mergedValue) &&
-          (Array.isArray(mergedValue) ? mergedValue.every(item => !isWordFormIncomplete(item)) : !isWordFormIncomplete(mergedValue));
+        const isNowComplete =
+          !isValueEmpty(mergedValue) &&
+          (Array.isArray(mergedValue)
+            ? mergedValue.every(item => !isWordFormIncomplete(item))
+            : !isWordFormIncomplete(mergedValue));
 
         const aiProvidedValue = !isValueEmpty(structuredValue);
-        fieldStatus[field] = (isNowComplete && aiProvidedValue) ? 'filled' : 'missing';
+        fieldStatus[field] = isNowComplete && aiProvidedValue ? 'filled' : 'missing';
       }
     }
 

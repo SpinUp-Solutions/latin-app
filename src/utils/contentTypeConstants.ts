@@ -14,6 +14,7 @@ import {
   MousePointerClick,
   Sparkles,
   Fingerprint,
+  Languages,
 } from 'lucide-react';
 
 export const ALL_CONTENT_TYPES = [
@@ -33,6 +34,7 @@ export const ALL_CONTENT_TYPES = [
   { type: 'click-on-multiple-words', icon: MousePointerClick, label: 'Click On Multiple Words' },
   { type: 'generated-translation', icon: Sparkles, label: 'Generated Translation Exercise' },
   { type: 'generated-form-identification', icon: Fingerprint, label: 'Generated Form Identification Exercise' },
+  { type: 'translation-grading', icon: Languages, label: '[WIP] Translation Grading' },
 ] as const;
 
 export const CONTENT_TYPES = [
@@ -55,4 +57,5 @@ export const EXERCISE_TYPES = [
   { type: 'click-on-multiple-words', icon: MousePointerClick, label: 'Click On Multiple Words' },
   { type: 'generated-translation', icon: Sparkles, label: 'Generated Translation Exercise' },
   { type: 'generated-form-identification', icon: Fingerprint, label: 'Generated Form Identification Exercise' },
+  { type: 'translation-grading', icon: Languages, label: '[WIP] Translation Grading' },
 ] as const;

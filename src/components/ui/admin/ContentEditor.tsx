@@ -20,6 +20,7 @@ import { TableFillEditor } from './content-editor/TableFillEditor';
 import { ClickOnMultipleWordsEditor } from './content-editor/ClickOnMultipleWordsEditor';
 import { GeneratedTranslationEditor } from './content-editor/GeneratedTranslationEditor';
 import { GeneratedFormIdentificationEditor } from './content-editor/GeneratedFormIdentificationEditor';
+import { TranslationGradingEditor } from './content-editor/TranslationGradingEditor';
 
 import { getEditorTitle } from '@/src/utils/editorRegistry';
 
@@ -71,6 +72,8 @@ export const ContentEditor: React.FC = () => {
         return <GeneratedTranslationEditor />;
       case 'generated-form-identification':
         return <GeneratedFormIdentificationEditor />;
+      case 'translation-grading':
+        return <TranslationGradingEditor />;
       default:
         return (
           <div className="p-8 text-center text-gray-500">

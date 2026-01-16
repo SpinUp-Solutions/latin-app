@@ -13,7 +13,7 @@ export * from './indeclinable-words';
 
 import { NounSchema } from './noun';
 import { VerbSchema } from './verb';
-import { BasePronounSchema, PronounSchema } from './pronoun';
+import { BasePronounSchema } from './pronoun';
 import { AdjectiveSchema } from './adjective';
 import { AdverbSchema, PrepositionSchema, ConjunctionSchema, InterjectionSchema } from './indeclinable-words';
 
