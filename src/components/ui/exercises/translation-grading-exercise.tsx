@@ -24,7 +24,6 @@ const PASSING_GRADES = ['A+', 'A', 'A-', 'B+', 'B', 'B-'];
 const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
   const [userAnswers, setUserAnswers] = useState<Record<number, string>>({});
   const [passedSentences, setPassedSentences] = useState<Set<number>>(new Set());
-  const [grammarExpanded, setGrammarExpanded] = useState(false);
 
   const { currentIndex, isLastItem, isFirstItem, nextItem, previousItem, autoAdvanceIfEnabled } =
     useExerciseProgression({
@@ -202,56 +201,54 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
 
               {data.grammaticalBreakdown && data.grammaticalBreakdown.length > 0 && (
                 <div>
-                  <button
-                    onClick={() => setGrammarExpanded(!grammarExpanded)}
-                    className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900 mb-2">
-                    {grammarExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                    Grammatical Analysis
-                  </button>
+                  <p className="text-sm font-medium text-gray-700 mb-2">Grammatical Analysis:</p>
 
-                  {grammarExpanded && (
-                    <div className="overflow-x-auto border border-gray-200 rounded-lg">
-                      <table className="w-full text-sm border-collapse">
-                        <thead>
-                          <tr className="border-b bg-amber-50">
-                            <th className="text-left p-3 font-medium text-gray-700">Latin Segment</th>
-                            <th className="text-left p-3 font-medium text-gray-700">Syntactical Role</th>
-                            <th className="text-left p-3 font-medium text-gray-700">Key Grammatical Features</th>
-                            <th className="text-left p-3 font-medium text-gray-700">Notes</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {data.grammaticalBreakdown.map((item, i) => {
-                            // Get color based on syntactical role
-                            const role = item.syntacticalRole.toLowerCase();
-                            let roleColor = 'bg-gray-100 text-gray-800';
-                            if (role.includes('protasis') || role.includes('condition')) roleColor = 'bg-blue-100 text-blue-800';
-                            else if (role.includes('apodosis') || role.includes('conclusion')) roleColor = 'bg-purple-100 text-purple-800';
-                            else if (role.includes('subject')) roleColor = 'bg-green-100 text-green-800';
-                            else if (role.includes('subordinate') || role.includes('relative')) roleColor = 'bg-indigo-100 text-indigo-800';
-                            else if (role.includes('participial')) roleColor = 'bg-orange-100 text-orange-800';
-                            else if (role.includes('object')) roleColor = 'bg-yellow-100 text-yellow-800';
+                  <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                    <table className="w-full text-sm border-collapse">
+                      <thead>
+                        <tr className="border-b bg-amber-50">
+                          <th className="text-left p-3 font-medium text-gray-700">Latin Segment</th>
+                          <th className="text-left p-3 font-medium text-gray-700">Syntactical Role</th>
+                          <th className="text-left p-3 font-medium text-gray-700">Key Grammatical Features</th>
+                          <th className="text-left p-3 font-medium text-gray-700">Notes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.grammaticalBreakdown.map((item, i) => {
+                          // Get color based on syntactical role
+                          const role = item.syntacticalRole.toLowerCase();
+                          let roleColor = 'border-gray-300 bg-gray-50 text-gray-700';
+                          if (role.includes('protasis') || role.includes('condition'))
+                            roleColor = 'border-blue-400 bg-blue-50 text-blue-700';
+                          else if (role.includes('apodosis') || role.includes('conclusion'))
+                            roleColor = 'border-purple-400 bg-purple-50 text-purple-700';
+                          else if (role.includes('subject')) roleColor = 'border-green-400 bg-green-50 text-green-700';
+                          else if (role.includes('subordinate') || role.includes('relative'))
+                            roleColor = 'border-indigo-400 bg-indigo-50 text-indigo-700';
+                          else if (role.includes('participial'))
+                            roleColor = 'border-orange-400 bg-orange-50 text-orange-700';
+                          else if (role.includes('object'))
+                            roleColor = 'border-yellow-400 bg-yellow-50 text-yellow-700';
 
-                            return (
-                              <tr key={i} className="border-b last:border-b-0 hover:bg-gray-50">
-                                <td className="p-3 font-serif italic font-medium">{item.latinSegment}</td>
-                                <td className="p-3">
-                                  <span className={`px-2 py-1 rounded text-xs font-medium ${roleColor}`}>
-                                    {item.syntacticalRole}
-                                  </span>
-                                </td>
-                                <td className="p-3 text-gray-700">{item.keyGrammaticalFeatures}</td>
-                                <td className="p-3 text-gray-500 text-xs">{item.notes}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+                          return (
+                            <tr key={i} className="border-b last:border-b-0 hover:bg-gray-50 transition-colors">
+                              <td className="p-3 font-serif italic font-medium">{item.latinSegment}</td>
+                              <td className="p-3">
+                                <div
+                                  className={`inline-flex px-2 py-0.5 border-l-2 text-[10px] uppercase tracking-wider font-bold ${roleColor}`}>
+                                  {item.syntacticalRole}
+                                </div>
+                              </td>
+                              <td className="p-3 text-gray-700">{item.keyGrammaticalFeatures}</td>
+                              <td className="p-3 text-gray-500 text-xs">{item.notes}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
-
               <div className="pt-2">
                 {PASSING_GRADES.includes(data.grade) ? (
                   <Button onClick={handleContinue} className="w-full">
