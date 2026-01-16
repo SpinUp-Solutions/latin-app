@@ -5,15 +5,12 @@ import { TranslationGradingExercise } from '@/src/types/exercises';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { useTranslationGrading } from '@/src/hooks/useTranslationGrading';
-import { ExerciseInput } from '../feedback';
 import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
-import { Card, CardContent } from '@/src/components/ui/card';
 import { Button } from '@/src/components/ui/button';
 import { Textarea } from '@/src/components/ui/textarea';
 import { Loader2, ChevronLeft, ChevronRight, Check, Lightbulb } from 'lucide-react';
-import { GrammaticalBreakdownItem } from '@/shared/openai/translation-grading';
 import {
   RomanTable,
   RomanTableHeader,
@@ -52,7 +49,7 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
       progressionRules: exercise.feedbackConfig.progressionRules,
     });
 
-  const { isCorrect, message, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(exercise.feedbackConfig);
+  const { handleCorrect, handleIncorrect, reset } = useExerciseFeedback(exercise.feedbackConfig);
 
   const { grade, reset: resetGrading, isLoading, data, error } = useTranslationGrading();
 
@@ -197,7 +194,7 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
                     <span className="w-2 h-px bg-roman-red/30" />
                     Overall Feedback
                   </h4>
-                  <p className="text-sm text-gray-700 leading-relaxed italic">"{data.notes}"</p>
+                  <p className="text-sm text-gray-700 leading-relaxed italic">&ldquo;{data.notes}&rdquo;</p>
                 </div>
               </div>
 
