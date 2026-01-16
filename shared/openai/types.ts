@@ -1,7 +1,7 @@
 import { VocabularyWord } from '../types/vocabulary/schemas';
 import { PartOfSpeech } from '../types/vocabulary/schemas/enums';
 
-export type AIProvider = 'openai' | 'gemini';
+export type AIProvider = 'openai';
 
 export interface AIAutocompleteRequest {
   word: string;
