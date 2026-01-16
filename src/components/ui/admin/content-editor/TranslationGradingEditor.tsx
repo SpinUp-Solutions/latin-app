@@ -6,6 +6,8 @@ import { TranslationGradingExercise } from '@/src/types/exercises';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonEditorSlice';
 import { SimpleInput, SimpleTextarea } from '@/src/components/ui/form-components';
+import { Textarea } from '@/src/components/ui/textarea';
+import { Label } from '@/src/components/ui/label';
 import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
 
@@ -88,13 +90,17 @@ export const TranslationGradingEditor: React.FC = () => {
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
                   <div className="flex-1 space-y-3">
-                    <SimpleTextarea
-                      label={`Sentence ${index + 1}`}
-                      value={item.latinText}
-                      onChange={value => updateItem(index, 'latinText', value)}
-                      placeholder="Enter Latin sentence..."
-                      rows={2}
-                    />
+                    <div>
+                      <Label htmlFor={`latin-sentence-${index}`}>{`Sentence ${index + 1}`}</Label>
+                      <Textarea
+                        id={`latin-sentence-${index}`}
+                        value={item.latinText}
+                        onChange={event => updateItem(index, 'latinText', event.target.value)}
+                        placeholder="Enter Latin sentence..."
+                        rows={2}
+                        className="mt-1"
+                      />
+                    </div>
 
                     <div>
                       <label className="block text-xs font-medium mb-1 text-blue-700">Instructions (optional)</label>

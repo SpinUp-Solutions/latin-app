@@ -1,6 +1,8 @@
 import { VocabularyWord } from '../types/vocabulary/schemas';
 import { PartOfSpeech } from '../types/vocabulary/schemas/enums';
 
+export type AIProvider = 'openai';
+
 export interface AIAutocompleteRequest {
   word: string;
   part_of_speech: PartOfSpeech;
@@ -65,6 +67,7 @@ export type OpenAIStructuredOutput = Partial<VocabularyWord>;
 export interface TranslationGradingRequest {
   latinText: string;
   userTranslation: string;
+  provider?: AIProvider;
 }
 
 export interface TranslationGradingResponse<T = unknown> {
