@@ -37,6 +37,7 @@ import {
   filterPathsByPreviousAnswers,
   getDisplayForm,
   enrichPathsWithSteps,
+  deduplicatePathsBySteps,
 } from '@/src/utils/exercises/formIdentificationHelpers';
 import { formatLabel } from '@/src/utils/label-formatter';
 
@@ -91,7 +92,12 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
         const enrichedPrimaryPaths = enrichPathsWithSteps(basePrimaryPaths, word, steps);
         const enrichedOptionalPaths = enrichPathsWithSteps(baseOptionalPaths, word, steps);
 
-        const pathDisplays = enrichedPrimaryPaths
+        // Deduplicate paths based on only the requested steps
+        // This handles syncretism where paths differ only in fields not being asked
+        const dedupedPrimaryPaths = deduplicatePathsBySteps(enrichedPrimaryPaths, steps);
+        const dedupedOptionalPaths = deduplicatePathsBySteps(enrichedOptionalPaths, steps);
+
+        const pathDisplays = dedupedPrimaryPaths
           .map(path => {
             const pathValues = steps
               .map(step => {
@@ -115,8 +121,8 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
           steps,
           correctAnswerDisplay,
           hint: word.definitions?.join('; '),
-          primaryFormPaths: enrichedPrimaryPaths,
-          optionalFormPaths: enrichedOptionalPaths,
+          primaryFormPaths: dedupedPrimaryPaths,
+          optionalFormPaths: dedupedOptionalPaths,
         } as SingleFieldFormIdentificationItem;
       });
     }
@@ -140,10 +146,15 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
         const enrichedPrimaryPaths = enrichPathsWithSteps(basePrimaryPaths, word, steps);
         const enrichedOptionalPaths = enrichPathsWithSteps(baseOptionalPaths, word, steps);
 
-        const expectedAnswerCount = enrichedPrimaryPaths.length;
+        // Deduplicate paths based on only the requested steps
+        // This handles syncretism where paths differ only in fields not being asked
+        const dedupedPrimaryPaths = deduplicatePathsBySteps(enrichedPrimaryPaths, steps);
+        const dedupedOptionalPaths = deduplicatePathsBySteps(enrichedOptionalPaths, steps);
+
+        const expectedAnswerCount = dedupedPrimaryPaths.length;
 
         return steps.map((step, stepIndex) => {
-          const stepValues = extractStepValuesFromPaths(enrichedPrimaryPaths, step);
+          const stepValues = extractStepValuesFromPaths(dedupedPrimaryPaths, step);
           const correctAnswerDisplay = stepValues.join(';');
 
           return {
@@ -157,8 +168,8 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
             steps,
             stepIndex,
             totalSteps: steps.length,
-            primaryFormPaths: enrichedPrimaryPaths,
-            optionalFormPaths: enrichedOptionalPaths,
+            primaryFormPaths: dedupedPrimaryPaths,
+            optionalFormPaths: dedupedOptionalPaths,
             hint: word.definitions?.join('; '),
             expectedAnswerCount,
             correctAnswerDisplay,
@@ -471,8 +482,18 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
               <>
                 <strong>Question:</strong> Identify the:{' '}
                 <span className="font-medium">
-                  {(currentItem as SingleFieldFormIdentificationItem).steps.map(formatLabel).join('; ')}
+                  {(currentItem as SingleFieldFormIdentificationItem).steps.map(formatLabel).join(', ')}
                 </span>
+                <div className="text-xs text-gray-500 mt-1">
+                  Format: values separated by commas
+                  {(currentItem as SingleFieldFormIdentificationItem).primaryFormPaths.length > 1 &&
+                    ', multiple answers by semicolons'}{' '}
+                  (e.g.,{' '}
+                  {(currentItem as SingleFieldFormIdentificationItem).primaryFormPaths.length > 1
+                    ? `${(currentItem as SingleFieldFormIdentificationItem).steps.map(() => 'x').join(',')};${(currentItem as SingleFieldFormIdentificationItem).steps.map(() => 'y').join(',')}`
+                    : (currentItem as SingleFieldFormIdentificationItem).steps.map(() => 'x').join(',')}
+                  )
+                </div>
               </>
             ) : isMultiAnswerMode ? (
               <>
@@ -480,6 +501,12 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
                 <span className="font-medium">
                   {formatLabel((currentItem as MultiAnswerFormIdentificationItem).step)}
                 </span>
+                {(currentItem as MultiAnswerFormIdentificationItem).expectedAnswerCount > 1 && (
+                  <div className="text-xs text-gray-500 mt-1">
+                    Enter {(currentItem as MultiAnswerFormIdentificationItem).expectedAnswerCount} answers separated by
+                    semicolons (e.g., x;y)
+                  </div>
+                )}
               </>
             ) : (
               <>
@@ -495,7 +522,11 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
             onChange={handleAnswerChange}
             onSubmit={handleSubmit}
             placeholder={
-              isSingleField || isMultiAnswerMode ? 'Enter answers separated by semicolons...' : 'Type your answer...'
+              isSingleField
+                ? `e.g., ${(currentItem as SingleFieldFormIdentificationItem).steps.map(() => 'value').join(',')}${(currentItem as SingleFieldFormIdentificationItem).primaryFormPaths.length > 1 ? ';...' : ''}`
+                : isMultiAnswerMode && (currentItem as MultiAnswerFormIdentificationItem).expectedAnswerCount > 1
+                  ? `e.g., answer1;answer2`
+                  : 'Type your answer...'
             }
           />
 

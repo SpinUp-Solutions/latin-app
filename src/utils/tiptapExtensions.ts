@@ -1,4 +1,4 @@
-import StarterKit from '@tiptap/starter-kit';
+import StarterKit, { StarterKitOptions } from '@tiptap/starter-kit';
 import { Extensions } from '@tiptap/core';
 import { Tooltip } from '@/src/components/ui/core/tooltip-extension';
 import { Hyperlink } from '@/src/components/ui/core/hyperlink-extension';
@@ -13,31 +13,24 @@ export interface ExtensionSetOptions {
   enableAnnotations?: boolean;
 }
 
-const getStarterKitConfig = (mode: EditorMode) => {
-  const baseConfig = {
-    heading: false,
-    bulletList: false,
-    orderedList: false,
-    listItem: false,
-    blockquote: false,
-    codeBlock: false,
-    hardBreak: false,
-    horizontalRule: false,
-  } as const;
-
+const getStarterKitConfig = (mode: EditorMode): Partial<StarterKitOptions> => {
   if (mode === 'readonly') {
     return {
-      ...baseConfig,
-      // Disable all text editing features for readonly mode
+      heading: false,
+      bulletList: false,
+      orderedList: false,
+      listItem: false,
+      blockquote: false,
+      codeBlock: false,
+      hardBreak: false,
+      horizontalRule: false,
       paragraph: false,
       text: false,
-    } as const;
+    };
   }
 
   if (mode === 'simple') {
     return {
-      ...baseConfig,
-      // Keep only basic text and formatting (bold, italic) for simple mode
       heading: false,
       bulletList: false,
       orderedList: false,
@@ -48,10 +41,18 @@ const getStarterKitConfig = (mode: EditorMode) => {
       horizontalRule: false,
       dropcursor: false,
       gapcursor: false,
-    } as const;
+    };
   }
 
-  return baseConfig;
+  return {
+    heading: {
+      levels: [1, 2, 3],
+    },
+    blockquote: false,
+    codeBlock: false,
+    hardBreak: false,
+    horizontalRule: false,
+  };
 };
 
 export const createExtensionSet = ({

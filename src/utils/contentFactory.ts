@@ -348,6 +348,19 @@ export const createNewContent = (type: string): RenderableContentItem => {
           paradigmConfigs: {},
         },
       };
+    case 'translation-grading':
+      return {
+        id: baseId,
+        type: 'translation-grading',
+        title: '[WIP] Translation Grading Exercise',
+        instructions: 'Translate the Latin sentence into English.',
+        audioPath: null,
+        itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
+        feedbackConfig: createDefaultFeedbackConfig(),
+        data: {
+          items: [{ latinText: 'Puella rosam videt.' }],
+        },
+      };
     default:
       throw new Error(`Unknown content type: ${type}`);
   }
