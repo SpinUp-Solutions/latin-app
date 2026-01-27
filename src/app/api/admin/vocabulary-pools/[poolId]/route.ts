@@ -45,6 +45,8 @@ export async function GET(request: NextRequest, { params }: { params: { poolId: 
               'word',
               'translation',
               'part_of_speech',
+              'definitions',
+              'pronunciation',
               'gender',
               'declension',
               'conjugation',
