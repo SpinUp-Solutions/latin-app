@@ -43,9 +43,7 @@ export const VocabularyPoolEditor: React.FC = () => {
         contentItemId={editingContent.id}
       />
 
-      <p className="text-xs text-gray-500">
-        This item uses the vocabulary pool selected in lesson settings.
-      </p>
+      <p className="text-xs text-gray-500">This item uses the vocabulary pool selected in lesson settings.</p>
     </div>
   );
 };

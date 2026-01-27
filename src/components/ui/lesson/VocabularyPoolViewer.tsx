@@ -28,7 +28,8 @@ export function VocabularyPoolViewer({ content }: VocabularyPoolViewerProps) {
     skip: Boolean(poolIdFromEditor) || !lessonId,
   });
 
-  const poolIdFromLesson = lessonId && studentLessons ? studentLessons.find(lesson => lesson.id === lessonId)?.vocabulary_pool || '' : '';
+  const poolIdFromLesson =
+    lessonId && studentLessons ? studentLessons.find(lesson => lesson.id === lessonId)?.vocabulary_pool || '' : '';
 
   const poolIdToUse = poolIdFromEditor || poolIdFromLesson;
   const isResolvingPoolId = !poolIdFromEditor && Boolean(lessonId) && lessonsLoading;
