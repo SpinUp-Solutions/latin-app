@@ -90,11 +90,7 @@ export default function WordSearchPanel() {
                       </span>
                     )}
                   </div>
-                  <p
-                    className={cn(
-                      'text-xs text-amber-950/80',
-                      result.translation ? '' : 'italic text-amber-800/60'
-                    )}>
+                  <p className={cn('text-xs text-amber-950/80', result.translation ? '' : 'italic text-amber-800/60')}>
                     {result.translation || 'No translation available'}
                   </p>
                 </li>

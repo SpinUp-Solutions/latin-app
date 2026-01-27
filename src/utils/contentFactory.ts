@@ -358,6 +358,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
         audioPath: null,
         itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
         feedbackConfig: createDefaultFeedbackConfig(),
+        translationDirection: 'latin-to-english',
         data: {
           items: [{ latinText: 'Puella rosam videt.' }],
         },

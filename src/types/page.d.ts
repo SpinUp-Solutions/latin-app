@@ -13,6 +13,7 @@ import {
   GeneratedFillExercise,
   GeneratedTranslationExercise,
   GeneratedFormIdentificationExercise,
+  TranslationGradingExercise,
 } from './exercises';
 
 export type RenderableContentItem =
@@ -32,7 +33,8 @@ export type RenderableContentItem =
   | ClickOnMultipleWordsExercise
   | GeneratedFillExercise
   | GeneratedTranslationExercise
-  | GeneratedFormIdentificationExercise;
+  | GeneratedFormIdentificationExercise
+  | TranslationGradingExercise;
 
 export interface BasePage {
   id: string;

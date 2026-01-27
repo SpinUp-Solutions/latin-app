@@ -74,14 +74,19 @@ export const gradeTranslationFn = onCall(
     const data = request.data as TranslationGradingRequest;
     console.log(`[gradeTranslationFn] ========================================`);
     console.log(`[gradeTranslationFn] OPENAI_API_KEY present: ${!!process.env.OPENAI_API_KEY}`);
-    console.log(`[gradeTranslationFn] Latin: "${data.latinText?.substring(0, 40)}..."`);
+    console.log(`[gradeTranslationFn] Direction: ${data.direction}`);
+    console.log(`[gradeTranslationFn] Source: "${data.sourceText?.substring(0, 40)}..."`);
 
-    if (!data.latinText || typeof data.latinText !== 'string') {
-      throw new HttpsError('invalid-argument', 'latinText is required');
+    if (!data.sourceText || typeof data.sourceText !== 'string') {
+      throw new HttpsError('invalid-argument', 'sourceText is required');
     }
 
     if (!data.userTranslation || typeof data.userTranslation !== 'string') {
       throw new HttpsError('invalid-argument', 'userTranslation is required');
+    }
+
+    if (!data.direction || (data.direction !== 'latin-to-english' && data.direction !== 'english-to-latin')) {
+      throw new HttpsError('invalid-argument', 'direction is required');
     }
 
     try {

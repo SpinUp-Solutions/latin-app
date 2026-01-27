@@ -8,6 +8,7 @@ import { updateEditingContent } from '@/src/store/slices/lessonEditorSlice';
 import { SimpleInput, SimpleTextarea } from '@/src/components/ui/form-components';
 import { Textarea } from '@/src/components/ui/textarea';
 import { Label } from '@/src/components/ui/label';
+import { ToggleGroup, ToggleGroupItem } from '@/src/components/ui/toggle-group';
 import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
 
@@ -21,8 +22,14 @@ export const TranslationGradingEditor: React.FC = () => {
     return <div>No content selected for editing</div>;
   }
 
+  const translationDirection = editingContent.translationDirection || 'latin-to-english';
+  const isLatinToEnglish = translationDirection === 'latin-to-english';
+  const sourceLabel = isLatinToEnglish ? 'Latin' : 'English';
+  const sentenceIdPrefix = isLatinToEnglish ? 'latin' : 'english';
+  const sourcePlaceholder = isLatinToEnglish ? 'Enter Latin sentence...' : 'Enter English sentence...';
+
   const updateContent = (updates: Partial<TranslationGradingExercise>) => {
-    dispatch(updateEditingContent({ ...editingContent, ...updates }));
+    dispatch(updateEditingContent({ ...editingContent, ...updates } as TranslationGradingExercise));
   };
 
   const updateData = (dataUpdates: Partial<TranslationGradingExercise['data']>) => {
@@ -40,8 +47,15 @@ export const TranslationGradingEditor: React.FC = () => {
     updateData({ items: newItems });
   };
 
-  const updateItem = (index: number, field: 'latinText' | 'instructions', value: string) => {
-    const newItems = editingContent.data.items.map((item, i) => (i === index ? { ...item, [field]: value } : item));
+  const updateItemText = (index: number, value: string) => {
+    const newItems = editingContent.data.items.map((item, i) => (i === index ? { ...item, latinText: value } : item));
+    updateData({ items: newItems });
+  };
+
+  const updateItemInstructions = (index: number, value: string) => {
+    const newItems = editingContent.data.items.map((item, i) =>
+      i === index ? { ...item, instructions: value } : item
+    );
     updateData({ items: newItems });
   };
 
@@ -50,8 +64,31 @@ export const TranslationGradingEditor: React.FC = () => {
     updateData({ items: newItems });
   };
 
+  const handleDirectionChange = (value: string) => {
+    if (value === 'latin-to-english' || value === 'english-to-latin') {
+      updateContent({ translationDirection: value });
+    }
+  };
+
   return (
     <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="text-sm font-medium text-gray-700">Translation Mode</div>
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          size="sm"
+          value={translationDirection}
+          onValueChange={handleDirectionChange}
+          className="gap-2">
+          <ToggleGroupItem value="latin-to-english" aria-label="Latin to English">
+            Latin -&gt; English
+          </ToggleGroupItem>
+          <ToggleGroupItem value="english-to-latin" aria-label="English to Latin">
+            English -&gt; Latin
+          </ToggleGroupItem>
+        </ToggleGroup>
+      </div>
       <div className="space-y-4">
         <SimpleInput
           label="Exercise Title"
@@ -77,7 +114,7 @@ export const TranslationGradingEditor: React.FC = () => {
 
       <div>
         <div className="flex items-center justify-between mb-3">
-          <label className="block text-sm font-medium">Latin Sentences</label>
+          <label className="block text-sm font-medium">{sourceLabel} Sentences</label>
           <Button onClick={addItem} size="sm" variant="outline">
             <Plus className="h-4 w-4 mr-1" />
             Add Sentence
@@ -91,12 +128,12 @@ export const TranslationGradingEditor: React.FC = () => {
                 <div className="flex items-start gap-3">
                   <div className="flex-1 space-y-3">
                     <div>
-                      <Label htmlFor={`latin-sentence-${index}`}>{`Sentence ${index + 1}`}</Label>
+                      <Label htmlFor={`${sentenceIdPrefix}-sentence-${index}`}>{`Sentence ${index + 1}`}</Label>
                       <Textarea
-                        id={`latin-sentence-${index}`}
+                        id={`${sentenceIdPrefix}-sentence-${index}`}
                         value={item.latinText}
-                        onChange={event => updateItem(index, 'latinText', event.target.value)}
-                        placeholder="Enter Latin sentence..."
+                        onChange={event => updateItemText(index, event.target.value)}
+                        placeholder={sourcePlaceholder}
                         rows={2}
                         className="mt-1"
                       />
@@ -107,7 +144,7 @@ export const TranslationGradingEditor: React.FC = () => {
                       <SimpleTextarea
                         label=""
                         value={item.instructions || ''}
-                        onChange={value => updateItem(index, 'instructions', value)}
+                        onChange={value => updateItemInstructions(index, value)}
                         placeholder="Add context, grammar notes, or hints for this sentence..."
                         rows={2}
                       />
