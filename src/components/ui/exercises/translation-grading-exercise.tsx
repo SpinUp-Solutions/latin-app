@@ -41,6 +41,11 @@ const getRoleColor = (role: string) => {
 const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
   const [userAnswers, setUserAnswers] = useState<Record<number, string>>({});
   const [passedSentences, setPassedSentences] = useState<Set<number>>(new Set());
+  const translationDirection = exercise.translationDirection || 'latin-to-english';
+  const isLatinToEnglish = translationDirection === 'latin-to-english';
+  const sourceLanguage = isLatinToEnglish ? 'Latin' : 'English';
+  const targetLanguage = isLatinToEnglish ? 'English' : 'Latin';
+  const direction = translationDirection;
 
   const { currentIndex, isLastItem, isFirstItem, nextItem, previousItem, autoAdvanceIfEnabled } =
     useExerciseProgression({
@@ -59,9 +64,11 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
     if (isLoading || !currentAnswer.trim()) return;
 
     const currentItem = exercise.data.items[currentIndex];
+    const sourceText = currentItem.latinText;
     const result = await grade({
-      latinText: currentItem.latinText,
+      sourceText,
       userTranslation: currentAnswer,
+      direction,
     });
 
     if (!result) return;
@@ -99,6 +106,7 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
   };
 
   const currentItem = exercise.data.items[currentIndex];
+  const sourceText = currentItem.latinText;
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -145,8 +153,10 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
 
         <div className="mb-6">
           <div className="mb-4 p-5 bg-roman-parchment/5 rounded-xl border border-roman-red/10 shadow-[inset_0_1px_2px_rgba(139,38,53,0.05)]">
-            <p className="text-[10px] uppercase tracking-widest text-roman-red/70 font-bold mb-2">Latin Prompt</p>
-            <p className="text-xl font-serif italic text-roman-red leading-relaxed">{currentItem.latinText}</p>
+            <p className="text-[10px] uppercase tracking-widest text-roman-red/70 font-bold mb-2">
+              {sourceLanguage} Prompt
+            </p>
+            <p className="text-xl font-serif italic text-roman-red leading-relaxed">{sourceText}</p>
           </div>
 
           <div className="flex gap-4">
@@ -159,7 +169,7 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
                 }));
               }}
               onKeyDown={handleKeyDown}
-              placeholder="Type your English translation..."
+              placeholder={`Type your ${targetLanguage} translation...`}
               className="min-h-[140px] text-base resize-y border-roman-red/10 focus-visible:ring-roman-red/20 flex-1"
             />
             <Button
@@ -221,10 +231,10 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
                   <RomanTableHeader>
                     <RomanTableRow className="border-roman-red/10">
                       <RomanTableHead className="w-1/3 py-2 text-[10px] text-roman-red/80 font-bold uppercase tracking-widest">
-                        Latin Segment
+                        {sourceLanguage} Segment
                       </RomanTableHead>
                       <RomanTableHead className="w-1/3 py-2 text-[10px] text-roman-red/80 font-bold uppercase tracking-widest">
-                        Your Translation
+                        Your {targetLanguage}
                       </RomanTableHead>
                       <RomanTableHead className="py-2 text-[10px] text-roman-red/80 font-bold uppercase tracking-widest">
                         Feedback

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button } from '@/src/components/ui/button';
-import { Edit, Trash2, Type, Lightbulb, Table, Book, Target, GripVertical, Copy } from 'lucide-react';
+import { Edit, Trash2, Type, Lightbulb, Table, Book, Library, Target, GripVertical, Copy } from 'lucide-react';
 import { RenderableContentItem } from '@/src/types/page';
 import { SimpleRichDisplay } from '../../core/simple-rich-display';
 import { useSortable } from '@dnd-kit/sortable';
@@ -25,6 +25,8 @@ const getContentIcon = (type: string) => {
       return Table;
     case 'vocabulary':
       return Book;
+    case 'vocabulary-pool':
+      return Library;
     default:
       return Target;
   }

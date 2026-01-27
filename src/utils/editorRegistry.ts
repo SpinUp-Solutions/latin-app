@@ -21,6 +21,8 @@ export const getEditorTitle = (contentType: string): string => {
       return 'Edit Table Content';
     case 'vocabulary':
       return 'Edit Vocabulary Content';
+    case 'vocabulary-pool':
+      return 'Edit Vocabulary Pool Content';
     case 'matching':
       return 'Edit Matching Exercise';
     case 'fill':

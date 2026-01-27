@@ -22,6 +22,13 @@ interface WordsResponse {
   };
 }
 
+export interface VocabularySearchResult {
+  id: string;
+  word: string;
+  translation: string;
+  part_of_speech: string;
+}
+
 export const vocabularyApi = createApi({
   reducerPath: 'vocabularyApi',
   baseQuery: createAuthenticatedBaseQuery(),
@@ -191,6 +198,15 @@ export const vocabularyApi = createApi({
       ],
     }),
 
+    searchWords: builder.query<VocabularySearchResult[], { search: string; limit?: number }>({
+      query: ({ search, limit = 12 }) => {
+        const params = new URLSearchParams({ search, limit: limit.toString() });
+        return `/words/search?${params}`;
+      },
+      transformResponse: (response: { success: boolean; data: { words: VocabularySearchResult[] } }) =>
+        response.data.words,
+    }),
+
     deleteWord: builder.mutation<void, string>({
       query: wordId => ({
         url: `/admin/words/${wordId}`,
@@ -223,6 +239,7 @@ export const {
   useGetWordTypeCountsQuery,
   useUpdateWordMutation,
   useCreateWordMutation,
+  useSearchWordsQuery,
   useDeleteWordMutation,
   useBulkDeleteWordsMutation,
 } = vocabularyApi;

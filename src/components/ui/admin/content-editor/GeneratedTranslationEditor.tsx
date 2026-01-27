@@ -12,6 +12,7 @@ import { FormSelectionTable } from '../vocabulary/FormSelectionTable';
 import { WordSourceSection } from './WordSourceSection';
 import { MultiPosConfigSection } from './MultiPosConfigSection';
 import { useGeneratedExerciseEditor } from '@/src/hooks/useGeneratedExerciseEditor';
+import { splitTranslationAnswers } from '@/src/utils/exercises/generatedTranslationExercise';
 import type { TranslationDirection } from '@/src/types/exercises/generated-translation';
 import type { PartOfSpeech, PronounType, PronounPerson } from '@/shared/types/vocabulary/schemas/enums';
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
@@ -182,7 +183,7 @@ const GeneratedTranslationEditorView: React.FC<{ editingContent: GeneratedTransl
               <div className="space-y-2 mt-4">
                 <label className="block text-sm font-medium">Preview ({previewWords.length} items)</label>
                 {previewWords.map((word, index) => {
-                  const translations = word.translation ? word.translation.split(',').map(t => t.trim()) : [];
+                  const translations = splitTranslationAnswers(word.translation);
 
                   const displayWord =
                     word.selected_form === word.root_word
