@@ -61,6 +61,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
         id: baseId,
         type: 'vocabulary-pool',
         title: 'Vocabulary Pool',
+        studyMode: 'flashcards',
       };
     case 'matching':
       return {
