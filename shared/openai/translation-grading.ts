@@ -1,7 +1,8 @@
 import { openai, TRANSLATION_GRADING_MODEL } from './client';
 import { TranslationGradingRequest, TranslationGradingResponse, CostBreakdown } from './types';
 
-const SYSTEM_PROMPT = `You are a Latin language expert grading student translations.
+const SYSTEM_PROMPT = `You are a Latin language expert grading student translations between Latin and English.
+You may be asked to grade Latin -> English or English -> Latin. Follow the specified direction.
 
 Grading scale:
 - A: Accurate meaning, correct grammar, natural English
@@ -17,10 +18,10 @@ In notes: mention strengths first, then areas to improve. Keep it to 2-3 sentenc
 Provide a suggested translation.
 
 REQUIRED: You MUST provide a 'breakdown' array with segment-by-segment analysis:
-- Break the Latin text into logical segments (phrases/clauses)
+- Break the source text into logical segments (phrases/clauses)
 - Each segment must have these exact properties:
-  * latinSegment: The Latin phrase/clause
-  * yourTranslation: What the student wrote for this segment
+  * latinSegment: The source segment (use this field even if the source is English)
+  * yourTranslation: What the student wrote for this segment in the target language
   * feedback: Specific instructive feedback (e.g., "Excellent. Correct partitive genitive.")
   * type: Use "✓" for correct, "⚠" for issues, or descriptive text like "Grammar" or "Vocabulary"
 - Be specific and instructive in feedback for each segment
@@ -42,6 +43,8 @@ Example breakdown format:
 ]
 
 REQUIRED: You MUST also provide a 'grammaticalBreakdown' array with clause-level syntactical analysis:
+- For Latin → English: analyze the Latin source text
+- For English → Latin: analyze the student's Latin translation
 - Break the Latin text into logical segments (clauses, phrases, or grammatical units)
 - For each segment, explain its syntactical role and key grammatical features
 - This is high-level syntactic analysis, NOT word-by-word parsing
@@ -230,22 +233,25 @@ async function callOpenAIGrading(userPrompt: string): Promise<GradingCallResult>
 export async function gradeTranslation(
   request: TranslationGradingRequest
 ): Promise<TranslationGradingResponse<TranslationGradingOutput>> {
-  const { latinText, userTranslation } = request;
+  const { sourceText, userTranslation, direction } = request;
+  const sourceLanguage = direction === 'english-to-latin' ? 'English' : 'Latin';
+  const targetLanguage = direction === 'english-to-latin' ? 'Latin' : 'English';
 
   console.log(`[gradeTranslation] Starting with OpenAI`);
-  console.log(`[gradeTranslation] Latin text: "${latinText.substring(0, 50)}..."`);
+  console.log(`[gradeTranslation] Direction: ${direction}`);
+  console.log(`[gradeTranslation] Source text: "${sourceText.substring(0, 50)}..."`);
 
-  const userPrompt = `Grade this Latin to English translation:
+  const userPrompt = `Grade this ${sourceLanguage} to ${targetLanguage} translation:
 
-Latin: ${latinText}
-Student's translation: ${userTranslation}
+Source (${sourceLanguage}): ${sourceText}
+Student's translation (${targetLanguage}): ${userTranslation}
 
 Provide:
 1. A letter grade
 2. Notes with overall feedback (2-3 sentences)
 3. A suggested translation
 4. A breakdown array analyzing the translation segment-by-segment
-5. A grammaticalBreakdown array with phrase-based grammatical analysis of the Latin text`;
+5. A grammaticalBreakdown array with phrase-based grammatical analysis of the Latin text (source for Latin -> English, student's translation for English -> Latin)`;
 
   try {
     console.log(`[gradeTranslation] Calling OPENAI...`);

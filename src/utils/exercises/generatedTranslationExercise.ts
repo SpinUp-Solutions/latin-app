@@ -8,6 +8,15 @@ export interface GeneratedTranslationItem {
   stripInfinitive?: boolean;
 }
 
+export const splitTranslationAnswers = (value?: string | null): string[] => {
+  if (!value) return [];
+
+  return value
+    .split(/[;,]/)
+    .map(part => part.trim())
+    .filter(Boolean);
+};
+
 const normalize = (s: string): string => {
   return stripHtmlTags(s)
     .trim()

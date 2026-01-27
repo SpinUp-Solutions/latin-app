@@ -64,9 +64,12 @@ export interface AIAutocompleteResponse {
 
 export type OpenAIStructuredOutput = Partial<VocabularyWord>;
 
+export type TranslationDirection = 'latin-to-english' | 'english-to-latin';
+
 export interface TranslationGradingRequest {
-  latinText: string;
+  sourceText: string;
   userTranslation: string;
+  direction: TranslationDirection;
   provider?: AIProvider;
 }
 

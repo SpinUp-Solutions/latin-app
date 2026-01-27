@@ -13,6 +13,7 @@ import { Card, CardContent } from '../card';
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
 import {
   validateGeneratedTranslationExercise,
+  splitTranslationAnswers,
   type GeneratedTranslationItem,
 } from '@/src/utils/exercises/generatedTranslationExercise';
 
@@ -44,12 +45,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
     const words = data.words as unknown as ExerciseWordResponse[];
 
     const mapped = words.map<GeneratedTranslationItem | null>(word => {
-      const translations = word.translation
-        ? word.translation
-            .split(',')
-            .map(t => t.trim())
-            .filter(Boolean)
-        : [];
+      const translations = splitTranslationAnswers(word.translation);
       const definitionsText = word.definitions && word.definitions.length > 0 ? word.definitions.join(', ') : '';
 
       if (translationDirection === 'english-to-latin') {

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useGetStudentLessonsQuery } from '@/src/store/api/lessonApi';
 import { BookOpen, CheckCircle, Play } from 'lucide-react';
 import { useAuth } from '@/src/hooks/useAuth';
+import WordSearchPanel from './word-search-panel';
 
 interface VocabSidebarProps {
   currentLessonId: string;
@@ -79,8 +80,11 @@ export default function VocabSidebar({ currentLessonId }: VocabSidebarProps) {
           </div>
           <p className="text-base text-roman-stone ml-15">Loading...</p>
         </div>
-        <div className="relative flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-600"></div>
+        <div className="flex-1 overflow-y-auto relative">
+          <WordSearchPanel />
+          <div className="relative flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-600"></div>
+          </div>
         </div>
       </div>
     );
@@ -107,6 +111,7 @@ export default function VocabSidebar({ currentLessonId }: VocabSidebarProps) {
       </div>
 
       <div className="flex-1 overflow-y-auto relative">
+        <WordSearchPanel />
         {lessons.length === 0 ? (
           <div className="px-6 py-12 text-center">
             <div className="relative h-16 w-16 bg-gradient-to-br from-amber-100 to-amber-50 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg">
