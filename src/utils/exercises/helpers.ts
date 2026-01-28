@@ -25,6 +25,16 @@ export const normalizeText = (text: string): string => {
 };
 
 /**
+ * Strips macrons from Latin text (e.g., ā -> a)
+ */
+export const stripMacrons = (text: string): string => {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0304]/g, '')
+    .normalize('NFC');
+};
+
+/**
  * Checks if two normalized strings are equal
  * Handles both plain text and HTML content (from rich text editors)
  */

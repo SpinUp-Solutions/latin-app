@@ -61,6 +61,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
           acceptedAnswers: [answerToAccept],
           hint: definitionsText || undefined,
           stripInfinitive: false,
+          stripMacrons: true,
         };
       }
 

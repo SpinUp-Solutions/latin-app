@@ -11,7 +11,7 @@ export const PartOfSpeechSchema = z.enum([
   'interjection',
 ]);
 
-export const WordTypeSchema = z.enum(['core']);
+export const WordTypeSchema = z.enum(['core', 'non-core']);
 
 export const PronounTypeSchema = z.enum([
   'personal',
