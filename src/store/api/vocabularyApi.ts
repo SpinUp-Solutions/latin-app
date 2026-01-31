@@ -27,6 +27,7 @@ export interface VocabularySearchResult {
   word: string;
   translation: string;
   part_of_speech: string;
+  dictionary_entry: string | null;
 }
 
 export const vocabularyApi = createApi({

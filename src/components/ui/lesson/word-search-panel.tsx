@@ -83,7 +83,7 @@ export default function WordSearchPanel() {
               {results.map(result => (
                 <li key={result.id} className="px-3 py-2">
                   <div className="flex items-baseline justify-between gap-2">
-                    <span className="font-serif text-sm text-roman-red">{result.word}</span>
+                    <span className="font-serif text-sm text-roman-red">{result.dictionary_entry || result.word}</span>
                     {result.part_of_speech && (
                       <span className="text-[10px] uppercase tracking-wide text-amber-800/80">
                         {result.part_of_speech}

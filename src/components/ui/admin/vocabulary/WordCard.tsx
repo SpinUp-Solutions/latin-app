@@ -4,6 +4,7 @@ import { Badge } from '@/src/components/ui/badge';
 import { ChevronDown, ChevronRight, Volume2, List, ChevronUp, Trash2 } from 'lucide-react';
 import { VocabularyWordWithId } from '@/src/types/vocabulary/index';
 import { getWordTypeColor, isVerb } from '@/src/utils/vocabUtils';
+import { formatEnumLabel } from '@/src/utils/schema-helpers';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -191,7 +192,7 @@ export const WordCard: React.FC<WordCardProps> = ({
                 <div className="flex flex-wrap gap-x-6 gap-y-1 text-gray-600">
                   {word.part_of_speech === 'noun' && word.gender && (
                     <span>
-                      <strong>Gender:</strong> {word.gender}
+                      <strong>Gender:</strong> {formatEnumLabel(word.gender)}
                     </span>
                   )}
                   {word.pronunciation && (
