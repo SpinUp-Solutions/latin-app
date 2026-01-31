@@ -5,11 +5,17 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/src/components/ui/tabs';
-import { BookOpen, Edit, Trash2, Calendar, Eye, FileText, Clock } from 'lucide-react';
+import { BookOpen, Edit, Trash2, Calendar, Eye, FileText, Clock, AlertTriangle, RotateCcw } from 'lucide-react';
 import { Lesson } from '@/src/types/lesson';
 import { toast } from 'sonner';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
-import { useGetLessonsQuery, useDeleteLessonMutation } from '@/src/store/api/lessonApi';
+import {
+  useGetLessonsQuery,
+  useDeleteLessonMutation,
+  useGetRecoveryItemsQuery,
+  useRetryFromRecoveryMutation,
+  useDeleteRecoveryItemMutation,
+} from '@/src/store/api/lessonApi';
 import { clearDraft, loadDrafts } from '@/src/store/slices/lessonEditorSlice';
 import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
@@ -24,8 +30,12 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
   const router = useRouter();
   const dispatch = useAppDispatch();
   const { data: lessons = [], isLoading: loading, error } = useGetLessonsQuery();
+  const { data: recoveryItems = [] } = useGetRecoveryItemsQuery();
   const [deleteLesson] = useDeleteLessonMutation();
+  const [retryFromRecovery, { isLoading: retryingRecovery }] = useRetryFromRecoveryMutation();
+  const [deleteRecoveryItem] = useDeleteRecoveryItemMutation();
   const { drafts } = useAppSelector(state => state.lessonEditor);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
   const [dialogState, setDialogState] = useState<{
     isOpen: boolean;
     title: string;
@@ -76,6 +86,37 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
       onConfirm: () => {
         dispatch(clearDraft(lessonId));
         toast.success('Draft deleted successfully');
+      },
+    });
+  };
+
+  const handleRetryRecovery = async (recoveryId: string) => {
+    setRetryingId(recoveryId);
+    try {
+      const result = await retryFromRecovery(recoveryId).unwrap();
+      toast.success('Lesson recovered successfully!');
+      router.push(`/admin/lessons/edit/${result.lesson.id}`);
+    } catch (error) {
+      console.error('Failed to retry from recovery:', error);
+      toast.error('Failed to recover lesson. Please try again.');
+    } finally {
+      setRetryingId(null);
+    }
+  };
+
+  const handleDiscardRecovery = (recoveryId: string, lessonTitle: string) => {
+    setDialogState({
+      isOpen: true,
+      title: `Discard Recovery: "${lessonTitle}"?`,
+      description: 'This will permanently discard this recovery item. The lesson data will be lost.',
+      onConfirm: async () => {
+        try {
+          await deleteRecoveryItem(recoveryId).unwrap();
+          toast.success('Recovery item discarded');
+        } catch (error) {
+          console.error('Failed to discard recovery:', error);
+          toast.error('Failed to discard recovery item');
+        }
       },
     });
   };
@@ -172,6 +213,87 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
 
   return (
     <div className="space-y-8">
+      {/* Recovery Section */}
+      {recoveryItems.length > 0 && (
+        <section>
+          <h2 className="text-xl font-serif text-gray-800 border-b pb-2 mb-4 flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-red-600" />
+            <span className="text-red-700">Recovery Items ({recoveryItems.length})</span>
+          </h2>
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+            <p className="text-sm text-red-700">
+              These lessons failed to save previously. You can retry saving them or discard them if no longer needed.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {recoveryItems.map(item => (
+              <Card key={item.id} className="hover:shadow-lg transition-shadow border-red-300 bg-red-50/50">
+                <CardHeader>
+                  <CardTitle className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0" />
+                      <div className="truncate min-w-0">
+                        <SimpleRichDisplay content={item.lessonTitle} className="truncate" />
+                      </div>
+                    </div>
+                    <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full flex-shrink-0">Recovery</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="text-sm text-red-700 bg-red-100 p-2 rounded border border-red-200">
+                    <strong>Error:</strong> {item.errorMessage}
+                  </div>
+
+                  <div className="text-xs text-gray-500 space-y-1">
+                    <div className="flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      Failed at: {formatDate(item.createdAt)}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between text-xs text-gray-600">
+                    <span>{item.rawLessonData.pages?.length || 0} total pages</span>
+                    <span>
+                      {item.rawLessonData.pages?.reduce(
+                        (count, page) => count + page.items.filter(i => isExerciseType(i.type)).length,
+                        0
+                      ) || 0}{' '}
+                      exercises
+                    </span>
+                  </div>
+
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      onClick={() => handleRetryRecovery(item.id)}
+                      disabled={retryingRecovery && retryingId === item.id}
+                      className="flex-1 bg-green-600 hover:bg-green-700 text-white">
+                      {retryingRecovery && retryingId === item.id ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                          Retrying...
+                        </>
+                      ) : (
+                        <>
+                          <RotateCcw className="h-4 w-4 mr-1" />
+                          Retry Save
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => handleDiscardRecovery(item.id, item.lessonTitle)}
+                      disabled={retryingRecovery && retryingId === item.id}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Drafts Section */}
       {Object.keys(drafts).length > 0 && (
         <section>
