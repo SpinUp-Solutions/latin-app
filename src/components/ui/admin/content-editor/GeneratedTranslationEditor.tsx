@@ -16,6 +16,7 @@ import { splitTranslationAnswers } from '@/src/utils/exercises/generatedTranslat
 import type { TranslationDirection } from '@/src/types/exercises/generated-translation';
 import type { PartOfSpeech, PronounType, PronounPerson } from '@/shared/types/vocabulary/schemas/enums';
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
+import { getExerciseDisplayForm, hasSelectedForm } from '@/src/utils/exercises/formSelection';
 
 export const GeneratedTranslationEditor: React.FC = () => {
   const editingContent = useAppSelector(
@@ -185,16 +186,13 @@ const GeneratedTranslationEditorView: React.FC<{ editingContent: GeneratedTransl
                 {previewWords.map((word, index) => {
                   const translations = splitTranslationAnswers(word.translation);
 
-                  const displayWord =
-                    word.selected_form === word.root_word
-                      ? word.dictionary_entry || word.selected_form
-                      : word.selected_form;
+                  const displayWord = getExerciseDisplayForm(word);
 
                   return (
                     <Card key={index}>
                       <CardContent className="p-3 space-y-1">
                         <div className="font-medium">{displayWord}</div>
-                        {word.selected_form !== word.root_word && (
+                        {hasSelectedForm(word) && word.selected_form !== word.root_word && (
                           <div className="text-xs text-gray-500">Root: {word.dictionary_entry || word.root_word}</div>
                         )}
                         <div className="text-sm text-gray-600">Accepted answers: {translations.join(' OR ')}</div>

@@ -50,7 +50,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       .where('sort_key', '>=', searchKey)
       .where('sort_key', '<=', `${searchKey}\uf8ff`)
       .limit(limit)
-      .select('word', 'translation', 'part_of_speech')
+      .select('word', 'translation', 'part_of_speech', 'dictionary_entry')
       .get();
 
     const words = snapshot.docs.map(doc => {
@@ -60,6 +60,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         word: data.word ?? '',
         translation: data.translation ?? '',
         part_of_speech: data.part_of_speech ?? '',
+        dictionary_entry: data.dictionary_entry || null,
       };
     });
 

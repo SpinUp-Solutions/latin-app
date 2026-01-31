@@ -11,7 +11,7 @@ export const PartOfSpeechSchema = z.enum([
   'interjection',
 ]);
 
-export const WordTypeSchema = z.enum(['core']);
+export const WordTypeSchema = z.enum(['core', 'non-core']);
 
 export const PronounTypeSchema = z.enum([
   'personal',
@@ -36,7 +36,7 @@ export const CaseSchema = z.enum([
   'locative',
 ]);
 
-export const GenderSchema = z.enum(['masculine', 'feminine', 'neuter']);
+export const GenderSchema = z.enum(['masculine', 'feminine', 'neuter', 'masculine-feminine']);
 
 export const NumberSchema = z.enum(['singular', 'plural']);
 

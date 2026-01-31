@@ -7,7 +7,7 @@ import { createAuthenticatedBaseQuery } from './baseQuery';
 export const lessonApi = createApi({
   reducerPath: 'lessonApi',
   baseQuery: createAuthenticatedBaseQuery(),
-  tagTypes: ['Lesson', 'LessonList', 'StudentLesson'],
+  tagTypes: ['Lesson', 'LessonList', 'StudentLesson', 'Recovery'],
   keepUnusedDataFor: 60 * 5,
   refetchOnMountOrArgChange: 30,
   refetchOnFocus: true,
@@ -141,6 +141,65 @@ export const lessonApi = createApi({
       }),
       invalidatesTags: () => [{ type: 'StudentLesson', id: 'LIST' }],
     }),
+
+    // Recovery endpoints
+    getRecoveryItems: builder.query<
+      {
+        id: string;
+        lessonId: string;
+        lessonTitle: string;
+        rawLessonData: Lesson;
+        errorMessage: string;
+        errorCode?: string;
+        createdAt: string;
+      }[],
+      void
+    >({
+      query: () => '/admin/lessons/recovery',
+      transformResponse: (response: {
+        recoveryItems: {
+          id: string;
+          lessonId: string;
+          lessonTitle: string;
+          rawLessonData: Lesson;
+          errorMessage: string;
+          errorCode?: string;
+          createdAt: string;
+        }[];
+      }) => response.recoveryItems,
+      providesTags: [{ type: 'Recovery', id: 'LIST' }],
+    }),
+
+    saveToRecovery: builder.mutation<
+      { success: boolean; recoveryId: string },
+      { lesson: Lesson; errorMessage: string; errorCode?: string }
+    >({
+      query: data => ({
+        url: '/admin/lessons/recovery',
+        method: 'POST',
+        body: data,
+      }),
+      invalidatesTags: [{ type: 'Recovery', id: 'LIST' }],
+    }),
+
+    retryFromRecovery: builder.mutation<{ success: boolean; lesson: Lesson }, string>({
+      query: recoveryId => ({
+        url: `/admin/lessons/recovery/${recoveryId}`,
+        method: 'POST',
+      }),
+      invalidatesTags: [
+        { type: 'Recovery', id: 'LIST' },
+        { type: 'LessonList', id: 'LIST' },
+      ],
+    }),
+
+    deleteRecoveryItem: builder.mutation<{ success: boolean }, string>({
+      query: recoveryId => ({
+        url: `/admin/lessons/recovery/${recoveryId}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: [{ type: 'Recovery', id: 'LIST' }],
+    }),
   }),
 });
 
@@ -148,6 +207,7 @@ export const {
   useGetLessonsQuery,
   useGetStudentLessonsQuery,
   useGetLessonByIdQuery,
+  useLazyGetLessonByIdQuery,
   useCreateLessonMutation,
   useUpdateLessonMutation,
   useDeleteLessonMutation,
@@ -156,4 +216,9 @@ export const {
   useMarkExerciseCompleteMutation,
   useUpdatePageProgressMutation,
   useMarkLessonCompleteMutation,
+  // Recovery hooks
+  useGetRecoveryItemsQuery,
+  useSaveToRecoveryMutation,
+  useRetryFromRecoveryMutation,
+  useDeleteRecoveryItemMutation,
 } = lessonApi;
