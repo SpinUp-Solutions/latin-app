@@ -36,7 +36,7 @@ export const CaseSchema = z.enum([
   'locative',
 ]);
 
-export const GenderSchema = z.enum(['masculine', 'feminine', 'neuter']);
+export const GenderSchema = z.enum(['masculine', 'feminine', 'neuter', 'masculine-feminine']);
 
 export const NumberSchema = z.enum(['singular', 'plural']);
 

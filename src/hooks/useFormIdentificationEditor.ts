@@ -7,7 +7,7 @@ import { useGetMultiParadigmWordsQuery } from '@/src/store/api/advancedVocabular
 import { useAvailableParadigms } from '@/src/hooks/useAvailableParadigms';
 import { useFormSelectionControls } from '@/src/hooks/useFormSelection';
 import { ensureGeneratorConfig, DEFAULT_POS_FILTERS } from '@/src/utils/exercises/generatorConfigDefaults';
-import { PARADIGM_STEPS, PARADIGM_TABLE_TYPE } from '@/src/config/paradigmDefinitions';
+import { PARADIGM_STEPS, PARADIGM_TABLE_TYPE, PARADIGM_RELEVANT_FILTERS } from '@/src/config/paradigmDefinitions';
 import { getParadigmPOS } from '@/src/utils/paradigm';
 import type { GeneratedFormIdentificationExercise } from '@/src/types/exercises/generated-form-identification';
 import type { FormParadigm, ParadigmConfig, ParadigmConfigs } from '@/src/types/exercises/paradigm';
@@ -120,8 +120,26 @@ export function useFormIdentificationEditor(editingContent: GeneratedFormIdentif
   const handleGlobalFiltersChange = useCallback(
     (updates: Partial<GeneratorFilters>) => {
       updateConfig({ filters: { ...config.filters, ...updates } });
+
+      if (activeParadigm) {
+        const relevantFilters = PARADIGM_RELEVANT_FILTERS[activeParadigm];
+        const paradigmFilterUpdates: Partial<GeneratorFilters> = {};
+
+        for (const key of Object.keys(updates) as (keyof GeneratorFilters)[]) {
+          if (relevantFilters.includes(key as keyof Omit<GeneratorFilters, 'partOfSpeech'>)) {
+            paradigmFilterUpdates[key] = updates[key];
+          }
+        }
+
+        if (Object.keys(paradigmFilterUpdates).length > 0) {
+          const currentFilters = editingContent.data.paradigmConfigs?.[activeParadigm]?.filters || {};
+          handleUpdateParadigmConfig(activeParadigm, {
+            filters: { ...currentFilters, ...paradigmFilterUpdates },
+          });
+        }
+      }
     },
-    [config.filters, updateConfig]
+    [config.filters, updateConfig, activeParadigm, editingContent.data.paradigmConfigs, handleUpdateParadigmConfig]
   );
 
   useEffect(() => {

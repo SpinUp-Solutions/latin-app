@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Button } from '@/src/components/ui/button';
 import { BookOpen } from 'lucide-react';
 import { Lesson } from '@/src/types/lesson';
@@ -9,7 +9,6 @@ import { RenderableContentItem } from '@/src/types/page';
 // Redux hooks and actions
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import {
-  setLesson,
   updateLessonInfo,
   addPage,
   updatePageTitle,
@@ -18,7 +17,6 @@ import {
   removePage,
   duplicatePage,
   startEditingContent,
-  loadTooltips,
 } from '@/src/store/slices/lessonEditorSlice';
 
 // Components
@@ -29,26 +27,19 @@ import { LessonPreview } from './lesson-builder/LessonPreview';
 import { ALL_CONTENT_TYPES } from '@/src/utils/contentTypeConstants';
 import { ContentEditor } from './ContentEditor';
 import { useClipboard, ClipboardPanel } from '../core/clipboard';
-import { extractTooltipsFromLesson } from '@/src/utils/tooltipUtils';
 
 interface LessonBuilderProps {
   initialLesson?: Lesson;
   onSave: (lesson: Lesson) => void;
+  saving?: boolean;
 }
 
-export const LessonBuilder: React.FC<LessonBuilderProps> = ({ initialLesson, onSave }) => {
+export const LessonBuilder: React.FC<LessonBuilderProps> = ({ initialLesson, onSave, saving }) => {
   const dispatch = useAppDispatch();
-  const { currentLesson, saving } = useAppSelector(state => state.lessonEditor);
+  const { currentLesson } = useAppSelector(state => state.lessonEditor);
   const { pasteBulk } = useClipboard();
   const isNewLesson = !initialLesson;
-
-  useEffect(() => {
-    dispatch(setLesson(initialLesson));
-    if (initialLesson) {
-      const tooltips = extractTooltipsFromLesson(initialLesson);
-      dispatch(loadTooltips(tooltips));
-    }
-  }, [dispatch, initialLesson]);
+  const isSaving = saving ?? false;
 
   if (!currentLesson) {
     return <div>Loading lesson...</div>;
@@ -118,8 +109,8 @@ export const LessonBuilder: React.FC<LessonBuilderProps> = ({ initialLesson, onS
               <p className="text-xs text-gray-500">Create and edit lesson content</p>
             </div>
             <div className="flex gap-2">
-              <Button onClick={handleSaveLesson} disabled={saving} size="sm">
-                {saving ? (
+              <Button onClick={handleSaveLesson} disabled={isSaving} size="sm">
+                {isSaving ? (
                   <>
                     <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2"></div>
                     Saving...

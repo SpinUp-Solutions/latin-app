@@ -14,7 +14,7 @@ interface LessonEditorState {
   } | null;
   isModalOpen: boolean;
   tooltips: Record<string, TooltipData>;
-  saving: boolean;
+  dirty: boolean;
   error: string | null;
 }
 
@@ -24,7 +24,7 @@ const initialState: LessonEditorState = {
   editingContent: null,
   isModalOpen: false,
   tooltips: {},
-  saving: false,
+  dirty: false,
   error: null,
 };
 
@@ -88,6 +88,7 @@ const lessonEditorSlice = createSlice({
         publishedBy: null,
       };
       state.error = null;
+      state.dirty = false;
     },
 
     updateLessonInfo: (
@@ -96,6 +97,7 @@ const lessonEditorSlice = createSlice({
     ) => {
       if (state.currentLesson) {
         Object.assign(state.currentLesson, action.payload);
+        state.dirty = true;
       }
     },
 
@@ -108,6 +110,7 @@ const lessonEditorSlice = createSlice({
           audioPath: null,
         };
         state.currentLesson.pages.push(newPage);
+        state.dirty = true;
       }
     },
 
@@ -121,6 +124,7 @@ const lessonEditorSlice = createSlice({
       const { pageIndex, title } = action.payload;
       if (state.currentLesson) {
         state.currentLesson.pages[pageIndex].title = title;
+        state.dirty = true;
       }
     },
 
@@ -134,6 +138,7 @@ const lessonEditorSlice = createSlice({
       const { pageIndex, autoAdvance } = action.payload;
       if (state.currentLesson?.pages[pageIndex]) {
         state.currentLesson.pages[pageIndex].autoAdvance = autoAdvance;
+        state.dirty = true;
       }
     },
 
@@ -147,6 +152,7 @@ const lessonEditorSlice = createSlice({
       const { pageIndex, content } = action.payload;
       if (state.currentLesson) {
         state.currentLesson.pages[pageIndex].items.push(content);
+        state.dirty = true;
       }
     },
 
@@ -161,6 +167,7 @@ const lessonEditorSlice = createSlice({
       const { pageIndex, itemIndex, content } = action.payload;
       if (state.currentLesson) {
         state.currentLesson.pages[pageIndex].items[itemIndex] = content;
+        state.dirty = true;
       }
     },
 
@@ -174,6 +181,7 @@ const lessonEditorSlice = createSlice({
       const { pageIndex, itemIndex } = action.payload;
       if (state.currentLesson) {
         state.currentLesson.pages[pageIndex].items.splice(itemIndex, 1);
+        state.dirty = true;
       }
     },
 
@@ -186,6 +194,7 @@ const lessonEditorSlice = createSlice({
       const { pageIndex } = action.payload;
       if (state.currentLesson) {
         state.currentLesson.pages.splice(pageIndex, 1);
+        state.dirty = true;
       }
     },
 
@@ -201,6 +210,7 @@ const lessonEditorSlice = createSlice({
         const { page: newPage, tooltips: newTooltips } = regeneratePageIds(pageToDuplicate, state.tooltips);
         state.currentLesson.pages.splice(pageIndex + 1, 0, newPage);
         state.tooltips = { ...state.tooltips, ...newTooltips };
+        state.dirty = true;
       }
     },
 
@@ -228,6 +238,7 @@ const lessonEditorSlice = createSlice({
         if (state.currentLesson) {
           const { pageIndex, itemIndex } = state.editingContent;
           state.currentLesson.pages[pageIndex].items[itemIndex] = action.payload;
+          state.dirty = true;
         }
       }
     },
@@ -238,6 +249,7 @@ const lessonEditorSlice = createSlice({
         state.currentLesson.pages[pageIndex].items[itemIndex] = content;
         state.editingContent = null;
         state.isModalOpen = false;
+        state.dirty = true;
       }
     },
 
@@ -254,15 +266,18 @@ const lessonEditorSlice = createSlice({
       state.currentLesson = null;
       state.editingContent = null;
       state.error = null;
+      state.dirty = false;
     },
 
     addTooltip: (state, action: PayloadAction<{ id: string; data: Omit<TooltipData, 'id'> }>) => {
       const { id, data } = action.payload;
       state.tooltips[id] = { ...data, id };
+      state.dirty = true;
     },
 
     removeTooltip: (state, action: PayloadAction<string>) => {
       delete state.tooltips[action.payload];
+      state.dirty = true;
     },
 
     clearTooltips: state => {
@@ -285,6 +300,7 @@ const lessonEditorSlice = createSlice({
         const pages = state.currentLesson.pages;
         const [movedPage] = pages.splice(fromIndex, 1);
         pages.splice(toIndex, 0, movedPage);
+        state.dirty = true;
       }
     },
 
@@ -301,11 +317,12 @@ const lessonEditorSlice = createSlice({
         const items = state.currentLesson.pages[pageIndex].items;
         const [movedItem] = items.splice(fromIndex, 1);
         items.splice(toIndex, 0, movedItem);
+        state.dirty = true;
       }
     },
 
-    setSaving: (state, action: PayloadAction<boolean>) => {
-      state.saving = action.payload;
+    setDirty: (state, action: PayloadAction<boolean>) => {
+      state.dirty = action.payload;
     },
   },
   extraReducers: builder => {
@@ -345,7 +362,7 @@ export const {
   loadTooltips,
   reorderPages,
   reorderContentItems,
-  setSaving,
+  setDirty,
 } = lessonEditorSlice.actions;
 
 export const selectHasDraft = (state: { lessonEditor: LessonEditorState }, lessonId: string) =>

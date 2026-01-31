@@ -234,6 +234,34 @@ export function formatPrimaryAnswersDisplay(
   return values.join(' OR ');
 }
 
+function generateMasculineFeminineVariants(): string[] {
+  const mascForms = ['masculine', 'masc.', 'masc', 'm'];
+  const femForms = ['feminine', 'fem.', 'fem', 'f'];
+  const separators = [',', ', ', '/', '-', ' '];
+
+  const variants: string[] = [
+    ...mascForms,
+    ...femForms,
+    'masculine-feminine',
+    'masculine/feminine',
+    'm./f.',
+    'm/f',
+    'mf',
+    'fm',
+  ];
+
+  for (const sep of separators) {
+    for (const masc of mascForms) {
+      for (const fem of femForms) {
+        variants.push(`${masc}${sep}${fem}`);
+        variants.push(`${fem}${sep}${masc}`);
+      }
+    }
+  }
+
+  return [...new Set(variants)];
+}
+
 const createVariantMap = () => {
   const v: Record<string, string[]> = {};
 
@@ -265,6 +293,7 @@ const createVariantMap = () => {
       masculine: ['masculine', 'masc.', 'masc', 'm'],
       feminine: ['feminine', 'fem.', 'fem', 'f'],
       neuter: ['neuter', 'neut.', 'neut', 'n'],
+      'masculine-feminine': generateMasculineFeminineVariants(),
     };
     v[val] = map[val] || [val];
   });
@@ -364,13 +393,52 @@ const createVariantMap = () => {
 
 const ANSWER_VARIANTS = createVariantMap();
 
+const normalizeVariantKey = (value: string): string => {
+  const normalized = value.toLowerCase().trim();
+  if (!normalized) return normalized;
+
+  const directGenderAliases: Record<string, string> = {
+    m: 'masculine',
+    'masc.': 'masculine',
+    masc: 'masculine',
+    f: 'feminine',
+    'fem.': 'feminine',
+    fem: 'feminine',
+    n: 'neuter',
+    'neut.': 'neuter',
+    neut: 'neuter',
+    mf: 'masculine-feminine',
+    fm: 'masculine-feminine',
+  };
+
+  if (directGenderAliases[normalized]) {
+    return directGenderAliases[normalized];
+  }
+
+  const tokens = normalized
+    .replace(/[.,;:!?]/g, '')
+    .split(/[\s/,-]+/)
+    .filter(Boolean);
+
+  if (tokens.length >= 2) {
+    const tokenSet = new Set(tokens);
+    const hasMasc = tokenSet.has('m') || tokenSet.has('masc') || tokenSet.has('masculine');
+    const hasFem = tokenSet.has('f') || tokenSet.has('fem') || tokenSet.has('feminine');
+    if (hasMasc && hasFem) {
+      return 'masculine-feminine';
+    }
+  }
+
+  return normalized;
+};
+
 export const getAcceptedAnswersForStep = (correctAnswer: string): string[] => {
-  const normalized = correctAnswer.toLowerCase().trim();
+  const normalized = normalizeVariantKey(correctAnswer);
   return ANSWER_VARIANTS[normalized] || [correctAnswer];
 };
 
 export const getDisplayForm = (value: string): string => {
-  const normalized = value.toLowerCase().trim();
+  const normalized = normalizeVariantKey(value);
   const variants = ANSWER_VARIANTS[normalized];
   return variants ? variants[variants.length - 1] : value;
 };
@@ -389,7 +457,7 @@ export const getHintForStep = (word: ExerciseWordResponse, step: FormIdentificat
     person: 'Identify the person (1st, 2nd, or 3rd)',
     number: 'Determine if this is singular or plural',
     case: 'Identify the grammatical case',
-    gender: 'Determine the gender (masculine, feminine, or neuter)',
+    gender: 'Determine the gender (masculine, feminine, neuter, or masculine/feminine)',
     degree: 'Identify the degree (positive, comparative, or superlative)',
     pronoun_type: 'Identify the pronoun type (personal, demonstrative, relative, etc.)',
   };

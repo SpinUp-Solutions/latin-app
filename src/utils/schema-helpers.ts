@@ -27,6 +27,7 @@ export const capitalize = (str: string): string => {
 export const formatEnumLabel = (value: string): string => {
   if (value === '1-2') return 'First/Second';
   if (value === '3-istem') return 'Third i-stem';
+  if (value === 'masculine-feminine') return 'Masculine/Feminine';
 
   const numberMap: Record<string, string> = {
     '1': 'First',
