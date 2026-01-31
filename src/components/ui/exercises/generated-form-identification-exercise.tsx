@@ -33,12 +33,14 @@ import {
   getHintForStep,
   extractStepValuesFromPaths,
   getAcceptedAnswersForMultipleValues,
+  getAcceptedAnswersForStep,
   formatPrimaryAnswersDisplay,
   filterPathsByPreviousAnswers,
   getDisplayForm,
   enrichPathsWithSteps,
   deduplicatePathsBySteps,
 } from '@/src/utils/exercises/formIdentificationHelpers';
+import { hasSelectedForm } from '@/src/utils/exercises/formSelection';
 import { formatLabel } from '@/src/utils/label-formatter';
 
 interface Props {
@@ -75,6 +77,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
 
     if (isSingleField) {
       return words.map(word => {
+        const hasSelected = hasSelectedForm(word);
         const wordAny = word as Record<string, unknown>;
         const paradigm = deriveParadigm(
           word.part_of_speech as PartOfSpeech,
@@ -118,6 +121,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
           root_word: word.root_word,
           dictionary_entry: word.dictionary_entry ?? null,
           selected_form: word.selected_form,
+          hasSelectedForm: hasSelected,
           steps,
           correctAnswerDisplay,
           hint: word.definitions?.join('; '),
@@ -129,6 +133,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
 
     if (isMultiAnswerMode) {
       return words.flatMap(word => {
+        const hasSelected = hasSelectedForm(word);
         const wordAny = word as Record<string, unknown>;
         const paradigm = deriveParadigm(
           word.part_of_speech as PartOfSpeech,
@@ -164,6 +169,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
             root_word: word.root_word,
             dictionary_entry: word.dictionary_entry ?? null,
             selected_form: word.selected_form,
+            hasSelectedForm: hasSelected,
             step,
             steps,
             stepIndex,
@@ -179,6 +185,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
     }
 
     return words.flatMap(word => {
+      const hasSelected = hasSelectedForm(word);
       const wordAny = word as Record<string, unknown>;
       const paradigm = deriveParadigm(
         word.part_of_speech as PartOfSpeech,
@@ -213,9 +220,10 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
           root_word: word.root_word,
           dictionary_entry: word.dictionary_entry ?? null,
           selected_form: word.selected_form,
+          hasSelectedForm: hasSelected,
           step,
           correctAnswer,
-          acceptedAnswers: acceptedAnswers.length > 0 ? acceptedAnswers : [correctAnswer],
+          acceptedAnswers: acceptedAnswers.length > 0 ? acceptedAnswers : getAcceptedAnswersForStep(correctAnswer),
           hint: getHintForStep(word, step),
           primaryFormPaths: filteredPrimaryPaths,
           optionalFormPaths: filteredOptionalPaths,
@@ -469,9 +477,9 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
             <div className="text-lg font-medium">
               <SimpleRichDisplay
                 content={
-                  currentItem.selected_form === currentItem.root_word
-                    ? currentItem.dictionary_entry || currentItem.selected_form
-                    : currentItem.selected_form
+                  currentItem.hasSelectedForm
+                    ? currentItem.selected_form
+                    : currentItem.dictionary_entry || currentItem.selected_form
                 }
               />
             </div>

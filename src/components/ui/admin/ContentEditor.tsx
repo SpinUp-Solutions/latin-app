@@ -9,6 +9,7 @@ import { TextEditor } from './content-editor/TextEditor';
 import { EmphasisEditor } from './content-editor/EmphasisEditor';
 import { TableEditor } from './content-editor/TableEditor';
 import { VocabularyEditor } from './content-editor/VocabularyEditor';
+import { VocabularyPoolEditor } from './content-editor/VocabularyPoolEditor';
 import { MatchingEditor } from './content-editor/MatchingEditor';
 import { FillEditor } from './content-editor/FillEditor';
 import { TextSelectionEditor } from './content-editor/TextSelectionEditor';
@@ -50,6 +51,8 @@ export const ContentEditor: React.FC = () => {
         return <TableEditor />;
       case 'vocabulary':
         return <VocabularyEditor />;
+      case 'vocabulary-pool':
+        return <VocabularyPoolEditor />;
       case 'matching':
         return <MatchingEditor />;
       case 'fill':

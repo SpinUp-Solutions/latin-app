@@ -3,6 +3,7 @@ import { Input } from '@/src/components/ui/input';
 import { Textarea } from '@/src/components/ui/textarea';
 import { Button } from '@/src/components/ui/button';
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/src/components/ui/form';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { VocabularyFormValues } from './types';
 import { Plus, Trash2 } from 'lucide-react';
 import React from 'react';
@@ -46,10 +47,27 @@ export const BaseWordForm = () => {
           )}
         />
 
-        <div>
-          <FormLabel>Word Type</FormLabel>
-          <div className="mt-2 text-sm text-gray-600">{form.getValues('type')}</div>
-        </div>
+        <FormField
+          control={form.control}
+          name="type"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Word Type</FormLabel>
+              <Select onValueChange={field.onChange} value={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="core">Core</SelectItem>
+                  <SelectItem value="non-core">Non-Core</SelectItem>
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
       </div>
 
       <FormField

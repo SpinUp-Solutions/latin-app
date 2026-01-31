@@ -13,8 +13,10 @@ import { Card, CardContent } from '../card';
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
 import {
   validateGeneratedTranslationExercise,
+  splitTranslationAnswers,
   type GeneratedTranslationItem,
 } from '@/src/utils/exercises/generatedTranslationExercise';
+import { getExerciseDisplayForm, hasSelectedForm } from '@/src/utils/exercises/formSelection';
 
 interface Props {
   exercise: GeneratedTranslationExercise;
@@ -44,12 +46,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
     const words = data.words as unknown as ExerciseWordResponse[];
 
     const mapped = words.map<GeneratedTranslationItem | null>(word => {
-      const translations = word.translation
-        ? word.translation
-            .split(',')
-            .map(t => t.trim())
-            .filter(Boolean)
-        : [];
+      const translations = splitTranslationAnswers(word.translation);
       const definitionsText = word.definitions && word.definitions.length > 0 ? word.definitions.join(', ') : '';
 
       if (translationDirection === 'english-to-latin') {
@@ -57,14 +54,14 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
           return null;
         }
 
-        const answerToAccept =
-          word.selected_form === word.root_word ? word.dictionary_entry || word.root_word : word.selected_form;
+        const answerToAccept = hasSelectedForm(word) ? word.selected_form : word.dictionary_entry || word.selected_form;
 
         return {
           text: translations.join(', '),
           acceptedAnswers: [answerToAccept],
           hint: definitionsText || undefined,
           stripInfinitive: false,
+          stripMacrons: true,
         };
       }
 
@@ -74,8 +71,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
 
       // If no form selected, show dictionary_entry (if exists) or root_word
       // If form selected, show the selected_form
-      const displayText =
-        word.selected_form === word.root_word ? word.dictionary_entry || word.selected_form : word.selected_form;
+      const displayText = getExerciseDisplayForm(word);
 
       return {
         text: displayText,
