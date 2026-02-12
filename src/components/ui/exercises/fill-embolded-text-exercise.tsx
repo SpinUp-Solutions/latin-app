@@ -21,7 +21,7 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
   const [isProcessing, setIsProcessing] = useState(false);
   const [correctAnswers, setCorrectAnswers] = useState(0);
 
-  const { currentIndex, isLastItem, autoAdvanceIfEnabled } = useExerciseProgression({
+  const { currentIndex, isLastItem, autoAdvanceIfEnabled, confirmAdvance } = useExerciseProgression({
     totalItems: exercise.data.words.length,
     itemProgressionDelay: exercise.itemProgressionDelay,
     progressionRules: exercise.feedbackConfig.progressionRules,
@@ -162,6 +162,7 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
           correctAnswer={currentWord.correctAnswer}
           explanation={currentWord.explanation}
           showExplanation={showExplanation}
+          onContinue={isCorrect ? confirmAdvance : undefined}
         />
       </div>
     </div>

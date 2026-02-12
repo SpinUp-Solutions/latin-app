@@ -301,7 +301,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
           title: 'Word Selection Exercise',
           passage:
             'Click on the <em>adjectives</em> in this sample passage with multiple <strong>descriptive</strong> words.',
-          correctWordIndices: [3, 8, 10],
+          correctWordIndices: [],
           instructions: '',
           hint: 'Look for words that describe or modify nouns.',
           explanation: 'Adjectives are words that modify nouns and add descriptive information.',

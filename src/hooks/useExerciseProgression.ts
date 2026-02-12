@@ -11,10 +11,12 @@ interface ExerciseProgressionState {
   currentIndex: number;
   isLastItem: boolean;
   isFirstItem: boolean;
+  isAwaitingConfirmation: boolean;
 }
 
 interface ExerciseProgressionActions {
   autoAdvanceIfEnabled: (afterAdvance: () => void) => void;
+  confirmAdvance: () => void;
   resetIndex: () => void;
   nextItem: () => void;
   previousItem: () => void;
@@ -22,80 +24,81 @@ interface ExerciseProgressionActions {
 
 export function useExerciseProgression({
   totalItems,
-  itemProgressionDelay,
   progressionRules,
 }: ExerciseProgressionOptions): ExerciseProgressionState & ExerciseProgressionActions {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const clearPendingTimer = useCallback(() => {
-    if (timerRef.current !== null) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-  }, []);
+  const [isAwaitingConfirmation, setIsAwaitingConfirmation] = useState(false);
+  const pendingAdvanceRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    clearPendingTimer();
+    pendingAdvanceRef.current = null;
+    setIsAwaitingConfirmation(false);
     setCurrentIndex(0);
-  }, [totalItems, clearPendingTimer]);
-
-  useEffect(() => {
-    return () => {
-      clearPendingTimer();
-    };
-  }, [clearPendingTimer]);
+  }, [totalItems]);
 
   const isLastItem = currentIndex >= totalItems - 1;
   const isFirstItem = currentIndex === 0;
 
   const nextItem = useCallback(() => {
-    clearPendingTimer();
+    pendingAdvanceRef.current = null;
+    setIsAwaitingConfirmation(false);
     setCurrentIndex(prev => {
       if (prev < totalItems - 1) {
         return prev + 1;
       }
       return prev;
     });
-  }, [totalItems, clearPendingTimer]);
+  }, [totalItems]);
 
   const previousItem = useCallback(() => {
-    clearPendingTimer();
+    pendingAdvanceRef.current = null;
+    setIsAwaitingConfirmation(false);
     setCurrentIndex(prev => {
       if (prev > 0) {
         return prev - 1;
       }
       return prev;
     });
-  }, [clearPendingTimer]);
+  }, []);
 
   const resetIndex = useCallback(() => {
-    clearPendingTimer();
+    pendingAdvanceRef.current = null;
+    setIsAwaitingConfirmation(false);
     setCurrentIndex(0);
-  }, [clearPendingTimer]);
+  }, []);
 
   const autoAdvanceIfEnabled = useCallback(
     (afterAdvance: () => void) => {
       if (progressionRules?.autoAdvance !== false) {
-        const delay = itemProgressionDelay || 2000;
-        clearPendingTimer();
-        timerRef.current = setTimeout(() => {
+        pendingAdvanceRef.current = () => {
           nextItem();
           afterAdvance();
-        }, delay);
+        };
+        setIsAwaitingConfirmation(true);
       } else {
         nextItem();
         afterAdvance();
       }
     },
-    [progressionRules?.autoAdvance, itemProgressionDelay, nextItem, clearPendingTimer]
+    [progressionRules?.autoAdvance, nextItem]
   );
+
+  const confirmAdvance = useCallback(() => {
+    const pending = pendingAdvanceRef.current;
+    if (pending) {
+      pendingAdvanceRef.current = null;
+      setIsAwaitingConfirmation(false);
+      pending();
+    }
+  }, []);
 
   return {
     currentIndex,
     isLastItem,
     isFirstItem,
+    isAwaitingConfirmation,
     autoAdvanceIfEnabled,
+    confirmAdvance,
     resetIndex,
     nextItem,
     previousItem,

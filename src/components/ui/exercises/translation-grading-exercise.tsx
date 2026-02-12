@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import { TranslationGradingExercise } from '@/src/types/exercises';
-import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { useTranslationGrading } from '@/src/hooks/useTranslationGrading';
 import { ExerciseProgress } from './exercise-progress';
@@ -47,14 +46,12 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
   const targetLanguage = isLatinToEnglish ? 'English' : 'Latin';
   const direction = translationDirection;
 
-  const { currentIndex, isLastItem, isFirstItem, nextItem, previousItem, autoAdvanceIfEnabled } =
+  const { currentIndex, isLastItem, isFirstItem, nextItem, previousItem } =
     useExerciseProgression({
       totalItems: exercise.data.items.length,
       itemProgressionDelay: exercise.itemProgressionDelay,
       progressionRules: exercise.feedbackConfig.progressionRules,
     });
-
-  const { handleCorrect, handleIncorrect, reset } = useExerciseFeedback(exercise.feedbackConfig);
 
   const { grade, reset: resetGrading, isLoading, data, error } = useTranslationGrading();
 
@@ -77,22 +74,17 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
 
     if (passed) {
       setPassedSentences(prev => new Set([...prev, currentIndex]));
-      handleCorrect(isLastItem);
 
       if (isLastItem) {
         const finalScore = Math.round(((passedSentences.size + 1) / exercise.data.items.length) * 100);
         onComplete?.(finalScore);
       }
-    } else {
-      handleIncorrect();
     }
   };
 
   const handleContinue = () => {
-    autoAdvanceIfEnabled(() => {
-      resetGrading();
-      reset();
-    });
+    nextItem();
+    resetGrading();
   };
 
   const handlePrevious = () => {
@@ -334,7 +326,6 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
                 <Button
                   onClick={() => {
                     resetGrading();
-                    reset();
                   }}
                   variant="ghost"
                   className="text-roman-red/60 hover:text-roman-red hover:bg-roman-red/5 font-serif uppercase tracking-widest text-[10px] h-9 px-4">

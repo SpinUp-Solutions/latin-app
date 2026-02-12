@@ -84,13 +84,13 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
     return mapped.filter((item): item is GeneratedTranslationItem => item !== null);
   }, [data, translationDirection]);
 
-  const { currentIndex, isLastItem, autoAdvanceIfEnabled } = useExerciseProgression({
+  const { currentIndex, isLastItem, autoAdvanceIfEnabled, confirmAdvance } = useExerciseProgression({
     totalItems: items.length,
     itemProgressionDelay: exercise.itemProgressionDelay,
     progressionRules: exercise.feedbackConfig.progressionRules,
   });
 
-  const { isCorrect, message, level, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
+  const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
     exercise.feedbackConfig
   );
 
@@ -214,6 +214,8 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
             level={level}
             hint={currentItem.hint}
             correctAnswer={currentItem.acceptedAnswers.join(' OR ')}
+            showExplanation={showExplanation}
+            onContinue={isCorrect ? confirmAdvance : undefined}
           />
         </CardContent>
       </Card>

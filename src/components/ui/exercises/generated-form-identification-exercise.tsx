@@ -199,12 +199,16 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
         Record<string, string | undefined>
       >;
       const baseOptionalPaths = (word.optional_form_paths || []) as Array<Record<string, string | undefined>>;
+      const enrichedPrimaryPaths = enrichPathsWithSteps(basePrimaryPaths, word, steps);
+      const enrichedOptionalPaths = enrichPathsWithSteps(baseOptionalPaths, word, steps);
+      const dedupedPrimaryPaths = deduplicatePathsBySteps(enrichedPrimaryPaths, steps);
+      const dedupedOptionalPaths = deduplicatePathsBySteps(enrichedOptionalPaths, steps);
 
       const previousAnswers = wordAnswers[word.id] || {};
 
       return steps.map(step => {
-        const filteredPrimaryPaths = filterPathsByPreviousAnswers(basePrimaryPaths, previousAnswers);
-        const filteredOptionalPaths = filterPathsByPreviousAnswers(baseOptionalPaths, previousAnswers);
+        const filteredPrimaryPaths = filterPathsByPreviousAnswers(dedupedPrimaryPaths, previousAnswers);
+        const filteredOptionalPaths = filterPathsByPreviousAnswers(dedupedOptionalPaths, previousAnswers);
 
         const primaryValues = extractStepValuesFromPaths(filteredPrimaryPaths, step);
         const optionalValues = extractStepValuesFromPaths(filteredOptionalPaths, step);
@@ -278,7 +282,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
       .map(result => result.data);
   }, [items, isSingleField, isMultiAnswerMode]);
 
-  const { currentIndex, isLastItem, autoAdvanceIfEnabled, resetIndex } = useExerciseProgression({
+  const { currentIndex, isLastItem, autoAdvanceIfEnabled, confirmAdvance, resetIndex } = useExerciseProgression({
     totalItems: validatedItems.length,
     itemProgressionDelay: exercise.itemProgressionDelay,
     progressionRules: exercise.feedbackConfig.progressionRules,
@@ -290,7 +294,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
     }
   }, [validatedItems.length, currentIndex, resetIndex]);
 
-  const { isCorrect, message, level, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
+  const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
     exercise.feedbackConfig
   );
 
@@ -375,19 +379,12 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
       if (isLastItem) {
         const finalScore = Math.round((newCorrectAnswers / validatedItems.length) * 100);
         onComplete?.(finalScore);
-
-        autoAdvanceIfEnabled(() => {
-          setUserAnswer('');
-          reset();
-          setIsProcessing(false);
-        });
-      } else {
-        autoAdvanceIfEnabled(() => {
-          setUserAnswer('');
-          reset();
-          setIsProcessing(false);
-        });
       }
+      autoAdvanceIfEnabled(() => {
+        setUserAnswer('');
+        reset();
+        setIsProcessing(false);
+      });
     } else {
       handleIncorrect();
       setIsProcessing(false);
@@ -474,7 +471,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
                 </span>
               </div>
             )}
-            <div className="text-lg font-medium">
+            <div className="text-lg font-medium flex items-baseline gap-1">
               <SimpleRichDisplay
                 content={
                   currentItem.hasSelectedForm
@@ -482,6 +479,14 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
                     : currentItem.dictionary_entry || currentItem.selected_form
                 }
               />
+              {exercise.data.showDictionaryEntry &&
+                currentItem.hasSelectedForm &&
+                currentItem.dictionary_entry &&
+                currentItem.dictionary_entry !== currentItem.selected_form && (
+                  <span className="text-sm text-gray-500">
+                    (<SimpleRichDisplay content={currentItem.dictionary_entry} />)
+                  </span>
+                )}
             </div>
           </div>
 
@@ -550,6 +555,8 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
                   ? (currentItem as MultiAnswerFormIdentificationItem).correctAnswerDisplay
                   : (currentItem as FormIdentificationItem).correctAnswer
             }
+            showExplanation={showExplanation}
+            onContinue={isCorrect ? confirmAdvance : undefined}
           />
         </CardContent>
       </Card>

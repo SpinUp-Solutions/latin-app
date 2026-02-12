@@ -9,7 +9,7 @@ import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
 import { SimpleRichEditor } from '../../core/simple-rich-editor';
 import { MultiClickableRichDisplay } from '../../core/multi-clickable-rich-display';
-import { stripHtmlTags } from '@/src/utils/exercises/helpers';
+import { splitHtmlIntoWords } from '@/src/utils/htmlWordSplitter';
 
 export const ClickOnMultipleWordsEditor: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -54,9 +54,8 @@ export const ClickOnMultipleWordsEditor: React.FC = () => {
 
   const getSelectedWords = () => {
     if (!editingContent.data.passage) return [];
-    const words = stripHtmlTags(editingContent.data.passage)
-      .split(/\s+/)
-      .filter(w => w.trim());
+    const words = splitHtmlIntoWords(editingContent.data.passage)
+      .map(w => w.replace(/<[^>]*>/g, ''));
 
     return editingContent.data.correctWordIndices
       .map(index => ({ index, word: words[index] || `Index ${index}` }))
@@ -124,7 +123,7 @@ export const ClickOnMultipleWordsEditor: React.FC = () => {
         <label className="block text-sm font-medium mb-2">Text Passage</label>
         <SimpleRichEditor
           content={editingContent.data.passage || ''}
-          onChange={value => updateData({ passage: value })}
+          onChange={value => updateData({ passage: value, correctWordIndices: [] })}
           placeholder="Enter the text passage that students will analyze..."
           rows={4}
           className="w-full font-serif text-base"
@@ -265,11 +264,7 @@ export const ClickOnMultipleWordsEditor: React.FC = () => {
               <div>
                 <strong>Passage Length:</strong>{' '}
                 {editingContent.data.passage
-                  ? `${
-                      stripHtmlTags(editingContent.data.passage)
-                        .split(/\s+/)
-                        .filter(w => w.trim()).length
-                    } words`
+                  ? `${splitHtmlIntoWords(editingContent.data.passage).length} words`
                   : '0 words'}
               </div>
               <div>

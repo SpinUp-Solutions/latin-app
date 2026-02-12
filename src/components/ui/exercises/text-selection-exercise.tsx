@@ -21,7 +21,7 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
   const [isProcessing, setIsProcessing] = useState(false);
   const [correctAnswers, setCorrectAnswers] = useState(0);
 
-  const { currentIndex, isLastItem, autoAdvanceIfEnabled } = useExerciseProgression({
+  const { currentIndex, isLastItem, autoAdvanceIfEnabled, confirmAdvance } = useExerciseProgression({
     totalItems: exercise.data.questions.length,
     itemProgressionDelay: exercise.itemProgressionDelay,
     progressionRules: exercise.feedbackConfig.progressionRules,
@@ -121,6 +121,7 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
           correctAnswer={exercise.data.passage.split(' ')[currentQuestion.correctWordIndex]}
           explanation={currentQuestion.explanation}
           showExplanation={showExplanation}
+          onContinue={isCorrect ? confirmAdvance : undefined}
         />
       </div>
     </div>

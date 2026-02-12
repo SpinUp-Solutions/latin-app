@@ -179,6 +179,10 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete }
           message={message}
           level={level}
           hint={exercise.data.hint}
+          correctAnswer={exercise.data.passage
+            .split(' ')
+            .filter((_, i) => exercise.data.correctWordIndices.includes(i))
+            .join(', ')}
           explanation={exercise.data.explanation}
           showExplanation={showExplanation}
         />

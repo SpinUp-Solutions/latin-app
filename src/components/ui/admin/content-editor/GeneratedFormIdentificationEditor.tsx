@@ -71,7 +71,7 @@ const GeneratedFormIdentificationEditorView: React.FC<{
         filters={{
           partOfSpeech: (editor.derivedFilters.partOfSpeech || 'all') as PartOfSpeech | 'all',
           search: editor.derivedFilters.search || '',
-          verbConjugation: (editor.derivedFilters.verbConjugation || 'all') as '1' | '2' | '3' | '3io' | '4' | 'all',
+          verbConjugation: (editor.derivedFilters.verbConjugation || 'all') as '1' | '2' | '3' | '3io' | '4' | 'irregular' | 'all',
           isDeponent: (editor.derivedFilters.isDeponent || 'both') as 'true' | 'false' | 'both',
           nounDeclension: (editor.derivedFilters.nounDeclension || 'all') as
             | '1'
@@ -174,6 +174,25 @@ const GeneratedFormIdentificationEditorView: React.FC<{
               </p>
             </div>
           )}
+          <div className="mt-4 pt-4 border-t space-y-2">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="showDictionaryEntry"
+                checked={!!editingContent.data.showDictionaryEntry}
+                onCheckedChange={checked =>
+                  editor.updateContent({
+                    data: { ...editingContent.data, showDictionaryEntry: !!checked },
+                  })
+                }
+              />
+              <Label htmlFor="showDictionaryEntry" className="text-sm cursor-pointer">
+                Show dictionary entry
+              </Label>
+            </div>
+            <p className="text-xs text-gray-500 ml-6">
+              Display the dictionary entry next to the selected form.
+            </p>
+          </div>
         </CardContent>
       </Card>
 
