@@ -73,6 +73,10 @@ function LiveLessonsPage() {
   const originalLiveIds = useMemo(() => new Set(currentLiveLessons.map(l => l.id)), [currentLiveLessons]);
 
   useEffect(() => {
+    setSelectedLessons(new Set());
+  }, [lessonType]);
+
+  useEffect(() => {
     if (currentLiveLessons.length > 0 && selectedLessons.size === 0) {
       setSelectedLessons(originalLiveIds);
     }
@@ -142,13 +146,6 @@ function LiveLessonsPage() {
     setIsPublishing(true);
 
     try {
-      if (toUnpublish.length > 0) {
-        await updatePublishStatus({
-          lessonIds: toUnpublish,
-          isLive: false,
-        }).unwrap();
-      }
-
       if (toPublish.length > 0) {
         await updatePublishStatus({
           lessonIds: toPublish,
@@ -156,9 +153,34 @@ function LiveLessonsPage() {
         }).unwrap();
       }
 
+      if (toUnpublish.length > 0) {
+        try {
+          await updatePublishStatus({
+            lessonIds: toUnpublish,
+            isLive: false,
+          }).unwrap();
+        } catch {
+          if (toPublish.length > 0) {
+            try {
+              await updatePublishStatus({
+                lessonIds: toPublish,
+                isLive: false,
+              }).unwrap();
+              toast.error('Failed to unpublish lessons. New publish changes have been rolled back.');
+            } catch {
+              toast.error('Failed to unpublish lessons and rollback failed. Some lessons may need manual review.');
+            }
+          } else {
+            toast.error('Failed to unpublish lessons');
+          }
+          setIsPublishing(false);
+          return;
+        }
+      }
+
       toast.success('Changes applied successfully');
     } catch (error) {
-      toast.error('Failed to apply changes');
+      toast.error('Failed to publish lessons');
     }
 
     setIsPublishing(false);

@@ -221,6 +221,7 @@ export const MultiParadigmConfigSection: React.FC<MultiParadigmConfigSectionProp
                 <SelectItem value="3">3rd</SelectItem>
                 <SelectItem value="3io">3rd -io</SelectItem>
                 <SelectItem value="4">4th</SelectItem>
+                <SelectItem value="irregular">Irregular</SelectItem>
               </SelectContent>
             </Select>
           </div>

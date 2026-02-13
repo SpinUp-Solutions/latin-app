@@ -18,6 +18,10 @@ export function cascadeFilterUpdates(currentFilters: PoolFilters, updates: Parti
   if (newPos !== 'adjective') {
     cleanedUpdates.adjectiveDeclension = 'all';
   }
+  if (newPos !== 'pronoun') {
+    cleanedUpdates.pronounType = 'all';
+    cleanedUpdates.pronounPerson = 'all';
+  }
 
   return { ...currentFilters, ...cleanedUpdates };
 }
@@ -70,6 +74,15 @@ export const buildAdvancedFilterParams = (
   if (filters.partOfSpeech === 'adjective') {
     if (filters.adjectiveDeclension && filters.adjectiveDeclension !== 'all') {
       params.append('adjectiveDeclension', filters.adjectiveDeclension);
+    }
+  }
+
+  if (filters.partOfSpeech === 'pronoun') {
+    if (filters.pronounType && filters.pronounType !== 'all') {
+      params.append('pronounType', filters.pronounType);
+    }
+    if (filters.pronounType === 'personal' && filters.pronounPerson && filters.pronounPerson !== 'all') {
+      params.append('pronounPerson', filters.pronounPerson);
     }
   }
 

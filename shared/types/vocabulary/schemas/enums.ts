@@ -46,7 +46,7 @@ export const AdjectiveDeclensionSchema = z.enum(['1-2', '3']);
 
 export const DegreeSchema = z.enum(['positive', 'comparative', 'superlative']);
 
-export const VerbConjugationSchema = z.enum(['1', '2', '3', '3io', '4']);
+export const VerbConjugationSchema = z.enum(['1', '2', '3', '3io', '4', 'irregular']);
 
 export const IndicativeTenseSchema = z.enum([
   'present',

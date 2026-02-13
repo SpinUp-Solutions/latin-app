@@ -384,6 +384,10 @@ const createVariantMap = () => {
   });
 
   VerbConjugationSchema.options.forEach(val => {
+    if (val === 'irregular') {
+      v[val] = ['irregular conjugation', 'irregular', 'irr.', 'irr'];
+      return;
+    }
     const n = val.replace('io', '');
     v[val] = val.includes('io') ? [`${n} conjugation`, val, `${n}io`, `${n}-io`, n] : [`${n} conjugation`, val, n];
   });

@@ -674,51 +674,43 @@ function pickRandomFormServer(
 }
 
 async function getWordTypeCounts(collection: string) {
+  const posTypes = [
+    'noun',
+    'verb',
+    'adjective',
+    'adverb',
+    'preposition',
+    'pronoun',
+    'conjunction',
+    'interjection',
+  ] as const;
+
+  const counts: Record<string, number> = {
+    noun: 0,
+    verb: 0,
+    adjective: 0,
+    adverb: 0,
+    preposition: 0,
+    pronoun: 0,
+    conjunction: 0,
+    interjection: 0,
+    other: 0,
+  };
+
   try {
-    const snapshot = await adminDb.collection(collection).limit(1000).get();
-
-    const counts = {
-      noun: 0,
-      verb: 0,
-      adjective: 0,
-      adverb: 0,
-      preposition: 0,
-      pronoun: 0,
-      conjunction: 0,
-      interjection: 0,
-      other: 0,
-    };
-
-    snapshot.docs.forEach(doc => {
-      const data = doc.data();
-      const partOfSpeech = data.part_of_speech as string;
-      if (counts.hasOwnProperty(partOfSpeech)) {
-        counts[partOfSpeech as keyof typeof counts]++;
-      } else {
-        counts.other++;
-      }
+    const countPromises = posTypes.map(async pos => {
+      const snapshot = await adminDb.collection(collection).where('part_of_speech', '==', pos).count().get();
+      return { pos, count: snapshot.data().count };
     });
 
-    const sampleSize = snapshot.docs.length;
-    const scaleFactor = sampleSize < 1000 ? 1 : Math.ceil(sampleSize / 1000);
-
-    Object.keys(counts).forEach(key => {
-      counts[key as keyof typeof counts] *= scaleFactor;
-    });
+    const results = await Promise.all(countPromises);
+    for (const { pos, count } of results) {
+      counts[pos] = count;
+    }
 
     return counts;
   } catch (error) {
     console.error('Error getting word type counts:', error);
-    return {
-      noun: 0,
-      verb: 0,
-      adjective: 0,
-      adverb: 0,
-      preposition: 0,
-      pronoun: 0,
-      conjunction: 0,
-      interjection: 0,
-      other: 0,
-    };
+    return counts;
   }
 }
