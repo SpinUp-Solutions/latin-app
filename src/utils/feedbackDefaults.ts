@@ -2,10 +2,9 @@ import type { FeedbackConfig, SuccessMessageConfig, ProgressionRules, FeedbackLe
 
 export const FEEDBACK_DEFAULTS = {
   showExplanation: true,
-  autoAdvance: true,
-  resetOnCorrect: true,
+  autoAdvanceOnCorrect: true,
+  pauseForExplanation: true,
   showProgress: true,
-  allowManualAdvance: true,
 } as const;
 
 export const DEFAULT_ITEM_PROGRESSION_DELAY = 2000;
@@ -20,12 +19,11 @@ export function getSuccessMessageWithDefaults(successMessage?: SuccessMessageCon
   };
 }
 
-export function getProgressionRulesWithDefaults(rules?: ProgressionRules): ProgressionRules {
+export function getProgressionRulesWithDefaults(rules?: ProgressionRules): Required<ProgressionRules> {
   return {
-    autoAdvance: rules?.autoAdvance ?? FEEDBACK_DEFAULTS.autoAdvance,
-    resetOnCorrect: rules?.resetOnCorrect ?? FEEDBACK_DEFAULTS.resetOnCorrect,
+    autoAdvanceOnCorrect: rules?.autoAdvanceOnCorrect ?? FEEDBACK_DEFAULTS.autoAdvanceOnCorrect,
+    pauseForExplanation: rules?.pauseForExplanation ?? FEEDBACK_DEFAULTS.pauseForExplanation,
     showProgress: rules?.showProgress ?? FEEDBACK_DEFAULTS.showProgress,
-    allowManualAdvance: rules?.allowManualAdvance ?? FEEDBACK_DEFAULTS.allowManualAdvance,
   };
 }
 

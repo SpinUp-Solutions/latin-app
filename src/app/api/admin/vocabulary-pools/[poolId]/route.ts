@@ -43,6 +43,7 @@ export async function GET(request: NextRequest, { params }: { params: { poolId: 
             .where(FieldPath.documentId(), 'in', batch)
             .select(
               'word',
+              'dictionary_entry',
               'translation',
               'part_of_speech',
               'definitions',

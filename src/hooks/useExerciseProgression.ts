@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { ProgressionRules } from '@/src/types/exercises/base';
+import { DEFAULT_ITEM_PROGRESSION_DELAY } from '@/src/utils/feedbackDefaults';
 
 interface ExerciseProgressionOptions {
   totalItems: number;
@@ -11,10 +12,12 @@ interface ExerciseProgressionState {
   currentIndex: number;
   isLastItem: boolean;
   isFirstItem: boolean;
+  isAwaitingConfirmation: boolean;
 }
 
 interface ExerciseProgressionActions {
-  autoAdvanceIfEnabled: (afterAdvance: () => void) => void;
+  autoAdvanceIfEnabled: (afterAdvance: () => void, hasVisibleExplanation: boolean) => void;
+  confirmAdvance: () => void;
   resetIndex: () => void;
   nextItem: () => void;
   previousItem: () => void;
@@ -26,76 +29,132 @@ export function useExerciseProgression({
   progressionRules,
 }: ExerciseProgressionOptions): ExerciseProgressionState & ExerciseProgressionActions {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isAwaitingConfirmation, setIsAwaitingConfirmation] = useState(false);
+  const pendingAdvanceRef = useRef<(() => void) | null>(null);
+  const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const clearPendingTimer = useCallback(() => {
-    if (timerRef.current !== null) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
+  const pendingTimerCallbackRef = useRef<(() => void) | null>(null);
+
+  const clearAutoAdvanceTimer = useCallback(() => {
+    if (autoAdvanceTimerRef.current) {
+      clearTimeout(autoAdvanceTimerRef.current);
+      autoAdvanceTimerRef.current = null;
     }
+    pendingTimerCallbackRef.current = null;
   }, []);
 
   useEffect(() => {
-    clearPendingTimer();
-    setCurrentIndex(0);
-  }, [totalItems, clearPendingTimer]);
+    pendingAdvanceRef.current = null;
+    setIsAwaitingConfirmation(false);
+    clearAutoAdvanceTimer();
+    setCurrentIndex(prev => {
+      if (totalItems === 0) return 0;
+      return prev >= totalItems ? totalItems - 1 : prev;
+    });
+  }, [totalItems, clearAutoAdvanceTimer]);
 
   useEffect(() => {
     return () => {
-      clearPendingTimer();
+      if (autoAdvanceTimerRef.current) {
+        clearTimeout(autoAdvanceTimerRef.current);
+        autoAdvanceTimerRef.current = null;
+      }
+      const pendingCb = pendingTimerCallbackRef.current;
+      if (pendingCb) {
+        pendingTimerCallbackRef.current = null;
+        pendingCb();
+      }
     };
-  }, [clearPendingTimer]);
+  }, []);
 
-  const isLastItem = currentIndex >= totalItems - 1;
+  const isLastItem = totalItems > 0 && currentIndex >= totalItems - 1;
   const isFirstItem = currentIndex === 0;
 
   const nextItem = useCallback(() => {
-    clearPendingTimer();
+    pendingAdvanceRef.current = null;
+    setIsAwaitingConfirmation(false);
+    clearAutoAdvanceTimer();
     setCurrentIndex(prev => {
       if (prev < totalItems - 1) {
         return prev + 1;
       }
       return prev;
     });
-  }, [totalItems, clearPendingTimer]);
+  }, [totalItems, clearAutoAdvanceTimer]);
 
   const previousItem = useCallback(() => {
-    clearPendingTimer();
+    pendingAdvanceRef.current = null;
+    setIsAwaitingConfirmation(false);
+    clearAutoAdvanceTimer();
     setCurrentIndex(prev => {
       if (prev > 0) {
         return prev - 1;
       }
       return prev;
     });
-  }, [clearPendingTimer]);
+  }, [clearAutoAdvanceTimer]);
 
   const resetIndex = useCallback(() => {
-    clearPendingTimer();
+    pendingAdvanceRef.current = null;
+    setIsAwaitingConfirmation(false);
+    clearAutoAdvanceTimer();
     setCurrentIndex(0);
-  }, [clearPendingTimer]);
+  }, [clearAutoAdvanceTimer]);
 
   const autoAdvanceIfEnabled = useCallback(
-    (afterAdvance: () => void) => {
-      if (progressionRules?.autoAdvance !== false) {
-        const delay = itemProgressionDelay || 2000;
-        clearPendingTimer();
-        timerRef.current = setTimeout(() => {
+    (afterAdvance: () => void, hasVisibleExplanation: boolean) => {
+      clearAutoAdvanceTimer();
+
+      const autoAdvance = progressionRules?.autoAdvanceOnCorrect ?? false;
+      const pauseForExplanation = progressionRules?.pauseForExplanation ?? true;
+
+      const shouldShowContinue = !autoAdvance || (pauseForExplanation && hasVisibleExplanation);
+
+      if (shouldShowContinue) {
+        pendingAdvanceRef.current = () => {
           nextItem();
           afterAdvance();
-        }, delay);
+        };
+        setIsAwaitingConfirmation(true);
       } else {
-        nextItem();
-        afterAdvance();
+        const delay = itemProgressionDelay ?? DEFAULT_ITEM_PROGRESSION_DELAY;
+        const callback = () => {
+          nextItem();
+          afterAdvance();
+        };
+        pendingTimerCallbackRef.current = callback;
+        autoAdvanceTimerRef.current = setTimeout(() => {
+          autoAdvanceTimerRef.current = null;
+          pendingTimerCallbackRef.current = null;
+          callback();
+        }, delay);
       }
     },
-    [progressionRules?.autoAdvance, itemProgressionDelay, nextItem, clearPendingTimer]
+    [
+      progressionRules?.autoAdvanceOnCorrect,
+      progressionRules?.pauseForExplanation,
+      itemProgressionDelay,
+      nextItem,
+      clearAutoAdvanceTimer,
+    ]
   );
+
+  const confirmAdvance = useCallback(() => {
+    const pending = pendingAdvanceRef.current;
+    if (pending) {
+      pendingAdvanceRef.current = null;
+      setIsAwaitingConfirmation(false);
+      pending();
+    }
+  }, []);
 
   return {
     currentIndex,
     isLastItem,
     isFirstItem,
+    isAwaitingConfirmation,
     autoAdvanceIfEnabled,
+    confirmAdvance,
     resetIndex,
     nextItem,
     previousItem,

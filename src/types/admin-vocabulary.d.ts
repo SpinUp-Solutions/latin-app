@@ -3,6 +3,7 @@ export type { ConjugationTable, DeclensionTableRow, AdjectiveDeclensionTableRow 
 export interface Word {
   id: string;
   word: string;
+  dictionary_entry?: string | null;
   wordType: string;
   translation: string;
   section: string;
