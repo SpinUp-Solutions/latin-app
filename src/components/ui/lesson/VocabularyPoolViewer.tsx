@@ -130,7 +130,7 @@ export function VocabularyPoolViewer({ content }: VocabularyPoolViewerProps) {
 
   const items: VocabularyStudyItem[] = vocabularyPool.words.map((word: Word) => ({
     id: word.id,
-    latin: word.word || '',
+    latin: word.dictionary_entry || word.word || '',
     english: word.translation || '',
     pronunciation: undefined,
     partOfSpeech: word.wordType || undefined,

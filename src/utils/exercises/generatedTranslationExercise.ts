@@ -49,14 +49,6 @@ export const validateGeneratedTranslationExercise = (
   );
   const isCorrect = normalizedAnswers.includes(input);
 
-  console.log('[Validation Debug]', {
-    userAnswer,
-    input,
-    acceptedAnswers: currentItem.acceptedAnswers,
-    normalizedAnswers,
-    isCorrect,
-  });
-
   return {
     isCorrect,
     correctAnswer: currentItem.acceptedAnswers.join(', '),

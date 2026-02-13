@@ -399,6 +399,7 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
                     { value: '3rd', label: '3rd Conjugation' },
                     { value: '3rd-io', label: '3rd Conjugation (i-stem)' },
                     { value: '4th', label: '4th Conjugation' },
+                    { value: 'irregular', label: 'Irregular' },
                   ]}
                 />
                 <SimpleInput

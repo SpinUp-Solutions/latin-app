@@ -11,7 +11,11 @@ import { LessonBuilder } from '@/src/components/ui/admin';
 import { ClipboardProvider } from '@/src/components/ui/core/clipboard';
 import { Lesson } from '@/src/types/lesson';
 import { useAppDispatch } from '@/src/store/hooks';
-import { useCreateLessonMutation, useLazyGetLessonByIdQuery, useSaveToRecoveryMutation } from '@/src/store/api/lessonApi';
+import {
+  useCreateLessonMutation,
+  useLazyGetLessonByIdQuery,
+  useSaveToRecoveryMutation,
+} from '@/src/store/api/lessonApi';
 import {
   ErrorDialog,
   ErrorType,

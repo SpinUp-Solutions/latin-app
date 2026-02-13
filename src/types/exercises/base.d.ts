@@ -24,14 +24,9 @@ export interface SuccessMessageConfig {
 }
 
 export interface ProgressionRules {
-  /** Auto-advance after a correct answer (default: true). */
-  autoAdvance?: boolean;
-  /** Reset escalation counter after a correct answer (default: true). */
-  resetOnCorrect?: boolean;
-  /** Show progress indicator (default: true) */
+  autoAdvanceOnCorrect?: boolean;
+  pauseForExplanation?: boolean;
   showProgress?: boolean;
-  /** Allow manual advancement (default: true) */
-  allowManualAdvance?: boolean;
 }
 
 export interface FeedbackConfig {

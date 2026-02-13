@@ -81,16 +81,16 @@ export const validateSingleFieldFormIdentificationExercise = (
     }
   }
 
-  const allPaths = [...validatedItem.primaryFormPaths, ...validatedItem.optionalFormPaths];
+  const primaryPaths = validatedItem.primaryFormPaths;
   const matchedPathIndices = new Set<number>();
 
   for (const userPath of userPaths) {
     let foundMatch = false;
 
-    for (let pathIdx = 0; pathIdx < allPaths.length; pathIdx++) {
+    for (let pathIdx = 0; pathIdx < primaryPaths.length; pathIdx++) {
       if (matchedPathIndices.has(pathIdx)) continue;
 
-      const path = allPaths[pathIdx];
+      const path = primaryPaths[pathIdx];
       const pathStepValues = validatedItem.steps.map(step => path[step]);
 
       if (pathStepValues.some(v => !v)) continue;
@@ -174,6 +174,33 @@ export const validateMultiAnswerStep = (
       hint: validatedItem.hint,
       answerSlots: [],
     };
+  }
+
+  const variantToCanonical = new Map<string, string>();
+  primaryPaths.forEach(path => {
+    const value = path[step];
+    if (!value) return;
+    const canonical = normalize(value);
+    getAcceptedAnswersForStep(value).forEach(variant => {
+      const normalizedVariant = normalize(variant);
+      if (!variantToCanonical.has(normalizedVariant)) {
+        variantToCanonical.set(normalizedVariant, canonical);
+      }
+    });
+  });
+
+  const seenCanonicalValues = new Set<string>();
+  for (const normalizedPart of normalizedUserParts) {
+    const canonical = variantToCanonical.get(normalizedPart) || normalizedPart;
+    if (seenCanonicalValues.has(canonical)) {
+      return {
+        isCorrect: false,
+        correctAnswer: validatedItem.correctAnswerDisplay,
+        hint: 'Duplicate answers are not allowed.',
+        answerSlots: [],
+      };
+    }
+    seenCanonicalValues.add(canonical);
   }
 
   return {
