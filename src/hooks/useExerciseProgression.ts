@@ -33,25 +33,41 @@ export function useExerciseProgression({
   const pendingAdvanceRef = useRef<(() => void) | null>(null);
   const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const pendingTimerCallbackRef = useRef<(() => void) | null>(null);
+
   const clearAutoAdvanceTimer = useCallback(() => {
     if (autoAdvanceTimerRef.current) {
       clearTimeout(autoAdvanceTimerRef.current);
       autoAdvanceTimerRef.current = null;
     }
+    pendingTimerCallbackRef.current = null;
   }, []);
 
   useEffect(() => {
     pendingAdvanceRef.current = null;
     setIsAwaitingConfirmation(false);
-    setCurrentIndex(0);
     clearAutoAdvanceTimer();
+    setCurrentIndex(prev => {
+      if (totalItems === 0) return 0;
+      return prev >= totalItems ? totalItems - 1 : prev;
+    });
   }, [totalItems, clearAutoAdvanceTimer]);
 
   useEffect(() => {
-    return () => clearAutoAdvanceTimer();
-  }, [clearAutoAdvanceTimer]);
+    return () => {
+      if (autoAdvanceTimerRef.current) {
+        clearTimeout(autoAdvanceTimerRef.current);
+        autoAdvanceTimerRef.current = null;
+      }
+      const pendingCb = pendingTimerCallbackRef.current;
+      if (pendingCb) {
+        pendingTimerCallbackRef.current = null;
+        pendingCb();
+      }
+    };
+  }, []);
 
-  const isLastItem = currentIndex >= totalItems - 1;
+  const isLastItem = totalItems > 0 && currentIndex >= totalItems - 1;
   const isFirstItem = currentIndex === 0;
 
   const nextItem = useCallback(() => {
@@ -102,10 +118,15 @@ export function useExerciseProgression({
         setIsAwaitingConfirmation(true);
       } else {
         const delay = itemProgressionDelay ?? DEFAULT_ITEM_PROGRESSION_DELAY;
-        autoAdvanceTimerRef.current = setTimeout(() => {
-          autoAdvanceTimerRef.current = null;
+        const callback = () => {
           nextItem();
           afterAdvance();
+        };
+        pendingTimerCallbackRef.current = callback;
+        autoAdvanceTimerRef.current = setTimeout(() => {
+          autoAdvanceTimerRef.current = null;
+          pendingTimerCallbackRef.current = null;
+          callback();
         }, delay);
       }
     },

@@ -269,7 +269,13 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({
                 <input
                   type="checkbox"
                   checked={progressionRulesWithDefaults.autoAdvanceOnCorrect}
-                  onChange={e => updateProgressionRules({ autoAdvanceOnCorrect: e.target.checked })}
+                  onChange={e => {
+                    const updates: Partial<ProgressionRules> = { autoAdvanceOnCorrect: e.target.checked };
+                    if (!e.target.checked) {
+                      updates.pauseForExplanation = true;
+                    }
+                    updateProgressionRules(updates);
+                  }}
                 />
                 Auto-advance on correct answer
               </label>

@@ -90,7 +90,7 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
 
   const handleAnswerChange = (value: string) => {
     setUserAnswer(value);
-    if (isCorrect !== null) {
+    if (isCorrect === false) {
       reset();
     }
   };
@@ -154,6 +154,7 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
             onChange={handleAnswerChange}
             onSubmit={handleSubmit}
             placeholder="Enter your answer..."
+            disabled={isProcessing}
           />
         </div>
 

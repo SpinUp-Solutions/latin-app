@@ -9,6 +9,7 @@ interface ExerciseInputProps {
   placeholder?: string;
   buttonText?: string;
   className?: string;
+  disabled?: boolean;
 }
 
 const ExerciseInput: React.FC<ExerciseInputProps> = ({
@@ -18,6 +19,7 @@ const ExerciseInput: React.FC<ExerciseInputProps> = ({
   placeholder = 'Type your answer in Latin...',
   buttonText = 'Check',
   className = '',
+  disabled,
 }) => {
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
@@ -36,9 +38,10 @@ const ExerciseInput: React.FC<ExerciseInputProps> = ({
             onKeyDown={handleKeyPress}
             placeholder={placeholder}
             className="w-full"
+            disabled={disabled}
           />
         </div>
-        <Button onClick={onSubmit} className="bg-roman-red text-white hover:bg-red-700">
+        <Button onClick={onSubmit} disabled={disabled} className="bg-roman-red text-white hover:bg-red-700">
           {buttonText}
         </Button>
       </div>

@@ -80,6 +80,7 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
     if (isLastItem) {
       const finalScore = Math.round((passedSentences.size / exercise.data.items.length) * 100);
       onComplete?.(finalScore);
+      return;
     }
     nextItem();
     resetGrading();

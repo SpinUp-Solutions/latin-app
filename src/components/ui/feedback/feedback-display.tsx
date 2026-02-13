@@ -84,8 +84,7 @@ export const FeedbackDisplay: React.FC<FeedbackDisplayProps> = ({
       {isCorrect && onContinue && (
         <button
           onClick={onContinue}
-          className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
-        >
+          className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors">
           Continue
           <ChevronRight className="h-4 w-4" />
         </button>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { GeneratedFormIdentificationExercise } from '@/src/types/exercises/generated-form-identification';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
@@ -282,18 +282,12 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
       .map(result => result.data);
   }, [items, isSingleField, isMultiAnswerMode]);
 
-  const { currentIndex, isLastItem, isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance, resetIndex } =
+  const { currentIndex, isLastItem, isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance } =
     useExerciseProgression({
       totalItems: validatedItems.length,
       itemProgressionDelay: exercise.itemProgressionDelay,
       progressionRules: exercise.feedbackConfig.progressionRules,
     });
-
-  useEffect(() => {
-    if (validatedItems.length > 0 && currentIndex >= validatedItems.length) {
-      resetIndex();
-    }
-  }, [validatedItems.length, currentIndex, resetIndex]);
 
   const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
     exercise.feedbackConfig
@@ -546,6 +540,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
                   ? `e.g., answer1;answer2`
                   : 'Type your answer...'
             }
+            disabled={isProcessing}
           />
 
           <FeedbackDisplay

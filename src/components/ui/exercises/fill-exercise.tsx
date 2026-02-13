@@ -111,6 +111,7 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
           onChange={handleAnswerChange}
           onSubmit={handleSubmit}
           placeholder="Type your answer"
+          disabled={isProcessing}
         />
 
         <FeedbackDisplay

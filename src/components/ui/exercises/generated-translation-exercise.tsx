@@ -211,6 +211,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
             onChange={handleAnswerChange}
             onSubmit={handleSubmit}
             placeholder={inputPlaceholder}
+            disabled={isProcessing}
           />
 
           <FeedbackDisplay
