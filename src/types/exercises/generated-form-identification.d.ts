@@ -6,6 +6,7 @@ export interface GeneratedFormIdentificationExercise extends BaseExercise {
   data: {
     mode: 'step-by-step' | 'single-field';
     requireAllPrimaryAnswers?: boolean;
+    showDictionaryEntry?: boolean;
     generatorConfig: GeneratorConfigBase;
     paradigmConfigs: ParadigmConfigs;
   };

@@ -21,11 +21,12 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
   const [isProcessing, setIsProcessing] = useState(false);
   const [correctAnswers, setCorrectAnswers] = useState(0);
 
-  const { currentIndex, isLastItem, autoAdvanceIfEnabled } = useExerciseProgression({
-    totalItems: exercise.data.words.length,
-    itemProgressionDelay: exercise.itemProgressionDelay,
-    progressionRules: exercise.feedbackConfig.progressionRules,
-  });
+  const { currentIndex, isLastItem, isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance } =
+    useExerciseProgression({
+      totalItems: exercise.data.words.length,
+      itemProgressionDelay: exercise.itemProgressionDelay,
+      progressionRules: exercise.feedbackConfig.progressionRules,
+    });
 
   const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
     exercise.feedbackConfig
@@ -60,24 +61,26 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
       setCorrectAnswers(newCorrectAnswers);
       handleCorrect(isLastItem);
 
+      const hasVisibleExplanation =
+        (exercise.feedbackConfig.successMessage?.showExplanation ?? true) && !!currentWord.explanation;
+
       if (isLastItem) {
         const finalScore = Math.round((newCorrectAnswers / exercise.data.words.length) * 100);
-
-        onComplete?.(finalScore);
 
         autoAdvanceIfEnabled(() => {
           setUserAnswer('');
           setSelectedWordIndex(null);
           reset();
           setIsProcessing(false);
-        });
+          onComplete?.(finalScore);
+        }, hasVisibleExplanation);
       } else {
         autoAdvanceIfEnabled(() => {
           setUserAnswer('');
           setSelectedWordIndex(null);
           reset();
           setIsProcessing(false);
-        });
+        }, hasVisibleExplanation);
       }
     } else {
       handleIncorrect();
@@ -87,7 +90,7 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
 
   const handleAnswerChange = (value: string) => {
     setUserAnswer(value);
-    if (isCorrect !== null) {
+    if (isCorrect === false) {
       reset();
     }
   };
@@ -151,6 +154,7 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
             onChange={handleAnswerChange}
             onSubmit={handleSubmit}
             placeholder="Enter your answer..."
+            disabled={isProcessing}
           />
         </div>
 
@@ -162,6 +166,7 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
           correctAnswer={currentWord.correctAnswer}
           explanation={currentWord.explanation}
           showExplanation={showExplanation}
+          onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
         />
       </div>
     </div>

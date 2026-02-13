@@ -236,7 +236,9 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
                         <SimpleRichDisplay content={item.lessonTitle} className="truncate" />
                       </div>
                     </div>
-                    <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full flex-shrink-0">Recovery</span>
+                    <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full flex-shrink-0">
+                      Recovery
+                    </span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">

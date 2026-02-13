@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, X, HelpCircle } from 'lucide-react';
+import { Check, X, HelpCircle, ChevronRight } from 'lucide-react';
 import type { FeedbackLevel } from '@/src/types/exercises/base';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 
@@ -12,6 +12,7 @@ interface FeedbackDisplayProps {
   explanation?: string;
   showExplanation?: boolean;
   className?: string;
+  onContinue?: () => void;
 }
 
 export const FeedbackDisplay: React.FC<FeedbackDisplayProps> = ({
@@ -23,6 +24,7 @@ export const FeedbackDisplay: React.FC<FeedbackDisplayProps> = ({
   explanation,
   showExplanation = false,
   className = '',
+  onContinue,
 }) => {
   const shouldShowHint = !isCorrect && Boolean(level?.showHint) && Boolean(hint);
   const shouldShowAnswer = !isCorrect && Boolean(level?.showAnswer) && Boolean(correctAnswer);
@@ -77,6 +79,15 @@ export const FeedbackDisplay: React.FC<FeedbackDisplayProps> = ({
         <div className="mt-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <SimpleRichDisplay content={explanation} className="text-blue-800 text-sm leading-relaxed" />
         </div>
+      )}
+
+      {isCorrect && onContinue && (
+        <button
+          onClick={onContinue}
+          className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors">
+          Continue
+          <ChevronRight className="h-4 w-4" />
+        </button>
       )}
     </div>
   );

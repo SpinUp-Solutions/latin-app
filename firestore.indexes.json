@@ -263,6 +263,86 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "vocabulary_words_v5",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "part_of_speech",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "pronoun_type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sort_key",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "vocabulary_words_v5",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "part_of_speech",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "pronoun_type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "person",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "sort_key",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "vocabulary_words_v5",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "part_of_speech",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "pronoun_type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "random_index",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "vocabulary_words_v5",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "part_of_speech",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "pronoun_type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "person",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "random_index",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

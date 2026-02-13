@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useGetLessonByIdQuery } from '@/src/store/api/lessonApi';
 import LessonPlayer from '@/src/components/ui/lesson/lesson-player';
@@ -8,13 +8,25 @@ import { LessonWithProgress } from '@/src/types/lesson';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/src/components/ui/button';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
+import { useAppDispatch } from '@/src/store/hooks';
+import { setLesson, resetLessonState } from '@/src/store/slices/lessonEditorSlice';
 
 function AdminLessonPreviewPage() {
   const params = useParams();
   const router = useRouter();
+  const dispatch = useAppDispatch();
   const lessonId = params.id as string;
 
   const { data, isLoading, error } = useGetLessonByIdQuery({ lessonId });
+
+  useEffect(() => {
+    if (data?.lesson) {
+      dispatch(setLesson(data.lesson));
+    }
+    return () => {
+      dispatch(resetLessonState());
+    };
+  }, [data, dispatch]);
 
   const previewLesson: LessonWithProgress | null = useMemo(() => {
     if (!data?.lesson) return null;

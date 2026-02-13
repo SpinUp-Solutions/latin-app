@@ -1,6 +1,7 @@
-import { collection, query, where, getDocs, limit } from 'firebase/firestore';
+import { collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
 import { db } from './firebase';
 import { Word } from '@/src/types/admin-vocabulary';
+import { stripMacrons } from '@/src/utils/exercises/helpers';
 
 export interface WordLookupResult {
   found: boolean;
@@ -13,6 +14,7 @@ export class WordLookupService {
 
   /**
    * Search for a word in the Firebase words collection
+   * Supports macron-insensitive matching via the sort_key field
    * @param searchTerm - The word to search for
    * @returns Promise with the word data if found
    */
@@ -23,11 +25,10 @@ export class WordLookupService {
       }
 
       const normalizedTerm = searchTerm.toLowerCase().trim();
+      const wordsRef = collection(db, this.COLLECTION_NAME);
 
       // Query for exact match first
-      const wordsRef = collection(db, this.COLLECTION_NAME);
       const exactQuery = query(wordsRef, where('word', '==', normalizedTerm), limit(1));
-
       const exactSnapshot = await getDocs(exactQuery);
 
       if (!exactSnapshot.empty) {
@@ -36,18 +37,23 @@ export class WordLookupService {
         return { found: true, word: wordData };
       }
 
-      // If no exact match, try case-insensitive search
-      // Note: This requires a more complex query or client-side filtering
-      // For now, we'll do a broader search and filter client-side
-      const broadQuery = query(wordsRef, limit(50));
-      const broadSnapshot = await getDocs(broadQuery);
+      // Fallback: macron-insensitive search via sort_key
+      const searchKey = stripMacrons(normalizedTerm);
+      const sortKeyQuery = query(
+        wordsRef,
+        orderBy('sort_key'),
+        where('sort_key', '>=', searchKey),
+        where('sort_key', '<=', searchKey + '\uf8ff'),
+        limit(5)
+      );
+      const sortKeySnapshot = await getDocs(sortKeyQuery);
 
-      for (const doc of broadSnapshot.docs) {
-        const data = doc.data();
-        if (data.word && data.word.toLowerCase() === normalizedTerm) {
-          const wordData = { id: doc.id, ...data } as Word;
-          return { found: true, word: wordData };
-        }
+      if (!sortKeySnapshot.empty) {
+        // Prefer an exact sort_key match, otherwise take the first result
+        const exactSortKeyDoc = sortKeySnapshot.docs.find(doc => doc.data().sort_key === searchKey);
+        const bestDoc = exactSortKeyDoc || sortKeySnapshot.docs[0];
+        const wordData = { id: bestDoc.id, ...bestDoc.data() } as Word;
+        return { found: true, word: wordData };
       }
 
       return { found: false };
