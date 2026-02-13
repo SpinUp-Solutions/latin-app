@@ -282,11 +282,12 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
       .map(result => result.data);
   }, [items, isSingleField, isMultiAnswerMode]);
 
-  const { currentIndex, isLastItem, autoAdvanceIfEnabled, confirmAdvance, resetIndex } = useExerciseProgression({
-    totalItems: validatedItems.length,
-    itemProgressionDelay: exercise.itemProgressionDelay,
-    progressionRules: exercise.feedbackConfig.progressionRules,
-  });
+  const { currentIndex, isLastItem, isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance, resetIndex } =
+    useExerciseProgression({
+      totalItems: validatedItems.length,
+      itemProgressionDelay: exercise.itemProgressionDelay,
+      progressionRules: exercise.feedbackConfig.progressionRules,
+    });
 
   useEffect(() => {
     if (validatedItems.length > 0 && currentIndex >= validatedItems.length) {
@@ -343,16 +344,14 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
       setCorrectAnswers(newCorrectAnswers);
       handleCorrect(isLastItem);
 
-      if (isLastItem) {
-        const finalScore = Math.round((newCorrectAnswers / validatedItems.length) * 100);
-        onComplete?.(finalScore);
-      }
+      const finalScore = isLastItem ? Math.round((newCorrectAnswers / validatedItems.length) * 100) : null;
 
       autoAdvanceIfEnabled(() => {
         setUserAnswer('');
         reset();
         setIsProcessing(false);
-      });
+        if (finalScore !== null) onComplete?.(finalScore);
+      }, false);
       return;
     }
 
@@ -376,15 +375,14 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
       setCorrectAnswers(newCorrectAnswers);
       handleCorrect(isLastItem);
 
-      if (isLastItem) {
-        const finalScore = Math.round((newCorrectAnswers / validatedItems.length) * 100);
-        onComplete?.(finalScore);
-      }
+      const finalScore = isLastItem ? Math.round((newCorrectAnswers / validatedItems.length) * 100) : null;
+
       autoAdvanceIfEnabled(() => {
         setUserAnswer('');
         reset();
         setIsProcessing(false);
-      });
+        if (finalScore !== null) onComplete?.(finalScore);
+      }, false);
     } else {
       handleIncorrect();
       setIsProcessing(false);
@@ -454,7 +452,11 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
         </p>
       )}
 
-      <ExerciseProgress current={safeIndex} total={validatedItems.length} />
+      <ExerciseProgress
+        current={safeIndex}
+        total={validatedItems.length}
+        showProgress={exercise.feedbackConfig.progressionRules?.showProgress !== false}
+      />
 
       <Card>
         <CardContent className="p-6 space-y-4">
@@ -471,20 +473,23 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
                 </span>
               </div>
             )}
-            <div className="text-lg font-medium flex items-baseline gap-1">
-              <SimpleRichDisplay
-                content={
-                  currentItem.hasSelectedForm
-                    ? currentItem.selected_form
-                    : currentItem.dictionary_entry || currentItem.selected_form
-                }
-              />
+            <div className="text-lg font-medium flex items-baseline gap-2">
+              <span className="bg-roman-red text-white px-2 py-0.5 rounded">
+                <SimpleRichDisplay
+                  className="text-white prose-p:text-white"
+                  content={
+                    currentItem.hasSelectedForm
+                      ? currentItem.selected_form
+                      : currentItem.dictionary_entry || currentItem.selected_form
+                  }
+                />
+              </span>
               {exercise.data.showDictionaryEntry &&
                 currentItem.hasSelectedForm &&
-                currentItem.dictionary_entry &&
-                currentItem.dictionary_entry !== currentItem.selected_form && (
-                  <span className="text-sm text-gray-500">
-                    (<SimpleRichDisplay content={currentItem.dictionary_entry} />)
+                (currentItem.dictionary_entry || currentItem.root_word) &&
+                (currentItem.dictionary_entry || currentItem.root_word) !== currentItem.selected_form && (
+                  <span className="text-xs font-medium text-gray-400">
+                    <SimpleRichDisplay content={currentItem.dictionary_entry || currentItem.root_word} />
                   </span>
                 )}
             </div>
@@ -556,7 +561,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
                   : (currentItem as FormIdentificationItem).correctAnswer
             }
             showExplanation={showExplanation}
-            onContinue={isCorrect ? confirmAdvance : undefined}
+            onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
           />
         </CardContent>
       </Card>

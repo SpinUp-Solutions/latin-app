@@ -21,11 +21,12 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
   const [isProcessing, setIsProcessing] = useState(false);
   const [correctAnswers, setCorrectAnswers] = useState(0);
 
-  const { currentIndex, isLastItem, autoAdvanceIfEnabled, confirmAdvance } = useExerciseProgression({
-    totalItems: exercise.data.questions.length,
-    itemProgressionDelay: exercise.itemProgressionDelay,
-    progressionRules: exercise.feedbackConfig.progressionRules,
-  });
+  const { currentIndex, isLastItem, isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance } =
+    useExerciseProgression({
+      totalItems: exercise.data.questions.length,
+      itemProgressionDelay: exercise.itemProgressionDelay,
+      progressionRules: exercise.feedbackConfig.progressionRules,
+    });
 
   const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
     exercise.feedbackConfig
@@ -43,22 +44,24 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
       setCorrectAnswers(newCorrectAnswers);
       handleCorrect(isLastItem);
 
+      const hasVisibleExplanation =
+        (exercise.feedbackConfig.successMessage?.showExplanation ?? true) && !!currentQuestion.explanation;
+
       if (isLastItem) {
         const finalScore = Math.round((newCorrectAnswers / exercise.data.questions.length) * 100);
-
-        onComplete?.(finalScore);
 
         autoAdvanceIfEnabled(() => {
           setSelectedWordIndex(null);
           reset();
           setIsProcessing(false);
-        });
+          onComplete?.(finalScore);
+        }, hasVisibleExplanation);
       } else {
         autoAdvanceIfEnabled(() => {
           setSelectedWordIndex(null);
           reset();
           setIsProcessing(false);
-        });
+        }, hasVisibleExplanation);
       }
     } else {
       handleIncorrect();
@@ -121,7 +124,7 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
           correctAnswer={exercise.data.passage.split(' ')[currentQuestion.correctWordIndex]}
           explanation={currentQuestion.explanation}
           showExplanation={showExplanation}
-          onContinue={isCorrect ? confirmAdvance : undefined}
+          onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
         />
       </div>
     </div>

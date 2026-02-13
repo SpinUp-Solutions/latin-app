@@ -73,15 +73,14 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
 
     if (passed) {
       setPassedSentences(prev => new Set([...prev, currentIndex]));
-
-      if (isLastItem) {
-        const finalScore = Math.round(((passedSentences.size + 1) / exercise.data.items.length) * 100);
-        onComplete?.(finalScore);
-      }
     }
   };
 
   const handleContinue = () => {
+    if (isLastItem) {
+      const finalScore = Math.round((passedSentences.size / exercise.data.items.length) * 100);
+      onComplete?.(finalScore);
+    }
     nextItem();
     resetGrading();
   };
@@ -354,7 +353,7 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
           </div>
         )}
 
-        {exercise.feedbackConfig.progressionRules?.allowManualAdvance !== false && !data && (
+        {!data && (
           <div className="flex justify-between items-center mt-8 pt-4 border-t border-gray-100">
             <Button
               variant="ghost"

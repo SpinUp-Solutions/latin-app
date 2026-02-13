@@ -268,19 +268,21 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
-                  checked={progressionRulesWithDefaults.autoAdvance}
-                  onChange={e => updateProgressionRules({ autoAdvance: e.target.checked })}
+                  checked={progressionRulesWithDefaults.autoAdvanceOnCorrect}
+                  onChange={e => updateProgressionRules({ autoAdvanceOnCorrect: e.target.checked })}
                 />
-                Auto-advance after correct answer
+                Auto-advance on correct answer
               </label>
 
-              <label className="flex items-center gap-2 text-sm">
+              <label
+                className={`flex items-center gap-2 text-sm ${!progressionRulesWithDefaults.autoAdvanceOnCorrect ? 'opacity-50' : ''}`}>
                 <input
                   type="checkbox"
-                  checked={progressionRulesWithDefaults.resetOnCorrect}
-                  onChange={e => updateProgressionRules({ resetOnCorrect: e.target.checked })}
+                  checked={progressionRulesWithDefaults.pauseForExplanation}
+                  onChange={e => updateProgressionRules({ pauseForExplanation: e.target.checked })}
+                  disabled={!progressionRulesWithDefaults.autoAdvanceOnCorrect}
                 />
-                Reset error count on correct answer
+                Pause for explanation when auto-advancing
               </label>
 
               <label className="flex items-center gap-2 text-sm">
@@ -290,15 +292,6 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({
                   onChange={e => updateProgressionRules({ showProgress: e.target.checked })}
                 />
                 Show progress indicator
-              </label>
-
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={progressionRulesWithDefaults.allowManualAdvance}
-                  onChange={e => updateProgressionRules({ allowManualAdvance: e.target.checked })}
-                />
-                Allow manual &quot;Next&quot; button
               </label>
             </div>
           </CardContent>

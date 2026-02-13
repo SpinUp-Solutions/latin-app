@@ -21,11 +21,12 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
 
   const [correctAnswers, setCorrectAnswers] = useState(0);
 
-  const { currentIndex, isLastItem, autoAdvanceIfEnabled, confirmAdvance } = useExerciseProgression({
-    totalItems: exercise.data.items.length,
-    itemProgressionDelay: exercise.itemProgressionDelay,
-    progressionRules: exercise.feedbackConfig.progressionRules,
-  });
+  const { currentIndex, isLastItem, isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance } =
+    useExerciseProgression({
+      totalItems: exercise.data.items.length,
+      itemProgressionDelay: exercise.itemProgressionDelay,
+      progressionRules: exercise.feedbackConfig.progressionRules,
+    });
 
   const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
     exercise.feedbackConfig
@@ -42,22 +43,24 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
       setCorrectAnswers(newCorrectAnswers);
       handleCorrect(isLastItem);
 
+      const hasVisibleExplanation =
+        (exercise.feedbackConfig.successMessage?.showExplanation ?? true) && !!currentItem.explanation;
+
       if (isLastItem) {
         const finalScore = Math.round((newCorrectAnswers / exercise.data.items.length) * 100);
-
-        onComplete?.(finalScore);
 
         autoAdvanceIfEnabled(() => {
           setUserAnswer('');
           reset();
           setIsProcessing(false);
-        });
+          onComplete?.(finalScore);
+        }, hasVisibleExplanation);
       } else {
         autoAdvanceIfEnabled(() => {
           setUserAnswer('');
           reset();
           setIsProcessing(false);
-        });
+        }, hasVisibleExplanation);
       }
     } else {
       handleIncorrect();
@@ -118,7 +121,7 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
           correctAnswer={currentItem.answer}
           explanation={currentItem.explanation}
           showExplanation={showExplanation}
-          onContinue={isCorrect ? confirmAdvance : undefined}
+          onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
         />
       </div>
     </div>

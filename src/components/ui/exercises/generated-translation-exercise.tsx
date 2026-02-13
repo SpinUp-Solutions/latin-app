@@ -84,11 +84,12 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
     return mapped.filter((item): item is GeneratedTranslationItem => item !== null);
   }, [data, translationDirection]);
 
-  const { currentIndex, isLastItem, autoAdvanceIfEnabled, confirmAdvance } = useExerciseProgression({
-    totalItems: items.length,
-    itemProgressionDelay: exercise.itemProgressionDelay,
-    progressionRules: exercise.feedbackConfig.progressionRules,
-  });
+  const { currentIndex, isLastItem, isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance } =
+    useExerciseProgression({
+      totalItems: items.length,
+      itemProgressionDelay: exercise.itemProgressionDelay,
+      progressionRules: exercise.feedbackConfig.progressionRules,
+    });
 
   const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
     exercise.feedbackConfig
@@ -109,19 +110,19 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
 
       if (isLastItem) {
         const finalScore = Math.round((newCorrectAnswers / items.length) * 100);
-        onComplete?.(finalScore);
 
         autoAdvanceIfEnabled(() => {
           setUserAnswer('');
           reset();
           setIsProcessing(false);
-        });
+          onComplete?.(finalScore);
+        }, false);
       } else {
         autoAdvanceIfEnabled(() => {
           setUserAnswer('');
           reset();
           setIsProcessing(false);
-        });
+        }, false);
       }
     } else {
       handleIncorrect();
@@ -193,7 +194,11 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
         </p>
       )}
 
-      <ExerciseProgress current={currentIndex} total={items.length} />
+      <ExerciseProgress
+        current={currentIndex}
+        total={items.length}
+        showProgress={exercise.feedbackConfig.progressionRules?.showProgress !== false}
+      />
 
       <Card>
         <CardContent className="p-6 space-y-4">
@@ -215,7 +220,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
             hint={currentItem.hint}
             correctAnswer={currentItem.acceptedAnswers.join(' OR ')}
             showExplanation={showExplanation}
-            onContinue={isCorrect ? confirmAdvance : undefined}
+            onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
           />
         </CardContent>
       </Card>
