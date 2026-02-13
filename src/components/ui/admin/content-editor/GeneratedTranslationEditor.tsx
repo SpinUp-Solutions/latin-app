@@ -55,7 +55,14 @@ const GeneratedTranslationEditorView: React.FC<{ editingContent: GeneratedTransl
         filters={{
           partOfSpeech: (editor.derivedFilters.partOfSpeech || 'all') as PartOfSpeech | 'all',
           search: editor.derivedFilters.search || '',
-          verbConjugation: (editor.derivedFilters.verbConjugation || 'all') as '1' | '2' | '3' | '3io' | '4' | 'irregular' | 'all',
+          verbConjugation: (editor.derivedFilters.verbConjugation || 'all') as
+            | '1'
+            | '2'
+            | '3'
+            | '3io'
+            | '4'
+            | 'irregular'
+            | 'all',
           isDeponent: (editor.derivedFilters.isDeponent || 'both') as 'true' | 'false' | 'both',
           nounDeclension: (editor.derivedFilters.nounDeclension || 'all') as
             | '1'

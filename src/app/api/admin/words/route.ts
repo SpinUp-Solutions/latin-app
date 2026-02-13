@@ -674,7 +674,16 @@ function pickRandomFormServer(
 }
 
 async function getWordTypeCounts(collection: string) {
-  const posTypes = ['noun', 'verb', 'adjective', 'adverb', 'preposition', 'pronoun', 'conjunction', 'interjection'] as const;
+  const posTypes = [
+    'noun',
+    'verb',
+    'adjective',
+    'adverb',
+    'preposition',
+    'pronoun',
+    'conjunction',
+    'interjection',
+  ] as const;
 
   const counts: Record<string, number> = {
     noun: 0,
@@ -690,11 +699,7 @@ async function getWordTypeCounts(collection: string) {
 
   try {
     const countPromises = posTypes.map(async pos => {
-      const snapshot = await adminDb
-        .collection(collection)
-        .where('part_of_speech', '==', pos)
-        .count()
-        .get();
+      const snapshot = await adminDb.collection(collection).where('part_of_speech', '==', pos).count().get();
       return { pos, count: snapshot.data().count };
     });
 

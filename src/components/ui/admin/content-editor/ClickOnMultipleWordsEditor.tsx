@@ -54,8 +54,7 @@ export const ClickOnMultipleWordsEditor: React.FC = () => {
 
   const getSelectedWords = () => {
     if (!editingContent.data.passage) return [];
-    const words = splitHtmlIntoWords(editingContent.data.passage)
-      .map(w => w.replace(/<[^>]*>/g, ''));
+    const words = splitHtmlIntoWords(editingContent.data.passage).map(w => w.replace(/<[^>]*>/g, ''));
 
     return editingContent.data.correctWordIndices
       .map(index => ({ index, word: words[index] || `Index ${index}` }))

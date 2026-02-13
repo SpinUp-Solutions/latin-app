@@ -46,12 +46,11 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
   const targetLanguage = isLatinToEnglish ? 'English' : 'Latin';
   const direction = translationDirection;
 
-  const { currentIndex, isLastItem, isFirstItem, nextItem, previousItem } =
-    useExerciseProgression({
-      totalItems: exercise.data.items.length,
-      itemProgressionDelay: exercise.itemProgressionDelay,
-      progressionRules: exercise.feedbackConfig.progressionRules,
-    });
+  const { currentIndex, isLastItem, isFirstItem, nextItem, previousItem } = useExerciseProgression({
+    totalItems: exercise.data.items.length,
+    itemProgressionDelay: exercise.itemProgressionDelay,
+    progressionRules: exercise.feedbackConfig.progressionRules,
+  });
 
   const { grade, reset: resetGrading, isLoading, data, error } = useTranslationGrading();
 

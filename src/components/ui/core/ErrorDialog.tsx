@@ -131,7 +131,9 @@ Timestamp: ${new Date().toISOString()}`;
 
         <div className="my-4">
           <p className="text-gray-700 text-sm leading-relaxed">{errorMessage}</p>
-          <p className="text-gray-500 text-xs mt-2">Your work has NOT been lost. You can try again or save to recovery.</p>
+          <p className="text-gray-500 text-xs mt-2">
+            Your work has NOT been lost. You can try again or save to recovery.
+          </p>
         </div>
 
         {technicalDetails && (
@@ -204,7 +206,8 @@ export function parseErrorType(error: unknown): ErrorType {
     if (err.status === 400) return 'validation';
     if (err.status === 401 || err.status === 403) return 'auth';
     if (err.status && err.status >= 500) return 'server';
-    if (err.message?.toLowerCase().includes('fetch') || err.message?.toLowerCase().includes('network')) return 'network';
+    if (err.message?.toLowerCase().includes('fetch') || err.message?.toLowerCase().includes('network'))
+      return 'network';
   }
   return 'unknown';
 }
@@ -212,7 +215,8 @@ export function parseErrorType(error: unknown): ErrorType {
 export function getHumanReadableError(error: unknown): string {
   if (typeof error === 'object' && error !== null) {
     const err = error as { status?: number; data?: { error?: string }; message?: string };
-    if (err.status === 409) return 'A lesson with this ID already exists. This usually happens when continuing from an old draft.';
+    if (err.status === 409)
+      return 'A lesson with this ID already exists. This usually happens when continuing from an old draft.';
     if (err.status === 400)
       return err.data?.error || 'Invalid lesson data. Please check that all required fields are filled in correctly.';
     if (err.status === 401) return 'Your session has expired. Please refresh the page and log in again.';

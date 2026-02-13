@@ -71,7 +71,14 @@ const GeneratedFormIdentificationEditorView: React.FC<{
         filters={{
           partOfSpeech: (editor.derivedFilters.partOfSpeech || 'all') as PartOfSpeech | 'all',
           search: editor.derivedFilters.search || '',
-          verbConjugation: (editor.derivedFilters.verbConjugation || 'all') as '1' | '2' | '3' | '3io' | '4' | 'irregular' | 'all',
+          verbConjugation: (editor.derivedFilters.verbConjugation || 'all') as
+            | '1'
+            | '2'
+            | '3'
+            | '3io'
+            | '4'
+            | 'irregular'
+            | 'all',
           isDeponent: (editor.derivedFilters.isDeponent || 'both') as 'true' | 'false' | 'both',
           nounDeclension: (editor.derivedFilters.nounDeclension || 'all') as
             | '1'
@@ -189,9 +196,7 @@ const GeneratedFormIdentificationEditorView: React.FC<{
                 Show dictionary entry
               </Label>
             </div>
-            <p className="text-xs text-gray-500 ml-6">
-              Display the dictionary entry next to the selected form.
-            </p>
+            <p className="text-xs text-gray-500 ml-6">Display the dictionary entry next to the selected form.</p>
           </div>
         </CardContent>
       </Card>
