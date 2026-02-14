@@ -67,6 +67,7 @@ export async function GET(request: NextRequest) {
 
     const normalLessons = allLessons.filter(l => l.type === 'normal');
     const vocabLessons = allLessons.filter(l => l.type === 'vocab');
+    const diagrammingLessons = allLessons.filter(l => l.type === 'sentence-diagramming');
 
     const processNormalLessons = (lessons: typeof allLessons): LessonWithProgress[] => {
       return lessons.map((lesson, index) => {
@@ -141,9 +142,29 @@ export async function GET(request: NextRequest) {
       });
     };
 
+    const processDiagrammingLessons = (lessons: typeof allLessons): LessonWithProgress[] => {
+      return lessons.map(lesson => {
+        const userProgress = userProgressMap[lesson.id];
+        const status = userProgress?.status === 'completed' ? 'completed' : 'available';
+        const progress = status === 'completed' ? 100 : 0;
+
+        return {
+          ...lesson,
+          progress,
+          status,
+          currentPageIndex: 0,
+          exerciseProgress: [],
+          completedAt: userProgress?.completedAt,
+          score: userProgress?.score,
+          lastAccessedAt: userProgress?.lastAccessedAt,
+        } as LessonWithProgress;
+      });
+    };
+
     const lessonsWithStatus: LessonWithProgress[] = [
       ...processNormalLessons(normalLessons),
       ...processVocabLessons(vocabLessons),
+      ...processDiagrammingLessons(diagrammingLessons),
     ];
 
     return NextResponse.json({ lessons: lessonsWithStatus });

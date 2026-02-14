@@ -18,6 +18,7 @@ import 'swiper/css';
 import 'swiper/css/navigation';
 import { SwiperNavigation } from '@/src/components/ui/core/swiper-nav';
 import { VocabularyPracticeWidget } from '@/src/components/ui/core/VocabularyPracticeWidget';
+import { DiagrammingPracticeWidget } from '@/src/components/ui/core/DiagrammingPracticeWidget';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 
 const statusConfig: Record<LessonStatus, { card: string }> = {
@@ -113,6 +114,16 @@ export default function DashboardPage() {
       }));
   }, [studentLessons]);
 
+  const diagrammingLessons = useMemo(() => {
+    if (!studentLessons) return [];
+    return studentLessons
+      .filter(lesson => lesson.type === 'sentence-diagramming')
+      .map(lesson => ({
+        ...lesson,
+        totalPages: lesson.pages.length,
+      }));
+  }, [studentLessons]);
+
   const completionStats = useMemo(() => {
     if (normalLessons.length === 0) return { percentage: 0, completed: 0, total: 0 };
     const completed = normalLessons.filter(l => l.status === 'completed').length;
@@ -134,7 +145,7 @@ export default function DashboardPage() {
 
   const handleLessonClick = useCallback(
     (lessonId: string) => {
-      const allLessons = [...normalLessons, ...vocabLessons];
+      const allLessons = [...normalLessons, ...vocabLessons, ...diagrammingLessons];
       const lesson = allLessons.find(l => l.id === lessonId);
 
       if (lesson?.status === 'locked') {
@@ -144,7 +155,7 @@ export default function DashboardPage() {
 
       router.push(`/lesson/${lessonId}`);
     },
-    [router, normalLessons, vocabLessons]
+    [router, normalLessons, vocabLessons, diagrammingLessons]
   );
 
   useEffect(() => {
@@ -322,6 +333,12 @@ export default function DashboardPage() {
             {vocabLessons.length > 0 && (
               <section className="mb-16">
                 <VocabularyPracticeWidget lessons={vocabLessons} />
+              </section>
+            )}
+
+            {diagrammingLessons.length > 0 && (
+              <section className="mb-16">
+                <DiagrammingPracticeWidget lessons={diagrammingLessons} />
               </section>
             )}
 

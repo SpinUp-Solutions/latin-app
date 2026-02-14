@@ -5,7 +5,7 @@ export interface Lesson {
   id: string;
   title: string;
   description?: string;
-  type: 'vocab' | 'normal';
+  type: 'vocab' | 'normal' | 'sentence-diagramming';
   vocabulary_pool?: string;
   pages: Page[];
 

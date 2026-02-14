@@ -42,7 +42,7 @@ function LiveLessonsPage() {
   const availableLessons = useSelector(selectAvailableLessons);
   const hasUnsavedChanges = useSelector(selectHasUnsavedChanges);
 
-  const [lessonType, setLessonType] = useState<'normal' | 'vocab'>('normal');
+  const [lessonType, setLessonType] = useState<'normal' | 'vocab' | 'sentence-diagramming'>('normal');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'live' | 'draft'>('live');
   const [selectedLessons, setSelectedLessons] = useState<Set<string>>(new Set());
@@ -50,11 +50,19 @@ function LiveLessonsPage() {
 
   const normalLiveLessons = liveLessons.filter(l => l.type === 'normal');
   const vocabLiveLessons = liveLessons.filter(l => l.type === 'vocab');
+  const diagrammingLiveLessons = liveLessons.filter(l => l.type === 'sentence-diagramming');
   const normalAvailableLessons = availableLessons.filter(l => l.type === 'normal');
   const vocabAvailableLessons = availableLessons.filter(l => l.type === 'vocab');
+  const diagrammingAvailableLessons = availableLessons.filter(l => l.type === 'sentence-diagramming');
 
-  const currentLiveLessons = lessonType === 'normal' ? normalLiveLessons : vocabLiveLessons;
-  const currentAvailableLessons = lessonType === 'normal' ? normalAvailableLessons : vocabAvailableLessons;
+  const currentLiveLessons =
+    lessonType === 'normal' ? normalLiveLessons : lessonType === 'vocab' ? vocabLiveLessons : diagrammingLiveLessons;
+  const currentAvailableLessons =
+    lessonType === 'normal'
+      ? normalAvailableLessons
+      : lessonType === 'vocab'
+        ? vocabAvailableLessons
+        : diagrammingAvailableLessons;
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -227,13 +235,19 @@ function LiveLessonsPage() {
       </header>
 
       <main className="container mx-auto py-8 px-4 max-w-6xl">
-        <Tabs value={lessonType} onValueChange={value => setLessonType(value as 'normal' | 'vocab')} className="mb-6">
+        <Tabs
+          value={lessonType}
+          onValueChange={value => setLessonType(value as 'normal' | 'vocab' | 'sentence-diagramming')}
+          className="mb-6">
           <TabsList>
             <TabsTrigger value="normal">
               Normal Lessons ({normalLiveLessons.length + normalAvailableLessons.length})
             </TabsTrigger>
             <TabsTrigger value="vocab">
               Vocab Lessons ({vocabLiveLessons.length + vocabAvailableLessons.length})
+            </TabsTrigger>
+            <TabsTrigger value="sentence-diagramming">
+              Diagramming ({diagrammingLiveLessons.length + diagrammingAvailableLessons.length})
             </TabsTrigger>
           </TabsList>
 

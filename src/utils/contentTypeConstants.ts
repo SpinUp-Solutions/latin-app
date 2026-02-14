@@ -45,6 +45,10 @@ export const CONTENT_TYPES = [
   { type: 'vocabulary-pool', icon: Library, label: 'Vocabulary Pool' },
 ] as const;
 
+export const SENTENCE_DIAGRAMMING_LESSON_CONTENT_TYPES = [
+  { type: 'sentence-diagramming', icon: Pencil, label: 'Sentence Diagramming' },
+] as const;
+
 export const EXERCISE_TYPES = [
   { type: 'matching', icon: Target, label: 'Matching' },
   { type: 'fill', icon: Target, label: 'Fill-in-Blank' },

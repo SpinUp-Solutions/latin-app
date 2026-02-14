@@ -6,6 +6,7 @@ import { useGetStudentLessonsQuery } from '@/src/store/api/lessonApi';
 import LessonPlayer from '@/src/components/ui/lesson/lesson-player';
 import LessonSidebar from '@/src/components/ui/lesson/lesson-sidebar';
 import VocabSidebar from '@/src/components/ui/lesson/vocab-sidebar';
+import DiagrammingSidebar from '@/src/components/ui/lesson/diagramming-sidebar';
 
 export default function DynamicLessonPage() {
   const params = useParams();
@@ -112,6 +113,7 @@ export default function DynamicLessonPage() {
           </div>
         </main>
         <VocabSidebar currentLessonId={lessonId} />
+        <DiagrammingSidebar currentLessonId={lessonId} />
       </div>
     </div>
   );

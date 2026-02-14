@@ -45,6 +45,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
 
   const normalLessons = lessons.filter(l => l.type === 'normal');
   const vocabLessons = lessons.filter(l => l.type === 'vocab');
+  const diagrammingLessons = lessons.filter(l => l.type === 'sentence-diagramming');
 
   useEffect(() => {
     dispatch(loadDrafts());
@@ -385,9 +386,11 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
             <TabsList>
               <TabsTrigger value="normal">Normal Lessons ({normalLessons.length})</TabsTrigger>
               <TabsTrigger value="vocab">Vocab Lessons ({vocabLessons.length})</TabsTrigger>
+              <TabsTrigger value="diagramming">Diagramming ({diagrammingLessons.length})</TabsTrigger>
             </TabsList>
             <TabsContent value="normal">{renderLessonGrid(normalLessons)}</TabsContent>
             <TabsContent value="vocab">{renderLessonGrid(vocabLessons)}</TabsContent>
+            <TabsContent value="diagramming">{renderLessonGrid(diagrammingLessons)}</TabsContent>
           </Tabs>
         )}
       </section>

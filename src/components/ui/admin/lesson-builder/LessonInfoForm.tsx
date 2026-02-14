@@ -53,7 +53,7 @@ export const LessonInfoForm: React.FC<LessonInfoFormProps> = ({ lesson, onUpdate
                   name="lessonType"
                   value="normal"
                   checked={lesson.type === 'normal'}
-                  onChange={e => onUpdateInfo({ type: e.target.value as 'normal' | 'vocab' })}
+                  onChange={e => onUpdateInfo({ type: e.target.value as Lesson['type'] })}
                   disabled={!isNewLesson}
                   className="w-3 h-3"
                 />
@@ -65,11 +65,23 @@ export const LessonInfoForm: React.FC<LessonInfoFormProps> = ({ lesson, onUpdate
                   name="lessonType"
                   value="vocab"
                   checked={lesson.type === 'vocab'}
-                  onChange={e => onUpdateInfo({ type: e.target.value as 'normal' | 'vocab' })}
+                  onChange={e => onUpdateInfo({ type: e.target.value as Lesson['type'] })}
                   disabled={!isNewLesson}
                   className="w-3 h-3"
                 />
                 <span className={`text-sm ${!isNewLesson ? 'text-gray-500' : ''}`}>Vocab</span>
+              </label>
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="radio"
+                  name="lessonType"
+                  value="sentence-diagramming"
+                  checked={lesson.type === 'sentence-diagramming'}
+                  onChange={e => onUpdateInfo({ type: e.target.value as Lesson['type'] })}
+                  disabled={!isNewLesson}
+                  className="w-3 h-3"
+                />
+                <span className={`text-sm ${!isNewLesson ? 'text-gray-500' : ''}`}>Diagramming</span>
               </label>
             </div>
             {!isNewLesson && <p className="text-xs text-gray-500 mt-1">Type cannot be changed</p>}

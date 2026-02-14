@@ -26,7 +26,11 @@ const lessonSlice = createSlice({
 
     localReorderLiveLessons: (
       state,
-      action: PayloadAction<{ fromIndex: number; toIndex: number; lessonType: 'normal' | 'vocab' }>
+      action: PayloadAction<{
+        fromIndex: number;
+        toIndex: number;
+        lessonType: 'normal' | 'vocab' | 'sentence-diagramming';
+      }>
     ) => {
       const { fromIndex, toIndex, lessonType } = action.payload;
       const liveLessonsOfType = state.lessons
