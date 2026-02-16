@@ -42,7 +42,7 @@ function LiveLessonsPage() {
   const availableLessons = useSelector(selectAvailableLessons);
   const hasUnsavedChanges = useSelector(selectHasUnsavedChanges);
 
-  const [lessonType, setLessonType] = useState<'normal' | 'vocab' | 'sentence-diagramming'>('normal');
+  const [lessonType, setLessonType] = useState<'normal' | 'vocab' | 'sentence-diagramming' | 'listening'>('normal');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'live' | 'draft'>('live');
   const [selectedLessons, setSelectedLessons] = useState<Set<string>>(new Set());
@@ -51,18 +51,28 @@ function LiveLessonsPage() {
   const normalLiveLessons = liveLessons.filter(l => l.type === 'normal');
   const vocabLiveLessons = liveLessons.filter(l => l.type === 'vocab');
   const diagrammingLiveLessons = liveLessons.filter(l => l.type === 'sentence-diagramming');
+  const listeningLiveLessons = liveLessons.filter(l => l.type === 'listening');
   const normalAvailableLessons = availableLessons.filter(l => l.type === 'normal');
   const vocabAvailableLessons = availableLessons.filter(l => l.type === 'vocab');
   const diagrammingAvailableLessons = availableLessons.filter(l => l.type === 'sentence-diagramming');
+  const listeningAvailableLessons = availableLessons.filter(l => l.type === 'listening');
 
   const currentLiveLessons =
-    lessonType === 'normal' ? normalLiveLessons : lessonType === 'vocab' ? vocabLiveLessons : diagrammingLiveLessons;
+    lessonType === 'normal'
+      ? normalLiveLessons
+      : lessonType === 'vocab'
+        ? vocabLiveLessons
+        : lessonType === 'sentence-diagramming'
+          ? diagrammingLiveLessons
+          : listeningLiveLessons;
   const currentAvailableLessons =
     lessonType === 'normal'
       ? normalAvailableLessons
       : lessonType === 'vocab'
         ? vocabAvailableLessons
-        : diagrammingAvailableLessons;
+        : lessonType === 'sentence-diagramming'
+          ? diagrammingAvailableLessons
+          : listeningAvailableLessons;
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -237,7 +247,7 @@ function LiveLessonsPage() {
       <main className="container mx-auto py-8 px-4 max-w-6xl">
         <Tabs
           value={lessonType}
-          onValueChange={value => setLessonType(value as 'normal' | 'vocab' | 'sentence-diagramming')}
+          onValueChange={value => setLessonType(value as 'normal' | 'vocab' | 'sentence-diagramming' | 'listening')}
           className="mb-6">
           <TabsList>
             <TabsTrigger value="normal">
@@ -247,7 +257,10 @@ function LiveLessonsPage() {
               Vocab Lessons ({vocabLiveLessons.length + vocabAvailableLessons.length})
             </TabsTrigger>
             <TabsTrigger value="sentence-diagramming">
-              Diagramming ({diagrammingLiveLessons.length + diagrammingAvailableLessons.length})
+              Diagramming Lessons ({diagrammingLiveLessons.length + diagrammingAvailableLessons.length})
+            </TabsTrigger>
+            <TabsTrigger value="listening">
+              Listening Lessons ({listeningLiveLessons.length + listeningAvailableLessons.length})
             </TabsTrigger>
           </TabsList>
 

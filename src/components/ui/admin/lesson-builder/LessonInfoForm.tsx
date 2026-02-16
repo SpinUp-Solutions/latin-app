@@ -83,6 +83,18 @@ export const LessonInfoForm: React.FC<LessonInfoFormProps> = ({ lesson, onUpdate
                 />
                 <span className={`text-sm ${!isNewLesson ? 'text-gray-500' : ''}`}>Diagramming</span>
               </label>
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="radio"
+                  name="lessonType"
+                  value="listening"
+                  checked={lesson.type === 'listening'}
+                  onChange={e => onUpdateInfo({ type: e.target.value as Lesson['type'] })}
+                  disabled={!isNewLesson}
+                  className="w-3 h-3"
+                />
+                <span className={`text-sm ${!isNewLesson ? 'text-gray-500' : ''}`}>Listening</span>
+              </label>
             </div>
             {!isNewLesson && <p className="text-xs text-gray-500 mt-1">Type cannot be changed</p>}
           </div>

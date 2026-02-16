@@ -24,7 +24,11 @@ import { LessonInfoForm } from './lesson-builder/LessonInfoForm';
 import { PageSection } from './lesson-builder/PageSection';
 import { LessonPreview } from './lesson-builder/LessonPreview';
 
-import { ALL_CONTENT_TYPES, SENTENCE_DIAGRAMMING_LESSON_CONTENT_TYPES } from '@/src/utils/contentTypeConstants';
+import {
+  ALL_CONTENT_TYPES,
+  SENTENCE_DIAGRAMMING_LESSON_CONTENT_TYPES,
+  LISTENING_LESSON_CONTENT_TYPES,
+} from '@/src/utils/contentTypeConstants';
 import { ContentEditor } from './ContentEditor';
 import { useClipboard, ClipboardPanel } from '../core/clipboard';
 
@@ -133,7 +137,9 @@ export const LessonBuilder: React.FC<LessonBuilderProps> = ({ initialLesson, onS
             contentTypes={
               currentLesson.type === 'sentence-diagramming'
                 ? SENTENCE_DIAGRAMMING_LESSON_CONTENT_TYPES
-                : ALL_CONTENT_TYPES
+                : currentLesson.type === 'listening'
+                  ? LISTENING_LESSON_CONTENT_TYPES
+                  : ALL_CONTENT_TYPES
             }
             onAddPage={handleAddPage}
             onRemovePage={handleRemovePage}

@@ -363,6 +363,21 @@ export const createNewContent = (type: string): RenderableContentItem => {
           items: [{ latinText: 'Puella rosam videt.' }],
         },
       };
+    case 'listening-passage':
+      return {
+        id: baseId,
+        type: 'listening-passage',
+        title: 'Listening Passage',
+        instructions: 'Listen to the audio and follow along with the Latin text.',
+        audioPath: null,
+        itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
+        feedbackConfig: createDefaultFeedbackConfig(),
+        data: {
+          latinText: 'Marcus in foro ambulat.',
+          translation: 'Marcus walks in the forum.',
+          passageAudioPath: null,
+        },
+      };
     default:
       throw new Error(`Unknown content type: ${type}`);
   }

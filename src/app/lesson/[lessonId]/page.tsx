@@ -7,6 +7,7 @@ import LessonPlayer from '@/src/components/ui/lesson/lesson-player';
 import LessonSidebar from '@/src/components/ui/lesson/lesson-sidebar';
 import VocabSidebar from '@/src/components/ui/lesson/vocab-sidebar';
 import DiagrammingSidebar from '@/src/components/ui/lesson/diagramming-sidebar';
+import ListeningSidebar from '@/src/components/ui/lesson/listening-sidebar';
 
 export default function DynamicLessonPage() {
   const params = useParams();
@@ -114,6 +115,7 @@ export default function DynamicLessonPage() {
         </main>
         <VocabSidebar currentLessonId={lessonId} />
         <DiagrammingSidebar currentLessonId={lessonId} />
+        <ListeningSidebar currentLessonId={lessonId} />
       </div>
     </div>
   );

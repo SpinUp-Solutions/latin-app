@@ -19,6 +19,7 @@ import 'swiper/css/navigation';
 import { SwiperNavigation } from '@/src/components/ui/core/swiper-nav';
 import { VocabularyPracticeWidget } from '@/src/components/ui/core/VocabularyPracticeWidget';
 import { DiagrammingPracticeWidget } from '@/src/components/ui/core/DiagrammingPracticeWidget';
+import { ListeningPracticeWidget } from '@/src/components/ui/core/ListeningPracticeWidget';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 
 const statusConfig: Record<LessonStatus, { card: string }> = {
@@ -124,6 +125,16 @@ export default function DashboardPage() {
       }));
   }, [studentLessons]);
 
+  const listeningLessons = useMemo(() => {
+    if (!studentLessons) return [];
+    return studentLessons
+      .filter(lesson => lesson.type === 'listening')
+      .map(lesson => ({
+        ...lesson,
+        totalPages: lesson.pages.length,
+      }));
+  }, [studentLessons]);
+
   const completionStats = useMemo(() => {
     if (normalLessons.length === 0) return { percentage: 0, completed: 0, total: 0 };
     const completed = normalLessons.filter(l => l.status === 'completed').length;
@@ -145,7 +156,7 @@ export default function DashboardPage() {
 
   const handleLessonClick = useCallback(
     (lessonId: string) => {
-      const allLessons = [...normalLessons, ...vocabLessons, ...diagrammingLessons];
+      const allLessons = [...normalLessons, ...vocabLessons, ...diagrammingLessons, ...listeningLessons];
       const lesson = allLessons.find(l => l.id === lessonId);
 
       if (lesson?.status === 'locked') {
@@ -155,7 +166,7 @@ export default function DashboardPage() {
 
       router.push(`/lesson/${lessonId}`);
     },
-    [router, normalLessons, vocabLessons, diagrammingLessons]
+    [router, normalLessons, vocabLessons, diagrammingLessons, listeningLessons]
   );
 
   useEffect(() => {
@@ -339,6 +350,12 @@ export default function DashboardPage() {
             {diagrammingLessons.length > 0 && (
               <section className="mb-16">
                 <DiagrammingPracticeWidget lessons={diagrammingLessons} />
+              </section>
+            )}
+
+            {listeningLessons.length > 0 && (
+              <section className="mb-16">
+                <ListeningPracticeWidget lessons={listeningLessons} />
               </section>
             )}
 

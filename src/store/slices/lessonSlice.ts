@@ -29,7 +29,7 @@ const lessonSlice = createSlice({
       action: PayloadAction<{
         fromIndex: number;
         toIndex: number;
-        lessonType: 'normal' | 'vocab' | 'sentence-diagramming';
+        lessonType: 'normal' | 'vocab' | 'sentence-diagramming' | 'listening';
       }>
     ) => {
       const { fromIndex, toIndex, lessonType } = action.payload;
