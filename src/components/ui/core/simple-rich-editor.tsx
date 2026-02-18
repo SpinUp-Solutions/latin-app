@@ -68,24 +68,24 @@ export const SimpleRichEditor: React.FC<SimpleRichEditorProps> = ({
   if (!editor) {
     const loadingClasses = singleLine
       ? 'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm'
-      : `flex ${rows ? `min-h-[${rows * 20 + 40}px]` : 'min-h-[80px]'} w-full rounded-md border border-input bg-background px-3 py-2 text-sm`;
+      : `flex flex-col ${rows ? `min-h-[${rows * 20 + 40}px]` : 'min-h-[80px]'} w-full rounded-md border border-input bg-background px-3 py-2 text-sm`;
 
     return <div className={cn(loadingClasses, 'opacity-50', className)}>Loading...</div>;
   }
 
   const baseClasses = singleLine
     ? 'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-within:outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50'
-    : `flex ${rows ? `min-h-[${rows * 20 + 40}px]` : 'min-h-[80px]'} w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-within:outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`;
+    : `flex flex-col ${rows ? `min-h-[${rows * 20 + 40}px]` : 'min-h-[80px]'} w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-within:outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`;
 
   return (
     <>
       <div className={cn(baseClasses, className)}>
-        <TooltipContainer className="w-full h-full [&_[data-tooltip='true']]:cursor-help">
+        <TooltipContainer className="w-full flex-1 flex flex-col [&_[data-tooltip='true']]:cursor-help">
           <EditorContent
             editor={editor}
             className={cn(
-              'w-full h-full flex',
-              '[&_.ProseMirror]:w-full [&_.ProseMirror]:h-full',
+              'w-full flex-1 flex flex-col',
+              '[&_.ProseMirror]:w-full [&_.ProseMirror]:flex-1',
               '[&_.ProseMirror]:outline-none [&_.ProseMirror]:border-none',
               '[&_.ProseMirror]:bg-transparent [&_.ProseMirror]:resize-none',
               '[&_.ProseMirror]:text-sm [&_.ProseMirror]:leading-normal',

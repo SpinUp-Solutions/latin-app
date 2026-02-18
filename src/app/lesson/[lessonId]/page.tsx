@@ -5,9 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useGetStudentLessonsQuery } from '@/src/store/api/lessonApi';
 import LessonPlayer from '@/src/components/ui/lesson/lesson-player';
 import LessonSidebar from '@/src/components/ui/lesson/lesson-sidebar';
-import VocabSidebar from '@/src/components/ui/lesson/vocab-sidebar';
-import DiagrammingSidebar from '@/src/components/ui/lesson/diagramming-sidebar';
-import ListeningSidebar from '@/src/components/ui/lesson/listening-sidebar';
+import PracticeSidebar from '@/src/components/ui/lesson/practice-sidebar';
 
 export default function DynamicLessonPage() {
   const params = useParams();
@@ -113,9 +111,7 @@ export default function DynamicLessonPage() {
             <LessonPlayer lesson={currentLesson} />
           </div>
         </main>
-        <VocabSidebar currentLessonId={lessonId} />
-        <DiagrammingSidebar currentLessonId={lessonId} />
-        <ListeningSidebar currentLessonId={lessonId} />
+        <PracticeSidebar currentLessonId={lessonId} />
       </div>
     </div>
   );

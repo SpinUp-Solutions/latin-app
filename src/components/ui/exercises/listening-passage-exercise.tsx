@@ -1,10 +1,8 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React from 'react';
 import { ListeningPassageExercise as ListeningPassageExerciseType } from '@/src/types/exercises/listening-passage';
 import { AudioPlayer } from '@/src/components/ui/core/AudioPlayer';
-import { Button } from '@/src/components/ui/button';
-import { CheckCircle } from 'lucide-react';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 
 interface ListeningPassageExerciseProps {
@@ -12,23 +10,7 @@ interface ListeningPassageExerciseProps {
   onComplete?: (score: number) => void;
 }
 
-const ListeningPassageExercise: React.FC<ListeningPassageExerciseProps> = ({ exercise, onComplete }) => {
-  const [completed, setCompleted] = useState(false);
-
-  const handleEnded = useCallback(() => {
-    if (!completed) {
-      setCompleted(true);
-      onComplete?.(100);
-    }
-  }, [completed, onComplete]);
-
-  const handleManualComplete = () => {
-    if (!completed) {
-      setCompleted(true);
-      onComplete?.(100);
-    }
-  };
-
+const ListeningPassageExercise: React.FC<ListeningPassageExerciseProps> = ({ exercise }) => {
   return (
     <div className="space-y-6">
       {exercise.title && (
@@ -53,28 +35,7 @@ const ListeningPassageExercise: React.FC<ListeningPassageExerciseProps> = ({ exe
         </div>
       </div>
 
-      {exercise.data.passageAudioPath && (
-        <AudioPlayer audioPath={exercise.data.passageAudioPath} onEnded={handleEnded} />
-      )}
-
-      {!completed && (
-        <div className="flex justify-center">
-          <Button
-            onClick={handleManualComplete}
-            variant="outline"
-            className="text-roman-green border-roman-green/30 hover:bg-roman-green/10">
-            <CheckCircle className="h-4 w-4 mr-2" />
-            Mark as Complete
-          </Button>
-        </div>
-      )}
-
-      {completed && (
-        <div className="text-center text-roman-green font-medium flex items-center justify-center gap-2">
-          <CheckCircle className="h-5 w-5" />
-          Completed
-        </div>
-      )}
+      {exercise.data.passageAudioPath && <AudioPlayer audioPath={exercise.data.passageAudioPath} />}
     </div>
   );
 };

@@ -64,7 +64,6 @@ export const EXERCISE_TYPES = [
   { type: 'generated-translation', icon: Sparkles, label: 'Generated Translation Exercise' },
   { type: 'generated-form-identification', icon: Fingerprint, label: 'Generated Form Identification Exercise' },
   { type: 'translation-grading', icon: Languages, label: '[WIP] Translation Grading' },
-  { type: 'listening-passage', icon: Headphones, label: 'Listening Passage' },
 ] as const;
 
 export const LISTENING_LESSON_CONTENT_TYPES = [

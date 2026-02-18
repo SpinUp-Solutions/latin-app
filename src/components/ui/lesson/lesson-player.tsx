@@ -3,15 +3,21 @@
 import React, { useState, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { LessonWithProgress } from '@/src/types/lesson';
-import { BookOpen } from 'lucide-react';
+import { BookOpen, CheckCircle } from 'lucide-react';
 import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { LessonProgress } from '../core/lesson-progress';
+import { Button } from '@/src/components/ui/button';
 import PageTemplate from './page-template';
 import useAudio from '@/src/hooks/useAudio';
 import LessonNavigation from '../exercises/lesson-navigation';
-import { useMarkExerciseCompleteMutation, useUpdatePageProgressMutation } from '@/src/store/api/lessonApi';
+import {
+  useMarkExerciseCompleteMutation,
+  useUpdatePageProgressMutation,
+  useMarkLessonCompleteMutation,
+} from '@/src/store/api/lessonApi';
 import { useAuth } from '@/src/hooks/useAuth';
+import { toast } from 'sonner';
 
 interface LessonPlayerProps {
   lesson: LessonWithProgress;
@@ -21,6 +27,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
   const { user } = useAuth();
   const [markExerciseComplete] = useMarkExerciseCompleteMutation();
   const [updatePageProgress] = useUpdatePageProgressMutation();
+  const [markLessonComplete] = useMarkLessonCompleteMutation();
 
   const [currentPageIndex, setCurrentPageIndex] = useState(lesson.currentPageIndex || 0);
 
@@ -72,6 +79,19 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
     },
     [markExerciseComplete, user?.uid, lesson.id, currentPageIndex]
   );
+
+  const isListeningLesson = lesson.type === 'listening';
+  const isLessonCompleted = lesson.status === 'completed';
+
+  const handleMarkLessonComplete = useCallback(async () => {
+    if (!user?.uid) return;
+    try {
+      await markLessonComplete({ userId: user.uid, lessonId: lesson.id, score: 100 }).unwrap();
+      toast.success('Lesson marked as completed!');
+    } catch {
+      toast.error('Failed to mark lesson as completed');
+    }
+  }, [user?.uid, lesson.id, markLessonComplete]);
 
   if (!lesson || !currentPage) {
     return (
@@ -134,6 +154,25 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
               canGoNext={currentPageIndex < totalPages - 1}
             />
           </div>
+
+          {isListeningLesson && (
+            <div className="flex justify-center pt-4 border-t border-border mt-4">
+              {isLessonCompleted ? (
+                <div className="text-roman-green font-medium flex items-center gap-2">
+                  <CheckCircle className="h-5 w-5" />
+                  Completed
+                </div>
+              ) : (
+                <Button
+                  onClick={handleMarkLessonComplete}
+                  variant="outline"
+                  className="text-roman-green border-roman-green/30 hover:bg-roman-green/10">
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Mark as Completed
+                </Button>
+              )}
+            </div>
+          )}
         </RomanCardContent>
       </RomanCard>
     </div>

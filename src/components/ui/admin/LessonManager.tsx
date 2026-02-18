@@ -268,6 +268,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
 
                   <div className="flex gap-2 pt-2">
                     <Button
+                      size="sm"
                       onClick={() => handleRetryRecovery(item.id)}
                       disabled={retryingRecovery && retryingId === item.id}
                       className="flex-1 bg-green-600 hover:bg-green-700 text-white">
@@ -349,6 +350,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
 
                     <div className="flex gap-2 pt-2">
                       <Button
+                        size="sm"
                         onClick={() => onContinueDraft(lessonId)}
                         className="flex-1 bg-amber-600 hover:bg-amber-700 text-white">
                         <Edit className="h-4 w-4 mr-1" />

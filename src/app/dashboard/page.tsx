@@ -17,9 +17,7 @@ import { Swiper, SwiperSlide } from 'swiper/react';
 import 'swiper/css';
 import 'swiper/css/navigation';
 import { SwiperNavigation } from '@/src/components/ui/core/swiper-nav';
-import { VocabularyPracticeWidget } from '@/src/components/ui/core/VocabularyPracticeWidget';
-import { DiagrammingPracticeWidget } from '@/src/components/ui/core/DiagrammingPracticeWidget';
-import { ListeningPracticeWidget } from '@/src/components/ui/core/ListeningPracticeWidget';
+import { PracticeSection } from '@/src/components/ui/core/PracticeSection';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 
 const statusConfig: Record<LessonStatus, { card: string }> = {
@@ -341,23 +339,13 @@ export default function DashboardPage() {
               )}
             </section>
 
-            {vocabLessons.length > 0 && (
-              <section className="mb-16">
-                <VocabularyPracticeWidget lessons={vocabLessons} />
-              </section>
-            )}
-
-            {diagrammingLessons.length > 0 && (
-              <section className="mb-16">
-                <DiagrammingPracticeWidget lessons={diagrammingLessons} />
-              </section>
-            )}
-
-            {listeningLessons.length > 0 && (
-              <section className="mb-16">
-                <ListeningPracticeWidget lessons={listeningLessons} />
-              </section>
-            )}
+            <section className="mb-16">
+              <PracticeSection
+                vocabLessons={vocabLessons}
+                diagrammingLessons={diagrammingLessons}
+                listeningLessons={listeningLessons}
+              />
+            </section>
 
             {/* Progress Section */}
             <section className="mb-16">

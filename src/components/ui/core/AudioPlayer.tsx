@@ -141,10 +141,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioPath, onEnded, cl
         className="flex-1 h-2 bg-roman-stone/20 rounded-full cursor-pointer relative group"
         onClick={handleProgressClick}
         onMouseDown={handleMouseDown}>
-        <div
-          className="absolute inset-y-0 left-0 bg-roman-terracotta rounded-full"
-          style={{ width: `${progress}%` }}
-        />
+        <div className="absolute inset-y-0 left-0 bg-roman-terracotta rounded-full" style={{ width: `${progress}%` }} />
         <div
           className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-roman-terracotta rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
           style={{ left: `calc(${progress}% - 7px)` }}
