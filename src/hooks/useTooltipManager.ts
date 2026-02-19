@@ -1,9 +1,10 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Editor } from '@tiptap/react';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { addTooltip, removeTooltip } from '@/src/store/slices/lessonEditorSlice';
 import { TooltipData, TooltipFormData } from '@/src/types/tooltip';
 import { findTooltipMarkWithData, generateTooltipId } from '@/src/utils/tooltipUtils';
+import { TooltipStorage } from '@/src/components/ui/core/tooltip-extension';
 
 export interface TooltipManagerOptions {
   editor: Editor | null;
@@ -30,7 +31,6 @@ export const useTooltipManager = ({ editor, disabled = false }: TooltipManagerOp
       return;
     }
 
-    // Check if there's already a tooltip on this selection
     const existingTooltip = findTooltipMarkWithData(editor, from, to);
     if (existingTooltip) {
       const tooltipId = existingTooltip.attrs.tooltipId;
@@ -38,7 +38,6 @@ export const useTooltipManager = ({ editor, disabled = false }: TooltipManagerOp
       if (tooltipData) {
         setEditingTooltip(tooltipData);
       } else {
-        // Fallback to mark data if not in global state
         setEditingTooltip({
           id: tooltipId,
           word: existingTooltip.attrs.word,
@@ -54,6 +53,10 @@ export const useTooltipManager = ({ editor, disabled = false }: TooltipManagerOp
           conjugationClass: existingTooltip.attrs.conjugationClass,
           grammaticalInfo: existingTooltip.attrs.grammaticalInfo,
           principalParts: existingTooltip.attrs.principalParts,
+          title: existingTooltip.attrs.title,
+          chips: existingTooltip.attrs.chips,
+          customSections: existingTooltip.attrs.customSections,
+          visibleFields: existingTooltip.attrs.visibleFields,
         });
       }
     } else {
@@ -70,7 +73,6 @@ export const useTooltipManager = ({ editor, disabled = false }: TooltipManagerOp
 
       const tooltipId = editingTooltip?.id || generateTooltipId(tooltipData.word);
 
-      // Save to global state
       dispatch(
         addTooltip({
           id: tooltipId,
@@ -88,11 +90,14 @@ export const useTooltipManager = ({ editor, disabled = false }: TooltipManagerOp
             conjugationClass: tooltipData.conjugationClass,
             grammaticalInfo: tooltipData.grammaticalInfo,
             principalParts: tooltipData.principalParts,
+            title: tooltipData.title,
+            chips: tooltipData.chips,
+            customSections: tooltipData.customSections,
+            visibleFields: tooltipData.visibleFields,
           },
         })
       );
 
-      // Apply to editor
       editor
         .chain()
         .focus()
@@ -111,6 +116,10 @@ export const useTooltipManager = ({ editor, disabled = false }: TooltipManagerOp
           conjugationClass: tooltipData.conjugationClass,
           grammaticalInfo: tooltipData.grammaticalInfo,
           principalParts: tooltipData.principalParts,
+          title: tooltipData.title,
+          chips: tooltipData.chips,
+          customSections: tooltipData.customSections,
+          visibleFields: tooltipData.visibleFields,
         })
         .run();
 
@@ -124,10 +133,8 @@ export const useTooltipManager = ({ editor, disabled = false }: TooltipManagerOp
     () => {
       if (!editor || !editingTooltip) return;
 
-      // Remove from global state
       dispatch(removeTooltip(editingTooltip.id));
 
-      // Remove from editor
       editor.chain().focus().unsetTooltip().run();
       handleCloseDialog();
     },
@@ -155,15 +162,23 @@ export const useTooltipManager = ({ editor, disabled = false }: TooltipManagerOp
     setActiveTooltip(null);
   }, []);
 
+  useEffect(() => {
+    if (!editor) return;
+    const storage = editor.extensionStorage.tooltip as TooltipStorage | undefined;
+    if (!storage) return;
+    storage.onOpenDialog = handleAddTooltip;
+    return () => {
+      storage.onOpenDialog = null;
+    };
+  }, [editor, handleAddTooltip]);
+
   return {
-    // State
     isDialogOpen,
     editingTooltip,
     selectedText,
     activeTooltip,
     tooltips,
 
-    // Actions
     handleAddTooltip,
     handleSaveTooltip,
     handleRemoveTooltip,

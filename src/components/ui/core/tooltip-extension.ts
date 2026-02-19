@@ -6,31 +6,32 @@ export interface TooltipOptions {
   HTMLAttributes: Record<string, unknown>;
 }
 
+export interface TooltipStorage {
+  onOpenDialog: (() => void) | null;
+}
+
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
     tooltip: {
-      /**
-       * Set a tooltip
-       */
       setTooltip: (attributes: Partial<TooltipMarkAttrs>) => ReturnType;
-      /**
-       * Toggle a tooltip
-       */
       toggleTooltip: (attributes: Partial<TooltipMarkAttrs>) => ReturnType;
-      /**
-       * Unset a tooltip
-       */
       unsetTooltip: () => ReturnType;
     };
   }
 }
 
-export const Tooltip = Mark.create<TooltipOptions>({
+export const Tooltip = Mark.create<TooltipOptions, TooltipStorage>({
   name: 'tooltip',
 
   addOptions() {
     return {
       HTMLAttributes: {},
+    };
+  },
+
+  addStorage() {
+    return {
+      onOpenDialog: null,
     };
   },
 
@@ -81,6 +82,62 @@ export const Tooltip = Mark.create<TooltipOptions>({
       link: {
         default: null,
       },
+      title: {
+        default: null,
+        parseHTML: element => element.getAttribute('data-tooltip-title'),
+        renderHTML: attributes => {
+          if (!attributes.title) return {};
+          return { 'data-tooltip-title': attributes.title };
+        },
+      },
+      chips: {
+        default: null,
+        parseHTML: element => {
+          const val = element.getAttribute('chips');
+          if (!val) return null;
+          try {
+            return JSON.parse(val);
+          } catch {
+            return null;
+          }
+        },
+        renderHTML: attributes => {
+          if (!attributes.chips) return {};
+          return { chips: JSON.stringify(attributes.chips) };
+        },
+      },
+      customSections: {
+        default: null,
+        parseHTML: element => {
+          const val = element.getAttribute('customsections');
+          if (!val) return null;
+          try {
+            return JSON.parse(val);
+          } catch {
+            return null;
+          }
+        },
+        renderHTML: attributes => {
+          if (!attributes.customSections) return {};
+          return { customsections: JSON.stringify(attributes.customSections) };
+        },
+      },
+      visibleFields: {
+        default: null,
+        parseHTML: element => {
+          const val = element.getAttribute('visiblefields');
+          if (!val) return null;
+          try {
+            return JSON.parse(val);
+          } catch {
+            return null;
+          }
+        },
+        renderHTML: attributes => {
+          if (!attributes.visibleFields) return {};
+          return { visiblefields: JSON.stringify(attributes.visibleFields) };
+        },
+      },
     };
   },
 
@@ -126,6 +183,15 @@ export const Tooltip = Mark.create<TooltipOptions>({
         ({ commands }) => {
           return commands.unsetMark(this.name);
         },
+    };
+  },
+
+  addKeyboardShortcuts() {
+    return {
+      'Mod-Shift-t': () => {
+        this.storage.onOpenDialog?.();
+        return true;
+      },
     };
   },
 });

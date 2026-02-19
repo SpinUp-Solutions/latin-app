@@ -30,7 +30,26 @@ const createDefaultFormData = (word = ''): TooltipFormData => ({
   grammaticalInfo: '',
   principalParts: [],
   link: '',
+  title: '',
+  chips: [],
+  customSections: [],
 });
+
+export const WORD_DATA_FIELDS: Array<{ key: string; label: string }> = [
+  { key: 'translation', label: 'Translation' },
+  { key: 'pronunciation', label: 'Pronunciation' },
+  { key: 'partOfSpeech', label: 'Part of Speech' },
+  { key: 'wordType', label: 'Word Type' },
+  { key: 'definition', label: 'Definition' },
+  { key: 'examples', label: 'Examples' },
+  { key: 'etymology', label: 'Etymology' },
+  { key: 'gender', label: 'Gender' },
+  { key: 'declensionClass', label: 'Declension Class' },
+  { key: 'conjugationClass', label: 'Conjugation Class' },
+  { key: 'grammaticalInfo', label: 'Grammatical Info' },
+  { key: 'principalParts', label: 'Principal Parts' },
+  { key: 'link', label: 'Link' },
+];
 
 export const transformToFormData = (data: TooltipData | null, selectedText = ''): TooltipFormData => {
   if (!data || !isValidTooltipData(data)) {
@@ -52,25 +71,42 @@ export const transformToFormData = (data: TooltipData | null, selectedText = '')
     grammaticalInfo: data.grammaticalInfo || '',
     principalParts: data.principalParts || [],
     link: data.link || '',
+    title: data.title || '',
+    chips: data.chips || [],
+    customSections: data.customSections || [],
+    visibleFields: data.visibleFields,
   };
 };
 
 export const cleanFormData = (formData: TooltipFormData): Partial<TooltipFormData> => {
-  return Object.entries(formData).reduce((acc, [key, value]) => {
+  const result: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(formData)) {
+    if (key === 'customSections') {
+      const sections = (value as Array<{ label: string; content: string }>) || [];
+      const filtered = sections.filter(s => s.label.trim() || s.content.trim());
+      if (filtered.length > 0) result[key] = filtered;
+      continue;
+    }
+
+    if (key === 'visibleFields') {
+      if (value !== undefined) result[key] = value;
+      continue;
+    }
+
     if (value && (typeof value === 'string' ? value.trim() : true)) {
       if (Array.isArray(value)) {
         const filtered = value.filter(item => (typeof item === 'string' ? item.trim() : true));
-        if (filtered.length > 0) {
-          (acc as Record<string, unknown>)[key] = filtered;
-        }
+        if (filtered.length > 0) result[key] = filtered;
       } else if (typeof value === 'string' && value.trim()) {
-        (acc as Record<string, unknown>)[key] = value.trim();
+        result[key] = value.trim();
       } else if (typeof value !== 'string' && value !== null && value !== undefined) {
-        (acc as Record<string, unknown>)[key] = value;
+        result[key] = value;
       }
     }
-    return acc;
-  }, {} as Partial<TooltipFormData>);
+  }
+
+  return result as Partial<TooltipFormData>;
 };
 
 const findTooltipMark = (editor: Editor, from: number, to: number): Mark | null => {
@@ -140,6 +176,15 @@ export const calculateTooltipPosition = (
   return { x, y, isBelow };
 };
 
+const safeJsonParse = <T>(value: string | null, fallback: T): T => {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
+};
+
 export const extractTooltipDataFromElement = (element: Element): TooltipData | null => {
   const tooltipId = element.getAttribute('data-tooltip-id');
   if (!tooltipId) return null;
@@ -163,9 +208,16 @@ export const extractTooltipDataFromElement = (element: Element): TooltipData | n
     grammaticalInfo: element.getAttribute('grammaticalInfo') || '',
     principalParts: principalParts ? principalParts.split(',').map(part => part.trim()) : [],
     link: element.getAttribute('link') || '',
+    title: element.getAttribute('data-tooltip-title') || '',
+    chips: safeJsonParse<string[]>(element.getAttribute('chips'), []),
+    customSections: safeJsonParse<Array<{ label: string; content: string }>>(
+      element.getAttribute('customsections'),
+      []
+    ),
+    visibleFields: safeJsonParse<string[] | undefined>(element.getAttribute('visiblefields'), undefined),
   };
 
-  if (tooltipData.word || tooltipData.translation) {
+  if (tooltipData.word || tooltipData.translation || tooltipData.title) {
     return tooltipData;
   }
 
