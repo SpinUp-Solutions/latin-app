@@ -14,6 +14,7 @@ import {
   GeneratedTranslationExercise,
   GeneratedFormIdentificationExercise,
   TranslationGradingExercise,
+  ListeningPassageExercise,
 } from './exercises';
 
 export type RenderableContentItem =
@@ -34,7 +35,8 @@ export type RenderableContentItem =
   | GeneratedFillExercise
   | GeneratedTranslationExercise
   | GeneratedFormIdentificationExercise
-  | TranslationGradingExercise;
+  | TranslationGradingExercise
+  | ListeningPassageExercise;
 
 export interface BasePage {
   id: string;
