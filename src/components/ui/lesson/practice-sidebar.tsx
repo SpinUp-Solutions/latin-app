@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGetStudentLessonsQuery } from '@/src/store/api/lessonApi';
 import { BookOpen, Pencil, Headphones, CheckCircle, Play, ChevronDown } from 'lucide-react';
@@ -70,14 +70,36 @@ const sectionConfig: Record<
 
 const sectionOrder: PracticeView[] = ['vocab', 'sentence-diagramming', 'listening'];
 
+const EXPANDED_SECTIONS_KEY = 'practice-sidebar-expanded';
+
+const defaultExpanded: Record<PracticeView, boolean> = {
+  vocab: false,
+  'sentence-diagramming': false,
+  listening: false,
+};
+
 export default function PracticeSidebar({ currentLessonId }: PracticeSidebarProps) {
-  const [expandedSections, setExpandedSections] = useState<Record<PracticeView, boolean>>({
-    vocab: false,
-    'sentence-diagramming': false,
-    listening: false,
+  const [expandedSections, setExpandedSections] = useState<Record<PracticeView, boolean>>(() => {
+    if (typeof window === 'undefined') return defaultExpanded;
+    try {
+      const stored = sessionStorage.getItem(EXPANDED_SECTIONS_KEY);
+      if (stored) return JSON.parse(stored);
+    } catch {
+      /* ignore */
+    }
+    return defaultExpanded;
   });
   const router = useRouter();
   const { user } = useAuth();
+
+  // Persist expanded sections to sessionStorage on change
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(EXPANDED_SECTIONS_KEY, JSON.stringify(expandedSections));
+    } catch {
+      /* ignore */
+    }
+  }, [expandedSections]);
 
   const { data: studentLessons, isLoading } = useGetStudentLessonsQuery(undefined, {
     skip: !user?.uid,
@@ -109,6 +131,10 @@ export default function PracticeSidebar({ currentLessonId }: PracticeSidebarProp
       <div className="relative px-6 py-8 border-b border-roman-red/10 bg-white/40 backdrop-blur-sm flex-shrink-0">
         <h3 className="text-2xl font-serif text-gray-800">Practice</h3>
         <p className="text-base text-roman-stone">{isLoading ? 'Loading...' : 'Browse lessons by type'}</p>
+      </div>
+
+      <div className="relative flex-shrink-0">
+        <WordSearchPanel />
       </div>
 
       <div className="flex-1 overflow-y-auto relative">
@@ -157,12 +183,10 @@ export default function PracticeSidebar({ currentLessonId }: PracticeSidebarProp
 
                   {isExpanded && (
                     <div className="pb-2">
-                      {sectionKey === 'vocab' && <WordSearchPanel />}
-
                       {lessons.length === 0 ? (
                         <p className="px-6 py-4 text-sm text-gray-400 text-center">{config.emptyLabel}</p>
                       ) : (
-                        <div className="space-y-2 px-4 pt-1">
+                        <div className="max-h-72 overflow-y-auto space-y-2 px-4 py-2">
                           {lessons.map(lesson => {
                             const isCompleted = lesson.status === 'completed';
                             const isCurrentLesson = lesson.id === currentLessonId;
