@@ -47,41 +47,52 @@ const TooltipContentComponent: React.FC<TooltipContentProps> = ({
   return (
     <div className={`w-72 max-w-sm rounded-lg border border-roman-terracotta/20 overflow-hidden ${className || ''}`}>
       <div className="bg-roman-parchment px-3 pt-3 pb-2 border-b border-roman-terracotta/10">
-        <h3 className="text-sm font-serif font-semibold text-foreground tracking-wide">
-          {title || word}
-        </h3>
+        <h3 className="text-sm font-serif font-semibold text-foreground tracking-wide">{title || word}</h3>
         {isFieldVisible('pronunciation') && pronunciation && (
           <div className="text-xs text-roman-stone font-mono mt-0.5">/{pronunciation}/</div>
         )}
         {(partOfSpeech || gender || declensionClass || conjugationClass || wordType || chips.length > 0) && (
           <div className="flex gap-1 flex-wrap mt-1.5">
             {isFieldVisible('partOfSpeech') && partOfSpeech && (
-              <Badge variant="secondary" className="text-[10px] py-0 px-1.5 h-4 bg-roman-red/10 text-roman-red border-0">
+              <Badge
+                variant="secondary"
+                className="text-[10px] py-0 px-1.5 h-4 bg-roman-red/10 text-roman-red border-0">
                 {partOfSpeech}
               </Badge>
             )}
             {isFieldVisible('gender') && gender && (
-              <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4 border-roman-terracotta/30 text-roman-stone">
+              <Badge
+                variant="outline"
+                className="text-[10px] py-0 px-1.5 h-4 border-roman-terracotta/30 text-roman-stone">
                 {gender}
               </Badge>
             )}
             {isFieldVisible('declensionClass') && declensionClass && (
-              <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4 border-roman-terracotta/30 text-roman-stone">
+              <Badge
+                variant="outline"
+                className="text-[10px] py-0 px-1.5 h-4 border-roman-terracotta/30 text-roman-stone">
                 {declensionClass}
               </Badge>
             )}
             {isFieldVisible('conjugationClass') && conjugationClass && (
-              <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4 border-roman-terracotta/30 text-roman-stone">
+              <Badge
+                variant="outline"
+                className="text-[10px] py-0 px-1.5 h-4 border-roman-terracotta/30 text-roman-stone">
                 {conjugationClass}
               </Badge>
             )}
             {isFieldVisible('wordType') && wordType && (
-              <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4 border-roman-terracotta/30 text-roman-stone">
+              <Badge
+                variant="outline"
+                className="text-[10px] py-0 px-1.5 h-4 border-roman-terracotta/30 text-roman-stone">
                 {wordType}
               </Badge>
             )}
             {chips.map((chip, index) => (
-              <Badge key={index} variant="secondary" className="text-[10px] py-0 px-1.5 h-4 bg-roman-gold/15 text-roman-stone border-0">
+              <Badge
+                key={index}
+                variant="secondary"
+                className="text-[10px] py-0 px-1.5 h-4 bg-roman-gold/15 text-roman-stone border-0">
                 {chip}
               </Badge>
             ))}
@@ -113,9 +124,7 @@ const TooltipContentComponent: React.FC<TooltipContentProps> = ({
 
         {isFieldVisible('principalParts') && principalParts.length > 0 && (
           <div>
-            <h4 className="text-[10px] font-serif text-roman-stone uppercase tracking-wider mb-0.5">
-              Principal Parts
-            </h4>
+            <h4 className="text-[10px] font-serif text-roman-stone uppercase tracking-wider mb-0.5">Principal Parts</h4>
             <SimpleRichDisplay content={principalParts.join(', ')} className="text-xs font-mono" />
           </div>
         )}
@@ -142,9 +151,7 @@ const TooltipContentComponent: React.FC<TooltipContentProps> = ({
 
         {customSections.map((section, index) => (
           <div key={index}>
-            <h4 className="text-[10px] font-serif text-roman-stone uppercase tracking-wider mb-0.5">
-              {section.label}
-            </h4>
+            <h4 className="text-[10px] font-serif text-roman-stone uppercase tracking-wider mb-0.5">{section.label}</h4>
             <SimpleRichDisplay content={section.content} className="text-xs" />
           </div>
         ))}

@@ -41,12 +41,10 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
   } = useWordSelection();
 
   useEffect(() => {
-    if (initialSelectedIds.length > 0 || initialSelectedWords.length > 0) {
-      initialize(
-        initialSelectedIds.length > 0 ? initialSelectedIds : initialSelectedWords.map(w => w.id),
-        initialSelectedWords
-      );
-    }
+    initialize(
+      initialSelectedIds.length > 0 ? initialSelectedIds : initialSelectedWords.map(w => w.id),
+      initialSelectedWords
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

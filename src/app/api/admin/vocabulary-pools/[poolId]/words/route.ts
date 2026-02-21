@@ -18,15 +18,6 @@ export async function POST(request: NextRequest, { params }: { params: { poolId:
       );
     }
 
-    // Get current pool
-    const poolDoc = await adminDb.collection('vocabulary_pools').doc(poolId).get();
-    if (!poolDoc.exists) {
-      return NextResponse.json({ success: false, error: 'Pool not found' }, { status: 404 });
-    }
-
-    const poolData = poolDoc.data() as VocabularyPool;
-    const currentWordIds = poolData.wordDocIds || [];
-
     const invalidIds: string[] = [];
     const validIds: string[] = [];
 
@@ -48,40 +39,45 @@ export async function POST(request: NextRequest, { params }: { params: { poolId:
 
     console.log(`Validation complete: ${validIds.length} valid, ${invalidIds.length} invalid`);
 
-    // Handle duplicates
-    const newIds = skipDuplicates ? validIds.filter(id => !currentWordIds.includes(id)) : validIds;
+    const poolRef = adminDb.collection('vocabulary_pools').doc(poolId);
 
-    const duplicateCount = validIds.length - newIds.length;
+    const result = await adminDb.runTransaction(async transaction => {
+      const poolDoc = await transaction.get(poolRef);
+      if (!poolDoc.exists) {
+        throw new Error('Pool not found');
+      }
 
-    console.log(
-      `Adding ${newIds.length} new words to pool (${duplicateCount} duplicates ${skipDuplicates ? 'skipped' : 'included'})`
-    );
+      const poolData = poolDoc.data() as VocabularyPool;
+      const currentWordIds = poolData.wordDocIds || [];
 
-    // Update pool
-    const updatedWordIds = [...currentWordIds, ...newIds];
+      const newIds = skipDuplicates ? validIds.filter(id => !currentWordIds.includes(id)) : validIds;
+      const duplicateCount = validIds.length - newIds.length;
+      const updatedWordIds = [...currentWordIds, ...newIds];
 
-    await adminDb.collection('vocabulary_pools').doc(poolId).update({
-      wordDocIds: updatedWordIds,
-      'metadata.wordCount': updatedWordIds.length,
-      'metadata.updatedAt': new Date(),
-      'metadata.updatedBy': 'admin',
+      transaction.update(poolRef, {
+        wordDocIds: updatedWordIds,
+        'metadata.wordCount': updatedWordIds.length,
+        'metadata.updatedAt': new Date(),
+        'metadata.updatedBy': 'admin',
+      });
+
+      return { newIds, duplicateCount };
     });
 
-    // Get updated pool data
-    const updatedPoolDoc = await adminDb.collection('vocabulary_pools').doc(poolId).get();
+    console.log(`Successfully added ${result.newIds.length} words to pool ${poolId}`);
+
+    const updatedPoolDoc = await poolRef.get();
     const updatedPoolData = updatedPoolDoc.data();
 
     if (!updatedPoolData) {
       return NextResponse.json({ success: false, error: 'Pool data not found' }, { status: 404 });
     }
 
-    console.log(`Successfully added ${newIds.length} words to pool ${poolId}`);
-
     return NextResponse.json({
       success: true,
       data: {
-        addedCount: newIds.length,
-        duplicateCount,
+        addedCount: result.newIds.length,
+        duplicateCount: result.duplicateCount,
         invalidIds,
         pool: {
           id: poolId,
@@ -115,37 +111,37 @@ export async function DELETE(request: NextRequest, { params }: { params: { poolI
       );
     }
 
-    // Get current pool
-    const poolDoc = await adminDb.collection('vocabulary_pools').doc(poolId).get();
-    if (!poolDoc.exists) {
-      return NextResponse.json({ success: false, error: 'Pool not found' }, { status: 404 });
-    }
+    const poolRef = adminDb.collection('vocabulary_pools').doc(poolId);
 
-    const poolData = poolDoc.data() as VocabularyPool;
-    const currentWordIds = poolData.wordDocIds || [];
+    const removedCount = await adminDb.runTransaction(async transaction => {
+      const poolDoc = await transaction.get(poolRef);
+      if (!poolDoc.exists) {
+        throw new Error('Pool not found');
+      }
 
-    // Remove specified words
-    const updatedWordIds = currentWordIds.filter(id => !wordDocIds.includes(id));
-    const removedCount = currentWordIds.length - updatedWordIds.length;
+      const poolData = poolDoc.data() as VocabularyPool;
+      const currentWordIds = poolData.wordDocIds || [];
+      const updatedWordIds = currentWordIds.filter(id => !wordDocIds.includes(id));
+      const removed = currentWordIds.length - updatedWordIds.length;
 
-    console.log(`Removing ${removedCount} words from pool ${poolId}`);
+      transaction.update(poolRef, {
+        wordDocIds: updatedWordIds,
+        'metadata.wordCount': updatedWordIds.length,
+        'metadata.updatedAt': new Date(),
+        'metadata.updatedBy': 'admin',
+      });
 
-    await adminDb.collection('vocabulary_pools').doc(poolId).update({
-      wordDocIds: updatedWordIds,
-      'metadata.wordCount': updatedWordIds.length,
-      'metadata.updatedAt': new Date(),
-      'metadata.updatedBy': 'admin',
+      return removed;
     });
 
-    // Get updated pool data
-    const updatedPoolDoc = await adminDb.collection('vocabulary_pools').doc(poolId).get();
+    console.log(`Successfully removed ${removedCount} words from pool ${poolId}`);
+
+    const updatedPoolDoc = await poolRef.get();
     const updatedPoolData = updatedPoolDoc.data();
 
     if (!updatedPoolData) {
       return NextResponse.json({ success: false, error: 'Pool data not found' }, { status: 404 });
     }
-
-    console.log(`Successfully removed ${removedCount} words from pool ${poolId}`);
 
     return NextResponse.json({
       success: true,
