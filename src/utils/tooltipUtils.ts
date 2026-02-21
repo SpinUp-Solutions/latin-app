@@ -189,9 +189,6 @@ export const extractTooltipDataFromElement = (element: Element): TooltipData | n
   const tooltipId = element.getAttribute('data-tooltip-id');
   if (!tooltipId) return null;
 
-  const examples = element.getAttribute('examples');
-  const principalParts = element.getAttribute('principalParts');
-
   const tooltipData: TooltipData = {
     id: tooltipId,
     word: element.getAttribute('word') || '',
@@ -200,13 +197,13 @@ export const extractTooltipDataFromElement = (element: Element): TooltipData | n
     partOfSpeech: element.getAttribute('partOfSpeech') || '',
     wordType: element.getAttribute('wordtype') || '',
     definition: element.getAttribute('definition') || '',
-    examples: examples ? examples.split(',').map(ex => ex.trim()) : [],
+    examples: safeJsonParse<string[]>(element.getAttribute('examples'), []),
     etymology: element.getAttribute('etymology') || '',
     gender: element.getAttribute('gender') || '',
     declensionClass: element.getAttribute('declensionClass') || '',
     conjugationClass: element.getAttribute('conjugationClass') || '',
     grammaticalInfo: element.getAttribute('grammaticalInfo') || '',
-    principalParts: principalParts ? principalParts.split(',').map(part => part.trim()) : [],
+    principalParts: safeJsonParse<string[]>(element.getAttribute('principalparts'), []),
     link: element.getAttribute('link') || '',
     title: element.getAttribute('data-tooltip-title') || '',
     chips: safeJsonParse<string[]>(element.getAttribute('chips'), []),

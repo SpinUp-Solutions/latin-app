@@ -60,6 +60,19 @@ export const Tooltip = Mark.create<TooltipOptions, TooltipStorage>({
       },
       examples: {
         default: null,
+        parseHTML: element => {
+          const val = element.getAttribute('examples');
+          if (!val) return null;
+          try {
+            return JSON.parse(val);
+          } catch {
+            return null;
+          }
+        },
+        renderHTML: attributes => {
+          if (!attributes.examples) return {};
+          return { examples: JSON.stringify(attributes.examples) };
+        },
       },
       etymology: {
         default: null,
@@ -78,6 +91,19 @@ export const Tooltip = Mark.create<TooltipOptions, TooltipStorage>({
       },
       principalParts: {
         default: null,
+        parseHTML: element => {
+          const val = element.getAttribute('principalparts');
+          if (!val) return null;
+          try {
+            return JSON.parse(val);
+          } catch {
+            return null;
+          }
+        },
+        renderHTML: attributes => {
+          if (!attributes.principalParts) return {};
+          return { principalparts: JSON.stringify(attributes.principalParts) };
+        },
       },
       link: {
         default: null,
@@ -158,7 +184,7 @@ export const Tooltip = Mark.create<TooltipOptions, TooltipStorage>({
         'data-tooltip': 'true',
         'data-tooltip-id': tooltipId,
         class:
-          'tooltip-text cursor-help underline decoration-dotted decoration-blue-500/60 hover:decoration-blue-500 transition-colors',
+          'tooltip-text cursor-help underline decoration-dotted decoration-roman-terracotta/60 hover:decoration-roman-red transition-colors',
       }),
       0,
     ];
@@ -188,7 +214,7 @@ export const Tooltip = Mark.create<TooltipOptions, TooltipStorage>({
 
   addKeyboardShortcuts() {
     return {
-      'Mod-Shift-t': () => {
+      'Mod-Alt-t': () => {
         this.storage.onOpenDialog?.();
         return true;
       },

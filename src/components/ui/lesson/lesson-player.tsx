@@ -22,7 +22,9 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
   const [markExerciseComplete] = useMarkExerciseCompleteMutation();
   const [updatePageProgress] = useUpdatePageProgressMutation();
 
-  const [currentPageIndex, setCurrentPageIndex] = useState(lesson.currentPageIndex || 0);
+  const [currentPageIndex, setCurrentPageIndex] = useState(
+    Math.min(lesson.currentPageIndex || 0, lesson.pages.length - 1)
+  );
 
   const currentPage = lesson.pages[currentPageIndex];
   const totalPages = lesson.pages.length;

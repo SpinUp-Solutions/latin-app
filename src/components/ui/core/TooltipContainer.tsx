@@ -46,11 +46,13 @@ const TooltipOverlay: React.FC<TooltipOverlayProps> = ({ elementPosition, data }
         top: `${position.y}px`,
         transform: isBelow ? 'translateX(-50%)' : 'translateX(-50%) translateY(-100%)',
       }}>
-      <TooltipContent {...data} className="bg-white shadow-lg" />
+      <TooltipContent {...data} className="shadow-lg" />
 
       <div
-        className={`absolute w-2 h-2 bg-white border rotate-45 shadow left-1/2 transform -translate-x-1/2 ${
-          isBelow ? 'top-0 -translate-y-1/2 border-l border-t' : 'top-full -translate-y-1/2 border-b border-r'
+        className={`absolute w-2 h-2 rotate-45 left-1/2 transform -translate-x-1/2 ${
+          isBelow
+            ? 'top-0 -translate-y-1/2 bg-roman-parchment border-l border-t border-roman-terracotta/20'
+            : 'top-full -translate-y-1/2 bg-white border-b border-r border-roman-terracotta/20'
         }`}
       />
     </div>

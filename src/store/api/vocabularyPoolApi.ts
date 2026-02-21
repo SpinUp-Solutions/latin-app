@@ -60,6 +60,21 @@ export const vocabularyPoolApi = createApi({
         success: boolean;
         data: { pools: VocabularyPool[]; total: number; hasMore: boolean; lastPoolId: string | null };
       }) => response.data,
+      serializeQueryArgs: ({ queryArgs }) => {
+        return { filters: queryArgs.filters };
+      },
+      merge: (currentCache, newData, { arg }) => {
+        if (!arg.lastPoolId) return newData;
+        const existingIds = new Set(currentCache.pools.map(p => p.id));
+        const newPools = newData.pools.filter(p => !existingIds.has(p.id));
+        return {
+          ...newData,
+          pools: [...currentCache.pools, ...newPools],
+        };
+      },
+      forceRefetch: ({ currentArg, previousArg }) => {
+        return currentArg?.lastPoolId !== previousArg?.lastPoolId;
+      },
       providesTags: result =>
         result
           ? [...result.pools.map(({ id }) => ({ type: 'Pool' as const, id })), { type: 'PoolList', id: 'LIST' }]
@@ -104,6 +119,8 @@ export const vocabularyPoolApi = createApi({
       transformResponse: (response: { success: boolean; data: { pool: VocabularyPool } }) => response.data.pool,
       invalidatesTags: (result, error, { id }) => [
         { type: 'Pool', id },
+        { type: 'Pool', id: `${id}-pos-summary` },
+        { type: 'Pool', id: `${id}-paradigm-summary` },
         { type: 'PoolList', id: 'LIST' },
       ],
     }),

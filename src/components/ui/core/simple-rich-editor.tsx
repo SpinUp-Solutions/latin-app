@@ -47,7 +47,7 @@ export const SimpleRichEditor: React.FC<SimpleRichEditorProps> = ({
       editorProps: {
         ...editor.options.editorProps,
         handleKeyDown: (view, event) => {
-          if (event.altKey && event.key === 't') {
+          if ((event.metaKey || event.ctrlKey) && event.altKey && event.code === 'KeyT') {
             event.preventDefault();
             tooltipManager.handleAddTooltip();
             return true;

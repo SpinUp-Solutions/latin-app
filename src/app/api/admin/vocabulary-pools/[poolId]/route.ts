@@ -131,42 +131,45 @@ export async function PUT(request: NextRequest, { params }: { params: { poolId: 
     }
 
     const updateData: Record<string, unknown> = {
-      ...updates,
       'metadata.updatedAt': new Date(),
       'metadata.updatedBy': 'admin',
     };
 
-    // Update word count if wordDocIds is being updated
+    if (updates.name) updateData.name = updates.name;
+    if (updates.description) updateData.description = updates.description;
     if (updates.wordDocIds) {
+      updateData.wordDocIds = updates.wordDocIds;
       updateData['metadata.wordCount'] = updates.wordDocIds.length;
     }
-
-    // Clean up tags if provided
     if (updates.tags) {
       updateData['metadata.tags'] = updates.tags.map((tag: string) => tag.toLowerCase().trim()).filter(Boolean);
     }
-
-    if (updates.metadata) {
-      if (updates.metadata.difficulty) {
-        updateData['metadata.difficulty'] = updates.metadata.difficulty;
-      }
-      delete updateData.metadata;
-    }
-
     if (updates.difficulty) {
       updateData['metadata.difficulty'] = updates.difficulty;
     }
+    if (updates.metadata?.difficulty) {
+      updateData['metadata.difficulty'] = updates.metadata.difficulty;
+    }
 
-    await adminDb.collection('vocabulary_pools').doc(poolId).update(updateData);
+    const poolRef = adminDb.collection('vocabulary_pools').doc(poolId);
+    await poolRef.update(updateData);
 
-    console.log(`Vocabulary pool ${poolId} updated successfully`);
+    const updatedDoc = await poolRef.get();
+    const poolData = updatedDoc.data()!;
 
     return NextResponse.json({
       success: true,
       data: {
         pool: {
           id: poolId,
-          ...updates,
+          name: poolData.name,
+          description: poolData.description,
+          wordDocIds: poolData.wordDocIds || [],
+          metadata: {
+            ...poolData.metadata,
+            createdAt: poolData.metadata.createdAt.toDate(),
+            updatedAt: poolData.metadata.updatedAt.toDate(),
+          },
         },
       },
     });

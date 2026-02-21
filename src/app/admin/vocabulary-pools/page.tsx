@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/src/components/ui/button';
 import { ArrowLeft, Plus, Library } from 'lucide-react';
@@ -17,15 +17,17 @@ function VocabularyPoolsPage() {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const filters = useAppSelector(state => state.vocabularyPools.filters);
-  const { data, isLoading, error } = useGetPoolsQuery({ filters });
+  const [lastPoolId, setLastPoolId] = useState<string | null>(null);
+  const { data, isLoading, isFetching, error } = useGetPoolsQuery({ filters, lastPoolId });
   const [deletePoolMutation] = useDeletePoolMutation();
 
   const pools = data?.pools ?? [];
-  const pagination = {
-    hasMore: data?.hasMore ?? false,
-    lastPoolId: data?.lastPoolId ?? null,
-    total: data?.total ?? 0,
-  };
+  const hasMore = data?.hasMore ?? false;
+  const loadingMore = isFetching && lastPoolId !== null;
+
+  useEffect(() => {
+    setLastPoolId(null);
+  }, [filters]);
 
   const handleDeletePool = async (poolId: string, poolName: string) => {
     if (confirm(`Are you sure you want to delete "${poolName}"? This action cannot be undone.`)) {
@@ -80,8 +82,11 @@ function VocabularyPoolsPage() {
         <PoolList
           pools={pools}
           loading={isLoading}
-          hasMore={pagination.hasMore}
-          onLoadMore={() => {}}
+          loadingMore={loadingMore}
+          hasMore={hasMore}
+          onLoadMore={() => {
+            if (data?.lastPoolId) setLastPoolId(data.lastPoolId);
+          }}
           onEdit={pool => router.push(`/admin/vocabulary-pools/${pool.id}/edit`)}
           onDelete={handleDeletePool}
         />
