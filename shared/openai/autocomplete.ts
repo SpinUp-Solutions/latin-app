@@ -251,7 +251,7 @@ export async function autocompleteVocabularyWord(request: AIAutocompleteRequest)
 
     const startTime = Date.now();
     const response = await openai.responses.create({
-        model: AUTOCOMPLETE_MODEL,
+      model: AUTOCOMPLETE_MODEL,
       reasoning: { effort: 'low' },
       max_output_tokens: MAX_TOKENS,
       instructions: SYSTEM_PROMPT,

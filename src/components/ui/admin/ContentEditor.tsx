@@ -22,6 +22,7 @@ import { ClickOnMultipleWordsEditor } from './content-editor/ClickOnMultipleWord
 import { GeneratedTranslationEditor } from './content-editor/GeneratedTranslationEditor';
 import { GeneratedFormIdentificationEditor } from './content-editor/GeneratedFormIdentificationEditor';
 import { TranslationGradingEditor } from './content-editor/TranslationGradingEditor';
+import { ListeningPassageEditor } from './content-editor/ListeningPassageEditor';
 
 import { getEditorTitle } from '@/src/utils/editorRegistry';
 
@@ -77,6 +78,8 @@ export const ContentEditor: React.FC = () => {
         return <GeneratedFormIdentificationEditor />;
       case 'translation-grading':
         return <TranslationGradingEditor />;
+      case 'listening-passage':
+        return <ListeningPassageEditor />;
       default:
         return (
           <div className="p-8 text-center text-gray-500">

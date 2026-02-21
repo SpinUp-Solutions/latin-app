@@ -68,7 +68,7 @@ export const SimpleRichEditor: React.FC<SimpleRichEditorProps> = ({
   if (!editor) {
     const loadingClasses = singleLine
       ? 'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm'
-      : `flex ${rows ? `min-h-[${rows * 20 + 40}px]` : 'min-h-[80px]'} w-full rounded-md border border-input bg-background px-3 py-2 text-sm`;
+      : `flex flex-col ${rows ? `min-h-[${rows * 20 + 40}px]` : 'min-h-[80px]'} w-full rounded-md border border-input bg-background px-3 py-2 text-sm`;
 
     return <div className={cn(loadingClasses, 'opacity-50', className)}>Loading...</div>;
   }
@@ -80,7 +80,7 @@ export const SimpleRichEditor: React.FC<SimpleRichEditorProps> = ({
   return (
     <>
       <div className={cn(baseClasses, className)}>
-        <TooltipContainer className="w-full h-full [&_[data-tooltip='true']]:cursor-help">
+        <TooltipContainer className="w-full flex-1 flex flex-col [&_[data-tooltip='true']]:cursor-help">
           <EditorContent
             editor={editor}
             className={cn(
