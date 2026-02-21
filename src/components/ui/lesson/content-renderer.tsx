@@ -14,6 +14,7 @@ import ClickOnMultipleWordsExercise from '../exercises/click-on-multiple-words';
 import GeneratedTranslationExercise from '../exercises/generated-translation-exercise';
 import GeneratedFormIdentificationExercise from '../exercises/generated-form-identification-exercise';
 import TranslationGradingExercise from '../exercises/translation-grading-exercise';
+import ListeningPassageExercise from '../exercises/listening-passage-exercise';
 import { ContentItem, TextContent, TableContent, VocabularyContent, VocabularyPoolContent } from '@/src/types/lesson';
 import {
   MatchingExercise,
@@ -28,6 +29,7 @@ import {
   GeneratedTranslationExercise as GeneratedTranslationExerciseType,
   GeneratedFormIdentificationExercise as GeneratedFormIdentificationExerciseType,
   TranslationGradingExercise as TranslationGradingExerciseType,
+  ListeningPassageExercise as ListeningPassageExerciseType,
 } from '@/src/types/exercises';
 import { VocabularyViewer } from './VocabularyViewer';
 import { VocabularyPoolViewer } from './VocabularyPoolViewer';
@@ -123,6 +125,9 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onCom
       return (
         <TranslationGradingExercise exercise={content as TranslationGradingExerciseType} onComplete={onComplete} />
       );
+
+    case 'listening-passage':
+      return <ListeningPassageExercise exercise={content as ListeningPassageExerciseType} onComplete={onComplete} />;
 
     default:
       return (

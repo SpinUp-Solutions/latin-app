@@ -15,6 +15,7 @@ import {
   Sparkles,
   Fingerprint,
   Languages,
+  Headphones,
 } from 'lucide-react';
 
 export const ALL_CONTENT_TYPES = [
@@ -35,6 +36,7 @@ export const ALL_CONTENT_TYPES = [
   { type: 'generated-translation', icon: Sparkles, label: 'Generated Translation Exercise' },
   { type: 'generated-form-identification', icon: Fingerprint, label: 'Generated Form Identification Exercise' },
   { type: 'translation-grading', icon: Languages, label: '[WIP] Translation Grading' },
+  { type: 'listening-passage', icon: Headphones, label: 'Listening Passage' },
 ] as const;
 
 export const CONTENT_TYPES = [
@@ -43,6 +45,10 @@ export const CONTENT_TYPES = [
   { type: 'table', icon: Table, label: 'Table' },
   { type: 'vocabulary', icon: Book, label: 'Vocabulary' },
   { type: 'vocabulary-pool', icon: Library, label: 'Vocabulary Pool' },
+] as const;
+
+export const SENTENCE_DIAGRAMMING_LESSON_CONTENT_TYPES = [
+  { type: 'sentence-diagramming', icon: Pencil, label: 'Sentence Diagramming' },
 ] as const;
 
 export const EXERCISE_TYPES = [
@@ -58,4 +64,8 @@ export const EXERCISE_TYPES = [
   { type: 'generated-translation', icon: Sparkles, label: 'Generated Translation Exercise' },
   { type: 'generated-form-identification', icon: Fingerprint, label: 'Generated Form Identification Exercise' },
   { type: 'translation-grading', icon: Languages, label: '[WIP] Translation Grading' },
+] as const;
+
+export const LISTENING_LESSON_CONTENT_TYPES = [
+  { type: 'listening-passage', icon: Headphones, label: 'Listening Passage' },
 ] as const;

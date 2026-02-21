@@ -119,11 +119,11 @@ export async function PUT(request: NextRequest, { params }: { params: { poolId: 
     const { poolId } = params;
     const updates = await request.json();
 
-    if (updates.name && updates.name.length > 100) {
+    if (updates.name !== undefined && updates.name.length > 100) {
       return NextResponse.json({ success: false, error: 'Name must be less than 100 characters' }, { status: 400 });
     }
 
-    if (updates.description && updates.description.length > 500) {
+    if (updates.description !== undefined && updates.description.length > 500) {
       return NextResponse.json(
         { success: false, error: 'Description must be less than 500 characters' },
         { status: 400 }
@@ -131,42 +131,45 @@ export async function PUT(request: NextRequest, { params }: { params: { poolId: 
     }
 
     const updateData: Record<string, unknown> = {
-      ...updates,
       'metadata.updatedAt': new Date(),
       'metadata.updatedBy': 'admin',
     };
 
-    // Update word count if wordDocIds is being updated
-    if (updates.wordDocIds) {
+    if (updates.name !== undefined) updateData.name = updates.name;
+    if (updates.description !== undefined) updateData.description = updates.description;
+    if (updates.wordDocIds !== undefined) {
+      updateData.wordDocIds = updates.wordDocIds;
       updateData['metadata.wordCount'] = updates.wordDocIds.length;
     }
-
-    // Clean up tags if provided
-    if (updates.tags) {
+    if (updates.tags !== undefined) {
       updateData['metadata.tags'] = updates.tags.map((tag: string) => tag.toLowerCase().trim()).filter(Boolean);
     }
-
-    if (updates.metadata) {
-      if (updates.metadata.difficulty) {
-        updateData['metadata.difficulty'] = updates.metadata.difficulty;
-      }
-      delete updateData.metadata;
-    }
-
-    if (updates.difficulty) {
+    if (updates.difficulty !== undefined) {
       updateData['metadata.difficulty'] = updates.difficulty;
     }
+    if (updates.metadata?.difficulty !== undefined) {
+      updateData['metadata.difficulty'] = updates.metadata.difficulty;
+    }
 
-    await adminDb.collection('vocabulary_pools').doc(poolId).update(updateData);
+    const poolRef = adminDb.collection('vocabulary_pools').doc(poolId);
+    await poolRef.update(updateData);
 
-    console.log(`Vocabulary pool ${poolId} updated successfully`);
+    const updatedDoc = await poolRef.get();
+    const poolData = updatedDoc.data()!;
 
     return NextResponse.json({
       success: true,
       data: {
         pool: {
           id: poolId,
-          ...updates,
+          name: poolData.name,
+          description: poolData.description,
+          wordDocIds: poolData.wordDocIds || [],
+          metadata: {
+            ...poolData.metadata,
+            createdAt: poolData.metadata.createdAt.toDate(),
+            updatedAt: poolData.metadata.updatedAt.toDate(),
+          },
         },
       },
     });
@@ -196,7 +199,14 @@ export async function DELETE(request: NextRequest, { params }: { params: { poolI
       );
     }
 
-    await adminDb.collection('vocabulary_pools').doc(poolId).delete();
+    await adminDb.runTransaction(async transaction => {
+      const poolRef = adminDb.collection('vocabulary_pools').doc(poolId);
+      const poolDoc = await transaction.get(poolRef);
+      if (!poolDoc.exists) {
+        throw new Error('Pool not found');
+      }
+      transaction.delete(poolRef);
+    });
 
     console.log(`Vocabulary pool ${poolId} deleted successfully`);
 
@@ -206,9 +216,10 @@ export async function DELETE(request: NextRequest, { params }: { params: { poolI
     });
   } catch (error) {
     console.error('Error deleting vocabulary pool:', error);
+    const statusCode = error instanceof Error && error.message.includes('not found') ? 404 : 500;
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
+      { status: statusCode }
     );
   }
 }
