@@ -8,6 +8,10 @@ interface BaseTooltipFields {
   examples?: string[];
   etymology?: string;
   link?: string;
+  title?: string;
+  chips?: string[];
+  customSections?: Array<{ label: string; content: string }>;
+  visibleFields?: string[];
 }
 
 interface GrammaticalFields {

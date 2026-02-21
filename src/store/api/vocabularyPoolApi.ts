@@ -30,7 +30,7 @@ export const vocabularyPoolApi = createApi({
   refetchOnReconnect: true,
   endpoints: builder => ({
     getPools: builder.query<
-      { pools: VocabularyPool[]; total: number; hasMore: boolean; lastPoolId: string | null },
+      { pools: VocabularyPool[]; hasMore: boolean; lastPoolId: string | null },
       {
         reset?: boolean;
         filters?: {
@@ -53,23 +53,46 @@ export const vocabularyPoolApi = createApi({
         if (filters?.isActive !== null && filters?.isActive !== undefined) {
           params.append('isActive', filters.isActive.toString());
         }
+        if (filters?.sortBy) params.append('sortBy', filters.sortBy);
+        if (filters?.sortOrder) params.append('sortOrder', filters.sortOrder);
 
         return `/admin/vocabulary-pools?${params}`;
       },
       transformResponse: (response: {
         success: boolean;
-        data: { pools: VocabularyPool[]; total: number; hasMore: boolean; lastPoolId: string | null };
+        data: { pools: VocabularyPool[]; hasMore: boolean; lastPoolId: string | null };
       }) => response.data,
+      serializeQueryArgs: ({ queryArgs }) => {
+        return { filters: queryArgs.filters };
+      },
+      merge: (currentCache, newData, { arg }) => {
+        if (!arg.lastPoolId) return newData;
+        const existingIds = new Set(currentCache.pools.map(p => p.id));
+        const newPools = newData.pools.filter(p => !existingIds.has(p.id));
+        return {
+          ...newData,
+          pools: [...currentCache.pools, ...newPools],
+        };
+      },
+      forceRefetch: ({ currentArg, previousArg }) => {
+        return currentArg?.lastPoolId !== previousArg?.lastPoolId;
+      },
       providesTags: result =>
         result
           ? [...result.pools.map(({ id }) => ({ type: 'Pool' as const, id })), { type: 'PoolList', id: 'LIST' }]
           : [{ type: 'PoolList', id: 'LIST' }],
     }),
 
-    getPool: builder.query<VocabularyPoolWithWords, string>({
+    getPool: builder.query<VocabularyPoolWithWords & { missingWordIds?: string[]; actualWordCount?: number }, string>({
       query: poolId => `/admin/vocabulary-pools/${poolId}`,
-      transformResponse: (response: { success: boolean; data: { pool: VocabularyPoolWithWords } }) =>
-        response.data.pool,
+      transformResponse: (response: {
+        success: boolean;
+        data: { pool: VocabularyPoolWithWords; missingWordIds?: string[]; actualWordCount?: number };
+      }) => ({
+        ...response.data.pool,
+        missingWordIds: response.data.missingWordIds,
+        actualWordCount: response.data.actualWordCount,
+      }),
       providesTags: (result, error, poolId) => [{ type: 'Pool', id: poolId }],
     }),
 
@@ -104,6 +127,8 @@ export const vocabularyPoolApi = createApi({
       transformResponse: (response: { success: boolean; data: { pool: VocabularyPool } }) => response.data.pool,
       invalidatesTags: (result, error, { id }) => [
         { type: 'Pool', id },
+        { type: 'Pool', id: `${id}-pos-summary` },
+        { type: 'Pool', id: `${id}-paradigm-summary` },
         { type: 'PoolList', id: 'LIST' },
       ],
     }),
@@ -119,15 +144,22 @@ export const vocabularyPoolApi = createApi({
       ],
     }),
 
-    addWordsToPool: builder.mutation<{ pool: VocabularyPool }, { poolId: string; wordDocIds: string[] }>({
+    addWordsToPool: builder.mutation<
+      { pool: VocabularyPool; addedCount: number; duplicateCount: number; invalidIds: string[] },
+      { poolId: string; wordDocIds: string[] }
+    >({
       query: ({ poolId, wordDocIds }) => ({
         url: `/admin/vocabulary-pools/${poolId}/words`,
         method: 'POST',
         body: { wordDocIds },
       }),
-      transformResponse: (response: { success: boolean; data: { pool: VocabularyPool } }) => response.data,
+      transformResponse: (response: {
+        success: boolean;
+        data: { pool: VocabularyPool; addedCount: number; duplicateCount: number; invalidIds: string[] };
+      }) => response.data,
       invalidatesTags: (result, error, { poolId }) => [
         { type: 'Pool', id: poolId },
+        { type: 'Pool', id: `${poolId}-pos-summary` },
         { type: 'Pool', id: `${poolId}-paradigm-summary` },
         { type: 'AvailableWords', id: 'LIST' },
       ],
@@ -142,6 +174,7 @@ export const vocabularyPoolApi = createApi({
       transformResponse: (response: { success: boolean; data: { pool: VocabularyPool } }) => response.data,
       invalidatesTags: (result, error, { poolId }) => [
         { type: 'Pool', id: poolId },
+        { type: 'Pool', id: `${poolId}-pos-summary` },
         { type: 'Pool', id: `${poolId}-paradigm-summary` },
         { type: 'AvailableWords', id: 'LIST' },
       ],

@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/ca
 import { BookOpen, Library } from 'lucide-react';
 import { Lesson } from '@/src/types/lesson';
 import { Input } from '@/src/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { SimpleRichEditor } from '../../core/simple-rich-editor';
 import { VocabularyPoolSelector } from '../vocabulary-pools/VocabularyPoolSelector';
 
@@ -46,32 +47,20 @@ export const LessonInfoForm: React.FC<LessonInfoFormProps> = ({ lesson, onUpdate
           </div>
           <div>
             <label className="block text-xs font-medium mb-1 text-gray-600">Type</label>
-            <div className="flex gap-3">
-              <label className="flex items-center gap-1.5 cursor-pointer">
-                <input
-                  type="radio"
-                  name="lessonType"
-                  value="normal"
-                  checked={lesson.type === 'normal'}
-                  onChange={e => onUpdateInfo({ type: e.target.value as 'normal' | 'vocab' })}
-                  disabled={!isNewLesson}
-                  className="w-3 h-3"
-                />
-                <span className={`text-sm ${!isNewLesson ? 'text-gray-500' : ''}`}>Normal</span>
-              </label>
-              <label className="flex items-center gap-1.5 cursor-pointer">
-                <input
-                  type="radio"
-                  name="lessonType"
-                  value="vocab"
-                  checked={lesson.type === 'vocab'}
-                  onChange={e => onUpdateInfo({ type: e.target.value as 'normal' | 'vocab' })}
-                  disabled={!isNewLesson}
-                  className="w-3 h-3"
-                />
-                <span className={`text-sm ${!isNewLesson ? 'text-gray-500' : ''}`}>Vocab</span>
-              </label>
-            </div>
+            <Select
+              value={lesson.type}
+              onValueChange={value => onUpdateInfo({ type: value as Lesson['type'] })}
+              disabled={!isNewLesson}>
+              <SelectTrigger className="h-8 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="normal">Normal</SelectItem>
+                <SelectItem value="vocab">Vocab</SelectItem>
+                <SelectItem value="sentence-diagramming">Sentence Diagramming</SelectItem>
+                <SelectItem value="listening">Listening</SelectItem>
+              </SelectContent>
+            </Select>
             {!isNewLesson && <p className="text-xs text-gray-500 mt-1">Type cannot be changed</p>}
           </div>
           <div>

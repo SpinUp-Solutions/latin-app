@@ -60,9 +60,8 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
     if (isLoading || !currentAnswer.trim()) return;
 
     const currentItem = exercise.data.items[currentIndex];
-    const sourceText = currentItem.latinText;
     const result = await grade({
-      sourceText,
+      sourceText: currentItem.latinText.replace(/<[^>]*>/g, ''),
       userTranslation: currentAnswer,
       direction,
     });
@@ -147,7 +146,10 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
             <p className="text-[10px] uppercase tracking-widest text-roman-red/70 font-bold mb-2">
               {sourceLanguage} Prompt
             </p>
-            <p className="text-xl font-serif italic text-roman-red leading-relaxed">{sourceText}</p>
+            <SimpleRichDisplay
+              content={sourceText}
+              className="text-xl font-serif italic text-roman-red leading-relaxed"
+            />
           </div>
 
           <div className="flex gap-4">

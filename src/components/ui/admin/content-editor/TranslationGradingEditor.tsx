@@ -6,8 +6,8 @@ import { TranslationGradingExercise } from '@/src/types/exercises';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonEditorSlice';
 import { SimpleInput, SimpleTextarea } from '@/src/components/ui/form-components';
-import { Textarea } from '@/src/components/ui/textarea';
 import { Label } from '@/src/components/ui/label';
+import { SimpleRichEditor } from '@/src/components/ui/core/simple-rich-editor';
 import { ToggleGroup, ToggleGroupItem } from '@/src/components/ui/toggle-group';
 import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
@@ -129,13 +129,12 @@ export const TranslationGradingEditor: React.FC = () => {
                   <div className="flex-1 space-y-3">
                     <div>
                       <Label htmlFor={`${sentenceIdPrefix}-sentence-${index}`}>{`Sentence ${index + 1}`}</Label>
-                      <Textarea
-                        id={`${sentenceIdPrefix}-sentence-${index}`}
-                        value={item.latinText}
-                        onChange={event => updateItemText(index, event.target.value)}
+                      <SimpleRichEditor
+                        content={item.latinText}
+                        onChange={value => updateItemText(index, value)}
                         placeholder={sourcePlaceholder}
                         rows={2}
-                        className="mt-1"
+                        className="mt-1 w-full font-serif"
                       />
                     </div>
 
@@ -182,13 +181,13 @@ export const TranslationGradingEditor: React.FC = () => {
               </div>
               <div>
                 <strong>Completed:</strong>{' '}
-                {editingContent.data.items.filter(item => item.latinText.trim() !== '').length}
+                {editingContent.data.items.filter(item => item.latinText.replace(/<[^>]*>/g, '').trim() !== '').length}
               </div>
               <div>
                 <strong>With Instructions:</strong>{' '}
                 {editingContent.data.items.filter(item => item.instructions && item.instructions.trim() !== '').length}
               </div>
-              {editingContent.data.items.some(item => item.latinText.trim() === '') && (
+              {editingContent.data.items.some(item => item.latinText.replace(/<[^>]*>/g, '').trim() === '') && (
                 <div className="text-amber-600">⚠️ Some sentences are empty</div>
               )}
             </div>

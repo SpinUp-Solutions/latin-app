@@ -1,10 +1,5 @@
 import { z } from 'zod';
-import {
-  AdverbSchema,
-  PrepositionSchema,
-  ConjunctionSchema,
-  InterjectionSchema,
-} from '../schemas/indeclinable-words';
+import { AdverbSchema, PrepositionSchema, ConjunctionSchema, InterjectionSchema } from '../schemas/indeclinable-words';
 
 type IndeclinableSchema = z.ZodObject<{
   translation: z.ZodString;

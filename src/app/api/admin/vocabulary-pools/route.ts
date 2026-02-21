@@ -15,32 +15,79 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const tags = searchParams.get('tags')?.split(',').filter(Boolean);
     const isActiveParam = searchParams.get('isActive');
     const isActive = isActiveParam ? isActiveParam === 'true' : null;
+    const sortBy = searchParams.get('sortBy') || 'createdAt';
+    const sortOrder = (searchParams.get('sortOrder') || 'desc') as 'asc' | 'desc';
 
-    console.log('Fetching pools with filters:', { limit, lastPoolId, search, difficulty, tags, isActive });
+    const sortFieldMap: Record<string, string> = {
+      name: 'name',
+      wordCount: 'metadata.wordCount',
+      createdAt: 'metadata.createdAt',
+    };
+    const firestoreSortField = sortFieldMap[sortBy] || 'metadata.createdAt';
 
-    let query: Query = adminDb.collection('vocabulary_pools').orderBy('metadata.createdAt', 'desc');
-
-    // Apply filters
-    if (difficulty) {
-      query = query.where('metadata.difficulty', '==', difficulty);
-    }
-
-    if (isActive !== null) {
-      query = query.where('metadata.isActive', '==', isActive);
-    }
-
-    if (tags && tags.length > 0) {
-      // Note: Firestore array-contains can only filter by one tag at a time
-      // For multiple tags, we'd need to filter on the client side or use array-contains-any
-      query = query.where('metadata.tags', 'array-contains-any', tags);
-    }
-
-    // Apply search if provided (simplified - searches in name only)
     if (search) {
-      query = query.where('name', '>=', search).where('name', '<=', search + '\uf8ff');
+      let query: Query = adminDb
+        .collection('vocabulary_pools')
+        .orderBy('name')
+        .where('name', '>=', search)
+        .where('name', '<=', search + '\uf8ff')
+        .limit(50);
+
+      if (lastPoolId) {
+        const lastDoc = await adminDb.collection('vocabulary_pools').doc(lastPoolId).get();
+        if (lastDoc.exists) {
+          query = query.startAfter(lastDoc);
+        }
+      }
+
+      const snapshot = await query.get();
+
+      let pools = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        metadata: {
+          ...doc.data().metadata,
+          createdAt: doc.data().metadata.createdAt.toDate(),
+          updatedAt: doc.data().metadata.updatedAt.toDate(),
+        },
+      })) as VocabularyPool[];
+
+      if (difficulty) {
+        pools = pools.filter(p => p.metadata.difficulty === difficulty);
+      }
+      if (isActive !== null) {
+        pools = pools.filter(p => p.metadata.isActive === isActive);
+      }
+
+      const hasMore = pools.length > limit;
+      pools = pools.slice(0, limit);
+      const lastDoc = snapshot.docs.find(d => d.id === pools[pools.length - 1]?.id);
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          pools,
+          hasMore,
+          lastPoolId: lastDoc?.id || null,
+        },
+      });
     }
 
-    // Apply cursor-based pagination
+    const useFirestoreFilters = sortBy === 'createdAt';
+    let query: Query = adminDb.collection('vocabulary_pools').orderBy(firestoreSortField, sortOrder);
+
+    if (useFirestoreFilters) {
+      if (difficulty) {
+        query = query.where('metadata.difficulty', '==', difficulty);
+      }
+      if (isActive !== null) {
+        query = query.where('metadata.isActive', '==', isActive);
+      }
+      if (tags && tags.length > 0) {
+        query = query.where('metadata.tags', 'array-contains-any', tags);
+      }
+    }
+
     if (lastPoolId) {
       const lastDoc = await adminDb.collection('vocabulary_pools').doc(lastPoolId).get();
       if (lastDoc.exists) {
@@ -48,13 +95,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }
     }
 
-    query = query.limit(limit);
+    const fetchLimit = useFirestoreFilters ? limit : limit * 3;
+    query = query.limit(fetchLimit);
     const snapshot = await query.get();
 
-    const pools = snapshot.docs.map(doc => ({
+    let pools = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
-      // Convert Firestore Timestamps to Dates
       metadata: {
         ...doc.data().metadata,
         createdAt: doc.data().metadata.createdAt.toDate(),
@@ -62,14 +109,26 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       },
     })) as VocabularyPool[];
 
-    const hasMore = snapshot.docs.length === limit;
-    const lastDoc = snapshot.docs[snapshot.docs.length - 1];
+    if (!useFirestoreFilters) {
+      if (difficulty) {
+        pools = pools.filter(p => p.metadata.difficulty === difficulty);
+      }
+      if (isActive !== null) {
+        pools = pools.filter(p => p.metadata.isActive === isActive);
+      }
+      if (tags && tags.length > 0) {
+        pools = pools.filter(p => p.metadata.tags.some(t => tags.includes(t)));
+      }
+    }
+
+    const hasMore = useFirestoreFilters ? snapshot.docs.length === limit : pools.length > limit;
+    pools = pools.slice(0, limit);
+    const lastDoc = snapshot.docs.find(d => d.id === pools[pools.length - 1]?.id);
 
     return NextResponse.json({
       success: true,
       data: {
         pools,
-        total: pools.length,
         hasMore,
         lastPoolId: lastDoc?.id || null,
       },

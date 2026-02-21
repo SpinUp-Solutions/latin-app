@@ -27,7 +27,6 @@ export interface VocabularyPoolsResponse {
   success: boolean;
   data: {
     pools: VocabularyPool[];
-    total: number;
     hasMore: boolean;
     lastPoolId: string | null;
   };
