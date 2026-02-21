@@ -2,19 +2,35 @@ import React from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Badge } from '@/src/components/ui/badge';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
-import { Edit, Trash2, Library, Calendar, Hash } from 'lucide-react';
+import { Edit, Trash2, Library, Calendar, Hash, Loader2 } from 'lucide-react';
+import { useInfiniteScroll } from '@/src/hooks/useInfiniteScroll';
 import type { VocabularyPool } from '@/src/types/vocabulary-pool';
 
 interface PoolListProps {
   pools: VocabularyPool[];
   loading: boolean;
+  loadingMore: boolean;
   hasMore: boolean;
   onLoadMore: () => void;
   onEdit: (pool: VocabularyPool) => void;
   onDelete: (poolId: string, poolName: string) => void;
 }
 
-export const PoolList: React.FC<PoolListProps> = ({ pools, loading, hasMore, onLoadMore, onEdit, onDelete }) => {
+export const PoolList: React.FC<PoolListProps> = ({
+  pools,
+  loading,
+  loadingMore,
+  hasMore,
+  onLoadMore,
+  onEdit,
+  onDelete,
+}) => {
+  const sentinelRef = useInfiniteScroll({
+    onLoadMore,
+    hasMore,
+    loading: loadingMore,
+    rootMargin: '300px',
+  });
   if (loading && pools.length === 0) {
     return (
       <div className="text-center py-12">
@@ -96,18 +112,14 @@ export const PoolList: React.FC<PoolListProps> = ({ pools, loading, hasMore, onL
         </RomanCard>
       ))}
 
-      {hasMore && (
-        <div className="text-center py-6">
-          <Button variant="outline" onClick={onLoadMore} disabled={loading}>
-            {loading ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400 mr-2"></div>
-                Loading...
-              </>
-            ) : (
-              'Load More Pools'
-            )}
-          </Button>
+      {(hasMore || loadingMore) && (
+        <div ref={sentinelRef} className="flex justify-center py-6">
+          {loadingMore && (
+            <div className="flex items-center gap-2 text-gray-600">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-sm">Loading more pools...</span>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -67,6 +67,8 @@ export async function GET(request: NextRequest) {
 
     const normalLessons = allLessons.filter(l => l.type === 'normal');
     const vocabLessons = allLessons.filter(l => l.type === 'vocab');
+    const diagrammingLessons = allLessons.filter(l => l.type === 'sentence-diagramming');
+    const listeningLessons = allLessons.filter(l => l.type === 'listening');
 
     const processNormalLessons = (lessons: typeof allLessons): LessonWithProgress[] => {
       return lessons.map((lesson, index) => {
@@ -141,9 +143,49 @@ export async function GET(request: NextRequest) {
       });
     };
 
+    const processDiagrammingLessons = (lessons: typeof allLessons): LessonWithProgress[] => {
+      return lessons.map(lesson => {
+        const userProgress = userProgressMap[lesson.id];
+        const status = userProgress?.status === 'completed' ? 'completed' : 'available';
+        const progress = status === 'completed' ? 100 : 0;
+
+        return {
+          ...lesson,
+          progress,
+          status,
+          currentPageIndex: 0,
+          exerciseProgress: [],
+          completedAt: userProgress?.completedAt,
+          score: userProgress?.score,
+          lastAccessedAt: userProgress?.lastAccessedAt,
+        } as LessonWithProgress;
+      });
+    };
+
+    const processListeningLessons = (lessons: typeof allLessons): LessonWithProgress[] => {
+      return lessons.map(lesson => {
+        const userProgress = userProgressMap[lesson.id];
+        const status = userProgress?.status === 'completed' ? 'completed' : 'available';
+        const progress = status === 'completed' ? 100 : 0;
+
+        return {
+          ...lesson,
+          progress,
+          status,
+          currentPageIndex: 0,
+          exerciseProgress: [],
+          completedAt: userProgress?.completedAt,
+          score: userProgress?.score,
+          lastAccessedAt: userProgress?.lastAccessedAt,
+        } as LessonWithProgress;
+      });
+    };
+
     const lessonsWithStatus: LessonWithProgress[] = [
       ...processNormalLessons(normalLessons),
       ...processVocabLessons(vocabLessons),
+      ...processDiagrammingLessons(diagrammingLessons),
+      ...processListeningLessons(listeningLessons),
     ];
 
     return NextResponse.json({ lessons: lessonsWithStatus });

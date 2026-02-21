@@ -15,9 +15,7 @@ import { Card, CardContent } from '@/src/components/ui/card';
 import { Library, Search } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import Link from 'next/link';
-import { useGetPoolsQuery } from '@/src/store/api/vocabularyPoolApi';
-import { useAppSelector, useAppDispatch } from '@/src/store/hooks';
-import { updateFilters } from '@/src/store/slices/vocabularyPoolSlice';
+import { useGetPoolsQuery, useGetPoolQuery } from '@/src/store/api/vocabularyPoolApi';
 import type { VocabularyPool } from '@/src/types/vocabulary-pool';
 
 interface VocabularyPoolSelectorProps {
@@ -31,22 +29,22 @@ export const VocabularyPoolSelector: React.FC<VocabularyPoolSelectorProps> = ({
   onPoolSelect,
   disabled = false,
 }) => {
-  const dispatch = useAppDispatch();
-  const filters = useAppSelector(state => state.vocabularyPools.filters);
+  const [difficulty, setDifficulty] = useState('');
+  const filters = { difficulty, isActive: true as boolean | null };
   const { data, isLoading: loading } = useGetPoolsQuery({ filters });
   const pools = data?.pools ?? [];
+  const { data: directPool } = useGetPoolQuery(selectedPoolId!, { skip: !selectedPoolId });
   const [selectedPool, setSelectedPool] = useState<VocabularyPool | null>(null);
   const [showPoolPicker, setShowPoolPicker] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    if (selectedPoolId && data?.pools && data.pools.length > 0) {
-      const pool = data.pools.find(p => p.id === selectedPoolId);
-      setSelectedPool(pool || null);
+    if (selectedPoolId && directPool) {
+      setSelectedPool(directPool);
     } else if (!selectedPoolId) {
       setSelectedPool(null);
     }
-  }, [selectedPoolId, data]);
+  }, [selectedPoolId, directPool]);
 
   const filteredPools = pools.filter(
     pool =>
@@ -124,9 +122,7 @@ export const VocabularyPoolSelector: React.FC<VocabularyPoolSelectorProps> = ({
                   className="pl-10"
                 />
               </div>
-              <Select
-                value={filters.difficulty || 'all'}
-                onValueChange={value => dispatch(updateFilters({ difficulty: value === 'all' ? '' : value }))}>
+              <Select value={difficulty || 'all'} onValueChange={value => setDifficulty(value === 'all' ? '' : value)}>
                 <SelectTrigger className="w-48">
                   <SelectValue placeholder="All Difficulties" />
                 </SelectTrigger>

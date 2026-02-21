@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
 import { Label } from '@/src/components/ui/label';
@@ -21,6 +21,13 @@ interface PoolFormProps {
 
 export const PoolForm: React.FC<PoolFormProps> = ({ initialData, onSubmit, onCancel, isLoading, mode }) => {
   const { selectedIds, clear } = useWordSelection();
+
+  useEffect(() => {
+    return () => {
+      clear();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [formData, setFormData] = useState({
     name: initialData?.name || '',

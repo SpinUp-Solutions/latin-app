@@ -39,7 +39,17 @@ export const useWordSelection = () => {
       ...filters,
       search: debouncedSearch,
     }),
-    [filters, debouncedSearch]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      filters.partOfSpeech,
+      filters.verbConjugation,
+      filters.isDeponent,
+      filters.nounDeclension,
+      filters.adjectiveDeclension,
+      filters.pronounType,
+      filters.pronounPerson,
+      debouncedSearch,
+    ]
   );
 
   const { data, isLoading, isFetching } = useGetWordsForPoolSelectionQuery({

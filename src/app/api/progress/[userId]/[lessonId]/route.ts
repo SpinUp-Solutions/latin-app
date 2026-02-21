@@ -58,8 +58,10 @@ export async function POST(request: NextRequest, { params }: { params: { userId:
 
     const lesson = { id: lessonDoc.id, ...lessonDoc.data() } as Lesson;
     const isVocabLesson = lesson.type === 'vocab';
+    const isDiagrammingLesson = lesson.type === 'sentence-diagramming';
+    const isListeningLesson = lesson.type === 'listening';
 
-    if (isVocabLesson && progressData.status === 'completed') {
+    if ((isVocabLesson || isDiagrammingLesson || isListeningLesson) && progressData.status === 'completed') {
       await adminDb
         .collection('userProgress')
         .doc(`${params.userId}_${params.lessonId}`)

@@ -11,6 +11,7 @@ export type { ClickOnMultipleWordsExercise } from './click-on-multiple-words';
 export type { GeneratedTranslationExercise } from './generated-translation';
 export type { GeneratedFormIdentificationExercise } from './generated-form-identification';
 export type { TranslationGradingExercise } from './translation-grading';
+export type { ListeningPassageExercise } from './listening-passage';
 
 import type { MatchingExercise } from './matching';
 import type { FillExercise } from './fill';
@@ -24,6 +25,7 @@ import type { ClickOnMultipleWordsExercise } from './click-on-multiple-words';
 import type { GeneratedTranslationExercise } from './generated-translation';
 import type { GeneratedFormIdentificationExercise } from './generated-form-identification';
 import type { TranslationGradingExercise } from './translation-grading';
+import type { ListeningPassageExercise } from './listening-passage';
 
 export type Exercise =
   | MatchingExercise
@@ -37,4 +39,5 @@ export type Exercise =
   | ClickOnMultipleWordsExercise
   | GeneratedTranslationExercise
   | GeneratedFormIdentificationExercise
-  | TranslationGradingExercise;
+  | TranslationGradingExercise
+  | ListeningPassageExercise;

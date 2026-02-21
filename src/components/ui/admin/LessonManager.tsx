@@ -45,6 +45,8 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
 
   const normalLessons = lessons.filter(l => l.type === 'normal');
   const vocabLessons = lessons.filter(l => l.type === 'vocab');
+  const diagrammingLessons = lessons.filter(l => l.type === 'sentence-diagramming');
+  const listeningLessons = lessons.filter(l => l.type === 'listening');
 
   useEffect(() => {
     dispatch(loadDrafts());
@@ -266,6 +268,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
 
                   <div className="flex gap-2 pt-2">
                     <Button
+                      size="sm"
                       onClick={() => handleRetryRecovery(item.id)}
                       disabled={retryingRecovery && retryingId === item.id}
                       className="flex-1 bg-green-600 hover:bg-green-700 text-white">
@@ -347,6 +350,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
 
                     <div className="flex gap-2 pt-2">
                       <Button
+                        size="sm"
                         onClick={() => onContinueDraft(lessonId)}
                         className="flex-1 bg-amber-600 hover:bg-amber-700 text-white">
                         <Edit className="h-4 w-4 mr-1" />
@@ -385,9 +389,13 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
             <TabsList>
               <TabsTrigger value="normal">Normal Lessons ({normalLessons.length})</TabsTrigger>
               <TabsTrigger value="vocab">Vocab Lessons ({vocabLessons.length})</TabsTrigger>
+              <TabsTrigger value="diagramming">Diagramming Lessons ({diagrammingLessons.length})</TabsTrigger>
+              <TabsTrigger value="listening">Listening Lessons ({listeningLessons.length})</TabsTrigger>
             </TabsList>
             <TabsContent value="normal">{renderLessonGrid(normalLessons)}</TabsContent>
             <TabsContent value="vocab">{renderLessonGrid(vocabLessons)}</TabsContent>
+            <TabsContent value="diagramming">{renderLessonGrid(diagrammingLessons)}</TabsContent>
+            <TabsContent value="listening">{renderLessonGrid(listeningLessons)}</TabsContent>
           </Tabs>
         )}
       </section>
