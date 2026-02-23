@@ -5,6 +5,7 @@ import { Input } from '@/src/components/ui/input';
 import { Label } from '@/src/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { Checkbox } from '@/src/components/ui/checkbox';
+import { MultiSelect, type MultiSelectOption } from '@/src/components/ui/multi-select';
 import {
   PartOfSpeechSchema,
   NounDeclensionSchema,
@@ -23,12 +24,12 @@ interface AdvancedFiltersPanelProps {
   filters: {
     partOfSpeech: PartOfSpeech | 'all';
     search: string;
-    verbConjugation: VerbConjugation | 'all';
+    verbConjugation: VerbConjugation[] | 'all';
     isDeponent: 'true' | 'false' | 'both';
-    nounDeclension: NounDeclension | 'all';
-    adjectiveDeclension: AdjectiveDeclension | 'all';
-    pronounType: PronounType | 'all';
-    pronounPerson: PronounPerson | 'all';
+    nounDeclension: NounDeclension[] | 'all';
+    adjectiveDeclension: AdjectiveDeclension[] | 'all';
+    pronounType: PronounType[] | 'all';
+    pronounPerson: PronounPerson[] | 'all';
     limit?: number | 'all';
   };
   onFiltersChange: (updates: Partial<AdvancedFiltersPanelProps['filters']>) => void;
@@ -38,11 +39,31 @@ interface AdvancedFiltersPanelProps {
 }
 
 const PART_OF_SPEECH_OPTIONS = ['all', ...PartOfSpeechSchema.options] as const;
-const VERB_CONJUGATION_OPTIONS = ['all', ...VerbConjugationSchema.options] as const;
-const NOUN_DECLENSION_OPTIONS = ['all', ...NounDeclensionSchema.options] as const;
-const ADJECTIVE_DECLENSION_OPTIONS = ['all', ...AdjectiveDeclensionSchema.options] as const;
-const PRONOUN_TYPE_OPTIONS = ['all', ...PronounTypeSchema.options] as const;
-const PRONOUN_PERSON_OPTIONS = ['all', ...PronounPersonSchema.options] as const;
+
+const VERB_CONJUGATION_OPTIONS: MultiSelectOption[] = VerbConjugationSchema.options.map(v => ({
+  value: v,
+  label: v,
+}));
+
+const NOUN_DECLENSION_OPTIONS: MultiSelectOption[] = NounDeclensionSchema.options.map(v => ({
+  value: v,
+  label: `Declension ${v}`,
+}));
+
+const ADJECTIVE_DECLENSION_OPTIONS: MultiSelectOption[] = AdjectiveDeclensionSchema.options.map(v => ({
+  value: v,
+  label: `Declension ${v}`,
+}));
+
+const PRONOUN_TYPE_OPTIONS: MultiSelectOption[] = PronounTypeSchema.options.map(v => ({
+  value: v,
+  label: v.charAt(0).toUpperCase() + v.slice(1),
+}));
+
+const PRONOUN_PERSON_OPTIONS: MultiSelectOption[] = PronounPersonSchema.options.map(v => ({
+  value: v,
+  label: `${v} Person`,
+}));
 
 const DEPONENT_OPTIONS = [
   { value: 'both', label: 'Both' },
@@ -91,6 +112,8 @@ export const AdvancedFiltersPanel: React.FC<AdvancedFiltersPanelProps> = ({
       }
     }
   };
+
+  const pronounTypeIncludesPersonal = filters.pronounType !== 'all' && filters.pronounType.includes('personal');
 
   return (
     <Card className="shadow-sm">
@@ -160,21 +183,13 @@ export const AdvancedFiltersPanel: React.FC<AdvancedFiltersPanelProps> = ({
         {filters.partOfSpeech === 'verb' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-gray-200">
             <div className="space-y-2">
-              <Label htmlFor="verb-conjugation">Conjugation</Label>
-              <Select
+              <Label>Conjugation</Label>
+              <MultiSelect
+                options={VERB_CONJUGATION_OPTIONS}
                 value={filters.verbConjugation}
-                onValueChange={value => onFiltersChange({ verbConjugation: value as VerbConjugation | 'all' })}>
-                <SelectTrigger id="verb-conjugation">
-                  <SelectValue placeholder="Select conjugation" />
-                </SelectTrigger>
-                <SelectContent>
-                  {VERB_CONJUGATION_OPTIONS.map(option => (
-                    <SelectItem key={option} value={option}>
-                      {option === 'all' ? 'All' : option}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={value => onFiltersChange({ verbConjugation: value as VerbConjugation[] | 'all' })}
+                placeholder="All"
+              />
             </div>
 
             <div className="space-y-2">
@@ -200,21 +215,13 @@ export const AdvancedFiltersPanel: React.FC<AdvancedFiltersPanelProps> = ({
         {filters.partOfSpeech === 'noun' && (
           <div className="pt-2 border-t border-gray-200">
             <div className="space-y-2">
-              <Label htmlFor="noun-declension">Declension</Label>
-              <Select
+              <Label>Declension</Label>
+              <MultiSelect
+                options={NOUN_DECLENSION_OPTIONS}
                 value={filters.nounDeclension}
-                onValueChange={value => onFiltersChange({ nounDeclension: value as NounDeclension | 'all' })}>
-                <SelectTrigger id="noun-declension">
-                  <SelectValue placeholder="Select declension" />
-                </SelectTrigger>
-                <SelectContent>
-                  {NOUN_DECLENSION_OPTIONS.map(option => (
-                    <SelectItem key={option} value={option}>
-                      {option === 'all' ? 'All' : `Declension ${option}`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={value => onFiltersChange({ nounDeclension: value as NounDeclension[] | 'all' })}
+                placeholder="All"
+              />
             </div>
           </div>
         )}
@@ -222,21 +229,13 @@ export const AdvancedFiltersPanel: React.FC<AdvancedFiltersPanelProps> = ({
         {filters.partOfSpeech === 'adjective' && (
           <div className="pt-2 border-t border-gray-200">
             <div className="space-y-2">
-              <Label htmlFor="adjective-declension">Declension</Label>
-              <Select
+              <Label>Declension</Label>
+              <MultiSelect
+                options={ADJECTIVE_DECLENSION_OPTIONS}
                 value={filters.adjectiveDeclension}
-                onValueChange={value => onFiltersChange({ adjectiveDeclension: value as AdjectiveDeclension | 'all' })}>
-                <SelectTrigger id="adjective-declension">
-                  <SelectValue placeholder="Select declension" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ADJECTIVE_DECLENSION_OPTIONS.map(option => (
-                    <SelectItem key={option} value={option}>
-                      {option === 'all' ? 'All' : `Declension ${option}`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={value => onFiltersChange({ adjectiveDeclension: value as AdjectiveDeclension[] | 'all' })}
+                placeholder="All"
+              />
             </div>
           </div>
         )}
@@ -244,45 +243,31 @@ export const AdvancedFiltersPanel: React.FC<AdvancedFiltersPanelProps> = ({
         {filters.partOfSpeech === 'pronoun' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-gray-200">
             <div className="space-y-2">
-              <Label htmlFor="pronoun-type">Pronoun Type</Label>
-              <Select
+              <Label>Pronoun Type</Label>
+              <MultiSelect
+                options={PRONOUN_TYPE_OPTIONS}
                 value={filters.pronounType}
-                onValueChange={value => {
+                onChange={value => {
+                  const newType = value as PronounType[] | 'all';
+                  const includesPersonal = newType !== 'all' && newType.includes('personal');
                   onFiltersChange({
-                    pronounType: value as PronounType | 'all',
-                    ...(value !== 'personal' ? { pronounPerson: 'all' } : {}),
+                    pronounType: newType,
+                    ...(!includesPersonal ? { pronounPerson: 'all' as const } : {}),
                   });
-                }}>
-                <SelectTrigger id="pronoun-type">
-                  <SelectValue placeholder="Select pronoun type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {PRONOUN_TYPE_OPTIONS.map(option => (
-                    <SelectItem key={option} value={option}>
-                      {option === 'all' ? 'All' : option.charAt(0).toUpperCase() + option.slice(1)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                }}
+                placeholder="All"
+              />
             </div>
 
-            {filters.pronounType === 'personal' && (
+            {pronounTypeIncludesPersonal && (
               <div className="space-y-2">
-                <Label htmlFor="pronoun-person">Person</Label>
-                <Select
+                <Label>Person</Label>
+                <MultiSelect
+                  options={PRONOUN_PERSON_OPTIONS}
                   value={filters.pronounPerson}
-                  onValueChange={value => onFiltersChange({ pronounPerson: value as PronounPerson | 'all' })}>
-                  <SelectTrigger id="pronoun-person">
-                    <SelectValue placeholder="Select person" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PRONOUN_PERSON_OPTIONS.map(option => (
-                      <SelectItem key={option} value={option}>
-                        {option === 'all' ? 'All' : `${option} Person`}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  onChange={value => onFiltersChange({ pronounPerson: value as PronounPerson[] | 'all' })}
+                  placeholder="All"
+                />
               </div>
             )}
           </div>

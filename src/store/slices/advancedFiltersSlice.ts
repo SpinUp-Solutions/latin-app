@@ -17,12 +17,12 @@ interface AdvancedFiltersState {
   filters: {
     partOfSpeech: PartOfSpeech | 'all';
     search: string;
-    verbConjugation: VerbConjugation | 'all';
+    verbConjugation: VerbConjugation[] | 'all';
     isDeponent: 'true' | 'false' | 'both';
-    nounDeclension: NounDeclension | 'all';
-    adjectiveDeclension: AdjectiveDeclension | 'all';
-    pronounType: PronounType | 'all';
-    pronounPerson: PronounPerson | 'all';
+    nounDeclension: NounDeclension[] | 'all';
+    adjectiveDeclension: AdjectiveDeclension[] | 'all';
+    pronounType: PronounType[] | 'all';
+    pronounPerson: PronounPerson[] | 'all';
     limit: LimitValue;
   };
   pagination: {
@@ -71,15 +71,30 @@ const advancedFiltersSlice = createSlice({
         state.selection.selectedCellPaths = [];
       }
 
-      // Reset pronounPerson when pronounType changes to non-personal
-      if ('pronounType' in action.payload && action.payload.pronounType !== 'personal') {
-        state.filters.pronounPerson = 'all';
+      // Reset pronounPerson when pronounType changes to not include personal
+      if ('pronounType' in action.payload) {
+        const newPronounType = action.payload.pronounType;
+        const includesPersonal =
+          newPronounType !== 'all' && Array.isArray(newPronounType) && newPronounType.includes('personal');
+        if (!includesPersonal) {
+          state.filters.pronounPerson = 'all';
+        }
       }
 
       // Clear cell selection and update table type when pronoun schema may change
       if ('pronounType' in action.payload || 'pronounPerson' in action.payload) {
         if (state.filters.partOfSpeech === 'pronoun') {
-          const tableType = deriveTableTypeFromPOS('pronoun', state.filters.pronounType, state.filters.pronounPerson);
+          const pronounType = state.filters.pronounType;
+          const pronounPerson = state.filters.pronounPerson;
+          const firstType =
+            pronounType !== 'all' && Array.isArray(pronounType) && pronounType.length === 1
+              ? pronounType[0]
+              : undefined;
+          const firstPerson =
+            pronounPerson !== 'all' && Array.isArray(pronounPerson) && pronounPerson.length === 1
+              ? pronounPerson[0]
+              : undefined;
+          const tableType = deriveTableTypeFromPOS('pronoun', firstType, firstPerson);
           state.selection.selectedTableType = tableType ?? null;
           state.selection.selectedCellPaths = [];
         }

@@ -6,12 +6,12 @@ import type { AdjectiveDeclension } from '@/shared/types/vocabulary/schemas/enum
 export interface PoolFilters {
   partOfSpeech: PartOfSpeech | 'all';
   search: string;
-  verbConjugation: VerbConjugation | 'all';
+  verbConjugation: VerbConjugation[] | 'all';
   isDeponent: 'true' | 'false' | 'both';
-  nounDeclension: NounDeclension | 'all';
-  adjectiveDeclension: AdjectiveDeclension | 'all';
-  pronounType: PronounType | 'all';
-  pronounPerson: PronounPerson | 'all';
+  nounDeclension: NounDeclension[] | 'all';
+  adjectiveDeclension: AdjectiveDeclension[] | 'all';
+  pronounType: PronounType[] | 'all';
+  pronounPerson: PronounPerson[] | 'all';
 }
 
 export const DEFAULT_POOL_FILTERS: PoolFilters = {

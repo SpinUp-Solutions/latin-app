@@ -46,17 +46,24 @@ function AdvancedFiltersPage() {
     search: debouncedSearch || undefined,
     lastWordId: pagination.lastWordId,
     verbConjugation:
-      filters.partOfSpeech === 'verb' && filters.verbConjugation !== 'all' ? filters.verbConjugation : undefined,
+      filters.partOfSpeech === 'verb' && filters.verbConjugation !== 'all'
+        ? filters.verbConjugation.join(',')
+        : undefined,
     isDeponent: filters.partOfSpeech === 'verb' && filters.isDeponent !== 'both' ? filters.isDeponent : undefined,
     nounDeclension:
-      filters.partOfSpeech === 'noun' && filters.nounDeclension !== 'all' ? filters.nounDeclension : undefined,
+      filters.partOfSpeech === 'noun' && filters.nounDeclension !== 'all'
+        ? filters.nounDeclension.join(',')
+        : undefined,
     adjectiveDeclension:
       filters.partOfSpeech === 'adjective' && filters.adjectiveDeclension !== 'all'
-        ? filters.adjectiveDeclension
+        ? filters.adjectiveDeclension.join(',')
         : undefined,
-    pronounType: filters.partOfSpeech === 'pronoun' && filters.pronounType !== 'all' ? filters.pronounType : undefined,
+    pronounType:
+      filters.partOfSpeech === 'pronoun' && filters.pronounType !== 'all' ? filters.pronounType.join(',') : undefined,
     pronounPerson:
-      filters.partOfSpeech === 'pronoun' && filters.pronounPerson !== 'all' ? filters.pronounPerson : undefined,
+      filters.partOfSpeech === 'pronoun' && filters.pronounPerson !== 'all'
+        ? filters.pronounPerson.join(',')
+        : undefined,
     limit: fetchAll ? undefined : numericLimit,
     fetchAll: fetchAll ? true : undefined,
     cellPaths: selection.selectedCellPaths.length > 0 ? selection.selectedCellPaths : undefined,
@@ -122,8 +129,13 @@ function AdvancedFiltersPage() {
     }
   };
 
+  const pronounTypeForTable =
+    filters.pronounType !== 'all' && filters.pronounType.length === 1 ? filters.pronounType[0] : 'all';
+  const pronounPersonForTable =
+    filters.pronounPerson !== 'all' && filters.pronounPerson.length === 1 ? filters.pronounPerson[0] : 'all';
+
   const handleSelectAll = () => {
-    const allPaths = formSelection.getAllPaths(filters.partOfSpeech, filters.pronounType, filters.pronounPerson);
+    const allPaths = formSelection.getAllPaths(filters.partOfSpeech, pronounTypeForTable, pronounPersonForTable);
     dispatch(addCellPaths(allPaths));
   };
 
@@ -164,8 +176,8 @@ function AdvancedFiltersPage() {
           {filters.partOfSpeech !== 'all' && (
             <FormSelectionTable
               partOfSpeech={filters.partOfSpeech}
-              pronounType={filters.pronounType}
-              pronounPerson={filters.pronounPerson}
+              pronounType={pronounTypeForTable}
+              pronounPerson={pronounPersonForTable}
               selectedCellPaths={selection.selectedCellPaths}
               onToggleCell={handleToggleCell}
               onSelectAll={handleSelectAll}

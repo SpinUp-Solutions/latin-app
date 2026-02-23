@@ -21,6 +21,7 @@ import { WordSourceSection } from './WordSourceSection';
 import { MultiParadigmConfigSection } from './MultiParadigmConfigSection';
 import { useFormIdentificationEditor } from '@/src/hooks/useFormIdentificationEditor';
 import type { PartOfSpeech, PronounType, PronounPerson } from '@/shared/types/vocabulary/schemas/enums';
+import { parseMultiFilterValue, serializeMultiFilterValue } from '@/src/utils/wordFilters';
 import { deriveParadigm } from '@/src/utils/paradigm';
 import type { FormIdentificationStep } from '@/src/types/exercises/schemas/form-identification';
 import { getExerciseDisplayForm, hasSelectedForm } from '@/src/utils/exercises/formSelection';
@@ -71,26 +72,18 @@ const GeneratedFormIdentificationEditorView: React.FC<{
         filters={{
           partOfSpeech: (editor.derivedFilters.partOfSpeech || 'all') as PartOfSpeech | 'all',
           search: editor.derivedFilters.search || '',
-          verbConjugation: (editor.derivedFilters.verbConjugation || 'all') as
-            | '1'
-            | '2'
-            | '3'
-            | '3io'
-            | '4'
-            | 'irregular'
+          verbConjugation: parseMultiFilterValue(editor.derivedFilters.verbConjugation) as
+            | ('1' | '2' | '3' | '3io' | '4' | 'irregular')[]
             | 'all',
           isDeponent: (editor.derivedFilters.isDeponent || 'both') as 'true' | 'false' | 'both',
-          nounDeclension: (editor.derivedFilters.nounDeclension || 'all') as
-            | '1'
-            | '2'
-            | '3'
-            | '3-istem'
-            | '4'
-            | '5'
+          nounDeclension: parseMultiFilterValue(editor.derivedFilters.nounDeclension) as
+            | ('1' | '2' | '3' | '3-istem' | '4' | '5')[]
             | 'all',
-          adjectiveDeclension: (editor.derivedFilters.adjectiveDeclension || 'all') as '1-2' | '3' | 'all',
-          pronounType: (editor.derivedFilters.pronounType || 'all') as PronounType | 'all',
-          pronounPerson: (editor.derivedFilters.pronounPerson || 'all') as PronounPerson | 'all',
+          adjectiveDeclension: parseMultiFilterValue(editor.derivedFilters.adjectiveDeclension) as
+            | ('1-2' | '3')[]
+            | 'all',
+          pronounType: parseMultiFilterValue(editor.derivedFilters.pronounType) as PronounType[] | 'all',
+          pronounPerson: parseMultiFilterValue(editor.derivedFilters.pronounPerson) as PronounPerson[] | 'all',
           limit: editor.config.count,
         }}
         onFiltersChange={updates => {
@@ -101,7 +94,15 @@ const GeneratedFormIdentificationEditorView: React.FC<{
           }
 
           if (Object.keys(filterUpdates).length > 0) {
-            editor.handleGlobalFiltersChange(filterUpdates);
+            const serialized: Record<string, string | undefined> = {};
+            for (const [key, value] of Object.entries(filterUpdates)) {
+              if (Array.isArray(value)) {
+                serialized[key] = serializeMultiFilterValue(value) ?? 'all';
+              } else {
+                serialized[key] = value as string;
+              }
+            }
+            editor.handleGlobalFiltersChange(serialized);
           }
         }}
         onReset={handleResetFilters}
