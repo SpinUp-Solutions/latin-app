@@ -377,7 +377,7 @@ export default function DashboardPage() {
                   <div className="relative p-8">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                       {/* Lessons Completed */}
-                      <div className="group transform hover:-translate-y-1 transition-all duration-300">
+                      <div className="group will-change-transform hover:-translate-y-1 transition-all duration-300">
                         <div className="text-center p-6 rounded-2xl bg-gradient-to-br from-roman-green/10 to-emerald-100/5 border border-roman-green/20 hover:border-roman-green/30 transition-all duration-300">
                           <div className="relative h-16 w-16 bg-gradient-to-br from-roman-green/20 to-emerald-100/10 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg">
                             <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-2xl"></div>
@@ -391,7 +391,7 @@ export default function DashboardPage() {
                       </div>
 
                       {/* Words Learned */}
-                      <div className="group transform hover:-translate-y-1 transition-all duration-300">
+                      <div className="group will-change-transform hover:-translate-y-1 transition-all duration-300">
                         <div className="text-center p-6 rounded-2xl bg-gradient-to-br from-roman-gold/10 to-amber-100/5 border border-roman-gold/20 hover:border-roman-gold/30 transition-all duration-300">
                           <div className="relative h-16 w-16 bg-gradient-to-br from-roman-gold/20 to-amber-100/10 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg">
                             <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-2xl"></div>
