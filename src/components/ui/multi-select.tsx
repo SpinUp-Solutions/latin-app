@@ -22,13 +22,31 @@ interface MultiSelectProps {
 
 export function MultiSelect({ options, value, onChange, placeholder = 'All', className }: MultiSelectProps) {
   const [open, setOpen] = React.useState(false);
+  // Local-only visual state: user explicitly unchecked "All"
+  const [uncheckedAll, setUncheckedAll] = React.useState(false);
 
   const allValues = options.map(o => o.value);
-  const isAll = value === 'all' || (Array.isArray(value) && value.length === 0);
-  const selectedValues = isAll ? allValues : value;
-  const allChecked = isAll || selectedValues.length === options.length;
+  const isAll = value === 'all';
+  const selectedValues = value === 'all' ? (uncheckedAll ? [] : allValues) : value;
+  const allChecked = !uncheckedAll && (isAll || selectedValues.length === options.length);
+
+  // Reset local uncheckedAll state when value changes from parent (e.g., POS changed, reset)
+  const prevValueRef = React.useRef(value);
+  React.useEffect(() => {
+    if (prevValueRef.current !== value) {
+      setUncheckedAll(false);
+      prevValueRef.current = value;
+    }
+  }, [value]);
 
   const handleToggle = (optionValue: string) => {
+    if (uncheckedAll) {
+      // Coming from "unchecked all" state — select just this one option
+      setUncheckedAll(false);
+      onChange([optionValue]);
+      return;
+    }
+
     let base: string[];
     if (isAll) {
       // Transition from 'all' to explicit array: remove the unchecked item
@@ -40,24 +58,25 @@ export function MultiSelect({ options, value, onChange, placeholder = 'All', cla
     }
 
     // If all options are now selected, emit 'all'
-    onChange(base.length === options.length ? 'all' : base.length === 0 ? 'all' : base);
+    onChange(base.length === options.length ? 'all' : base);
   };
 
   const handleAllToggle = () => {
     if (allChecked) {
-      // Deselect all → emit 'all' (no filter = same as all)
-      // But to give visual feedback, we do nothing since unchecked-all = all semantically
-      // Instead, just keep 'all'
-      return;
+      // Uncheck all — purely visual, since 'all' and 'none' are semantically identical
+      setUncheckedAll(true);
+    } else {
+      setUncheckedAll(false);
+      onChange('all');
     }
-    onChange('all');
   };
 
-  const displayText = isAll
-    ? placeholder
-    : selectedValues.length === 1
-      ? options.find(o => o.value === selectedValues[0])?.label || selectedValues[0]
-      : null;
+  const displayText =
+    isAll || selectedValues.length === 0
+      ? placeholder
+      : selectedValues.length === 1
+        ? options.find(o => o.value === selectedValues[0])?.label || selectedValues[0]
+        : null;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -67,7 +86,7 @@ export function MultiSelect({ options, value, onChange, placeholder = 'All', cla
           aria-expanded={open}
           className={cn(
             'flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
-            !displayText && !isAll && 'h-auto min-h-10',
+            selectedValues.length > 1 && 'h-auto min-h-10',
             className
           )}>
           <div className="flex flex-wrap gap-1 items-center [&>span]:line-clamp-1">
@@ -91,26 +110,27 @@ export function MultiSelect({ options, value, onChange, placeholder = 'All', cla
         className="w-[var(--radix-popover-trigger-width)] rounded-md border bg-white p-1 shadow-md"
         align="start">
         <div>
-          <label
+          <div
             className="relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
             onClick={handleAllToggle}>
-            <span className="absolute left-2 flex h-4 w-4 items-center justify-center">
-              <Checkbox checked={allChecked} onCheckedChange={() => handleAllToggle()} />
+            <span className="absolute left-2 flex h-4 w-4 items-center justify-center pointer-events-none">
+              <Checkbox checked={allChecked} tabIndex={-1} />
             </span>
             <span className="font-medium">All</span>
-          </label>
+          </div>
           <div className="-mx-1 my-1 h-px bg-muted" />
           {options.map(option => {
             const isChecked = selectedValues.includes(option.value);
             return (
-              <label
+              <div
                 key={option.value}
-                className="relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none hover:bg-accent hover:text-accent-foreground">
-                <span className="absolute left-2 flex h-4 w-4 items-center justify-center">
-                  <Checkbox checked={isChecked} onCheckedChange={() => handleToggle(option.value)} />
+                className="relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none hover:bg-accent hover:text-accent-foreground"
+                onClick={() => handleToggle(option.value)}>
+                <span className="absolute left-2 flex h-4 w-4 items-center justify-center pointer-events-none">
+                  <Checkbox checked={isChecked} tabIndex={-1} />
                 </span>
                 <span>{option.label}</span>
-              </label>
+              </div>
             );
           })}
         </div>

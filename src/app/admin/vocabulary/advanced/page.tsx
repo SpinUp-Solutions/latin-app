@@ -46,22 +46,31 @@ function AdvancedFiltersPage() {
     search: debouncedSearch || undefined,
     lastWordId: pagination.lastWordId,
     verbConjugation:
-      filters.partOfSpeech === 'verb' && filters.verbConjugation !== 'all'
+      filters.partOfSpeech === 'verb' && filters.verbConjugation !== 'all' && filters.verbConjugation.length > 0
         ? filters.verbConjugation.join(',')
         : undefined,
     isDeponent: filters.partOfSpeech === 'verb' && filters.isDeponent !== 'both' ? filters.isDeponent : undefined,
     nounDeclension:
-      filters.partOfSpeech === 'noun' && filters.nounDeclension !== 'all'
+      filters.partOfSpeech === 'noun' && filters.nounDeclension !== 'all' && filters.nounDeclension.length > 0
         ? filters.nounDeclension.join(',')
         : undefined,
     adjectiveDeclension:
-      filters.partOfSpeech === 'adjective' && filters.adjectiveDeclension !== 'all'
+      filters.partOfSpeech === 'adjective' &&
+      filters.adjectiveDeclension !== 'all' &&
+      filters.adjectiveDeclension.length > 0
         ? filters.adjectiveDeclension.join(',')
         : undefined,
     pronounType:
-      filters.partOfSpeech === 'pronoun' && filters.pronounType !== 'all' ? filters.pronounType.join(',') : undefined,
+      filters.partOfSpeech === 'pronoun' && filters.pronounType !== 'all' && filters.pronounType.length > 0
+        ? filters.pronounType.join(',')
+        : undefined,
     pronounPerson:
-      filters.partOfSpeech === 'pronoun' && filters.pronounPerson !== 'all'
+      filters.partOfSpeech === 'pronoun' &&
+      filters.pronounType !== 'all' &&
+      filters.pronounType.length === 1 &&
+      filters.pronounType[0] === 'personal' &&
+      filters.pronounPerson !== 'all' &&
+      filters.pronounPerson.length > 0
         ? filters.pronounPerson.join(',')
         : undefined,
     limit: fetchAll ? undefined : numericLimit,

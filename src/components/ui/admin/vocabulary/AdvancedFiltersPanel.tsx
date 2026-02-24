@@ -113,7 +113,8 @@ export const AdvancedFiltersPanel: React.FC<AdvancedFiltersPanelProps> = ({
     }
   };
 
-  const pronounTypeIncludesPersonal = filters.pronounType !== 'all' && filters.pronounType.includes('personal');
+  const isOnlyPersonal =
+    filters.pronounType !== 'all' && filters.pronounType.length === 1 && filters.pronounType[0] === 'personal';
 
   return (
     <Card className="shadow-sm">
@@ -249,17 +250,17 @@ export const AdvancedFiltersPanel: React.FC<AdvancedFiltersPanelProps> = ({
                 value={filters.pronounType}
                 onChange={value => {
                   const newType = value as PronounType[] | 'all';
-                  const includesPersonal = newType !== 'all' && newType.includes('personal');
+                  const newIsOnlyPersonal = newType !== 'all' && newType.length === 1 && newType[0] === 'personal';
                   onFiltersChange({
                     pronounType: newType,
-                    ...(!includesPersonal ? { pronounPerson: 'all' as const } : {}),
+                    ...(!newIsOnlyPersonal ? { pronounPerson: 'all' as const } : {}),
                   });
                 }}
                 placeholder="All"
               />
             </div>
 
-            {pronounTypeIncludesPersonal && (
+            {isOnlyPersonal && (
               <div className="space-y-2">
                 <Label>Person</Label>
                 <MultiSelect

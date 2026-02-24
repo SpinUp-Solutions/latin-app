@@ -71,12 +71,15 @@ const advancedFiltersSlice = createSlice({
         state.selection.selectedCellPaths = [];
       }
 
-      // Reset pronounPerson when pronounType changes to not include personal
+      // Reset pronounPerson when pronounType is not exactly ['personal']
       if ('pronounType' in action.payload) {
         const newPronounType = action.payload.pronounType;
-        const includesPersonal =
-          newPronounType !== 'all' && Array.isArray(newPronounType) && newPronounType.includes('personal');
-        if (!includesPersonal) {
+        const isOnlyPersonal =
+          newPronounType !== 'all' &&
+          Array.isArray(newPronounType) &&
+          newPronounType.length === 1 &&
+          newPronounType[0] === 'personal';
+        if (!isOnlyPersonal) {
           state.filters.pronounPerson = 'all';
         }
       }
