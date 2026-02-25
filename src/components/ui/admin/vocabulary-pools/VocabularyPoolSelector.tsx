@@ -30,13 +30,13 @@ export const VocabularyPoolSelector: React.FC<VocabularyPoolSelectorProps> = ({
   disabled = false,
 }) => {
   const [difficulty, setDifficulty] = useState('');
-  const filters = { difficulty, isActive: true as boolean | null };
+  const [searchQuery, setSearchQuery] = useState('');
+  const filters = { search: searchQuery || undefined, difficulty, isActive: true as boolean | null };
   const { data, isLoading: loading } = useGetPoolsQuery({ filters });
   const pools = data?.pools ?? [];
   const { data: directPool } = useGetPoolQuery(selectedPoolId!, { skip: !selectedPoolId });
   const [selectedPool, setSelectedPool] = useState<VocabularyPool | null>(null);
   const [showPoolPicker, setShowPoolPicker] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     if (selectedPoolId && directPool) {
@@ -45,15 +45,6 @@ export const VocabularyPoolSelector: React.FC<VocabularyPoolSelectorProps> = ({
       setSelectedPool(null);
     }
   }, [selectedPoolId, directPool]);
-
-  const filteredPools = pools.filter(
-    pool =>
-      pool.metadata.isActive &&
-      (searchQuery
-        ? pool.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          pool.description.toLowerCase().includes(searchQuery.toLowerCase())
-        : true)
-  );
 
   return (
     <div className="space-y-4">
@@ -142,7 +133,7 @@ export const VocabularyPoolSelector: React.FC<VocabularyPoolSelectorProps> = ({
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red mx-auto mb-2" />
                   Loading pools...
                 </div>
-              ) : filteredPools.length === 0 ? (
+              ) : pools.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   No vocabulary pools found.
                   <br />
@@ -154,7 +145,7 @@ export const VocabularyPoolSelector: React.FC<VocabularyPoolSelectorProps> = ({
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {filteredPools.map(pool => (
+                  {pools.map(pool => (
                     <Card
                       key={pool.id}
                       className={cn(
