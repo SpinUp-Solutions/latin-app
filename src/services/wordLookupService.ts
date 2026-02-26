@@ -1,16 +1,50 @@
 import { collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
 import { db } from './firebase';
-import { Word } from '@/src/types/admin-vocabulary';
 import { stripMacrons } from '@/src/utils/exercises/helpers';
+import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
+
+type WordFormLike =
+  | string
+  | {
+      full_form?: string | null;
+      shortened_form?: string | null;
+    }
+  | null;
+
+export interface TooltipLookupWord {
+  id: string;
+  word: string;
+  translation?: string | null;
+  pronunciation?: string | null;
+  part_of_speech?: string | null;
+  wordType?: string | null;
+  type?: string | null;
+  definition?: string | null;
+  definitions?: string[] | null;
+  etymology?: string | null;
+  gender?: string | null;
+  declension?: string | null;
+  declensionClass?: string | null;
+  conjugation?: string | null;
+  conjugationClass?: string | null;
+  grammaticalInfo?: string | null;
+  dictionary_entry?: string | null;
+  principal_parts?: WordFormLike[] | null;
+  principalParts?: string[] | null;
+  dictionary_forms?: WordFormLike[] | null;
+  pronoun_type?: string | null;
+  person?: string | null;
+  is_deponent?: boolean | null;
+}
 
 export interface WordLookupResult {
   found: boolean;
-  word?: Word;
+  word?: TooltipLookupWord;
   error?: string;
 }
 
 export class WordLookupService {
-  private static readonly COLLECTION_NAME = 'words';
+  private static readonly COLLECTION_NAME = VOCABULARY_WORDS_COLLECTION;
 
   /**
    * Search for a word in the Firebase words collection
@@ -33,7 +67,7 @@ export class WordLookupService {
 
       if (!exactSnapshot.empty) {
         const doc = exactSnapshot.docs[0];
-        const wordData = { id: doc.id, ...doc.data() } as Word;
+        const wordData = { id: doc.id, ...doc.data() } as TooltipLookupWord;
         return { found: true, word: wordData };
       }
 
@@ -52,7 +86,7 @@ export class WordLookupService {
         // Prefer an exact sort_key match, otherwise take the first result
         const exactSortKeyDoc = sortKeySnapshot.docs.find(doc => doc.data().sort_key === searchKey);
         const bestDoc = exactSortKeyDoc || sortKeySnapshot.docs[0];
-        const wordData = { id: bestDoc.id, ...bestDoc.data() } as Word;
+        const wordData = { id: bestDoc.id, ...bestDoc.data() } as TooltipLookupWord;
         return { found: true, word: wordData };
       }
 
@@ -67,27 +101,29 @@ export class WordLookupService {
   }
 
   /**
-   * Convert Firebase Word data to tooltip-compatible format
-   * @param word - The Word object from Firebase
+   * Convert Firebase word data (legacy or v5 schema) to tooltip-compatible format
+   * @param word - The word object from Firebase
    * @returns Tooltip-compatible data object
    */
-  static convertToTooltipData(word: Word) {
+  static convertToTooltipData(word: TooltipLookupWord) {
+    const definitions = this.getDefinitions(word);
+
     // Map Firebase word data to tooltip interface
     const tooltipData = {
       word: word.word,
-      translation: word.translation,
+      translation: word.translation || '',
       pronunciation: word.pronunciation || '',
-      partOfSpeech: word.wordType,
+      partOfSpeech: word.part_of_speech || word.wordType || '',
       wordType: this.getDetailedWordType(word),
-      definition: word.definitions?.join('; ') || '',
-      examples: this.extractExamples(word.definitions || []),
+      definition: definitions.join('; '),
+      examples: this.extractExamples(definitions),
       etymology: word.etymology || '',
       // Additional fields specific to word types
       gender: word.gender || '',
-      declensionClass: word.declensionClass || '',
-      conjugationClass: word.conjugationClass || '',
-      grammaticalInfo: word.grammaticalInfo || '',
-      principalParts: word.principalParts || [],
+      declensionClass: word.declensionClass || word.declension || '',
+      conjugationClass: word.conjugationClass || word.conjugation || '',
+      grammaticalInfo: word.grammaticalInfo || word.dictionary_entry || '',
+      principalParts: this.getPrincipalParts(word),
     };
 
     return tooltipData;
@@ -96,26 +132,45 @@ export class WordLookupService {
   /**
    * Get detailed word type information
    */
-  private static getDetailedWordType(word: Word): string {
-    const parts = [];
+  private static getDetailedWordType(word: TooltipLookupWord): string {
+    const parts: string[] = [];
+    const legacyWordType = typeof word.wordType === 'string' ? word.wordType : '';
+    const v5WordType = typeof word.type === 'string' ? word.type : '';
+    const pos = typeof word.part_of_speech === 'string' ? word.part_of_speech : '';
 
-    if (word.wordType) {
-      parts.push(word.wordType);
+    if (legacyWordType && legacyWordType !== pos) {
+      parts.push(legacyWordType);
+    } else if (v5WordType) {
+      parts.push(v5WordType);
     }
 
     if (word.gender) {
       parts.push(word.gender);
     }
 
-    if (word.declensionClass) {
-      parts.push(`${word.declensionClass} declension`);
+    const declension = word.declensionClass || word.declension;
+    if (declension) {
+      parts.push(`${declension} declension`);
     }
 
-    if (word.conjugationClass) {
-      parts.push(`${word.conjugationClass} conjugation`);
+    const conjugation = word.conjugationClass || word.conjugation;
+    if (conjugation) {
+      parts.push(`${conjugation} conjugation`);
     }
 
-    return parts.join(', ');
+    if (word.pronoun_type) {
+      parts.push(word.pronoun_type);
+    }
+
+    if (word.person) {
+      parts.push(word.person);
+    }
+
+    if (word.is_deponent) {
+      parts.push('deponent');
+    }
+
+    return Array.from(new Set(parts)).join(', ');
   }
 
   /**
@@ -141,5 +196,39 @@ export class WordLookupService {
     }
 
     return examples.slice(0, 3); // Limit to 3 examples
+  }
+
+  private static getDefinitions(word: TooltipLookupWord): string[] {
+    if (Array.isArray(word.definitions)) {
+      return word.definitions.filter((def): def is string => typeof def === 'string' && def.trim().length > 0);
+    }
+
+    if (typeof word.definition === 'string' && word.definition.trim().length > 0) {
+      return [word.definition];
+    }
+
+    return [];
+  }
+
+  private static getPrincipalParts(word: TooltipLookupWord): string[] {
+    if (Array.isArray(word.principalParts)) {
+      return word.principalParts.filter((part): part is string => typeof part === 'string' && part.trim().length > 0);
+    }
+
+    const v5Forms = word.principal_parts || word.dictionary_forms;
+    if (!Array.isArray(v5Forms)) {
+      return [];
+    }
+
+    return v5Forms
+      .map(form => {
+        if (typeof form === 'string') return form.trim();
+        if (!form || typeof form !== 'object') return '';
+        const fullForm = typeof form.full_form === 'string' ? form.full_form.trim() : '';
+        if (fullForm) return fullForm;
+        const shortenedForm = typeof form.shortened_form === 'string' ? form.shortened_form.trim() : '';
+        return shortenedForm;
+      })
+      .filter((part): part is string => part.length > 0);
   }
 }

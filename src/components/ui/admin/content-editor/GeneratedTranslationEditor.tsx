@@ -15,6 +15,7 @@ import { useGeneratedExerciseEditor } from '@/src/hooks/useGeneratedExerciseEdit
 import { splitTranslationAnswers } from '@/src/utils/exercises/generatedTranslationExercise';
 import type { TranslationDirection } from '@/src/types/exercises/generated-translation';
 import type { PartOfSpeech, PronounType, PronounPerson } from '@/shared/types/vocabulary/schemas/enums';
+import { parseMultiFilterValue, serializeMultiFilterValue } from '@/src/utils/wordFilters';
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
 import { getExerciseDisplayForm, hasSelectedForm } from '@/src/utils/exercises/formSelection';
 
@@ -55,26 +56,18 @@ const GeneratedTranslationEditorView: React.FC<{ editingContent: GeneratedTransl
         filters={{
           partOfSpeech: (editor.derivedFilters.partOfSpeech || 'all') as PartOfSpeech | 'all',
           search: editor.derivedFilters.search || '',
-          verbConjugation: (editor.derivedFilters.verbConjugation || 'all') as
-            | '1'
-            | '2'
-            | '3'
-            | '3io'
-            | '4'
-            | 'irregular'
+          verbConjugation: parseMultiFilterValue(editor.derivedFilters.verbConjugation) as
+            | ('1' | '2' | '3' | '3io' | '4' | 'irregular')[]
             | 'all',
           isDeponent: (editor.derivedFilters.isDeponent || 'both') as 'true' | 'false' | 'both',
-          nounDeclension: (editor.derivedFilters.nounDeclension || 'all') as
-            | '1'
-            | '2'
-            | '3'
-            | '3-istem'
-            | '4'
-            | '5'
+          nounDeclension: parseMultiFilterValue(editor.derivedFilters.nounDeclension) as
+            | ('1' | '2' | '3' | '3-istem' | '4' | '5')[]
             | 'all',
-          adjectiveDeclension: (editor.derivedFilters.adjectiveDeclension || 'all') as '1-2' | '3' | 'all',
-          pronounType: (editor.derivedFilters.pronounType || 'all') as PronounType | 'all',
-          pronounPerson: (editor.derivedFilters.pronounPerson || 'all') as PronounPerson | 'all',
+          adjectiveDeclension: parseMultiFilterValue(editor.derivedFilters.adjectiveDeclension) as
+            | ('1-2' | '3')[]
+            | 'all',
+          pronounType: parseMultiFilterValue(editor.derivedFilters.pronounType) as PronounType[] | 'all',
+          pronounPerson: parseMultiFilterValue(editor.derivedFilters.pronounPerson) as PronounPerson[] | 'all',
           limit: editor.config.count,
         }}
         onFiltersChange={updates => {
@@ -83,7 +76,15 @@ const GeneratedTranslationEditorView: React.FC<{ editingContent: GeneratedTransl
             const nextCount = updates.limit === undefined ? currentCount : (updates.limit as typeof currentCount);
             editor.updateConfig({ count: nextCount });
           } else {
-            editor.handleFiltersChange(updates);
+            const serialized: Record<string, string | undefined> = {};
+            for (const [key, value] of Object.entries(updates)) {
+              if (Array.isArray(value)) {
+                serialized[key] = serializeMultiFilterValue(value) ?? 'all';
+              } else {
+                serialized[key] = value as string;
+              }
+            }
+            editor.handleFiltersChange(serialized);
           }
         }}
         onReset={editor.handleResetFilters}
@@ -155,8 +156,8 @@ const GeneratedTranslationEditorView: React.FC<{ editingContent: GeneratedTransl
               <label className="block text-sm font-medium mb-3">Form Selection</label>
               <FormSelectionTable
                 partOfSpeech={editor.activePOS}
-                pronounType={(editor.derivedFilters.pronounType || 'all') as PronounType | 'all'}
-                pronounPerson={(editor.derivedFilters.pronounPerson || 'all') as PronounPerson | 'all'}
+                pronounType={editor.derivedFilters.pronounType as PronounType | 'all' | undefined}
+                pronounPerson={editor.derivedFilters.pronounPerson as PronounPerson | 'all' | undefined}
                 selectedCellPaths={editor.derivedFormSelection?.selectedCellPaths || []}
                 onToggleCell={editor.formSelectionControls.handleToggleCell}
                 onTogglePaths={editor.formSelectionControls.handleTogglePaths}

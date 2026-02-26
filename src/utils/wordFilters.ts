@@ -1,5 +1,19 @@
 import type { PoolFilters } from '@/src/types/pool-filters';
 
+export function parseMultiFilterValue(value: string | undefined): string[] | 'all' {
+  if (!value || value === 'all') return 'all';
+  return value
+    .split(',')
+    .map(v => v.trim())
+    .filter(v => v.length > 0);
+}
+
+export function serializeMultiFilterValue(value: string[] | 'all'): string | undefined {
+  if (value === 'all') return undefined;
+  if (value.length === 0) return undefined;
+  return value.join(',');
+}
+
 export function cascadeFilterUpdates(currentFilters: PoolFilters, updates: Partial<PoolFilters>): PoolFilters {
   if (!('partOfSpeech' in updates)) {
     return { ...currentFilters, ...updates };
@@ -57,8 +71,8 @@ export const buildAdvancedFilterParams = (
   }
 
   if (filters.partOfSpeech === 'verb') {
-    if (filters.verbConjugation && filters.verbConjugation !== 'all') {
-      params.append('verbConjugation', filters.verbConjugation);
+    if (filters.verbConjugation !== 'all' && filters.verbConjugation.length > 0) {
+      params.append('verbConjugation', filters.verbConjugation.join(','));
     }
     if (filters.isDeponent && filters.isDeponent !== 'both') {
       params.append('isDeponent', filters.isDeponent);
@@ -66,23 +80,29 @@ export const buildAdvancedFilterParams = (
   }
 
   if (filters.partOfSpeech === 'noun') {
-    if (filters.nounDeclension && filters.nounDeclension !== 'all') {
-      params.append('nounDeclension', filters.nounDeclension);
+    if (filters.nounDeclension !== 'all' && filters.nounDeclension.length > 0) {
+      params.append('nounDeclension', filters.nounDeclension.join(','));
     }
   }
 
   if (filters.partOfSpeech === 'adjective') {
-    if (filters.adjectiveDeclension && filters.adjectiveDeclension !== 'all') {
-      params.append('adjectiveDeclension', filters.adjectiveDeclension);
+    if (filters.adjectiveDeclension !== 'all' && filters.adjectiveDeclension.length > 0) {
+      params.append('adjectiveDeclension', filters.adjectiveDeclension.join(','));
     }
   }
 
   if (filters.partOfSpeech === 'pronoun') {
-    if (filters.pronounType && filters.pronounType !== 'all') {
-      params.append('pronounType', filters.pronounType);
+    if (filters.pronounType !== 'all' && filters.pronounType.length > 0) {
+      params.append('pronounType', filters.pronounType.join(','));
     }
-    if (filters.pronounType === 'personal' && filters.pronounPerson && filters.pronounPerson !== 'all') {
-      params.append('pronounPerson', filters.pronounPerson);
+    if (
+      filters.pronounType !== 'all' &&
+      filters.pronounType.length === 1 &&
+      filters.pronounType[0] === 'personal' &&
+      filters.pronounPerson !== 'all' &&
+      filters.pronounPerson.length > 0
+    ) {
+      params.append('pronounPerson', filters.pronounPerson.join(','));
     }
   }
 

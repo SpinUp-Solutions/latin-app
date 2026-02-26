@@ -68,7 +68,7 @@ export default function Home() {
           </div>
 
           <div className="mt-40 grid grid-cols-1 md:grid-cols-3 gap-12 max-w-6xl mx-auto">
-            <div className="group cursor-pointer transform hover:-translate-y-2 transition-all duration-300">
+            <div className="group transform hover:-translate-y-2 transition-all duration-300">
               <div className="relative h-64 bg-gradient-to-br from-roman-red/15 via-roman-red/10 to-roman-terracotta/5 rounded-3xl mb-6 flex items-center justify-center group-hover:scale-105 transition-transform shadow-xl group-hover:shadow-2xl border border-roman-red/20 backdrop-blur-sm">
                 <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-3xl"></div>
                 <Scroll className="h-16 w-16 text-roman-red drop-shadow-lg" />
@@ -79,7 +79,7 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="group cursor-pointer transform hover:-translate-y-2 transition-all duration-300">
+            <div className="group transform hover:-translate-y-2 transition-all duration-300">
               <div className="relative h-64 bg-gradient-to-br from-roman-gold/20 via-roman-gold/15 to-amber-100/10 rounded-3xl mb-6 flex items-center justify-center group-hover:scale-105 transition-transform shadow-xl group-hover:shadow-2xl border border-roman-gold/30 backdrop-blur-sm">
                 <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-3xl"></div>
                 <Crown className="h-16 w-16 text-roman-gold drop-shadow-lg" />
@@ -90,7 +90,7 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="group cursor-pointer transform hover:-translate-y-2 transition-all duration-300">
+            <div className="group transform hover:-translate-y-2 transition-all duration-300">
               <div className="relative h-64 bg-gradient-to-br from-roman-green/15 via-roman-green/10 to-emerald-100/5 rounded-3xl mb-6 flex items-center justify-center group-hover:scale-105 transition-transform shadow-xl group-hover:shadow-2xl border border-roman-green/20 backdrop-blur-sm">
                 <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-3xl"></div>
                 <Target className="h-16 w-16 text-roman-green drop-shadow-lg" />

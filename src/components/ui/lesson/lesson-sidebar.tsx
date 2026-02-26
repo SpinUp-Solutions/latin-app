@@ -7,6 +7,7 @@ import { LessonStatus } from '@/src/types/lesson';
 import { BookOpen, CheckCircle, Lock, Play } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/src/hooks/useAuth';
+import { stripHtmlTags } from '@/src/utils/exercises';
 
 interface LessonSidebarProps {
   currentLessonId: string;
@@ -162,7 +163,9 @@ export default function LessonSidebar({ currentLessonId }: LessonSidebarProps) {
                       <div className="flex-1 min-w-0">
                         <h4 className="text-base font-serif text-gray-900 truncate mb-1">{lesson.title}</h4>
                         {lesson.description && (
-                          <p className="text-sm text-roman-stone mt-1 line-clamp-2">{lesson.description}</p>
+                          <p className="text-sm text-roman-stone mt-1 line-clamp-2">
+                            {stripHtmlTags(lesson.description)}
+                          </p>
                         )}
 
                         <div className="flex items-center gap-2 mt-2 text-xs text-roman-stone font-medium">
