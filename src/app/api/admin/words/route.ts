@@ -52,6 +52,19 @@ const parseSelectFields = (selectFields: string | null): string[] => {
     .filter(f => f.length > 0);
 };
 
+const applyMultiValueFilter = (query: Query, field: string, paramValue: string | null): Query => {
+  if (!paramValue) return query;
+  const values = paramValue
+    .split(',')
+    .map(v => v.trim())
+    .filter(v => v.length > 0);
+  if (values.length === 0) return query;
+  if (values.length === 1) {
+    return query.where(field, '==', values[0]);
+  }
+  return query.where(field, 'in', values);
+};
+
 const shuffleArray = <T>(items: T[]): T[] => {
   const copy = [...items];
   for (let i = copy.length - 1; i > 0; i -= 1) {
@@ -195,30 +208,19 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }
 
       if (wordType === 'verb') {
-        if (verbConjugation) {
-          query = query.where('conjugation', '==', verbConjugation);
-        }
+        query = applyMultiValueFilter(query, 'conjugation', verbConjugation);
         if (isDeponent === 'true') {
           query = query.where('is_deponent', '==', true);
         } else if (isDeponent === 'false') {
           query = query.where('is_deponent', '==', false);
         }
-      } else if (wordType === 'noun' && nounDeclension) {
-        query = query.where('declension', '==', nounDeclension);
-      } else if (wordType === 'adjective' && adjectiveDeclension) {
-        query = query.where('declension', '==', adjectiveDeclension);
+      } else if (wordType === 'noun') {
+        query = applyMultiValueFilter(query, 'declension', nounDeclension);
+      } else if (wordType === 'adjective') {
+        query = applyMultiValueFilter(query, 'declension', adjectiveDeclension);
       } else if (wordType === 'pronoun') {
-        if (pronounType) {
-          query = query.where('pronoun_type', '==', pronounType);
-        }
-        if (pronounPerson) {
-          const persons = pronounPerson.split(',').map(p => p.trim());
-          if (persons.length === 1) {
-            query = query.where('person', '==', persons[0]);
-          } else {
-            query = query.where('person', 'in', persons);
-          }
-        }
+        query = applyMultiValueFilter(query, 'pronoun_type', pronounType);
+        query = applyMultiValueFilter(query, 'person', pronounPerson);
       }
 
       if (lastWordId && !fetchAll) {
@@ -253,30 +255,19 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           wrapQuery = wrapQuery.where('part_of_speech', '==', wordType);
         }
         if (wordType === 'verb') {
-          if (verbConjugation) {
-            wrapQuery = wrapQuery.where('conjugation', '==', verbConjugation);
-          }
+          wrapQuery = applyMultiValueFilter(wrapQuery, 'conjugation', verbConjugation);
           if (isDeponent === 'true') {
             wrapQuery = wrapQuery.where('is_deponent', '==', true);
           } else if (isDeponent === 'false') {
             wrapQuery = wrapQuery.where('is_deponent', '==', false);
           }
-        } else if (wordType === 'noun' && nounDeclension) {
-          wrapQuery = wrapQuery.where('declension', '==', nounDeclension);
-        } else if (wordType === 'adjective' && adjectiveDeclension) {
-          wrapQuery = wrapQuery.where('declension', '==', adjectiveDeclension);
+        } else if (wordType === 'noun') {
+          wrapQuery = applyMultiValueFilter(wrapQuery, 'declension', nounDeclension);
+        } else if (wordType === 'adjective') {
+          wrapQuery = applyMultiValueFilter(wrapQuery, 'declension', adjectiveDeclension);
         } else if (wordType === 'pronoun') {
-          if (pronounType) {
-            wrapQuery = wrapQuery.where('pronoun_type', '==', pronounType);
-          }
-          if (pronounPerson) {
-            const persons = pronounPerson.split(',').map(p => p.trim());
-            if (persons.length === 1) {
-              wrapQuery = wrapQuery.where('person', '==', persons[0]);
-            } else {
-              wrapQuery = wrapQuery.where('person', 'in', persons);
-            }
-          }
+          wrapQuery = applyMultiValueFilter(wrapQuery, 'pronoun_type', pronounType);
+          wrapQuery = applyMultiValueFilter(wrapQuery, 'person', pronounPerson);
         }
 
         wrapQuery = wrapQuery.limit(remaining);

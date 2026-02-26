@@ -5,6 +5,8 @@ import { Badge } from '@/src/components/ui/badge';
 import { Input } from '@/src/components/ui/input';
 import { Label } from '@/src/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
+import { MultiSelect } from '@/src/components/ui/multi-select';
+import { parseMultiFilterValue, serializeMultiFilterValue } from '@/src/utils/wordFilters';
 import { FormSelectionTable } from '../vocabulary/FormSelectionTable';
 import type { PronounType, PronounPerson } from '@/shared/types/vocabulary/schemas/enums';
 import type { FormParadigm, ParadigmConfig, ParadigmConfigs } from '@/src/types/exercises/paradigm';
@@ -155,12 +157,14 @@ export const MultiParadigmConfigSection: React.FC<MultiParadigmConfigSectionProp
   );
 
   const handleFilterChange = useCallback(
-    (key: string, value: string) => {
+    (key: string, value: string | string[] | 'all') => {
       if (!activeParadigm) return;
       const config = paradigmConfigs[activeParadigm];
       const currentFilters = config?.filters || {};
+      // Serialize array values to comma-separated strings for GeneratorFilters storage
+      const serialized = Array.isArray(value) ? (serializeMultiFilterValue(value) ?? 'all') : value;
       onUpdateParadigmConfig(activeParadigm, {
-        filters: { ...currentFilters, [key]: value },
+        filters: { ...currentFilters, [key]: serialized },
       });
     },
     [activeParadigm, paradigmConfigs, onUpdateParadigmConfig]
@@ -208,22 +212,20 @@ export const MultiParadigmConfigSection: React.FC<MultiParadigmConfigSectionProp
         {relevantFilters.includes('verbConjugation') && (
           <div>
             <Label className="text-sm">Conjugation</Label>
-            <Select
-              value={filters.verbConjugation || 'all'}
-              onValueChange={val => handleFilterChange('verbConjugation', val)}>
-              <SelectTrigger className="w-full mt-1">
-                <SelectValue placeholder="All" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="1">1st</SelectItem>
-                <SelectItem value="2">2nd</SelectItem>
-                <SelectItem value="3">3rd</SelectItem>
-                <SelectItem value="3io">3rd -io</SelectItem>
-                <SelectItem value="4">4th</SelectItem>
-                <SelectItem value="irregular">Irregular</SelectItem>
-              </SelectContent>
-            </Select>
+            <MultiSelect
+              options={[
+                { value: '1', label: '1st' },
+                { value: '2', label: '2nd' },
+                { value: '3', label: '3rd' },
+                { value: '3io', label: '3rd -io' },
+                { value: '4', label: '4th' },
+                { value: 'irregular', label: 'Irregular' },
+              ]}
+              value={parseMultiFilterValue(filters.verbConjugation)}
+              onChange={val => handleFilterChange('verbConjugation', val)}
+              placeholder="All"
+              className="mt-1"
+            />
           </div>
         )}
 
@@ -246,62 +248,58 @@ export const MultiParadigmConfigSection: React.FC<MultiParadigmConfigSectionProp
         {relevantFilters.includes('nounDeclension') && (
           <div>
             <Label className="text-sm">Declension</Label>
-            <Select
-              value={filters.nounDeclension || 'all'}
-              onValueChange={val => handleFilterChange('nounDeclension', val)}>
-              <SelectTrigger className="w-full mt-1">
-                <SelectValue placeholder="All" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="1">1st</SelectItem>
-                <SelectItem value="2">2nd</SelectItem>
-                <SelectItem value="3">3rd</SelectItem>
-                <SelectItem value="3-istem">3rd i-stem</SelectItem>
-                <SelectItem value="4">4th</SelectItem>
-                <SelectItem value="5">5th</SelectItem>
-              </SelectContent>
-            </Select>
+            <MultiSelect
+              options={[
+                { value: '1', label: '1st' },
+                { value: '2', label: '2nd' },
+                { value: '3', label: '3rd' },
+                { value: '3-istem', label: '3rd i-stem' },
+                { value: '4', label: '4th' },
+                { value: '5', label: '5th' },
+              ]}
+              value={parseMultiFilterValue(filters.nounDeclension)}
+              onChange={val => handleFilterChange('nounDeclension', val)}
+              placeholder="All"
+              className="mt-1"
+            />
           </div>
         )}
 
         {relevantFilters.includes('adjectiveDeclension') && (
           <div>
             <Label className="text-sm">Declension</Label>
-            <Select
-              value={filters.adjectiveDeclension || 'all'}
-              onValueChange={val => handleFilterChange('adjectiveDeclension', val)}>
-              <SelectTrigger className="w-full mt-1">
-                <SelectValue placeholder="All" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="1-2">1st/2nd</SelectItem>
-                <SelectItem value="3">3rd</SelectItem>
-              </SelectContent>
-            </Select>
+            <MultiSelect
+              options={[
+                { value: '1-2', label: '1st/2nd' },
+                { value: '3', label: '3rd' },
+              ]}
+              value={parseMultiFilterValue(filters.adjectiveDeclension)}
+              onChange={val => handleFilterChange('adjectiveDeclension', val)}
+              placeholder="All"
+              className="mt-1"
+            />
           </div>
         )}
 
         {relevantFilters.includes('pronounType') && (
           <div>
             <Label className="text-sm">Pronoun Type</Label>
-            <Select value={filters.pronounType || 'all'} onValueChange={val => handleFilterChange('pronounType', val)}>
-              <SelectTrigger className="w-full mt-1">
-                <SelectValue placeholder="All" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="personal">Personal (3rd person)</SelectItem>
-                <SelectItem value="demonstrative">Demonstrative</SelectItem>
-                <SelectItem value="relative">Relative</SelectItem>
-                <SelectItem value="interrogative">Interrogative</SelectItem>
-                <SelectItem value="reflexive">Reflexive</SelectItem>
-                <SelectItem value="intensive">Intensive</SelectItem>
-                <SelectItem value="indefinite">Indefinite</SelectItem>
-                <SelectItem value="possessive">Possessive</SelectItem>
-              </SelectContent>
-            </Select>
+            <MultiSelect
+              options={[
+                { value: 'personal', label: 'Personal (3rd person)' },
+                { value: 'demonstrative', label: 'Demonstrative' },
+                { value: 'relative', label: 'Relative' },
+                { value: 'interrogative', label: 'Interrogative' },
+                { value: 'reflexive', label: 'Reflexive' },
+                { value: 'intensive', label: 'Intensive' },
+                { value: 'indefinite', label: 'Indefinite' },
+                { value: 'possessive', label: 'Possessive' },
+              ]}
+              value={parseMultiFilterValue(filters.pronounType)}
+              onChange={val => handleFilterChange('pronounType', val)}
+              placeholder="All"
+              className="mt-1"
+            />
           </div>
         )}
 

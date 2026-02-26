@@ -74,3 +74,18 @@ h5,
 h6 {
   @apply font-serif tracking-wide;
 }
+a,
+button,
+[role='button'],
+[type='button'],
+[type='submit'],
+[type='reset'],
+select,
+summary,
+[tabindex]:not([tabindex='-1']):not(input):not(textarea):not([contenteditable='true']),
+input[type='checkbox'],
+input[type='radio'],
+input[type='file']::file-selector-button,
+label[for] {
+  cursor: pointer;
+}
