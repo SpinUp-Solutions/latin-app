@@ -33,7 +33,7 @@ function AdminPage() {
       <main className="container mx-auto py-8 px-4">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {/* Lesson Management */}
-          <RomanCard className="cursor-pointer hover:shadow-lg transition-shadow">
+          <RomanCard className="hover:shadow-lg transition-shadow">
             <RomanCardContent className="p-6">
               <div className="flex items-center gap-4 mb-4">
                 <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
@@ -68,7 +68,7 @@ function AdminPage() {
           </RomanCard>
 
           {/* Vocabulary Management */}
-          <RomanCard className="cursor-pointer hover:shadow-lg transition-shadow">
+          <RomanCard className="hover:shadow-lg transition-shadow">
             <RomanCardContent className="p-6">
               <div className="flex items-center gap-4 mb-4">
                 <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
@@ -103,7 +103,7 @@ function AdminPage() {
           </RomanCard>
 
           {/* User Management */}
-          <RomanCard className="cursor-pointer hover:shadow-lg transition-shadow">
+          <RomanCard className="hover:shadow-lg transition-shadow">
             <RomanCardContent className="p-6">
               <div className="flex items-center gap-4 mb-4">
                 <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center">
