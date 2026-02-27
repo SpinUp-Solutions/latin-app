@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { TranslationGradingExercise } from '@/src/types/exercises';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { useTranslationGrading } from '@/src/hooks/useTranslationGrading';
@@ -38,6 +38,7 @@ const getRoleColor = (role: string) => {
 };
 
 const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [userAnswers, setUserAnswers] = useState<Record<number, string>>({});
   const [passedSentences, setPassedSentences] = useState<Set<number>>(new Set());
   const translationDirection = exercise.translationDirection || 'latin-to-english';
@@ -154,6 +155,7 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
 
           <div className="flex gap-4">
             <Textarea
+              ref={textareaRef}
               value={currentAnswer}
               onChange={e => {
                 setUserAnswers(prev => ({
@@ -327,6 +329,9 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
                 <Button
                   onClick={() => {
                     resetGrading();
+                    requestAnimationFrame(() => {
+                      textareaRef.current?.focus();
+                    });
                   }}
                   variant="ghost"
                   className="text-roman-red/60 hover:text-roman-red hover:bg-roman-red/5 font-serif uppercase tracking-widest text-[10px] h-9 px-4">

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Input } from '../input';
 import { Button } from '../button';
 
@@ -21,10 +21,29 @@ const ExerciseInput: React.FC<ExerciseInputProps> = ({
   className = '',
   disabled,
 }) => {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const wasDisabledRef = useRef(false);
+
+  // Refocus input when it transitions from disabled back to enabled (after correct answer auto-advance)
+  useEffect(() => {
+    if (wasDisabledRef.current && !disabled) {
+      inputRef.current?.focus();
+    }
+    wasDisabledRef.current = !!disabled;
+  }, [disabled]);
+
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       onSubmit();
     }
+  };
+
+  const handleButtonClick = () => {
+    onSubmit();
+    // Refocus input after clicking the button (handles incorrect answer case where disabled never toggled)
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
   };
 
   return (
@@ -32,6 +51,7 @@ const ExerciseInput: React.FC<ExerciseInputProps> = ({
       <div className="flex gap-4">
         <div className="flex-1">
           <Input
+            ref={inputRef}
             type="text"
             value={value}
             onChange={e => onChange(e.target.value)}
@@ -41,7 +61,7 @@ const ExerciseInput: React.FC<ExerciseInputProps> = ({
             disabled={disabled}
           />
         </div>
-        <Button onClick={onSubmit} disabled={disabled} className="bg-roman-red text-white hover:bg-red-700">
+        <Button onClick={handleButtonClick} disabled={disabled} className="bg-roman-red text-white hover:bg-red-700">
           {buttonText}
         </Button>
       </div>
