@@ -27,20 +27,19 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     if (search) {
       const searchLower = search.toLowerCase();
-      let query: Query = adminDb.collection('vocabulary_pools').orderBy('name');
+      const query: Query = adminDb.collection('vocabulary_pools').orderBy('name');
 
       const snapshot = await query.get();
 
-      let pools = snapshot.docs
-        .map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          metadata: {
-            ...doc.data().metadata,
-            createdAt: doc.data().metadata.createdAt.toDate(),
-            updatedAt: doc.data().metadata.updatedAt.toDate(),
-          },
-        })) as VocabularyPool[];
+      let pools = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        metadata: {
+          ...doc.data().metadata,
+          createdAt: doc.data().metadata.createdAt.toDate(),
+          updatedAt: doc.data().metadata.updatedAt.toDate(),
+        },
+      })) as VocabularyPool[];
 
       pools = pools.filter(p => p.name.toLowerCase().includes(searchLower));
 
