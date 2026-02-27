@@ -107,6 +107,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const randomize = !fetchAll && searchParams.get('randomize') === 'true';
     const randomStart = searchParams.get('randomStart');
     const poolId = searchParams.get('poolId');
+    const exerciseMode = searchParams.get('exerciseMode') === 'true';
 
     if (countsOnly) {
       const wordTypeCounts = await getWordTypeCounts(collection);
@@ -295,7 +296,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       .map(doc => {
         const data = doc.data();
         const serialized = serializeWord(data as Record<string, unknown>);
-        const isExerciseMode = !!tableType;
+        const isExerciseMode = !!tableType || exerciseMode;
 
         if (isExerciseMode) {
           const paths = parseCellPaths(cellPaths);
