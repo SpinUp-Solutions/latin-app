@@ -22,6 +22,14 @@ interface WordsResponse {
   };
 }
 
+export interface DeleteWordResponse {
+  success: boolean;
+  warning?: boolean;
+  referencedPools?: { id: string; name: string }[];
+  message?: string;
+  cleanedPools?: string[];
+}
+
 export interface VocabularySearchResult {
   id: string;
   word: string;
@@ -208,16 +216,20 @@ export const vocabularyApi = createApi({
         response.data.words,
     }),
 
-    deleteWord: builder.mutation<void, string>({
-      query: wordId => ({
-        url: `/admin/words/${wordId}`,
+    deleteWord: builder.mutation<DeleteWordResponse, { wordId: string; confirm?: boolean }>({
+      query: ({ wordId, confirm }) => ({
+        url: `/admin/words/${wordId}${confirm ? '?confirm=true' : ''}`,
         method: 'DELETE',
       }),
-      invalidatesTags: (result, error, wordId) => [
-        { type: 'Word', id: wordId },
-        { type: 'WordList', id: 'LIST' },
-        { type: 'WordCounts', id: 'COUNTS' },
-      ],
+      transformResponse: (response: DeleteWordResponse) => response,
+      invalidatesTags: result =>
+        result?.success
+          ? [
+              { type: 'Word', id: 'LIST' },
+              { type: 'WordList', id: 'LIST' },
+              { type: 'WordCounts', id: 'COUNTS' },
+            ]
+          : [],
     }),
 
     bulkDeleteWords: builder.mutation<{ deletedCount: number }, string[]>({

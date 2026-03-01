@@ -87,6 +87,19 @@ export async function GET(request: NextRequest, { params }: { params: { poolId: 
         }
       });
 
+      if (missingWordIds.length > 0) {
+        // Fire-and-forget cleanup - don't block the response
+        adminDb
+          .collection('vocabulary_pools')
+          .doc(poolId)
+          .update({
+            wordDocIds: orderedWords.map(w => w.id),
+            'metadata.wordCount': orderedWords.length,
+            'metadata.updatedAt': new Date(),
+          })
+          .catch(err => console.error('Auto-cleanup of dangling word references failed:', err));
+      }
+
       return NextResponse.json({
         success: true,
         data: {
