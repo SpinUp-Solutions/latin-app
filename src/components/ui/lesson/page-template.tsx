@@ -4,6 +4,7 @@ import React, { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Page } from '@/src/types/lesson';
 import ContentRenderer from './content-renderer';
+import { ExerciseErrorBoundary } from './exercise-error-boundary';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { isExerciseType } from '@/src/utils/lessonUtils';
 
@@ -67,12 +68,14 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({ page, pageIndex, onE
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: index * 0.1 }}
           className="space-y-4">
-          <ContentRenderer
-            content={item}
-            pageIndex={pageIndex}
-            itemIndex={index}
-            onComplete={(score: number) => handleItemComplete(index, score)}
-          />
+          <ExerciseErrorBoundary key={item.id}>
+            <ContentRenderer
+              content={item}
+              pageIndex={pageIndex}
+              itemIndex={index}
+              onComplete={(score: number) => handleItemComplete(index, score)}
+            />
+          </ExerciseErrorBoundary>
         </motion.div>
       ))}
     </motion.div>

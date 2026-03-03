@@ -13,6 +13,7 @@ import {
   useUpdateWordMutation,
   useCreateWordMutation,
   useDeleteWordMutation,
+  type DeleteWordResponse,
 } from '@/src/store/api/vocabularyApi';
 import {
   updateFilters as updateFiltersAction,
@@ -24,6 +25,7 @@ import { WordEditPanel } from '@/src/components/ui/admin/vocabulary/WordEditPane
 import { VocabularyFiltersComponent } from '@/src/components/ui/admin/vocabulary/VocabularyFilters';
 import { VocabularyList } from '@/src/components/ui/admin/vocabulary/VocabularyList';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
+import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { PartOfSpeechSchema, type PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 import { buildEmptyWord, isPlaceholderWord } from '@/src/utils/vocabulary-defaults';
@@ -42,6 +44,10 @@ function AdminVocabularyPage() {
   const [selectedWordId, setSelectedWordId] = useState<string | null>(null);
   const [creatingWord, setCreatingWord] = useState<VocabularyWordWithId | null>(null);
   const [deletingWordId, setDeletingWordId] = useState<string | null>(null);
+  const [poolWarning, setPoolWarning] = useState<{
+    word: VocabularyWordWithId;
+    pools: { id: string; name: string }[];
+  } | null>(null);
   const TARGET_COLLECTION = VOCABULARY_WORDS_COLLECTION;
 
   const queryArgs = {
@@ -199,21 +205,32 @@ function AdminVocabularyPage() {
     setSelectedWordId(null);
   };
 
-  const handleDeleteWord = async (word: VocabularyWordWithId) => {
+  const handleDeleteWord = async (word: VocabularyWordWithId, confirm = false) => {
     setDeletingWordId(word.id);
     try {
-      await deleteWord(word.id).unwrap();
+      await deleteWord({ wordId: word.id, confirm }).unwrap();
       toast.success(`Word "${word.word}" deleted successfully`);
       if (selectedWordId === word.id) {
         setSelectedWordId(null);
       }
     } catch (error) {
+      const fetchError = error as { status?: number; data?: DeleteWordResponse };
+      if (fetchError.status === 409 && fetchError.data?.warning && fetchError.data.referencedPools) {
+        setPoolWarning({ word, pools: fetchError.data.referencedPools });
+        return;
+      }
       console.error('Delete word error:', error);
       const message = error instanceof Error ? error.message : 'Error deleting word';
       toast.error(message);
     } finally {
       setDeletingWordId(null);
     }
+  };
+
+  const handleConfirmDeleteWithPools = async () => {
+    if (!poolWarning) return;
+    setPoolWarning(null);
+    await handleDeleteWord(poolWarning.word, true);
   };
 
   const handleBackup = () => {
@@ -304,6 +321,20 @@ function AdminVocabularyPage() {
           />
         </div>
       </main>
+
+      <ConfirmationDialog
+        isOpen={!!poolWarning}
+        onClose={() => setPoolWarning(null)}
+        onConfirm={handleConfirmDeleteWithPools}
+        title="Word Used in Vocabulary Pools"
+        description={
+          poolWarning
+            ? `The word "${poolWarning.word.word}" is used in the following pool(s): ${poolWarning.pools.map(p => p.name).join(', ')}. Deleting it will remove it from those pools. Continue?`
+            : ''
+        }
+        confirmText="Delete & Remove from Pools"
+        cancelText="Cancel"
+      />
     </div>
   );
 }

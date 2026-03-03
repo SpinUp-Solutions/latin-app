@@ -34,7 +34,11 @@ export function VocabularyPoolViewer({ content }: VocabularyPoolViewerProps) {
   const poolIdToUse = poolIdFromEditor || poolIdFromLesson;
   const isResolvingPoolId = !poolIdFromEditor && Boolean(lessonId) && lessonsLoading;
 
-  const { data: vocabularyPool, isLoading: poolLoading } = useGetPoolQuery(poolIdToUse, { skip: !poolIdToUse });
+  const {
+    data: vocabularyPool,
+    isLoading: poolLoading,
+    error: poolError,
+  } = useGetPoolQuery(poolIdToUse, { skip: !poolIdToUse });
 
   if (!poolIdToUse) {
     if (isResolvingPoolId) {
@@ -67,6 +71,23 @@ export function VocabularyPoolViewer({ content }: VocabularyPoolViewerProps) {
           <RomanCardContent className="p-8 text-center">
             <BookOpen className="h-12 w-12 mx-auto text-gray-300 mb-4" />
             <p className="text-gray-500">No vocabulary pool assigned to this lesson.</p>
+          </RomanCardContent>
+        </RomanCard>
+      </div>
+    );
+  }
+
+  if (poolError) {
+    return (
+      <div className="space-y-6">
+        <RomanCard>
+          <RomanCardContent className="p-8 text-center">
+            <BookOpen className="h-12 w-12 mx-auto text-red-300 mb-4" />
+            <p className="text-red-600 font-medium">Failed to load vocabulary pool</p>
+            <p className="text-roman-stone text-sm mt-2">
+              The vocabulary pool for this lesson could not be loaded. It may have been removed or is temporarily
+              unavailable.
+            </p>
           </RomanCardContent>
         </RomanCard>
       </div>
