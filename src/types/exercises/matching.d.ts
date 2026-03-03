@@ -12,5 +12,6 @@ export interface MatchingExercise extends BaseExercise {
     rightColumn: MatchingItem[];
     answers: Record<string, string>; // leftId -> rightId
     hint?: string; // Optional hint shown on incorrect matches
+    requiredRepetitions?: number; // Number of rounds students must complete (default: 1)
   };
 }

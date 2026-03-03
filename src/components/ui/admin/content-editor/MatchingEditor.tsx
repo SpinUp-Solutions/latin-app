@@ -216,6 +216,25 @@ export const MatchingEditor: React.FC = () => {
         </p>
       </div>
 
+      {/* Required Repetitions */}
+      <div>
+        <label className="block text-sm font-medium mb-1">Required Repetitions</label>
+        <input
+          type="number"
+          min={1}
+          max={10}
+          value={editingContent.data.requiredRepetitions || 1}
+          onChange={e => {
+            const value = Math.max(1, Math.min(10, parseInt(e.target.value) || 1));
+            updateData({ requiredRepetitions: value });
+          }}
+          className="w-24 rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-roman-red/50 focus:border-roman-red"
+        />
+        <p className="text-xs text-gray-500 mt-1">
+          Number of times students must complete this exercise with reshuffled items
+        </p>
+      </div>
+
       {/* Answer Mappings */}
       <div>
         <label className="block text-sm font-medium mb-3">Answer Mappings</label>

@@ -22,6 +22,7 @@ interface MatchingTableProps {
 
 export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComplete }) => {
   const { leftColumn, rightColumn, answers: finalAnswer } = exercise.data;
+  const totalRounds = exercise.data.requiredRepetitions || 1;
 
   const [selectedLeft, setSelectedLeft] = useState<MatchingItem | null>(null);
   const [selectedRight, setSelectedRight] = useState<MatchingItem | null>(null);
@@ -31,6 +32,9 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
 
   const [shuffledLeftColumn, setShuffledLeftColumn] = useState<MatchingItem[]>(leftColumn);
   const [shuffledRightColumn, setShuffledRightColumn] = useState<MatchingItem[]>(rightColumn);
+
+  const [currentRound, setCurrentRound] = useState(1);
+  const [roundScores, setRoundScores] = useState<number[]>([]);
 
   const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
     exercise.feedbackConfig
@@ -45,6 +49,8 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
     setMatches({});
     setMatchedLeftIds(new Set());
     setShowIncorrectFlash(false);
+    setCurrentRound(1);
+    setRoundScores([]);
     reset();
   }, [leftColumn, rightColumn, finalAnswer, reset]);
 
@@ -84,16 +90,31 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
         setMatchedLeftIds(newMatchedLeftIds);
 
         const isLastMatch = Object.keys(newMatches).length === Object.keys(finalAnswer).length;
-        handleCorrect(isLastMatch);
+        const isLastRound = currentRound >= totalRounds;
+        handleCorrect(isLastMatch && isLastRound);
         setSelectedLeft(null);
         setSelectedRight(null);
 
         if (isLastMatch) {
           const correctMatches = Object.keys(newMatches).length;
           const totalMatches = Object.keys(finalAnswer).length;
-          const score = Math.round((correctMatches / totalMatches) * 100);
+          const roundScore = Math.round((correctMatches / totalMatches) * 100);
 
-          onComplete?.(score);
+          if (isLastRound) {
+            const allScores = [...roundScores, roundScore];
+            const averageScore = Math.round(allScores.reduce((sum, s) => sum + s, 0) / allScores.length);
+            onComplete?.(averageScore);
+          } else {
+            // Start next round: reset state and reshuffle
+            const nextRoundScores = [...roundScores, roundScore];
+            setRoundScores(nextRoundScores);
+            setCurrentRound(prev => prev + 1);
+            setMatches({});
+            setMatchedLeftIds(new Set());
+            setShuffledLeftColumn(shuffleArray(leftColumn));
+            setShuffledRightColumn(shuffleArray(rightColumn));
+            reset();
+          }
         }
       } else {
         handleIncorrect();
@@ -152,6 +173,13 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
       {exercise.instructions && exercise.instructions.replace(/<[^>]*>/g, '').trim() !== '' && (
         <div className="p-6 bg-roman-parchment rounded-lg mb-4">
           <SimpleRichDisplay content={exercise.instructions} className="whitespace-pre-wrap break-words" />
+        </div>
+      )}
+
+      {/* Round indicator */}
+      {totalRounds > 1 && (
+        <div className="text-sm font-medium text-roman-terracotta text-center">
+          Round {currentRound} of {totalRounds}
         </div>
       )}
 
