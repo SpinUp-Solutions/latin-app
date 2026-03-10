@@ -3,6 +3,7 @@
 import React, { useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useGetStudentLessonsQuery } from '@/src/store/api/lessonApi';
+import Image from 'next/image';
 import LessonPlayer from '@/src/components/ui/lesson/lesson-player';
 import LessonSidebar from '@/src/components/ui/lesson/lesson-sidebar';
 import PracticeSidebar from '@/src/components/ui/lesson/practice-sidebar';
@@ -34,11 +35,15 @@ export default function DynamicLessonPage() {
     return (
       <div className="min-h-screen bg-roman-marble">
         <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-full bg-roman-red flex items-center justify-center text-white font-serif">
-              <span className="text-xl">L</span>
-            </div>
-            <h1 className="text-xl font-serif tracking-wide">Latin App</h1>
+          <div className="flex items-center gap-3">
+            <Image
+              src="/assets/logos/wakeforest.png"
+              alt="Wake Forest University"
+              width={120}
+              height={75}
+              className="w-14 h-auto"
+            />
+            <h1 className="text-xl font-serif tracking-wide">Latin</h1>
           </div>
         </header>
         <main className="container mx-auto py-8 px-4">
@@ -62,11 +67,15 @@ export default function DynamicLessonPage() {
     return (
       <div className="min-h-screen bg-roman-marble">
         <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-full bg-roman-red flex items-center justify-center text-white font-serif">
-              <span className="text-xl">L</span>
-            </div>
-            <h1 className="text-xl font-serif tracking-wide">Latin App</h1>
+          <div className="flex items-center gap-3">
+            <Image
+              src="/assets/logos/wakeforest.png"
+              alt="Wake Forest University"
+              width={120}
+              height={75}
+              className="w-14 h-auto"
+            />
+            <h1 className="text-xl font-serif tracking-wide">Latin</h1>
           </div>
         </header>
         <main className="container mx-auto py-8 px-4">
@@ -99,7 +108,7 @@ export default function DynamicLessonPage() {
           <div className="w-10 h-10 rounded-full bg-roman-red flex items-center justify-center text-white font-serif">
             <span className="text-xl">L</span>
           </div>
-          <h1 className="text-xl font-serif tracking-wide">Latin App</h1>
+          <h1 className="text-xl font-serif tracking-wide">Wake Forest University Latin</h1>
         </div>
       </header>
 
