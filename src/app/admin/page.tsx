@@ -4,6 +4,7 @@ import React from 'react';
 import { Button } from '@/src/components/ui/button';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { ArrowLeft, Shield, Plus, BookOpen, Globe, Filter } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 
@@ -18,13 +19,17 @@ function AdminPage() {
               Back to Dashboard
             </Link>
           </Button>
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-full bg-roman-red flex items-center justify-center text-white font-serif">
-              <Shield className="h-5 w-5" />
-            </div>
+          <div className="flex items-center gap-3">
+            <Image
+              src="/assets/logos/wakeforest.png"
+              alt="Wake Forest University"
+              width={120}
+              height={75}
+              className="w-14 h-auto"
+            />
             <div>
               <h1 className="text-xl font-serif tracking-wide">Admin Panel</h1>
-              <p className="text-sm text-roman-stone">Latin App Administration</p>
+              <p className="text-sm text-roman-stone">Latin Administration</p>
             </div>
           </div>
         </div>

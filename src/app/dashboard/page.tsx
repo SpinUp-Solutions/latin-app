@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback, useMemo } from 'react';
+import React, { memo, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/src/services/firebase';
@@ -9,8 +9,8 @@ import { useAuth } from '@/src/hooks/useAuth';
 import { LessonStatus, LessonWithProgress } from '@/src/types/lesson';
 import { Button } from '@/src/components/ui/button';
 import { toast } from 'sonner';
-import React, { memo } from 'react';
-import { BookOpen, User, TrendingUp } from 'lucide-react';
+import { BookOpen, User } from 'lucide-react';
+import Image from 'next/image';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { CircularProgressButton } from '@/src/components/ui/CircularProgressButton';
 import { Swiper, SwiperSlide } from 'swiper/react';
@@ -183,40 +183,6 @@ export default function DashboardPage() {
     }
   };
 
-  const handleResetProgress = async () => {
-    if (!user?.uid) return;
-
-    try {
-      const currentUser = auth.currentUser;
-      if (!currentUser) {
-        toast.error('User not authenticated');
-        return;
-      }
-
-      const token = await currentUser.getIdToken();
-      const response = await fetch('/api/dev/reset-progress', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ userId: user.uid }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        window.location.reload();
-        toast.success(`Progress reset successfully! Deleted ${data.deletedCount || 0} records`);
-      } else {
-        toast.error(`Reset failed: ${data.error}`);
-      }
-    } catch (error) {
-      console.error('Reset progress error:', error);
-      toast.error('Failed to reset progress');
-    }
-  };
-
   if (loading || !user || lessonsLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-roman-marble">
@@ -240,12 +206,16 @@ export default function DashboardPage() {
       <div className="relative">
         <header className="bg-white/80 backdrop-blur-sm border-b border-roman-red/20 px-8 py-6 flex items-center justify-between shadow-xl">
           <div className="flex items-center gap-4">
-            <div className="relative w-16 h-16 bg-gradient-to-br from-roman-red to-roman-terracotta rounded-2xl flex items-center justify-center text-white font-serif shadow-lg">
-              <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-2xl"></div>
-              <span className="text-2xl relative drop-shadow-lg">L</span>
-            </div>
+            <Image
+              src="/assets/logos/wakeforest_shield.png"
+              alt="Wake Forest University"
+              width={64}
+              height={64}
+              className="w-14 h-14"
+              priority
+            />
             <div>
-              <h1 className="text-3xl font-serif tracking-wide text-gray-900 mb-1">Latin Learning</h1>
+              <h1 className="text-3xl font-serif tracking-wide text-gray-900 mb-1">Wake Forest University Latin</h1>
               <p className="text-lg text-roman-stone leading-relaxed">Welcome back, {displayName}</p>
             </div>
           </div>
@@ -256,13 +226,6 @@ export default function DashboardPage() {
               onClick={() => router.push('/profile')}>
               <User className="h-5 w-5 mr-2" />
               Profile
-            </Button>
-            <Button
-              variant="destructive"
-              size="lg"
-              onClick={handleResetProgress}
-              className="rounded-xl px-6 py-3 text-lg shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5">
-              Reset Progress
             </Button>
             <Button
               onClick={handleSignOut}
@@ -345,68 +308,6 @@ export default function DashboardPage() {
                 diagrammingLessons={diagrammingLessons}
                 listeningLessons={listeningLessons}
               />
-            </section>
-
-            {/* Progress Section */}
-            <section className="mb-16">
-              <div className="relative">
-                {/* Background effects similar to landing page */}
-                <div className="absolute inset-0">
-                  <div className="absolute top-0 left-0 w-72 h-72 bg-gradient-to-r from-roman-green/25 to-emerald-300/15 rounded-full mix-blend-multiply filter blur-2xl opacity-60"></div>
-                  <div className="absolute bottom-0 right-0 w-72 h-72 bg-gradient-to-l from-roman-gold/30 to-amber-300/20 rounded-full mix-blend-multiply filter blur-2xl opacity-60"></div>
-                </div>
-
-                <div className="relative bg-white/80 backdrop-blur-sm rounded-3xl border border-roman-red/20 shadow-2xl overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent"></div>
-
-                  {/* Header */}
-                  <div className="relative p-8 border-b border-roman-red/10">
-                    <div className="flex items-center gap-4">
-                      <div className="relative h-16 w-16 bg-gradient-to-br from-roman-green/20 via-roman-green/15 to-emerald-100/10 rounded-2xl flex items-center justify-center shadow-lg border border-roman-green/30">
-                        <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-2xl"></div>
-                        <TrendingUp className="h-8 w-8 text-roman-green drop-shadow-lg relative" />
-                      </div>
-                      <div>
-                        <h3 className="text-3xl font-serif text-gray-900 mb-1">Progress</h3>
-                        <p className="text-lg text-roman-stone leading-relaxed">Your Latin Learning Journey</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Content */}
-                  <div className="relative p-8">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                      {/* Lessons Completed */}
-                      <div className="group will-change-transform hover:-translate-y-1 transition-all duration-300">
-                        <div className="text-center p-6 rounded-2xl bg-gradient-to-br from-roman-green/10 to-emerald-100/5 border border-roman-green/20 hover:border-roman-green/30 transition-all duration-300">
-                          <div className="relative h-16 w-16 bg-gradient-to-br from-roman-green/20 to-emerald-100/10 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg">
-                            <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-2xl"></div>
-                            <BookOpen className="h-8 w-8 text-roman-green drop-shadow-lg relative" />
-                          </div>
-                          <div className="text-5xl font-serif font-bold text-transparent bg-clip-text bg-gradient-to-r from-roman-green to-emerald-600 mb-2">
-                            8
-                          </div>
-                          <div className="text-lg text-roman-stone font-medium">Lessons Completed</div>
-                        </div>
-                      </div>
-
-                      {/* Words Learned */}
-                      <div className="group will-change-transform hover:-translate-y-1 transition-all duration-300">
-                        <div className="text-center p-6 rounded-2xl bg-gradient-to-br from-roman-gold/10 to-amber-100/5 border border-roman-gold/20 hover:border-roman-gold/30 transition-all duration-300">
-                          <div className="relative h-16 w-16 bg-gradient-to-br from-roman-gold/20 to-amber-100/10 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg">
-                            <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-2xl"></div>
-                            <BookOpen className="h-8 w-8 text-roman-gold drop-shadow-lg relative" />
-                          </div>
-                          <div className="text-5xl font-serif font-bold text-transparent bg-clip-text bg-gradient-to-r from-roman-gold to-amber-600 mb-2">
-                            245
-                          </div>
-                          <div className="text-lg text-roman-stone font-medium">Words Learned</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
             </section>
           </div>
         </main>

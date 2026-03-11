@@ -8,8 +8,11 @@ import { Toaster } from '@/src/components/ui/sonner';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Next.js Fullstack Boilerplate',
-  description: 'A production-ready starter template for Next.js applications',
+  title: {
+    default: 'Wake Forest University Latin',
+    template: '%s | Wake Forest University Latin',
+  },
+  description: 'Learn Latin through modern, interactive lessons at WakeForest University',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

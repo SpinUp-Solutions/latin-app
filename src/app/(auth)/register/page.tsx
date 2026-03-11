@@ -10,6 +10,7 @@ import { Input } from '@/src/components/ui/input';
 import { toast } from 'sonner';
 import { doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { Loader2, CalendarIcon } from 'lucide-react';
+import Image from 'next/image';
 import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { useAuth } from '@/src/hooks/useAuth';
 import { Calendar } from '@/src/components/ui/calendar';
@@ -97,18 +98,25 @@ export default function RegisterPage() {
 
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
 
-      await setDoc(doc(db, 'users', userCredential.user.uid), {
-        uid: userCredential.user.uid,
-        email,
-        role: 'student',
-        username: username.toLowerCase(),
-        firstName,
-        lastName,
-        dateOfBirth: dateOfBirth?.toISOString().split('T')[0] ?? '',
-        createdAt: new Date().toISOString(),
-      });
+      try {
+        await setDoc(doc(db, 'users', userCredential.user.uid), {
+          uid: userCredential.user.uid,
+          email,
+          role: 'student',
+          username: username.toLowerCase(),
+          firstName,
+          lastName,
+          dateOfBirth: dateOfBirth?.toISOString().split('T')[0] ?? '',
+          createdAt: new Date().toISOString(),
+        });
+      } catch (firestoreError) {
+        // Rollback: delete the auth user so they can retry registration
+        await userCredential.user.delete();
+        throw firestoreError;
+      }
 
-      toast.success('Account created! Please wait while we redirect you.');
+      toast.success('Account created!');
+      router.replace('/dashboard');
     } catch (error: unknown) {
       console.error('Registration error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to create account. Please try again.';
@@ -132,6 +140,13 @@ export default function RegisterPage() {
         <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-secondary/20 blur-3xl -z-10 transform rotate-45"></div>
         <RomanCard className="shadow-xl">
           <RomanCardHeader className="space-y-1 text-center">
+            <Image
+              src="/assets/logos/wakeforest.png"
+              alt="Wake Forest University"
+              width={160}
+              height={100}
+              className="w-32 h-auto mx-auto mb-2"
+            />
             <h2 className="text-2xl font-bold font-serif">Create an account</h2>
             <p className="text-muted-foreground">Sign up to get started with our platform</p>
           </RomanCardHeader>
