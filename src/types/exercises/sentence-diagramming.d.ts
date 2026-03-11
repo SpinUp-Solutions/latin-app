@@ -19,8 +19,8 @@ export type DiagramMarkType =
   | 'genitive-bold'
   | 'shared-italic'
   | 'vocative-v'
-  | 'text-blue'
-  | 'text-red'
+  | 'passive'
+  | 'compound'
   | 'prepositional-parentheses'
   | 'subordinate-brackets';
 

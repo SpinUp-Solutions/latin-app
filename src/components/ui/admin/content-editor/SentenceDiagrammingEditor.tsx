@@ -13,7 +13,8 @@ import { SimpleRichEditor } from '../../core/simple-rich-editor';
 import {
   buildDiagrammingContent,
   DEFAULT_STUDENT_DIAGRAM_TOOLS,
-  DIAGRAM_MARK_DEFINITIONS,
+  DIAGRAM_MARK_DEFINITION_BY_TYPE,
+  DIAGRAM_TOOL_GROUPS,
   ensureDiagrammingContent,
   tokenizeSentence,
 } from '@/src/utils/sentenceDiagramming';
@@ -174,18 +175,29 @@ export const SentenceDiagrammingEditor: React.FC = () => {
           <div className="text-sm text-gray-600">
             Choose which annotation tools the student can use for this exercise.
           </div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {DIAGRAM_MARK_DEFINITIONS.map(definition => (
-              <label
-                key={definition.type}
-                className="flex items-center gap-2 rounded border border-gray-200 px-3 py-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={availableStudentTools.includes(definition.type)}
-                  onChange={() => handleAvailableToolToggle(definition.type)}
-                />
-                <span>{definition.title}</span>
-              </label>
+          <div className="space-y-4">
+            {DIAGRAM_TOOL_GROUPS.map(group => (
+              <div key={group.title} className="space-y-2">
+                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">{group.title}</div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {group.tools.map(tool => {
+                    const definition = DIAGRAM_MARK_DEFINITION_BY_TYPE[tool];
+
+                    return (
+                      <label
+                        key={definition.type}
+                        className="flex items-center gap-2 rounded border border-gray-200 px-3 py-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={availableStudentTools.includes(definition.type)}
+                          onChange={() => handleAvailableToolToggle(definition.type)}
+                        />
+                        <span>{definition.title}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
             ))}
           </div>
         </div>

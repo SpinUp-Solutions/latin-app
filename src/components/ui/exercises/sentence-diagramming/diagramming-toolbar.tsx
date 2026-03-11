@@ -2,6 +2,7 @@ import React from 'react';
 import { Editor } from '@tiptap/react';
 import { MessageSquare, Redo, RotateCcw, Undo } from 'lucide-react';
 import { DiagramToolKey } from '@/src/types/exercises/sentence-diagramming';
+import { DIAGRAM_TOOL_GROUPS } from '@/src/utils/sentenceDiagramming';
 
 interface DiagrammingToolbarProps {
   editor: Editor;
@@ -19,56 +20,86 @@ interface DiagramToolbarItem {
   label: string;
   markName: string;
   className?: string;
+  swatchClassName?: string;
+  title?: string;
 }
 
-const TOOL_GROUPS: Array<{ title: string; items: DiagramToolbarItem[] }> = [
-  {
-    title: 'Verbal Forms',
-    items: [
-      { type: 'verb-circle', label: 'Single Circle', markName: 'verbCircle' },
-      { type: 'infinitive-double-circle', label: 'Double Circle', markName: 'infinitiveDoubleCircle' },
-      { type: 'participle-box', label: 'Box', markName: 'participleBox' },
-    ],
+const TOOL_METADATA: Record<DiagramToolKey, DiagramToolbarItem> = {
+  'subordinate-brackets': {
+    label: 'Subord. Clause',
+    markName: 'subordinateBrackets',
+    title: 'Subordinate clause (brackets)',
   },
-  {
-    title: 'Case Lines',
-    items: [
-      { type: 'nominative-underline', label: 'Single Underline', markName: 'nominativeUnderline' },
-      { type: 'accusative-double-underline', label: 'Double Underline', markName: 'accusativeDoubleUnderline' },
-      { type: 'predicate-nominative-squiggle', label: 'Single Squiggle', markName: 'predicateNominativeSquiggle' },
-      {
-        type: 'predicate-accusative-double-squiggle',
-        label: 'Double Squiggle',
-        markName: 'predicateAccusativeDoubleSquiggle',
-      },
-      { type: 'vocative-v', label: 'V', markName: 'vocativeV' },
-    ],
+  'prepositional-parentheses': {
+    label: 'Prep. Phrase',
+    markName: 'prepositionalParentheses',
+    title: 'Prepositional phrase (parentheses)',
   },
-  {
-    title: 'Text',
-    items: [
-      { type: 'genitive-bold', label: 'Bold', markName: 'genitiveBold' },
-      { type: 'shared-italic', label: 'Italic', markName: 'sharedItalic' },
-      { type: 'text-blue', label: 'Blue', markName: 'textBlue', className: 'text-blue-700' },
-      { type: 'text-red', label: 'Red', markName: 'textRed', className: 'text-red-700' },
-    ],
+  'verb-circle': {
+    label: 'Verb',
+    markName: 'verbCircle',
+    title: 'Verb (single yellow circle)',
   },
-  {
-    title: 'Grouping',
-    items: [
-      {
-        type: 'prepositional-parentheses',
-        label: '( ... )',
-        markName: 'prepositionalParentheses',
-      },
-      {
-        type: 'subordinate-brackets',
-        label: '[ ... ]',
-        markName: 'subordinateBrackets',
-      },
-    ],
+  'infinitive-double-circle': {
+    label: 'Infinitive',
+    markName: 'infinitiveDoubleCircle',
+    title: 'Infinitive (double yellow circle)',
   },
-];
+  'participle-box': {
+    label: 'Participle',
+    markName: 'participleBox',
+    title: 'Participle / participial phrase (yellow box)',
+  },
+  passive: {
+    label: 'Passive',
+    markName: 'passive',
+    className: 'border-blue-300 bg-blue-50 text-blue-800',
+    swatchClassName: 'bg-blue-600',
+    title: 'Passive (blue text)',
+  },
+  compound: {
+    label: 'Compound',
+    markName: 'compound',
+    className: 'border-red-300 bg-red-50 text-red-800',
+    swatchClassName: 'bg-red-600',
+    title: 'Compound / periphrastic (red text)',
+  },
+  'nominative-underline': {
+    label: 'Nominative',
+    markName: 'nominativeUnderline',
+    title: 'Nominative (single underline)',
+  },
+  'accusative-double-underline': {
+    label: 'Accusative',
+    markName: 'accusativeDoubleUnderline',
+    title: 'Accusative (double underline)',
+  },
+  'predicate-nominative-squiggle': {
+    label: 'Predicate Nom.',
+    markName: 'predicateNominativeSquiggle',
+    title: 'Predicate nominative (single squiggle)',
+  },
+  'predicate-accusative-double-squiggle': {
+    label: 'Predicate Acc.',
+    markName: 'predicateAccusativeDoubleSquiggle',
+    title: 'Predicate accusative (double squiggle)',
+  },
+  'genitive-bold': {
+    label: 'Genitive',
+    markName: 'genitiveBold',
+    title: 'Genitive (bold)',
+  },
+  'vocative-v': {
+    label: 'Vocative',
+    markName: 'vocativeV',
+    title: 'Vocative (superimposed V)',
+  },
+  'shared-italic': {
+    label: 'Conj./Adv./Interj.',
+    markName: 'sharedItalic',
+    title: 'Conjunction / adverb / interjection (italic)',
+  },
+};
 
 const buttonClass = (isActive: boolean, disabled: boolean, customClass?: string) => {
   const baseClass = [
@@ -95,9 +126,12 @@ export const DiagrammingToolbar: React.FC<DiagrammingToolbarProps> = ({
   availableTools,
 }) => {
   const visibleTools = new Set(availableTools);
-  const visibleGroups = TOOL_GROUPS.map(group => ({
+  const visibleGroups = DIAGRAM_TOOL_GROUPS.map(group => ({
     ...group,
-    items: availableTools ? group.items.filter(item => visibleTools.has(item.type)) : group.items,
+    items: (availableTools ? group.tools.filter(tool => visibleTools.has(tool)) : group.tools).map(tool => ({
+      type: tool,
+      ...TOOL_METADATA[tool],
+    })),
   })).filter(group => group.items.length > 0);
 
   return (
@@ -113,8 +147,13 @@ export const DiagrammingToolbar: React.FC<DiagrammingToolbarProps> = ({
                 disabled={disabled}
                 onClick={() => onAnnotationClick(item.type)}
                 className={buttonClass(editor.isActive(item.markName), disabled, item.className)}
-                title={item.label}>
-                {item.label}
+                title={item.title || item.label}>
+                <span className="flex items-center gap-1.5">
+                  {item.swatchClassName ? (
+                    <span className={`h-2.5 w-2.5 rounded-full ${item.swatchClassName}`} />
+                  ) : null}
+                  <span>{item.label}</span>
+                </span>
               </button>
             ))}
           </div>
@@ -124,14 +163,14 @@ export const DiagrammingToolbar: React.FC<DiagrammingToolbarProps> = ({
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <div className="w-32 text-xs font-semibold uppercase tracking-wide text-gray-500">Tools</div>
         <div className="flex flex-wrap gap-2">
-          {visibleTools.has('text-blue') || visibleTools.has('text-red') || !availableTools ? (
+          {visibleTools.has('passive') || visibleTools.has('compound') || !availableTools ? (
             <button
               type="button"
               disabled={disabled}
               onClick={onResetTextColors}
               className={buttonClass(false, disabled)}
-              title="Reset text color">
-              Black
+              title="Reset passive / compound color">
+              Reset Color
             </button>
           ) : null}
 

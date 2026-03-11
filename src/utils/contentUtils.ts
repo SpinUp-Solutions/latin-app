@@ -13,8 +13,8 @@ export const stripAdminAnnotations = (htmlContent: string): string => {
     '[data-genitive-bold="true"]',
     '[data-shared-italic="true"]',
     '[data-vocative-v="true"]',
-    '[data-text-blue="true"]',
-    '[data-text-red="true"]',
+    '[data-passive="true"]',
+    '[data-compound="true"]',
     '[data-prepositional-parentheses="true"]',
     '[data-subordinate-brackets="true"]',
   ];

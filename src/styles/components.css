@@ -54,8 +54,8 @@
 .sentence-diagramming-canvas span[data-genitive-bold],
 .sentence-diagramming-canvas span[data-shared-italic],
 .sentence-diagramming-canvas span[data-vocative-v],
-.sentence-diagramming-canvas span[data-text-blue],
-.sentence-diagramming-canvas span[data-text-red],
+.sentence-diagramming-canvas span[data-passive],
+.sentence-diagramming-canvas span[data-compound],
 .sentence-diagramming-canvas span[data-prepositional-parentheses],
 .sentence-diagramming-canvas span[data-subordinate-brackets],
 .sentence-diagramming-exercise-content span[data-verb-circle],
@@ -68,8 +68,8 @@
 .sentence-diagramming-exercise-content span[data-genitive-bold],
 .sentence-diagramming-exercise-content span[data-shared-italic],
 .sentence-diagramming-exercise-content span[data-vocative-v],
-.sentence-diagramming-exercise-content span[data-text-blue],
-.sentence-diagramming-exercise-content span[data-text-red],
+.sentence-diagramming-exercise-content span[data-passive],
+.sentence-diagramming-exercise-content span[data-compound],
 .sentence-diagramming-exercise-content span[data-prepositional-parentheses],
 .sentence-diagramming-exercise-content span[data-subordinate-brackets] {
   cursor: pointer;
@@ -124,12 +124,15 @@
 }
 
 .diagram-predicate-accusative-double-squiggle {
-  background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='4' viewBox='0 0 12 4'%3E%3Cpath d='M0 3 C2 1 4 1 6 3 S10 5 12 3' fill='none' stroke='%23111827' stroke-width='1.5'/%3E%3C/svg%3E"),
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='4' viewBox='0 0 12 4'%3E%3Cpath d='M0 3 C2 1 4 1 6 3 S10 5 12 3' fill='none' stroke='%23111827' stroke-width='1.5'/%3E%3C/svg%3E"),
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='4' viewBox='0 0 12 4'%3E%3Cpath d='M0 3 C2 1 4 1 6 3 S10 5 12 3' fill='none' stroke='%23111827' stroke-width='1.5'/%3E%3C/svg%3E");
   background-repeat: repeat-x, repeat-x;
-  background-position: left calc(100% - 1px), left calc(100% - 5px);
-  background-size: 12px 4px, 12px 4px;
+  background-position:
+    left calc(100% - 1px),
+    left calc(100% - 5px);
+  background-size:
+    12px 4px,
+    12px 4px;
   padding-bottom: 10px;
 }
 
@@ -157,36 +160,32 @@
   line-height: 1;
 }
 
-.diagram-text-blue {
+.diagram-passive,
+.diagram-passive .diagram-word-token {
   color: #2563eb;
 }
 
-.diagram-text-red {
+.diagram-compound,
+.diagram-compound .diagram-word-token {
   color: #dc2626;
 }
 
-/* Preposition parentheses */
-.diagram-prepositional-parentheses::before {
-  content: '(';
+.diagram-prepositional-parentheses,
+.diagram-subordinate-brackets {
+  display: inline;
+  margin: 0;
+}
+
+.diagram-group-boundary {
+  display: inline;
+  font-weight: 700;
+  user-select: none;
+}
+
+.diagram-group-boundary-parentheses {
   color: #92400e;
-  font-weight: bold;
 }
 
-.diagram-prepositional-parentheses::after {
-  content: ')';
-  color: #92400e;
-  font-weight: bold;
-}
-
-/* Subordination brackets */
-.diagram-subordinate-brackets::before {
-  content: '[';
+.diagram-group-boundary-brackets {
   color: #1e40af;
-  font-weight: bold;
-}
-
-.diagram-subordinate-brackets::after {
-  content: ']';
-  color: #1e40af;
-  font-weight: bold;
 }

@@ -1,5 +1,5 @@
 import { Editor } from '@tiptap/react';
-import { Node } from '@tiptap/pm/model';
+import { Mark, Node } from '@tiptap/pm/model';
 import {
   AnnotationType,
   DiagramMarkType,
@@ -17,6 +17,11 @@ export interface DiagramMarkDefinition {
   className: string;
   title: string;
   exclusiveGroup?: DiagramExclusiveGroup;
+}
+
+export interface DiagramToolGroup {
+  title: string;
+  tools: DiagramToolKey[];
 }
 
 export const WORD_TOKEN_MARK_NAME = 'diagramWordToken';
@@ -101,19 +106,19 @@ export const DIAGRAM_MARK_DEFINITIONS: DiagramMarkDefinition[] = [
     title: 'Vocative',
   },
   {
-    type: 'text-blue',
-    markName: 'textBlue',
-    dataAttribute: 'data-text-blue',
-    className: 'diagram-text-blue',
-    title: 'Blue Text',
+    type: 'passive',
+    markName: 'passive',
+    dataAttribute: 'data-passive',
+    className: 'diagram-passive',
+    title: 'Passive',
     exclusiveGroup: 'color',
   },
   {
-    type: 'text-red',
-    markName: 'textRed',
-    dataAttribute: 'data-text-red',
-    className: 'diagram-text-red',
-    title: 'Red Text',
+    type: 'compound',
+    markName: 'compound',
+    dataAttribute: 'data-compound',
+    className: 'diagram-compound',
+    title: 'Compound / Periphrastic',
     exclusiveGroup: 'color',
   },
   {
@@ -132,11 +137,35 @@ export const DIAGRAM_MARK_DEFINITIONS: DiagramMarkDefinition[] = [
   },
 ];
 
-export const DEFAULT_STUDENT_DIAGRAM_TOOLS: DiagramToolKey[] = DIAGRAM_MARK_DEFINITIONS.map(
-  definition => definition.type
-);
+export const DIAGRAM_TOOL_GROUPS: DiagramToolGroup[] = [
+  {
+    title: 'Clause Structure',
+    tools: ['subordinate-brackets', 'prepositional-parentheses'],
+  },
+  {
+    title: 'Verbal System',
+    tools: ['verb-circle', 'infinitive-double-circle', 'participle-box', 'passive', 'compound'],
+  },
+  {
+    title: 'Case Functions',
+    tools: [
+      'nominative-underline',
+      'accusative-double-underline',
+      'predicate-nominative-squiggle',
+      'predicate-accusative-double-squiggle',
+      'genitive-bold',
+      'vocative-v',
+    ],
+  },
+  {
+    title: 'Function Words',
+    tools: ['shared-italic'],
+  },
+];
 
-const DIAGRAM_MARK_DEFINITION_BY_TYPE = Object.fromEntries(
+export const DEFAULT_STUDENT_DIAGRAM_TOOLS: DiagramToolKey[] = DIAGRAM_TOOL_GROUPS.flatMap(group => group.tools);
+
+export const DIAGRAM_MARK_DEFINITION_BY_TYPE = Object.fromEntries(
   DIAGRAM_MARK_DEFINITIONS.map(definition => [definition.type, definition])
 ) as Record<DiagramMarkType, DiagramMarkDefinition>;
 
@@ -317,12 +346,82 @@ export const extractDiagramMarksFromEditor = (editor: Editor): DiagramSelectionM
   return normalizeDiagramMarks(extracted);
 };
 
+const hasMarkType = (editor: Editor, markName: string) => Boolean(editor.state.schema.marks[markName]);
+
+const selectionHasExactMark = (editor: Editor, markName: string, markId: string) => {
+  const { from, to } = editor.state.selection;
+  let foundWordToken = false;
+  let exactMarkOnSelection = true;
+
+  editor.state.doc.nodesBetween(from, to, (node: Node, pos: number) => {
+    if (!node.isText || pos >= to || pos + node.nodeSize <= from) {
+      return;
+    }
+
+    const isWordTokenText = node.marks.some(mark => mark.type.name === WORD_TOKEN_MARK_NAME);
+    if (!isWordTokenText) {
+      return;
+    }
+
+    foundWordToken = true;
+
+    const hasExactMark = node.marks.some(mark => mark.type.name === markName && mark.attrs.id === markId);
+    if (!hasExactMark) {
+      exactMarkOnSelection = false;
+      return false;
+    }
+  });
+
+  return foundWordToken && exactMarkOnSelection;
+};
+
+const unsetExactMark = (
+  editor: Editor,
+  markName: string,
+  attrs: {
+    id: string;
+    wordIds: string[];
+    startWordIndex: number;
+    endWordIndex: number;
+  }
+) => {
+  const removals: Array<{ from: number; to: number; mark: Mark }> = [];
+
+  editor.state.doc.nodesBetween(0, editor.state.doc.content.size, (node: Node, pos: number) => {
+    if (!node.isText) {
+      return;
+    }
+
+    node.marks.forEach(mark => {
+      if (mark.type.name === markName && mark.attrs.id === attrs.id) {
+        removals.push({
+          from: pos,
+          to: pos + node.nodeSize,
+          mark,
+        });
+      }
+    });
+  });
+
+  if (removals.length === 0) {
+    return;
+  }
+
+  const transaction = removals.reduce(
+    (tr, removal) => tr.removeMark(removal.from, removal.to, removal.mark),
+    editor.state.tr
+  );
+
+  editor.view.dispatch(transaction);
+  editor.commands.focus();
+};
+
 const unsetExclusiveMarks = (editor: Editor, definition: DiagramMarkDefinition) => {
   const group = definition.exclusiveGroup ? DIAGRAM_EXCLUSIVE_GROUPS[definition.exclusiveGroup] : [];
   let chain = editor.chain().focus();
 
   group.forEach(groupDefinition => {
-    if (groupDefinition.markName !== definition.markName) {
+    if (groupDefinition.markName !== definition.markName && hasMarkType(editor, groupDefinition.markName)) {
       chain = chain.unsetMark(groupDefinition.markName);
     }
   });
@@ -335,6 +434,10 @@ export const handleAnnotationClick = (editor: Editor, annotationType: Annotation
     return;
   }
 
+  if (!hasMarkType(editor, DIAGRAM_MARK_DEFINITION_BY_TYPE[annotationType].markName)) {
+    return;
+  }
+
   const selectionRange = getSelectionWordRange(editor);
   if (!selectionRange) {
     alert('Please select one or more words to annotate');
@@ -342,19 +445,22 @@ export const handleAnnotationClick = (editor: Editor, annotationType: Annotation
   }
 
   const definition = DIAGRAM_MARK_DEFINITION_BY_TYPE[annotationType];
-  const isActive = editor.isActive(definition.markName);
-
-  if (isActive) {
-    editor.chain().focus().unsetMark(definition.markName).run();
-    return;
-  }
-
+  const markId = createDiagramSelectionMarkId(
+    annotationType,
+    selectionRange.startWordIndex,
+    selectionRange.endWordIndex
+  );
   const attrs = {
-    id: createDiagramSelectionMarkId(annotationType, selectionRange.startWordIndex, selectionRange.endWordIndex),
+    id: markId,
     wordIds: selectionRange.wordIds,
     startWordIndex: selectionRange.startWordIndex,
     endWordIndex: selectionRange.endWordIndex,
   };
+
+  if (selectionHasExactMark(editor, definition.markName, markId)) {
+    unsetExactMark(editor, definition.markName, attrs);
+    return;
+  }
 
   unsetExclusiveMarks(editor, definition).setMark(definition.markName, attrs).run();
 };
@@ -364,7 +470,17 @@ export const handleResetTextColors = (editor: Editor, isDisabled?: boolean) => {
     return;
   }
 
-  editor.chain().focus().unsetMark('textBlue').unsetMark('textRed').run();
+  let chain = editor.chain().focus();
+
+  if (hasMarkType(editor, 'passive')) {
+    chain = chain.unsetMark('passive');
+  }
+
+  if (hasMarkType(editor, 'compound')) {
+    chain = chain.unsetMark('compound');
+  }
+
+  chain.run();
 };
 
 export const handleClearAnnotations = (editor: Editor) => {
@@ -375,7 +491,9 @@ export const handleClearAnnotations = (editor: Editor) => {
   let chain = editor.chain().focus().selectAll();
 
   DIAGRAM_MARK_DEFINITIONS.forEach(definition => {
-    chain = chain.unsetMark(definition.markName);
+    if (hasMarkType(editor, definition.markName)) {
+      chain = chain.unsetMark(definition.markName);
+    }
   });
 
   chain.run();
