@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Badge } from '@/src/components/ui/badge';
 import {
@@ -12,10 +12,11 @@ import {
 import { Input } from '@/src/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { Card, CardContent } from '@/src/components/ui/card';
-import { Library, Search } from 'lucide-react';
+import { Library, Loader2, Search } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import Link from 'next/link';
 import { useGetPoolsQuery, useGetPoolQuery } from '@/src/store/api/vocabularyPoolApi';
+import { useInfiniteScroll } from '@/src/hooks/useInfiniteScroll';
 import type { VocabularyPool } from '@/src/types/vocabulary-pool';
 
 interface VocabularyPoolSelectorProps {
@@ -31,12 +32,26 @@ export const VocabularyPoolSelector: React.FC<VocabularyPoolSelectorProps> = ({
 }) => {
   const [difficulty, setDifficulty] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [lastPoolId, setLastPoolId] = useState<string | null>(null);
   const filters = { search: searchQuery || undefined, difficulty, isActive: true as boolean | null };
-  const { data, isLoading: loading } = useGetPoolsQuery({ filters });
+  const { data, isLoading, isFetching } = useGetPoolsQuery({ filters, lastPoolId });
   const pools = data?.pools ?? [];
+  const hasMore = data?.hasMore ?? false;
+  const loadingMore = isFetching && lastPoolId !== null;
   const { data: directPool } = useGetPoolQuery(selectedPoolId!, { skip: !selectedPoolId });
   const [selectedPool, setSelectedPool] = useState<VocabularyPool | null>(null);
   const [showPoolPicker, setShowPoolPicker] = useState(false);
+
+  const handleLoadMore = useCallback(() => {
+    if (data?.lastPoolId) setLastPoolId(data.lastPoolId);
+  }, [data?.lastPoolId]);
+
+  const sentinelRef = useInfiniteScroll({
+    onLoadMore: handleLoadMore,
+    hasMore,
+    loading: loadingMore,
+    rootMargin: '200px',
+  });
 
   useEffect(() => {
     if (selectedPoolId && directPool) {
@@ -45,6 +60,10 @@ export const VocabularyPoolSelector: React.FC<VocabularyPoolSelectorProps> = ({
       setSelectedPool(null);
     }
   }, [selectedPoolId, directPool]);
+
+  useEffect(() => {
+    setLastPoolId(null);
+  }, [searchQuery, difficulty]);
 
   return (
     <div className="space-y-4">
@@ -128,7 +147,7 @@ export const VocabularyPoolSelector: React.FC<VocabularyPoolSelectorProps> = ({
 
             {/* Pool List */}
             <div className="max-h-96 overflow-y-auto">
-              {loading ? (
+              {isLoading ? (
                 <div className="text-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red mx-auto mb-2" />
                   Loading pools...
@@ -172,6 +191,16 @@ export const VocabularyPoolSelector: React.FC<VocabularyPoolSelectorProps> = ({
                       </CardContent>
                     </Card>
                   ))}
+                  {(hasMore || loadingMore) && (
+                    <div ref={sentinelRef} className="col-span-full flex justify-center py-4">
+                      {loadingMore && (
+                        <div className="flex items-center gap-2 text-gray-600">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>Loading more pools...</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

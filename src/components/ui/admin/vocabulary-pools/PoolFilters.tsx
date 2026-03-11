@@ -55,7 +55,6 @@ export const PoolFilters: React.FC<PoolFiltersProps> = ({ filters, onFiltersChan
               value={filters.search}
               onChange={e => onFiltersChange({ search: e.target.value })}
               className="pl-10"
-              disabled={loading}
             />
           </div>
 

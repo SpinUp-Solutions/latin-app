@@ -234,6 +234,10 @@ export const advancedVocabularyApi = createApi({
               params.append('select', selectFields.join(','));
             }
 
+            // Signal exercise mode so the API adds root_word/selected_form
+            // even for POS types without a tableType (e.g. prepositions)
+            params.append('exerciseMode', 'true');
+
             if (wordSource === 'pool' && poolId) {
               params.append('poolId', poolId);
             } else {
@@ -345,6 +349,10 @@ export const advancedVocabularyApi = createApi({
             if (selectFields.length > 0) {
               params.append('select', selectFields.join(','));
             }
+
+            // Signal exercise mode so the API adds root_word/selected_form
+            // even for POS types without a tableType (e.g. prepositions)
+            params.append('exerciseMode', 'true');
 
             if (wordSource === 'pool' && poolId) {
               params.append('poolId', poolId);
