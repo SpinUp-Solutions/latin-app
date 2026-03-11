@@ -8,19 +8,34 @@ export interface SentenceWord {
   endPosition: number;
 }
 
-export type AnnotationType =
-  | 'preposition'
-  | 'subordination'
+export type DiagramMarkType =
   | 'verb-circle'
-  | 'subject-underline'
-  | 'direct-object-underline'
-  | 'indirect-object-bracket'
-  | 'genitive-arrow'
-  | 'genitive-arrow-target'
-  | 'ablative-phrase';
+  | 'infinitive-double-circle'
+  | 'participle-box'
+  | 'nominative-underline'
+  | 'accusative-double-underline'
+  | 'predicate-nominative-squiggle'
+  | 'predicate-accusative-double-squiggle'
+  | 'genitive-bold'
+  | 'shared-italic'
+  | 'vocative-v'
+  | 'text-blue'
+  | 'text-red'
+  | 'prepositional-parentheses'
+  | 'subordinate-brackets';
+
+export type DiagramToolKey = DiagramMarkType;
+export type AnnotationType = DiagramToolKey;
+
+export interface DiagramSelectionMark {
+  id: string;
+  type: DiagramMarkType;
+  startWordIndex: number;
+  endWordIndex: number;
+}
 
 export interface SentenceDiagrammingSolution {
-  annotations: Record<string, AnnotationType>;
+  marks: DiagramSelectionMark[];
 }
 
 export interface SentenceDiagrammingExercise extends BaseExercise {
@@ -33,6 +48,7 @@ export interface SentenceDiagrammingExercise extends BaseExercise {
       content?: string;
     };
     solution: SentenceDiagrammingSolution;
+    availableStudentTools: DiagramToolKey[];
     hints: string[];
     difficulty: 'beginner' | 'intermediate' | 'advanced';
   };
