@@ -15,8 +15,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let docTimeout: ReturnType<typeof setTimeout> | null = null;
 
     const cleanupDoc = () => {
-      if (unsubDoc) { unsubDoc(); unsubDoc = null; }
-      if (docTimeout) { clearTimeout(docTimeout); docTimeout = null; }
+      if (unsubDoc) {
+        unsubDoc();
+        unsubDoc = null;
+      }
+      if (docTimeout) {
+        clearTimeout(docTimeout);
+        docTimeout = null;
+      }
     };
 
     const unsubAuth = onAuthStateChanged(auth, firebaseUser => {
@@ -27,7 +33,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // the Firestore user doc is created (fixes race during registration
         // where onAuthStateChanged fires before the doc is written).
         unsubDoc = onSnapshot(doc(db, 'users', firebaseUser.uid), snapshot => {
-          if (docTimeout) { clearTimeout(docTimeout); docTimeout = null; }
+          if (docTimeout) {
+            clearTimeout(docTimeout);
+            docTimeout = null;
+          }
 
           const rawData = snapshot.data();
           if (!rawData) {

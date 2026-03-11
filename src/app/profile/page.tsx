@@ -3,11 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { doc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import {
-  updatePassword,
-  EmailAuthProvider,
-  reauthenticateWithCredential,
-} from 'firebase/auth';
+import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { auth, db } from '@/src/services/firebase';
 import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
@@ -208,13 +204,7 @@ export default function ProfilePage() {
             <form onSubmit={handleSaveProfile} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={user.email ?? ''}
-                  disabled
-                  className="bg-muted"
-                />
+                <Input id="email" type="email" value={user.email ?? ''} disabled className="bg-muted" />
               </div>
 
               <div className="space-y-2">

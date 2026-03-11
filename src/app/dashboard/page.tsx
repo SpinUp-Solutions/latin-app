@@ -183,40 +183,6 @@ export default function DashboardPage() {
     }
   };
 
-  const handleResetProgress = async () => {
-    if (!user?.uid) return;
-
-    try {
-      const currentUser = auth.currentUser;
-      if (!currentUser) {
-        toast.error('User not authenticated');
-        return;
-      }
-
-      const token = await currentUser.getIdToken();
-      const response = await fetch('/api/dev/reset-progress', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ userId: user.uid }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        window.location.reload();
-        toast.success(`Progress reset successfully! Deleted ${data.deletedCount || 0} records`);
-      } else {
-        toast.error(`Reset failed: ${data.error}`);
-      }
-    } catch (error) {
-      console.error('Reset progress error:', error);
-      toast.error('Failed to reset progress');
-    }
-  };
-
   if (loading || !user || lessonsLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-roman-marble">
@@ -261,7 +227,7 @@ export default function DashboardPage() {
               <User className="h-5 w-5 mr-2" />
               Profile
             </Button>
-<Button
+            <Button
               onClick={handleSignOut}
               size="lg"
               className="bg-gradient-to-r from-gray-900 to-gray-800 hover:from-gray-800 hover:to-gray-700 text-white px-8 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5 hover:scale-105">
