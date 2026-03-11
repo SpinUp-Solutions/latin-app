@@ -24,7 +24,9 @@ interface DiagramToolbarItem {
   title?: string;
 }
 
-const TOOL_METADATA: Record<DiagramToolKey, DiagramToolbarItem> = {
+type DiagramToolbarMetadata = Omit<DiagramToolbarItem, 'type'>;
+
+const TOOL_METADATA: Record<DiagramToolKey, DiagramToolbarMetadata> = {
   'subordinate-brackets': {
     label: 'Subord. Clause',
     markName: 'subordinateBrackets',
