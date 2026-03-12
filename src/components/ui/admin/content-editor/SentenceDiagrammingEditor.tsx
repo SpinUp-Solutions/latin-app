@@ -1,11 +1,23 @@
 import React from 'react';
-import { SentenceWord, AnnotationType, SentenceDiagrammingExercise } from '@/src/types/exercises/sentence-diagramming';
+import {
+  DiagramSelectionMark,
+  DiagramToolKey,
+  SentenceDiagrammingExercise,
+} from '@/src/types/exercises/sentence-diagramming';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonEditorSlice';
 import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
 import { DiagrammingEditor } from '../../core/DiagrammingEditor';
 import { SimpleRichEditor } from '../../core/simple-rich-editor';
+import {
+  buildDiagrammingContent,
+  DEFAULT_STUDENT_DIAGRAM_TOOLS,
+  DIAGRAM_MARK_DEFINITION_BY_TYPE,
+  DIAGRAM_TOOL_GROUPS,
+  ensureDiagrammingContent,
+  tokenizeSentence,
+} from '@/src/utils/sentenceDiagramming';
 
 export const SentenceDiagrammingEditor: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -16,6 +28,8 @@ export const SentenceDiagrammingEditor: React.FC = () => {
   if (!editingContent) {
     return <div>No content selected for editing</div>;
   }
+
+  const availableStudentTools = editingContent.data.availableStudentTools || DEFAULT_STUDENT_DIAGRAM_TOOLS;
 
   const updateContent = (updates: Partial<SentenceDiagrammingExercise>) => {
     const updatedContent = { ...editingContent, ...updates };
@@ -49,21 +63,34 @@ export const SentenceDiagrammingEditor: React.FC = () => {
 
   const handleLatinChange = (latin: string) => {
     const words = tokenizeSentence(latin);
-    handleSentenceChange({
-      latin,
-      words,
-      content: `<p>${latin}</p>`, // Reset content to plain sentence when text changes
-    });
+    dispatch(
+      updateEditingContent({
+        ...editingContent,
+        data: {
+          ...editingContent.data,
+          sentence: {
+            ...editingContent.data.sentence,
+            latin,
+            words,
+            content: buildDiagrammingContent(words),
+          },
+          solution: {
+            ...editingContent.data.solution,
+            marks: [],
+          },
+        },
+      })
+    );
   };
 
-  const handleAnnotationsAndContentChange = (annotations: Record<string, AnnotationType>, htmlContent: string) => {
+  const handleAnnotationsAndContentChange = (marks: DiagramSelectionMark[], htmlContent: string) => {
     const updatedContent = {
       ...editingContent,
       data: {
         ...editingContent.data,
         solution: {
           ...editingContent.data.solution,
-          annotations: annotations,
+          marks,
         },
         sentence: {
           ...editingContent.data.sentence,
@@ -75,22 +102,13 @@ export const SentenceDiagrammingEditor: React.FC = () => {
     dispatch(updateEditingContent(updatedContent));
   };
 
-  const tokenizeSentence = (latin: string): SentenceWord[] => {
-    const words = latin.split(/\s+/).filter(word => word.trim());
-    let currentPosition = 0;
+  const handleAvailableToolToggle = (tool: DiagramToolKey) => {
+    const nextTools = availableStudentTools.includes(tool)
+      ? availableStudentTools.filter(currentTool => currentTool !== tool)
+      : [...availableStudentTools, tool];
 
-    return words.map((word, index) => {
-      const startPosition = currentPosition;
-      const endPosition = currentPosition + word.length;
-      currentPosition = endPosition + 1;
-
-      return {
-        id: `word-${index}`,
-        text: word,
-        index,
-        startPosition,
-        endPosition,
-      };
+    updateData({
+      availableStudentTools: nextTools,
     });
   };
 
@@ -152,6 +170,40 @@ export const SentenceDiagrammingEditor: React.FC = () => {
       </div>
 
       <div>
+        <label className="block text-sm font-medium mb-2">Student Toolbar</label>
+        <div className="rounded-md border border-gray-200 p-4 space-y-3">
+          <div className="text-sm text-gray-600">
+            Choose which annotation tools the student can use for this exercise.
+          </div>
+          <div className="space-y-4">
+            {DIAGRAM_TOOL_GROUPS.map(group => (
+              <div key={group.title} className="space-y-2">
+                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">{group.title}</div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {group.tools.map(tool => {
+                    const definition = DIAGRAM_MARK_DEFINITION_BY_TYPE[tool];
+
+                    return (
+                      <label
+                        key={definition.type}
+                        className="flex items-center gap-2 rounded border border-gray-200 px-3 py-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={availableStudentTools.includes(definition.type)}
+                          onChange={() => handleAvailableToolToggle(definition.type)}
+                        />
+                        <span>{definition.title}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div>
         <label className="block text-sm font-medium mb-2">Solution Diagram</label>
         <div className="text-sm text-gray-600 mb-2">
           Create the correct annotation solution by selecting text and using the toolbar below:
@@ -159,9 +211,10 @@ export const SentenceDiagrammingEditor: React.FC = () => {
 
         <DiagrammingEditor
           key={editingContent.data.sentence.latin}
-          initialContent={editingContent.data.sentence.content || `<p>${editingContent.data.sentence.latin}</p>`}
-          words={editingContent.data.sentence.words}
-          sentence={editingContent.data.sentence.latin}
+          initialContent={ensureDiagrammingContent(
+            editingContent.data.sentence.content,
+            editingContent.data.sentence.words
+          )}
           onUpdate={handleAnnotationsAndContentChange}
         />
       </div>

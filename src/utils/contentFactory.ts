@@ -1,6 +1,7 @@
 import { RenderableContentItem } from '@/src/types/page';
 import { createDefaultFeedbackConfig, DEFAULT_ITEM_PROGRESSION_DELAY } from './feedbackDefaults';
 import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
+import { buildDiagrammingContent, DEFAULT_STUDENT_DIAGRAM_TOOLS } from './sentenceDiagramming';
 
 export const generateId = (prefix?: string): string => {
   const timestamp = Date.now();
@@ -140,7 +141,31 @@ export const createNewContent = (type: string): RenderableContentItem => {
           words: [],
         },
       };
-    case 'sentence-diagramming':
+    case 'sentence-diagramming': {
+      const defaultWords = [
+        {
+          id: 'word-1',
+          text: 'Marcus',
+          index: 0,
+          startPosition: 0,
+          endPosition: 6,
+        },
+        {
+          id: 'word-2',
+          text: 'puellam',
+          index: 1,
+          startPosition: 7,
+          endPosition: 14,
+        },
+        {
+          id: 'word-3',
+          text: 'videt',
+          index: 2,
+          startPosition: 15,
+          endPosition: 20,
+        },
+      ];
+
       return {
         id: baseId,
         type: 'sentence-diagramming',
@@ -153,33 +178,13 @@ export const createNewContent = (type: string): RenderableContentItem => {
           sentence: {
             latin: 'Marcus puellam videt',
             translation: 'Marcus sees the girl',
-            words: [
-              {
-                id: 'word-1',
-                text: 'Marcus',
-                index: 0,
-                startPosition: 0,
-                endPosition: 6,
-              },
-              {
-                id: 'word-2',
-                text: 'puellam',
-                index: 1,
-                startPosition: 7,
-                endPosition: 14,
-              },
-              {
-                id: 'word-3',
-                text: 'videt',
-                index: 2,
-                startPosition: 15,
-                endPosition: 20,
-              },
-            ],
+            words: defaultWords,
+            content: buildDiagrammingContent(defaultWords),
           },
           solution: {
-            annotations: {},
+            marks: [],
           },
+          availableStudentTools: DEFAULT_STUDENT_DIAGRAM_TOOLS,
           hints: [
             'Start by identifying the verb in the sentence.',
             'Look for the subject - who is doing the action?',
@@ -188,6 +193,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
           difficulty: 'beginner',
         },
       };
+    }
     case 'multiple-choice':
       return {
         id: baseId,

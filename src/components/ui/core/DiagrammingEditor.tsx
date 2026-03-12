@@ -5,33 +5,32 @@ import { useTipTapEditor } from '@/src/hooks/useTipTapEditor';
 import { useTooltipManager } from '@/src/hooks/useTooltipManager';
 import { TooltipEditorDialog } from './tooltip-editor-dialog';
 import { getAdminExtensions, getStudentExtensions } from '@/src/utils/tiptapExtensions';
-import { SentenceWord, AnnotationType } from '@/src/types/exercises/sentence-diagramming';
+import { AnnotationType, DiagramSelectionMark, DiagramToolKey } from '@/src/types/exercises/sentence-diagramming';
 import {
   handleAnnotationClick,
   handleClearAnnotations,
-  extractAnnotationsFromEditor,
+  extractDiagramMarksFromEditor,
+  handleResetTextColors,
 } from '@/src/utils/sentenceDiagramming';
 
 export interface DiagrammingEditorProps {
   initialContent: string;
   isStudentMode?: boolean;
-  words?: SentenceWord[];
-  sentence?: string;
-  onUpdate?: (annotations: Record<string, AnnotationType>, htmlContent: string) => void;
+  onUpdate?: (marks: DiagramSelectionMark[], htmlContent: string) => void;
   onEditorReady?: (editor: Editor) => void;
   disabled?: boolean;
   className?: string;
+  availableTools?: DiagramToolKey[];
 }
 
 export const DiagrammingEditor: React.FC<DiagrammingEditorProps> = ({
   initialContent,
   isStudentMode = false,
-  words = [],
-  sentence = '',
   onUpdate,
   onEditorReady,
   disabled = false,
   className = 'sentence-diagramming-canvas',
+  availableTools,
 }) => {
   const editor = useTipTapEditor({
     extensions: isStudentMode ? getStudentExtensions() : getAdminExtensions(),
@@ -39,8 +38,8 @@ export const DiagrammingEditor: React.FC<DiagrammingEditorProps> = ({
     className,
     onUpdate: onUpdate
       ? (editor, html) => {
-          const annotations = extractAnnotationsFromEditor(editor);
-          onUpdate(annotations, html);
+          const marks = extractDiagramMarksFromEditor(editor);
+          onUpdate(marks, html);
         }
       : undefined,
     onEditorReady,
@@ -58,7 +57,7 @@ export const DiagrammingEditor: React.FC<DiagrammingEditorProps> = ({
 
   const handleAnnotation = (type: AnnotationType) => {
     if (!editor || disabled) return;
-    handleAnnotationClick(editor, type, words, sentence, disabled);
+    handleAnnotationClick(editor, type, disabled);
   };
 
   if (!editor) {
@@ -71,9 +70,11 @@ export const DiagrammingEditor: React.FC<DiagrammingEditorProps> = ({
         editor={editor}
         onAnnotationClick={handleAnnotation}
         onClearAnnotations={clearAnnotations}
+        onResetTextColors={() => handleResetTextColors(editor, disabled)}
         onAddTooltip={tooltipManager.handleAddTooltip}
         disabled={disabled}
         isStudentMode={isStudentMode}
+        availableTools={availableTools}
       />
 
       <div className="p-4 min-h-[150px] bg-white">

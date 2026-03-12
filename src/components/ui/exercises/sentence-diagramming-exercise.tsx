@@ -1,17 +1,21 @@
 import React, { useState } from 'react';
 import { DiagrammingToolbar } from './sentence-diagramming/diagramming-toolbar';
 import {
+  DiagramSelectionMark,
   SentenceDiagrammingExercise as SentenceDiagrammingExerciseType,
-  AnnotationType,
 } from '@/src/types/exercises/sentence-diagramming';
 import { Button } from '../button';
 import { CheckCircle, HelpCircle, RotateCcw } from 'lucide-react';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { FeedbackDisplay } from '../feedback';
 import {
-  extractAnnotationsFromEditor,
+  compareDiagramMarks,
+  DEFAULT_STUDENT_DIAGRAM_TOOLS,
+  ensureDiagrammingContent,
+  extractDiagramMarksFromEditor,
   handleAnnotationClick,
   handleClearAnnotations,
+  handleResetTextColors,
 } from '@/src/utils/sentenceDiagramming';
 import { useTipTapEditor } from '@/src/hooks/useTipTapEditor';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
@@ -25,16 +29,17 @@ interface SentenceDiagrammingExerciseProps {
 }
 
 export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExerciseProps> = ({ exercise, onComplete }) => {
-  const [userAnnotations, setUserAnnotations] = useState<Record<string, AnnotationType>>({});
+  const [userMarks, setUserMarks] = useState<DiagramSelectionMark[]>([]);
   const [showHint, setShowHint] = useState(false);
   const [currentHintIndex, setCurrentHintIndex] = useState(0);
+  const availableStudentTools = exercise.data.availableStudentTools || DEFAULT_STUDENT_DIAGRAM_TOOLS;
 
   const { isCorrect, message, level, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
     exercise.feedbackConfig
   );
 
   const cleanContent = stripAdminAnnotations(
-    exercise.data.sentence.content || `<p>${exercise.data.sentence.latin}</p>`
+    ensureDiagrammingContent(exercise.data.sentence.content, exercise.data.sentence.words)
   );
 
   const editor = useTipTapEditor({
@@ -42,8 +47,8 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
     initialContent: cleanContent,
     className: 'sentence-diagramming-exercise-content',
     onUpdate: editor => {
-      const annotations = extractAnnotationsFromEditor(editor);
-      setUserAnnotations(annotations);
+      const marks = extractDiagramMarksFromEditor(editor);
+      setUserMarks(marks);
     },
   });
 
@@ -53,11 +58,11 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
     if (editor) {
       handleClearAnnotations(editor);
     }
-    setUserAnnotations({});
+    setUserMarks([]);
   };
 
   const handleSubmit = () => {
-    const result = validateAnnotations(userAnnotations, exercise.data.solution.annotations);
+    const result = compareDiagramMarks(userMarks, exercise.data.solution.marks || []);
     if (result.isComplete) {
       handleCorrect(true); // Always complete since there's only one step
       if (onComplete) {
@@ -89,28 +94,6 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
     }
   };
 
-  const validateAnnotations = (
-    userAnnotations: Record<string, AnnotationType>,
-    solutionAnnotations: Record<string, AnnotationType>
-  ) => {
-    let totalCorrect = 0;
-    const totalExpected = Object.keys(solutionAnnotations).length;
-
-    // Count matches between user annotations and solution
-    Object.keys(solutionAnnotations).forEach(wordId => {
-      if (userAnnotations[wordId] === solutionAnnotations[wordId]) {
-        totalCorrect++;
-      }
-    });
-
-    return {
-      isComplete: totalCorrect === totalExpected,
-      accuracy: totalExpected > 0 ? (totalCorrect / totalExpected) * 100 : 0,
-      totalCorrect,
-      totalExpected,
-    };
-  };
-
   if (!editor) {
     return <div>Loading exercise...</div>;
   }
@@ -132,18 +115,12 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
           <EditorWithTooltips editor={editor} className="p-4 min-h-[150px] bg-white">
             <DiagrammingToolbar
               editor={editor}
-              onAnnotationClick={type =>
-                handleAnnotationClick(
-                  editor,
-                  type,
-                  exercise.data.sentence.words,
-                  exercise.data.sentence.latin,
-                  isCorrect === true
-                )
-              }
+              onAnnotationClick={type => handleAnnotationClick(editor, type, isCorrect === true)}
               onClearAnnotations={clearAnnotations}
+              onResetTextColors={() => handleResetTextColors(editor, isCorrect === true)}
               disabled={isCorrect === true}
               isStudentMode={true}
+              availableTools={availableStudentTools}
             />
           </EditorWithTooltips>
         </div>
@@ -178,7 +155,7 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
       <div className="flex gap-2">
         <Button
           onClick={handleSubmit}
-          disabled={isCorrect === true || Object.keys(userAnnotations).length === 0}
+          disabled={isCorrect === true || userMarks.length === 0}
           className="flex items-center gap-2">
           <CheckCircle className="w-4 h-4" />
           Check Answer

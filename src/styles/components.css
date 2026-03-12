@@ -44,75 +44,148 @@
 }
 
 /* Base annotation styles */
-.sentence-diagramming-canvas span[data-preposition],
-.sentence-diagramming-canvas span[data-subordination],
 .sentence-diagramming-canvas span[data-verb-circle],
-.sentence-diagramming-canvas span[data-subject-underline],
-.sentence-diagramming-canvas span[data-direct-object-underline],
-.sentence-diagramming-canvas span[data-indirect-object-bracket],
-.sentence-diagramming-canvas span[data-genitive-arrow],
-.sentence-diagramming-canvas span[data-genitive-arrow-target],
-.sentence-diagramming-canvas span[data-ablative-phrase],
-.sentence-diagramming-exercise-content span[data-preposition],
-.sentence-diagramming-exercise-content span[data-subordination],
+.sentence-diagramming-canvas span[data-infinitive-double-circle],
+.sentence-diagramming-canvas span[data-participle-box],
+.sentence-diagramming-canvas span[data-nominative-underline],
+.sentence-diagramming-canvas span[data-accusative-double-underline],
+.sentence-diagramming-canvas span[data-predicate-nominative-squiggle],
+.sentence-diagramming-canvas span[data-predicate-accusative-double-squiggle],
+.sentence-diagramming-canvas span[data-genitive-bold],
+.sentence-diagramming-canvas span[data-shared-italic],
+.sentence-diagramming-canvas span[data-vocative-v],
+.sentence-diagramming-canvas span[data-passive],
+.sentence-diagramming-canvas span[data-compound],
+.sentence-diagramming-canvas span[data-prepositional-parentheses],
+.sentence-diagramming-canvas span[data-subordinate-brackets],
 .sentence-diagramming-exercise-content span[data-verb-circle],
-.sentence-diagramming-exercise-content span[data-subject-underline],
-.sentence-diagramming-exercise-content span[data-direct-object-underline],
-.sentence-diagramming-exercise-content span[data-indirect-object-bracket],
-.sentence-diagramming-exercise-content span[data-genitive-arrow],
-.sentence-diagramming-exercise-content span[data-genitive-arrow-target],
-.sentence-diagramming-exercise-content span[data-ablative-phrase] {
+.sentence-diagramming-exercise-content span[data-infinitive-double-circle],
+.sentence-diagramming-exercise-content span[data-participle-box],
+.sentence-diagramming-exercise-content span[data-nominative-underline],
+.sentence-diagramming-exercise-content span[data-accusative-double-underline],
+.sentence-diagramming-exercise-content span[data-predicate-nominative-squiggle],
+.sentence-diagramming-exercise-content span[data-predicate-accusative-double-squiggle],
+.sentence-diagramming-exercise-content span[data-genitive-bold],
+.sentence-diagramming-exercise-content span[data-shared-italic],
+.sentence-diagramming-exercise-content span[data-vocative-v],
+.sentence-diagramming-exercise-content span[data-passive],
+.sentence-diagramming-exercise-content span[data-compound],
+.sentence-diagramming-exercise-content span[data-prepositional-parentheses],
+.sentence-diagramming-exercise-content span[data-subordinate-brackets] {
   cursor: pointer;
   margin: 0 1px;
   display: inline-block;
+  position: relative;
 }
 
-/* Preposition parentheses */
-.preposition-annotation::before {
-  content: '(';
+/* Hidden word tokens keep selection aligned to actual words. */
+.diagram-word-token {
+  display: inline;
+}
+
+.diagram-verb-circle {
+  border: 2px solid #eab308;
+  border-radius: 9999px;
+  background: #fef3c7;
+  padding: 0 6px;
+}
+
+.diagram-infinitive-double-circle {
+  border: 2px solid #eab308;
+  border-radius: 9999px;
+  background: #fef3c7;
+  box-shadow: 0 0 0 2px #eab308;
+  padding: 0 6px;
+}
+
+.diagram-participle-box {
+  border: 2px solid #eab308;
+  border-radius: 0.25rem;
+  background: #fef3c7;
+  padding: 0 6px;
+}
+
+.diagram-nominative-underline {
+  border-bottom: 2px solid #111827;
+  padding-bottom: 2px;
+}
+
+.diagram-accusative-double-underline {
+  border-bottom: 4px double #111827;
+  padding-bottom: 2px;
+}
+
+.diagram-predicate-nominative-squiggle {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='4' viewBox='0 0 12 4'%3E%3Cpath d='M0 3 C2 1 4 1 6 3 S10 5 12 3' fill='none' stroke='%23111827' stroke-width='1.5'/%3E%3C/svg%3E");
+  background-repeat: repeat-x;
+  background-position: left calc(100% - 1px);
+  background-size: 12px 4px;
+  padding-bottom: 6px;
+}
+
+.diagram-predicate-accusative-double-squiggle {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='4' viewBox='0 0 12 4'%3E%3Cpath d='M0 3 C2 1 4 1 6 3 S10 5 12 3' fill='none' stroke='%23111827' stroke-width='1.5'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='4' viewBox='0 0 12 4'%3E%3Cpath d='M0 3 C2 1 4 1 6 3 S10 5 12 3' fill='none' stroke='%23111827' stroke-width='1.5'/%3E%3C/svg%3E");
+  background-repeat: repeat-x, repeat-x;
+  background-position:
+    left calc(100% - 1px),
+    left calc(100% - 5px);
+  background-size:
+    12px 4px,
+    12px 4px;
+  padding-bottom: 10px;
+}
+
+.diagram-genitive-bold {
+  font-weight: 700;
+}
+
+.diagram-shared-italic {
+  font-style: italic;
+}
+
+.diagram-vocative-v {
+  padding-top: 0.15rem;
+}
+
+.diagram-vocative-v::after {
+  content: 'V';
+  position: absolute;
+  left: 50%;
+  top: -0.6rem;
+  transform: translateX(-50%);
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1;
+}
+
+.diagram-passive,
+.diagram-passive .diagram-word-token {
+  color: #2563eb;
+}
+
+.diagram-compound,
+.diagram-compound .diagram-word-token {
+  color: #dc2626;
+}
+
+.diagram-prepositional-parentheses,
+.diagram-subordinate-brackets {
+  display: inline;
+  margin: 0;
+}
+
+.diagram-group-boundary {
+  display: inline;
+  font-weight: 700;
+  user-select: none;
+}
+
+.diagram-group-boundary-parentheses {
   color: #92400e;
-  font-weight: bold;
 }
 
-.preposition-annotation::after {
-  content: ')';
-  color: #92400e;
-  font-weight: bold;
-}
-
-/* Subordination brackets */
-.subordination-annotation::before {
-  content: '[';
+.diagram-group-boundary-brackets {
   color: #1e40af;
-  font-weight: bold;
-}
-
-.subordination-annotation::after {
-  content: ']';
-  color: #1e40af;
-  font-weight: bold;
-}
-
-/* Indirect object L-bracket */
-.indirect-object-bracket-annotation::before {
-  content: '⌊';
-  color: #059669;
-  font-weight: bold;
-  margin-right: 2px;
-}
-
-/* Genitive arrow */
-.genitive-arrow-annotation::after {
-  content: '→';
-  color: #7c3aed;
-  font-weight: bold;
-  margin-left: 2px;
-}
-
-/* Genitive arrow target */
-.genitive-arrow-target-annotation::before {
-  content: '←';
-  color: #ef4444;
-  font-weight: bold;
-  margin-right: 2px;
 }

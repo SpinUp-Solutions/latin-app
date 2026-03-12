@@ -1,245 +1,251 @@
-import { Mark, mergeAttributes } from '@tiptap/core';
+import { Extension, Mark, mergeAttributes } from '@tiptap/core';
+import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { Decoration, DecorationSet } from '@tiptap/pm/view';
+import {
+  DIAGRAM_MARK_DEFINITIONS,
+  WORD_TOKEN_DATA_ATTRIBUTE,
+  WORD_TOKEN_MARK_NAME,
+} from '@/src/utils/sentenceDiagramming';
 
-export interface DiagrammingExtensionConfig {
-  name: string;
-  dataAttribute: string;
-  className: string;
-  style: string;
-  title: string;
-  customRender?: (HTMLAttributes: Record<string, unknown>) => [string, Record<string, unknown>, number];
-}
-
-export interface DiagrammingCommands {
-  [key: string]: {
-    set: (attributes?: Record<string, unknown>) => boolean;
-    unset: () => boolean;
-  };
-}
-
-declare module '@tiptap/core' {
-  interface Commands<ReturnType> {
-    diagramming: {
-      setPreposition: (attributes?: Record<string, unknown>) => ReturnType;
-      unsetPreposition: () => ReturnType;
-      setSubordination: (attributes?: Record<string, unknown>) => ReturnType;
-      unsetSubordination: () => ReturnType;
-      setVerbCircle: (attributes?: Record<string, unknown>) => ReturnType;
-      unsetVerbCircle: () => ReturnType;
-      setSubjectUnderline: (attributes?: Record<string, unknown>) => ReturnType;
-      unsetSubjectUnderline: () => ReturnType;
-      setDirectObjectUnderline: (attributes?: Record<string, unknown>) => ReturnType;
-      unsetDirectObjectUnderline: () => ReturnType;
-      setIndirectObjectBracket: (attributes?: Record<string, unknown>) => ReturnType;
-      unsetIndirectObjectBracket: () => ReturnType;
-      setGenitiveArrow: (attributes?: Record<string, unknown>) => ReturnType;
-      unsetGenitiveArrow: () => ReturnType;
-      setGenitiveArrowTarget: (attributes?: Record<string, unknown>) => ReturnType;
-      unsetGenitiveArrowTarget: () => ReturnType;
-      setAblativePhrase: (attributes?: Record<string, unknown>) => ReturnType;
-      unsetAblativePhrase: () => ReturnType;
-    };
-  }
-}
-
-const baseAttributes = {
+const selectionAttributes = {
+  id: {
+    default: null,
+  },
   wordIds: {
     default: [],
   },
+  startWordIndex: {
+    default: null,
+  },
+  endWordIndex: {
+    default: null,
+  },
 };
 
-export const createDiagrammingExtension = (config: DiagrammingExtensionConfig) => {
-  return Mark.create({
-    name: config.name,
+const createDiagrammingExtension = ({
+  markName,
+  dataAttribute,
+  className,
+  title,
+}: {
+  markName: string;
+  dataAttribute: string;
+  className: string;
+  title: string;
+}) =>
+  Mark.create({
+    name: markName,
+    excludes: '',
 
     addAttributes() {
-      return baseAttributes;
+      return selectionAttributes;
     },
 
     parseHTML() {
       return [
         {
-          tag: `span[${config.dataAttribute}]`,
+          tag: `span[${dataAttribute}]`,
         },
       ];
     },
 
     renderHTML({ HTMLAttributes }) {
-      if (config.customRender) {
-        return config.customRender(HTMLAttributes);
-      }
-
       return [
         'span',
         mergeAttributes(HTMLAttributes, {
-          [config.dataAttribute]: 'true',
-          class: config.className,
-          style: config.style,
-          title: config.title,
+          [dataAttribute]: 'true',
+          class: className,
+          title,
         }),
         0,
       ];
-    },
-
-    addCommands() {
-      const setCommandName = `set${config.name.charAt(0).toUpperCase()}${config.name.slice(1)}`;
-      const unsetCommandName = `unset${config.name.charAt(0).toUpperCase()}${config.name.slice(1)}`;
-
-      return {
-        [setCommandName]:
-          (attributes = {}) =>
-          ({
-            commands,
-            editor,
-          }: {
-            commands: {
-              setMark: (name: string, attrs?: Record<string, unknown>) => boolean;
-              unsetMark: (name: string) => boolean;
-            };
-            editor: { isActive: (name: string) => boolean };
-          }) => {
-            if (editor.isActive(this.name)) {
-              return commands.unsetMark(this.name);
-            }
-            return commands.setMark(this.name, attributes);
-          },
-        [unsetCommandName]:
-          () =>
-          ({ commands }: { commands: { unsetMark: (name: string) => boolean } }) => {
-            return commands.unsetMark(this.name);
-          },
-      };
     },
   });
+
+export const DiagramWordTokenExtension = Mark.create({
+  name: WORD_TOKEN_MARK_NAME,
+  excludes: '',
+  inclusive: false,
+
+  addAttributes() {
+    return {
+      wordId: {
+        default: null,
+      },
+      wordIndex: {
+        default: null,
+      },
+    };
+  },
+
+  parseHTML() {
+    return [
+      {
+        tag: `span[${WORD_TOKEN_DATA_ATTRIBUTE}]`,
+      },
+    ];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return [
+      'span',
+      mergeAttributes(HTMLAttributes, {
+        [WORD_TOKEN_DATA_ATTRIBUTE]: 'true',
+        class: 'diagram-word-token',
+      }),
+      0,
+    ];
+  },
+});
+
+const GROUPING_WIDGETS = {
+  prepositionalParentheses: {
+    startText: '(',
+    endText: ')',
+    className: 'diagram-group-boundary diagram-group-boundary-parentheses',
+  },
+  subordinateBrackets: {
+    startText: '[',
+    endText: ']',
+    className: 'diagram-group-boundary diagram-group-boundary-brackets',
+  },
+} as const;
+
+const groupingDecorationPluginKey = new PluginKey('diagramGroupingDecorations');
+
+const buildBoundaryWidget = (text: string, className: string) => () => {
+  const span = document.createElement('span');
+  span.className = className;
+  span.textContent = text;
+  span.contentEditable = 'false';
+  return span;
 };
 
-export const extensionConfigs: DiagrammingExtensionConfig[] = [
-  {
-    name: 'preposition',
-    dataAttribute: 'data-preposition',
-    className: 'preposition-annotation',
-    style:
-      'background-color: #fef3c7; border: 1px solid #f59e0b; padding: 1px 2px; border-radius: 3px; position: relative;',
-    title: 'Preposition',
-  },
-  {
-    name: 'subordination',
-    dataAttribute: 'data-subordination',
-    className: 'subordination-annotation',
-    style:
-      'background-color: #dbeafe; border: 2px dashed #3b82f6; padding: 1px 2px; border-radius: 3px; position: relative;',
-    title: 'Subordinate Clause',
-  },
-  {
-    name: 'verbCircle',
-    dataAttribute: 'data-verb-circle',
-    className: 'verb-circle-annotation',
-    style: '', // Will be overridden by customRender
-    title: 'Verb',
-    customRender: HTMLAttributes => {
-      const voice = HTMLAttributes.voice || 'active';
-      const isActive = voice === 'active';
+const DiagramGroupingDecorationsExtension = Extension.create({
+  name: 'diagramGroupingDecorations',
 
-      return [
-        'span',
-        mergeAttributes(HTMLAttributes, {
-          'data-verb-circle': 'true',
-          class: `verb-circle-annotation ${isActive ? 'active' : 'passive'}`,
-          style: `border: 2px solid ${isActive ? '#dc2626' : '#7c3aed'}; border-radius: 50%; padding: 2px 4px; background-color: ${isActive ? '#fef2f2' : '#f3e8ff'};`,
-          title: `${voice} voice`,
-        }),
-        0,
-      ];
-    },
-  },
-  {
-    name: 'subjectUnderline',
-    dataAttribute: 'data-subject-underline',
-    className: 'subject-underline-annotation',
-    style: 'border-bottom: 2px solid #1f2937; padding-bottom: 1px;',
-    title: 'Subject (Nominative)',
-  },
-  {
-    name: 'directObjectUnderline',
-    dataAttribute: 'data-direct-object-underline',
-    className: 'direct-object-underline-annotation',
-    style: 'border-bottom: 4px double #1f2937; padding-bottom: 1px;',
-    title: 'Direct Object (Accusative)',
-  },
-  {
-    name: 'indirectObjectBracket',
-    dataAttribute: 'data-indirect-object-bracket',
-    className: 'indirect-object-bracket-annotation',
-    style: 'border-left: 3px solid #059669; padding-left: 3px; background-color: #f0fdf4; position: relative;',
-    title: 'Indirect Object (Dative)',
-  },
-  {
-    name: 'genitiveArrow',
-    dataAttribute: 'data-genitive-arrow',
-    className: 'genitive-arrow-annotation',
-    style:
-      'background-color: #fdf4ff; border: 1px solid #a855f7; padding: 1px 2px; border-radius: 3px; position: relative;',
-    title: 'Genitive (shows possession/relationship)',
-  },
-  {
-    name: 'genitiveArrowTarget',
-    dataAttribute: 'data-genitive-arrow-target',
-    className: 'genitive-arrow-target-annotation',
-    style:
-      'background-color: #fef2f2; border: 1px solid #ef4444; padding: 1px 2px; border-radius: 3px; position: relative;',
-    title: 'Genitive Target (what is possessed/modified)',
-  },
-  {
-    name: 'ablativePhrase',
-    dataAttribute: 'data-ablative-phrase',
-    className: 'ablative-phrase-annotation',
-    style: '', // Will be overridden by customRender
-    title: 'Ablative Phrase',
-    customRender: HTMLAttributes => {
-      const ablativeType = HTMLAttributes.ablativeType || 'means';
-      const typeColors = {
-        agent: '#ef4444',
-        means: '#06b6d4',
-        manner: '#8b5cf6',
-        place: '#10b981',
-        time: '#f59e0b',
-        accompaniment: '#ec4899',
-        separation: '#6b7280',
-      };
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: groupingDecorationPluginKey,
+        props: {
+          decorations: state => {
+            const groups = new Map<
+              string,
+              {
+                id: string;
+                markName: keyof typeof GROUPING_WIDGETS;
+                start: number;
+                end: number;
+                startWordIndex: number;
+                endWordIndex: number;
+              }
+            >();
 
-      const color = typeColors[ablativeType as keyof typeof typeColors] || '#06b6d4';
+            state.doc.nodesBetween(0, state.doc.content.size, (node, pos) => {
+              if (!node.isText) {
+                return;
+              }
 
-      return [
-        'span',
-        mergeAttributes(HTMLAttributes, {
-          'data-ablative-phrase': 'true',
-          class: 'ablative-phrase-annotation',
-          style: `background-color: ${color}20; border: 1px solid ${color}; padding: 1px 3px; border-radius: 3px;`,
-          title: `Ablative of ${ablativeType}`,
-        }),
-        0,
-      ];
-    },
+              node.marks.forEach(mark => {
+                if (!(mark.type.name in GROUPING_WIDGETS) || !mark.attrs.id) {
+                  return;
+                }
+
+                const markName = mark.type.name as keyof typeof GROUPING_WIDGETS;
+                const startWordIndex = Number(mark.attrs.startWordIndex);
+                const endWordIndex = Number(mark.attrs.endWordIndex);
+                const existing = groups.get(mark.attrs.id);
+                const nextEnd = pos + node.nodeSize;
+
+                if (existing) {
+                  existing.start = Math.min(existing.start, pos);
+                  existing.end = Math.max(existing.end, nextEnd);
+                  if (!Number.isNaN(startWordIndex)) {
+                    existing.startWordIndex = Math.min(existing.startWordIndex, startWordIndex);
+                  }
+                  if (!Number.isNaN(endWordIndex)) {
+                    existing.endWordIndex = Math.max(existing.endWordIndex, endWordIndex);
+                  }
+                  return;
+                }
+
+                groups.set(mark.attrs.id, {
+                  id: mark.attrs.id,
+                  markName,
+                  start: pos,
+                  end: nextEnd,
+                  startWordIndex: Number.isNaN(startWordIndex) ? 0 : startWordIndex,
+                  endWordIndex: Number.isNaN(endWordIndex) ? 0 : endWordIndex,
+                });
+              });
+            });
+
+            const groupValues = Array.from(groups.values());
+            const decorations = [
+              ...groupValues
+                .slice()
+                .sort((left, right) => {
+                  if (left.start !== right.start) {
+                    return left.start - right.start;
+                  }
+
+                  return right.endWordIndex - left.endWordIndex;
+                })
+                .map(group =>
+                  Decoration.widget(
+                    group.start,
+                    buildBoundaryWidget(
+                      GROUPING_WIDGETS[group.markName].startText,
+                      GROUPING_WIDGETS[group.markName].className
+                    ),
+                    {
+                      key: `${group.id}:start`,
+                      side: -1,
+                    }
+                  )
+                ),
+              ...groupValues
+                .slice()
+                .sort((left, right) => {
+                  if (left.end !== right.end) {
+                    return left.end - right.end;
+                  }
+
+                  return right.startWordIndex - left.startWordIndex;
+                })
+                .map(group =>
+                  Decoration.widget(
+                    group.end,
+                    buildBoundaryWidget(
+                      GROUPING_WIDGETS[group.markName].endText,
+                      GROUPING_WIDGETS[group.markName].className
+                    ),
+                    {
+                      key: `${group.id}:end`,
+                      side: 1,
+                    }
+                  )
+                ),
+            ];
+
+            return DecorationSet.create(state.doc, decorations);
+          },
+        },
+      }),
+    ];
   },
-];
-
-export const PrepositionExtension = createDiagrammingExtension(extensionConfigs[0]);
-export const SubordinationExtension = createDiagrammingExtension(extensionConfigs[1]);
-export const VerbCircleExtension = createDiagrammingExtension(extensionConfigs[2]);
-export const SubjectUnderlineExtension = createDiagrammingExtension(extensionConfigs[3]);
-export const DirectObjectUnderlineExtension = createDiagrammingExtension(extensionConfigs[4]);
-export const IndirectObjectBracketExtension = createDiagrammingExtension(extensionConfigs[5]);
-export const GenitiveArrowExtension = createDiagrammingExtension(extensionConfigs[6]);
-export const GenitiveArrowTargetExtension = createDiagrammingExtension(extensionConfigs[7]);
-export const AblativePhraseExtension = createDiagrammingExtension(extensionConfigs[8]);
+});
 
 export const DiagrammingExtensions = [
-  PrepositionExtension,
-  SubordinationExtension,
-  VerbCircleExtension,
-  SubjectUnderlineExtension,
-  DirectObjectUnderlineExtension,
-  IndirectObjectBracketExtension,
-  GenitiveArrowExtension,
-  GenitiveArrowTargetExtension,
-  AblativePhraseExtension,
+  ...DIAGRAM_MARK_DEFINITIONS.map(definition =>
+    createDiagrammingExtension({
+      markName: definition.markName,
+      dataAttribute: definition.dataAttribute,
+      className: definition.className,
+      title: definition.title,
+    })
+  ),
+  DiagramWordTokenExtension,
+  DiagramGroupingDecorationsExtension,
 ];
