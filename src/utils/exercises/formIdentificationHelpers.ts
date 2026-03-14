@@ -328,11 +328,11 @@ const createVariantMap = () => {
 
   const tenses: Record<string, string[]> = {
     present: ['present', 'pres.', 'pres'],
-    imperfect: ['imperfect', 'imperf.', 'imperf'],
+    imperfect: ['imperfect', 'imperf.', 'imperf', 'imp.', 'imp'],
     future: ['future', 'fut.', 'fut'],
-    perfect: ['perfect', 'perf.', 'perf'],
-    pluperfect: ['pluperfect', 'pluperf.', 'pluperf'],
-    future_perfect: ['future perfect', 'fut. perf.', 'fut perf'],
+    perfect: ['perfect', 'perf.', 'perf', 'per.', 'per'],
+    pluperfect: ['pluperfect', 'pluperf.', 'pluperf', 'plup.', 'plup'],
+    future_perfect: ['future perfect', 'fut. perf.', 'fut perf', 'futp.', 'futp'],
   };
   Object.entries(tenses).forEach(([k, arr]) => {
     v[k] = arr;
