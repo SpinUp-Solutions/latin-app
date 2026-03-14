@@ -42,6 +42,7 @@ import {
 } from '@/src/utils/exercises/formIdentificationHelpers';
 import { hasSelectedForm } from '@/src/utils/exercises/formSelection';
 import { formatLabel } from '@/src/utils/label-formatter';
+import { normalizeCollection, buildLegacyParadigmConfigs } from '@/src/utils/exercises/legacyExerciseCompat';
 
 interface Props {
   exercise: GeneratedFormIdentificationExercise;
@@ -60,13 +61,24 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
   const requireAllPrimaryAnswers = exercise.data.requireAllPrimaryAnswers ?? false;
   const isMultiAnswerMode = !isSingleField && requireAllPrimaryAnswers;
 
+  // Backward compat: old exercises stored filters/formSelection in generatorConfig
+  // with no paradigmConfigs, wordSource, or poolId
+  const hasNewFormatParadigmConfigs =
+    exercise.data.paradigmConfigs &&
+    typeof exercise.data.paradigmConfigs === 'object' &&
+    Object.keys(exercise.data.paradigmConfigs).length > 0;
+
+  const paradigmConfigs = hasNewFormatParadigmConfigs
+    ? exercise.data.paradigmConfigs
+    : buildLegacyParadigmConfigs(config as Parameters<typeof buildLegacyParadigmConfigs>[0]);
+
   const { data, isLoading, isError } = useGetMultiParadigmWordsQuery({
     exerciseType: 'generated-form-identification',
-    collection: config.collection,
-    wordSource: config.wordSource,
-    poolId: config.poolId,
+    collection: normalizeCollection(config.collection),
+    wordSource: config.wordSource || 'filters',
+    poolId: config.poolId ?? null,
     count: config.count,
-    paradigmConfigs: exercise.data.paradigmConfigs ?? {},
+    paradigmConfigs,
   });
 
   type ItemType = FormIdentificationItem | SingleFieldFormIdentificationItem | MultiAnswerFormIdentificationItem;
