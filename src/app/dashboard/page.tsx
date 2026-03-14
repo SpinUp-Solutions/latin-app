@@ -19,6 +19,7 @@ import 'swiper/css/navigation';
 import { SwiperNavigation } from '@/src/components/ui/core/swiper-nav';
 import { PracticeSection } from '@/src/components/ui/core/PracticeSection';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
+import { FeedbackBanner } from '@/src/components/ui/core/feedback-banner';
 
 const statusConfig: Record<LessonStatus, { card: string }> = {
   completed: {
@@ -235,6 +236,8 @@ export default function DashboardPage() {
             </Button>
           </div>
         </header>
+
+        <FeedbackBanner />
 
         <main className="px-8 py-12">
           <div className="max-w-[1800px] mx-auto">
