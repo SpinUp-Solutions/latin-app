@@ -12,15 +12,30 @@ export type DiagramMarkType =
   | 'verb-circle'
   | 'infinitive-double-circle'
   | 'participle-box'
+  | 'participial-phrase-box'
   | 'nominative-underline'
   | 'accusative-double-underline'
   | 'predicate-nominative-squiggle'
   | 'predicate-accusative-double-squiggle'
   | 'genitive-bold'
+  | 'dative-orange'
+  | 'ablative-green'
+  | 'locative-bold'
   | 'shared-italic'
-  | 'vocative-v'
+  | 'vocative-uppercase'
+  | 'active'
   | 'passive'
-  | 'compound'
+  | 'person-1s'
+  | 'person-2s'
+  | 'person-3s'
+  | 'person-1p'
+  | 'person-2p'
+  | 'person-3p'
+  | 'special-plus-dative'
+  | 'special-intransitive'
+  | 'special-plus-ablative'
+  | 'ablative-absolute'
+  | 'passive-periphrastic'
   | 'prepositional-parentheses'
   | 'subordinate-brackets';
 
@@ -32,6 +47,8 @@ export interface DiagramSelectionMark {
   type: DiagramMarkType;
   startWordIndex: number;
   endWordIndex: number;
+  startCharOffset?: number;
+  endCharOffset?: number;
 }
 
 export interface SentenceDiagrammingSolution {

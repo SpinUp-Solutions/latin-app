@@ -16,6 +16,7 @@ import {
   DIAGRAM_MARK_DEFINITION_BY_TYPE,
   DIAGRAM_TOOL_GROUPS,
   ensureDiagrammingContent,
+  normalizeDiagramToolKeys,
   tokenizeSentence,
 } from '@/src/utils/sentenceDiagramming';
 
@@ -29,7 +30,9 @@ export const SentenceDiagrammingEditor: React.FC = () => {
     return <div>No content selected for editing</div>;
   }
 
-  const availableStudentTools = editingContent.data.availableStudentTools || DEFAULT_STUDENT_DIAGRAM_TOOLS;
+  const availableStudentTools = normalizeDiagramToolKeys(
+    editingContent.data.availableStudentTools || DEFAULT_STUDENT_DIAGRAM_TOOLS
+  );
 
   const updateContent = (updates: Partial<SentenceDiagrammingExercise>) => {
     const updatedContent = { ...editingContent, ...updates };

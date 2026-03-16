@@ -47,29 +47,59 @@
 .sentence-diagramming-canvas span[data-verb-circle],
 .sentence-diagramming-canvas span[data-infinitive-double-circle],
 .sentence-diagramming-canvas span[data-participle-box],
+.sentence-diagramming-canvas span[data-participial-phrase-box],
+.sentence-diagramming-canvas span[data-ablative-absolute],
+.sentence-diagramming-canvas span[data-passive-periphrastic],
 .sentence-diagramming-canvas span[data-nominative-underline],
 .sentence-diagramming-canvas span[data-accusative-double-underline],
 .sentence-diagramming-canvas span[data-predicate-nominative-squiggle],
 .sentence-diagramming-canvas span[data-predicate-accusative-double-squiggle],
 .sentence-diagramming-canvas span[data-genitive-bold],
+.sentence-diagramming-canvas span[data-dative-orange],
+.sentence-diagramming-canvas span[data-ablative-green],
+.sentence-diagramming-canvas span[data-locative-bold],
 .sentence-diagramming-canvas span[data-shared-italic],
-.sentence-diagramming-canvas span[data-vocative-v],
+.sentence-diagramming-canvas span[data-vocative-uppercase],
+.sentence-diagramming-canvas span[data-active],
 .sentence-diagramming-canvas span[data-passive],
-.sentence-diagramming-canvas span[data-compound],
+.sentence-diagramming-canvas span[data-person-1s],
+.sentence-diagramming-canvas span[data-person-2s],
+.sentence-diagramming-canvas span[data-person-3s],
+.sentence-diagramming-canvas span[data-person-1p],
+.sentence-diagramming-canvas span[data-person-2p],
+.sentence-diagramming-canvas span[data-person-3p],
+.sentence-diagramming-canvas span[data-special-plus-dative],
+.sentence-diagramming-canvas span[data-special-intransitive],
+.sentence-diagramming-canvas span[data-special-plus-ablative],
 .sentence-diagramming-canvas span[data-prepositional-parentheses],
 .sentence-diagramming-canvas span[data-subordinate-brackets],
 .sentence-diagramming-exercise-content span[data-verb-circle],
 .sentence-diagramming-exercise-content span[data-infinitive-double-circle],
 .sentence-diagramming-exercise-content span[data-participle-box],
+.sentence-diagramming-exercise-content span[data-participial-phrase-box],
+.sentence-diagramming-exercise-content span[data-ablative-absolute],
+.sentence-diagramming-exercise-content span[data-passive-periphrastic],
 .sentence-diagramming-exercise-content span[data-nominative-underline],
 .sentence-diagramming-exercise-content span[data-accusative-double-underline],
 .sentence-diagramming-exercise-content span[data-predicate-nominative-squiggle],
 .sentence-diagramming-exercise-content span[data-predicate-accusative-double-squiggle],
 .sentence-diagramming-exercise-content span[data-genitive-bold],
+.sentence-diagramming-exercise-content span[data-dative-orange],
+.sentence-diagramming-exercise-content span[data-ablative-green],
+.sentence-diagramming-exercise-content span[data-locative-bold],
 .sentence-diagramming-exercise-content span[data-shared-italic],
-.sentence-diagramming-exercise-content span[data-vocative-v],
+.sentence-diagramming-exercise-content span[data-vocative-uppercase],
+.sentence-diagramming-exercise-content span[data-active],
 .sentence-diagramming-exercise-content span[data-passive],
-.sentence-diagramming-exercise-content span[data-compound],
+.sentence-diagramming-exercise-content span[data-person-1s],
+.sentence-diagramming-exercise-content span[data-person-2s],
+.sentence-diagramming-exercise-content span[data-person-3s],
+.sentence-diagramming-exercise-content span[data-person-1p],
+.sentence-diagramming-exercise-content span[data-person-2p],
+.sentence-diagramming-exercise-content span[data-person-3p],
+.sentence-diagramming-exercise-content span[data-special-plus-dative],
+.sentence-diagramming-exercise-content span[data-special-intransitive],
+.sentence-diagramming-exercise-content span[data-special-plus-ablative],
 .sentence-diagramming-exercise-content span[data-prepositional-parentheses],
 .sentence-diagramming-exercise-content span[data-subordinate-brackets] {
   cursor: pointer;
@@ -86,16 +116,22 @@
 .diagram-verb-circle {
   border: 2px solid #eab308;
   border-radius: 9999px;
-  background: #fef3c7;
   padding: 0 6px;
 }
 
 .diagram-infinitive-double-circle {
   border: 2px solid #eab308;
   border-radius: 9999px;
-  background: #fef3c7;
-  box-shadow: 0 0 0 2px #eab308;
   padding: 0 6px;
+}
+
+.diagram-infinitive-double-circle::before {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border: 2px solid #eab308;
+  border-radius: 9999px;
+  pointer-events: none;
 }
 
 .diagram-participle-box {
@@ -103,6 +139,17 @@
   border-radius: 0.25rem;
   background: #fef3c7;
   padding: 0 6px;
+}
+
+.diagram-passive-periphrastic {
+  border: 2px solid #eab308;
+  border-radius: 9999px;
+  color: #dc2626;
+  padding: 0 6px;
+}
+
+.diagram-passive-periphrastic .diagram-word-token {
+  color: #dc2626;
 }
 
 .diagram-nominative-underline {
@@ -140,24 +187,23 @@
   font-weight: 700;
 }
 
+.diagram-dative-orange,
+.diagram-dative-orange .diagram-word-token {
+  color: #ea580c;
+}
+
+.diagram-ablative-green,
+.diagram-ablative-green .diagram-word-token {
+  color: #15803d;
+}
+
 .diagram-shared-italic {
   font-style: italic;
 }
 
-.diagram-vocative-v {
-  padding-top: 0.15rem;
-}
-
-.diagram-vocative-v::after {
-  content: 'V';
-  position: absolute;
-  left: 50%;
-  top: -0.6rem;
-  transform: translateX(-50%);
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: #111827;
-  line-height: 1;
+.diagram-vocative-uppercase,
+.diagram-vocative-uppercase .diagram-word-token {
+  text-transform: uppercase;
 }
 
 .diagram-passive,
@@ -165,9 +211,19 @@
   color: #2563eb;
 }
 
-.diagram-compound,
-.diagram-compound .diagram-word-token {
+.diagram-person-underline {
+  border-bottom: 2px solid #111827;
+  padding-bottom: 2px;
+}
+
+.diagram-special-red,
+.diagram-special-red .diagram-word-token {
   color: #dc2626;
+}
+
+.diagram-special-blue,
+.diagram-special-blue .diagram-word-token {
+  color: #2563eb;
 }
 
 .diagram-prepositional-parentheses,

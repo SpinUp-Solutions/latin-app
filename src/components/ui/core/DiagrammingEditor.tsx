@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Editor, EditorContent } from '@tiptap/react';
 import { DiagrammingToolbar } from '../exercises/sentence-diagramming/diagramming-toolbar';
 import { useTipTapEditor } from '@/src/hooks/useTipTapEditor';
@@ -32,12 +32,14 @@ export const DiagrammingEditor: React.FC<DiagrammingEditorProps> = ({
   className = 'sentence-diagramming-canvas',
   availableTools,
 }) => {
+  const [selectionError, setSelectionError] = useState<string | null>(null);
   const editor = useTipTapEditor({
     extensions: isStudentMode ? getStudentExtensions() : getAdminExtensions(),
     initialContent,
     className,
     onUpdate: onUpdate
       ? (editor, html) => {
+          setSelectionError(null);
           const marks = extractDiagramMarksFromEditor(editor);
           onUpdate(marks, html);
         }
@@ -53,11 +55,17 @@ export const DiagrammingEditor: React.FC<DiagrammingEditorProps> = ({
   const clearAnnotations = () => {
     if (!editor || disabled) return;
     handleClearAnnotations(editor);
+    setSelectionError(null);
   };
 
   const handleAnnotation = (type: AnnotationType) => {
     if (!editor || disabled) return;
-    handleAnnotationClick(editor, type, disabled);
+    const error = handleAnnotationClick(editor, type, disabled);
+    if (error) {
+      setSelectionError(error);
+      return;
+    }
+    setSelectionError(null);
   };
 
   if (!editor) {
@@ -76,6 +84,10 @@ export const DiagrammingEditor: React.FC<DiagrammingEditorProps> = ({
         isStudentMode={isStudentMode}
         availableTools={availableTools}
       />
+
+      {selectionError ? (
+        <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">{selectionError}</div>
+      ) : null}
 
       <div className="p-4 min-h-[150px] bg-white">
         <EditorContent editor={editor} />

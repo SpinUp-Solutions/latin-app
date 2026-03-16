@@ -1,23 +1,10 @@
+import { DIAGRAM_MARK_DEFINITIONS } from './sentenceDiagramming';
+
 export const stripAdminAnnotations = (htmlContent: string): string => {
   const tempDiv = document.createElement('div');
   tempDiv.innerHTML = htmlContent;
 
-  const annotationSelectors = [
-    '[data-verb-circle="true"]',
-    '[data-infinitive-double-circle="true"]',
-    '[data-participle-box="true"]',
-    '[data-nominative-underline="true"]',
-    '[data-accusative-double-underline="true"]',
-    '[data-predicate-nominative-squiggle="true"]',
-    '[data-predicate-accusative-double-squiggle="true"]',
-    '[data-genitive-bold="true"]',
-    '[data-shared-italic="true"]',
-    '[data-vocative-v="true"]',
-    '[data-passive="true"]',
-    '[data-compound="true"]',
-    '[data-prepositional-parentheses="true"]',
-    '[data-subordinate-brackets="true"]',
-  ];
+  const annotationSelectors = DIAGRAM_MARK_DEFINITIONS.map(definition => `[${definition.dataAttribute}="true"]`);
 
   annotationSelectors.forEach(selector => {
     const elements = tempDiv.querySelectorAll(selector);

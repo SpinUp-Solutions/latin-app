@@ -15,6 +15,7 @@ import {
   extractDiagramMarksFromEditor,
   handleAnnotationClick,
   handleClearAnnotations,
+  normalizeDiagramToolKeys,
   handleResetTextColors,
 } from '@/src/utils/sentenceDiagramming';
 import { useTipTapEditor } from '@/src/hooks/useTipTapEditor';
@@ -32,7 +33,10 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
   const [userMarks, setUserMarks] = useState<DiagramSelectionMark[]>([]);
   const [showHint, setShowHint] = useState(false);
   const [currentHintIndex, setCurrentHintIndex] = useState(0);
-  const availableStudentTools = exercise.data.availableStudentTools || DEFAULT_STUDENT_DIAGRAM_TOOLS;
+  const [selectionError, setSelectionError] = useState<string | null>(null);
+  const availableStudentTools = normalizeDiagramToolKeys(
+    exercise.data.availableStudentTools || DEFAULT_STUDENT_DIAGRAM_TOOLS
+  );
 
   const { isCorrect, message, level, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
     exercise.feedbackConfig
@@ -46,7 +50,37 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
     extensions: getStudentExtensions({ enableTooltips: true }),
     initialContent: cleanContent,
     className: 'sentence-diagramming-exercise-content',
+    editorProps: {
+      handleDOMEvents: {
+        beforeinput: (_view, event) => {
+          event.preventDefault();
+          return true;
+        },
+        paste: (_view, event) => {
+          event.preventDefault();
+          return true;
+        },
+        drop: (_view, event) => {
+          event.preventDefault();
+          return true;
+        },
+      },
+      handleKeyDown: (_view, event) => {
+        if (event.metaKey || event.ctrlKey || event.altKey) {
+          return false;
+        }
+
+        const blockedKeys = ['Backspace', 'Delete', 'Enter'];
+        if (blockedKeys.includes(event.key) || event.key.length === 1) {
+          event.preventDefault();
+          return true;
+        }
+
+        return false;
+      },
+    },
     onUpdate: editor => {
+      setSelectionError(null);
       const marks = extractDiagramMarksFromEditor(editor);
       setUserMarks(marks);
     },
@@ -59,10 +93,11 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
       handleClearAnnotations(editor);
     }
     setUserMarks([]);
+    setSelectionError(null);
   };
 
   const handleSubmit = () => {
-    const result = compareDiagramMarks(userMarks, exercise.data.solution.marks || []);
+    const result = compareDiagramMarks(userMarks, exercise.data.solution.marks || [], exercise.data.sentence.words);
     if (result.isComplete) {
       handleCorrect(true); // Always complete since there's only one step
       if (onComplete) {
@@ -115,7 +150,14 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
           <EditorWithTooltips editor={editor} className="p-4 min-h-[150px] bg-white">
             <DiagrammingToolbar
               editor={editor}
-              onAnnotationClick={type => handleAnnotationClick(editor, type, isCorrect === true)}
+              onAnnotationClick={type => {
+                const error = handleAnnotationClick(editor, type, isCorrect === true);
+                if (error) {
+                  setSelectionError(error);
+                  return;
+                }
+                setSelectionError(null);
+              }}
               onClearAnnotations={clearAnnotations}
               onResetTextColors={() => handleResetTextColors(editor, isCorrect === true)}
               disabled={isCorrect === true}
@@ -123,6 +165,10 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
               availableTools={availableStudentTools}
             />
           </EditorWithTooltips>
+
+          {selectionError ? (
+            <div className="border-t border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">{selectionError}</div>
+          ) : null}
         </div>
       </div>
 

@@ -20,6 +20,12 @@ const selectionAttributes = {
   endWordIndex: {
     default: null,
   },
+  startCharOffset: {
+    default: null,
+  },
+  endCharOffset: {
+    default: null,
+  },
 };
 
 const createDiagrammingExtension = ({
