@@ -190,14 +190,48 @@ export const advancedVocabularyApi = createApi({
       async queryFn(arg, _api, _extraOptions, baseQuery) {
         const { exerciseType, collection, wordSource, poolId, count, posConfigs } = arg;
 
-        const enabledEntries = Object.entries(posConfigs).filter(
+        const safePosConfigs = posConfigs && typeof posConfigs === 'object' ? posConfigs : {};
+
+        const enabledEntries = Object.entries(safePosConfigs).filter(
           (entry): entry is [PartOfSpeech, PosGeneratorConfig] => {
             const [, cfg] = entry;
             return cfg?.enabled === true;
           }
         );
 
+        // When using a pool with no POS configured, fetch all words from the pool
         if (enabledEntries.length === 0) {
+          if (wordSource === 'pool' && poolId) {
+            const additionalFields = getExerciseAdditionalFields(exerciseType);
+            const selectFields = composeSelectFields(additionalFields, {});
+            const params = new URLSearchParams();
+            params.append('collection', collection);
+            params.append('fetchAll', 'true');
+            params.append('poolId', poolId);
+            if (selectFields.length > 0) {
+              params.append('select', selectFields.join(','));
+            }
+
+            const result = await baseQuery({ url: `/admin/words?${params.toString()}` });
+            if (result.error) {
+              return { error: result.error };
+            }
+
+            const responseData = result.data as GetAdvancedWordsResponse;
+            const shuffled = shuffleArray(responseData.data.words);
+
+            return {
+              data: {
+                words: shuffled,
+                hasMore: false,
+                lastWordId: null,
+                limit: null,
+                filters: {},
+                collection,
+              },
+            };
+          }
+
           return { data: { words: [], hasMore: false, lastWordId: null, limit: null, filters: {}, collection } };
         }
 
@@ -305,14 +339,48 @@ export const advancedVocabularyApi = createApi({
       async queryFn(arg, _api, _extraOptions, baseQuery) {
         const { exerciseType, collection, wordSource, poolId, count, paradigmConfigs } = arg;
 
-        const enabledEntries = Object.entries(paradigmConfigs).filter(
+        const safeParadigmConfigs = paradigmConfigs && typeof paradigmConfigs === 'object' ? paradigmConfigs : {};
+
+        const enabledEntries = Object.entries(safeParadigmConfigs).filter(
           (entry): entry is [FormParadigm, ParadigmConfig] => {
             const [, cfg] = entry;
             return cfg?.enabled === true;
           }
         );
 
+        // When using a pool with no paradigm configured, fetch all words from the pool
         if (enabledEntries.length === 0) {
+          if (wordSource === 'pool' && poolId) {
+            const additionalFields = getExerciseAdditionalFields(exerciseType);
+            const selectFields = composeSelectFields(additionalFields, {});
+            const params = new URLSearchParams();
+            params.append('collection', collection);
+            params.append('fetchAll', 'true');
+            params.append('poolId', poolId);
+            if (selectFields.length > 0) {
+              params.append('select', selectFields.join(','));
+            }
+
+            const result = await baseQuery({ url: `/admin/words?${params.toString()}` });
+            if (result.error) {
+              return { error: result.error };
+            }
+
+            const responseData = result.data as GetAdvancedWordsResponse;
+            const shuffled = shuffleArray(responseData.data.words);
+
+            return {
+              data: {
+                words: shuffled,
+                hasMore: false,
+                lastWordId: null,
+                limit: null,
+                filters: {},
+                collection,
+              },
+            };
+          }
+
           return { data: { words: [], hasMore: false, lastWordId: null, limit: null, filters: {}, collection } };
         }
 

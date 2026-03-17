@@ -254,21 +254,6 @@ export const extractTooltipsFromLesson = (lesson: Lesson): Record<string, Toolti
           Object.assign(allTooltips, tooltips);
         }
 
-        // Check for sentence content (in exercises)
-        if (
-          'data' in item &&
-          item.data &&
-          typeof item.data === 'object' &&
-          'sentence' in item.data &&
-          item.data.sentence &&
-          typeof item.data.sentence === 'object' &&
-          'content' in item.data.sentence &&
-          typeof item.data.sentence.content === 'string'
-        ) {
-          const tooltips = extractTooltipsFromContent(item.data.sentence.content);
-          Object.assign(allTooltips, tooltips);
-        }
-
         // Recursively check nested objects and arrays
         Object.values(item).forEach(value => {
           if (Array.isArray(value)) {
@@ -302,20 +287,6 @@ export const extractTooltipsFromContentItem = (item: RenderableContentItem): Rec
   if (typeof item === 'object' && item !== null) {
     if ('content' in item && typeof item.content === 'string') {
       const tooltips = extractTooltipsFromContent(item.content);
-      Object.assign(itemTooltips, tooltips);
-    }
-
-    if (
-      'data' in item &&
-      item.data &&
-      typeof item.data === 'object' &&
-      'sentence' in item.data &&
-      item.data.sentence &&
-      typeof item.data.sentence === 'object' &&
-      'content' in item.data.sentence &&
-      typeof item.data.sentence.content === 'string'
-    ) {
-      const tooltips = extractTooltipsFromContent(item.data.sentence.content);
       Object.assign(itemTooltips, tooltips);
     }
 

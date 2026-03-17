@@ -1,39 +1,23 @@
 import { BaseExercise } from './base';
+import type {
+  AnnotationKind,
+  DiagramAnnotation,
+  DiagramDifficulty,
+  DiagramSpan,
+  DiagramToken,
+  SentenceDiagramDocument,
+} from '@/src/features/sentence-diagramming';
 
-export interface SentenceWord {
-  id: string;
-  text: string;
-  index: number;
-  startPosition: number;
-  endPosition: number;
-}
-
-export type AnnotationType =
-  | 'preposition'
-  | 'subordination'
-  | 'verb-circle'
-  | 'subject-underline'
-  | 'direct-object-underline'
-  | 'indirect-object-bracket'
-  | 'genitive-arrow'
-  | 'genitive-arrow-target'
-  | 'ablative-phrase';
-
-export interface SentenceDiagrammingSolution {
-  annotations: Record<string, AnnotationType>;
-}
+export type SentenceWord = DiagramToken;
+export type DiagramMarkType = AnnotationKind;
+export type DiagramToolKey = AnnotationKind;
+export type AnnotationType = AnnotationKind;
+export type DiagramSelectionMark = DiagramAnnotation;
+export type SentenceDiagrammingSolution = DiagramAnnotation[];
+export type SentenceDiagramSpan = DiagramSpan;
+export type SentenceDiagrammingDifficulty = DiagramDifficulty;
 
 export interface SentenceDiagrammingExercise extends BaseExercise {
   type: 'sentence-diagramming';
-  data: {
-    sentence: {
-      latin: string;
-      translation: string;
-      words: SentenceWord[];
-      content?: string;
-    };
-    solution: SentenceDiagrammingSolution;
-    hints: string[];
-    difficulty: 'beginner' | 'intermediate' | 'advanced';
-  };
+  data: SentenceDiagramDocument;
 }

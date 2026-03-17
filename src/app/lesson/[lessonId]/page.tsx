@@ -7,6 +7,7 @@ import Image from 'next/image';
 import LessonPlayer from '@/src/components/ui/lesson/lesson-player';
 import LessonSidebar from '@/src/components/ui/lesson/lesson-sidebar';
 import PracticeSidebar from '@/src/components/ui/lesson/practice-sidebar';
+import { FeedbackBanner } from '@/src/components/ui/core/feedback-banner';
 
 export default function DynamicLessonPage() {
   const params = useParams();
@@ -112,12 +113,14 @@ export default function DynamicLessonPage() {
         </div>
       </header>
 
+      <FeedbackBanner />
+
       <div className="flex flex-1 overflow-hidden">
         <LessonSidebar currentLessonId={lessonId} />
         <main className="flex-1 overflow-y-auto px-6 py-8">
           <div className="max-w-3xl mx-auto">
             <h2 className="text-2xl font-serif text-gray-800 mb-6">{currentLesson.title}</h2>
-            <LessonPlayer lesson={currentLesson} />
+            <LessonPlayer key={currentLesson.id} lesson={currentLesson} />
           </div>
         </main>
         <PracticeSidebar currentLessonId={lessonId} />

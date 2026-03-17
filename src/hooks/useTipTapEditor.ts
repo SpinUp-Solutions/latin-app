@@ -1,5 +1,6 @@
 import { useEditor, Editor } from '@tiptap/react';
 import { Extensions } from '@tiptap/core';
+import { EditorProps } from '@tiptap/pm/view';
 import { useCallback, useEffect } from 'react';
 
 export interface TipTapEditorOptions {
@@ -7,6 +8,7 @@ export interface TipTapEditorOptions {
   initialContent?: string;
   editable?: boolean;
   className?: string;
+  editorProps?: EditorProps;
   onUpdate?: (editor: Editor, html: string) => void;
   onSelectionUpdate?: (editor: Editor, selectedText: string) => void;
   onEditorReady?: (editor: Editor) => void;
@@ -17,10 +19,21 @@ export const useTipTapEditor = ({
   initialContent = '',
   editable = true,
   className = '',
+  editorProps,
   onUpdate,
   onSelectionUpdate,
   onEditorReady,
 }: TipTapEditorOptions) => {
+  const resolvedAttributes =
+    editorProps?.attributes && typeof editorProps.attributes !== 'function'
+      ? {
+          ...editorProps.attributes,
+          class: [editorProps.attributes.class, className].filter(Boolean).join(' '),
+        }
+      : {
+          class: className,
+        };
+
   const editor = useEditor({
     extensions,
     content: initialContent,
@@ -36,9 +49,8 @@ export const useTipTapEditor = ({
       onSelectionUpdate?.(editor, selectedText);
     },
     editorProps: {
-      attributes: {
-        class: className,
-      },
+      ...editorProps,
+      attributes: resolvedAttributes,
     },
   });
 
