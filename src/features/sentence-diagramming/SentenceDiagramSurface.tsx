@@ -36,7 +36,7 @@ const segmentOverlapsSelection = (
   return selectionStart < segmentEnd && selectionEnd > segmentStart;
 };
 
-const wrapperClassByKind: Record<AnnotationKind, string> = {
+const wrapperClassByKind: Partial<Record<AnnotationKind, string>> = {
   'subordinate-clause': 'sentence-diagram-shell-boundary',
   'prepositional-phrase': 'sentence-diagram-shell-boundary',
   'participial-phrase': 'sentence-diagram-shell sentence-diagram-shell-box',
@@ -45,27 +45,6 @@ const wrapperClassByKind: Record<AnnotationKind, string> = {
   verb: 'sentence-diagram-shell sentence-diagram-shell-circle',
   infinitive: 'sentence-diagram-shell sentence-diagram-shell-double-circle',
   participle: 'sentence-diagram-shell sentence-diagram-shell-box',
-  active: '',
-  passive: '',
-  'person-1s': '',
-  'person-2s': '',
-  'person-3s': '',
-  'person-1p': '',
-  'person-2p': '',
-  'person-3p': '',
-  'special-plus-dative': '',
-  'special-intransitive': '',
-  'special-plus-ablative': '',
-  nominative: '',
-  'predicate-nominative': '',
-  accusative: '',
-  'predicate-accusative': '',
-  genitive: '',
-  dative: '',
-  ablative: '',
-  vocative: '',
-  locative: '',
-  particle: '',
 };
 
 const boundaryToneClassByKind: Partial<Record<AnnotationKind, string>> = {

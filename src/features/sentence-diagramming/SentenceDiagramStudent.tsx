@@ -110,11 +110,9 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({ 
   };
 
   const handleSubmit = () => {
-    const result = compareDiagramAnnotationSets(annotations, exercise.data.solutionAnnotations, exercise.data.tokens);
-
-    if (result.isComplete) {
+    if (comparison.isComplete) {
       handleCorrect(true);
-      onComplete?.(Math.round(result.accuracy));
+      onComplete?.(Math.round(comparison.accuracy));
       return;
     }
 

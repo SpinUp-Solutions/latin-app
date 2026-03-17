@@ -44,21 +44,22 @@ const TOKEN_COLOR_PRIORITY: AnnotationKind[] = [
   'ablative',
 ];
 
+const TOKEN_COLOR_SET = new Set(TOKEN_COLOR_PRIORITY);
+
+const isMoreSpecific = (a: DiagramAnnotation, b: DiagramAnnotation) => {
+  const aLen = a.span.endTokenIndex - a.span.startTokenIndex;
+  const bLen = b.span.endTokenIndex - b.span.startTokenIndex;
+
+  if (aLen !== bLen) return aLen < bLen;
+  if (a.span.startTokenIndex !== b.span.startTokenIndex) return a.span.startTokenIndex > b.span.startTokenIndex;
+  return a.kind < b.kind;
+};
+
 const pickMostSpecific = (annotations: DiagramAnnotation[]) =>
-  [...annotations].sort((left, right) => {
-    const leftLength = left.span.endTokenIndex - left.span.startTokenIndex;
-    const rightLength = right.span.endTokenIndex - right.span.startTokenIndex;
-
-    if (leftLength !== rightLength) {
-      return leftLength - rightLength;
-    }
-
-    if (left.span.startTokenIndex !== right.span.startTokenIndex) {
-      return right.span.startTokenIndex - left.span.startTokenIndex;
-    }
-
-    return left.kind.localeCompare(right.kind);
-  })[0];
+  annotations.reduce<DiagramAnnotation | undefined>(
+    (best, curr) => (!best || isMoreSpecific(curr, best) ? curr : best),
+    undefined
+  );
 
 const coversToken = (annotation: DiagramAnnotation, tokenIndex: number) =>
   annotation.span.startTokenIndex <= tokenIndex && annotation.span.endTokenIndex >= tokenIndex;
@@ -67,7 +68,7 @@ const isWrapperAnnotation = (annotation: DiagramAnnotation) => ANNOTATION_SPECS[
 
 const getTokenToneClass = (annotations: DiagramAnnotation[]) => {
   const winner = [...annotations]
-    .filter(annotation => TOKEN_COLOR_PRIORITY.includes(annotation.kind))
+    .filter(annotation => TOKEN_COLOR_SET.has(annotation.kind))
     .sort((left, right) => {
       const leftPriority = TOKEN_COLOR_PRIORITY.indexOf(left.kind);
       const rightPriority = TOKEN_COLOR_PRIORITY.indexOf(right.kind);
@@ -186,10 +187,18 @@ export const buildTokenRenderState = (
   token: DiagramToken,
   annotations: DiagramAnnotation[]
 ): DiagramTokenRenderState => {
-  const tokenAnnotations = annotations.filter(
-    annotation => !isWrapperAnnotation(annotation) && coversToken(annotation, token.index)
-  );
-  const allCoveringAnnotations = annotations.filter(annotation => coversToken(annotation, token.index));
+  const tokenAnnotations: DiagramAnnotation[] = [];
+  const allCoveringAnnotations: DiagramAnnotation[] = [];
+
+  for (const annotation of annotations) {
+    if (coversToken(annotation, token.index)) {
+      allCoveringAnnotations.push(annotation);
+
+      if (!isWrapperAnnotation(annotation)) {
+        tokenAnnotations.push(annotation);
+      }
+    }
+  }
 
   return {
     token,
