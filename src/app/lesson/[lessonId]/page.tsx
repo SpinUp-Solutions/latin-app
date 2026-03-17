@@ -117,7 +117,7 @@ export default function DynamicLessonPage() {
         <main className="flex-1 overflow-y-auto px-6 py-8">
           <div className="max-w-3xl mx-auto">
             <h2 className="text-2xl font-serif text-gray-800 mb-6">{currentLesson.title}</h2>
-            <LessonPlayer lesson={currentLesson} />
+            <LessonPlayer key={currentLesson.id} lesson={currentLesson} />
           </div>
         </main>
         <PracticeSidebar currentLessonId={lessonId} />

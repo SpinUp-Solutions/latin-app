@@ -17,6 +17,7 @@ import {
   type GeneratedTranslationItem,
 } from '@/src/utils/exercises/generatedTranslationExercise';
 import { getExerciseDisplayForm, hasSelectedForm } from '@/src/utils/exercises/formSelection';
+import { normalizeCollection, buildLegacyPosConfigs } from '@/src/utils/exercises/legacyExerciseCompat';
 
 interface Props {
   exercise: GeneratedTranslationExercise;
@@ -31,13 +32,24 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
   const config = exercise.data.generatorConfig;
   const translationDirection = exercise.translationDirection || 'latin-to-english';
 
+  // Backward compat: old exercises stored filters/formSelection in generatorConfig
+  // with no posConfigs, wordSource, or poolId
+  const hasNewFormatPosConfigs =
+    exercise.data.posConfigs &&
+    typeof exercise.data.posConfigs === 'object' &&
+    Object.keys(exercise.data.posConfigs).length > 0;
+
+  const posConfigs = hasNewFormatPosConfigs
+    ? exercise.data.posConfigs
+    : buildLegacyPosConfigs(config as Parameters<typeof buildLegacyPosConfigs>[0]);
+
   const { data, isLoading, isError } = useGetMultiPosWordsQuery({
     exerciseType: 'generated-translation',
-    collection: config.collection,
-    wordSource: config.wordSource,
-    poolId: config.poolId,
+    collection: normalizeCollection(config.collection),
+    wordSource: config.wordSource || 'filters',
+    poolId: config.poolId ?? null,
     count: config.count,
-    posConfigs: exercise.data.posConfigs,
+    posConfigs,
   });
 
   const items: GeneratedTranslationItem[] = useMemo(() => {
