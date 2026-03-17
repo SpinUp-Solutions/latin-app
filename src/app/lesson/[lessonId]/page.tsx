@@ -7,6 +7,7 @@ import Image from 'next/image';
 import LessonPlayer from '@/src/components/ui/lesson/lesson-player';
 import LessonSidebar from '@/src/components/ui/lesson/lesson-sidebar';
 import PracticeSidebar from '@/src/components/ui/lesson/practice-sidebar';
+import { FeedbackBanner } from '@/src/components/ui/core/feedback-banner';
 
 export default function DynamicLessonPage() {
   const params = useParams();
@@ -111,6 +112,8 @@ export default function DynamicLessonPage() {
           <h1 className="text-xl font-serif tracking-wide">Wake Forest University Latin</h1>
         </div>
       </header>
+
+      <FeedbackBanner />
 
       <div className="flex flex-1 overflow-hidden">
         <LessonSidebar currentLessonId={lessonId} />
