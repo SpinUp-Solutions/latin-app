@@ -1,7 +1,7 @@
 import { RenderableContentItem } from '@/src/types/page';
 import { createDefaultFeedbackConfig, DEFAULT_ITEM_PROGRESSION_DELAY } from './feedbackDefaults';
 import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
-import { buildDiagrammingContent, DEFAULT_STUDENT_DIAGRAM_TOOLS } from './sentenceDiagramming';
+import { createEmptySentenceDiagramDocument, DEFAULT_STUDENT_TOOLS } from '@/src/features/sentence-diagramming';
 
 export const generateId = (prefix?: string): string => {
   const timestamp = Date.now();
@@ -142,56 +142,23 @@ export const createNewContent = (type: string): RenderableContentItem => {
         },
       };
     case 'sentence-diagramming': {
-      const defaultWords = [
-        {
-          id: 'word-1',
-          text: 'Marcus',
-          index: 0,
-          startPosition: 0,
-          endPosition: 6,
-        },
-        {
-          id: 'word-2',
-          text: 'puellam',
-          index: 1,
-          startPosition: 7,
-          endPosition: 14,
-        },
-        {
-          id: 'word-3',
-          text: 'videt',
-          index: 2,
-          startPosition: 15,
-          endPosition: 20,
-        },
-      ];
-
       return {
         id: baseId,
         type: 'sentence-diagramming',
         title: 'Sentence Diagramming Exercise',
-        instructions: 'Diagram the Latin sentence ',
+        instructions: 'Diagram the Latin sentence.',
         audioPath: null,
         itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
         feedbackConfig: createDefaultFeedbackConfig(),
-        data: {
-          sentence: {
-            latin: 'Marcus puellam videt',
-            translation: 'Marcus sees the girl',
-            words: defaultWords,
-            content: buildDiagrammingContent(defaultWords),
-          },
-          solution: {
-            marks: [],
-          },
-          availableStudentTools: DEFAULT_STUDENT_DIAGRAM_TOOLS,
+        data: createEmptySentenceDiagramDocument('Marcus puellam videt', 'Marcus sees the girl', {
+          availableStudentTools: DEFAULT_STUDENT_TOOLS,
           hints: [
             'Start by identifying the verb in the sentence.',
             'Look for the subject - who is doing the action?',
             'Find the direct object - what is being acted upon?',
           ],
           difficulty: 'beginner',
-        },
+        }),
       };
     }
     case 'multiple-choice':

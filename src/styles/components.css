@@ -33,159 +33,160 @@
   @apply prose-p:my-2 prose-p:leading-snug prose-headings:my-4 prose-ul:my-2 prose-ol:my-2;
 }
 
-/* Sentence Diagramming Extensions */
-.sentence-diagramming-canvas .ProseMirror,
-.sentence-diagramming-exercise-content .ProseMirror {
-  min-height: 100px;
-  padding: 8px;
-  font-size: 16px;
-  line-height: 1.8;
+/* Sentence Diagramming */
+.sentence-diagram-flow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.55rem;
+  padding: 1rem;
+  border-radius: 1.5rem;
+  background: white;
   font-family: Georgia, serif;
+  font-size: 1.35rem;
+  line-height: 1.65;
+  color: #1c1917;
+  user-select: text;
 }
 
-/* Base annotation styles */
-.sentence-diagramming-canvas span[data-verb-circle],
-.sentence-diagramming-canvas span[data-infinitive-double-circle],
-.sentence-diagramming-canvas span[data-participle-box],
-.sentence-diagramming-canvas span[data-nominative-underline],
-.sentence-diagramming-canvas span[data-accusative-double-underline],
-.sentence-diagramming-canvas span[data-predicate-nominative-squiggle],
-.sentence-diagramming-canvas span[data-predicate-accusative-double-squiggle],
-.sentence-diagramming-canvas span[data-genitive-bold],
-.sentence-diagramming-canvas span[data-shared-italic],
-.sentence-diagramming-canvas span[data-vocative-v],
-.sentence-diagramming-canvas span[data-passive],
-.sentence-diagramming-canvas span[data-compound],
-.sentence-diagramming-canvas span[data-prepositional-parentheses],
-.sentence-diagramming-canvas span[data-subordinate-brackets],
-.sentence-diagramming-exercise-content span[data-verb-circle],
-.sentence-diagramming-exercise-content span[data-infinitive-double-circle],
-.sentence-diagramming-exercise-content span[data-participle-box],
-.sentence-diagramming-exercise-content span[data-nominative-underline],
-.sentence-diagramming-exercise-content span[data-accusative-double-underline],
-.sentence-diagramming-exercise-content span[data-predicate-nominative-squiggle],
-.sentence-diagramming-exercise-content span[data-predicate-accusative-double-squiggle],
-.sentence-diagramming-exercise-content span[data-genitive-bold],
-.sentence-diagramming-exercise-content span[data-shared-italic],
-.sentence-diagramming-exercise-content span[data-vocative-v],
-.sentence-diagramming-exercise-content span[data-passive],
-.sentence-diagramming-exercise-content span[data-compound],
-.sentence-diagramming-exercise-content span[data-prepositional-parentheses],
-.sentence-diagramming-exercise-content span[data-subordinate-brackets] {
-  cursor: pointer;
-  margin: 0 1px;
-  display: inline-block;
+.sentence-diagram-flow ::selection {
+  background: rgba(59, 130, 246, 0.18);
+}
+
+.sentence-diagram-wrapper,
+.sentence-diagram-wrapper-inner,
+.sentence-diagram-shell,
+.sentence-diagram-token {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 0.55rem;
+}
+
+.sentence-diagram-wrapper {
   position: relative;
 }
 
-/* Hidden word tokens keep selection aligned to actual words. */
-.diagram-word-token {
-  display: inline;
+.sentence-diagram-wrapper-inner {
+  position: relative;
 }
 
-.diagram-verb-circle {
-  border: 2px solid #eab308;
-  border-radius: 9999px;
-  background: #fef3c7;
-  padding: 0 6px;
+.sentence-diagram-shell {
+  border: 2px solid #f59e0b;
+  border-radius: 1.1rem;
+  padding: 0.3rem 0.55rem;
+  box-shadow: 0 10px 28px -24px rgba(217, 119, 6, 0.9);
 }
 
-.diagram-infinitive-double-circle {
-  border: 2px solid #eab308;
-  border-radius: 9999px;
-  background: #fef3c7;
-  box-shadow: 0 0 0 2px #eab308;
-  padding: 0 6px;
-}
-
-.diagram-participle-box {
-  border: 2px solid #eab308;
+.sentence-diagram-shell-box {
   border-radius: 0.25rem;
-  background: #fef3c7;
-  padding: 0 6px;
+  background: rgba(254, 243, 199, 0.72);
 }
 
-.diagram-nominative-underline {
-  border-bottom: 2px solid #111827;
-  padding-bottom: 2px;
+.sentence-diagram-shell-circle {
+  border-radius: 9999px;
+  padding: 0.3rem 0.9rem;
+  background: rgba(255, 255, 255, 0.66);
 }
 
-.diagram-accusative-double-underline {
-  border-bottom: 4px double #111827;
-  padding-bottom: 2px;
+.sentence-diagram-shell-double-circle {
+  border-radius: 9999px;
+  padding: 0.3rem 0.9rem;
+  background: rgba(255, 255, 255, 0.72);
 }
 
-.diagram-predicate-nominative-squiggle {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='4' viewBox='0 0 12 4'%3E%3Cpath d='M0 3 C2 1 4 1 6 3 S10 5 12 3' fill='none' stroke='%23111827' stroke-width='1.5'/%3E%3C/svg%3E");
-  background-repeat: repeat-x;
-  background-position: left calc(100% - 1px);
-  background-size: 12px 4px;
-  padding-bottom: 6px;
-}
-
-.diagram-predicate-accusative-double-squiggle {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='4' viewBox='0 0 12 4'%3E%3Cpath d='M0 3 C2 1 4 1 6 3 S10 5 12 3' fill='none' stroke='%23111827' stroke-width='1.5'/%3E%3C/svg%3E"),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='4' viewBox='0 0 12 4'%3E%3Cpath d='M0 3 C2 1 4 1 6 3 S10 5 12 3' fill='none' stroke='%23111827' stroke-width='1.5'/%3E%3C/svg%3E");
-  background-repeat: repeat-x, repeat-x;
-  background-position:
-    left calc(100% - 1px),
-    left calc(100% - 5px);
-  background-size:
-    12px 4px,
-    12px 4px;
-  padding-bottom: 10px;
-}
-
-.diagram-genitive-bold {
-  font-weight: 700;
-}
-
-.diagram-shared-italic {
-  font-style: italic;
-}
-
-.diagram-vocative-v {
-  padding-top: 0.15rem;
-}
-
-.diagram-vocative-v::after {
-  content: 'V';
+.sentence-diagram-shell-double-circle::before {
+  content: '';
   position: absolute;
-  left: 50%;
-  top: -0.6rem;
-  transform: translateX(-50%);
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: #111827;
-  line-height: 1;
+  inset: 0.25rem;
+  border: 2px solid #f59e0b;
+  border-radius: 9999px;
+  pointer-events: none;
 }
 
-.diagram-passive,
-.diagram-passive .diagram-word-token {
-  color: #2563eb;
-}
-
-.diagram-compound,
-.diagram-compound .diagram-word-token {
-  color: #dc2626;
-}
-
-.diagram-prepositional-parentheses,
-.diagram-subordinate-brackets {
-  display: inline;
-  margin: 0;
-}
-
-.diagram-group-boundary {
-  display: inline;
+.sentence-diagram-boundary {
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  font-size: 1.55rem;
   font-weight: 700;
   user-select: none;
 }
 
-.diagram-group-boundary-parentheses {
-  color: #92400e;
+.sentence-diagram-token-text {
+  position: relative;
+  display: inline-flex;
+  align-items: flex-end;
+  letter-spacing: 0.01em;
 }
 
-.diagram-group-boundary-brackets {
-  color: #1e40af;
+.sentence-diagram-token-segment {
+  position: relative;
+  display: inline-block;
+  border-radius: 0.35rem;
+  padding: 0 0.05em;
+  transition:
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.sentence-diagram-token:hover .sentence-diagram-token-segment {
+  background: rgba(251, 191, 36, 0.08);
+}
+
+.sentence-diagram-selected-segment {
+  background: rgba(59, 130, 246, 0.15);
+  box-shadow: inset 0 -2px 0 rgba(59, 130, 246, 0.4);
+}
+
+.sentence-diagram-token:hover .sentence-diagram-selected-segment {
+  background: rgba(59, 130, 246, 0.2);
+}
+
+.sentence-diagram-exact-underline {
+  text-decoration-line: underline;
+  text-decoration-thickness: 2px;
+  text-decoration-color: currentColor;
+  text-underline-offset: 0.24em;
+}
+
+.sentence-diagram-underline-single {
+  text-decoration-line: underline;
+  text-decoration-thickness: 2px;
+  text-decoration-color: currentColor;
+  text-underline-offset: 0.24em;
+}
+
+.sentence-diagram-underline-double {
+  position: relative;
+  padding-bottom: 0.16em;
+}
+
+.sentence-diagram-underline-double::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0.04em;
+  border-bottom: 3px double currentColor;
+}
+
+.sentence-diagram-underline-squiggle {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='5' viewBox='0 0 14 5'%3E%3Cpath d='M0 4 C2 1 5 1 7 4 S12 7 14 4' fill='none' stroke='%231c1917' stroke-width='1.4'/%3E%3C/svg%3E");
+  background-repeat: repeat-x;
+  background-position: left calc(100% - 1px);
+  background-size: 14px 5px;
+  padding-bottom: 0.36em;
+}
+
+.sentence-diagram-underline-double-squiggle {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='5' viewBox='0 0 14 5'%3E%3Cpath d='M0 4 C2 1 5 1 7 4 S12 7 14 4' fill='none' stroke='%231c1917' stroke-width='1.4'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='5' viewBox='0 0 14 5'%3E%3Cpath d='M0 4 C2 1 5 1 7 4 S12 7 14 4' fill='none' stroke='%231c1917' stroke-width='1.4'/%3E%3C/svg%3E");
+  background-repeat: repeat-x, repeat-x;
+  background-position:
+    left calc(100% - 1px),
+    left calc(100% - 6px);
+  background-size:
+    14px 5px,
+    14px 5px;
+  padding-bottom: 0.62em;
 }

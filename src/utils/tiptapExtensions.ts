@@ -2,7 +2,6 @@ import StarterKit, { StarterKitOptions } from '@tiptap/starter-kit';
 import { Extensions } from '@tiptap/core';
 import { Tooltip } from '@/src/components/ui/core/tooltip-extension';
 import { Hyperlink } from '@/src/components/ui/core/hyperlink-extension';
-import { DiagrammingExtensions } from '@/src/components/ui/core/diagramming-extensions';
 
 export type EditorMode = 'admin' | 'student' | 'readonly' | 'simple';
 
@@ -59,8 +58,9 @@ export const createExtensionSet = ({
   mode,
   enableTooltips = true,
   enableHyperlinks = true,
-  enableAnnotations = true,
+  enableAnnotations: _enableAnnotations = true,
 }: ExtensionSetOptions): Extensions => {
+  void _enableAnnotations;
   const extensions: Extensions = [StarterKit.configure(getStarterKitConfig(mode))];
 
   if (enableTooltips) {
@@ -69,10 +69,6 @@ export const createExtensionSet = ({
 
   if (enableHyperlinks) {
     extensions.push(Hyperlink);
-  }
-
-  if (enableAnnotations && (mode === 'admin' || mode === 'student')) {
-    extensions.push(...DiagrammingExtensions);
   }
 
   return extensions;
