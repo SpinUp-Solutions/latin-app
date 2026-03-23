@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ClickOnMultipleWordsExercise } from '@/src/types/exercise';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { FeedbackDisplay } from '../feedback';
@@ -9,6 +9,7 @@ import { Button } from '@/src/components/ui/button';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { MultiClickableRichDisplay } from '../core/multi-clickable-rich-display';
+import { toast } from 'sonner';
 
 interface Props {
   exercise: ClickOnMultipleWordsExercise;
@@ -23,9 +24,28 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete }
     null
   );
 
-  const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
-    exercise.feedbackConfig
-  );
+  const {
+    isCorrect,
+    message,
+    level,
+    showExplanation,
+    handleCorrect,
+    handleIncorrect,
+    reset,
+    shouldResetExercise,
+    resetExercise,
+  } = useExerciseFeedback(exercise.feedbackConfig);
+
+  useEffect(() => {
+    if (shouldResetExercise) {
+      toast.info('Too many mistakes. Starting over...');
+      setSelectedIndices(new Set());
+      setHasSubmitted(false);
+      setValidationResult(null);
+      setIsProcessing(false);
+      resetExercise();
+    }
+  }, [shouldResetExercise, resetExercise]);
 
   const handleWordClick = (wordIndex: number) => {
     if (hasSubmitted || isProcessing) return;

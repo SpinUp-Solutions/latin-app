@@ -70,24 +70,37 @@ export async function GET(request: NextRequest) {
     const diagrammingLessons = allLessons.filter(l => l.type === 'sentence-diagramming');
     const listeningLessons = allLessons.filter(l => l.type === 'listening');
 
+    const isLockingDisabled = process.env.NEXT_PUBLIC_DISABLE_PROGRESSION_LOCK === 'true';
+
+    const getStatusFromProgress = (
+      userProgress: UserProgress | undefined,
+      lesson: (typeof allLessons)[number]
+    ): { status: string; progress: number } => {
+      if (userProgress) {
+        const currentPageIndex = userProgress.currentPageIndex || 0;
+        const totalPages = lesson.pages.length;
+        const progress = calculateProgressFromPageIndex(currentPageIndex, totalPages);
+        const isComplete = isLessonComplete(currentPageIndex, totalPages);
+        const status = isComplete ? 'completed' : currentPageIndex > 0 ? 'in-progress' : 'available';
+        return { status, progress };
+      }
+      return { status: 'available', progress: 0 };
+    };
+
     const processNormalLessons = (lessons: typeof allLessons): LessonWithProgress[] => {
       return lessons.map((lesson, index) => {
         const userProgress = userProgressMap[lesson.id];
         let status = 'locked';
         let progress = 0;
 
-        if (!currentUser) {
-          status = 'available';
+        if (!currentUser || isLockingDisabled) {
+          const result = getStatusFromProgress(userProgress, lesson);
+          status = result.status;
+          progress = result.progress;
         } else if (index === 0) {
-          if (userProgress) {
-            const currentPageIndex = userProgress.currentPageIndex || 0;
-            const totalPages = lesson.pages.length;
-            progress = calculateProgressFromPageIndex(currentPageIndex, totalPages);
-            const isComplete = isLessonComplete(currentPageIndex, totalPages);
-            status = isComplete ? 'completed' : currentPageIndex > 0 ? 'in-progress' : 'available';
-          } else {
-            status = 'available';
-          }
+          const result = getStatusFromProgress(userProgress, lesson);
+          status = result.status;
+          progress = result.progress;
         } else {
           const previousLesson = lessons[index - 1];
           const previousProgress = userProgressMap[previousLesson.id];
@@ -98,15 +111,9 @@ export async function GET(request: NextRequest) {
             const isPreviousComplete = isLessonComplete(prevCurrentPageIndex, prevTotalPages);
 
             if (isPreviousComplete) {
-              if (userProgress) {
-                const currentPageIndex = userProgress.currentPageIndex || 0;
-                const totalPages = lesson.pages.length;
-                progress = calculateProgressFromPageIndex(currentPageIndex, totalPages);
-                const isComplete = isLessonComplete(currentPageIndex, totalPages);
-                status = isComplete ? 'completed' : currentPageIndex > 0 ? 'in-progress' : 'available';
-              } else {
-                status = 'available';
-              }
+              const result = getStatusFromProgress(userProgress, lesson);
+              status = result.status;
+              progress = result.progress;
             }
           }
         }

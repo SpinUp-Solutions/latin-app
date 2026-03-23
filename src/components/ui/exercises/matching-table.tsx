@@ -9,6 +9,7 @@ import { validateMatchingExercise } from '@/src/utils/exercises/matchingExercise
 import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
+import { toast } from 'sonner';
 
 interface MatchingItem {
   id: string;
@@ -36,9 +37,33 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
   const [currentRound, setCurrentRound] = useState(1);
   const [roundScores, setRoundScores] = useState<number[]>([]);
 
-  const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
-    exercise.feedbackConfig
-  );
+  const {
+    isCorrect,
+    message,
+    level,
+    showExplanation,
+    handleCorrect,
+    handleIncorrect,
+    reset,
+    shouldResetExercise,
+    resetExercise,
+  } = useExerciseFeedback(exercise.feedbackConfig);
+
+  useEffect(() => {
+    if (shouldResetExercise) {
+      toast.info('Too many mistakes. Starting over...');
+      setShuffledLeftColumn(leftColumn);
+      setShuffledRightColumn(rightColumn);
+      setSelectedLeft(null);
+      setSelectedRight(null);
+      setMatches({});
+      setMatchedLeftIds(new Set());
+      setShowIncorrectFlash(false);
+      setCurrentRound(1);
+      setRoundScores([]);
+      resetExercise();
+    }
+  }, [shouldResetExercise, resetExercise, leftColumn, rightColumn]);
 
   // this is for the live preview :/
   useEffect(() => {

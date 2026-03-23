@@ -47,10 +47,12 @@ export function getEffectiveFeedbackConfig(config: FeedbackConfig): {
   escalationLevels: FeedbackLevel[];
   successMessage: SuccessMessageConfig;
   progressionRules: ProgressionRules;
+  maxLevelFailures?: number;
 } {
   return {
     escalationLevels: (config.escalationLevels ?? []).map(normalizeEscalationLevel),
     successMessage: getSuccessMessageWithDefaults(config.successMessage),
     progressionRules: getProgressionRulesWithDefaults(config.progressionRules),
+    maxLevelFailures: config.maxLevelFailures,
   };
 }

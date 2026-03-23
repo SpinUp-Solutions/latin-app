@@ -41,6 +41,12 @@ export interface FeedbackConfig {
 
   /** Generic behaviour flags (work for every exercise). */
   progressionRules?: ProgressionRules;
+
+  /**
+   * Number of wrong answers at the last escalation level before the entire
+   * exercise resets. `undefined` or `0` = disabled.
+   */
+  maxLevelFailures?: number;
 }
 
 // New robust state machine types
@@ -54,12 +60,15 @@ export interface FeedbackState {
   readonly shouldShowHint: boolean;
   readonly shouldShowAnswer: boolean;
   readonly shouldShowExplanation: boolean;
+  /** Running count of incorrect submissions while at the last escalation level. Persists across item resets. */
+  readonly maxLevelFailureCount: number;
 }
 
 export type FeedbackAction =
   | { type: 'ANSWER_INCORRECT'; escalationLevels: FeedbackLevel[] }
   | { type: 'ANSWER_CORRECT'; successMessage: string; showExplanation: boolean; isLastItem?: boolean }
-  | { type: 'RESET' };
+  | { type: 'RESET' }
+  | { type: 'EXERCISE_RESET' };
 
 export interface FeedbackMachineConfig {
   escalationLevels: FeedbackLevel[];

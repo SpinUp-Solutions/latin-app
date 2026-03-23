@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MultipleChoiceExercise } from '@/src/types/exercise';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { FeedbackDisplay } from '../feedback';
@@ -9,6 +9,7 @@ import { Button } from '@/src/components/ui/button';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { cn } from '@/src/lib/utils';
+import { toast } from 'sonner';
 
 interface Props {
   exercise: MultipleChoiceExercise;
@@ -20,9 +21,26 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect } = useExerciseFeedback(
-    exercise.feedbackConfig
-  );
+  const {
+    isCorrect,
+    message,
+    level,
+    showExplanation,
+    handleCorrect,
+    handleIncorrect,
+    shouldResetExercise,
+    resetExercise,
+  } = useExerciseFeedback(exercise.feedbackConfig);
+
+  useEffect(() => {
+    if (shouldResetExercise) {
+      toast.info('Too many mistakes. Starting over...');
+      setSelectedOptionIds([]);
+      setHasSubmitted(false);
+      setIsProcessing(false);
+      resetExercise();
+    }
+  }, [shouldResetExercise, resetExercise]);
 
   const handleOptionSelect = (optionId: string) => {
     if (hasSubmitted || isProcessing) return;

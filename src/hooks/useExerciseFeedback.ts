@@ -11,6 +11,7 @@ const createInitialState = (): FeedbackState => ({
   shouldShowHint: false,
   shouldShowAnswer: false,
   shouldShowExplanation: false,
+  maxLevelFailureCount: 0,
 });
 
 // Pure reducer function - handles all state transitions
@@ -24,6 +25,9 @@ function feedbackReducer(state: FeedbackState, action: FeedbackAction): Feedback
       const levelIndex = Math.min(nextAttempt - 1, escalationLevels.length - 1);
       const activeLevel = escalationLevels[levelIndex] || null;
 
+      // Count wrong answers at the last escalation level
+      const isAtMaxLevel = escalationLevels.length > 0 && nextAttempt >= escalationLevels.length;
+
       return {
         phase: 'attempting',
         currentAttempt: nextAttempt,
@@ -32,6 +36,7 @@ function feedbackReducer(state: FeedbackState, action: FeedbackAction): Feedback
         shouldShowHint: Boolean(activeLevel?.showHint),
         shouldShowAnswer: Boolean(activeLevel?.showAnswer),
         shouldShowExplanation: false,
+        maxLevelFailureCount: isAtMaxLevel ? state.maxLevelFailureCount + 1 : state.maxLevelFailureCount,
       };
     }
 
@@ -46,10 +51,18 @@ function feedbackReducer(state: FeedbackState, action: FeedbackAction): Feedback
         shouldShowHint: false,
         shouldShowAnswer: false,
         shouldShowExplanation: showExplanation,
+        maxLevelFailureCount: state.maxLevelFailureCount,
       };
     }
 
     case 'RESET': {
+      return {
+        ...createInitialState(),
+        maxLevelFailureCount: state.maxLevelFailureCount,
+      };
+    }
+
+    case 'EXERCISE_RESET': {
       return createInitialState();
     }
 
@@ -101,12 +114,21 @@ export function useExerciseFeedback(config: FeedbackConfig) {
     dispatch({ type: 'RESET' });
   }, []);
 
+  const resetExercise = useCallback(() => {
+    dispatch({ type: 'EXERCISE_RESET' });
+  }, []);
+
   // Derived values for backward compatibility
   const isCorrect = state.phase === 'succeeded' ? true : state.phase === 'attempting' ? false : null;
 
   const level = state.activeLevel;
   const message = state.displayMessage;
   const showExplanation = state.shouldShowExplanation;
+
+  const shouldResetExercise =
+    config.maxLevelFailures != null &&
+    config.maxLevelFailures > 0 &&
+    state.maxLevelFailureCount >= config.maxLevelFailures;
 
   return {
     // New state machine interface
@@ -120,5 +142,9 @@ export function useExerciseFeedback(config: FeedbackConfig) {
     handleCorrect,
     handleIncorrect,
     reset,
+
+    // Exercise reset on max-level failures
+    shouldResetExercise,
+    resetExercise,
   };
 }
