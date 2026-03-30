@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { TableFillExercise } from '@/src/types/exercise';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
+import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
 import { FeedbackDisplay } from '../feedback';
 import { validateTableFillExercise } from '@/src/utils/exercises/tableFillExercise';
 import { Button } from '@/src/components/ui/button';
@@ -29,15 +30,35 @@ const TableFillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
   const [isProcessing, setIsProcessing] = useState(false);
   const [cellResults, setCellResults] = useState<Record<string, boolean>>({});
 
-  const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
-    exercise.feedbackConfig
-  );
+  const {
+    isCorrect,
+    message,
+    level,
+    showExplanation,
+    handleCorrect,
+    handleIncorrect,
+    clearFeedback,
+    shouldResetExercise,
+    resetExercise,
+  } = useExerciseFeedback(exercise.feedbackConfig);
+
+  useDelayedExerciseReset({
+    shouldReset: shouldResetExercise,
+    delayMs: exercise.itemProgressionDelay,
+    onReset: () => {
+      setUserAnswers({});
+      setHasSubmitted(false);
+      setCellResults({});
+      setIsProcessing(false);
+      resetExercise();
+    },
+  });
 
   const handleInputChange = (cellKey: string, value: string) => {
     if (hasSubmitted || isProcessing) return;
     setUserAnswers(prev => ({ ...prev, [cellKey]: value }));
     if (isCorrect !== null) {
-      reset();
+      clearFeedback();
     }
   };
 
@@ -65,6 +86,7 @@ const TableFillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
     setUserAnswers({});
     setHasSubmitted(false);
     setCellResults({});
+    clearFeedback();
   };
 
   const getCellClassName = (cellKey: string, isBlank: boolean) => {

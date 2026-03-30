@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { MultipleChoiceExercise } from '@/src/types/exercise';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
+import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
 import { FeedbackDisplay } from '../feedback';
 import { validateMultipleChoiceExercise } from '@/src/utils/exercises/multipleChoiceExercise';
 import { Button } from '@/src/components/ui/button';
@@ -20,9 +21,28 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect } = useExerciseFeedback(
-    exercise.feedbackConfig
-  );
+  const {
+    isCorrect,
+    message,
+    level,
+    showExplanation,
+    handleCorrect,
+    handleIncorrect,
+    clearFeedback,
+    shouldResetExercise,
+    resetExercise,
+  } = useExerciseFeedback(exercise.feedbackConfig);
+
+  useDelayedExerciseReset({
+    shouldReset: shouldResetExercise,
+    delayMs: exercise.itemProgressionDelay,
+    onReset: () => {
+      setSelectedOptionIds([]);
+      setHasSubmitted(false);
+      setIsProcessing(false);
+      resetExercise();
+    },
+  });
 
   const handleOptionSelect = (optionId: string) => {
     if (hasSubmitted || isProcessing) return;
@@ -62,6 +82,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
   const handleReset = () => {
     setSelectedOptionIds([]);
     setHasSubmitted(false);
+    clearFeedback();
   };
 
   const getOptionClassName = (optionId: string) => {

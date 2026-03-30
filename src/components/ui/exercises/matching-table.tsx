@@ -3,6 +3,7 @@ import { Button } from '@/src/components/ui/button';
 import { X, Shuffle } from 'lucide-react';
 import { MatchingExercise } from '@/src/types/exercise';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
+import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
 import { FeedbackDisplay } from '../feedback';
 import FieldSelect from '../core/field-select';
 import { validateMatchingExercise } from '@/src/utils/exercises/matchingExercise';
@@ -36,9 +37,35 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
   const [currentRound, setCurrentRound] = useState(1);
   const [roundScores, setRoundScores] = useState<number[]>([]);
 
-  const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
-    exercise.feedbackConfig
-  );
+  const {
+    isCorrect,
+    message,
+    level,
+    showExplanation,
+    handleCorrect,
+    handleIncorrect,
+    clearFeedback,
+    reset,
+    shouldResetExercise,
+    resetExercise,
+  } = useExerciseFeedback(exercise.feedbackConfig);
+
+  useDelayedExerciseReset({
+    shouldReset: shouldResetExercise,
+    delayMs: exercise.itemProgressionDelay,
+    onReset: () => {
+      setShuffledLeftColumn(leftColumn);
+      setShuffledRightColumn(rightColumn);
+      setSelectedLeft(null);
+      setSelectedRight(null);
+      setMatches({});
+      setMatchedLeftIds(new Set());
+      setShowIncorrectFlash(false);
+      setCurrentRound(1);
+      setRoundScores([]);
+      resetExercise();
+    },
+  });
 
   // this is for the live preview :/
   useEffect(() => {
@@ -65,7 +92,7 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
     }
     setSelectedLeft(matchingItem);
     setSelectedRight(null);
-    reset();
+    clearFeedback();
   };
 
   const handleRightSelect = (item: string, index?: number) => {
@@ -75,7 +102,7 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
       return;
     }
     setSelectedRight(matchingItem);
-    reset();
+    clearFeedback();
 
     // Auto-match if left item is already selected
     if (selectedLeft && matchingItem) {
@@ -126,7 +153,7 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
           setSelectedLeft(null);
           setSelectedRight(null);
           setShowIncorrectFlash(false);
-          reset();
+          clearFeedback();
         }, 1000);
       }
     }

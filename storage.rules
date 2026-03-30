@@ -1,10 +1,19 @@
 rules_version = '2';
 
-// Craft rules based on data in your Firestore database
-// allow write: if firestore.get(
-//    /databases/(default)/documents/users/$(request.auth.uid)).data.isAdmin;
 service firebase.storage {
   match /b/{bucket}/o {
+    // Lesson migration snapshots are created and restored only through
+    // server-side Admin SDK routes. Client SDK access stays disabled.
+    match /lesson-snapshots/{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    // Lesson audio is uploaded and served via authenticated server routes
+    // and signed URLs. Direct client SDK access stays disabled.
+    match /lessons/{lessonId}/content_audio/{fileName} {
+      allow read, write: if false;
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }

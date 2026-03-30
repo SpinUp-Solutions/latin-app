@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { OddOneOutExercise } from '@/src/types/exercise';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
+import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
 import { FeedbackDisplay } from '../feedback';
 import { validateOddOneOutExercise } from '@/src/utils/exercises/oddOneOutExercise';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
@@ -22,9 +23,29 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
   const [isProcessing, setIsProcessing] = useState(false);
   const [hasSubmitted, setHasSubmitted] = useState(false);
 
-  const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect } = useExerciseFeedback(
-    exercise.feedbackConfig
-  );
+  const {
+    isCorrect,
+    message,
+    level,
+    showExplanation,
+    handleCorrect,
+    handleIncorrect,
+    clearFeedback,
+    shouldResetExercise,
+    resetExercise,
+  } = useExerciseFeedback(exercise.feedbackConfig);
+
+  useDelayedExerciseReset({
+    shouldReset: shouldResetExercise,
+    delayMs: exercise.itemProgressionDelay,
+    onReset: () => {
+      setSelectedItemId(null);
+      setUserExplanation('');
+      setHasSubmitted(false);
+      setIsProcessing(false);
+      resetExercise();
+    },
+  });
 
   const handleItemSelect = (itemId: string) => {
     if (hasSubmitted) return;
@@ -54,7 +75,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
     setSelectedItemId(null);
     setUserExplanation('');
     setHasSubmitted(false);
-    // Don't reset feedback state - preserve escalation level for next attempt
+    clearFeedback();
   };
 
   return (

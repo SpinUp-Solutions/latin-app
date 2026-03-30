@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
+import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { FillEmboldedTextExercise } from '@/src/types/exercise';
 import { ExerciseInput, FeedbackDisplay } from '../feedback';
@@ -21,16 +22,38 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
   const [isProcessing, setIsProcessing] = useState(false);
   const [correctAnswers, setCorrectAnswers] = useState(0);
 
-  const { currentIndex, isLastItem, isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance } =
+  const { currentIndex, isLastItem, isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance, resetIndex } =
     useExerciseProgression({
       totalItems: exercise.data.words.length,
       itemProgressionDelay: exercise.itemProgressionDelay,
       progressionRules: exercise.feedbackConfig.progressionRules,
     });
 
-  const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
-    exercise.feedbackConfig
-  );
+  const {
+    isCorrect,
+    message,
+    level,
+    showExplanation,
+    handleCorrect,
+    handleIncorrect,
+    clearFeedback,
+    reset,
+    shouldResetExercise,
+    resetExercise,
+  } = useExerciseFeedback(exercise.feedbackConfig);
+
+  useDelayedExerciseReset({
+    shouldReset: shouldResetExercise,
+    delayMs: exercise.itemProgressionDelay,
+    onReset: () => {
+      setUserAnswer('');
+      setSelectedWordIndex(null);
+      setCorrectAnswers(0);
+      setIsProcessing(false);
+      resetIndex();
+      resetExercise();
+    },
+  });
 
   const currentWord = exercise.data.words[currentIndex];
 
@@ -91,7 +114,7 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
   const handleAnswerChange = (value: string) => {
     setUserAnswer(value);
     if (isCorrect === false) {
-      reset();
+      clearFeedback();
     }
   };
 

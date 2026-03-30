@@ -25,6 +25,7 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({
 }) => {
   const [expandedSections, setExpandedSections] = useState({
     escalation: true,
+    questionReset: false,
     success: false,
     progression: false,
     timing: false,
@@ -80,6 +81,16 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({
   const removeEscalationLevel = (index: number) => {
     const newLevels = feedbackConfig.escalationLevels.filter((_, i) => i !== index);
     updateEscalationLevels(newLevels);
+  };
+
+  const questionResetEnabled = (feedbackConfig.maxLevelFailures ?? 0) > 0;
+  const questionResetThreshold = questionResetEnabled ? (feedbackConfig.maxLevelFailures ?? 2) : 2;
+
+  const updateQuestionReset = (enabled: boolean, threshold = questionResetThreshold) => {
+    onChange({
+      ...feedbackConfig,
+      maxLevelFailures: enabled ? Math.max(1, threshold) : undefined,
+    });
   };
 
   const successMessageWithDefaults = getSuccessMessageWithDefaults(feedbackConfig.successMessage);
@@ -175,6 +186,61 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({
               <Plus className="h-4 w-4 mr-2" />
               Add Escalation Level
             </Button>
+          </CardContent>
+        )}
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle
+            className="flex items-center justify-between cursor-pointer text-base"
+            onClick={() => toggleSection('questionReset')}>
+            <span>Question Reset</span>
+            {expandedSections.questionReset ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </CardTitle>
+        </CardHeader>
+        {expandedSections.questionReset && (
+          <CardContent className="space-y-4">
+            <div className="text-sm text-gray-600">
+              Reset the student back to the start of the exercise after too many incorrect submissions on the same
+              question.
+            </div>
+
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={questionResetEnabled}
+                onChange={e => updateQuestionReset(e.target.checked)}
+              />
+              Enable exercise reset after repeated wrong answers
+            </label>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Wrong answers before reset</label>
+              <input
+                type="number"
+                value={questionResetEnabled ? questionResetThreshold : ''}
+                onChange={e => {
+                  const val = e.target.value;
+                  if (val === '') {
+                    updateQuestionReset(false);
+                    return;
+                  }
+
+                  updateQuestionReset(true, Math.max(1, parseInt(val, 10) || 1));
+                }}
+                className="w-full p-2 border rounded-md text-sm disabled:bg-gray-50 disabled:text-gray-400"
+                placeholder={questionResetEnabled ? '' : 'Disabled'}
+                min="1"
+                step="1"
+                disabled={!questionResetEnabled}
+              />
+              <div className="text-xs text-gray-500 mt-1">
+                After this many wrong submissions on one question, the exercise restarts from the beginning. This is
+                independent of escalation levels; if the threshold is higher than the number of levels, the last level
+                repeats until reset.
+              </div>
+            </div>
           </CardContent>
         )}
       </Card>

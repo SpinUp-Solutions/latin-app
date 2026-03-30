@@ -1,7 +1,11 @@
 import { RenderableContentItem } from '@/src/types/page';
 import { createDefaultFeedbackConfig, DEFAULT_ITEM_PROGRESSION_DELAY } from './feedbackDefaults';
 import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
-import { createEmptySentenceDiagramDocument, DEFAULT_STUDENT_TOOLS } from '@/src/features/sentence-diagramming';
+import {
+  createEmptySentenceDiagramDocument,
+  createSentenceDiagramFeedbackContent,
+  DEFAULT_STUDENT_TOOLS,
+} from '@/src/features/sentence-diagramming';
 
 export const generateId = (prefix?: string): string => {
   const timestamp = Date.now();
@@ -152,11 +156,12 @@ export const createNewContent = (type: string): RenderableContentItem => {
         feedbackConfig: createDefaultFeedbackConfig(),
         data: createEmptySentenceDiagramDocument('Marcus puellam videt', 'Marcus sees the girl', {
           availableStudentTools: DEFAULT_STUDENT_TOOLS,
-          hints: [
-            'Start by identifying the verb in the sentence.',
-            'Look for the subject - who is doing the action?',
-            'Find the direct object - what is being acted upon?',
-          ],
+          hint: createSentenceDiagramFeedbackContent(
+            'Start by identifying the verb, then work outward to the subject and direct object.'
+          ),
+          explanation: createSentenceDiagramFeedbackContent(
+            'In this sentence, videt is the verb, Marcus is the subject, and puellam is the direct object.'
+          ),
           difficulty: 'beginner',
         }),
       };

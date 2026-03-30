@@ -49,9 +49,19 @@ function feedbackReducer(state: FeedbackState, action: FeedbackAction): Feedback
       };
     }
 
+    case 'CLEAR_FEEDBACK': {
+      return {
+        ...createInitialState(),
+        currentAttempt: state.currentAttempt,
+      };
+    }
+
     case 'RESET': {
       return createInitialState();
     }
+
+    case 'EXERCISE_RESET':
+      return createInitialState();
 
     default:
       return state;
@@ -101,12 +111,25 @@ export function useExerciseFeedback(config: FeedbackConfig) {
     dispatch({ type: 'RESET' });
   }, []);
 
+  const clearFeedback = useCallback(() => {
+    dispatch({ type: 'CLEAR_FEEDBACK' });
+  }, []);
+
+  const resetExercise = useCallback(() => {
+    dispatch({ type: 'EXERCISE_RESET' });
+  }, []);
+
   // Derived values for backward compatibility
   const isCorrect = state.phase === 'succeeded' ? true : state.phase === 'attempting' ? false : null;
 
   const level = state.activeLevel;
   const message = state.displayMessage;
   const showExplanation = state.shouldShowExplanation;
+
+  const shouldResetExercise =
+    machineConfig.maxLevelFailures != null &&
+    machineConfig.maxLevelFailures > 0 &&
+    state.currentAttempt >= machineConfig.maxLevelFailures;
 
   return {
     // New state machine interface
@@ -119,6 +142,11 @@ export function useExerciseFeedback(config: FeedbackConfig) {
     showExplanation,
     handleCorrect,
     handleIncorrect,
+    clearFeedback,
     reset,
+
+    // Exercise reset on repeated question failures
+    shouldResetExercise,
+    resetExercise,
   };
 }

@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { ClickOnMultipleWordsExercise } from '@/src/types/exercise';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
+import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
 import { FeedbackDisplay } from '../feedback';
 import { validateClickOnMultipleWords } from '@/src/utils/exercises/clickOnMultipleWords';
 import { Button } from '@/src/components/ui/button';
@@ -23,9 +24,29 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete }
     null
   );
 
-  const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
-    exercise.feedbackConfig
-  );
+  const {
+    isCorrect,
+    message,
+    level,
+    showExplanation,
+    handleCorrect,
+    handleIncorrect,
+    clearFeedback,
+    shouldResetExercise,
+    resetExercise,
+  } = useExerciseFeedback(exercise.feedbackConfig);
+
+  useDelayedExerciseReset({
+    shouldReset: shouldResetExercise,
+    delayMs: exercise.itemProgressionDelay,
+    onReset: () => {
+      setSelectedIndices(new Set());
+      setHasSubmitted(false);
+      setValidationResult(null);
+      setIsProcessing(false);
+      resetExercise();
+    },
+  });
 
   const handleWordClick = (wordIndex: number) => {
     if (hasSubmitted || isProcessing) return;
@@ -41,7 +62,7 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete }
     });
 
     if (isCorrect !== null) {
-      reset();
+      clearFeedback();
     }
   };
 
@@ -68,7 +89,7 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete }
     setSelectedIndices(new Set());
     setHasSubmitted(false);
     setValidationResult(null);
-    reset();
+    clearFeedback();
   };
 
   const getSelectionSummary = () => {

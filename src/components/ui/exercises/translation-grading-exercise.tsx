@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { TranslationGradingExercise } from '@/src/types/exercises';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
+import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
+import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
 import { useTranslationGrading } from '@/src/hooks/useTranslationGrading';
 import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
@@ -47,15 +49,33 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
   const targetLanguage = isLatinToEnglish ? 'English' : 'Latin';
   const direction = translationDirection;
 
-  const { currentIndex, isLastItem, isFirstItem, nextItem, previousItem } = useExerciseProgression({
+  const { currentIndex, isLastItem, isFirstItem, nextItem, previousItem, resetIndex } = useExerciseProgression({
     totalItems: exercise.data.items.length,
     itemProgressionDelay: exercise.itemProgressionDelay,
     progressionRules: exercise.feedbackConfig.progressionRules,
   });
 
+  const { handleCorrect, handleIncorrect, reset, shouldResetExercise, resetExercise } = useExerciseFeedback(
+    exercise.feedbackConfig
+  );
   const { grade, reset: resetGrading, isLoading, data, error } = useTranslationGrading();
 
   const currentAnswer = userAnswers[currentIndex] || '';
+
+  useDelayedExerciseReset({
+    shouldReset: shouldResetExercise,
+    delayMs: exercise.itemProgressionDelay,
+    onReset: () => {
+      setUserAnswers({});
+      setPassedSentences(new Set());
+      resetGrading();
+      resetIndex();
+      resetExercise();
+      requestAnimationFrame(() => {
+        textareaRef.current?.focus();
+      });
+    },
+  });
 
   const handleSubmit = async () => {
     if (isLoading || !currentAnswer.trim()) return;
@@ -73,6 +93,9 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
 
     if (passed) {
       setPassedSentences(prev => new Set([...prev, currentIndex]));
+      handleCorrect(isLastItem);
+    } else {
+      handleIncorrect();
     }
   };
 
@@ -84,16 +107,19 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
     }
     nextItem();
     resetGrading();
+    reset();
   };
 
   const handlePrevious = () => {
     previousItem();
     resetGrading();
+    reset();
   };
 
   const handleNext = () => {
     nextItem();
     resetGrading();
+    reset();
   };
 
   const currentItem = exercise.data.items[currentIndex];
