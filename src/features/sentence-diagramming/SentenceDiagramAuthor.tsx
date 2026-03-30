@@ -9,6 +9,7 @@ import {
 import {
   applyDiagramAnnotation,
   DiagramAnnotation,
+  normalizeSentenceDiagramFeedbackContent,
   resetDiagramColorAnnotations,
   SentenceDiagramDocument,
   tokenizeDiagramSentence,
@@ -29,31 +30,46 @@ interface SentenceDiagramAuthorProps {
 
 const difficultyOptions = ['beginner', 'intermediate', 'advanced'] as const;
 
-export const SentenceDiagramAuthor: React.FC<SentenceDiagramAuthorProps> = ({ document, onChange }) => {
+interface DiagramAnnotationEditorProps {
+  title: string;
+  description: string;
+  tokens: SentenceDiagramDocument['tokens'];
+  annotations: DiagramAnnotation[];
+  onChange: (annotations: DiagramAnnotation[]) => void;
+  emptyState: string;
+  text?: string;
+  onTextChange?: (value: string) => void;
+  textLabel?: string;
+  textPlaceholder?: string;
+}
+
+const DiagramAnnotationEditor: React.FC<DiagramAnnotationEditorProps> = ({
+  title,
+  description,
+  tokens,
+  annotations,
+  onChange,
+  emptyState,
+  text,
+  onTextChange,
+  textLabel,
+  textPlaceholder,
+}) => {
   const [selection, setSelection] = useState<DiagramSelection | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const normalizedTools = normalizeAnnotationTools(document.availableStudentTools);
-  const availableStudentTools = normalizedTools.length ? normalizedTools : DEFAULT_STUDENT_TOOLS;
   const groupedAnnotations = useMemo(
     () =>
-      document.solutionAnnotations.reduce<Record<string, DiagramAnnotation[]>>((groups, annotation) => {
+      annotations.reduce<Record<string, DiagramAnnotation[]>>((groups, annotation) => {
         const groupTitle = ANNOTATION_SPECS[annotation.kind].groupTitle;
         groups[groupTitle] = groups[groupTitle] || [];
         groups[groupTitle].push(annotation);
         return groups;
       }, {}),
-    [document.solutionAnnotations]
+    [annotations]
   );
 
-  const updateDocument = (updates: Partial<SentenceDiagramDocument>) => {
-    onChange({
-      ...document,
-      ...updates,
-    });
-  };
-
   const applyTool = (kind: AnnotationKind) => {
-    const span = getSelectionSpanForKind(selection, kind, document.tokens);
+    const span = getSelectionSpanForKind(selection, kind, tokens);
 
     if (!span) {
       setMessage(
@@ -65,16 +81,131 @@ export const SentenceDiagramAuthor: React.FC<SentenceDiagramAuthorProps> = ({ do
     }
 
     const result = applyDiagramAnnotation({
-      annotations: document.solutionAnnotations,
+      annotations,
       kind,
       span,
-      tokens: document.tokens,
+      tokens,
     });
 
-    updateDocument({
-      solutionAnnotations: result.annotations,
-    });
+    onChange(result.annotations);
     setMessage(result.error || null);
+  };
+
+  return (
+    <div className="space-y-4 rounded-[1.75rem] border border-stone-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-2">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-stone-500">{title}</div>
+          <div className="text-sm text-stone-600">{description}</div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="outline" className="border-stone-300 bg-white px-3 py-1 text-stone-700">
+            {annotations.length} annotations
+          </Badge>
+          <Badge variant="outline" className="border-stone-300 bg-white px-3 py-1 text-stone-700">
+            {tokens.length} tokens
+          </Badge>
+        </div>
+      </div>
+
+      {onTextChange ? (
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-stone-800">{textLabel || 'Text'}</label>
+          <Textarea
+            value={text || ''}
+            onChange={event => onTextChange(event.target.value)}
+            className="min-h-[110px] resize-y"
+            placeholder={textPlaceholder}
+          />
+        </div>
+      ) : null}
+
+      <SentenceDiagramToolbar
+        disabled={false}
+        onToolClick={applyTool}
+        onResetColors={() => {
+          onChange(resetDiagramColorAnnotations(annotations, tokens));
+          setMessage(null);
+        }}
+        onClear={() => {
+          onChange([]);
+          setMessage(null);
+        }}
+      />
+
+      <SentenceDiagramSurface
+        tokens={tokens}
+        annotations={annotations}
+        selection={selection}
+        onSelectionChange={nextSelection => {
+          setSelection(nextSelection);
+          setMessage(null);
+        }}
+        message={message}
+      />
+
+      <div className="rounded-[1.5rem] border border-stone-200 bg-white/80 p-4 shadow-sm">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-500">Authored Annotations</div>
+            <div className="text-sm text-stone-600">Each item below is persisted as a canonical JSON annotation.</div>
+          </div>
+          {annotations.length > 0 ? (
+            <Button variant="outline" size="sm" onClick={() => onChange([])}>
+              Clear
+            </Button>
+          ) : null}
+        </div>
+
+        {annotations.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-stone-300 px-4 py-6 text-sm text-stone-500">
+            {emptyState}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {Object.entries(groupedAnnotations).map(([groupTitle, groupedItems]) => (
+              <div key={groupTitle} className="space-y-2">
+                <div className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-500">{groupTitle}</div>
+                <div className="flex flex-wrap gap-2">
+                  {groupedItems.map(annotation => (
+                    <button
+                      key={annotation.id}
+                      type="button"
+                      onClick={() =>
+                        onChange(annotations.filter(currentAnnotation => currentAnnotation.id !== annotation.id))
+                      }
+                      className="rounded-full border border-stone-300 bg-stone-50 px-3 py-2 text-left text-xs text-stone-700 transition hover:bg-stone-100">
+                      <span className="font-semibold text-stone-900">
+                        {ANNOTATION_SPECS[annotation.kind].shortLabel}
+                      </span>
+                      <span className="mx-2 text-stone-400">•</span>
+                      <span>
+                        {annotation.span.startTokenIndex}:{annotation.span.startCharOffset}-
+                        {annotation.span.endTokenIndex}:{annotation.span.endCharOffset}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export const SentenceDiagramAuthor: React.FC<SentenceDiagramAuthorProps> = ({ document, onChange }) => {
+  const normalizedTools = normalizeAnnotationTools(document.availableStudentTools);
+  const availableStudentTools = normalizedTools.length ? normalizedTools : DEFAULT_STUDENT_TOOLS;
+  const hintContent = normalizeSentenceDiagramFeedbackContent(document.hint);
+  const explanationContent = normalizeSentenceDiagramFeedbackContent(document.explanation);
+
+  const updateDocument = (updates: Partial<SentenceDiagramDocument>) => {
+    onChange({
+      ...document,
+      ...updates,
+    });
   };
 
   return (
@@ -86,7 +217,8 @@ export const SentenceDiagramAuthor: React.FC<SentenceDiagramAuthorProps> = ({ do
               Sentence Authoring
             </div>
             <div className="text-sm text-stone-600">
-              This sentence is immutable in the surface below. Editing it retokenizes and clears the authored solution.
+              This sentence is immutable in the solution surface below. Editing it retokenizes and clears the solution
+              annotations.
             </div>
           </div>
 
@@ -101,8 +233,6 @@ export const SentenceDiagramAuthor: React.FC<SentenceDiagramAuthorProps> = ({ do
                   tokens: tokenizeDiagramSentence(latin),
                   solutionAnnotations: [],
                 });
-                setSelection(null);
-                setMessage(null);
               }}
               placeholder="Enter the Latin sentence"
               className="min-h-[60px] resize-y"
@@ -143,23 +273,6 @@ export const SentenceDiagramAuthor: React.FC<SentenceDiagramAuthorProps> = ({ do
                 {document.tokens.length} tokens
               </div>
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-stone-800">Hints</label>
-            <Textarea
-              value={document.hints.join('\n')}
-              onChange={event =>
-                updateDocument({
-                  hints: event.target.value
-                    .split('\n')
-                    .map(hint => hint.trim())
-                    .filter(Boolean),
-                })
-              }
-              className="min-h-[120px]"
-              placeholder="One hint per line"
-            />
           </div>
         </div>
 
@@ -207,106 +320,70 @@ export const SentenceDiagramAuthor: React.FC<SentenceDiagramAuthorProps> = ({ do
         </div>
       </div>
 
-      <div className="space-y-4 rounded-[1.75rem] border border-stone-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-2">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-stone-500">
-              Solution Authoring
-            </div>
-            <div className="text-sm text-stone-600">
-              Select immutable tokens, apply annotations, and save structured JSON only.
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="outline" className="border-stone-300 bg-white px-3 py-1 text-stone-700">
-              {document.solutionAnnotations.length} annotations
-            </Badge>
-            <Badge variant="outline" className="border-stone-300 bg-white px-3 py-1 text-stone-700">
-              {document.tokens.length} tokens
-            </Badge>
-          </div>
-        </div>
+      <DiagramAnnotationEditor
+        title="Solution Authoring"
+        description="Select immutable tokens, apply annotations, and save structured JSON only."
+        tokens={document.tokens}
+        annotations={document.solutionAnnotations}
+        onChange={solutionAnnotations => updateDocument({ solutionAnnotations })}
+        emptyState="No solution annotations yet."
+      />
 
-        <SentenceDiagramToolbar
-          disabled={false}
-          onToolClick={applyTool}
-          onResetColors={() => {
-            updateDocument({
-              solutionAnnotations: resetDiagramColorAnnotations(document.solutionAnnotations, document.tokens),
-            });
-            setMessage(null);
-          }}
-          onClear={() => {
-            updateDocument({ solutionAnnotations: [] });
-            setMessage(null);
-          }}
-        />
+      <DiagramAnnotationEditor
+        title="Hint Diagram"
+        description="Annotate the custom hint text shown when a feedback level enables hint display."
+        tokens={hintContent.tokens}
+        annotations={hintContent.annotations}
+        text={hintContent.text}
+        textLabel="Hint Text"
+        textPlaceholder="Write the hint text here. Editing it retokenizes and clears the hint annotations."
+        onTextChange={value =>
+          updateDocument({
+            hint: {
+              text: value,
+              tokens: tokenizeDiagramSentence(value),
+              annotations: [],
+            },
+          })
+        }
+        onChange={annotations =>
+          updateDocument({
+            hint: {
+              ...hintContent,
+              annotations,
+            },
+          })
+        }
+        emptyState="No hint annotations yet."
+      />
 
-        <SentenceDiagramSurface
-          tokens={document.tokens}
-          annotations={document.solutionAnnotations}
-          selection={selection}
-          onSelectionChange={nextSelection => {
-            setSelection(nextSelection);
-            setMessage(null);
-          }}
-          message={message}
-        />
-
-        <div className="rounded-[1.5rem] border border-stone-200 bg-white/80 p-4 shadow-sm">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-500">
-                Authored Annotations
-              </div>
-              <div className="text-sm text-stone-600">Each item below is persisted as a canonical JSON annotation.</div>
-            </div>
-            {document.solutionAnnotations.length > 0 ? (
-              <Button variant="outline" size="sm" onClick={() => updateDocument({ solutionAnnotations: [] })}>
-                Clear Solution
-              </Button>
-            ) : null}
-          </div>
-
-          {document.solutionAnnotations.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-stone-300 px-4 py-6 text-sm text-stone-500">
-              No solution annotations yet.
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {Object.entries(groupedAnnotations).map(([groupTitle, annotations]) => (
-                <div key={groupTitle} className="space-y-2">
-                  <div className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-500">{groupTitle}</div>
-                  <div className="flex flex-wrap gap-2">
-                    {annotations.map(annotation => (
-                      <button
-                        key={annotation.id}
-                        type="button"
-                        onClick={() =>
-                          updateDocument({
-                            solutionAnnotations: document.solutionAnnotations.filter(
-                              currentAnnotation => currentAnnotation.id !== annotation.id
-                            ),
-                          })
-                        }
-                        className="rounded-full border border-stone-300 bg-stone-50 px-3 py-2 text-left text-xs text-stone-700 transition hover:bg-stone-100">
-                        <span className="font-semibold text-stone-900">
-                          {ANNOTATION_SPECS[annotation.kind].shortLabel}
-                        </span>
-                        <span className="mx-2 text-stone-400">•</span>
-                        <span>
-                          {annotation.span.startTokenIndex}:{annotation.span.startCharOffset}-
-                          {annotation.span.endTokenIndex}:{annotation.span.endCharOffset}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+      <DiagramAnnotationEditor
+        title="Explanation Diagram"
+        description="Annotate the custom explanation text shown after correct answers when explanations are enabled."
+        tokens={explanationContent.tokens}
+        annotations={explanationContent.annotations}
+        text={explanationContent.text}
+        textLabel="Explanation Text"
+        textPlaceholder="Write the explanation text here. Editing it retokenizes and clears the explanation annotations."
+        onTextChange={value =>
+          updateDocument({
+            explanation: {
+              text: value,
+              tokens: tokenizeDiagramSentence(value),
+              annotations: [],
+            },
+          })
+        }
+        onChange={annotations =>
+          updateDocument({
+            explanation: {
+              ...explanationContent,
+              annotations,
+            },
+          })
+        }
+        emptyState="No explanation annotations yet."
+      />
     </div>
   );
 };

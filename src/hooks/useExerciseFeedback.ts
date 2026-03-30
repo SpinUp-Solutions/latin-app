@@ -11,7 +11,6 @@ const createInitialState = (): FeedbackState => ({
   shouldShowHint: false,
   shouldShowAnswer: false,
   shouldShowExplanation: false,
-  maxLevelFailureCount: 0,
 });
 
 // Pure reducer function - handles all state transitions
@@ -25,9 +24,6 @@ function feedbackReducer(state: FeedbackState, action: FeedbackAction): Feedback
       const levelIndex = Math.min(nextAttempt - 1, escalationLevels.length - 1);
       const activeLevel = escalationLevels[levelIndex] || null;
 
-      // Count wrong answers at the last escalation level
-      const isAtMaxLevel = escalationLevels.length > 0 && nextAttempt >= escalationLevels.length;
-
       return {
         phase: 'attempting',
         currentAttempt: nextAttempt,
@@ -36,7 +32,6 @@ function feedbackReducer(state: FeedbackState, action: FeedbackAction): Feedback
         shouldShowHint: Boolean(activeLevel?.showHint),
         shouldShowAnswer: Boolean(activeLevel?.showAnswer),
         shouldShowExplanation: false,
-        maxLevelFailureCount: isAtMaxLevel ? state.maxLevelFailureCount + 1 : state.maxLevelFailureCount,
       };
     }
 
@@ -51,20 +46,22 @@ function feedbackReducer(state: FeedbackState, action: FeedbackAction): Feedback
         shouldShowHint: false,
         shouldShowAnswer: false,
         shouldShowExplanation: showExplanation,
-        maxLevelFailureCount: state.maxLevelFailureCount,
+      };
+    }
+
+    case 'CLEAR_FEEDBACK': {
+      return {
+        ...createInitialState(),
+        currentAttempt: state.currentAttempt,
       };
     }
 
     case 'RESET': {
-      return {
-        ...createInitialState(),
-        maxLevelFailureCount: state.maxLevelFailureCount,
-      };
-    }
-
-    case 'EXERCISE_RESET': {
       return createInitialState();
     }
+
+    case 'EXERCISE_RESET':
+      return createInitialState();
 
     default:
       return state;
@@ -114,6 +111,10 @@ export function useExerciseFeedback(config: FeedbackConfig) {
     dispatch({ type: 'RESET' });
   }, []);
 
+  const clearFeedback = useCallback(() => {
+    dispatch({ type: 'CLEAR_FEEDBACK' });
+  }, []);
+
   const resetExercise = useCallback(() => {
     dispatch({ type: 'EXERCISE_RESET' });
   }, []);
@@ -126,9 +127,9 @@ export function useExerciseFeedback(config: FeedbackConfig) {
   const showExplanation = state.shouldShowExplanation;
 
   const shouldResetExercise =
-    config.maxLevelFailures != null &&
-    config.maxLevelFailures > 0 &&
-    state.maxLevelFailureCount >= config.maxLevelFailures;
+    machineConfig.maxLevelFailures != null &&
+    machineConfig.maxLevelFailures > 0 &&
+    state.currentAttempt >= machineConfig.maxLevelFailures;
 
   return {
     // New state machine interface
@@ -141,9 +142,10 @@ export function useExerciseFeedback(config: FeedbackConfig) {
     showExplanation,
     handleCorrect,
     handleIncorrect,
+    clearFeedback,
     reset,
 
-    // Exercise reset on max-level failures
+    // Exercise reset on repeated question failures
     shouldResetExercise,
     resetExercise,
   };

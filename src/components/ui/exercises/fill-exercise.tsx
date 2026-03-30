@@ -1,15 +1,15 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { FillExercise } from '@/src/types/exercise';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
+import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { ExerciseInput, FeedbackDisplay } from '../feedback';
 import { validateFillExercise } from '@/src/utils/exercises/fillExercise';
 import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
-import { toast } from 'sonner';
 
 interface Props {
   exercise: FillExercise;
@@ -41,16 +41,17 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
     resetExercise,
   } = useExerciseFeedback(exercise.feedbackConfig);
 
-  useEffect(() => {
-    if (shouldResetExercise) {
-      toast.info('Too many mistakes. Starting over...');
+  useDelayedExerciseReset({
+    shouldReset: shouldResetExercise,
+    delayMs: exercise.itemProgressionDelay,
+    onReset: () => {
       setUserAnswer('');
       setCorrectAnswers(0);
       setIsProcessing(false);
       resetIndex();
       resetExercise();
-    }
-  }, [shouldResetExercise, resetIndex, resetExercise]);
+    },
+  });
 
   const handleSubmit = () => {
     if (isProcessing) return;

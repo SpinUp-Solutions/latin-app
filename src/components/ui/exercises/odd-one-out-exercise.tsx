@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { OddOneOutExercise } from '@/src/types/exercise';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
+import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
 import { FeedbackDisplay } from '../feedback';
 import { validateOddOneOutExercise } from '@/src/utils/exercises/oddOneOutExercise';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
@@ -10,7 +11,6 @@ import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { SimpleRichEditor } from '../core/simple-rich-editor';
 import { Button } from '../button';
 import { CheckCircle2 } from 'lucide-react';
-import { toast } from 'sonner';
 
 interface Props {
   exercise: OddOneOutExercise;
@@ -30,20 +30,22 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
     showExplanation,
     handleCorrect,
     handleIncorrect,
+    clearFeedback,
     shouldResetExercise,
     resetExercise,
   } = useExerciseFeedback(exercise.feedbackConfig);
 
-  useEffect(() => {
-    if (shouldResetExercise) {
-      toast.info('Too many mistakes. Starting over...');
+  useDelayedExerciseReset({
+    shouldReset: shouldResetExercise,
+    delayMs: exercise.itemProgressionDelay,
+    onReset: () => {
       setSelectedItemId(null);
       setUserExplanation('');
       setHasSubmitted(false);
       setIsProcessing(false);
       resetExercise();
-    }
-  }, [shouldResetExercise, resetExercise]);
+    },
+  });
 
   const handleItemSelect = (itemId: string) => {
     if (hasSubmitted) return;
@@ -73,7 +75,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
     setSelectedItemId(null);
     setUserExplanation('');
     setHasSubmitted(false);
-    // Don't reset feedback state - preserve escalation level for next attempt
+    clearFeedback();
   };
 
   return (

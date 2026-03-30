@@ -3,13 +3,13 @@ import { Button } from '@/src/components/ui/button';
 import { X, Shuffle } from 'lucide-react';
 import { MatchingExercise } from '@/src/types/exercise';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
+import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
 import { FeedbackDisplay } from '../feedback';
 import FieldSelect from '../core/field-select';
 import { validateMatchingExercise } from '@/src/utils/exercises/matchingExercise';
 import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
-import { toast } from 'sonner';
 
 interface MatchingItem {
   id: string;
@@ -44,14 +44,16 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
     showExplanation,
     handleCorrect,
     handleIncorrect,
+    clearFeedback,
     reset,
     shouldResetExercise,
     resetExercise,
   } = useExerciseFeedback(exercise.feedbackConfig);
 
-  useEffect(() => {
-    if (shouldResetExercise) {
-      toast.info('Too many mistakes. Starting over...');
+  useDelayedExerciseReset({
+    shouldReset: shouldResetExercise,
+    delayMs: exercise.itemProgressionDelay,
+    onReset: () => {
       setShuffledLeftColumn(leftColumn);
       setShuffledRightColumn(rightColumn);
       setSelectedLeft(null);
@@ -62,8 +64,8 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
       setCurrentRound(1);
       setRoundScores([]);
       resetExercise();
-    }
-  }, [shouldResetExercise, resetExercise, leftColumn, rightColumn]);
+    },
+  });
 
   // this is for the live preview :/
   useEffect(() => {
@@ -90,7 +92,7 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
     }
     setSelectedLeft(matchingItem);
     setSelectedRight(null);
-    reset();
+    clearFeedback();
   };
 
   const handleRightSelect = (item: string, index?: number) => {
@@ -100,7 +102,7 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
       return;
     }
     setSelectedRight(matchingItem);
-    reset();
+    clearFeedback();
 
     // Auto-match if left item is already selected
     if (selectedLeft && matchingItem) {
@@ -151,7 +153,7 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
           setSelectedLeft(null);
           setSelectedRight(null);
           setShowIncorrectFlash(false);
-          reset();
+          clearFeedback();
         }, 1000);
       }
     }

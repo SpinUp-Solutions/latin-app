@@ -1,15 +1,15 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { ClickOnMultipleWordsExercise } from '@/src/types/exercise';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
+import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
 import { FeedbackDisplay } from '../feedback';
 import { validateClickOnMultipleWords } from '@/src/utils/exercises/clickOnMultipleWords';
 import { Button } from '@/src/components/ui/button';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { MultiClickableRichDisplay } from '../core/multi-clickable-rich-display';
-import { toast } from 'sonner';
 
 interface Props {
   exercise: ClickOnMultipleWordsExercise;
@@ -31,21 +31,22 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete }
     showExplanation,
     handleCorrect,
     handleIncorrect,
-    reset,
+    clearFeedback,
     shouldResetExercise,
     resetExercise,
   } = useExerciseFeedback(exercise.feedbackConfig);
 
-  useEffect(() => {
-    if (shouldResetExercise) {
-      toast.info('Too many mistakes. Starting over...');
+  useDelayedExerciseReset({
+    shouldReset: shouldResetExercise,
+    delayMs: exercise.itemProgressionDelay,
+    onReset: () => {
       setSelectedIndices(new Set());
       setHasSubmitted(false);
       setValidationResult(null);
       setIsProcessing(false);
       resetExercise();
-    }
-  }, [shouldResetExercise, resetExercise]);
+    },
+  });
 
   const handleWordClick = (wordIndex: number) => {
     if (hasSubmitted || isProcessing) return;
@@ -61,7 +62,7 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete }
     });
 
     if (isCorrect !== null) {
-      reset();
+      clearFeedback();
     }
   };
 
@@ -88,7 +89,7 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete }
     setSelectedIndices(new Set());
     setHasSubmitted(false);
     setValidationResult(null);
-    reset();
+    clearFeedback();
   };
 
   const getSelectionSummary = () => {

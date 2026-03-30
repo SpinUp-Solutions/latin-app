@@ -30,13 +30,20 @@ export interface DiagramAnnotation {
 
 export type DiagramDifficulty = 'beginner' | 'intermediate' | 'advanced';
 
+export interface SentenceDiagramFeedbackContent {
+  text: string;
+  tokens: DiagramToken[];
+  annotations: DiagramAnnotation[];
+}
+
 export interface SentenceDiagramDocument {
   latin: string;
   translation: string;
   tokens: DiagramToken[];
   solutionAnnotations: DiagramAnnotation[];
   availableStudentTools: AnnotationKind[];
-  hints: string[];
+  hint: SentenceDiagramFeedbackContent;
+  explanation: SentenceDiagramFeedbackContent;
   difficulty: DiagramDifficulty;
 }
 
@@ -78,12 +85,32 @@ export const tokenizeDiagramSentence = (latin: string): DiagramToken[] => {
   }));
 };
 
+export const createSentenceDiagramFeedbackContent = (text = ''): SentenceDiagramFeedbackContent => ({
+  text,
+  tokens: tokenizeDiagramSentence(text),
+  annotations: [],
+});
+
+export const normalizeSentenceDiagramFeedbackContent = (
+  content?: SentenceDiagramFeedbackContent | null
+): SentenceDiagramFeedbackContent => {
+  const text = content?.text ?? '';
+
+  return {
+    text,
+    tokens: content?.tokens ?? tokenizeDiagramSentence(text),
+    annotations: content?.annotations ?? [],
+  };
+};
+
 export const createEmptySentenceDiagramDocument = (
   latin: string,
   translation: string,
-  options?: Partial<Pick<SentenceDiagramDocument, 'difficulty' | 'availableStudentTools' | 'hints'>>
+  options?: Partial<Pick<SentenceDiagramDocument, 'difficulty' | 'availableStudentTools' | 'hint' | 'explanation'>>
 ) => {
   const availableStudentTools = normalizeAnnotationTools(options?.availableStudentTools);
+  const hint = normalizeSentenceDiagramFeedbackContent(options?.hint);
+  const explanation = normalizeSentenceDiagramFeedbackContent(options?.explanation);
 
   return {
     latin,
@@ -91,7 +118,8 @@ export const createEmptySentenceDiagramDocument = (
     tokens: tokenizeDiagramSentence(latin),
     solutionAnnotations: [],
     availableStudentTools: availableStudentTools.length ? availableStudentTools : DEFAULT_STUDENT_TOOLS,
-    hints: options?.hints || [],
+    hint,
+    explanation,
     difficulty: options?.difficulty || 'beginner',
   };
 };
@@ -407,26 +435,135 @@ export const resetDiagramColorAnnotations = (annotations: DiagramAnnotation[], t
     tokens
   );
 
+interface CanonicalComparisonAnnotation {
+  id: string;
+  kind: AnnotationKind;
+}
+
+interface ExactInterval {
+  start: number;
+  end: number;
+}
+
+const mergeIntervals = (intervals: ExactInterval[]) => {
+  if (!intervals.length) {
+    return [] as ExactInterval[];
+  }
+
+  const sorted = [...intervals].sort((left, right) => {
+    if (left.start !== right.start) {
+      return left.start - right.start;
+    }
+
+    return left.end - right.end;
+  });
+  const merged: ExactInterval[] = [];
+
+  for (const interval of sorted) {
+    const previous = merged[merged.length - 1];
+
+    if (!previous || interval.start > previous.end) {
+      merged.push({ ...interval });
+      continue;
+    }
+
+    previous.end = Math.max(previous.end, interval.end);
+  }
+
+  return merged;
+};
+
+const buildCanonicalComparisonAnnotations = (
+  annotations: DiagramAnnotation[],
+  tokens: DiagramToken[]
+): CanonicalComparisonAnnotation[] => {
+  const normalized = normalizeDiagramAnnotations(annotations, tokens);
+  const canonical = new Map<string, CanonicalComparisonAnnotation>();
+  const tokenCoverageByKind = new Map<AnnotationKind, ExactInterval[]>();
+  const exactCoverageByKindAndToken = new Map<string, ExactInterval[]>();
+
+  normalized.forEach(annotation => {
+    const spec = ANNOTATION_SPECS[annotation.kind];
+
+    if (spec.isWrapper) {
+      canonical.set(annotation.id, {
+        id: annotation.id,
+        kind: annotation.kind,
+      });
+      return;
+    }
+
+    if (spec.selectionMode === 'token') {
+      const intervals = tokenCoverageByKind.get(annotation.kind) || [];
+      intervals.push({
+        start: annotation.span.startTokenIndex,
+        end: annotation.span.endTokenIndex + 1,
+      });
+      tokenCoverageByKind.set(annotation.kind, intervals);
+      return;
+    }
+
+    const exactKey = `${annotation.kind}:${annotation.span.startTokenIndex}`;
+    const intervals = exactCoverageByKindAndToken.get(exactKey) || [];
+    intervals.push({
+      start: annotation.span.startCharOffset,
+      end: annotation.span.endCharOffset,
+    });
+    exactCoverageByKindAndToken.set(exactKey, intervals);
+  });
+
+  tokenCoverageByKind.forEach((intervals, kind) => {
+    mergeIntervals(intervals).forEach(interval => {
+      const span = {
+        startTokenIndex: interval.start,
+        endTokenIndex: interval.end - 1,
+        startCharOffset: 0,
+        endCharOffset: getTokenLength(tokens[interval.end - 1]),
+      };
+      const id = createAnnotationId(kind, span);
+      canonical.set(id, { id, kind });
+    });
+  });
+
+  exactCoverageByKindAndToken.forEach((intervals, key) => {
+    const [kind, tokenIndexRaw] = key.split(':');
+    const tokenIndex = Number(tokenIndexRaw);
+
+    mergeIntervals(intervals).forEach(interval => {
+      const span = {
+        startTokenIndex: tokenIndex,
+        endTokenIndex: tokenIndex,
+        startCharOffset: interval.start,
+        endCharOffset: interval.end,
+      };
+      const id = createAnnotationId(kind as AnnotationKind, span);
+      canonical.set(id, { id, kind: kind as AnnotationKind });
+    });
+  });
+
+  return [...canonical.values()].sort((left, right) => left.id.localeCompare(right.id));
+};
+
 export const compareDiagramAnnotationSets = (
   studentAnnotations: DiagramAnnotation[],
   solutionAnnotations: DiagramAnnotation[],
   tokens: DiagramToken[]
 ): DiagramComparisonResult => {
-  const normalizedStudent = normalizeDiagramAnnotations(studentAnnotations, tokens);
-  const normalizedSolution = normalizeDiagramAnnotations(solutionAnnotations, tokens);
-  const solutionIds = new Set(normalizedSolution.map(annotation => annotation.id));
-  const studentIds = new Set(normalizedStudent.map(annotation => annotation.id));
-  const matchedIds = normalizedStudent
+  const canonicalStudent = buildCanonicalComparisonAnnotations(studentAnnotations, tokens);
+  const canonicalSolution = buildCanonicalComparisonAnnotations(solutionAnnotations, tokens);
+  const solutionIds = new Set(canonicalSolution.map(annotation => annotation.id));
+  const studentIds = new Set(canonicalStudent.map(annotation => annotation.id));
+  const matchedIds = canonicalStudent
     .filter(annotation => solutionIds.has(annotation.id))
     .map(annotation => annotation.id);
-  const missingIds = normalizedSolution
+  const missingIds = canonicalSolution
     .filter(annotation => !studentIds.has(annotation.id))
     .map(annotation => annotation.id);
-  const extraIds = normalizedStudent
+  const extraIds = canonicalStudent
     .filter(annotation => !solutionIds.has(annotation.id))
     .map(annotation => annotation.id);
   const matched = matchedIds.length;
-  const expected = normalizedSolution.length;
+  const expected = canonicalSolution.length;
   const extra = extraIds.length;
 
   return {

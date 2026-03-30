@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { GeneratedTranslationExercise } from '@/src/types/exercises';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
+import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { ExerciseInput, FeedbackDisplay } from '../feedback';
 import { ExerciseProgress } from './exercise-progress';
@@ -18,7 +19,6 @@ import {
 } from '@/src/utils/exercises/generatedTranslationExercise';
 import { getExerciseDisplayForm, hasSelectedForm } from '@/src/utils/exercises/formSelection';
 import { normalizeCollection, buildLegacyPosConfigs } from '@/src/utils/exercises/legacyExerciseCompat';
-import { toast } from 'sonner';
 
 interface Props {
   exercise: GeneratedTranslationExercise;
@@ -116,16 +116,17 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
     resetExercise,
   } = useExerciseFeedback(exercise.feedbackConfig);
 
-  useEffect(() => {
-    if (shouldResetExercise) {
-      toast.info('Too many mistakes. Starting over...');
+  useDelayedExerciseReset({
+    shouldReset: shouldResetExercise,
+    delayMs: exercise.itemProgressionDelay,
+    onReset: () => {
       setUserAnswer('');
       setCorrectAnswers(0);
       setIsProcessing(false);
       resetIndex();
       resetExercise();
-    }
-  }, [shouldResetExercise, resetIndex, resetExercise]);
+    },
+  });
 
   const handleSubmit = () => {
     if (isProcessing || items.length === 0) return;

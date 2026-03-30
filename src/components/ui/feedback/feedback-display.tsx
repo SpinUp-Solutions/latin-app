@@ -3,17 +3,27 @@ import { Check, X, HelpCircle, ChevronRight } from 'lucide-react';
 import type { FeedbackLevel } from '@/src/types/exercises/base';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 
+type FeedbackBody = React.ReactNode;
+
 interface FeedbackDisplayProps {
   isCorrect: boolean | null;
   message: string;
   level?: FeedbackLevel | null;
-  hint?: string;
-  correctAnswer?: string;
-  explanation?: string;
+  hint?: FeedbackBody;
+  correctAnswer?: FeedbackBody;
+  explanation?: FeedbackBody;
   showExplanation?: boolean;
   className?: string;
   onContinue?: () => void;
 }
+
+const renderFeedbackBody = (content: FeedbackBody, className?: string) => {
+  if (typeof content === 'string') {
+    return <SimpleRichDisplay content={content} className={className} />;
+  }
+
+  return content;
+};
 
 export const FeedbackDisplay: React.FC<FeedbackDisplayProps> = ({
   isCorrect,
@@ -28,8 +38,10 @@ export const FeedbackDisplay: React.FC<FeedbackDisplayProps> = ({
 }) => {
   const shouldShowHint = !isCorrect && Boolean(level?.showHint) && Boolean(hint);
   const shouldShowAnswer = !isCorrect && Boolean(level?.showAnswer) && Boolean(correctAnswer);
+  const shouldShowExplanationPanel = Boolean(isCorrect && showExplanation && explanation);
   const hasPrimaryMessage = Boolean(message);
-  const shouldRender = isCorrect !== null && (hasPrimaryMessage || shouldShowHint || shouldShowAnswer);
+  const shouldRender =
+    isCorrect !== null && (hasPrimaryMessage || shouldShowHint || shouldShowAnswer || shouldShowExplanationPanel);
   if (!shouldRender) return null;
 
   const baseClasses = 'mt-4 p-3 rounded-lg shadow-md border transition-all duration-200';
@@ -56,18 +68,25 @@ export const FeedbackDisplay: React.FC<FeedbackDisplayProps> = ({
             {shouldShowHint && (
               <div className="flex items-start gap-2 mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-yellow-800">
                 <HelpCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                <span className="text-sm">
-                  <SimpleRichDisplay content={hint as string} />
-                </span>
+                <div className="flex-1 text-sm">{renderFeedbackBody(hint as FeedbackBody)}</div>
               </div>
             )}
 
             {shouldShowAnswer && (
               <div className="flex items-start gap-2 mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-blue-800">
                 <Check className="h-4 w-4 flex-shrink-0 mt-0.5 text-blue-600" />
-                <span className="text-sm">
-                  Correct answer: <span className="font-mono">{correctAnswer as string}</span>
-                </span>
+                <div className="flex-1 text-sm">
+                  {typeof correctAnswer === 'string' ? (
+                    <span>
+                      Correct answer: <span className="font-mono">{correctAnswer}</span>
+                    </span>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="font-medium">Correct answer</div>
+                      {correctAnswer}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -75,9 +94,9 @@ export const FeedbackDisplay: React.FC<FeedbackDisplayProps> = ({
       </div>
 
       {/* Show explanation after correct answer */}
-      {isCorrect && showExplanation && explanation && (
+      {shouldShowExplanationPanel && (
         <div className="mt-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <SimpleRichDisplay content={explanation} className="text-blue-800 text-sm leading-relaxed" />
+          <div className="text-blue-800">{renderFeedbackBody(explanation, 'text-sm leading-relaxed')}</div>
         </div>
       )}
 

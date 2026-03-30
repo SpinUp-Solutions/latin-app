@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { TableFillExercise } from '@/src/types/exercise';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
+import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
 import { FeedbackDisplay } from '../feedback';
 import { validateTableFillExercise } from '@/src/utils/exercises/tableFillExercise';
 import { Button } from '@/src/components/ui/button';
@@ -17,7 +18,6 @@ import {
   RomanTableCell,
 } from '../core/roman-table';
 import { cn } from '@/src/lib/utils';
-import { toast } from 'sonner';
 
 interface Props {
   exercise: TableFillExercise;
@@ -37,27 +37,28 @@ const TableFillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
     showExplanation,
     handleCorrect,
     handleIncorrect,
-    reset,
+    clearFeedback,
     shouldResetExercise,
     resetExercise,
   } = useExerciseFeedback(exercise.feedbackConfig);
 
-  useEffect(() => {
-    if (shouldResetExercise) {
-      toast.info('Too many mistakes. Starting over...');
+  useDelayedExerciseReset({
+    shouldReset: shouldResetExercise,
+    delayMs: exercise.itemProgressionDelay,
+    onReset: () => {
       setUserAnswers({});
       setHasSubmitted(false);
       setCellResults({});
       setIsProcessing(false);
       resetExercise();
-    }
-  }, [shouldResetExercise, resetExercise]);
+    },
+  });
 
   const handleInputChange = (cellKey: string, value: string) => {
     if (hasSubmitted || isProcessing) return;
     setUserAnswers(prev => ({ ...prev, [cellKey]: value }));
     if (isCorrect !== null) {
-      reset();
+      clearFeedback();
     }
   };
 
@@ -85,6 +86,7 @@ const TableFillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
     setUserAnswers({});
     setHasSubmitted(false);
     setCellResults({});
+    clearFeedback();
   };
 
   const getCellClassName = (cellKey: string, isBlank: boolean) => {

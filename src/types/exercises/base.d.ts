@@ -43,7 +43,7 @@ export interface FeedbackConfig {
   progressionRules?: ProgressionRules;
 
   /**
-   * Number of wrong answers at the last escalation level before the entire
+   * Number of wrong answers on the current question before the entire
    * exercise resets. `undefined` or `0` = disabled.
    */
   maxLevelFailures?: number;
@@ -60,13 +60,12 @@ export interface FeedbackState {
   readonly shouldShowHint: boolean;
   readonly shouldShowAnswer: boolean;
   readonly shouldShowExplanation: boolean;
-  /** Running count of incorrect submissions while at the last escalation level. Persists across item resets. */
-  readonly maxLevelFailureCount: number;
 }
 
 export type FeedbackAction =
   | { type: 'ANSWER_INCORRECT'; escalationLevels: FeedbackLevel[] }
   | { type: 'ANSWER_CORRECT'; successMessage: string; showExplanation: boolean; isLastItem?: boolean }
+  | { type: 'CLEAR_FEEDBACK' }
   | { type: 'RESET' }
   | { type: 'EXERCISE_RESET' };
 

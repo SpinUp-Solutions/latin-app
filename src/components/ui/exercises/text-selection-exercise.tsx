@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { TextSelectionExercise } from '@/src/types/exercise';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
+import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { FeedbackDisplay } from '../feedback';
 import { validateTextSelectionExercise } from '@/src/utils/exercises/textSelectionExercise';
@@ -10,7 +11,6 @@ import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { ClickableRichDisplay } from '../core/clickable-rich-display';
-import { toast } from 'sonner';
 
 interface Props {
   exercise: TextSelectionExercise;
@@ -41,16 +41,17 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
     resetExercise,
   } = useExerciseFeedback(exercise.feedbackConfig);
 
-  useEffect(() => {
-    if (shouldResetExercise) {
-      toast.info('Too many mistakes. Starting over...');
+  useDelayedExerciseReset({
+    shouldReset: shouldResetExercise,
+    delayMs: exercise.itemProgressionDelay,
+    onReset: () => {
       setSelectedWordIndex(null);
       setCorrectAnswers(0);
       setIsProcessing(false);
       resetIndex();
       resetExercise();
-    }
-  }, [shouldResetExercise, resetIndex, resetExercise]);
+    },
+  });
 
   const handleWordClick = (wordIndex: number) => {
     if (isProcessing) return; // Prevent multiple rapid clicks
