@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { GeneratedTranslationExercise } from '@/src/types/exercises';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
@@ -18,6 +18,7 @@ import {
 } from '@/src/utils/exercises/generatedTranslationExercise';
 import { getExerciseDisplayForm, hasSelectedForm } from '@/src/utils/exercises/formSelection';
 import { normalizeCollection, buildLegacyPosConfigs } from '@/src/utils/exercises/legacyExerciseCompat';
+import { toast } from 'sonner';
 
 interface Props {
   exercise: GeneratedTranslationExercise;
@@ -96,16 +97,35 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
     return mapped.filter((item): item is GeneratedTranslationItem => item !== null);
   }, [data, translationDirection]);
 
-  const { currentIndex, isLastItem, isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance } =
+  const { currentIndex, isLastItem, isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance, resetIndex } =
     useExerciseProgression({
       totalItems: items.length,
       itemProgressionDelay: exercise.itemProgressionDelay,
       progressionRules: exercise.feedbackConfig.progressionRules,
     });
 
-  const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
-    exercise.feedbackConfig
-  );
+  const {
+    isCorrect,
+    message,
+    level,
+    showExplanation,
+    handleCorrect,
+    handleIncorrect,
+    reset,
+    shouldResetExercise,
+    resetExercise,
+  } = useExerciseFeedback(exercise.feedbackConfig);
+
+  useEffect(() => {
+    if (shouldResetExercise) {
+      toast.info('Too many mistakes. Starting over...');
+      setUserAnswer('');
+      setCorrectAnswers(0);
+      setIsProcessing(false);
+      resetIndex();
+      resetExercise();
+    }
+  }, [shouldResetExercise, resetIndex, resetExercise]);
 
   const handleSubmit = () => {
     if (isProcessing || items.length === 0) return;

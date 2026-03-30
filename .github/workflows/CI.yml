@@ -25,6 +25,7 @@ jobs:
       NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
       NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: ${{ secrets.FIREBASE_MEASUREMENT_ID }}
       NEXT_PUBLIC_APP_URL: ${{ secrets.APP_URL }}
+      NEXT_PUBLIC_DISABLE_PROGRESSION_LOCK: 'true' # Temporary: remove when re-enabling lesson locking
 
     steps:
       - uses: actions/checkout@v4
@@ -53,6 +54,7 @@ jobs:
       NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
       NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: ${{ secrets.FIREBASE_MEASUREMENT_ID }}
       NEXT_PUBLIC_APP_URL: ${{ secrets.APP_URL }}
+      NEXT_PUBLIC_DISABLE_PROGRESSION_LOCK: 'true' # Temporary: remove when re-enabling lesson locking
 
     steps:
       - uses: actions/checkout@v4

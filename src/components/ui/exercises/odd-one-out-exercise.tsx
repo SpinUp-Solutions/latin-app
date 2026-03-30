@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { OddOneOutExercise } from '@/src/types/exercise';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { FeedbackDisplay } from '../feedback';
@@ -10,6 +10,7 @@ import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { SimpleRichEditor } from '../core/simple-rich-editor';
 import { Button } from '../button';
 import { CheckCircle2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface Props {
   exercise: OddOneOutExercise;
@@ -22,9 +23,27 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
   const [isProcessing, setIsProcessing] = useState(false);
   const [hasSubmitted, setHasSubmitted] = useState(false);
 
-  const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect } = useExerciseFeedback(
-    exercise.feedbackConfig
-  );
+  const {
+    isCorrect,
+    message,
+    level,
+    showExplanation,
+    handleCorrect,
+    handleIncorrect,
+    shouldResetExercise,
+    resetExercise,
+  } = useExerciseFeedback(exercise.feedbackConfig);
+
+  useEffect(() => {
+    if (shouldResetExercise) {
+      toast.info('Too many mistakes. Starting over...');
+      setSelectedItemId(null);
+      setUserExplanation('');
+      setHasSubmitted(false);
+      setIsProcessing(false);
+      resetExercise();
+    }
+  }, [shouldResetExercise, resetExercise]);
 
   const handleItemSelect = (itemId: string) => {
     if (hasSubmitted) return;

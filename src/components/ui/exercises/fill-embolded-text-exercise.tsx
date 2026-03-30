@@ -9,6 +9,7 @@ import { validateFillEmboldedTextExercise } from '@/src/utils/exercises/fillEmbo
 import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
+import { toast } from 'sonner';
 
 interface Props {
   exercise: FillEmboldedTextExercise;
@@ -21,16 +22,36 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
   const [isProcessing, setIsProcessing] = useState(false);
   const [correctAnswers, setCorrectAnswers] = useState(0);
 
-  const { currentIndex, isLastItem, isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance } =
+  const { currentIndex, isLastItem, isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance, resetIndex } =
     useExerciseProgression({
       totalItems: exercise.data.words.length,
       itemProgressionDelay: exercise.itemProgressionDelay,
       progressionRules: exercise.feedbackConfig.progressionRules,
     });
 
-  const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
-    exercise.feedbackConfig
-  );
+  const {
+    isCorrect,
+    message,
+    level,
+    showExplanation,
+    handleCorrect,
+    handleIncorrect,
+    reset,
+    shouldResetExercise,
+    resetExercise,
+  } = useExerciseFeedback(exercise.feedbackConfig);
+
+  useEffect(() => {
+    if (shouldResetExercise) {
+      toast.info('Too many mistakes. Starting over...');
+      setUserAnswer('');
+      setSelectedWordIndex(null);
+      setCorrectAnswers(0);
+      setIsProcessing(false);
+      resetIndex();
+      resetExercise();
+    }
+  }, [shouldResetExercise, resetIndex, resetExercise]);
 
   const currentWord = exercise.data.words[currentIndex];
 

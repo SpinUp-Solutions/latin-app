@@ -175,6 +175,31 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({
               <Plus className="h-4 w-4 mr-2" />
               Add Escalation Level
             </Button>
+
+            {feedbackConfig.escalationLevels.length > 0 && (
+              <div className="pt-4 border-t border-gray-200">
+                <label className="block text-sm font-medium mb-1">Max failures at last level before reset</label>
+                <input
+                  type="number"
+                  value={feedbackConfig.maxLevelFailures ?? ''}
+                  onChange={e => {
+                    const val = e.target.value;
+                    onChange({
+                      ...feedbackConfig,
+                      maxLevelFailures: val === '' ? undefined : Math.max(1, parseInt(val) || 1),
+                    });
+                  }}
+                  className="w-full p-2 border rounded-md text-sm"
+                  placeholder="Disabled"
+                  min="1"
+                  step="1"
+                />
+                <div className="text-xs text-gray-500 mt-1">
+                  Number of wrong answers at the last escalation level before the exercise resets. Leave empty to
+                  disable.
+                </div>
+              </div>
+            )}
           </CardContent>
         )}
       </Card>

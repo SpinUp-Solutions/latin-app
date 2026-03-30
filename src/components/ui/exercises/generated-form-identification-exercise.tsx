@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { GeneratedFormIdentificationExercise } from '@/src/types/exercises/generated-form-identification';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
@@ -43,6 +43,7 @@ import {
 import { hasSelectedForm } from '@/src/utils/exercises/formSelection';
 import { formatLabel } from '@/src/utils/label-formatter';
 import { normalizeCollection, buildLegacyParadigmConfigs } from '@/src/utils/exercises/legacyExerciseCompat';
+import { toast } from 'sonner';
 
 interface Props {
   exercise: GeneratedFormIdentificationExercise;
@@ -294,16 +295,37 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
       .map(result => result.data);
   }, [items, isSingleField, isMultiAnswerMode]);
 
-  const { currentIndex, isLastItem, isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance } =
+  const { currentIndex, isLastItem, isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance, resetIndex } =
     useExerciseProgression({
       totalItems: validatedItems.length,
       itemProgressionDelay: exercise.itemProgressionDelay,
       progressionRules: exercise.feedbackConfig.progressionRules,
     });
 
-  const { isCorrect, message, level, showExplanation, handleCorrect, handleIncorrect, reset } = useExerciseFeedback(
-    exercise.feedbackConfig
-  );
+  const {
+    isCorrect,
+    message,
+    level,
+    showExplanation,
+    handleCorrect,
+    handleIncorrect,
+    reset,
+    shouldResetExercise,
+    resetExercise,
+  } = useExerciseFeedback(exercise.feedbackConfig);
+
+  useEffect(() => {
+    if (shouldResetExercise) {
+      toast.info('Too many mistakes. Starting over...');
+      setUserAnswer('');
+      setCorrectAnswers(0);
+      setWordAnswers({});
+      setMultiAnswerSlots({});
+      setIsProcessing(false);
+      resetIndex();
+      resetExercise();
+    }
+  }, [shouldResetExercise, resetIndex, resetExercise]);
 
   const handleSubmit = () => {
     if (isProcessing || validatedItems.length === 0) return;
