@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { FieldValue } from 'firebase-admin/firestore';
-import { adminDb } from '@/src/services/firebase-admin';
+import { adminDb, adminStorage } from '@/src/services/firebase-admin';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 
 const LESSONS_COLLECTION = 'lessons';
@@ -66,6 +66,13 @@ interface LessonError {
   reason: string;
 }
 
+interface SnapshotInfo {
+  snapshotId: string;
+  path: string;
+  createdAt: string;
+  totalLessons: number;
+}
+
 interface MigrationSummary {
   dryRun: boolean;
   maxLevelFailures: number;
@@ -85,6 +92,7 @@ interface MigrationSummary {
   sampleChanges: SampleChange[];
   lessonErrors: LessonError[];
   batchesCommitted: number;
+  snapshot: SnapshotInfo | null;
 }
 
 function parseBoolean(value: boolean | string | undefined, fallback = false): boolean {
@@ -135,6 +143,27 @@ function parseLessonIds(value: string[] | string | undefined): string[] {
   return [];
 }
 
+function serializeFirestoreValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(serializeFirestoreValue);
+  }
+
+  if (value && typeof value === 'object') {
+    if ('toDate' in value && typeof value.toDate === 'function') {
+      return value.toDate().toISOString();
+    }
+
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, nestedValue]) => [
+        key,
+        serializeFirestoreValue(nestedValue),
+      ])
+    );
+  }
+
+  return value;
+}
+
 function isExerciseItem(item: unknown): item is Record<string, unknown> & { type: string } {
   return (
     !!item &&
@@ -159,6 +188,49 @@ async function getLessonDocs(lessonIds: string[]) {
   return {
     docs: docs.filter(doc => doc.exists),
     missingLessonIds: docs.filter(doc => !doc.exists).map(doc => doc.id),
+  };
+}
+
+async function createMigrationSnapshot(params: {
+  userId: string;
+  options: MigrationOptions;
+  docs: FirebaseFirestore.DocumentSnapshot[];
+}): Promise<SnapshotInfo> {
+  const createdAt = new Date().toISOString();
+  const snapshotId = `migrate-exercise-max-level-failures-${createdAt.replace(/[:.]/g, '-')}`;
+  const path = `lesson-snapshots/migrate-exercise-max-level-failures/${snapshotId}.json`;
+
+  const payload = {
+    snapshotId,
+    createdAt,
+    createdBy: params.userId,
+    migration: 'migrate-exercise-max-level-failures',
+    options: params.options,
+    totalLessons: params.docs.length,
+    lessons: params.docs
+      .map(doc => {
+        const serializedData = serializeFirestoreValue(doc.data()) as Record<string, unknown>;
+
+        return {
+          id: doc.id,
+          ...serializedData,
+        };
+      })
+      .sort((left, right) => left.id.localeCompare(right.id)),
+  };
+
+  await adminStorage
+    .bucket()
+    .file(path)
+    .save(JSON.stringify(payload, null, 2), {
+      contentType: 'application/json',
+    });
+
+  return {
+    snapshotId,
+    path,
+    createdAt,
+    totalLessons: params.docs.length,
   };
 }
 
@@ -348,6 +420,7 @@ export async function POST(request: NextRequest) {
       sampleChanges: [],
       lessonErrors: [],
       batchesCommitted: 0,
+      snapshot: null,
     };
 
     const updates: Array<{ lessonId: string; pages: LessonDocument['pages'] }> = [];
@@ -363,6 +436,15 @@ export async function POST(request: NextRequest) {
     }
 
     if (!options.dryRun && updates.length > 0) {
+      const updatedLessonIds = new Set(updates.map(update => update.lessonId));
+      const snapshotDocs = docs.filter(doc => updatedLessonIds.has(doc.id));
+
+      summary.snapshot = await createMigrationSnapshot({
+        userId: user.uid,
+        options,
+        docs: snapshotDocs,
+      });
+
       summary.batchesCommitted = await commitLessonUpdates(updates, user.uid);
     }
 

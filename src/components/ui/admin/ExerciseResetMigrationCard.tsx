@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Button } from '@/src/components/ui/button';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { useAdminApi } from '@/src/hooks/useAdminApi';
+import { auth } from '@/src/services/firebase';
 
 const DEFAULT_MAX_LEVEL_FAILURES = 2;
 
@@ -30,6 +31,12 @@ interface MigrationSummary {
   sampleChanges: Array<Record<string, unknown>>;
   lessonErrors: Array<Record<string, unknown>>;
   batchesCommitted: number;
+  snapshot: {
+    snapshotId: string;
+    path: string;
+    createdAt: string;
+    totalLessons: number;
+  } | null;
 }
 
 interface MigrationResponse {
@@ -45,6 +52,8 @@ export function ExerciseResetMigrationCard() {
   const [lessonIds, setLessonIds] = useState('');
   const [overwriteExisting, setOverwriteExisting] = useState(false);
   const [isRunning, setIsRunning] = useState<RunMode | null>(null);
+  const [isDownloadingBackup, setIsDownloadingBackup] = useState(false);
+  const [isRestoringSnapshot, setIsRestoringSnapshot] = useState(false);
   const [lastResult, setLastResult] = useState<MigrationResponse | null>(null);
 
   const parsedMaxLevelFailures = useMemo(() => {
@@ -104,6 +113,87 @@ export function ExerciseResetMigrationCard() {
     }
   };
 
+  const handleDownloadBackup = async () => {
+    setIsDownloadingBackup(true);
+
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) {
+        throw new Error('Authentication token not available');
+      }
+
+      const response = await fetch('/api/admin/lessons/backup', {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const error = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(error?.error || 'Failed to download lessons backup');
+      }
+
+      const blob = await response.blob();
+      const contentDisposition = response.headers.get('Content-Disposition') || '';
+      const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/i);
+      const filename = filenameMatch?.[1] || 'lessons-backup.json';
+
+      const objectUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(objectUrl);
+
+      toast.success('Lessons backup downloaded.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to download lessons backup');
+    } finally {
+      setIsDownloadingBackup(false);
+    }
+  };
+
+  const handleRestoreSnapshot = async () => {
+    const snapshotPath = lastResult?.data?.snapshot?.path;
+    if (!snapshotPath) {
+      toast.error('No snapshot available to restore.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Restore lessons from snapshot?\n\n${snapshotPath}\n\nThis will overwrite the affected lesson documents.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setIsRestoringSnapshot(true);
+
+    try {
+      const result = (await makeAdminRequest('lessons/restore-snapshot', {
+        method: 'POST',
+        body: JSON.stringify({
+          snapshotPath,
+          confirmRestore: true,
+        }),
+      })) as { success: boolean; message?: string; error?: string };
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to restore snapshot');
+      }
+
+      toast.success(result.message || 'Snapshot restored.');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to restore snapshot');
+    } finally {
+      setIsRestoringSnapshot(false);
+    }
+  };
+
   return (
     <RomanCard className="hover:shadow-lg transition-shadow md:col-span-2 lg:col-span-3">
       <RomanCardContent className="p-6 space-y-4">
@@ -155,19 +245,32 @@ export function ExerciseResetMigrationCard() {
         </label>
 
         <div className="flex flex-wrap gap-3">
+          <Button variant="outline" onClick={handleDownloadBackup} disabled={isRunning !== null || isDownloadingBackup}>
+            {isDownloadingBackup ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+            Download Lessons Backup
+          </Button>
           <Button
             variant="outline"
             onClick={() => submitMigration('dry-run')}
-            disabled={isRunning !== null || parsedMaxLevelFailures === null}>
+            disabled={isRunning !== null || isDownloadingBackup || parsedMaxLevelFailures === null}>
             {isRunning === 'dry-run' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
             Dry Run
           </Button>
           <Button
             onClick={() => submitMigration('apply')}
-            disabled={isRunning !== null || parsedMaxLevelFailures === null}>
+            disabled={isRunning !== null || isDownloadingBackup || parsedMaxLevelFailures === null}>
             {isRunning === 'apply' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
             Run Migration
           </Button>
+          {lastResult?.data?.snapshot?.path ? (
+            <Button
+              variant="destructive"
+              onClick={handleRestoreSnapshot}
+              disabled={isRunning !== null || isDownloadingBackup || isRestoringSnapshot}>
+              {isRestoringSnapshot ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              Restore Last Snapshot
+            </Button>
+          ) : null}
         </div>
 
         <div className="text-xs text-roman-stone">
@@ -204,6 +307,13 @@ export function ExerciseResetMigrationCard() {
                     <div className="font-medium text-gray-900">{lastResult.data.exercisesUpdated}</div>
                   </div>
                 </div>
+
+                {lastResult.data.snapshot ? (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                    <div className="font-medium">Server Snapshot Created</div>
+                    <div className="mt-1 break-all">{lastResult.data.snapshot.path}</div>
+                  </div>
+                ) : null}
 
                 <pre className="max-h-80 overflow-auto rounded-md bg-stone-950 p-3 text-xs text-stone-100">
                   {JSON.stringify(lastResult.data, null, 2)}
