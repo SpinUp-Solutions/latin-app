@@ -78,6 +78,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
     collection: normalizeCollection(config.collection),
     wordSource: config.wordSource || 'filters',
     poolId: config.poolId ?? null,
+    poolWordLimit: config.poolWordLimit ?? null,
     count: config.count,
     paradigmConfigs,
   });

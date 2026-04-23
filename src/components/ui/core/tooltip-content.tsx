@@ -103,7 +103,7 @@ const TooltipContentComponent: React.FC<TooltipContentProps> = ({
       <div className="bg-white px-3 py-2 space-y-2">
         {isFieldVisible('translation') && translation && (
           <div>
-            <h4 className="text-[10px] font-serif text-roman-stone uppercase tracking-wider mb-0.5">Translation</h4>
+            <h4 className="text-[10px] font-serif text-roman-stone uppercase tracking-wider mb-0.5">Definition</h4>
             <SimpleRichDisplay content={translation} className="text-xs" />
           </div>
         )}
@@ -117,7 +117,9 @@ const TooltipContentComponent: React.FC<TooltipContentProps> = ({
 
         {isFieldVisible('grammaticalInfo') && grammaticalInfo && (
           <div>
-            <h4 className="text-[10px] font-serif text-roman-stone uppercase tracking-wider mb-0.5">Grammar</h4>
+            <h4 className="text-[10px] font-serif text-roman-stone uppercase tracking-wider mb-0.5">
+              Dictionary Entry
+            </h4>
             <SimpleRichDisplay content={grammaticalInfo} className="text-xs font-mono" />
           </div>
         )}

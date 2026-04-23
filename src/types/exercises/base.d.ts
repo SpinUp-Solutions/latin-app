@@ -101,6 +101,7 @@ export interface GeneratorConfigBase {
   collection: string;
   wordSource: 'filters' | 'pool';
   poolId?: string | null;
+  poolWordLimit?: number | null;
   count: number | 'all';
   filters?: GeneratorFilters;
 }

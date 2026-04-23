@@ -1,6 +1,7 @@
 import React, { useCallback } from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent } from '@/src/components/ui/card';
+import { Input } from '@/src/components/ui/input';
 import { GeneratedTranslationExercise } from '@/src/types/exercises';
 import { useAppSelector } from '@/src/store/hooks';
 import { SimpleInput, SimpleTextarea, SimpleSelect } from '@/src/components/ui/form-components';
@@ -95,12 +96,41 @@ const GeneratedTranslationEditorView: React.FC<{ editingContent: GeneratedTransl
   );
 
   const poolContent = (
-    <div>
+    <div className="space-y-4">
       <label className="block text-sm font-medium mb-3">Vocabulary Pool</label>
       <VocabularyPoolSelector
         selectedPoolId={editor.config.poolId || undefined}
         onPoolSelect={poolId => editor.updateConfig({ poolId: poolId || null })}
       />
+
+      <div className="space-y-2">
+        <label htmlFor="translation-pool-word-limit" className="block text-sm font-medium">
+          Pool Word Limit
+        </label>
+        <Input
+          id="translation-pool-word-limit"
+          type="number"
+          min={1}
+          inputMode="numeric"
+          value={editor.config.poolWordLimit ?? ''}
+          onChange={event => {
+            const { value } = event.target;
+            if (value === '') {
+              editor.updateConfig({ poolWordLimit: null });
+              return;
+            }
+
+            const parsed = Number.parseInt(value, 10);
+            if (!Number.isNaN(parsed) && parsed > 0) {
+              editor.updateConfig({ poolWordLimit: parsed });
+            }
+          }}
+          placeholder="Leave blank to use the full pool"
+        />
+        <p className="text-xs text-gray-500">
+          Randomly sample up to this many unique words from the selected pool. Leave blank to use the full pool.
+        </p>
+      </div>
     </div>
   );
 

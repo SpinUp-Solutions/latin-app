@@ -2,6 +2,7 @@ import React from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent } from '@/src/components/ui/card';
 import { Checkbox } from '@/src/components/ui/checkbox';
+import { Input } from '@/src/components/ui/input';
 import { Label } from '@/src/components/ui/label';
 import { GeneratedFormIdentificationExercise } from '@/src/types/exercises/generated-form-identification';
 import { useAppSelector } from '@/src/store/hooks';
@@ -113,12 +114,41 @@ const GeneratedFormIdentificationEditorView: React.FC<{
   );
 
   const poolContent = (
-    <div>
+    <div className="space-y-4">
       <label className="block text-sm font-medium mb-3">Vocabulary Pool</label>
       <VocabularyPoolSelector
         selectedPoolId={editor.config.poolId || undefined}
         onPoolSelect={poolId => editor.updateConfig({ poolId: poolId || null })}
       />
+
+      <div className="space-y-2">
+        <Label htmlFor="form-identification-pool-word-limit" className="block text-sm font-medium">
+          Pool Word Limit
+        </Label>
+        <Input
+          id="form-identification-pool-word-limit"
+          type="number"
+          min={1}
+          inputMode="numeric"
+          value={editor.config.poolWordLimit ?? ''}
+          onChange={event => {
+            const { value } = event.target;
+            if (value === '') {
+              editor.updateConfig({ poolWordLimit: null });
+              return;
+            }
+
+            const parsed = Number.parseInt(value, 10);
+            if (!Number.isNaN(parsed) && parsed > 0) {
+              editor.updateConfig({ poolWordLimit: parsed });
+            }
+          }}
+          placeholder="Leave blank to use the full pool"
+        />
+        <p className="text-xs text-gray-500">
+          Randomly sample up to this many unique words from the selected pool. Leave blank to use the full pool.
+        </p>
+      </div>
     </div>
   );
 

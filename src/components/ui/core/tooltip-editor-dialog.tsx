@@ -12,7 +12,13 @@ import { X, Plus, Search, Loader2, CheckCircle, AlertCircle } from 'lucide-react
 import { SimpleInput, SimpleTextarea, SimpleSelect } from '@/src/components/ui/form-components';
 import { TooltipData, TooltipFormData } from '@/src/types/tooltip';
 import { WordLookupService, WordLookupResult } from '@/src/services/wordLookupService';
-import { transformToFormData, cleanFormData, getEmptyFormData, WORD_DATA_FIELDS } from '@/src/utils/tooltipUtils';
+import {
+  transformToFormData,
+  cleanFormData,
+  getEmptyFormData,
+  WORD_DATA_FIELDS,
+  DEFAULT_VISIBLE_FIELDS,
+} from '@/src/utils/tooltipUtils';
 import { useTipTapEditor } from '@/src/hooks/useTipTapEditor';
 import { getSimpleExtensions } from '@/src/utils/tiptapExtensions';
 import { cn } from '@/src/lib/utils';
@@ -79,15 +85,6 @@ interface TooltipEditorDialogProps {
   selectedText?: string;
 }
 
-const getPopulatedFieldKeys = (formData: TooltipFormData): string[] => {
-  return WORD_DATA_FIELDS.map(f => f.key).filter(key => {
-    const val = formData[key as keyof TooltipFormData];
-    if (Array.isArray(val)) return val.length > 0;
-    if (typeof val === 'string') return val.trim().length > 0;
-    return !!val;
-  });
-};
-
 export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
   isOpen,
   onClose,
@@ -119,7 +116,7 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
     if (initialData?.visibleFields) {
       setVisibleFields(initialData.visibleFields);
     } else if (existingHasWord) {
-      setVisibleFields(getPopulatedFieldKeys(data));
+      setVisibleFields(DEFAULT_VISIBLE_FIELDS);
     } else {
       setVisibleFields([]);
     }
@@ -153,7 +150,7 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
         const merged = { ...formData, ...convertedData, word: formData.word };
         setFormData(merged);
         setHasWordData(true);
-        setVisibleFields(getPopulatedFieldKeys(merged));
+        setVisibleFields(DEFAULT_VISIBLE_FIELDS);
       }
     } catch (error) {
       console.error('Search error:', error);
@@ -447,10 +444,10 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
                   <div className="space-y-4">
                     <FieldWithCheckbox fieldKey="translation" visible={visibleFields} onToggle={toggleFieldVisibility}>
                       <SimpleInput
-                        label="Translation"
+                        label="Definition"
                         value={formData.translation || ''}
                         onChange={value => handleInputChange('translation', value)}
-                        placeholder="English translation"
+                        placeholder="English meaning"
                       />
                     </FieldWithCheckbox>
 
@@ -605,7 +602,7 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
                       visible={visibleFields}
                       onToggle={toggleFieldVisibility}>
                       <SimpleInput
-                        label="Grammatical Information"
+                        label="Dictionary Entry"
                         value={formData.grammaticalInfo || ''}
                         onChange={value => handleInputChange('grammaticalInfo', value)}
                         placeholder="e.g., puella, -ae f / amo, amare, amavi, amatus"

@@ -119,6 +119,7 @@ export function useGeneratedExerciseEditor<T extends GeneratedExercise>(
           collection: config.collection,
           wordSource: config.wordSource,
           poolId: config.poolId,
+          poolWordLimit: config.poolWordLimit,
           count: config.count,
           posConfigs: editingContent.data.posConfigs,
         }

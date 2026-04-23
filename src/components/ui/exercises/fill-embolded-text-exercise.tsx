@@ -10,6 +10,7 @@ import { validateFillEmboldedTextExercise } from '@/src/utils/exercises/fillEmbo
 import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
+import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 
 interface Props {
   exercise: FillEmboldedTextExercise;
@@ -85,7 +86,8 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
       handleCorrect(isLastItem);
 
       const hasVisibleExplanation =
-        (exercise.feedbackConfig.successMessage?.showExplanation ?? true) && !!currentWord.explanation;
+        (exercise.feedbackConfig.successMessage?.showExplanation ?? true) &&
+        hasVisibleFeedbackContent(currentWord.explanation);
 
       if (isLastItem) {
         const finalScore = Math.round((newCorrectAnswers / exercise.data.words.length) * 100);

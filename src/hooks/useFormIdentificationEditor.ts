@@ -63,6 +63,7 @@ export function useFormIdentificationEditor(editingContent: GeneratedFormIdentif
           collection: config.collection,
           wordSource: config.wordSource,
           poolId: config.poolId,
+          poolWordLimit: config.poolWordLimit,
           count: config.count,
           paradigmConfigs: editingContent.data.paradigmConfigs,
         }
