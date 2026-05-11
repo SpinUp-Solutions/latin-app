@@ -4,6 +4,7 @@ dotenv.config({ path: '.env.local' });
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import { autocompleteVocabularyWord } from '../../shared/openai/autocomplete';
+import { resolveRootWord, ResolveRootWordRequest } from '../../shared/openai/root-resolver';
 import { gradeTranslation } from '../../shared/openai/translation-grading';
 import { AIAutocompleteRequest, TranslationGradingRequest } from '../../shared/openai/types';
 
@@ -54,6 +55,48 @@ export const autocompleteWord = onCall(
       const endTime = Date.now();
       console.error(`[Firebase Function] Error after ${endTime - startTime}ms:`, error);
 
+      throw new HttpsError('internal', error instanceof Error ? error.message : 'Unknown error occurred');
+    }
+  }
+);
+
+export const resolveRootWordFn = onCall(
+  {
+    timeoutSeconds: 120,
+    memory: '512MiB',
+    region: 'us-central1',
+    secrets: [openaiApiKey],
+  },
+  async request => {
+    console.log('[Firebase Function] resolveRootWordFn called');
+
+    if (!request.auth) {
+      console.error('[Firebase Function] Unauthenticated request');
+      throw new HttpsError('unauthenticated', 'User must be authenticated');
+    }
+
+    const data = request.data as ResolveRootWordRequest;
+    const selectedText = typeof data.selectedText === 'string' ? data.selectedText.trim() : '';
+
+    if (!selectedText) {
+      throw new HttpsError('invalid-argument', 'selectedText is required');
+    }
+
+    try {
+      const startTime = Date.now();
+      const result = await resolveRootWord({
+        selectedText,
+        context: typeof data.context === 'string' ? data.context : undefined,
+      });
+      const elapsed = Date.now() - startTime;
+
+      console.log(`[Firebase Function] resolveRootWordFn completed in ${elapsed}ms`);
+      console.log(`[Firebase Function] Success:`, result.success);
+      console.log(`[Firebase Function] Model used: ${result.model ?? 'unknown'}`);
+
+      return result;
+    } catch (error) {
+      console.error('[Firebase Function] resolveRootWordFn error:', error);
       throw new HttpsError('internal', error instanceof Error ? error.message : 'Unknown error occurred');
     }
   }

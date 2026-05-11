@@ -74,12 +74,46 @@ const shuffleArray = <T>(items: T[]): T[] => {
   return copy;
 };
 
-const pickPoolWordIds = (wordDocIds: string[], limitCount: number, fetchAllWords: boolean): string[] => {
+const hashSeed = (seed: string): number => {
+  let hash = 2166136261;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+};
+
+const createSeededRandom = (seed: string): (() => number) => {
+  let state = hashSeed(seed) || 1;
+  return () => {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+};
+
+const shuffleArrayWithSeed = <T>(items: T[], seed: string): T[] => {
+  const copy = [...items];
+  const random = createSeededRandom(seed);
+
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+
+  return copy;
+};
+
+const pickPoolWordIds = (
+  wordDocIds: string[],
+  limitCount: number,
+  fetchAllWords: boolean,
+  sampleSeed: string | null
+): string[] => {
   if (fetchAllWords || limitCount >= wordDocIds.length) {
     return [...wordDocIds];
   }
   const sampleSize = Math.max(1, Math.min(limitCount, wordDocIds.length));
-  const shuffled = shuffleArray(wordDocIds);
+  const shuffled = sampleSeed ? shuffleArrayWithSeed(wordDocIds, sampleSeed) : shuffleArray(wordDocIds);
   return shuffled.slice(0, sampleSize);
 };
 
@@ -107,6 +141,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const randomize = !fetchAll && searchParams.get('randomize') === 'true';
     const randomStart = searchParams.get('randomStart');
     const poolId = searchParams.get('poolId');
+    const poolSampleSeed = searchParams.get('poolSampleSeed');
     const exerciseMode = searchParams.get('exerciseMode') === 'true';
 
     if (countsOnly) {
@@ -142,7 +177,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         snapshot = { docs: [], size: 0, empty: true };
         poolSourceMeta = { totalIds: 0, requestedCount: 0 };
       } else {
-        const idsToFetch = pickPoolWordIds(wordDocIds, limit, fetchAll);
+        const idsToFetch = pickPoolWordIds(wordDocIds, limit, fetchAll, poolSampleSeed);
         poolSourceMeta = { totalIds: wordDocIds.length, requestedCount: idsToFetch.length };
 
         if (idsToFetch.length === 0) {

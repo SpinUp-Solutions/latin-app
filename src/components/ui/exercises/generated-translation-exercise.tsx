@@ -49,6 +49,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
     collection: normalizeCollection(config.collection),
     wordSource: config.wordSource || 'filters',
     poolId: config.poolId ?? null,
+    poolWordLimit: config.poolWordLimit ?? null,
     count: config.count,
     posConfigs,
   });

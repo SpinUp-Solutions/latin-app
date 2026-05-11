@@ -253,6 +253,7 @@ export const {
   useUpdateWordMutation,
   useCreateWordMutation,
   useSearchWordsQuery,
+  useLazySearchWordsQuery,
   useDeleteWordMutation,
   useBulkDeleteWordsMutation,
 } = vocabularyApi;

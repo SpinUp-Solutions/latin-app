@@ -47,6 +47,7 @@ interface MultiPosQueryArgs {
   collection: string;
   wordSource: 'filters' | 'pool';
   poolId?: string | null;
+  poolWordLimit?: number | null;
   count?: number | 'all';
   posConfigs: PosConfigs | FormIdentificationPosConfigs;
 }
@@ -56,6 +57,7 @@ interface MultiParadigmQueryArgs {
   collection: string;
   wordSource: 'filters' | 'pool';
   poolId?: string | null;
+  poolWordLimit?: number | null;
   count?: number | 'all';
   paradigmConfigs: ParadigmConfigs;
 }
@@ -67,6 +69,22 @@ function shuffleArray<T>(array: T[]): T[] {
     [result[i], result[j]] = [result[j], result[i]];
   }
   return result;
+}
+
+function getPoolQueryParams(poolId: string, poolWordLimit?: number | null, poolSampleSeed?: string): URLSearchParams {
+  const params = new URLSearchParams();
+  params.append('poolId', poolId);
+
+  if (typeof poolWordLimit === 'number' && poolWordLimit > 0) {
+    params.append('limit', String(poolWordLimit));
+    if (poolSampleSeed) {
+      params.append('poolSampleSeed', poolSampleSeed);
+    }
+  } else {
+    params.append('fetchAll', 'true');
+  }
+
+  return params;
 }
 
 export const advancedVocabularyApi = createApi({
@@ -188,7 +206,11 @@ export const advancedVocabularyApi = createApi({
     }),
     getMultiPosWords: builder.query<GetAdvancedWordsResponse['data'], MultiPosQueryArgs>({
       async queryFn(arg, _api, _extraOptions, baseQuery) {
-        const { exerciseType, collection, wordSource, poolId, count, posConfigs } = arg;
+        const { exerciseType, collection, wordSource, poolId, poolWordLimit, count, posConfigs } = arg;
+        const poolSampleSeed =
+          wordSource === 'pool' && poolId && typeof poolWordLimit === 'number' && poolWordLimit > 0
+            ? Math.random().toString(36).slice(2)
+            : undefined;
 
         const safePosConfigs = posConfigs && typeof posConfigs === 'object' ? posConfigs : {};
 
@@ -204,10 +226,8 @@ export const advancedVocabularyApi = createApi({
           if (wordSource === 'pool' && poolId) {
             const additionalFields = getExerciseAdditionalFields(exerciseType);
             const selectFields = composeSelectFields(additionalFields, {});
-            const params = new URLSearchParams();
+            const params = getPoolQueryParams(poolId, poolWordLimit, poolSampleSeed);
             params.append('collection', collection);
-            params.append('fetchAll', 'true');
-            params.append('poolId', poolId);
             if (selectFields.length > 0) {
               params.append('select', selectFields.join(','));
             }
@@ -249,7 +269,10 @@ export const advancedVocabularyApi = createApi({
             params.append('wordType', pos);
 
             if (wordSource === 'pool') {
-              params.append('fetchAll', 'true');
+              if (poolId) {
+                const poolParams = getPoolQueryParams(poolId, poolWordLimit, poolSampleSeed);
+                poolParams.forEach((value, key) => params.append(key, value));
+              }
             } else if (count === 'all') {
               params.append('fetchAll', 'true');
             } else if (typeof count === 'number') {
@@ -272,9 +295,7 @@ export const advancedVocabularyApi = createApi({
             // even for POS types without a tableType (e.g. prepositions)
             params.append('exerciseMode', 'true');
 
-            if (wordSource === 'pool' && poolId) {
-              params.append('poolId', poolId);
-            } else {
+            if (wordSource !== 'pool') {
               if (pos === 'verb') {
                 if (cfg.filters.verbConjugation && cfg.filters.verbConjugation !== 'all')
                   params.append('verbConjugation', cfg.filters.verbConjugation);
@@ -337,7 +358,11 @@ export const advancedVocabularyApi = createApi({
     }),
     getMultiParadigmWords: builder.query<GetAdvancedWordsResponse['data'], MultiParadigmQueryArgs>({
       async queryFn(arg, _api, _extraOptions, baseQuery) {
-        const { exerciseType, collection, wordSource, poolId, count, paradigmConfigs } = arg;
+        const { exerciseType, collection, wordSource, poolId, poolWordLimit, count, paradigmConfigs } = arg;
+        const poolSampleSeed =
+          wordSource === 'pool' && poolId && typeof poolWordLimit === 'number' && poolWordLimit > 0
+            ? Math.random().toString(36).slice(2)
+            : undefined;
 
         const safeParadigmConfigs = paradigmConfigs && typeof paradigmConfigs === 'object' ? paradigmConfigs : {};
 
@@ -353,10 +378,8 @@ export const advancedVocabularyApi = createApi({
           if (wordSource === 'pool' && poolId) {
             const additionalFields = getExerciseAdditionalFields(exerciseType);
             const selectFields = composeSelectFields(additionalFields, {});
-            const params = new URLSearchParams();
+            const params = getPoolQueryParams(poolId, poolWordLimit, poolSampleSeed);
             params.append('collection', collection);
-            params.append('fetchAll', 'true');
-            params.append('poolId', poolId);
             if (selectFields.length > 0) {
               params.append('select', selectFields.join(','));
             }
@@ -400,7 +423,10 @@ export const advancedVocabularyApi = createApi({
             params.append('wordType', pos);
 
             if (wordSource === 'pool') {
-              params.append('fetchAll', 'true');
+              if (poolId) {
+                const poolParams = getPoolQueryParams(poolId, poolWordLimit, poolSampleSeed);
+                poolParams.forEach((value, key) => params.append(key, value));
+              }
             } else if (count === 'all') {
               params.append('fetchAll', 'true');
             } else if (typeof count === 'number') {
@@ -422,9 +448,7 @@ export const advancedVocabularyApi = createApi({
             // even for POS types without a tableType (e.g. prepositions)
             params.append('exerciseMode', 'true');
 
-            if (wordSource === 'pool' && poolId) {
-              params.append('poolId', poolId);
-            } else {
+            if (wordSource !== 'pool') {
               if (paradigm === 'verb-conjugation') {
                 if (cfg.filters.verbConjugation && cfg.filters.verbConjugation !== 'all') {
                   params.append('verbConjugation', cfg.filters.verbConjugation);

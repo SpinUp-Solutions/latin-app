@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { TableFillExercise } from '@/src/types/exercise';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
+import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { FeedbackDisplay } from '../feedback';
 import { validateTableFillExercise } from '@/src/utils/exercises/tableFillExercise';
 import { Button } from '@/src/components/ui/button';
@@ -18,6 +19,7 @@ import {
   RomanTableCell,
 } from '../core/roman-table';
 import { cn } from '@/src/lib/utils';
+import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 
 interface Props {
   exercise: TableFillExercise;
@@ -29,6 +31,11 @@ const TableFillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [cellResults, setCellResults] = useState<Record<string, boolean>>({});
+  const { isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance } = useExerciseProgression({
+    totalItems: 1,
+    itemProgressionDelay: exercise.itemProgressionDelay,
+    progressionRules: exercise.feedbackConfig.progressionRules,
+  });
 
   const {
     isCorrect,
@@ -74,12 +81,18 @@ const TableFillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
     if (validation.isCorrect) {
       handleCorrect();
       const score = Math.round((validation.correctAnswers / validation.totalBlanks) * 100);
-      onComplete?.(score);
+      const hasVisibleExplanation =
+        (exercise.feedbackConfig.successMessage?.showExplanation ?? true) &&
+        hasVisibleFeedbackContent(exercise.data.explanation);
+
+      autoAdvanceIfEnabled(() => {
+        setIsProcessing(false);
+        onComplete?.(score);
+      }, hasVisibleExplanation);
     } else {
       handleIncorrect();
+      setIsProcessing(false);
     }
-
-    setIsProcessing(false);
   };
 
   const handleReset = () => {
@@ -214,6 +227,7 @@ const TableFillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
           hint={exercise.data.hint}
           explanation={exercise.data.explanation}
           showExplanation={showExplanation}
+          onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
         />
       </div>
     </div>

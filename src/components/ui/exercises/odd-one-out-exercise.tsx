@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { OddOneOutExercise } from '@/src/types/exercise';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
+import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { FeedbackDisplay } from '../feedback';
 import { validateOddOneOutExercise } from '@/src/utils/exercises/oddOneOutExercise';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
@@ -11,6 +12,7 @@ import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { SimpleRichEditor } from '../core/simple-rich-editor';
 import { Button } from '../button';
 import { CheckCircle2 } from 'lucide-react';
+import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 
 interface Props {
   exercise: OddOneOutExercise;
@@ -22,6 +24,11 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
   const [userExplanation, setUserExplanation] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [hasSubmitted, setHasSubmitted] = useState(false);
+  const { isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance } = useExerciseProgression({
+    totalItems: 1,
+    itemProgressionDelay: exercise.itemProgressionDelay,
+    progressionRules: exercise.feedbackConfig.progressionRules,
+  });
 
   const {
     isCorrect,
@@ -62,13 +69,18 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
 
     if (validation.isCorrect) {
       handleCorrect(true);
+      const hasVisibleExplanation =
+        (exercise.feedbackConfig.successMessage?.showExplanation ?? true) &&
+        hasVisibleFeedbackContent(exercise.data.explanation);
 
-      onComplete?.(100);
+      autoAdvanceIfEnabled(() => {
+        setIsProcessing(false);
+        onComplete?.(100);
+      }, hasVisibleExplanation);
     } else {
       handleIncorrect();
+      setIsProcessing(false);
     }
-
-    setIsProcessing(false);
   };
 
   const handleReset = () => {
@@ -209,6 +221,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
           correctAnswer={exercise.data.items.find(item => item.isOddOneOut)?.text}
           explanation={exercise.data.explanation}
           showExplanation={showExplanation}
+          onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
         />
       </div>
     </div>

@@ -4,12 +4,14 @@ import React, { useState } from 'react';
 import { MultipleChoiceExercise } from '@/src/types/exercise';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
+import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { FeedbackDisplay } from '../feedback';
 import { validateMultipleChoiceExercise } from '@/src/utils/exercises/multipleChoiceExercise';
 import { Button } from '@/src/components/ui/button';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { cn } from '@/src/lib/utils';
+import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 
 interface Props {
   exercise: MultipleChoiceExercise;
@@ -20,6 +22,11 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
   const [selectedOptionIds, setSelectedOptionIds] = useState<string[]>([]);
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const { isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance } = useExerciseProgression({
+    totalItems: 1,
+    itemProgressionDelay: exercise.itemProgressionDelay,
+    progressionRules: exercise.feedbackConfig.progressionRules,
+  });
 
   const {
     isCorrect,
@@ -70,13 +77,18 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
     if (validation.isCorrect) {
       handleCorrect(true);
       const score = 100;
+      const hasVisibleExplanation =
+        (exercise.feedbackConfig.successMessage?.showExplanation ?? true) &&
+        hasVisibleFeedbackContent(exercise.data.explanation);
 
-      onComplete?.(score);
+      autoAdvanceIfEnabled(() => {
+        setIsProcessing(false);
+        onComplete?.(score);
+      }, hasVisibleExplanation);
     } else {
       handleIncorrect();
+      setIsProcessing(false);
     }
-
-    setIsProcessing(false);
   };
 
   const handleReset = () => {
@@ -191,6 +203,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
             .join(', ')}
           explanation={exercise.data.explanation}
           showExplanation={showExplanation}
+          onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
         />
       </div>
     </div>

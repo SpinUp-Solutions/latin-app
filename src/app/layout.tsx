@@ -13,6 +13,9 @@ export const metadata: Metadata = {
     template: '%s | Wake Forest University Latin',
   },
   description: 'Learn Latin through modern, interactive lessons at WakeForest University',
+  icons: {
+    icon: '/assets/logos/wakeforest_shield.png',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

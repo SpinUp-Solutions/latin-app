@@ -16,6 +16,7 @@ import { Badge } from '@/src/components/ui/badge';
 import { Button } from '@/src/components/ui/button';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
+import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import type { FeedbackLevel } from '@/src/types/exercises/base';
 import { SentenceDiagrammingExercise } from '@/src/types/exercises/sentence-diagramming';
@@ -33,6 +34,7 @@ interface SentenceDiagramFeedbackPanelProps {
   correctAnswer?: React.ReactNode;
   explanation?: React.ReactNode;
   showExplanation?: boolean;
+  onContinue?: () => void;
 }
 
 const SentenceDiagramFeedbackPanel: React.FC<SentenceDiagramFeedbackPanelProps> = ({
@@ -43,6 +45,7 @@ const SentenceDiagramFeedbackPanel: React.FC<SentenceDiagramFeedbackPanelProps> 
   correctAnswer,
   explanation,
   showExplanation = false,
+  onContinue,
 }) => {
   const shouldShowHint = isCorrect === false && Boolean(level?.showHint) && Boolean(hint);
   const shouldShowAnswer = isCorrect === false && Boolean(level?.showAnswer) && Boolean(correctAnswer);
@@ -102,6 +105,12 @@ const SentenceDiagramFeedbackPanel: React.FC<SentenceDiagramFeedbackPanelProps> 
           <div className="text-sky-950">{explanation}</div>
         </div>
       ) : null}
+
+      {isCorrect === true && onContinue ? (
+        <Button onClick={onContinue} className="w-full">
+          Continue
+        </Button>
+      ) : null}
     </div>
   );
 };
@@ -139,6 +148,11 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({ 
   }, [exercise.data.explanation]);
 
   const progress = comparison.expected > 0 ? Math.round((comparison.matched / comparison.expected) * 100) : 0;
+  const { isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance } = useExerciseProgression({
+    totalItems: 1,
+    itemProgressionDelay: exercise.itemProgressionDelay,
+    progressionRules: exercise.feedbackConfig.progressionRules,
+  });
 
   useDelayedExerciseReset({
     shouldReset: shouldResetExercise,
@@ -216,7 +230,12 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({ 
   const handleSubmit = () => {
     if (comparison.isComplete) {
       handleCorrect(true);
-      onComplete?.(Math.round(comparison.accuracy));
+      const hasVisibleExplanation =
+        (exercise.feedbackConfig.successMessage?.showExplanation ?? true) && Boolean(explanationContent);
+
+      autoAdvanceIfEnabled(() => {
+        onComplete?.(Math.round(comparison.accuracy));
+      }, hasVisibleExplanation);
       return;
     }
 
@@ -349,6 +368,7 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({ 
         correctAnswer={correctAnswerContent}
         explanation={explanationBody}
         showExplanation={showExplanation}
+        onContinue={isCorrect === true && isAwaitingConfirmation ? confirmAdvance : undefined}
       />
     </div>
   );

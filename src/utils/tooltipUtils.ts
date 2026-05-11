@@ -35,8 +35,10 @@ const createDefaultFormData = (word = ''): TooltipFormData => ({
   customSections: [],
 });
 
+export const DEFAULT_VISIBLE_FIELDS = ['translation', 'definition', 'grammaticalInfo'];
+
 export const WORD_DATA_FIELDS: Array<{ key: string; label: string }> = [
-  { key: 'translation', label: 'Translation' },
+  { key: 'translation', label: 'Definition' },
   { key: 'pronunciation', label: 'Pronunciation' },
   { key: 'partOfSpeech', label: 'Part of Speech' },
   { key: 'wordType', label: 'Word Type' },
@@ -46,7 +48,7 @@ export const WORD_DATA_FIELDS: Array<{ key: string; label: string }> = [
   { key: 'gender', label: 'Gender' },
   { key: 'declensionClass', label: 'Declension Class' },
   { key: 'conjugationClass', label: 'Conjugation Class' },
-  { key: 'grammaticalInfo', label: 'Grammatical Info' },
+  { key: 'grammaticalInfo', label: 'Dictionary Entry' },
   { key: 'principalParts', label: 'Principal Parts' },
   { key: 'link', label: 'Link' },
 ];
