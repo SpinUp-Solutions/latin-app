@@ -115,7 +115,15 @@ const getTokenClassName = (annotations: DiagramAnnotation[], allAnnotations?: Di
     classNames.push(underlineClass);
   }
 
-  if (annotations.some(annotation => annotation.kind === 'genitive' || annotation.kind === 'locative')) {
+  if (annotations.some(annotation => annotation.kind === 'active')) {
+    classNames.push('font-bold');
+  }
+
+  if (annotations.some(annotation => annotation.kind === 'genitive')) {
+    classNames.push('uppercase tracking-[0.08em]');
+  }
+
+  if (annotations.some(annotation => annotation.kind === 'locative')) {
     classNames.push('font-semibold');
   }
 
@@ -124,7 +132,7 @@ const getTokenClassName = (annotations: DiagramAnnotation[], allAnnotations?: Di
   }
 
   if (annotations.some(annotation => annotation.kind === 'vocative')) {
-    classNames.push('uppercase tracking-[0.08em]');
+    classNames.push('line-through');
   }
 
   const toneClass = getTokenToneClass(allAnnotations ?? annotations);

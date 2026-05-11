@@ -331,8 +331,18 @@ const createVariantMap = () => {
     imperfect: ['imperfect', 'imperf.', 'imperf', 'imp.', 'imp'],
     future: ['future', 'fut.', 'fut'],
     perfect: ['perfect', 'perf.', 'perf', 'per.', 'per'],
-    pluperfect: ['pluperfect', 'pluperf.', 'pluperf', 'plup.', 'plup'],
-    future_perfect: ['future perfect', 'fut. perf.', 'fut perf', 'futp.', 'futp'],
+    pluperfect: ['pluperfect', 'pluperf.', 'pluperf', 'plup.', 'plup', 'pp'],
+    future_perfect: [
+      'future perfect',
+      'fut. perf.',
+      'fut perf',
+      'futp.',
+      'futp',
+      'fp',
+      'futureperfect',
+      'future perf',
+      'fut perfect',
+    ],
   };
   Object.entries(tenses).forEach(([k, arr]) => {
     v[k] = arr;

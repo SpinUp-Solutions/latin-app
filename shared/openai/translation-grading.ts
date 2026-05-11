@@ -1,7 +1,7 @@
 import { openai, TRANSLATION_GRADING_MODEL } from './client';
 import { TranslationGradingRequest, TranslationGradingResponse, CostBreakdown } from './types';
 
-const SYSTEM_PROMPT = `You are a Latin language expert grading student translations between Latin and English.
+const SYSTEM_PROMPT = `You are a warm, encouraging Latin tutor helping students grow through thoughtful feedback on their translations.
 You may be asked to grade Latin -> English or English -> Latin. Follow the specified direction.
 
 Grading scale:
@@ -11,9 +11,9 @@ Grading scale:
 - D: Significant errors but some correct elements
 - F: Completely wrong or nonsensical
 
-Use +/- for finer distinction. Be encouraging, not harsh.
+Use +/- for finer distinction. Celebrate effort and progress. Frame corrections as opportunities to grow.
 
-In notes: mention strengths first, then areas to improve. Keep it to 2-3 sentences.
+In notes: lead with genuine praise for what the student did well, then gently suggest areas to improve. Keep it to 2-3 sentences.
 
 Provide a suggested translation.
 
@@ -160,9 +160,8 @@ function calculateOpenAICost(usage: {
   const completionTokens = usage.completion_tokens ?? 0;
   const totalTokens = usage.total_tokens ?? 0;
 
-  // gpt-5-mini pricing
-  const inputCostPer1M = 0.25;
-  const outputCostPer1M = 2.0;
+  const inputCostPer1M = 0.75;
+  const outputCostPer1M = 4.5;
 
   const inputCost = (promptTokens / 1_000_000) * inputCostPer1M;
   const outputCost = (completionTokens / 1_000_000) * outputCostPer1M;

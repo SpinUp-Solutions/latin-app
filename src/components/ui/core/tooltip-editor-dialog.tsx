@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { EditorContent } from '@tiptap/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/src/components/ui/dialog';
 import { Button } from '@/src/components/ui/button';
@@ -8,14 +8,28 @@ import { Badge } from '@/src/components/ui/badge';
 import { Checkbox } from '@/src/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/src/components/ui/tabs';
 import { Alert, AlertDescription } from '@/src/components/ui/alert';
-import { X, Plus, Search, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { X, Plus, Search, Loader2, CheckCircle, AlertCircle, Database, Sparkles } from 'lucide-react';
 import { SimpleInput, SimpleTextarea, SimpleSelect } from '@/src/components/ui/form-components';
 import { TooltipData, TooltipFormData } from '@/src/types/tooltip';
 import { WordLookupService, WordLookupResult } from '@/src/services/wordLookupService';
-import { transformToFormData, cleanFormData, getEmptyFormData, WORD_DATA_FIELDS } from '@/src/utils/tooltipUtils';
+import {
+  transformToFormData,
+  cleanFormData,
+  getEmptyFormData,
+  WORD_DATA_FIELDS,
+  DEFAULT_VISIBLE_FIELDS,
+} from '@/src/utils/tooltipUtils';
 import { useTipTapEditor } from '@/src/hooks/useTipTapEditor';
 import { getSimpleExtensions } from '@/src/utils/tiptapExtensions';
 import { cn } from '@/src/lib/utils';
+import { useFirebaseAutocomplete } from '@/src/hooks/useFirebaseAutocomplete';
+import { useFirebaseRootResolver } from '@/src/hooks/useFirebaseRootResolver';
+import { useCreateVocabularyWordRequestMutation } from '@/src/store/api/vocabularyWordRequestsApi';
+import { useLazySearchWordsQuery, type VocabularySearchResult } from '@/src/store/api/vocabularyApi';
+import type { RootWordCandidate } from '@/shared/types/vocabulary/requests';
+import type { CostBreakdown } from '@/shared/openai/types';
+import type { VocabularyWord } from '@/shared/types/vocabulary/schemas';
+import { useToast } from '@/src/hooks/use-toast';
 
 const extractPath = (url: string): string => {
   if (!url.trim()) return '';
@@ -70,6 +84,28 @@ interface SearchState {
   hasSearched: boolean;
 }
 
+type AddToDbStep = 'idle' | 'resolving' | 'selecting' | 'autocompleting' | 'saving' | 'saved' | 'error';
+
+type EnrichedRootWordCandidate = RootWordCandidate & {
+  existingWord?: VocabularySearchResult | null;
+};
+
+const stripMacrons = (value: string): string =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0304]/g, '')
+    .normalize('NFC')
+    .toLowerCase();
+
+const toRootWordCandidate = (candidate: EnrichedRootWordCandidate): RootWordCandidate => ({
+  word: candidate.word,
+  part_of_speech: candidate.part_of_speech,
+  dictionary_entry: candidate.dictionary_entry,
+  translation_hint: candidate.translation_hint,
+  confidence: candidate.confidence,
+  reason: candidate.reason,
+});
+
 interface TooltipEditorDialogProps {
   isOpen: boolean;
   onClose: () => void;
@@ -79,15 +115,6 @@ interface TooltipEditorDialogProps {
   selectedText?: string;
 }
 
-const getPopulatedFieldKeys = (formData: TooltipFormData): string[] => {
-  return WORD_DATA_FIELDS.map(f => f.key).filter(key => {
-    const val = formData[key as keyof TooltipFormData];
-    if (Array.isArray(val)) return val.length > 0;
-    if (typeof val === 'string') return val.trim().length > 0;
-    return !!val;
-  });
-};
-
 export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
   isOpen,
   onClose,
@@ -96,6 +123,7 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
   initialData = null,
   selectedText = '',
 }) => {
+  const { toast } = useToast();
   const [formData, setFormData] = useState<TooltipFormData>(transformToFormData(initialData, selectedText));
   const [visibleFields, setVisibleFields] = useState<string[]>([]);
   const [hasWordData, setHasWordData] = useState(false);
@@ -106,7 +134,31 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
     searchResult: null,
     hasSearched: false,
   });
-  const [mode, setMode] = useState<'custom' | 'word-lookup'>('custom');
+  const [mode, setMode] = useState<'custom' | 'word-lookup' | 'add-to-db'>('custom');
+  const [addToDbStep, setAddToDbStep] = useState<AddToDbStep>('idle');
+  const [addToDbError, setAddToDbError] = useState<string | null>(null);
+  const [rootCandidates, setRootCandidates] = useState<EnrichedRootWordCandidate[]>([]);
+  const [savedRequestId, setSavedRequestId] = useState<string | null>(null);
+  const autocompleteMetaRef = useRef<{
+    cost?: CostBreakdown;
+    fieldStatus?: Record<string, 'filled' | 'missing'>;
+  }>({});
+
+  const [createVocabularyWordRequest] = useCreateVocabularyWordRequestMutation();
+  const [searchWords] = useLazySearchWordsQuery();
+  const { resolveRootWord } = useFirebaseRootResolver({
+    onError: error => {
+      setAddToDbError(error);
+    },
+  });
+  const { autocomplete: autocompleteVocabularyDraft } = useFirebaseAutocomplete({
+    onSuccess: (_data, cost, fieldStatus) => {
+      autocompleteMetaRef.current = { cost, fieldStatus };
+    },
+    onError: error => {
+      setAddToDbError(error);
+    },
+  });
 
   useEffect(() => {
     const data = transformToFormData(initialData, selectedText);
@@ -119,12 +171,16 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
     if (initialData?.visibleFields) {
       setVisibleFields(initialData.visibleFields);
     } else if (existingHasWord) {
-      setVisibleFields(getPopulatedFieldKeys(data));
+      setVisibleFields(DEFAULT_VISIBLE_FIELDS);
     } else {
       setVisibleFields([]);
     }
 
     setSearchState({ isSearching: false, searchResult: null, hasSearched: false });
+    setAddToDbStep('idle');
+    setAddToDbError(null);
+    setRootCandidates([]);
+    setSavedRequestId(null);
     setNewChip('');
     setNewExample('');
   }, [initialData, selectedText, isOpen]);
@@ -153,7 +209,7 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
         const merged = { ...formData, ...convertedData, word: formData.word };
         setFormData(merged);
         setHasWordData(true);
-        setVisibleFields(getPopulatedFieldKeys(merged));
+        setVisibleFields(DEFAULT_VISIBLE_FIELDS);
       }
     } catch (error) {
       console.error('Search error:', error);
@@ -162,6 +218,183 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
         searchResult: { found: false, error: 'Search failed' },
         hasSearched: true,
       });
+    }
+  };
+
+  const mergeDraftIntoTooltip = (draftWord: VocabularyWord, requestId: string) => {
+    const convertedData = WordLookupService.convertToTooltipData({
+      id: requestId,
+      ...draftWord,
+    });
+    setFormData(prev => ({
+      ...prev,
+      ...convertedData,
+      word: draftWord.word,
+      title: prev.title || draftWord.word,
+    }));
+    setHasWordData(true);
+    setVisibleFields(DEFAULT_VISIBLE_FIELDS);
+  };
+
+  const enrichCandidatesWithExistingWords = async (
+    candidates: RootWordCandidate[]
+  ): Promise<EnrichedRootWordCandidate[]> => {
+    const enriched = await Promise.all(
+      candidates.map(async candidate => {
+        try {
+          const words = await searchWords({ search: candidate.word, limit: 8 }).unwrap();
+          const candidateKey = stripMacrons(candidate.word);
+          const existingWord =
+            words.find(
+              word =>
+                stripMacrons(word.word) === candidateKey &&
+                (!candidate.part_of_speech || word.part_of_speech === candidate.part_of_speech)
+            ) || null;
+
+          return { ...candidate, existingWord };
+        } catch (error) {
+          console.error('Candidate existence check failed:', error);
+          return { ...candidate, existingWord: null };
+        }
+      })
+    );
+
+    return enriched;
+  };
+
+  const handleUseExistingCandidate = async (candidate: EnrichedRootWordCandidate) => {
+    if (!candidate.existingWord) return;
+
+    try {
+      setAddToDbError(null);
+      const result = await WordLookupService.searchWord(candidate.existingWord.word);
+      const convertedData =
+        result.found && result.word
+          ? WordLookupService.convertToTooltipData(result.word)
+          : {
+              word: candidate.existingWord.word,
+              translation: candidate.existingWord.translation,
+              partOfSpeech: candidate.existingWord.part_of_speech,
+              grammaticalInfo: candidate.existingWord.dictionary_entry || '',
+            };
+
+      setFormData(prev => ({
+        ...prev,
+        ...convertedData,
+        word: candidate.existingWord?.word || candidate.word,
+        title: prev.title || candidate.existingWord?.word || candidate.word,
+      }));
+      setHasWordData(true);
+      setVisibleFields(DEFAULT_VISIBLE_FIELDS);
+      setMode('word-lookup');
+      toast({
+        title: 'Existing word applied',
+        description: `${candidate.existingWord.word} was added to the tooltip fields.`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not load existing vocabulary entry';
+      setAddToDbError(message);
+      toast({
+        title: 'Could not use existing word',
+        description: message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleCandidateSelected = async (
+    candidate: EnrichedRootWordCandidate,
+    candidates: EnrichedRootWordCandidate[] = rootCandidates
+  ) => {
+    const sourceText = (formData.word || selectedText).trim();
+    if (!sourceText) return;
+    const selectedCandidate = toRootWordCandidate(candidate);
+    const cleanCandidates = candidates.map(toRootWordCandidate);
+
+    try {
+      setAddToDbError(null);
+      setAddToDbStep('autocompleting');
+      autocompleteMetaRef.current = {};
+
+      const autocompleteData = await autocompleteVocabularyDraft({
+        word: selectedCandidate.word,
+        part_of_speech: selectedCandidate.part_of_speech,
+        existingData: {
+          word: selectedCandidate.word,
+          part_of_speech: selectedCandidate.part_of_speech,
+          dictionary_entry: selectedCandidate.dictionary_entry ?? null,
+          translation: selectedCandidate.translation_hint ?? '',
+        } as Partial<VocabularyWord>,
+        overwriteExisting: false,
+      });
+
+      if (!autocompleteData) {
+        throw new Error('AI autocomplete did not return vocabulary data');
+      }
+
+      setAddToDbStep('saving');
+      const request = await createVocabularyWordRequest({
+        sourceText,
+        selectedCandidate,
+        candidates: cleanCandidates,
+        autocompleteData,
+        aiMeta: autocompleteMetaRef.current,
+      }).unwrap();
+
+      setSavedRequestId(request.id);
+      mergeDraftIntoTooltip(request.draftWord, request.id);
+      setAddToDbStep('saved');
+      toast({
+        title: 'Vocabulary request created',
+        description: `${request.draftWord.word} is waiting in pending review.`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not create vocabulary request';
+      setAddToDbError(message);
+      setAddToDbStep('error');
+      toast({
+        title: 'Could not add vocabulary request',
+        description: message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleAddToDb = async () => {
+    const sourceText = (formData.word || selectedText).trim();
+    if (!sourceText) return;
+
+    try {
+      setAddToDbError(null);
+      setSavedRequestId(null);
+      setRootCandidates([]);
+      setAddToDbStep('resolving');
+
+      const result = await resolveRootWord({
+        selectedText: sourceText,
+        context: selectedText && selectedText !== sourceText ? selectedText : undefined,
+      });
+
+      if (!result?.candidates || result.candidates.length === 0) {
+        throw new Error('No root word candidates were returned');
+      }
+
+      const enrichedCandidates = await enrichCandidatesWithExistingWords(result.candidates);
+      setRootCandidates(enrichedCandidates);
+
+      if (
+        enrichedCandidates.length === 1 &&
+        !enrichedCandidates[0].existingWord &&
+        enrichedCandidates[0].confidence === 'high'
+      ) {
+        await handleCandidateSelected(enrichedCandidates[0], enrichedCandidates);
+      } else {
+        setAddToDbStep('selecting');
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not resolve the root word';
+      setAddToDbError(message);
+      setAddToDbStep('error');
     }
   };
 
@@ -250,7 +483,7 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
   const handleSave = () => {
     const dataWithVisibility: TooltipFormData = {
       ...formData,
-      visibleFields: mode === 'word-lookup' && hasWordData ? visibleFields : undefined,
+      visibleFields: hasWordData ? visibleFields : undefined,
     };
     const cleanedData = cleanFormData(dataWithVisibility);
     const completeData: TooltipFormData = {
@@ -309,10 +542,14 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
           </div>
 
           {/* Mode Tabs */}
-          <Tabs value={mode} onValueChange={v => setMode(v as 'custom' | 'word-lookup')} className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+          <Tabs
+            value={mode}
+            onValueChange={v => setMode(v as 'custom' | 'word-lookup' | 'add-to-db')}
+            className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="custom">Custom</TabsTrigger>
               <TabsTrigger value="word-lookup">Word Lookup</TabsTrigger>
+              <TabsTrigger value="add-to-db">Add to DB</TabsTrigger>
             </TabsList>
 
             {/* Custom Tab */}
@@ -447,10 +684,10 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
                   <div className="space-y-4">
                     <FieldWithCheckbox fieldKey="translation" visible={visibleFields} onToggle={toggleFieldVisibility}>
                       <SimpleInput
-                        label="Translation"
+                        label="Definition"
                         value={formData.translation || ''}
                         onChange={value => handleInputChange('translation', value)}
-                        placeholder="English translation"
+                        placeholder="English meaning"
                       />
                     </FieldWithCheckbox>
 
@@ -605,7 +842,7 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
                       visible={visibleFields}
                       onToggle={toggleFieldVisibility}>
                       <SimpleInput
-                        label="Grammatical Information"
+                        label="Dictionary Entry"
                         value={formData.grammaticalInfo || ''}
                         onChange={value => handleInputChange('grammaticalInfo', value)}
                         placeholder="e.g., puella, -ae f / amo, amare, amavi, amatus"
@@ -687,6 +924,131 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
                         </Button>
                       </Badge>
                     ))}
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="add-to-db" className="space-y-4 mt-4">
+              <div className="rounded-md border border-border p-4 space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="add-db-word">Selected Word</Label>
+                  <Input
+                    id="add-db-word"
+                    value={formData.word}
+                    onChange={e => handleInputChange('word', e.target.value)}
+                    placeholder="Select or enter a Latin word"
+                  />
+                </div>
+
+                <Button
+                  type="button"
+                  onClick={handleAddToDb}
+                  disabled={!formData.word.trim() || ['resolving', 'autocompleting', 'saving'].includes(addToDbStep)}
+                  className="gap-2">
+                  {['resolving', 'autocompleting', 'saving'].includes(addToDbStep) ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Database className="h-4 w-4" />
+                  )}
+                  {addToDbStep === 'resolving'
+                    ? 'Finding Root and Checking DB...'
+                    : addToDbStep === 'autocompleting'
+                      ? 'Autocompleting...'
+                      : addToDbStep === 'saving'
+                        ? 'Saving Pending...'
+                        : 'Add to Pending Review'}
+                </Button>
+
+                {addToDbStep === 'selecting' && rootCandidates.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Choose the root word</p>
+                    {rootCandidates.every(candidate => candidate.existingWord) && (
+                      <Alert className="border-amber-200 bg-amber-50">
+                        <AlertCircle className="h-4 w-4 text-amber-600" />
+                        <AlertDescription className="text-sm">
+                          All proposed roots already exist. Use an existing entry for the tooltip, or create a new
+                          pending request only if this should be a separate vocabulary item.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                    <div className="space-y-2">
+                      {rootCandidates.map((candidate, index) => (
+                        <div
+                          key={`${candidate.word}-${candidate.part_of_speech}-${index}`}
+                          className={cn(
+                            'w-full rounded-md border border-border p-3 text-left transition-colors',
+                            candidate.existingWord ? 'bg-amber-50/50' : 'hover:border-roman-red hover:bg-roman-red/5'
+                          )}>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-medium">{candidate.word}</span>
+                            <div className="flex items-center gap-2">
+                              {candidate.existingWord ? (
+                                <Badge className="bg-amber-100 text-amber-900 hover:bg-amber-100">Already in DB</Badge>
+                              ) : (
+                                <Badge className="bg-green-100 text-green-900 hover:bg-green-100">New</Badge>
+                              )}
+                              <Badge variant="secondary">{candidate.part_of_speech}</Badge>
+                            </div>
+                          </div>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            {[candidate.dictionary_entry, candidate.translation_hint, candidate.reason]
+                              .filter(Boolean)
+                              .join(' • ')}
+                          </p>
+                          {candidate.existingWord && (
+                            <p className="mt-2 text-xs text-amber-800">
+                              Existing entry: {candidate.existingWord.word}
+                              {candidate.existingWord.translation ? ` — ${candidate.existingWord.translation}` : ''}
+                            </p>
+                          )}
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {candidate.existingWord ? (
+                              <>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleUseExistingCandidate(candidate)}>
+                                  Use Existing
+                                </Button>
+                                <Button type="button" size="sm" onClick={() => handleCandidateSelected(candidate)}>
+                                  Create New Anyway
+                                </Button>
+                              </>
+                            ) : (
+                              <Button type="button" size="sm" onClick={() => handleCandidateSelected(candidate)}>
+                                Create Pending Request
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {addToDbStep === 'saved' && (
+                  <Alert className="border-green-200 bg-green-50">
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                    <AlertDescription className="text-sm">
+                      Saved to pending review{savedRequestId ? ` (${savedRequestId})` : ''}. The tooltip fields were
+                      populated from the draft.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {addToDbError && (
+                  <Alert className="border-red-200 bg-red-50">
+                    <AlertCircle className="h-4 w-4 text-red-600" />
+                    <AlertDescription className="text-sm">{addToDbError}</AlertDescription>
+                  </Alert>
+                )}
+
+                {addToDbStep === 'idle' && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Sparkles className="h-4 w-4" />
+                    <span>The generated word will be stored for later admin approval.</span>
                   </div>
                 )}
               </div>

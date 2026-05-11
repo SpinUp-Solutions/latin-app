@@ -4,12 +4,14 @@ import React, { useState } from 'react';
 import { ClickOnMultipleWordsExercise } from '@/src/types/exercise';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
+import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { FeedbackDisplay } from '../feedback';
 import { validateClickOnMultipleWords } from '@/src/utils/exercises/clickOnMultipleWords';
 import { Button } from '@/src/components/ui/button';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { MultiClickableRichDisplay } from '../core/multi-clickable-rich-display';
+import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 
 interface Props {
   exercise: ClickOnMultipleWordsExercise;
@@ -23,6 +25,11 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete }
   const [validationResult, setValidationResult] = useState<ReturnType<typeof validateClickOnMultipleWords> | null>(
     null
   );
+  const { isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance } = useExerciseProgression({
+    totalItems: 1,
+    itemProgressionDelay: exercise.itemProgressionDelay,
+    progressionRules: exercise.feedbackConfig.progressionRules,
+  });
 
   const {
     isCorrect,
@@ -77,12 +84,18 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete }
 
     if (validation.isCorrect) {
       handleCorrect();
-      onComplete?.(validation.score);
+      const hasVisibleExplanation =
+        (exercise.feedbackConfig.successMessage?.showExplanation ?? true) &&
+        hasVisibleFeedbackContent(exercise.data.explanation);
+
+      autoAdvanceIfEnabled(() => {
+        setIsProcessing(false);
+        onComplete?.(validation.score);
+      }, hasVisibleExplanation);
     } else {
       handleIncorrect();
+      setIsProcessing(false);
     }
-
-    setIsProcessing(false);
   };
 
   const handleReset = () => {
@@ -206,6 +219,7 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete }
             .join(', ')}
           explanation={exercise.data.explanation}
           showExplanation={showExplanation}
+          onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
         />
       </div>
     </div>

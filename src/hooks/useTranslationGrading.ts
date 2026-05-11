@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/src/lib/firebase';
 import { TranslationGradingRequest, TranslationGradingResponse, CostBreakdown } from '@/shared/openai/types';
-import { TranslationGradingOutput } from '@/shared/openai/translation-grading';
+import type { TranslationGradingOutput } from '@/shared/openai/translation-grading';
 
 interface UseTranslationGradingOptions {
   onSuccess?: (data: TranslationGradingOutput, cost?: CostBreakdown) => void;

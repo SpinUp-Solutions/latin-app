@@ -11,6 +11,7 @@ import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { ClickableRichDisplay } from '../core/clickable-rich-display';
+import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 
 interface Props {
   exercise: TextSelectionExercise;
@@ -66,7 +67,8 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
       handleCorrect(isLastItem);
 
       const hasVisibleExplanation =
-        (exercise.feedbackConfig.successMessage?.showExplanation ?? true) && !!currentQuestion.explanation;
+        (exercise.feedbackConfig.successMessage?.showExplanation ?? true) &&
+        hasVisibleFeedbackContent(currentQuestion.explanation);
 
       if (isLastItem) {
         const finalScore = Math.round((newCorrectAnswers / exercise.data.questions.length) * 100);

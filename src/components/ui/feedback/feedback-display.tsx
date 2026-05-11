@@ -2,6 +2,7 @@ import React from 'react';
 import { Check, X, HelpCircle, ChevronRight } from 'lucide-react';
 import type { FeedbackLevel } from '@/src/types/exercises/base';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
+import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 
 type FeedbackBody = React.ReactNode;
 
@@ -36,9 +37,9 @@ export const FeedbackDisplay: React.FC<FeedbackDisplayProps> = ({
   className = '',
   onContinue,
 }) => {
-  const shouldShowHint = !isCorrect && Boolean(level?.showHint) && Boolean(hint);
-  const shouldShowAnswer = !isCorrect && Boolean(level?.showAnswer) && Boolean(correctAnswer);
-  const shouldShowExplanationPanel = Boolean(isCorrect && showExplanation && explanation);
+  const shouldShowHint = !isCorrect && Boolean(level?.showHint) && hasVisibleFeedbackContent(hint);
+  const shouldShowAnswer = !isCorrect && Boolean(level?.showAnswer) && hasVisibleFeedbackContent(correctAnswer);
+  const shouldShowExplanationPanel = Boolean(isCorrect && showExplanation && hasVisibleFeedbackContent(explanation));
   const hasPrimaryMessage = Boolean(message);
   const shouldRender =
     isCorrect !== null && (hasPrimaryMessage || shouldShowHint || shouldShowAnswer || shouldShowExplanationPanel);

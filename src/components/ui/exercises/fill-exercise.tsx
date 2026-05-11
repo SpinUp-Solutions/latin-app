@@ -10,6 +10,7 @@ import { validateFillExercise } from '@/src/utils/exercises/fillExercise';
 import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
+import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 
 interface Props {
   exercise: FillExercise;
@@ -65,7 +66,8 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
       handleCorrect(isLastItem);
 
       const hasVisibleExplanation =
-        (exercise.feedbackConfig.successMessage?.showExplanation ?? true) && !!currentItem.explanation;
+        (exercise.feedbackConfig.successMessage?.showExplanation ?? true) &&
+        hasVisibleFeedbackContent(currentItem.explanation);
 
       if (isLastItem) {
         const finalScore = Math.round((newCorrectAnswers / exercise.data.items.length) * 100);

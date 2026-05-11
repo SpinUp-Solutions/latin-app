@@ -39,6 +39,8 @@
   flex-wrap: wrap;
   align-items: flex-end;
   gap: 0.55rem;
+  width: 100%;
+  max-width: 100%;
   padding: 1rem;
   border-radius: 1.5rem;
   background: white;
@@ -57,17 +59,21 @@
 .sentence-diagram-wrapper-inner,
 .sentence-diagram-shell,
 .sentence-diagram-token {
-  display: inline-flex;
+  display: flex;
   align-items: flex-end;
   gap: 0.55rem;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .sentence-diagram-wrapper {
   position: relative;
+  flex-wrap: wrap;
 }
 
 .sentence-diagram-wrapper-inner {
   position: relative;
+  flex-wrap: wrap;
 }
 
 .sentence-diagram-shell {
@@ -75,6 +81,7 @@
   border-radius: 1.1rem;
   padding: 0.3rem 0.55rem;
   box-shadow: 0 10px 28px -24px rgba(217, 119, 6, 0.9);
+  flex-wrap: wrap;
 }
 
 .sentence-diagram-shell-box {
