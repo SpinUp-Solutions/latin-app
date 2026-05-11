@@ -1,5 +1,5 @@
 import { zodResponseFormat } from 'openai/helpers/zod';
-import { openai, AUTOCOMPLETE_MODEL, DEFAULT_TEMPERATURE, MAX_TOKENS } from './client';
+import { openai, AUTOCOMPLETE_MODEL, MAX_TOKENS } from './client';
 import { getPromptForPartOfSpeech, SYSTEM_PROMPT } from './prompts';
 import { AIAutocompleteRequest, AIAutocompleteResponse, AICompletableField, CostBreakdown } from './types';
 import { PartOfSpeech } from '../types/vocabulary/schemas/enums';
@@ -206,8 +206,8 @@ function calculateCost(usage: {
   const completionTokens = usage.completion_tokens ?? 0;
   const totalTokens = usage.total_tokens ?? 0;
 
-  const inputCostPer1M = 0.25;
-  const outputCostPer1M = 2.0;
+  const inputCostPer1M = 0.75;
+  const outputCostPer1M = 4.5;
 
   const inputCost = (promptTokens / 1_000_000) * inputCostPer1M;
   const outputCost = (completionTokens / 1_000_000) * outputCostPer1M;
@@ -236,7 +236,6 @@ export async function autocompleteVocabularyWord(request: AIAutocompleteRequest)
 
   console.log('[Autocomplete] Using schema:', config.schema.constructor.name);
   console.log('[Autocomplete] Model:', AUTOCOMPLETE_MODEL);
-  console.log('[Autocomplete] Temperature:', DEFAULT_TEMPERATURE);
   console.log('[Autocomplete] Max tokens:', MAX_TOKENS);
 
   try {
@@ -252,7 +251,7 @@ export async function autocompleteVocabularyWord(request: AIAutocompleteRequest)
     const startTime = Date.now();
     const response = await openai.responses.create({
       model: AUTOCOMPLETE_MODEL,
-      reasoning: { effort: 'low' },
+      reasoning: { effort: 'medium' },
       max_output_tokens: MAX_TOKENS,
       instructions: SYSTEM_PROMPT,
       input: getPromptForPartOfSpeech(request.part_of_speech, request.word),
