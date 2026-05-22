@@ -7,6 +7,26 @@ import type { VocabularyWordRequest } from '@/shared/types/vocabulary/requests';
 export const requestCollection = () => adminDb.collection(VOCABULARY_WORD_REQUESTS_COLLECTION);
 export const wordCollection = () => adminDb.collection(VOCABULARY_WORDS_COLLECTION);
 
+type FirestoreTimestampLike = {
+  toDate: () => Date;
+};
+
+type RequestSnapshotLike = {
+  id: string;
+  data: () => Record<string, unknown> | undefined;
+  createTime?: FirestoreTimestampLike;
+  updateTime?: FirestoreTimestampLike;
+};
+
+const isFirestoreTimestampLike = (value: unknown): value is FirestoreTimestampLike =>
+  !!value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function';
+
+const isValidDateString = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim().length > 0 && !Number.isNaN(Date.parse(value));
+
+const timestampToIso = (value: FirestoreTimestampLike | undefined): string | undefined =>
+  value ? value.toDate().toISOString() : undefined;
+
 export const stripMacrons = (value: string): string =>
   value
     .normalize('NFD')
@@ -16,7 +36,10 @@ export const stripMacrons = (value: string): string =>
 
 export const serializeForJson = (value: unknown): unknown => {
   if (value === null || value === undefined) return value;
-  if (typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function') {
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  if (isFirestoreTimestampLike(value)) {
     return value.toDate().toISOString();
   }
   if (Array.isArray(value)) {
@@ -36,7 +59,25 @@ export const serializeRequestDoc = (id: string, data: Record<string, unknown>): 
     ...(serializeForJson(data) as Record<string, unknown>),
   }) as VocabularyWordRequest;
 
+export const serializeRequestSnapshot = (snapshot: RequestSnapshotLike): VocabularyWordRequest => {
+  const request = serializeRequestDoc(snapshot.id, snapshot.data() || {}) as VocabularyWordRequest &
+    Record<string, unknown>;
+  const createdAt = isValidDateString(request.createdAt) ? request.createdAt : timestampToIso(snapshot.createTime);
+  const updatedAt = isValidDateString(request.updatedAt)
+    ? request.updatedAt
+    : timestampToIso(snapshot.updateTime) || createdAt;
+
+  return {
+    ...request,
+    createdAt: createdAt || '',
+    updatedAt: updatedAt || createdAt || '',
+  };
+};
+
 export const cleanForFirestore = (value: unknown): unknown => {
+  if (value instanceof Date || isFirestoreTimestampLike(value)) {
+    return value;
+  }
   if (Array.isArray(value)) {
     return value.map(item => cleanForFirestore(item));
   }

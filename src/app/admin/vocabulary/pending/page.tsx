@@ -31,15 +31,47 @@ const statusIcon = {
   dismissed: XCircle,
 };
 
+const getRequestErrorMessage = (error: unknown): string | null => {
+  if (!error) return null;
+
+  if (typeof error === 'object' && error !== null) {
+    if ('data' in error) {
+      const data = (error as { data?: unknown }).data;
+      if (typeof data === 'object' && data !== null && 'error' in data) {
+        const message = (data as { error?: unknown }).error;
+        if (typeof message === 'string') return message;
+      }
+      if (typeof data === 'string') return data;
+    }
+
+    if ('error' in error) {
+      const message = (error as { error?: unknown }).error;
+      if (typeof message === 'string') return message;
+    }
+
+    if ('status' in error) {
+      return `Request failed with status ${(error as { status: unknown }).status}`;
+    }
+  }
+
+  return 'Could not load vocabulary requests';
+};
+
 function PendingVocabularyPage() {
   const router = useRouter();
   const [status, setStatus] = useState<VocabularyWordRequestStatus>('pending');
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
 
-  const { data: requests = [], isLoading, isFetching } = useGetVocabularyWordRequestsQuery({ status });
+  const {
+    data: requests = [],
+    isLoading,
+    isFetching,
+    error: requestError,
+  } = useGetVocabularyWordRequestsQuery({ status });
   const [updateRequest, { isLoading: updating }] = useUpdateVocabularyWordRequestMutation();
   const [approveRequest, { isLoading: approving }] = useApproveVocabularyWordRequestMutation();
   const [dismissRequest, { isLoading: dismissing }] = useDismissVocabularyWordRequestMutation();
+  const requestErrorMessage = useMemo(() => getRequestErrorMessage(requestError), [requestError]);
 
   useEffect(() => {
     setSelectedRequestId(null);
@@ -144,7 +176,9 @@ function PendingVocabularyPage() {
             </div>
           </div>
 
-          {isLoading ? (
+          {requestErrorMessage ? (
+            <div className="p-6 text-sm text-red-700">Could not load requests: {requestErrorMessage}</div>
+          ) : isLoading ? (
             <div className="p-6 text-sm text-gray-500">Loading requests...</div>
           ) : requests.length === 0 ? (
             <div className="p-6 text-sm text-gray-500">No {STATUS_LABELS[status].toLowerCase()} requests.</div>

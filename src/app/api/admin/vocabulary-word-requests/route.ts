@@ -8,7 +8,7 @@ import {
   VocabularyWordRequestStatus,
 } from '@/shared/types/vocabulary/requests';
 import { buildDraftVocabularyWord } from '@/src/utils/vocabulary-request-drafts';
-import { requestCollection, routeError, serializeRequestDoc, cleanForFirestore } from './utils';
+import { requestCollection, routeError, serializeRequestSnapshot, cleanForFirestore } from './utils';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -33,6 +33,14 @@ const CandidateSchema = z.object({
 
 const statusSet = new Set<string>(VOCABULARY_WORD_REQUEST_STATUSES);
 
+const requestUpdatedAt = (value: { updatedAt?: string; createdAt?: string }): number => {
+  const updatedAt = Date.parse(value.updatedAt || '');
+  if (!Number.isNaN(updatedAt)) return updatedAt;
+
+  const createdAt = Date.parse(value.createdAt || '');
+  return Number.isNaN(createdAt) ? 0 : createdAt;
+};
+
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     await verifyAdminAccess(request);
@@ -44,8 +52,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     const snapshot = await requestCollection().where('status', '==', status).limit(100).get();
     const requests = snapshot.docs
-      .map(doc => serializeRequestDoc(doc.id, doc.data()))
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      .map(doc => serializeRequestSnapshot(doc))
+      .sort((a, b) => requestUpdatedAt(b) - requestUpdatedAt(a));
 
     return NextResponse.json({ success: true, data: { requests } });
   } catch (error) {
@@ -98,10 +106,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const docRef = await requestCollection().add(payload);
     const created = await docRef.get();
 
-    return NextResponse.json(
-      { success: true, data: { request: serializeRequestDoc(created.id, created.data() || {}) } },
-      { status: 201 }
-    );
+    return NextResponse.json({ success: true, data: { request: serializeRequestSnapshot(created) } }, { status: 201 });
   } catch (error) {
     return routeError(error);
   }
