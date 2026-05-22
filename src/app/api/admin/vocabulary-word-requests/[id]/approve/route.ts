@@ -4,7 +4,7 @@ import {
   buildValidatedWordForApproval,
   requestCollection,
   routeError,
-  serializeRequestDoc,
+  serializeRequestSnapshot,
   wordCollection,
 } from '../../utils';
 
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     return NextResponse.json({
       success: true,
       data: {
-        request: serializeRequestDoc(updated.id, updated.data() || {}),
+        request: serializeRequestSnapshot(updated),
         wordId: wordRef.id,
       },
     });

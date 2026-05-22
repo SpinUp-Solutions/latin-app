@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import { VocabularyWordSchema } from '@/shared/types/vocabulary/schemas';
-import { cleanForFirestore, requestCollection, routeError, serializeRequestDoc } from '../utils';
+import { cleanForFirestore, requestCollection, routeError, serializeRequestSnapshot } from '../utils';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -35,7 +35,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     const updated = await docRef.get();
     return NextResponse.json({
       success: true,
-      data: { request: serializeRequestDoc(updated.id, updated.data() || {}) },
+      data: { request: serializeRequestSnapshot(updated) },
     });
   } catch (error) {
     return routeError(error);
