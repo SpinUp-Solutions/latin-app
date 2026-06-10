@@ -192,7 +192,7 @@ async function callOpenAIGrading(userPrompt: string): Promise<GradingCallResult>
     max_output_tokens: 5000,
 
     instructions: SYSTEM_PROMPT,
-    reasoning: { effort: 'medium' },
+    reasoning: { effort: 'low' },
     input: userPrompt,
     text: {
       format: {

@@ -54,7 +54,7 @@ export function useFirebaseAutocomplete(options?: UseFirebaseAutocompleteOptions
       const autocompleteWordFunc = httpsCallable<typeof request, AIAutocompleteResponse>(
         functions,
         'autocompleteWord',
-        { timeout: 180000 }
+        { timeout: 540000 }
       );
 
       const response = await autocompleteWordFunc(request);
