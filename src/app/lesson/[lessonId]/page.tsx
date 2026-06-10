@@ -46,6 +46,7 @@ export default function DynamicLessonPage() {
               width={120}
               height={75}
               className="w-14 h-auto"
+              priority
             />
             <h1 className="text-xl font-serif tracking-wide">Latin</h1>
           </Link>
@@ -80,6 +81,7 @@ export default function DynamicLessonPage() {
               width={120}
               height={75}
               className="w-14 h-auto"
+              priority
             />
             <h1 className="text-xl font-serif tracking-wide">Latin</h1>
           </Link>

@@ -67,6 +67,7 @@ export default function LoginPage() {
               width={160}
               height={100}
               className="w-32 h-auto mx-auto mb-2"
+              priority
             />
             <h2 className="text-2xl font-bold font-serif">Welcome back</h2>
             <p className="text-muted-foreground">Sign in to access your account</p>
