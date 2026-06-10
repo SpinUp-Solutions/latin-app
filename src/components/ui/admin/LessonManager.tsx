@@ -6,7 +6,7 @@ import { Button } from '@/src/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/src/components/ui/tabs';
 import { BookOpen, Edit, Trash2, Calendar, Eye, FileText, Clock, AlertTriangle, RotateCcw } from 'lucide-react';
-import { Lesson } from '@/src/types/lesson';
+import { LessonSummary } from '@/src/types/lesson';
 import { toast } from 'sonner';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import {
@@ -22,7 +22,7 @@ import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display'
 import { isExerciseType } from '@/src/utils/lessonUtils';
 
 interface LessonManagerProps {
-  onEditLesson: (lesson: Lesson) => void;
+  onEditLesson: (lesson: LessonSummary) => void;
   onContinueDraft: (lessonId: string) => void;
 }
 
@@ -134,7 +134,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
     });
   };
 
-  const renderLessonGrid = (lessonsList: Lesson[]) => {
+  const renderLessonGrid = (lessonsList: LessonSummary[]) => {
     if (lessonsList.length === 0) {
       return <div className="text-center text-gray-500 py-8">No lessons found in this category.</div>;
     }
@@ -170,15 +170,9 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
               </div>
 
               <div className="flex justify-between text-xs text-gray-600">
-                <span>{lesson.pages.length} total pages</span>
-                <span>
-                  {lesson.pages.reduce(
-                    (count, page) => count + page.items.filter(item => isExerciseType(item.type)).length,
-                    0
-                  )}{' '}
-                  exercises
-                </span>
-                <span>{lesson.pages.reduce((count, page) => count + page.items.length, 0)} items</span>
+                <span>{lesson.totalPages} total pages</span>
+                <span>{lesson.totalExercises} exercises</span>
+                <span>{lesson.totalItems} items</span>
               </div>
 
               <div className="flex gap-2">

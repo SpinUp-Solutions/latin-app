@@ -3,8 +3,15 @@ import { adminDb } from '@/src/services/firebase-admin';
 import { FieldPath } from 'firebase-admin/firestore';
 import type { Word } from '@/src/types/admin-vocabulary';
 import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
+import { buildPoolSearchTokens } from '@/src/utils/vocabularyPoolSummary';
 
 export const dynamic = 'force-dynamic';
+
+const serializePoolMetadata = (metadata: FirebaseFirestore.DocumentData) => ({
+  ...metadata,
+  createdAt: metadata.createdAt?.toDate ? metadata.createdAt.toDate() : metadata.createdAt,
+  updatedAt: metadata.updatedAt?.toDate ? metadata.updatedAt.toDate() : metadata.updatedAt,
+});
 
 export async function GET(request: NextRequest, { params }: { params: { poolId: string } }): Promise<NextResponse> {
   try {
@@ -24,9 +31,7 @@ export async function GET(request: NextRequest, { params }: { params: { poolId: 
       id: poolDoc.id,
       ...poolData,
       metadata: {
-        ...poolData.metadata,
-        createdAt: poolData.metadata.createdAt.toDate(),
-        updatedAt: poolData.metadata.updatedAt.toDate(),
+        ...serializePoolMetadata(poolData.metadata),
       },
     };
 
@@ -149,6 +154,7 @@ export async function PUT(request: NextRequest, { params }: { params: { poolId: 
     };
 
     if (updates.name !== undefined) updateData.name = updates.name;
+    if (updates.name !== undefined) updateData.searchTokens = buildPoolSearchTokens(updates.name);
     if (updates.description !== undefined) updateData.description = updates.description;
     if (updates.wordDocIds !== undefined) {
       updateData.wordDocIds = updates.wordDocIds;
@@ -178,10 +184,9 @@ export async function PUT(request: NextRequest, { params }: { params: { poolId: 
           name: poolData.name,
           description: poolData.description,
           wordDocIds: poolData.wordDocIds || [],
+          searchTokens: poolData.searchTokens || buildPoolSearchTokens(poolData.name || ''),
           metadata: {
-            ...poolData.metadata,
-            createdAt: poolData.metadata.createdAt.toDate(),
-            updatedAt: poolData.metadata.updatedAt.toDate(),
+            ...serializePoolMetadata(poolData.metadata),
           },
         },
       },

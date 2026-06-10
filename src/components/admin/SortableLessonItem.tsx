@@ -5,12 +5,12 @@ import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, BookOpen } from 'lucide-react';
 import { Badge } from '@/src/components/ui/badge';
 import { Button } from '@/src/components/ui/button';
-import { Lesson } from '@/src/types/lesson';
+import { LessonSummary } from '@/src/types/lesson';
 import Link from 'next/link';
 import React from 'react';
 
 interface SortableLessonItemProps {
-  lesson: Lesson;
+  lesson: LessonSummary;
   id: string;
 }
 
@@ -53,7 +53,7 @@ export function SortableLessonItem({ lesson, id }: SortableLessonItemProps) {
         <div className="flex items-center gap-4 text-xs text-gray-500">
           <div className="flex items-center gap-1">
             <BookOpen className="w-3 h-3" />
-            <span>{lesson.pages?.length || 0} pages</span>
+            <span>{lesson.totalPages} pages</span>
           </div>
         </div>
       </div>

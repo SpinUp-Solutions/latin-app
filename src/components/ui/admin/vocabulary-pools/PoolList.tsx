@@ -4,15 +4,15 @@ import { Badge } from '@/src/components/ui/badge';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { Edit, Trash2, Library, Calendar, Hash, Loader2 } from 'lucide-react';
 import { useInfiniteScroll } from '@/src/hooks/useInfiniteScroll';
-import type { VocabularyPool } from '@/src/types/vocabulary-pool';
+import type { VocabularyPoolSummary } from '@/src/types/vocabulary-pool';
 
 interface PoolListProps {
-  pools: VocabularyPool[];
+  pools: VocabularyPoolSummary[];
   loading: boolean;
   loadingMore: boolean;
   hasMore: boolean;
   onLoadMore: () => void;
-  onEdit: (pool: VocabularyPool) => void;
+  onEdit: (pool: VocabularyPoolSummary) => void;
   onDelete: (poolId: string, poolName: string) => void;
 }
 

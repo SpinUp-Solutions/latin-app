@@ -5,8 +5,11 @@ export interface VocabularyPool {
   name: string;
   description: string;
   wordDocIds: string[]; // Array of word document IDs
+  searchTokens?: string[];
   metadata: VocabularyPoolMetadata;
 }
+
+export type VocabularyPoolSummary = Omit<VocabularyPool, 'wordDocIds' | 'searchTokens'>;
 
 export interface VocabularyPoolMetadata {
   createdAt: Date;
@@ -26,7 +29,7 @@ export interface VocabularyPoolWithWords extends VocabularyPool {
 export interface VocabularyPoolsResponse {
   success: boolean;
   data: {
-    pools: VocabularyPool[];
+    pools: VocabularyPoolSummary[];
     hasMore: boolean;
     lastPoolId: string | null;
   };

@@ -19,7 +19,16 @@ export interface Lesson {
   updatedAt?: string;
   updatedBy?: string;
   version?: number;
+  totalPages?: number;
+  totalItems?: number;
+  totalExercises?: number;
 }
+
+export type LessonSummary = Omit<Lesson, 'pages'> & {
+  totalPages: number;
+  totalItems: number;
+  totalExercises: number;
+};
 
 export interface LessonWithVocabularyPool extends Lesson {
   vocabularyPoolData?: VocabularyPoolWithWords;

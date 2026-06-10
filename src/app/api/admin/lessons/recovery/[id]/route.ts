@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { Lesson } from '@/src/types/lesson';
 import { verifyAdminAccess } from '../../../../../../lib/verifyAdminAccess';
-import { isExerciseType } from '@/src/utils/lessonUtils';
+import { getLessonContentCounts } from '@/src/utils/lessonSummary';
 
 interface RouteParams {
   params: {
@@ -42,10 +42,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const existingLessonDoc = await adminDb.collection('lessons').doc(lesson.id).get();
     const lessonExists = existingLessonDoc.exists;
 
-    const totalExercises = lesson.pages.reduce(
-      (count, page) => count + page.items.filter(item => isExerciseType(item.type)).length,
-      0
-    );
+    const { totalPages, totalItems, totalExercises } = getLessonContentCounts(lesson);
 
     let lessonData;
     if (lessonExists) {
@@ -53,14 +50,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       const existingLesson = existingLessonDoc.data();
       lessonData = {
         ...lesson,
+        totalPages,
+        totalItems,
         totalExercises,
         createdAt: existingLesson?.createdAt || new Date().toISOString(),
         createdBy: existingLesson?.createdBy || user.uid,
         updatedAt: new Date().toISOString(),
         updatedBy: user.uid,
         version: (existingLesson?.version || 0) + 1,
-        isLive: existingLesson?.isLive || false,
-        liveOrder: existingLesson?.liveOrder || null,
+        isLive: existingLesson?.isLive ?? false,
+        liveOrder: existingLesson?.liveOrder ?? null,
         publishedAt: existingLesson?.publishedAt || null,
         publishedBy: existingLesson?.publishedBy || null,
       };
@@ -69,6 +68,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       // Create new lesson
       lessonData = {
         ...lesson,
+        totalPages,
+        totalItems,
         totalExercises,
         createdAt: new Date().toISOString(),
         createdBy: user.uid,
