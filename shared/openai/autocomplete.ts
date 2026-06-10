@@ -268,12 +268,12 @@ function mergeValue(existingValue: unknown, incomingValue: unknown, overwriteExi
 }
 
 function calculateCost(usage: {
-  prompt_tokens?: number;
-  completion_tokens?: number;
+  input_tokens?: number;
+  output_tokens?: number;
   total_tokens?: number;
 }): CostBreakdown {
-  const promptTokens = usage.prompt_tokens ?? 0;
-  const completionTokens = usage.completion_tokens ?? 0;
+  const promptTokens = usage.input_tokens ?? 0;
+  const completionTokens = usage.output_tokens ?? 0;
   const totalTokens = usage.total_tokens ?? 0;
 
   const inputCostPer1M = 0.75;
