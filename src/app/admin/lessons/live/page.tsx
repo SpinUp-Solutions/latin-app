@@ -1,10 +1,15 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '@/src/store';
-import { Lesson } from '@/src/types/lesson';
-import { syncLessonsFromRTQ, localReorderLiveLessons, selectHasUnsavedChanges } from '@/src/store/slices/lessonSlice';
+import { LessonSummary } from '@/src/types/lesson';
+import {
+  syncLessonsFromRTQ,
+  localReorderLiveLessons,
+  selectHasUnsavedChanges,
+  setUnsavedChanges,
+} from '@/src/store/slices/lessonSlice';
 import {
   useGetLessonsQuery,
   useUpdateLessonsPublishStatusMutation,
@@ -35,7 +40,7 @@ import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 
 function LiveLessonsPage() {
   const dispatch = useDispatch();
-  const { data: serverLessons, isLoading: loading } = useGetLessonsQuery();
+  const { data: serverLessons, isLoading: loading, refetch } = useGetLessonsQuery();
   const [updatePublishStatus] = useUpdateLessonsPublishStatusMutation();
   const [reorderLessons] = useReorderLessonsMutation();
   const liveLessons = useSelector(selectLiveLessons);
@@ -46,7 +51,9 @@ function LiveLessonsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'live' | 'draft'>('live');
   const [selectedLessons, setSelectedLessons] = useState<Set<string>>(new Set());
+  const [hasInitializedSelection, setHasInitializedSelection] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const shouldPreserveLocalOrderRef = useRef(false);
 
   const normalLiveLessons = liveLessons.filter(l => l.type === 'normal');
   const vocabLiveLessons = liveLessons.filter(l => l.type === 'vocab');
@@ -83,7 +90,7 @@ function LiveLessonsPage() {
 
   // Sync RTK Query data to lessonSlice
   useEffect(() => {
-    if (serverLessons) {
+    if (serverLessons && !shouldPreserveLocalOrderRef.current) {
       dispatch(syncLessonsFromRTQ(serverLessons));
     }
   }, [serverLessons, dispatch]);
@@ -92,13 +99,15 @@ function LiveLessonsPage() {
 
   useEffect(() => {
     setSelectedLessons(new Set());
+    setHasInitializedSelection(false);
   }, [lessonType]);
 
   useEffect(() => {
-    if (currentLiveLessons.length > 0 && selectedLessons.size === 0) {
+    if (!hasInitializedSelection) {
       setSelectedLessons(originalLiveIds);
+      setHasInitializedSelection(true);
     }
-  }, [currentLiveLessons.length, selectedLessons.size, originalLiveIds]);
+  }, [hasInitializedSelection, originalLiveIds]);
 
   // Use the new parameterized selector for efficient filtering
   const filteredLessons = useSelector((state: RootState) => selectFilteredLessons(state, filterStatus, searchQuery));
@@ -133,6 +142,7 @@ function LiveLessonsPage() {
 
     if (oldIndex === -1 || newIndex === -1) return;
 
+    shouldPreserveLocalOrderRef.current = true;
     dispatch(localReorderLiveLessons({ fromIndex: oldIndex, toIndex: newIndex, lessonType }));
   };
 
@@ -144,6 +154,13 @@ function LiveLessonsPage() {
       }));
 
       await reorderLessons(updates).unwrap();
+      const refreshedLessons = await refetch();
+      shouldPreserveLocalOrderRef.current = false;
+      if (refreshedLessons.data) {
+        dispatch(syncLessonsFromRTQ(refreshedLessons.data));
+      } else {
+        dispatch(setUnsavedChanges(false));
+      }
       toast.success('Lesson order saved successfully');
     } catch (error) {
       toast.error('Failed to save lesson order');
@@ -152,6 +169,7 @@ function LiveLessonsPage() {
 
   const handleCancelLessonOrder = () => {
     if (serverLessons) {
+      shouldPreserveLocalOrderRef.current = false;
       dispatch(syncLessonsFromRTQ(serverLessons));
       toast.info('Changes discarded');
     }
@@ -196,6 +214,11 @@ function LiveLessonsPage() {
         }
       }
 
+      const refreshedLessons = await refetch();
+      if (refreshedLessons.data && !shouldPreserveLocalOrderRef.current) {
+        dispatch(syncLessonsFromRTQ(refreshedLessons.data));
+        setHasInitializedSelection(false);
+      }
       toast.success('Changes applied successfully');
     } catch (error) {
       toast.error('Failed to publish lessons');
@@ -405,7 +428,7 @@ function LiveLessonsPage() {
                     ) : (
                       filteredLessons
                         .filter(l => l.type === lessonType)
-                        .map((lesson: Lesson) => {
+                        .map((lesson: LessonSummary) => {
                           return (
                             <div key={lesson.id} className="p-4 hover:bg-gray-50 transition-colors">
                               <div className="flex items-start gap-4">
@@ -428,7 +451,7 @@ function LiveLessonsPage() {
                                         <p className="text-sm text-gray-600 mb-2">{lesson.description}</p>
                                       )}
                                       <div className="flex items-center gap-4 text-xs text-gray-500">
-                                        <span>{lesson.pages?.length || 0} pages</span>
+                                        <span>{lesson.totalPages} pages</span>
                                       </div>
                                     </div>
 

@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     let nextOrder = startOrder;
 
     // Get current max order if publishing and no startOrder provided
-    if (isLive && !nextOrder) {
+    if (isLive && nextOrder === undefined) {
       const maxOrderDoc = await adminDb
         .collection('lessons')
         .where('isLive', '==', true)

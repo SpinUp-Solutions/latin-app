@@ -5,13 +5,13 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/src/components/ui/button';
 import { ArrowLeft, BookOpen, Plus } from 'lucide-react';
 import { LessonManager } from '@/src/components/ui/admin/LessonManager';
-import { Lesson } from '@/src/types/lesson';
+import { LessonSummary } from '@/src/types/lesson';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 
 function ManageLessonsPage() {
   const router = useRouter();
 
-  const handleEditLesson = (lesson: Lesson) => {
+  const handleEditLesson = (lesson: LessonSummary) => {
     router.push(`/admin/lessons/edit/${lesson.id}`);
   };
 

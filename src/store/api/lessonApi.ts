@@ -1,5 +1,5 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
-import { Lesson, LessonWithProgress } from '@/src/types/lesson';
+import { Lesson, LessonSummary, LessonWithProgress } from '@/src/types/lesson';
 import { extractTooltipsFromLesson } from '@/src/utils/tooltipUtils';
 import { TooltipData } from '@/src/types/tooltip';
 import { createAuthenticatedBaseQuery } from './baseQuery';
@@ -13,9 +13,9 @@ export const lessonApi = createApi({
   refetchOnFocus: true,
   refetchOnReconnect: true,
   endpoints: builder => ({
-    getLessons: builder.query<Lesson[], void>({
+    getLessons: builder.query<LessonSummary[], void>({
       query: () => '/admin/lessons',
-      transformResponse: (response: { lessons: Lesson[] }) => response.lessons,
+      transformResponse: (response: { lessons: LessonSummary[] }) => response.lessons,
       providesTags: result =>
         result
           ? [...result.map(({ id }) => ({ type: 'Lesson' as const, id })), { type: 'LessonList', id: 'LIST' }]

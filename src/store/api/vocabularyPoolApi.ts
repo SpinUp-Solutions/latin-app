@@ -1,5 +1,10 @@
 import { createApi } from '@reduxjs/toolkit/query/react';
-import { VocabularyPool, VocabularyPoolWithWords, CreatePoolRequest } from '@/src/types/vocabulary-pool';
+import {
+  VocabularyPool,
+  VocabularyPoolSummary,
+  VocabularyPoolWithWords,
+  CreatePoolRequest,
+} from '@/src/types/vocabulary-pool';
 import { Word } from '@/src/types/admin-vocabulary';
 import { createAuthenticatedBaseQuery } from './baseQuery';
 import { buildAdvancedFilterParams, POOL_WORD_FIELDS } from '@/src/utils/wordFilters';
@@ -30,7 +35,7 @@ export const vocabularyPoolApi = createApi({
   refetchOnReconnect: true,
   endpoints: builder => ({
     getPools: builder.query<
-      { pools: VocabularyPool[]; hasMore: boolean; lastPoolId: string | null },
+      { pools: VocabularyPoolSummary[]; hasMore: boolean; lastPoolId: string | null },
       {
         reset?: boolean;
         filters?: {
@@ -60,7 +65,7 @@ export const vocabularyPoolApi = createApi({
       },
       transformResponse: (response: {
         success: boolean;
-        data: { pools: VocabularyPool[]; hasMore: boolean; lastPoolId: string | null };
+        data: { pools: VocabularyPoolSummary[]; hasMore: boolean; lastPoolId: string | null };
       }) => response.data,
       serializeQueryArgs: ({ queryArgs }) => {
         return { filters: queryArgs.filters };
@@ -93,6 +98,12 @@ export const vocabularyPoolApi = createApi({
         missingWordIds: response.data.missingWordIds,
         actualWordCount: response.data.actualWordCount,
       }),
+      providesTags: (result, error, poolId) => [{ type: 'Pool', id: poolId }],
+    }),
+
+    getPoolSummary: builder.query<VocabularyPoolSummary, string>({
+      query: poolId => `/admin/vocabulary-pools/${poolId}/summary`,
+      transformResponse: (response: { success: boolean; data: { pool: VocabularyPoolSummary } }) => response.data.pool,
       providesTags: (result, error, poolId) => [{ type: 'Pool', id: poolId }],
     }),
 
@@ -231,6 +242,7 @@ export const vocabularyPoolApi = createApi({
 export const {
   useGetPoolsQuery,
   useGetPoolQuery,
+  useGetPoolSummaryQuery,
   useGetPoolPOSSummaryQuery,
   useGetPoolParadigmSummaryQuery,
   useCreatePoolMutation,

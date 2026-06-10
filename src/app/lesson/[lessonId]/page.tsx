@@ -2,6 +2,7 @@
 
 import React, { useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useGetStudentLessonsQuery } from '@/src/store/api/lessonApi';
 import Image from 'next/image';
 import LessonPlayer from '@/src/components/ui/lesson/lesson-player';
@@ -36,7 +37,9 @@ export default function DynamicLessonPage() {
     return (
       <div className="min-h-screen bg-roman-marble">
         <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-3 rounded hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-roman-red">
             <Image
               src="/assets/logos/wakeforest.png"
               alt="Wake Forest University"
@@ -45,7 +48,7 @@ export default function DynamicLessonPage() {
               className="w-14 h-auto"
             />
             <h1 className="text-xl font-serif tracking-wide">Latin</h1>
-          </div>
+          </Link>
         </header>
         <main className="container mx-auto py-8 px-4">
           <div className="max-w-3xl mx-auto">
@@ -68,7 +71,9 @@ export default function DynamicLessonPage() {
     return (
       <div className="min-h-screen bg-roman-marble">
         <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-3 rounded hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-roman-red">
             <Image
               src="/assets/logos/wakeforest.png"
               alt="Wake Forest University"
@@ -77,7 +82,7 @@ export default function DynamicLessonPage() {
               className="w-14 h-auto"
             />
             <h1 className="text-xl font-serif tracking-wide">Latin</h1>
-          </div>
+          </Link>
         </header>
         <main className="container mx-auto py-8 px-4">
           <div className="max-w-3xl mx-auto">
@@ -105,12 +110,15 @@ export default function DynamicLessonPage() {
   return (
     <div className="h-screen flex flex-col bg-roman-marble">
       <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between flex-shrink-0">
-        <div className="flex items-center gap-2">
+        <Link
+          href="/dashboard"
+          aria-label="Back to dashboard"
+          className="flex items-center gap-2 rounded hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-roman-red">
           <div className="w-10 h-10 rounded-full bg-roman-red flex items-center justify-center text-white font-serif">
             <span className="text-xl">L</span>
           </div>
           <h1 className="text-xl font-serif tracking-wide">Wake Forest University Latin</h1>
-        </div>
+        </Link>
       </header>
 
       <FeedbackBanner />
