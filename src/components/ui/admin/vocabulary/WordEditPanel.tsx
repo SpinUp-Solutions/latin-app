@@ -599,7 +599,7 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
       <AIFilledFieldsContext.Provider value={aiFieldStatus}>
         <form
           onSubmit={handleSubmit}
-          className="flex flex-col h-full overflow-hidden bg-white border-l border-gray-200">
+          className="flex h-full min-h-0 flex-col overflow-hidden bg-white border-l border-gray-200">
           <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0">
             <div className="flex items-center justify-between">
               <div className="min-w-0 flex-1">
@@ -640,7 +640,7 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
             )}
           </div>
 
-          <div className="flex-1 overflow-y-auto overscroll-contain px-6 py-4">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4">
             <div className="space-y-6">
               <BaseWordForm />
               {renderPosForm()}

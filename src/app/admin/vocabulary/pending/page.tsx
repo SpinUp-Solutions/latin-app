@@ -31,15 +31,47 @@ const statusIcon = {
   dismissed: XCircle,
 };
 
+const getRequestErrorMessage = (error: unknown): string | null => {
+  if (!error) return null;
+
+  if (typeof error === 'object' && error !== null) {
+    if ('data' in error) {
+      const data = (error as { data?: unknown }).data;
+      if (typeof data === 'object' && data !== null && 'error' in data) {
+        const message = (data as { error?: unknown }).error;
+        if (typeof message === 'string') return message;
+      }
+      if (typeof data === 'string') return data;
+    }
+
+    if ('error' in error) {
+      const message = (error as { error?: unknown }).error;
+      if (typeof message === 'string') return message;
+    }
+
+    if ('status' in error) {
+      return `Request failed with status ${(error as { status: unknown }).status}`;
+    }
+  }
+
+  return 'Could not load vocabulary requests';
+};
+
 function PendingVocabularyPage() {
   const router = useRouter();
   const [status, setStatus] = useState<VocabularyWordRequestStatus>('pending');
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
 
-  const { data: requests = [], isLoading, isFetching } = useGetVocabularyWordRequestsQuery({ status });
+  const {
+    data: requests = [],
+    isLoading,
+    isFetching,
+    error: requestError,
+  } = useGetVocabularyWordRequestsQuery({ status });
   const [updateRequest, { isLoading: updating }] = useUpdateVocabularyWordRequestMutation();
   const [approveRequest, { isLoading: approving }] = useApproveVocabularyWordRequestMutation();
   const [dismissRequest, { isLoading: dismissing }] = useDismissVocabularyWordRequestMutation();
+  const requestErrorMessage = useMemo(() => getRequestErrorMessage(requestError), [requestError]);
 
   useEffect(() => {
     setSelectedRequestId(null);
@@ -107,7 +139,7 @@ function PendingVocabularyPage() {
   };
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-roman-marble">
+    <div className="h-screen min-h-0 flex flex-col overflow-hidden bg-roman-marble">
       <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-4">
           <Button variant="ghost" onClick={() => router.push('/admin')}>
@@ -124,8 +156,8 @@ function PendingVocabularyPage() {
         </Button>
       </header>
 
-      <main className="flex-1 grid grid-cols-[34%_66%] overflow-hidden">
-        <aside className="border-r border-gray-200 bg-white overflow-y-auto">
+      <main className="min-h-0 flex-1 grid grid-cols-[34%_66%] overflow-hidden">
+        <aside className="min-h-0 border-r border-gray-200 bg-white overflow-y-auto">
           <div className="sticky top-0 z-10 bg-white border-b border-gray-200 p-4 space-y-3">
             <div className="flex items-center justify-between gap-3">
               <Select value={status} onValueChange={value => setStatus(value as VocabularyWordRequestStatus)}>
@@ -144,7 +176,9 @@ function PendingVocabularyPage() {
             </div>
           </div>
 
-          {isLoading ? (
+          {requestErrorMessage ? (
+            <div className="p-6 text-sm text-red-700">Could not load requests: {requestErrorMessage}</div>
+          ) : isLoading ? (
             <div className="p-6 text-sm text-gray-500">Loading requests...</div>
           ) : requests.length === 0 ? (
             <div className="p-6 text-sm text-gray-500">No {STATUS_LABELS[status].toLowerCase()} requests.</div>
@@ -180,7 +214,7 @@ function PendingVocabularyPage() {
           )}
         </aside>
 
-        <section className="flex flex-col overflow-hidden bg-white">
+        <section className="min-h-0 flex flex-col overflow-hidden bg-white">
           {selectedRequest && (
             <div className="border-b border-gray-200 px-6 py-3 flex items-center justify-between gap-4">
               <div className="min-w-0">
@@ -203,7 +237,7 @@ function PendingVocabularyPage() {
               </div>
             </div>
           )}
-          <div className="flex-1 overflow-hidden">
+          <div className="min-h-0 flex-1 overflow-hidden">
             <WordEditPanel word={editorWord} onSave={handleSaveDraft} updating={updating} />
           </div>
         </section>

@@ -57,7 +57,6 @@ export async function resolveRootWord(request: ResolveRootWordRequest): Promise<
     const responseFormat = zodResponseFormat(RootResolverOutputSchema, 'root_word_candidates');
     const response = await openai.responses.create({
       model: DEFAULT_MODEL,
-      reasoning: { effort: 'low' },
       max_output_tokens: 2000,
       instructions: SYSTEM_PROMPT,
       input: buildPrompt(request),

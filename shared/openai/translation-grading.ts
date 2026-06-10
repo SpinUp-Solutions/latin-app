@@ -152,12 +152,12 @@ const TRANSLATION_GRADING_JSON_SCHEMA = {
 } as const;
 
 function calculateOpenAICost(usage: {
-  prompt_tokens?: number;
-  completion_tokens?: number;
+  input_tokens?: number;
+  output_tokens?: number;
   total_tokens?: number;
 }): CostBreakdown {
-  const promptTokens = usage.prompt_tokens ?? 0;
-  const completionTokens = usage.completion_tokens ?? 0;
+  const promptTokens = usage.input_tokens ?? 0;
+  const completionTokens = usage.output_tokens ?? 0;
   const totalTokens = usage.total_tokens ?? 0;
 
   const inputCostPer1M = 0.75;
@@ -192,7 +192,7 @@ async function callOpenAIGrading(userPrompt: string): Promise<GradingCallResult>
     max_output_tokens: 5000,
 
     instructions: SYSTEM_PROMPT,
-    reasoning: { effort: 'medium' },
+    reasoning: { effort: 'low' },
     input: userPrompt,
     text: {
       format: {
@@ -267,7 +267,6 @@ Provide:
       data: result.data,
       tokensUsed: result.tokensUsed,
       model: result.model,
-      cost: result.cost,
     };
   } catch (error) {
     console.error(`[gradeTranslation] ❌ Error with OpenAI:`, error);

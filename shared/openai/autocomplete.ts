@@ -48,6 +48,76 @@ interface PartOfSpeechConfig {
   partOfSpeech: VocabularyWord['part_of_speech'];
 }
 
+type ResponseDiagnosticsSource = {
+  model?: string;
+  usage?: {
+    output_tokens?: number;
+    total_tokens?: number;
+    output_tokens_details?: {
+      reasoning_tokens?: number;
+    };
+  } | null;
+  incomplete_details?: unknown;
+  output?: Array<{
+    type: string;
+    status?: string;
+  }>;
+};
+
+function getIncompleteReason(details: unknown): string | undefined {
+  if (!details || typeof details !== 'object') {
+    return undefined;
+  }
+
+  const reason = (details as Record<string, unknown>).reason;
+  return typeof reason === 'string' ? reason : undefined;
+}
+
+function createResponseDiagnostics(response: ResponseDiagnosticsSource) {
+  const outputTokens = response.usage?.output_tokens;
+  const reasoningTokens = response.usage?.output_tokens_details?.reasoning_tokens;
+  const outputTypes = response.output?.map(item => `${item.type}${item.status ? `:${item.status}` : ''}`) ?? [];
+  const incompleteReason = getIncompleteReason(response.incomplete_details);
+
+  return {
+    outputTokens,
+    reasoningTokens,
+    totalTokens: response.usage?.total_tokens,
+    outputTypes,
+    incompleteReason,
+    details: JSON.stringify({
+      model: response.model,
+      maxOutputTokens: MAX_TOKENS,
+      usage: response.usage,
+      outputTypes,
+      incompleteDetails: response.incomplete_details,
+    }),
+  };
+}
+
+function createTokenBudgetError(prefix: string, response: ResponseDiagnosticsSource): AIAutocompleteResponse {
+  const diagnostics = createResponseDiagnostics(response);
+  const tokenMessage =
+    diagnostics.outputTokens !== undefined
+      ? ` Used ${diagnostics.outputTokens}/${MAX_TOKENS} output tokens${
+          diagnostics.reasoningTokens !== undefined ? `, including ${diagnostics.reasoningTokens} reasoning tokens` : ''
+        }.`
+      : '';
+  const reasonMessage = diagnostics.incompleteReason ? ` Reason: ${diagnostics.incompleteReason}.` : '';
+
+  return {
+    success: false,
+    error: `${prefix}.${tokenMessage}${reasonMessage}`,
+    model: response.model,
+    tokensUsed: diagnostics.totalTokens,
+    errorDetails: {
+      message: prefix,
+      type: 'OpenAIIncompleteResponse',
+      details: diagnostics.details,
+    },
+  };
+}
+
 function getSchemaFields(schema: StructuredOutputSchema): AICompletableField[] {
   return schema.keyof().options as AICompletableField[];
 }
@@ -198,12 +268,12 @@ function mergeValue(existingValue: unknown, incomingValue: unknown, overwriteExi
 }
 
 function calculateCost(usage: {
-  prompt_tokens?: number;
-  completion_tokens?: number;
+  input_tokens?: number;
+  output_tokens?: number;
   total_tokens?: number;
 }): CostBreakdown {
-  const promptTokens = usage.prompt_tokens ?? 0;
-  const completionTokens = usage.completion_tokens ?? 0;
+  const promptTokens = usage.input_tokens ?? 0;
+  const completionTokens = usage.output_tokens ?? 0;
   const totalTokens = usage.total_tokens ?? 0;
 
   const inputCostPer1M = 0.75;
@@ -251,7 +321,7 @@ export async function autocompleteVocabularyWord(request: AIAutocompleteRequest)
     const startTime = Date.now();
     const response = await openai.responses.create({
       model: AUTOCOMPLETE_MODEL,
-      reasoning: { effort: 'medium' },
+      reasoning: { effort: 'low' },
       max_output_tokens: MAX_TOKENS,
       instructions: SYSTEM_PROMPT,
       input: getPromptForPartOfSpeech(request.part_of_speech, request.word),
@@ -276,14 +346,14 @@ export async function autocompleteVocabularyWord(request: AIAutocompleteRequest)
     const messageItem = response.output.find(item => item.type === 'message');
     if (!messageItem || messageItem.type !== 'message') {
       console.error('[Autocomplete] No message item in response');
-      return { success: false, error: 'No response from the model' };
+      return createTokenBudgetError('OpenAI did not produce structured vocabulary JSON', response);
     }
 
     console.log('[Autocomplete] Message status:', messageItem.status);
 
     if (messageItem.status === 'incomplete') {
       console.error('[Autocomplete] Response incomplete');
-      return { success: false, error: 'Response was incomplete' };
+      return createTokenBudgetError('OpenAI started the vocabulary JSON but did not finish it', response);
     }
 
     const textContent = messageItem.content.find(c => c.type === 'output_text');

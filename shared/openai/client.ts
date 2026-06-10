@@ -10,4 +10,4 @@ export const TRANSLATION_GRADING_MODEL = 'gpt-5.4-mini';
 
 export const DEFAULT_TEMPERATURE = 0.2;
 
-export const MAX_TOKENS = 16000;
+export const MAX_TOKENS = 32000;
