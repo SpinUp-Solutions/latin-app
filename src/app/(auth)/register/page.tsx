@@ -146,6 +146,7 @@ export default function RegisterPage() {
               width={160}
               height={100}
               className="w-32 h-auto mx-auto mb-2"
+              priority
             />
             <h2 className="text-2xl font-bold font-serif">Create an account</h2>
             <p className="text-muted-foreground">Sign up to get started with our platform</p>
