@@ -5,12 +5,16 @@ import { requestCollection, routeError, serializeRequestSnapshot } from '../../u
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }): Promise<NextResponse> {
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+): Promise<NextResponse> {
   try {
     await verifyAdminAccess(request);
     const body = await request.json().catch(() => ({}));
     const dismissedReason = typeof body?.reason === 'string' ? body.reason : null;
-    const docRef = requestCollection().doc(params.id);
+    const { id } = await params;
+    const docRef = requestCollection().doc(id);
     const snapshot = await docRef.get();
 
     if (!snapshot.exists) {

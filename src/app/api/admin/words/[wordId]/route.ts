@@ -14,9 +14,12 @@ async function findPoolsReferencingWord(wordId: string) {
   }));
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { wordId: string } }): Promise<NextResponse> {
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ wordId: string }> }
+): Promise<NextResponse> {
   try {
-    const { wordId } = params;
+    const { wordId } = await params;
     const { searchParams } = new URL(request.url);
     const collection = searchParams.get('collection') || VOCABULARY_WORDS_COLLECTION;
     const confirm = searchParams.get('confirm') === 'true';

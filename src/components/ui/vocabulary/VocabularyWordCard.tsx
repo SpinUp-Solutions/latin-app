@@ -26,9 +26,9 @@ export const VocabularyWordCard: React.FC<VocabularyWordCardProps> = ({ word, va
             </h3>
           </div>
 
-          <p className={cn('text-gray-800', isCompact ? 'text-base' : 'text-lg')}>
+          <div className={cn('text-gray-800', isCompact ? 'text-base' : 'text-lg')}>
             <SimpleRichDisplay content={word.translation} />
-          </p>
+          </div>
         </div>
       </RomanCardContent>
     </RomanCard>

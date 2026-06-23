@@ -5,9 +5,9 @@ import { verifyAdminAccess } from '../../../../../../lib/verifyAdminAccess';
 import { getLessonContentCounts } from '@/src/utils/lessonSummary';
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 // POST - Retry save from recovery (creates or updates the lesson)
@@ -18,7 +18,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const recoveryId = params.id;
+    const { id } = await params;
+    const recoveryId = id;
 
     // Get recovery item
     const recoveryDoc = await adminDb.collection('lesson_recovery').doc(recoveryId).get();
@@ -119,7 +120,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const recoveryId = params.id;
+    const { id } = await params;
+    const recoveryId = id;
 
     // Get recovery item to verify ownership
     const recoveryDoc = await adminDb.collection('lesson_recovery').doc(recoveryId).get();

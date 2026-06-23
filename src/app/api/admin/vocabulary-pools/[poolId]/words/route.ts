@@ -6,9 +6,12 @@ import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: NextRequest, { params }: { params: { poolId: string } }): Promise<NextResponse> {
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ poolId: string }> }
+): Promise<NextResponse> {
   try {
-    const { poolId } = params;
+    const { poolId } = await params;
     const { wordDocIds, skipDuplicates = true }: AddWordsRequest = await request.json();
 
     if (!wordDocIds || !Array.isArray(wordDocIds) || wordDocIds.length === 0) {
@@ -99,9 +102,12 @@ export async function POST(request: NextRequest, { params }: { params: { poolId:
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { poolId: string } }): Promise<NextResponse> {
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ poolId: string }> }
+): Promise<NextResponse> {
   try {
-    const { poolId } = params;
+    const { poolId } = await params;
     const { wordDocIds } = await request.json();
 
     if (!wordDocIds || !Array.isArray(wordDocIds) || wordDocIds.length === 0) {

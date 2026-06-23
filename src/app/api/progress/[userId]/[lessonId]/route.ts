@@ -19,15 +19,16 @@ async function verifyAuth(request: NextRequest) {
   return await auth().verifyIdToken(token);
 }
 
-export async function GET(request: NextRequest, { params }: { params: { userId: string; lessonId: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ userId: string; lessonId: string }> }) {
   try {
+    const { userId, lessonId } = await params;
     const currentUser = await verifyAuth(request);
 
-    if (currentUser.uid !== params.userId) {
+    if (currentUser.uid !== userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const progressDoc = await adminDb.collection('userProgress').doc(`${params.userId}_${params.lessonId}`).get();
+    const progressDoc = await adminDb.collection('userProgress').doc(`${userId}_${lessonId}`).get();
 
     if (!progressDoc.exists) {
       return NextResponse.json(null);
@@ -40,18 +41,22 @@ export async function GET(request: NextRequest, { params }: { params: { userId: 
   }
 }
 
-export async function POST(request: NextRequest, { params }: { params: { userId: string; lessonId: string } }) {
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ userId: string; lessonId: string }> }
+) {
   try {
+    const { userId, lessonId } = await params;
     const currentUser = await verifyAuth(request);
 
-    if (currentUser.uid !== params.userId) {
+    if (currentUser.uid !== userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const progressData = await request.json();
     const { exerciseId, score, currentPageIndex: directPageIndex, ...lessonProgressData } = progressData;
 
-    const lessonDoc = await adminDb.collection('lessons').doc(params.lessonId).get();
+    const lessonDoc = await adminDb.collection('lessons').doc(lessonId).get();
     if (!lessonDoc.exists) {
       return NextResponse.json({ error: 'Lesson not found' }, { status: 404 });
     }
@@ -64,11 +69,11 @@ export async function POST(request: NextRequest, { params }: { params: { userId:
     if ((isVocabLesson || isDiagrammingLesson || isListeningLesson) && progressData.status === 'completed') {
       await adminDb
         .collection('userProgress')
-        .doc(`${params.userId}_${params.lessonId}`)
+        .doc(`${userId}_${lessonId}`)
         .set(
           {
-            userId: params.userId,
-            lessonId: params.lessonId,
+            userId: userId,
+            lessonId: lessonId,
             status: 'completed',
             completedAt: new Date().toISOString(),
             score: score || progressData.score,
@@ -82,7 +87,7 @@ export async function POST(request: NextRequest, { params }: { params: { userId:
     }
 
     if (exerciseId && typeof score === 'number') {
-      const progressDoc = await adminDb.collection('userProgress').doc(`${params.userId}_${params.lessonId}`).get();
+      const progressDoc = await adminDb.collection('userProgress').doc(`${userId}_${lessonId}`).get();
 
       const existingData = progressDoc.exists ? progressDoc.data() : {};
       const exerciseProgress = existingData?.exerciseProgress || [];
@@ -123,32 +128,32 @@ export async function POST(request: NextRequest, { params }: { params: { userId:
 
       await adminDb
         .collection('userProgress')
-        .doc(`${params.userId}_${params.lessonId}`)
+        .doc(`${userId}_${lessonId}`)
         .set(
           {
             ...existingData,
             ...lessonProgressData,
             exerciseProgress,
             ...computedData,
-            userId: params.userId,
-            lessonId: params.lessonId,
+            userId: userId,
+            lessonId: lessonId,
             updatedAt: new Date().toISOString(),
           },
           { merge: true }
         );
     } else if (directPageIndex !== undefined) {
-      const existingDoc = await adminDb.collection('userProgress').doc(`${params.userId}_${params.lessonId}`).get();
+      const existingDoc = await adminDb.collection('userProgress').doc(`${userId}_${lessonId}`).get();
       const existingData = existingDoc.exists ? existingDoc.data() : {};
 
       await adminDb
         .collection('userProgress')
-        .doc(`${params.userId}_${params.lessonId}`)
+        .doc(`${userId}_${lessonId}`)
         .set(
           {
             ...existingData,
             currentPageIndex: directPageIndex,
-            userId: params.userId,
-            lessonId: params.lessonId,
+            userId: userId,
+            lessonId: lessonId,
             lastAccessedAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           },
@@ -157,12 +162,12 @@ export async function POST(request: NextRequest, { params }: { params: { userId:
     } else {
       await adminDb
         .collection('userProgress')
-        .doc(`${params.userId}_${params.lessonId}`)
+        .doc(`${userId}_${lessonId}`)
         .set(
           {
             ...progressData,
-            userId: params.userId,
-            lessonId: params.lessonId,
+            userId: userId,
+            lessonId: lessonId,
             lastAccessedAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           },

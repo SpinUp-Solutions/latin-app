@@ -25,15 +25,16 @@ import { UnifiedDialog } from '@/src/components/ui/core/UnifiedDialog';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 
 interface EditLessonPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 function EditLessonPage({ params }: EditLessonPageProps) {
+  const { id } = React.use(params);
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { data: lessonData } = useGetLessonByIdQuery({ lessonId: params.id });
+  const { data: lessonData } = useGetLessonByIdQuery({ lessonId: id });
   const [updateLesson, { isLoading: saving, isError: saveFailed }] = useUpdateLessonMutation();
   const [saveToRecovery, { isLoading: savingToRecovery }] = useSaveToRecoveryMutation();
   const { currentLesson, dirty } = useSelector((state: RootState) => state.lessonEditor);

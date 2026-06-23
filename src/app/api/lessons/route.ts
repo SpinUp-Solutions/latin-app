@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
         let status = 'locked';
         let progress = 0;
 
-        if (!currentUser || isLockingDisabled) {
+        if (isLockingDisabled) {
           const result = getStatusFromProgress(userProgress, lesson);
           status = result.status;
           progress = result.progress;

@@ -98,7 +98,7 @@ const config: Config = {
         serif: ['Trajan Pro', 'Georgia', 'serif'],
         sans: ['Open Sans', 'Roboto', 'sans-serif'],
       },
-      typography: (theme: (path: string) => any) => ({
+      typography: (theme: (path: string) => string) => ({
         DEFAULT: {
           css: {
             'h1, h2, h3, h4, h5, h6': {

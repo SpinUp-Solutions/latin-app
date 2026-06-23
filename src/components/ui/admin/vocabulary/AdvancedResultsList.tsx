@@ -54,7 +54,7 @@ const EmptyState: React.FC = () => (
 );
 
 const InfiniteScrollSentinel: React.FC<{
-  sentinelRef: React.RefObject<HTMLDivElement>;
+  sentinelRef: React.RefObject<HTMLDivElement | null>;
   loadingMore: boolean;
   hasMore: boolean;
 }> = ({ sentinelRef, loadingMore, hasMore }) => {

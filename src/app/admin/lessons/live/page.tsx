@@ -162,7 +162,7 @@ function LiveLessonsPage() {
         dispatch(setUnsavedChanges(false));
       }
       toast.success('Lesson order saved successfully');
-    } catch (error) {
+    } catch {
       toast.error('Failed to save lesson order');
     }
   };
@@ -220,7 +220,7 @@ function LiveLessonsPage() {
         setHasInitializedSelection(false);
       }
       toast.success('Changes applied successfully');
-    } catch (error) {
+    } catch {
       toast.error('Failed to publish lessons');
     }
 

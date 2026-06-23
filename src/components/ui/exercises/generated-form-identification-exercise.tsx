@@ -477,9 +477,9 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
       </div>
 
       {exercise.instructions && exercise.instructions.replace(/<[^>]*>/g, '').trim() !== '' && (
-        <p className="text-roman-stone">
+        <div className="text-roman-stone">
           <SimpleRichDisplay content={exercise.instructions} />
-        </p>
+        </div>
       )}
 
       <ExerciseProgress

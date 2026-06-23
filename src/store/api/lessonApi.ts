@@ -22,7 +22,7 @@ export const lessonApi = createApi({
           : [{ type: 'LessonList', id: 'LIST' }],
     }),
 
-    getStudentLessons: builder.query<LessonWithProgress[], void>({
+    getStudentLessons: builder.query<LessonWithProgress[], string | void>({
       query: () => '/lessons',
       transformResponse: (response: { lessons: LessonWithProgress[] }) => response.lessons,
       providesTags: [{ type: 'StudentLesson', id: 'LIST' }],

@@ -77,7 +77,7 @@ export const TooltipContainer: React.FC<TooltipContainerProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeTooltip, setActiveTooltip] = useState<ActiveTooltip | null>(null);
   const [fixedElementPos, setFixedElementPos] = useState<MousePosition>({ x: 0, y: 0 });
-  const hideTimeoutRef = useRef<NodeJS.Timeout>();
+  const hideTimeoutRef = useRef<NodeJS.Timeout>(null);
 
   const handleMouseOver = useCallback(
     (e: MouseEvent) => {
@@ -90,7 +90,7 @@ export const TooltipContainer: React.FC<TooltipContainerProps> = ({
 
         if (hideTimeoutRef.current) {
           clearTimeout(hideTimeoutRef.current);
-          hideTimeoutRef.current = undefined;
+          hideTimeoutRef.current = null;
         }
 
         const tooltipData = extractTooltipDataFromElement(tooltipElement);
@@ -118,7 +118,7 @@ export const TooltipContainer: React.FC<TooltipContainerProps> = ({
       if (isOverTooltip) {
         if (hideTimeoutRef.current) {
           clearTimeout(hideTimeoutRef.current);
-          hideTimeoutRef.current = undefined;
+          hideTimeoutRef.current = null;
         }
       } else if (!hideTimeoutRef.current) {
         hideTimeoutRef.current = setTimeout(() => {

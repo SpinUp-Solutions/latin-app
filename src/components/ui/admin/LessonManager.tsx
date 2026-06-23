@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/src/components/ui/tabs';
-import { BookOpen, Edit, Trash2, Calendar, Eye, FileText, Clock, AlertTriangle, RotateCcw } from 'lucide-react';
+import { BookOpen, Edit, Trash2, Calendar, Eye, FileText, Clock, AlertTriangle, RotateCcw, Search, X } from 'lucide-react';
 import { LessonSummary } from '@/src/types/lesson';
 import { toast } from 'sonner';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
@@ -20,6 +20,9 @@ import { clearDraft, loadDrafts } from '@/src/store/slices/lessonEditorSlice';
 import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { isExerciseType } from '@/src/utils/lessonUtils';
+import { Input } from '@/src/components/ui/input';
+import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
+import { useDebounce } from '@/src/hooks/useDebounce';
 
 interface LessonManagerProps {
   onEditLesson: (lesson: LessonSummary) => void;
@@ -43,10 +46,45 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
     onConfirm: () => void;
   } | null>(null);
 
-  const normalLessons = lessons.filter(l => l.type === 'normal');
-  const vocabLessons = lessons.filter(l => l.type === 'vocab');
-  const diagrammingLessons = lessons.filter(l => l.type === 'sentence-diagramming');
-  const listeningLessons = lessons.filter(l => l.type === 'listening');
+  const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearchQuery = useDebounce(searchQuery, 200);
+
+  const filteredLessons = useMemo(() => {
+    if (!debouncedSearchQuery) return lessons;
+    const query = debouncedSearchQuery.toLowerCase();
+    return lessons.filter(
+      lesson =>
+        lesson.title.toLowerCase().includes(query) ||
+        (lesson.description && lesson.description.toLowerCase().includes(query))
+    );
+  }, [lessons, debouncedSearchQuery]);
+
+  const filteredDrafts = useMemo(() => {
+    const draftEntries = Object.entries(drafts);
+    if (!debouncedSearchQuery) return draftEntries;
+    const query = debouncedSearchQuery.toLowerCase();
+    return draftEntries.filter(([, draft]) => {
+      return (
+        draft.lesson.title.toLowerCase().includes(query) ||
+        (draft.lesson.description && draft.lesson.description.toLowerCase().includes(query))
+      );
+    });
+  }, [drafts, debouncedSearchQuery]);
+
+  const filteredRecoveryItems = useMemo(() => {
+    if (!debouncedSearchQuery) return recoveryItems;
+    const query = debouncedSearchQuery.toLowerCase();
+    return recoveryItems.filter(
+      item =>
+        item.lessonTitle.toLowerCase().includes(query) ||
+        (item.rawLessonData.description && item.rawLessonData.description.toLowerCase().includes(query))
+    );
+  }, [recoveryItems, debouncedSearchQuery]);
+
+  const normalLessons = filteredLessons.filter(l => l.type === 'normal');
+  const vocabLessons = filteredLessons.filter(l => l.type === 'vocab');
+  const diagrammingLessons = filteredLessons.filter(l => l.type === 'sentence-diagramming');
+  const listeningLessons = filteredLessons.filter(l => l.type === 'listening');
 
   useEffect(() => {
     dispatch(loadDrafts());
@@ -209,12 +247,39 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
 
   return (
     <div className="space-y-8">
+      {/* Search Bar */}
+      {(lessons.length > 0 || Object.keys(drafts).length > 0) && (
+        <RomanCard className="mb-6">
+          <RomanCardContent className="p-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Search lessons by title or description..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="pl-10 pr-10 bg-white transition-colors duration-300 border-gray-200 focus:border-roman-red focus-visible:ring-0 focus-visible:ring-offset-0"
+              />
+              {searchQuery && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-1 top-1 h-8 w-8 p-0 text-gray-500 hover:text-gray-900"
+                  title="Clear search">
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          </RomanCardContent>
+        </RomanCard>
+      )}
+
       {/* Recovery Section */}
-      {recoveryItems.length > 0 && (
+      {filteredRecoveryItems.length > 0 && (
         <section>
           <h2 className="text-xl font-serif text-gray-800 border-b pb-2 mb-4 flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-red-600" />
-            <span className="text-red-700">Recovery Items ({recoveryItems.length})</span>
+            <span className="text-red-700">Recovery Items ({filteredRecoveryItems.length})</span>
           </h2>
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
             <p className="text-sm text-red-700">
@@ -222,7 +287,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {recoveryItems.map(item => (
+            {filteredRecoveryItems.map(item => (
               <Card key={item.id} className="hover:shadow-lg transition-shadow border-red-300 bg-red-50/50">
                 <CardHeader>
                   <CardTitle className="flex items-start justify-between gap-2">
@@ -294,14 +359,14 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
       )}
 
       {/* Drafts Section */}
-      {Object.keys(drafts).length > 0 && (
+      {filteredDrafts.length > 0 && (
         <section>
           <h2 className="text-xl font-serif text-gray-800 border-b pb-2 mb-4 flex items-center gap-2">
             <FileText className="h-5 w-5 text-amber-600" />
-            <span>Drafts ({Object.keys(drafts).length})</span>
+            <span>Drafts ({filteredDrafts.length})</span>
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {Object.entries(drafts)
+            {filteredDrafts
               .sort(([, a], [, b]) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime())
               .map(([lessonId, draft]) => (
                 <Card key={lessonId} className="hover:shadow-lg transition-shadow border-amber-300 bg-amber-50/50">
@@ -365,7 +430,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
       )}
 
       <section>
-        <h2 className="text-xl font-serif text-gray-800 border-b pb-2 mb-4">Saved Lessons ({lessons.length})</h2>
+        <h2 className="text-xl font-serif text-gray-800 border-b pb-2 mb-4">Saved Lessons ({filteredLessons.length})</h2>
         {lessons.length === 0 && Object.keys(drafts).length === 0 ? (
           <Card>
             <CardContent className="p-12 text-center">
@@ -374,9 +439,24 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
               <p className="text-gray-600 mb-4">Create your first lesson to get started.</p>
             </CardContent>
           </Card>
-        ) : lessons.length === 0 && Object.keys(drafts).length > 0 ? (
+        ) : filteredLessons.length === 0 && filteredDrafts.length === 0 ? (
+          <Card>
+            <CardContent className="p-12 text-center">
+              <BookOpen className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-800 mb-2">No Matches Found</h3>
+              <p className="text-gray-600 mb-4">No lessons or drafts match &ldquo;{searchQuery}&rdquo;.</p>
+              <Button variant="outline" onClick={() => setSearchQuery('')}>
+                Clear Search
+              </Button>
+            </CardContent>
+          </Card>
+        ) : filteredLessons.length === 0 && filteredDrafts.length > 0 ? (
           <div className="text-center text-gray-500 py-8">
-            No saved lessons yet. Continue with your drafts or create a new lesson.
+            {searchQuery ? (
+              <>No saved lessons match &ldquo;{searchQuery}&rdquo;. Continue with matching drafts above.</>
+            ) : (
+              <>No saved lessons yet. Continue with your drafts or create a new lesson.</>
+            )}
           </div>
         ) : (
           <Tabs defaultValue="normal" className="w-full">
