@@ -15,9 +15,10 @@ import { Card, CardContent } from '@/src/components/ui/card';
 import { Library, Loader2, Search } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import Link from 'next/link';
-import { useGetPoolsQuery, useGetPoolQuery } from '@/src/store/api/vocabularyPoolApi';
+import { useGetPoolsQuery, useGetPoolSummaryQuery } from '@/src/store/api/vocabularyPoolApi';
 import { useInfiniteScroll } from '@/src/hooks/useInfiniteScroll';
-import type { VocabularyPool } from '@/src/types/vocabulary-pool';
+import { useDebounce } from '@/src/hooks/useDebounce';
+import type { VocabularyPoolSummary } from '@/src/types/vocabulary-pool';
 
 interface VocabularyPoolSelectorProps {
   selectedPoolId?: string;
@@ -33,13 +34,14 @@ export const VocabularyPoolSelector: React.FC<VocabularyPoolSelectorProps> = ({
   const [difficulty, setDifficulty] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [lastPoolId, setLastPoolId] = useState<string | null>(null);
-  const filters = { search: searchQuery || undefined, difficulty, isActive: true as boolean | null };
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+  const filters = { search: debouncedSearchQuery || undefined, difficulty, isActive: true as boolean | null };
   const { data, isLoading, isFetching } = useGetPoolsQuery({ filters, lastPoolId });
   const pools = data?.pools ?? [];
   const hasMore = data?.hasMore ?? false;
   const loadingMore = isFetching && lastPoolId !== null;
-  const { data: directPool } = useGetPoolQuery(selectedPoolId!, { skip: !selectedPoolId });
-  const [selectedPool, setSelectedPool] = useState<VocabularyPool | null>(null);
+  const { data: directPool } = useGetPoolSummaryQuery(selectedPoolId!, { skip: !selectedPoolId });
+  const [selectedPool, setSelectedPool] = useState<VocabularyPoolSummary | null>(null);
   const [showPoolPicker, setShowPoolPicker] = useState(false);
 
   const handleLoadMore = useCallback(() => {
@@ -63,7 +65,7 @@ export const VocabularyPoolSelector: React.FC<VocabularyPoolSelectorProps> = ({
 
   useEffect(() => {
     setLastPoolId(null);
-  }, [searchQuery, difficulty]);
+  }, [debouncedSearchQuery, difficulty]);
 
   return (
     <div className="space-y-4">

@@ -29,7 +29,7 @@ export class NounScraper extends BaseScraper {
       if (await table.count()) {
         result.declensionTable = await this.extractTableData(table);
       }
-    } catch (error) {}
+    } catch {}
   }
 
   private static async extractTableData(table: Locator): Promise<DeclensionData[]> {

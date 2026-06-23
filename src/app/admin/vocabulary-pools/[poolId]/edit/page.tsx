@@ -13,13 +13,13 @@ import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card
 import type { CreatePoolRequest } from '@/src/types/vocabulary-pool';
 
 interface EditPoolPageProps {
-  params: {
+  params: Promise<{
     poolId: string;
-  };
+  }>;
 }
 
 export default function EditPoolPage({ params }: EditPoolPageProps) {
-  const { poolId } = params;
+  const { poolId } = React.use(params);
   const router = useRouter();
   const { data: pool, isLoading: loading, error } = useGetPoolQuery(poolId);
   const [updatePoolMutation, { isLoading: updating }] = useUpdatePoolMutation();

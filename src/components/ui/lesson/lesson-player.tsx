@@ -3,10 +3,9 @@
 import React, { useState, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { LessonWithProgress } from '@/src/types/lesson';
-import { BookOpen, CheckCircle } from 'lucide-react';
+import { BookOpen, Headphones, CheckCircle } from 'lucide-react';
 import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
-import { LessonProgress } from '../core/lesson-progress';
 import { Button } from '@/src/components/ui/button';
 import PageTemplate from './page-template';
 import useAudio from '@/src/hooks/useAudio';
@@ -21,9 +20,10 @@ import { toast } from 'sonner';
 
 interface LessonPlayerProps {
   lesson: LessonWithProgress;
+  navigationPlacement?: 'fixed' | 'contained';
 }
 
-export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
+export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson, navigationPlacement = 'fixed' }) => {
   const { user } = useAuth();
   const [markExerciseComplete] = useMarkExerciseCompleteMutation();
   const [updatePageProgress] = useUpdatePageProgressMutation();
@@ -60,6 +60,22 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
       setCurrentPageIndex(currentPageIndex - 1);
     }
   }, [currentPageIndex]);
+
+  const handleGoToPage = useCallback(
+    (newPageIndex: number) => {
+      if (newPageIndex < 0 || newPageIndex >= totalPages || newPageIndex === currentPageIndex) return;
+      setCurrentPageIndex(newPageIndex);
+
+      if (user?.uid && newPageIndex > (lesson.currentPageIndex || 0)) {
+        updatePageProgress({
+          userId: user.uid,
+          lessonId: lesson.id,
+          currentPageIndex: newPageIndex,
+        });
+      }
+    },
+    [currentPageIndex, totalPages, user?.uid, lesson.id, lesson.currentPageIndex, updatePageProgress]
+  );
 
   const handleAudioEnded = useCallback(() => {
     handleNext();
@@ -110,27 +126,60 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
       <audio ref={audioRef} className="hidden" controls preload="auto" />
 
       <RomanCard>
-        <RomanCardHeader>
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-full bg-roman-parchment flex items-center justify-center flex-shrink-0 border border-roman-terracotta/20">
-              <BookOpen className="h-6 w-6 text-roman-terracotta" />
+        <RomanCardHeader className="relative overflow-hidden border-b border-roman-red/10 bg-roman-parchment/30">
+          {/* Decorative top accent bar */}
+          <div className="absolute top-0 left-0 right-0 h-1.5 bg-roman-red" />
+
+          <div className="relative flex items-start gap-4 pt-3">
+            <div className="relative flex-shrink-0">
+              <div className="w-14 h-14 rounded-full bg-roman-parchment flex items-center justify-center border-2 border-roman-gold/40 shadow-sm">
+                {isListeningLesson ? (
+                  <Headphones className="h-7 w-7 text-roman-red" />
+                ) : (
+                  <BookOpen className="h-7 w-7 text-roman-red" />
+                )}
+              </div>
+              {isLessonCompleted && (
+                <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-roman-green text-white flex items-center justify-center border-2 border-white shadow-sm">
+                  <CheckCircle className="h-3.5 w-3.5" />
+                </div>
+              )}
             </div>
-            <div>
-              <h3 className="text-xl font-serif">
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="inline-flex items-center gap-1 rounded-full bg-roman-red/8 px-2.5 py-0.5 text-xs font-medium text-roman-red border border-roman-red/15">
+                  {isListeningLesson ? (
+                    <>
+                      <Headphones className="h-3 w-3" />
+                      Listening
+                    </>
+                  ) : (
+                    <>
+                      <BookOpen className="h-3 w-3" />
+                      Lesson
+                    </>
+                  )}
+                </span>
+                <span className="text-xs text-roman-stone tabular-nums">
+                  Page {currentPageIndex + 1} of {totalPages}
+                </span>
+              </div>
+
+              <h3 className="text-2xl font-serif text-roman-red leading-tight tracking-wide">
                 <SimpleRichDisplay content={lesson.title} />
               </h3>
-              <div className="text-sm text-roman-stone">
-                <SimpleRichDisplay content={lesson.description || ''} />
-              </div>
+
+              {lesson.description && (
+                <div className="text-sm text-roman-stone mt-1 leading-relaxed line-clamp-2">
+                  <SimpleRichDisplay content={lesson.description} />
+                </div>
+              )}
             </div>
           </div>
         </RomanCardHeader>
 
         <RomanCardContent>
-          <div className="mb-4">
-            <LessonProgress currentPage={currentPageIndex} totalPages={totalPages} />
-          </div>
-
           <div className="mb-6">
             <div className="lesson-content">
               <AnimatePresence mode="wait">
@@ -143,18 +192,6 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
                 />
               </AnimatePresence>
             </div>
-          </div>
-
-          <div className="flex items-center justify-between border-t border-border pt-4">
-            <LessonNavigation
-              onPrevious={handlePrevious}
-              onNext={handleNext}
-              onTogglePlay={togglePlay}
-              isPlaying={isPlaying}
-              hasAudio={hasAudio}
-              canGoPrevious={currentPageIndex > 0}
-              canGoNext={currentPageIndex < totalPages - 1}
-            />
           </div>
 
           {isListeningLesson && (
@@ -175,6 +212,19 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
               )}
             </div>
           )}
+
+          <LessonNavigation
+            currentPageIndex={currentPageIndex}
+            totalPages={totalPages}
+            pageTitles={lesson.pages.map(page => page.title)}
+            placement={navigationPlacement}
+            onPrevious={handlePrevious}
+            onNext={handleNext}
+            onGoToPage={handleGoToPage}
+            onTogglePlay={togglePlay}
+            isPlaying={isPlaying}
+            hasAudio={hasAudio}
+          />
         </RomanCardContent>
       </RomanCard>
     </div>

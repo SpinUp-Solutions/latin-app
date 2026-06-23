@@ -79,18 +79,18 @@ export const SimpleRichEditor: React.FC<SimpleRichEditorProps> = ({
 
   return (
     <>
-      <div className={cn(baseClasses, className)}>
-        <TooltipContainer className="w-full flex-1 flex flex-col [&_[data-tooltip='true']]:cursor-help">
+      <div className={cn(baseClasses, !singleLine && 'overflow-hidden', className)}>
+        <TooltipContainer className="w-full min-h-0 flex-1 flex flex-col [&_[data-tooltip='true']]:cursor-help">
           <EditorContent
             editor={editor}
             className={cn(
-              'w-full h-full min-w-0 flex',
-              '[&_.ProseMirror]:w-full [&_.ProseMirror]:h-full [&_.ProseMirror]:min-w-0 [&_.ProseMirror]:max-w-full',
+              'w-full min-h-0 min-w-0 flex-1 flex',
+              '[&_.ProseMirror]:w-full [&_.ProseMirror]:h-full [&_.ProseMirror]:min-h-0 [&_.ProseMirror]:min-w-0 [&_.ProseMirror]:max-w-full',
               '[&_.ProseMirror]:outline-none [&_.ProseMirror]:border-none',
               '[&_.ProseMirror]:bg-transparent [&_.ProseMirror]:resize-none',
               '[&_.ProseMirror]:text-sm [&_.ProseMirror]:leading-normal',
               '[&_.ProseMirror]:m-0 [&_.ProseMirror]:p-0',
-              !singleLine && '[&_.ProseMirror]:[overflow-wrap:anywhere]',
+              !singleLine && '[&_.ProseMirror]:overflow-y-auto [&_.ProseMirror]:[overflow-wrap:anywhere]',
               singleLine &&
                 '[&_.ProseMirror]:overflow-x-auto [&_.ProseMirror]:overflow-y-hidden [&_.ProseMirror]:whitespace-nowrap',
               placeholder &&

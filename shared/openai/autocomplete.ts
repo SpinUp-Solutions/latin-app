@@ -268,12 +268,12 @@ function mergeValue(existingValue: unknown, incomingValue: unknown, overwriteExi
 }
 
 function calculateCost(usage: {
-  prompt_tokens?: number;
-  completion_tokens?: number;
+  input_tokens?: number;
+  output_tokens?: number;
   total_tokens?: number;
 }): CostBreakdown {
-  const promptTokens = usage.prompt_tokens ?? 0;
-  const completionTokens = usage.completion_tokens ?? 0;
+  const promptTokens = usage.input_tokens ?? 0;
+  const completionTokens = usage.output_tokens ?? 0;
   const totalTokens = usage.total_tokens ?? 0;
 
   const inputCostPer1M = 0.75;
@@ -321,7 +321,7 @@ export async function autocompleteVocabularyWord(request: AIAutocompleteRequest)
     const startTime = Date.now();
     const response = await openai.responses.create({
       model: AUTOCOMPLETE_MODEL,
-      reasoning: { effort: 'medium' },
+      reasoning: { effort: 'low' },
       max_output_tokens: MAX_TOKENS,
       instructions: SYSTEM_PROMPT,
       input: getPromptForPartOfSpeech(request.part_of_speech, request.word),
@@ -409,8 +409,8 @@ export async function autocompleteVocabularyWord(request: AIAutocompleteRequest)
 
     const existing = request.existingData ?? {};
     console.log('[Autocomplete] Existing data fields:', Object.keys(existing));
-    console.log('[Autocomplete] Existing principal_parts:', (existing as any).principal_parts);
-    console.log('[Autocomplete] Existing alternate_form:', (existing as any).alternate_form);
+    console.log('[Autocomplete] Existing principal_parts:', (existing as Record<string, unknown>).principal_parts);
+    console.log('[Autocomplete] Existing alternate_form:', (existing as Record<string, unknown>).alternate_form);
 
     const selectedFields = request.fieldsToComplete
       ? selectFields(request.part_of_speech, request.fieldsToComplete)

@@ -17,11 +17,10 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { poolId: string } }
+  { params }: { params: Promise<{ poolId: string }> }
 ): Promise<NextResponse<POSSummaryResponse>> {
+  const { poolId } = await params;
   try {
-    const { poolId } = params;
-
     const poolDoc = await adminDb.collection('vocabulary_pools').doc(poolId).get();
 
     if (!poolDoc.exists) {
@@ -93,7 +92,7 @@ export async function GET(
         data: {
           summary: {} as Record<PartOfSpeech, number>,
           totalWords: 0,
-          poolId: params.poolId,
+          poolId,
         },
       },
       { status: 500 }

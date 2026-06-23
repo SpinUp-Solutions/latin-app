@@ -2,8 +2,35 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { Query } from 'firebase-admin/firestore';
 import type { VocabularyPool, CreatePoolRequest } from '@/src/types/vocabulary-pool';
+import {
+  buildPoolSearchTokens,
+  normalizePoolSearchText,
+  toVocabularyPoolSummary,
+} from '@/src/utils/vocabularyPoolSummary';
 
 export const dynamic = 'force-dynamic';
+
+const POOL_SUMMARY_FIELDS = ['name', 'description', 'metadata'];
+
+const toDateValue = (value: unknown) =>
+  value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function'
+    ? value.toDate()
+    : value;
+
+const serializePoolSummary = (doc: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot) => {
+  const data = doc.data() as Partial<VocabularyPool>;
+
+  return toVocabularyPoolSummary(doc.id, {
+    ...data,
+    metadata: data.metadata
+      ? {
+          ...data.metadata,
+          createdAt: toDateValue(data.metadata.createdAt),
+          updatedAt: toDateValue(data.metadata.updatedAt),
+        }
+      : undefined,
+  });
+};
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
@@ -26,39 +53,35 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const firestoreSortField = sortFieldMap[sortBy] || 'metadata.createdAt';
 
     if (search) {
-      const searchLower = search.toLowerCase();
-      const query: Query = adminDb.collection('vocabulary_pools').orderBy('name');
+      const searchToken = normalizePoolSearchText(search).slice(0, 40);
+      let query: Query = adminDb
+        .collection('vocabulary_pools')
+        .where('searchTokens', 'array-contains', searchToken)
+        .orderBy('name')
+        .select(...POOL_SUMMARY_FIELDS);
 
-      const snapshot = await query.get();
-
-      let pools = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        metadata: {
-          ...doc.data().metadata,
-          createdAt: doc.data().metadata.createdAt.toDate(),
-          updatedAt: doc.data().metadata.updatedAt.toDate(),
-        },
-      })) as VocabularyPool[];
-
-      pools = pools.filter(p => p.name.toLowerCase().includes(searchLower));
-
-      if (difficulty) {
-        pools = pools.filter(p => p.metadata.difficulty === difficulty);
-      }
       if (isActive !== null) {
-        pools = pools.filter(p => p.metadata.isActive === isActive);
+        query = query.where('metadata.isActive', '==', isActive);
+      }
+      if (difficulty) {
+        query = query.where('metadata.difficulty', '==', difficulty);
+      }
+      if (lastPoolId) {
+        const lastDoc = await adminDb.collection('vocabulary_pools').doc(lastPoolId).get();
+        if (lastDoc.exists) {
+          query = query.startAfter(lastDoc);
+        }
       }
 
-      const hasMore = pools.length > limit;
-      pools = pools.slice(0, limit);
-      const lastDoc = snapshot.docs.find(d => d.id === pools[pools.length - 1]?.id);
+      const snapshot = await query.limit(limit).get();
+      const pools = snapshot.docs.map(serializePoolSummary);
+      const lastDoc = snapshot.docs[snapshot.docs.length - 1];
 
       return NextResponse.json({
         success: true,
         data: {
           pools,
-          hasMore,
+          hasMore: snapshot.docs.length === limit,
           lastPoolId: lastDoc?.id || null,
         },
       });
@@ -87,18 +110,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
 
     const fetchLimit = useFirestoreFilters ? limit : limit * 3;
-    query = query.limit(fetchLimit);
+    query = query.limit(fetchLimit).select(...POOL_SUMMARY_FIELDS);
     const snapshot = await query.get();
 
-    let pools = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      metadata: {
-        ...doc.data().metadata,
-        createdAt: doc.data().metadata.createdAt.toDate(),
-        updatedAt: doc.data().metadata.updatedAt.toDate(),
-      },
-    })) as VocabularyPool[];
+    let pools = snapshot.docs.map(serializePoolSummary);
 
     if (!useFirestoreFilters) {
       if (difficulty) {
@@ -171,6 +186,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       name: name.trim(),
       description: description.trim(),
       wordDocIds,
+      searchTokens: buildPoolSearchTokens(name),
       metadata: {
         createdAt: now,
         createdBy: 'admin',

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { auth } from '@/src/services/firebase';
 
 interface UseAudioReturn {
-  audioRef: React.RefObject<HTMLAudioElement>;
+  audioRef: React.RefObject<HTMLAudioElement | null>;
   isPlaying: boolean;
   isLoading: boolean;
   togglePlay: () => void;
@@ -18,6 +18,7 @@ export function useAudio(initialAudioPath?: string | null, onAudioEnded?: () => 
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const playCleanupRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     setSignedUrl(null);
@@ -111,6 +112,7 @@ export function useAudio(initialAudioPath?: string | null, onAudioEnded?: () => 
         setIsLoading(false);
         audio.removeEventListener('canplay', handleCanPlay);
         audio.removeEventListener('error', handleLoadError);
+        playCleanupRef.current = null;
       };
 
       const handleLoadError = (e: Event) => {
@@ -119,10 +121,20 @@ export function useAudio(initialAudioPath?: string | null, onAudioEnded?: () => 
         setIsPlaying(false);
         audio.removeEventListener('canplay', handleCanPlay);
         audio.removeEventListener('error', handleLoadError);
+        playCleanupRef.current = null;
       };
+
+      if (playCleanupRef.current) {
+        playCleanupRef.current();
+      }
 
       audio.addEventListener('canplay', handleCanPlay);
       audio.addEventListener('error', handleLoadError);
+
+      playCleanupRef.current = () => {
+        audio.removeEventListener('canplay', handleCanPlay);
+        audio.removeEventListener('error', handleLoadError);
+      };
 
       const playPromise = audio.play();
       if (playPromise !== undefined) {
@@ -162,6 +174,14 @@ export function useAudio(initialAudioPath?: string | null, onAudioEnded?: () => 
       audio.removeEventListener('error', handleError);
     };
   }, [onAudioEnded]);
+
+  useEffect(() => {
+    return () => {
+      if (playCleanupRef.current) {
+        playCleanupRef.current();
+      }
+    };
+  }, []);
 
   const togglePlay = () => {
     if (isPlaying) {

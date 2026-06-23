@@ -19,9 +19,9 @@ export const LessonPreview: React.FC<LessonPreviewProps> = ({ lesson }) => {
         </h2>
         <p className="text-sm text-roman-stone">See how your lesson will look to students</p>
       </div>
-      <div className="p-4">
+      <div className="p-4 pb-6">
         {hasContent ? (
-          <LessonPlayer lesson={lesson} />
+          <LessonPlayer lesson={lesson} navigationPlacement="contained" />
         ) : (
           <div className="flex items-center justify-center h-64 border-2 border-dashed border-gray-300 rounded-lg">
             <div className="text-center">

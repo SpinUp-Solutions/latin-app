@@ -3,12 +3,22 @@ import { adminDb } from '@/src/services/firebase-admin';
 import { FieldPath } from 'firebase-admin/firestore';
 import type { Word } from '@/src/types/admin-vocabulary';
 import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
+import { buildPoolSearchTokens } from '@/src/utils/vocabularyPoolSummary';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: NextRequest, { params }: { params: { poolId: string } }): Promise<NextResponse> {
+const serializePoolMetadata = (metadata: FirebaseFirestore.DocumentData) => ({
+  ...metadata,
+  createdAt: metadata.createdAt?.toDate ? metadata.createdAt.toDate() : metadata.createdAt,
+  updatedAt: metadata.updatedAt?.toDate ? metadata.updatedAt.toDate() : metadata.updatedAt,
+});
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ poolId: string }> }
+): Promise<NextResponse> {
   try {
-    const { poolId } = params;
+    const { poolId } = await params;
 
     const poolDoc = await adminDb.collection('vocabulary_pools').doc(poolId).get();
     if (!poolDoc.exists) {
@@ -24,9 +34,7 @@ export async function GET(request: NextRequest, { params }: { params: { poolId: 
       id: poolDoc.id,
       ...poolData,
       metadata: {
-        ...poolData.metadata,
-        createdAt: poolData.metadata.createdAt.toDate(),
-        updatedAt: poolData.metadata.updatedAt.toDate(),
+        ...serializePoolMetadata(poolData.metadata),
       },
     };
 
@@ -127,9 +135,12 @@ export async function GET(request: NextRequest, { params }: { params: { poolId: 
   }
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { poolId: string } }): Promise<NextResponse> {
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ poolId: string }> }
+): Promise<NextResponse> {
   try {
-    const { poolId } = params;
+    const { poolId } = await params;
     const updates = await request.json();
 
     if (updates.name !== undefined && updates.name.length > 100) {
@@ -149,6 +160,7 @@ export async function PUT(request: NextRequest, { params }: { params: { poolId: 
     };
 
     if (updates.name !== undefined) updateData.name = updates.name;
+    if (updates.name !== undefined) updateData.searchTokens = buildPoolSearchTokens(updates.name);
     if (updates.description !== undefined) updateData.description = updates.description;
     if (updates.wordDocIds !== undefined) {
       updateData.wordDocIds = updates.wordDocIds;
@@ -178,10 +190,9 @@ export async function PUT(request: NextRequest, { params }: { params: { poolId: 
           name: poolData.name,
           description: poolData.description,
           wordDocIds: poolData.wordDocIds || [],
+          searchTokens: poolData.searchTokens || buildPoolSearchTokens(poolData.name || ''),
           metadata: {
-            ...poolData.metadata,
-            createdAt: poolData.metadata.createdAt.toDate(),
-            updatedAt: poolData.metadata.updatedAt.toDate(),
+            ...serializePoolMetadata(poolData.metadata),
           },
         },
       },
@@ -195,9 +206,12 @@ export async function PUT(request: NextRequest, { params }: { params: { poolId: 
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { poolId: string } }): Promise<NextResponse> {
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ poolId: string }> }
+): Promise<NextResponse> {
   try {
-    const { poolId } = params;
+    const { poolId } = await params;
 
     const lessonsQuery = await adminDb.collection('lessons').where('vocabulary_pool', '==', poolId).limit(1).get();
 

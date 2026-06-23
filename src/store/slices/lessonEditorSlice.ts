@@ -34,7 +34,7 @@ export const loadDrafts = createAsyncThunk('lessonEditor/loadDrafts', (_, { reje
   try {
     const draftsData = sessionStorage.getItem(DRAFTS_KEY);
     return draftsData ? JSON.parse(draftsData) : {};
-  } catch (error) {
+  } catch {
     return rejectWithValue('Failed to load drafts');
   }
 });
@@ -50,7 +50,7 @@ export const saveDraft = createAsyncThunk(
       drafts[lesson.id] = { lesson, lastModified: timestamp };
       sessionStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts));
       return { lessonId: lesson.id, draft: { lesson, lastModified: timestamp } };
-    } catch (error) {
+    } catch {
       return rejectWithValue('Failed to save draft');
     }
   }
@@ -65,7 +65,7 @@ export const clearDraft = createAsyncThunk(
       delete drafts[lessonId];
       sessionStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts));
       return lessonId;
-    } catch (error) {
+    } catch {
       return rejectWithValue('Failed to clear draft');
     }
   }

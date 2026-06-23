@@ -24,7 +24,7 @@ const cloneTable = (value: unknown): TableData => {
   if (value === undefined || value === null) return {};
   try {
     return JSON.parse(JSON.stringify(value)) as TableData;
-  } catch (error) {
+  } catch {
     return {};
   }
 };

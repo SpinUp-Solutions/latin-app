@@ -1,8 +1,8 @@
 import { createSlice, createSelector, PayloadAction } from '@reduxjs/toolkit';
-import { Lesson } from '@/src/types/lesson';
+import { LessonSummary } from '@/src/types/lesson';
 
 interface LessonState {
-  lessons: Lesson[];
+  lessons: LessonSummary[];
   hasUnsavedChanges: boolean;
 }
 
@@ -15,7 +15,7 @@ const lessonSlice = createSlice({
   name: 'lesson',
   initialState,
   reducers: {
-    syncLessonsFromRTQ: (state, action: PayloadAction<Lesson[]>) => {
+    syncLessonsFromRTQ: (state, action: PayloadAction<LessonSummary[]>) => {
       state.lessons = action.payload;
       state.hasUnsavedChanges = false;
     },

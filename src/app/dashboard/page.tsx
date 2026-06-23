@@ -90,7 +90,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const { user, loading, displayName } = useAuth();
 
-  const { data: studentLessons, isLoading: lessonsLoading } = useGetStudentLessonsQuery(undefined, {
+  const { data: studentLessons, isLoading: lessonsLoading } = useGetStudentLessonsQuery(user?.uid, {
     skip: !user?.uid,
   });
 
@@ -210,9 +210,9 @@ export default function DashboardPage() {
             <Image
               src="/assets/logos/wakeforest_shield.png"
               alt="Wake Forest University"
-              width={64}
-              height={64}
-              className="w-14 h-14"
+              width={1000}
+              height={736}
+              className="h-14 w-auto"
               priority
             />
             <div>

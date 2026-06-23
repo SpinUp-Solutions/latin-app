@@ -50,7 +50,7 @@ export class VerbScraper extends BaseScraper {
       if (await table.count()) {
         result.conjugationTable = await this.extractConjugationData(table);
       }
-    } catch (error) {}
+    } catch {}
   }
 
   private static async extractConjugationData(table: Locator): Promise<ConjugationTable> {

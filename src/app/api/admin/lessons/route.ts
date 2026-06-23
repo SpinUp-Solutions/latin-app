@@ -2,7 +2,26 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { Lesson } from '@/src/types/lesson';
 import { verifyAdminAccess } from '../../../../lib/verifyAdminAccess';
-import { isExerciseType } from '@/src/utils/lessonUtils';
+import { getLessonContentCounts, toLessonSummary } from '@/src/utils/lessonSummary';
+
+const LESSON_SUMMARY_FIELDS = [
+  'title',
+  'description',
+  'type',
+  'vocabulary_pool',
+  'isLive',
+  'liveOrder',
+  'publishedAt',
+  'publishedBy',
+  'createdAt',
+  'createdBy',
+  'updatedAt',
+  'updatedBy',
+  'version',
+  'totalPages',
+  'totalItems',
+  'totalExercises',
+];
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,12 +30,24 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const snapshot = await adminDb.collection('lessons').orderBy('updatedAt', 'desc').get();
+    const snapshot = await adminDb
+      .collection('lessons')
+      .orderBy('updatedAt', 'desc')
+      .select(...LESSON_SUMMARY_FIELDS)
+      .get();
 
-    const lessons = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as Lesson[];
+    const lessons = await Promise.all(
+      snapshot.docs.map(async doc => {
+        const data = doc.data() as Partial<Lesson>;
+
+        if (data.totalPages === undefined || data.totalItems === undefined || data.totalExercises === undefined) {
+          const fullDoc = await doc.ref.get();
+          return toLessonSummary(doc.id, fullDoc.data() as Partial<Lesson>);
+        }
+
+        return toLessonSummary(doc.id, data);
+      })
+    );
 
     const liveLessons = lessons.filter(l => l.isLive);
     const availableLessons = lessons.filter(l => !l.isLive);
@@ -56,13 +87,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'A lesson with this ID already exists' }, { status: 409 });
     }
 
-    const totalExercises = lesson.pages.reduce(
-      (count, page) => count + page.items.filter(item => isExerciseType(item.type)).length,
-      0
-    );
+    const { totalPages, totalItems, totalExercises } = getLessonContentCounts(lesson);
 
     const lessonData = {
       ...lesson,
+      totalPages,
+      totalItems,
       totalExercises,
       createdAt: new Date().toISOString(),
       createdBy: user.uid,
@@ -116,21 +146,20 @@ export async function PUT(request: NextRequest) {
     }
 
     const existingLesson = existingLessonDoc.data();
-    const totalExercises = lesson.pages.reduce(
-      (count, page) => count + page.items.filter(item => isExerciseType(item.type)).length,
-      0
-    );
+    const { totalPages, totalItems, totalExercises } = getLessonContentCounts(lesson);
 
     const updatedLessonData = {
       ...lesson,
+      totalPages,
+      totalItems,
       totalExercises,
       createdAt: existingLesson?.createdAt || new Date().toISOString(),
       createdBy: existingLesson?.createdBy || user.uid,
       updatedAt: new Date().toISOString(),
       updatedBy: user.uid,
       version: (existingLesson?.version || 0) + 1,
-      isLive: existingLesson?.isLive || false,
-      liveOrder: existingLesson?.liveOrder || null,
+      isLive: existingLesson?.isLive ?? false,
+      liveOrder: existingLesson?.liveOrder ?? null,
       publishedAt: existingLesson?.publishedAt || null,
       publishedBy: existingLesson?.publishedBy || null,
     };

@@ -96,6 +96,10 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioPath, onEnded, cl
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsSeeking(true);
     seekToPosition(e.clientX);
+  };
+
+  useEffect(() => {
+    if (!isSeeking) return;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       seekToPosition(moveEvent.clientX);
@@ -103,13 +107,16 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioPath, onEnded, cl
 
     const handleMouseUp = () => {
       setIsSeeking(false);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
     };
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
-  };
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isSeeking, seekToPosition]);
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
