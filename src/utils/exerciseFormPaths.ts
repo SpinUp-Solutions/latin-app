@@ -62,6 +62,10 @@ export const parseFormPathFromString = (
     if (parts.length === 5) {
       return createVerbFormPath(parts[2], parts[1], parts[0], parts[4], parts[3]);
     }
+
+    if (parts.length === 4 && parts[0] === 'nonFinite' && parts[1] === 'infinitive') {
+      return createVerbFormPath(parts[2], parts[3], 'infinitive', '', '');
+    }
   }
 
   if (tableType === 'declension') {
