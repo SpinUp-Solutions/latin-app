@@ -21,6 +21,8 @@ This document is the shared planning space for the refactor. Settled choices are
 
 The POC proves the authoring and scoring behavior. The refactor should now make tests part of the wider learning flow without creating parallel content, rendering, or editor systems.
 
+Existing POC test documents will not be migrated. Real tests are authored fresh in the new system, and the POC `tests` collection is deleted during cleanup. Only existing lesson documents need compatibility handling.
+
 ## Architectural thought process
 
 ### Lessons and tests need a shared flow identity
@@ -250,8 +252,10 @@ For a parent-linked active mock, both directions must agree: the parent referenc
 - The server derives total points by summing exercise `maxPoints` values across the version's pages and never trusts a client-supplied total.
 - Alternative versions of the same normal test may have different total points. Stored and displayed percentages provide the normalized comparison used for pass/fail and best-score history.
 - `passingPercentage` is either `null` or a whole number from 1 through 100. It is stored on the normal-test or mock-test container, never on `TestVersion`.
-- Multi-step generated exercises award the appropriate fraction of the exercise's allocated points.
-- Single-step partial acceptance remains exercise-specific grading behavior and does not change the container schema.
+- Generated exercises award credit per independently gradable answer component, then normalize that component score to the exercise's admin-assigned `maxPoints`.
+- For `generated-form-identification` in `single-field` mode, every requested grammatical field is one grading unit even though the student submits the fields together. A response with two correct fields out of three earns `2 / 3` of the exercise's `maxPoints`; for example, expected `1,s,m` and submitted `1,s,f` earns two of three units. If the admin assigned 1 point, the exercise awards `0.666...`; if they assigned 6 points, it awards 4.
+- Missing or incorrect components earn zero units, accepted answer variants earn the same credit as their canonical value, and incorrect components never cancel credit already earned for correct components.
+- Other single-step partial acceptance remains exercise-specific grading behavior and does not change the container schema.
 - Scoring calculations retain full precision and do not round each step independently.
 - The UI displays awarded points with at most two decimal places and the final percentage as a whole number initially; display rounding never changes the stored score.
 
@@ -266,13 +270,46 @@ interface BaseExercise extends ContentItem {
 
 Validation is contextual: lesson validation ignores an absent `maxPoints`, while test-version validation requires it on every exercise. Existing lesson documents require no point-related migration.
 
+A structurally valid test version must contain at least one scored exercise. This guarantees `maxScore` is always positive and percentage calculation can never divide by zero. The POC builder already enforces this rule.
+
+## Server-side grading architecture
+
+Grading currently lives entirely in the client: every exercise component grades itself and reports a completion score, and the POC records those client-computed results. That model is acceptable for practice lessons but not for persisted, gate-controlling test results. Test grading is therefore server-authoritative, and this section defines what that requires, because none of it exists yet.
+
+### Test-eligible exercise types
+
+Test versions may only contain exercise types on an explicit server-side allowlist, extending the POC's `SUPPORTED_TEST_EXERCISE_TYPES`: `matching`, `fill`, `multiple-choice`, `odd-one-out`, `text-selection`, `fill-embolded-text`, `sentence-diagramming`, `table-fill`, `click-on-multiple-words`, `generated-translation`, and `generated-form-identification`.
+
+`translation-grading` is excluded: it is graded by an LLM through the `gradeTranslationFn` Firebase Function, which is non-deterministic, slow, and per-call costly, and the component has no test mode. It can be revisited later; excluding it now keeps submission grading synchronous and deterministic. `listening-passage` is not an exercise type and participates only as unscored content. Version validation rejects exercise types that are not on the allowlist, and the test builder's palette only offers allowlisted types.
+
+`sentence-diagramming` is the most complex grading port and keeps its existing `diagramming_attempts` audit writes in test mode; the audit record is diagnostic and independent of the attempt's frozen results.
+
+### Canonical answer formats and grading modules
+
+- Each allowlisted exercise type defines a canonical serializable answer format, keyed by persisted item ID (and item index within multi-item exercises). The attempt's `answers` map stores exactly these shapes.
+- Each allowlisted type gets a pure server grading function in a shared module: `(deliveryState, answers) -> { awardedPoints, maxPoints }` per exercise. These functions are extracted from, or verified against, the existing component grading logic so practice and test grading cannot drift.
+- In test mode, components collect and report raw answers instead of grading locally. Practice mode keeps the existing client-side grading behavior unchanged.
+- Multi-item exercises award the appropriate fraction of the exercise's `maxPoints` per correct item, calculated at full precision.
+- The `generated-form-identification` grader expands each resolved item into its requested grammatical fields. In `single-field` mode it scores those submitted fields independently and calculates `awardedPoints = maxPoints * correctFieldCount / totalRequestedFieldCount` across the exercise. The combined input format does not make the answer all-or-nothing.
+
+### Resolving generated exercises server-side
+
+Generated exercises (`generated-translation`, `generated-form-identification`) currently fetch their word data in the browser at render time with client-side randomness. For tests this moves to attempt start:
+
+- The attempt-start route resolves every generated exercise's items server-side, reusing the existing word-query server logic and the shared mapping utilities, and freezes the resolved items plus grading inputs into the attempt's `deliveryState`.
+- Exercise components accept injected pre-resolved items in test mode instead of self-fetching, so a refresh or resume re-renders the identical questions. Practice mode keeps self-fetching.
+
+### Answer-key sanitization
+
+The content payload returned to a student for an in-progress attempt is a sanitized projection of the frozen delivery state: prompts, options, and layout data only. Accepted answers, correct options, and other grading inputs stay server-side in `deliveryState`. Each exercise type's grading module declares which fields are grading inputs so sanitization and grading cannot disagree. Lessons continue to ship full content to the client; sanitization applies only to test attempts.
+
 ## Stable content identity
 
 Persisted content-item IDs, not page or item positions, are the stable identity for test exercises.
 
 - Every item in a persisted test version must have a non-empty `ContentItem.id`.
 - Item IDs must be unique across the entire test version, including across different pages.
-- IDs are assigned during authoring or one-time migration and are never generated by the student renderer.
+- IDs are assigned during authoring and are never generated by the student renderer.
 - Moving or editing an existing item preserves its ID.
 - Copying an item or page creates new IDs for every copied item while preserving the originals.
 - Answers, in-progress delivery state, and exercise results use the persisted exercise ID.
@@ -431,6 +468,7 @@ The student experience is designed around two ideas: stakes are always legible b
 ### Taking a test
 
 - Starting is a commitment, so a brief pre-start moment states the passing rule or **Score only**, the total points, that answer feedback is withheld until submission, and that progress is saved across a refresh. That last reassurance is earned by attempt persistence and should be said, not implied.
+- Tests are untimed. A countdown timer is an explicit non-goal of this refactor for both normal and mock tests.
 - Test mode's silence is designed, not just imposed: the player acknowledges each answer without judging it, for example **Answer recorded**, and shows progress such as **12 of 20 answered**.
 - Submission is a deliberate act. A review step lists unanswered questions before the student confirms.
 - The results screen is the emotional peak and the consolation for intentionally unreviewable questions: the retained per-exercise results are surfaced as a strengths-and-weaknesses breakdown.
@@ -563,11 +601,32 @@ At attempt start, the server freezes the container's current `passingPercentage`
 
 On submission, the server grades against the attempt's temporary delivery state rather than the current editable `TestVersion`. It calculates and freezes `exerciseResults`, `score`, `maxScore`, `percentage`, and `outcome`, then removes `answers` and `deliveryState` only after those statistics are persisted successfully. `outcome` is `passed` when `percentage >= passingPercentage`, `not-passed` when it is below a configured threshold, and `score-only` when no threshold exists.
 
+### Attempt concurrency and idempotency
+
+- A student has at most one in-progress attempt per origin (`testId` or `mockTestId`). Attempt start runs in a transaction: if an in-progress attempt already exists for that student and origin, it is returned for resumption instead of creating a second one. Double-clicks, retries, and a second device therefore converge on the same attempt.
+- There is no abandon-and-restart action. The exit from an unwanted attempt is submitting it (unanswered exercises score zero) and then retaking; this keeps version-usage counts and attempt history honest.
+- Answers persist incrementally to the in-progress attempt as each exercise is answered, keyed by persisted item ID with last-write-wins per exercise. A refresh or device switch resumes from the stored answers and frozen delivery state.
+- Submission is transactional on attempt status: submitting an already submitted attempt returns the stored result idempotently rather than regrading, so a network retry cannot double-submit.
+- Version-usage counts for least-used selection consider submitted attempts; the single resumable in-progress attempt cannot skew counts because starting again resumes it.
+- `deliveryState` lives inside the attempt document, which is subject to Firestore's 1 MiB document limit. Attempt start must fail with an admin-visible configuration error if the frozen delivery state would exceed a safety threshold; extremely large versions are an authoring problem to surface, not silently truncate.
+- Stale in-progress attempts are not automatically expired in this refactor. They contain grading inputs, so if a cleanup policy is added later it must delete, not archive, the temporary state.
+
 For a normal test, a `passed` or `score-only` submission grants sticky learning-unit completion. Once granted, later retakes cannot remove it. A mock outcome is informational only. The student can use retained statistics to review performance and decide whether to retake, but cannot reopen historical questions or answers. Editing a test version later never changes a submitted attempt's stored statistics.
 
 Dashboard summaries derive the best result by highest stored percentage and the latest result by `submittedAt`; raw awarded/max points always come from the specific attempt being displayed.
 
 There is no `placementId` or revision number. The attempt's origin distinguishes normal-flow and mock usage. Preview attempts remain ephemeral and must never persist progress or attempt records.
+
+## Learning-path gating integration
+
+The dashboard's lock chain currently derives each unit's status positionally: a unit is unlocked when the previous unit is complete, and lesson completion is computed as `currentPageIndex >= pages.length` from the `userProgress` record. Tests must plug into that chain without breaking it.
+
+- Sticky test completion is materialized into `userProgress`: when a normal-test submission grants completion (`passed` or `score-only`), the same server transaction writes a completed `userProgress` record for the test unit (`${userId}_${unitId}`), alongside the attempt statistics. The existing chain then needs only a kind-aware completion check, and completion never has to be re-derived from attempt history on every dashboard read.
+- The chain's completion check becomes kind-aware: lessons keep the page-index calculation; tests read the materialized completion record. A `TestUnit` has no `pages` array, so any code path applying page math to it is a bug.
+- Progression is monotonic when the learning path changes. Inserting a new required-pass test does not re-lock a student who has already started or completed a unit after that insertion point. The dashboard derives the student's reached frontier from existing lesson progress, test attempts, and completion records; an inserted test behind that frontier remains available to take but is treated as non-gating for that student. Students whose recorded frontier has not passed the insertion point must satisfy the new test normally.
+- `TestUnit` keeps `type: 'normal'`, which collides with the lesson type filter `type === 'normal'` used by the dashboard API and admin screens. Every consumer of the `lessons` collection must discriminate on `kind` before `type`. Until that is deployed, no test may be published: a live `TestUnit` would be swept into the normal-lessons pipeline as a broken zero-page lesson. This is the one hard sequencing constraint between Phase 3 and Phase 5.
+- The `NEXT_PUBLIC_DISABLE_PROGRESSION_LOCK` flag bypasses required-pass test gates the same way it bypasses lesson locks. It is a development convenience, and a half-disabled chain would be harder to reason about than a fully disabled one.
+- Test cards do not show page-based progress percentages. Their card state derives from attempt summaries: not attempted, in progress, or the best/latest submitted results.
 
 ## Storage and Next.js API direction
 
@@ -589,7 +648,24 @@ All server behavior uses Next.js API routes and shared server modules. The prefe
 /api/test-attempts
 ```
 
-Existing lesson endpoints may remain as compatibility adapters until callers migrate. Admin routes must use the existing admin authorization rules. Validation and derived-score calculation should live in shared server modules so all routes apply identical rules.
+Existing lesson endpoints may remain as compatibility adapters until callers migrate. Admin routes must use the existing admin authorization rules. Validation and derived-score calculation should live in shared server modules so all routes apply identical rules. Attempt routes additionally enforce that a student can only start, resume, and submit their own attempts.
+
+### Firestore security rules
+
+The current rules allow direct client read/write on every collection except `diagramming_attempts`. Left unchanged, a student could read `testVersions` answer keys or forge a passing `testAttempts` document from the browser console, making the server-authoritative design a fiction.
+
+- `testVersions`, `testAttempts`, and `mockTests` are server-only: client read and write are denied, and all access flows through the API routes using the Admin SDK, which bypasses rules.
+- `userProgress` also becomes server-only in this refactor because it now materializes gate-controlling test completion; its API routes already exist.
+- Broader tightening of the legacy wildcard rule is desirable but out of scope; the rule above must ship with Phase 3, before any attempt data exists.
+
+### Composite indexes
+
+`firestore.indexes.json` gains entries alongside the new queries, at minimum:
+
+- `mockTests`: `status` + `isLive` + `mockOrder` for the student dashboard, and `parent.testId` lookups for admin overviews.
+- `testAttempts`: `studentId` + `origin.testId` + `status` and `studentId` + `origin.mockTestId` + `status` for selection counts and resume checks, plus `submittedAt` ordering for latest-attempt summaries.
+
+Exact shapes are settled during implementation; the requirement is that every new query path has its index deployed with the phase that introduces it rather than discovered as a runtime error.
 
 ## Validation architecture
 
@@ -602,9 +678,11 @@ This refactor establishes a domain-validation layer rather than extending an exi
 - Keep pure document-shape checks in Zod; enforce cross-document exclusivity and bidirectional parent/mock consistency in the server transaction service using those parsed documents.
 - Reuse existing exercise-specific validators where available rather than rewriting every exercise schema in Phase 1.
 - Consolidate deeper exercise validation incrementally behind the same shared server modules.
-- Apply the same schemas in all Next.js mutation routes, migration tooling, and server-side attempt creation.
+- Apply the same schemas in all Next.js mutation routes and server-side attempt creation.
 
-## Compatibility and migration
+## Compatibility
+
+There is no POC data migration. The `tests` collection is deleted during cleanup and real tests are created fresh through the new builder. Compatibility work is limited to existing lessons:
 
 - Existing lesson documents without `kind` are read as `kind: 'lesson'`.
 - New and updated learning-unit documents persist an explicit `kind`.
@@ -612,11 +690,7 @@ This refactor establishes a domain-validation layer rather than extending an exi
 - Existing lesson exercises do not need `maxPoints`; the field is optional in the shared exercise type and required only during test-version validation.
 - Existing vocabulary lessons retain `type: 'vocab'` and their current dashboard, player, and progress behavior.
 - Normal tests use the same `isLive` and `liveOrder` fields and can therefore be sorted together with lessons.
-- Each current POC `TestDefinition` becomes one score-only `TestUnit` plus one initial `TestVersion`; migration assigns `passingPercentage: null` and `mockTestId: null` because the POC has no passing requirement or mock assignment.
-- The initial version preserves all POC content and exercise order, moving each POC `maxPoints` value onto its corresponding exercise item.
-- Migration assigns a new stable ID once to any POC content item missing one and reports duplicate IDs before writing.
-- The current `tests` collection remains temporary and is retained until converted documents are verified.
-- Migration tooling must be idempotent, support dry-run mode, and report validation errors before writing.
+- A `kind: 'lesson'` backfill for existing lesson documents is optional; the read-time normalizer makes it safe to run at any point or not at all.
 
 ## Implementation plan
 
@@ -644,37 +718,44 @@ This refactor establishes a domain-validation layer rather than extending an exi
 - Make the shared renderer emit the persisted `item.id` plus positional context instead of inventing an exercise ID at runtime.
 - Keep the existing normal-lesson positional progress format behind a compatibility adapter while test mode keys state by persisted item ID.
 - Use runtime mode `practice | test | preview`, with test-mode feedback timing overriding when exercise-level feedback may be revealed.
+- In test mode, exercise components collect and report canonical raw answers instead of grading locally, and generated exercises render from injected pre-resolved items instead of self-fetching.
+- Restrict the test builder's content palette to allowlisted exercise types plus unscored content.
+- Reuse the lesson editor's draft and recovery conventions for `TestVersion` editing rather than inventing a separate safety mechanism.
 - Remove the synthetic lesson adapter after the page-based version editor is stable.
 
-### Phase 3: Learning-unit API and POC migration
+### Phase 3: Learning-unit API
 
 - Add Next.js learning-unit and test-version API routes.
-- Backfill existing lessons with `kind: 'lesson'`.
-- Convert every POC test into one score-only `TestUnit` and one normal-rotation `TestVersion` reference with `mockTestId: null`.
-- Produce dry-run counts and validation errors before writes.
-- Assign missing POC item IDs once, reject duplicate IDs, and preserve stable IDs on repeat migration runs.
+- Optionally backfill existing lessons with `kind: 'lesson'`; the normalizer covers unbackfilled documents either way.
+- Update the admin lesson list APIs and `LessonManager` to filter on `kind` so `TestUnit` documents in the shared `lessons` collection never appear in Lesson Management.
 - Save newly created containers and their first valid version atomically.
-- Verify converted IDs, references, exercise counts, content counts, and total points.
+- Lock down Firestore security rules and add the composite indexes required by the new collections (see Storage direction).
 - Retain compatibility routes and redirects during rollout.
 
 ### Phase 4: Attempts and retakes
 
 - Persist attempts separately from lesson progress before tests enter the normal flow.
-- Make attempt start idempotent, select normal-test versions server-side using the least-used randomized cycle, and always use a mock card's single referenced version.
+- Build the per-type server grading modules and canonical answer formats for every allowlisted exercise type, verified against the existing client grading behavior.
+- Resolve generated exercises server-side at attempt start and freeze the resolved items into `deliveryState`.
+- Return only sanitized attempt content to the client; grading inputs never leave the server.
+- Enforce one in-progress attempt per student and origin transactionally; attempt start resumes an existing attempt, and duplicate submissions return the stored result idempotently.
+- Select normal-test versions server-side using the least-used randomized cycle, and always use a mock card's single referenced version.
 - Freeze the origin container's `passingPercentage` at attempt start.
-- Temporarily retain answers and resolved delivery state, including grading inputs and `maxPoints`, so an in-progress attempt resumes consistently.
+- Temporarily retain answers and resolved delivery state, including grading inputs and `maxPoints`, so an in-progress attempt resumes consistently; guard against the Firestore document size limit at attempt start.
 - Grade against the attempt's delivery state rather than the current editable test version.
 - Freeze score statistics, passing outcome, and exercise-level results on submission, then remove exact questions, answers, and temporary delivery state.
 - Retain submitted statistics for student history and retake decisions.
-- Grant sticky normal-flow completion after a passing or score-only submission; never revoke it because of a later lower retake.
+- Grant sticky normal-flow completion after a passing or score-only submission by writing the materialized `userProgress` completion record in the same transaction; never revoke it because of a later lower retake.
 - Query best percentage and latest attempt separately for dashboard presentation.
 - Calculate with full precision and apply rounding only when displaying points and percentages.
-- Add tests for threshold equality, score-only completion, failed gating, permanent completion after a pass, and best/latest summary selection.
+- Add tests for per-type grading parity with the client implementations, component-level partial credit in both generated-exercise modes, normalization to different `maxPoints` values, threshold equality, score-only completion, failed gating, permanent completion after a pass, duplicate start/submit idempotency, and best/latest summary selection.
 - Verify that in-progress normal and mock attempts remain resumable when later assignment changes make their selected version ineligible for new attempts.
 
 ### Phase 5: Normal-flow integration
 
 - Include normal tests in the same `isLive` and `liveOrder` sequence as normal lessons.
+- Make every consumer of the `lessons` collection kind-aware before any test is published; the dashboard lock chain uses page math for lessons and the materialized completion record for tests.
+- Make progression monotonic across path edits: derive each student's reached frontier from existing progress and attempts so a newly inserted required-pass test cannot re-lock students who already progressed beyond its insertion point.
 - Extend the current live-lesson screen into a shared Learning Path organizer for normal lessons and normal tests.
 - Add insertion buttons before, between, and after units; open a test picker and transactionally insert the selected `TestUnit` at that exact `liveOrder`.
 - Give admin rows and student cards distinct accessible test styling through color, iconography, and labels.
@@ -696,15 +777,15 @@ This refactor establishes a domain-validation layer rather than extending an exi
 - Archive rather than delete when returning a version to rotation; distinguish archived mocks from active but non-live mocks.
 - Support atomically moving a standalone mock version into normal rotation, or explicitly duplicating it when both destinations are required.
 - Enforce active parent/mock bidirectional consistency and require at least one normal-rotation version in every live parent test.
-- Keep `mockOrder` independent from normal `liveOrder`.
+- Keep `mockOrder` independent from normal `liveOrder`, and give admins an explicit control for ordering mock cards.
 - Display best percentage, latest raw/percentage score, attempt count, score trend, and informational passing status directly on each mock card.
 - Nudge a failed required-pass normal test toward its related live mock when one exists.
 - Hide the student Mock Tests section when no mock is live.
 
 ### Phase 7: Cleanup
 
-- Remove `TestDefinition`, the temporary `tests` API, and test-specific adapter state after migration verification.
-- Archive or delete old `tests` documents only after an agreed retention period.
+- Delete the POC `tests` collection outright; no conversion or retention period is needed because real tests are authored fresh in the new system.
+- Remove `TestDefinition`, the POC `/api/admin/tests` routes, the POC `/admin/tests/*` pages, `TestBuilder`/`TestRunner`, and test-specific adapter state.
 - Remove temporary aliases and compatibility adapters after all callers use the new model.
 
 ## Acceptance criteria
@@ -727,9 +808,11 @@ This refactor establishes a domain-validation layer rather than extending an exi
 - Reordering an item preserves its ID, while copying an item or page creates new IDs.
 - Test answers and results use persisted item IDs; existing lesson progress remains compatible with its legacy positional format.
 - Server validation rejects a version with a missing score or a score assigned to non-exercise content.
+- Server validation rejects a version containing a non-allowlisted exercise type or no scored exercise at all.
 - Adding an exercise automatically assigns the default point value.
 - Adding or editing non-exercise content does not change total points.
 - Copying an exercise copies its inline `maxPoints`; deleting it requires no separate scoring cleanup.
+- In `generated-form-identification` single-field mode, each requested grammatical field is scored independently; expected `1,s,m` versus submitted `1,s,f` earns `2 / 3` of the exercise's configured `maxPoints`.
 - A normal test can reference multiple versions.
 - A mock test references exactly one version.
 - A version reference with `mockTestId: null` participates in normal rotation; a non-null value makes that version mock-only.
@@ -746,11 +829,17 @@ This refactor establishes a domain-validation layer rather than extending an exi
 - Normal-test random selection uses every eligible version before repeatedly favoring an already-used version; a mock retake uses that card's single version.
 - Refreshing an in-progress attempt does not change the selected version or resolved generated questions.
 - Changing a version's mock assignment does not invalidate an attempt that already selected that version.
+- A student can never hold two in-progress attempts for the same origin, and repeating a start or submit request returns the existing result instead of duplicating it.
+- The attempt payload delivered to the client contains no accepted answers, correct options, or other grading inputs.
+- Direct client reads and writes of `testVersions`, `testAttempts`, `mockTests`, and `userProgress` are denied by security rules.
 - Final scoring uses the attempt's temporary grading inputs and `maxPoints`, not the current editable version.
+- Server grading produces the same result as the practice-mode client grading for every allowlisted exercise type.
 - Submitting an attempt removes its exact questions, answers, and temporary delivery state.
 - Editing a test version does not change the frozen score statistics of previously submitted attempts.
 - Attempt start freezes the applicable passing percentage, and submission freezes the resulting score-only/passed/not-passed outcome.
 - A score-only normal test completes on submission, while a required-pass test gates the next unit until passed.
+- Test units never appear in Lesson Management, and lesson page math is never applied to a test unit.
+- Inserting a required-pass test does not re-lock a student with recorded progress beyond its insertion point; it gates only students who have not yet reached that point.
 - Once a normal test grants completion, a later lower retake never relocks the learning path.
 - Students can view submitted attempt statistics and choose to retake without reopening historical questions or answers.
 - Normal and mock test cards show best percentage prominently and latest raw/percentage score secondarily; mock cards also show attempt count and a score trend across submitted attempts.
@@ -759,7 +848,6 @@ This refactor establishes a domain-validation layer rather than extending an exi
 - Every test states its stakes before the attempt starts, and a failing result shows the percentage distance to the threshold with a retake path and, when one exists, a nudge to the related live mock.
 - Fractional scores are calculated at full precision and rounded only for display.
 - Admin preview writes neither lesson progress nor test attempts.
-- Migration dry runs are repeatable and do not duplicate or corrupt data.
 
 ## Risks and safeguards
 
@@ -775,38 +863,41 @@ This refactor establishes a domain-validation layer rather than extending an exi
 - Submitted attempts cannot be reviewed question-by-question or regraded after their exact questions and answers are removed; this is an intentional product limitation.
 - In-progress delivery state must be removed only after the server has calculated and persisted the final score statistics successfully.
 - Normal-test random selection must happen server-side and persist the chosen version before the client receives it.
+- Server grading modules and client practice grading are parallel implementations of the same rules; parity tests per exercise type are the guard against drift.
+- Security rules for the new collections must ship before any attempt data exists; server-authoritative grading is meaningless while clients can write attempts directly.
+- No test may be published until every consumer of the `lessons` collection discriminates on `kind`; otherwise live test units render as broken zero-page lessons.
 - A flag-day `Lesson` to `LearningUnit` rename creates unnecessary regression risk; migrate callers incrementally.
 - Moving the existing lesson collection immediately would complicate rollback and existing references.
 
 ## Open decisions
 
-1. How long should converted documents remain in the old `tests` collection before deletion?
-2. Submitted attempts retain per-exercise statistics, but no teacher-facing view of student results is planned in this refactor. Confirm it is deliberately out of scope or schedule it as a later phase.
+1. Submitted attempts retain per-exercise statistics, but no teacher-facing view of student results is planned in this refactor. Confirm it is deliberately out of scope or schedule it as a later phase.
 
 ## Decision log
 
 The current schema, invariants, workflows, and implementation phases are authoritative. This register records the rationale for settled choices; if it conflicts with the current document body, the body wins.
 
-| Date       | Settled decision                                                                                                                   | Why it matters                                                                                             |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| 2026-07-13 | Use `LearningUnit = LessonUnit \| TestUnit`, distinguish with `kind`, and preserve every lesson `type`.                            | Lessons and normal tests share one flow without breaking vocab, diagramming, or listening behavior.        |
-| 2026-07-13 | Keep learning units in the existing Firestore `lessons` collection during migration.                                               | Incremental normalization and compatibility adapters are safer than a collection flag day.                 |
-| 2026-07-13 | Store each `TestVersion` as a separate first-class document without immutable revision history.                                    | Large page content remains independently editable; alternative versions matter now, edit history does not. |
-| 2026-07-14 | Use Next.js server routes plus scoped Zod validation for all new domain mutations.                                                 | The application has one server boundary and does not depend on Firebase Functions.                         |
-| 2026-07-14 | Store positive `maxPoints` directly on every test exercise and infer exercises from the type registry.                             | Scoring stays synchronized while existing lesson exercises remain valid without points.                    |
-| 2026-07-14 | Use stable persisted content-item IDs and calculate fractional scores at full precision.                                           | Reordering cannot re-key answers, and partial-credit totals remain mathematically correct.                 |
-| 2026-07-14 | Store container-level percentage thresholds; `null` means score-only, and version totals may differ.                               | Passing is delivery policy, while percentages normalize alternatives with different point totals.          |
-| 2026-07-14 | Persist attempts before flow integration, freeze delivery and passing state at start, then retain only submitted statistics.       | Refreshes remain stable without permanently retaining questions or answers.                                |
-| 2026-07-13 | Select normal versions server-side through a least-used random cycle and scope histories by origin.                                | Students cycle through eligible alternatives while normal and mock attempts remain independent.            |
-| 2026-07-14 | Apply assignment/configuration changes only to future attempts and make earned normal completion sticky.                           | Existing attempts remain valid, and a later lower retake cannot relock the learning path.                  |
-| 2026-07-14 | Make normal rotation and mock delivery mutually exclusive through nullable `mockTestId`.                                           | A mock-only version remains under its parent test but can never be selected in normal rotation.            |
-| 2026-07-14 | Keep one separate `MockTest` document per mock version with its own ID, order, passing rule, and visibility.                       | Dashboard queries, attempt origins, standalone mocks, and two-version/two-card behavior use one shape.     |
-| 2026-07-14 | Maintain a bidirectional parent/mock link, archive instead of delete, and separate lifecycle from visibility.                      | Parent overviews stay complete, IDs and history survive reassignment, and hidden mocks stay mock-only.     |
-| 2026-07-14 | Require explicit duplication when equivalent content must exist in both normal and mock delivery.                                  | Versions are never silently shared across simultaneous delivery contexts.                                  |
-| 2026-07-13 | Do not introduce a generic `placementId`.                                                                                          | `testId`, `mockTestId`, explicit origins, `liveOrder`, and `mockOrder` cover current delivery needs.       |
-| 2026-07-14 | Keep Test Management separate and make the version editor match the lesson creator with points, passing controls, and preview.     | Teachers get a familiar authoring experience without a second content-editor system.                       |
-| 2026-07-14 | Extend the existing live-order screen into the mixed Learning Path organizer with plus-button insertion and explicit placement.    | Teachers can distinguish, insert, and reorder tests among lessons without accidental publishing.           |
-| 2026-07-14 | Give lesson, test, and mock cards distinct accessible treatments; place Mock Tests below the learning path and hide it when empty. | Students can identify assessment types immediately without an empty or color-only interface.               |
-| 2026-07-14 | Hide normal-flow version labels, while keeping mock titles teacher-controlled.                                                     | Students should not compare hidden alternatives as easy/hard, but separate mock cards need names.          |
-| 2026-07-14 | Show best score primarily, latest score and trend secondarily, and retained exercise statistics on results.                        | Students can judge progress and retake value without reopening historical questions.                       |
-| 2026-07-14 | Required-pass failures show threshold distance, a retake path, and a related live-mock nudge when available.                       | Failure feedback remains actionable without leaking answers or consuming rotation versions.                |
+| Date       | Settled decision                                                                                                                   | Why it matters                                                                                                                              |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-07-13 | Use `LearningUnit = LessonUnit \| TestUnit`, distinguish with `kind`, and preserve every lesson `type`.                            | Lessons and normal tests share one flow without breaking vocab, diagramming, or listening behavior.                                         |
+| 2026-07-13 | Keep learning units in the existing Firestore `lessons` collection during migration.                                               | Incremental normalization and compatibility adapters are safer than a collection flag day.                                                  |
+| 2026-07-13 | Store each `TestVersion` as a separate first-class document without immutable revision history.                                    | Large page content remains independently editable; alternative versions matter now, edit history does not.                                  |
+| 2026-07-14 | Use Next.js server routes plus scoped Zod validation for all new domain mutations.                                                 | Next.js API routes are the primary server boundary; the `gradeTranslationFn` Firebase Function stays a practice-only exception.             |
+| 2026-07-14 | Store positive `maxPoints` directly on every test exercise and infer exercises from the type registry.                             | Scoring stays synchronized while existing lesson exercises remain valid without points.                                                     |
+| 2026-07-14 | Use stable persisted content-item IDs and calculate item- and component-level fractional scores at full precision.                 | Reordering cannot re-key answers, and generated-form fields such as `1,s,m` can earn independent credit normalized to the exercise points.  |
+| 2026-07-14 | Store container-level percentage thresholds; `null` means score-only, and version totals may differ.                               | Passing is delivery policy, while percentages normalize alternatives with different point totals.                                           |
+| 2026-07-14 | Persist attempts before flow integration, freeze delivery and passing state at start, then retain only submitted statistics.       | Refreshes remain stable without permanently retaining questions or answers.                                                                 |
+| 2026-07-13 | Select normal versions server-side through a least-used random cycle and scope histories by origin.                                | Students cycle through eligible alternatives while normal and mock attempts remain independent.                                             |
+| 2026-07-14 | Apply assignment/configuration changes only to future attempts and make earned normal completion sticky.                           | Existing attempts remain valid, and a later lower retake cannot relock the learning path.                                                   |
+| 2026-07-14 | Do not let a newly inserted required-pass test re-lock students who already progressed beyond its insertion point.                 | Learning-path edits must not revoke access a student has already reached; the new gate applies only before the student's recorded frontier. |
+| 2026-07-14 | Make normal rotation and mock delivery mutually exclusive through nullable `mockTestId`.                                           | A mock-only version remains under its parent test but can never be selected in normal rotation.                                             |
+| 2026-07-14 | Keep one separate `MockTest` document per mock version with its own ID, order, passing rule, and visibility.                       | Dashboard queries, attempt origins, standalone mocks, and two-version/two-card behavior use one shape.                                      |
+| 2026-07-14 | Maintain a bidirectional parent/mock link, archive instead of delete, and separate lifecycle from visibility.                      | Parent overviews stay complete, IDs and history survive reassignment, and hidden mocks stay mock-only.                                      |
+| 2026-07-14 | Require explicit duplication when equivalent content must exist in both normal and mock delivery.                                  | Versions are never silently shared across simultaneous delivery contexts.                                                                   |
+| 2026-07-13 | Do not introduce a generic `placementId`.                                                                                          | `testId`, `mockTestId`, explicit origins, `liveOrder`, and `mockOrder` cover current delivery needs.                                        |
+| 2026-07-14 | Keep Test Management separate and make the version editor match the lesson creator with points, passing controls, and preview.     | Teachers get a familiar authoring experience without a second content-editor system.                                                        |
+| 2026-07-14 | Extend the existing live-order screen into the mixed Learning Path organizer with plus-button insertion and explicit placement.    | Teachers can distinguish, insert, and reorder tests among lessons without accidental publishing.                                            |
+| 2026-07-14 | Give lesson, test, and mock cards distinct accessible treatments; place Mock Tests below the learning path and hide it when empty. | Students can identify assessment types immediately without an empty or color-only interface.                                                |
+| 2026-07-14 | Hide normal-flow version labels, while keeping mock titles teacher-controlled.                                                     | Students should not compare hidden alternatives as easy/hard, but separate mock cards need names.                                           |
+| 2026-07-14 | Show best score primarily, latest score and trend secondarily, and retained exercise statistics on results.                        | Students can judge progress and retake value without reopening historical questions.                                                        |
+| 2026-07-14 | Required-pass failures show threshold distance, a retake path, and a related live-mock nudge when available.                       | Failure feedback remains actionable without leaking answers or consuming rotation versions.                                                 |
