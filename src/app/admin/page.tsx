@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { Button } from '@/src/components/ui/button';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
-import { ArrowLeft, Shield, Plus, BookOpen, Globe, Filter, Clock, Database, Loader2 } from 'lucide-react';
+import { ArrowLeft, Shield, Plus, BookOpen, Globe, Filter, Clock, Database, Loader2, ClipboardList } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
@@ -184,6 +184,26 @@ function AdminPage() {
                   Manage Roles
                 </Button>
               </div>
+            </RomanCardContent>
+          </RomanCard>
+
+          <RomanCard className="hover:shadow-lg transition-shadow">
+            <RomanCardContent className="p-6">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-12 h-12 rounded-full bg-rose-100 flex items-center justify-center">
+                  <ClipboardList className="h-6 w-6 text-rose-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-serif text-gray-800">Diagramming Audit</h3>
+                  <p className="text-sm text-roman-stone">Inspect student submissions and expected answers</p>
+                </div>
+              </div>
+              <Button asChild className="w-full justify-start" variant="outline">
+                <Link href="/admin/diagramming-attempts">
+                  <ClipboardList className="h-4 w-4 mr-2" />
+                  View Diagramming Attempts
+                </Link>
+              </Button>
             </RomanCardContent>
           </RomanCard>
 

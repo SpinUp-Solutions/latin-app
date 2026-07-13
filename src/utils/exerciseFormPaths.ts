@@ -12,13 +12,17 @@ export const createVerbFormPath = (
   voice: string,
   mood: string,
   person: string,
-  number: string
+  number: string,
+  caseValue?: string,
+  gender?: string
 ): VerbFormPath => ({
   tense,
   voice,
   mood,
   person,
   number,
+  ...(caseValue ? { case: caseValue } : {}),
+  ...(gender ? { gender } : {}),
 });
 
 export const createNounFormPath = (number: string, caseValue: string): NounFormPath => ({
@@ -59,12 +63,26 @@ export const parseFormPathFromString = (
   const parts = path.split('.');
 
   if (tableType === 'conjugation') {
-    if (parts.length === 5) {
+    const finiteMoods = new Set(['indicative', 'subjunctive', 'imperative']);
+
+    if (parts.length === 5 && finiteMoods.has(parts[0])) {
       return createVerbFormPath(parts[2], parts[1], parts[0], parts[4], parts[3]);
     }
 
     if (parts.length === 4 && parts[0] === 'nonFinite' && parts[1] === 'infinitive') {
       return createVerbFormPath(parts[2], parts[3], 'infinitive', '', '');
+    }
+
+    if (parts.length === 7 && parts[0] === 'nonFinite' && parts[1] === 'participle') {
+      return createVerbFormPath(parts[2], parts[3], 'participle', '', parts[6], parts[4], parts[5]);
+    }
+
+    if (parts.length === 2 && parts[0] === 'gerund') {
+      return createVerbFormPath('', '', 'gerund', '', '', parts[1]);
+    }
+
+    if (parts.length === 2 && parts[0] === 'supine') {
+      return createVerbFormPath('', '', 'supine', '', '', parts[1]);
     }
   }
 

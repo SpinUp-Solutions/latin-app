@@ -17,6 +17,8 @@ import {
 } from '@/src/store/api/lessonApi';
 import { useAuth } from '@/src/hooks/useAuth';
 import { toast } from 'sonner';
+import { auth } from '@/src/services/firebase';
+import { DiagramAttempt } from '@/src/features/sentence-diagramming';
 
 interface LessonPlayerProps {
   lesson: LessonWithProgress;
@@ -96,6 +98,32 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson, navigationPl
       });
     },
     [markExerciseComplete, user?.uid, lesson.id, currentPageIndex]
+  );
+
+  const handleDiagrammingAttempt = useCallback(
+    async (itemIndex: number, exerciseId: string, attempt: DiagramAttempt) => {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) return;
+
+      try {
+        await fetch('/api/diagramming-attempts', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            lessonId: lesson.id,
+            pageIndex: currentPageIndex,
+            itemIndex,
+            exerciseId,
+            appVersion: process.env.NEXT_PUBLIC_APP_VERSION || 'unknown',
+            studentAnnotations: attempt.studentAnnotations,
+          }),
+        });
+      } catch (error) {
+        // Auditing must never block a student from receiving exercise feedback.
+        console.warn('Unable to record diagramming attempt', error);
+      }
+    },
+    [lesson.id, currentPageIndex]
   );
 
   const isListeningLesson = lesson.type === 'listening';
@@ -189,6 +217,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson, navigationPl
                   pageIndex={currentPageIndex}
                   onExerciseComplete={handleExerciseComplete}
                   onPageComplete={handlePageComplete}
+                  onDiagrammingAttempt={handleDiagrammingAttempt}
                 />
               </AnimatePresence>
             </div>

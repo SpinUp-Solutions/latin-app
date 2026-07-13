@@ -15,6 +15,7 @@ import {
   PronounTypeSchema,
   PronounPersonSchema,
 } from '@/shared/types/vocabulary/schemas';
+import { getSupportedVerbFormStepsForParsedPath } from './verbFormStepCompatibility';
 
 type VerbWordResponse = Extract<ExerciseWordResponse, { part_of_speech: 'verb' }>;
 type NounWordResponse = Extract<ExerciseWordResponse, { part_of_speech: 'noun' }>;
@@ -57,6 +58,10 @@ export const extractStepValue = (word: ExerciseWordResponse, step: FormIdentific
         return word.form_path?.person || '';
       case 'number':
         return word.form_path?.number || '';
+      case 'case':
+        return word.form_path?.case || '';
+      case 'gender':
+        return word.form_path?.gender || '';
       default:
         return '';
     }
@@ -137,6 +142,27 @@ export function enrichPathsWithSteps(
     });
     return enrichedPath;
   });
+}
+
+export function getAnswerableStepsForWord(
+  word: ExerciseWordResponse,
+  steps: FormIdentificationStep[],
+  formPaths: Array<Record<string, string | undefined>>
+): FormIdentificationStep[] {
+  if (!isVerb(word) || formPaths.length === 0) {
+    return steps;
+  }
+
+  const supportedStepSets = formPaths
+    .map(path => getSupportedVerbFormStepsForParsedPath(path))
+    .filter((support): support is NonNullable<typeof support> => support !== null)
+    .map(support => new Set<FormIdentificationStep>(support.supportedSteps));
+
+  if (supportedStepSets.length === 0) {
+    return steps;
+  }
+
+  return steps.filter(step => supportedStepSets.every(supportedSteps => supportedSteps.has(step)));
 }
 
 /**
@@ -354,6 +380,8 @@ const createVariantMap = () => {
     imperative: ['imperative', 'imp.', 'imp'],
     infinitive: ['infinitive', 'inf.', 'inf'],
     participle: ['participle', 'part.', 'part'],
+    gerund: ['gerund', 'ger.', 'ger'],
+    supine: ['supine', 'sup.', 'sup'],
   };
   Object.entries(moods).forEach(([k, arr]) => {
     v[k] = arr;
@@ -500,9 +528,14 @@ export function hasValidFormData(word: ExerciseWordResponse, steps: FormIdentifi
   }
 
   const formPaths = primaryPaths || (formPath ? [formPath] : []);
+  const answerableSteps = getAnswerableStepsForWord(
+    word,
+    steps,
+    formPaths as Array<Record<string, string | undefined>>
+  );
 
   return formPaths.some(path => {
-    return steps.every(step => {
+    return answerableSteps.every(step => {
       const pathRecord = path as Record<string, string | undefined>;
       if (pathRecord[step]) return true;
 

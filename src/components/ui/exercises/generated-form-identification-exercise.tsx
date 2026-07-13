@@ -40,6 +40,7 @@ import {
   getDisplayForm,
   enrichPathsWithSteps,
   deduplicatePathsBySteps,
+  getAnswerableStepsForWord,
 } from '@/src/utils/exercises/formIdentificationHelpers';
 import { hasSelectedForm } from '@/src/utils/exercises/formSelection';
 import { formatLabel } from '@/src/utils/label-formatter';
@@ -99,12 +100,12 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
           wordAny.person as PronounPerson | undefined
         );
         const paradigmConfig = paradigm ? exercise.data.paradigmConfigs?.[paradigm] : undefined;
-        const steps = paradigmConfig?.steps || [];
 
         const basePrimaryPaths = (word.primary_form_paths || (word.form_path ? [word.form_path] : [])) as Array<
           Record<string, string | undefined>
         >;
         const baseOptionalPaths = (word.optional_form_paths || []) as Array<Record<string, string | undefined>>;
+        const steps = getAnswerableStepsForWord(word, paradigmConfig?.steps || [], basePrimaryPaths);
 
         const enrichedPrimaryPaths = enrichPathsWithSteps(basePrimaryPaths, word, steps);
         const enrichedOptionalPaths = enrichPathsWithSteps(baseOptionalPaths, word, steps);
@@ -155,12 +156,12 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
           wordAny.person as PronounPerson | undefined
         );
         const paradigmConfig = paradigm ? exercise.data.paradigmConfigs?.[paradigm] : undefined;
-        const steps = paradigmConfig?.steps || [];
 
         const basePrimaryPaths = (word.primary_form_paths || (word.form_path ? [word.form_path] : [])) as Array<
           Record<string, string | undefined>
         >;
         const baseOptionalPaths = (word.optional_form_paths || []) as Array<Record<string, string | undefined>>;
+        const steps = getAnswerableStepsForWord(word, paradigmConfig?.steps || [], basePrimaryPaths);
 
         const enrichedPrimaryPaths = enrichPathsWithSteps(basePrimaryPaths, word, steps);
         const enrichedOptionalPaths = enrichPathsWithSteps(baseOptionalPaths, word, steps);
@@ -207,12 +208,12 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
         wordAny.person as PronounPerson | undefined
       );
       const paradigmConfig = paradigm ? exercise.data.paradigmConfigs?.[paradigm] : undefined;
-      const steps = paradigmConfig?.steps || [];
 
       const basePrimaryPaths = (word.primary_form_paths || (word.form_path ? [word.form_path] : [])) as Array<
         Record<string, string | undefined>
       >;
       const baseOptionalPaths = (word.optional_form_paths || []) as Array<Record<string, string | undefined>>;
+      const steps = getAnswerableStepsForWord(word, paradigmConfig?.steps || [], basePrimaryPaths);
       const enrichedPrimaryPaths = enrichPathsWithSteps(basePrimaryPaths, word, steps);
       const enrichedOptionalPaths = enrichPathsWithSteps(baseOptionalPaths, word, steps);
       const dedupedPrimaryPaths = deduplicatePathsBySteps(enrichedPrimaryPaths, steps);

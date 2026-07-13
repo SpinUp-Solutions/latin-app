@@ -11,6 +11,10 @@ describe('parseFormPathFromString', () => {
     });
   });
 
+  it('does not parse arbitrary five-part conjugation paths as finite forms', () => {
+    expect(parseFormPathFromString('nonFinite.foo.bar.baz.qux', 'conjugation')).toBeNull();
+  });
+
   it('parses present active infinitive paths', () => {
     expect(parseFormPathFromString('nonFinite.infinitive.present.active', 'conjugation')).toEqual({
       tense: 'present',
@@ -38,6 +42,40 @@ describe('parseFormPathFromString', () => {
       mood: 'infinitive',
       person: '',
       number: '',
+    });
+  });
+
+  it('parses participle paths', () => {
+    expect(parseFormPathFromString('nonFinite.participle.present.active.nominative.masculine.singular', 'conjugation')).toEqual({
+      tense: 'present',
+      voice: 'active',
+      mood: 'participle',
+      person: '',
+      number: 'singular',
+      case: 'nominative',
+      gender: 'masculine',
+    });
+  });
+
+  it('parses gerund paths', () => {
+    expect(parseFormPathFromString('gerund.genitive', 'conjugation')).toEqual({
+      tense: '',
+      voice: '',
+      mood: 'gerund',
+      person: '',
+      number: '',
+      case: 'genitive',
+    });
+  });
+
+  it('parses supine paths', () => {
+    expect(parseFormPathFromString('supine.accusative', 'conjugation')).toEqual({
+      tense: '',
+      voice: '',
+      mood: 'supine',
+      person: '',
+      number: '',
+      case: 'accusative',
     });
   });
 });

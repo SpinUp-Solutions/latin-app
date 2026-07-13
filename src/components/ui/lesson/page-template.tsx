@@ -7,15 +7,23 @@ import ContentRenderer from './content-renderer';
 import { ExerciseErrorBoundary } from './exercise-error-boundary';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { isExerciseType } from '@/src/utils/lessonUtils';
+import { DiagramAttempt } from '@/src/features/sentence-diagramming';
 
 interface PageTemplateProps {
   page: Page;
   pageIndex?: number;
   onExerciseComplete?: (itemIndex: number, score: number) => void;
   onPageComplete?: () => void;
+  onDiagrammingAttempt?: (itemIndex: number, exerciseId: string, attempt: DiagramAttempt) => void;
 }
 
-export const PageTemplate: React.FC<PageTemplateProps> = ({ page, pageIndex, onExerciseComplete, onPageComplete }) => {
+export const PageTemplate: React.FC<PageTemplateProps> = ({
+  page,
+  pageIndex,
+  onExerciseComplete,
+  onPageComplete,
+  onDiagrammingAttempt,
+}) => {
   const [completedExercises, setCompletedExercises] = useState(new Set<number>());
 
   const exerciseItems = page.items.filter(item => isExerciseType(item.type));
@@ -74,6 +82,7 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({ page, pageIndex, onE
               pageIndex={pageIndex}
               itemIndex={index}
               onComplete={(score: number) => handleItemComplete(index, score)}
+              onDiagrammingAttempt={attempt => onDiagrammingAttempt?.(index, item.id, attempt)}
             />
           </ExerciseErrorBoundary>
         </motion.div>

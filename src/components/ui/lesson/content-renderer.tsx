@@ -34,15 +34,17 @@ import {
 import { VocabularyViewer } from './VocabularyViewer';
 import { VocabularyPoolViewer } from './VocabularyPoolViewer';
 import TextComponent from './text-component';
+import { DiagramAttempt } from '@/src/features/sentence-diagramming';
 
 interface ContentRendererProps {
   content: ContentItem;
   onComplete?: (score: number) => void;
   pageIndex?: number;
   itemIndex?: number;
+  onDiagrammingAttempt?: (attempt: DiagramAttempt) => void;
 }
 
-export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onComplete }) => {
+export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onComplete, onDiagrammingAttempt }) => {
   switch (content.type) {
     case 'text':
       const textContent = content as TextContent;
@@ -91,7 +93,11 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onCom
 
     case 'sentence-diagramming':
       return (
-        <SentenceDiagrammingExercise exercise={content as SentenceDiagrammingExerciseType} onComplete={onComplete} />
+        <SentenceDiagrammingExercise
+          exercise={content as SentenceDiagrammingExerciseType}
+          onComplete={onComplete}
+          onAttempt={onDiagrammingAttempt}
+        />
       );
 
     case 'multiple-choice':

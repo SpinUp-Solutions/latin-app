@@ -7,3 +7,4 @@ export * from './SentenceDiagramFeedbackContent';
 export * from './SentenceDiagramStudent';
 export * from './SentenceDiagramSurface';
 export * from './SentenceDiagramToolbar';
+export * from './validation';
