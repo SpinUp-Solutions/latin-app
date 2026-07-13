@@ -15,9 +15,10 @@ import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 interface Props {
   exercise: FillEmboldedTextExercise;
   onComplete?: (score: number) => void;
+  testMode?: boolean;
 }
 
-const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
+const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComplete, testMode = false }) => {
   const [userAnswer, setUserAnswer] = useState('');
   const [selectedWordIndex, setSelectedWordIndex] = useState<number | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -44,7 +45,7 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
   } = useExerciseFeedback(exercise.feedbackConfig);
 
   useDelayedExerciseReset({
-    shouldReset: shouldResetExercise,
+    shouldReset: !testMode && shouldResetExercise,
     delayMs: exercise.itemProgressionDelay,
     onReset: () => {
       setUserAnswer('');
@@ -109,7 +110,18 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
       }
     } else {
       handleIncorrect();
-      setIsProcessing(false);
+      if (testMode) {
+        const finalScore = isLastItem ? Math.round((correctAnswers / exercise.data.words.length) * 100) : null;
+        autoAdvanceIfEnabled(() => {
+          setUserAnswer('');
+          setSelectedWordIndex(null);
+          reset();
+          setIsProcessing(false);
+          if (finalScore !== null) onComplete?.(finalScore);
+        }, false);
+      } else {
+        setIsProcessing(false);
+      }
     }
   };
 
@@ -191,7 +203,8 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
           correctAnswer={currentWord.correctAnswer}
           explanation={currentWord.explanation}
           showExplanation={showExplanation}
-          onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
+          onContinue={(isCorrect || testMode) && isAwaitingConfirmation ? confirmAdvance : undefined}
+          allowContinueOnIncorrect={testMode}
         />
       </div>
     </div>

@@ -12,6 +12,7 @@ import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { useGetMultiParadigmWordsQuery } from '@/src/store/api/advancedVocabularyApi';
 import { deriveParadigm } from '@/src/utils/paradigm';
 import { Card, CardContent } from '../card';
+import { Button } from '../button';
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
 import type { PartOfSpeech, PronounType, PronounPerson } from '@/shared/types/vocabulary/schemas/enums';
 import {
@@ -27,6 +28,7 @@ import {
   validateSingleFieldFormIdentificationExercise,
   validateMultiAnswerStep,
   validatePartialMultiAnswerPaths,
+  scoreSingleFieldFormIdentificationAnswer,
   normalize,
 } from '@/src/utils/exercises/generatedFormIdentificationExercise';
 import {
@@ -49,14 +51,18 @@ import { normalizeCollection, buildLegacyParadigmConfigs } from '@/src/utils/exe
 interface Props {
   exercise: GeneratedFormIdentificationExercise;
   onComplete?: (score: number) => void;
+  testMode?: boolean;
 }
 
-const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
+const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercise, onComplete, testMode = false }) => {
   const [userAnswer, setUserAnswer] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [correctAnswers, setCorrectAnswers] = useState(0);
   const [wordAnswers, setWordAnswers] = useState<Record<string, Record<string, string>>>({});
   const [multiAnswerSlots, setMultiAnswerSlots] = useState<Record<string, string[][]>>({});
+  const [testEarnedUnits, setTestEarnedUnits] = useState(0);
+  const [testSubmitted, setTestSubmitted] = useState(false);
+  const [pendingTestEarnedUnits, setPendingTestEarnedUnits] = useState(0);
 
   const config = exercise.data.generatorConfig;
   const isSingleField = exercise.data.mode === 'single-field';
@@ -297,12 +303,19 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
       .map(result => result.data);
   }, [items, isSingleField, isMultiAnswerMode]);
 
-  const { currentIndex, isLastItem, isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance, resetIndex } =
-    useExerciseProgression({
-      totalItems: validatedItems.length,
-      itemProgressionDelay: exercise.itemProgressionDelay,
-      progressionRules: exercise.feedbackConfig.progressionRules,
-    });
+  const {
+    currentIndex,
+    isLastItem,
+    isAwaitingConfirmation,
+    autoAdvanceIfEnabled,
+    confirmAdvance,
+    resetIndex,
+    nextItem,
+  } = useExerciseProgression({
+    totalItems: validatedItems.length,
+    itemProgressionDelay: exercise.itemProgressionDelay,
+    progressionRules: exercise.feedbackConfig.progressionRules,
+  });
 
   const {
     isCorrect,
@@ -317,7 +330,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
   } = useExerciseFeedback(exercise.feedbackConfig);
 
   useDelayedExerciseReset({
-    shouldReset: shouldResetExercise,
+    shouldReset: !testMode && shouldResetExercise,
     delayMs: exercise.itemProgressionDelay,
     onReset: () => {
       setUserAnswer('');
@@ -336,6 +349,54 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
 
     const currentItem = validatedItems[currentIndex];
     setIsProcessing(true);
+
+    if (testMode) {
+      let earnedUnits = 0;
+      let fullyCorrect = false;
+
+      if (isSingleField) {
+        const credit = scoreSingleFieldFormIdentificationAnswer(
+          userAnswer,
+          currentItem as SingleFieldFormIdentificationItem
+        );
+        earnedUnits = credit.earnedUnits;
+        fullyCorrect = credit.availableUnits > 0 && credit.earnedUnits === credit.availableUnits;
+      } else if (isMultiAnswerMode) {
+        const multiItem = currentItem as MultiAnswerFormIdentificationItem;
+        const validation = validateMultiAnswerStep(userAnswer, multiItem);
+        fullyCorrect = validation.isCorrect;
+        if (fullyCorrect) {
+          const updatedSlots = [...(multiAnswerSlots[multiItem.wordId] || [])];
+          updatedSlots[multiItem.stepIndex] = validation.answerSlots;
+          fullyCorrect = validatePartialMultiAnswerPaths(
+            updatedSlots,
+            multiItem.steps.slice(0, multiItem.stepIndex + 1),
+            multiItem.primaryFormPaths
+          ).isCorrect;
+          if (fullyCorrect) {
+            setMultiAnswerSlots(prev => ({ ...prev, [multiItem.wordId]: updatedSlots }));
+          }
+        }
+        earnedUnits = fullyCorrect ? 1 : 0;
+      } else {
+        const stepItem = currentItem as FormIdentificationItem;
+        const validation = validateGeneratedFormIdentificationExercise(userAnswer, stepItem);
+        fullyCorrect = validation.isCorrect;
+        earnedUnits = fullyCorrect ? 1 : 0;
+        if (fullyCorrect) {
+          setWordAnswers(prev => ({
+            ...prev,
+            [stepItem.wordId]: { ...(prev[stepItem.wordId] || {}), [stepItem.step]: normalize(userAnswer) },
+          }));
+        }
+      }
+
+      setPendingTestEarnedUnits(earnedUnits);
+      setTestSubmitted(true);
+      if (fullyCorrect) handleCorrect(isLastItem);
+      else handleIncorrect();
+      return;
+    }
 
     if (isMultiAnswerMode) {
       const multiItem = currentItem as MultiAnswerFormIdentificationItem;
@@ -422,6 +483,32 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
 
   const handleAnswerChange = (value: string) => {
     setUserAnswer(value);
+  };
+
+  const totalTestUnits = useMemo(
+    () =>
+      isSingleField
+        ? (validatedItems as SingleFieldFormIdentificationItem[]).reduce(
+            (total, item) => total + item.primaryFormPaths.length * item.steps.length,
+            0
+          )
+        : validatedItems.length,
+    [validatedItems, isSingleField]
+  );
+
+  const continueTest = () => {
+    const earned = testEarnedUnits + pendingTestEarnedUnits;
+    setTestEarnedUnits(earned);
+    if (isLastItem) {
+      onComplete?.(totalTestUnits > 0 ? (earned / totalTestUnits) * 100 : 0);
+      return;
+    }
+    setUserAnswer('');
+    setPendingTestEarnedUnits(0);
+    setTestSubmitted(false);
+    setIsProcessing(false);
+    reset();
+    nextItem();
   };
 
   if (isLoading) {
@@ -577,7 +664,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
                   ? `e.g., answer1;answer2`
                   : 'Type your answer...'
             }
-            disabled={isProcessing}
+            disabled={isProcessing || testSubmitted}
           />
 
           <FeedbackDisplay
@@ -593,8 +680,37 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
                   : (currentItem as FormIdentificationItem).correctAnswer
             }
             showExplanation={showExplanation}
-            onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
+            onContinue={!testMode && isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
           />
+          {testMode && testSubmitted && (
+            <div className="space-y-3">
+              <div className="rounded-md bg-gray-50 p-3 text-sm">
+                Credit for this answer: <strong>{pendingTestEarnedUnits}</strong>
+                {isSingleField && (
+                  <>
+                    {' '}
+                    /{' '}
+                    {(currentItem as SingleFieldFormIdentificationItem).primaryFormPaths.length *
+                      (currentItem as SingleFieldFormIdentificationItem).steps.length}{' '}
+                    fields
+                  </>
+                )}
+                <div className="mt-2 text-gray-600">
+                  Correct answer:{' '}
+                  <strong>
+                    {isSingleField
+                      ? (currentItem as SingleFieldFormIdentificationItem).correctAnswerDisplay
+                      : isMultiAnswerMode
+                        ? (currentItem as MultiAnswerFormIdentificationItem).correctAnswerDisplay
+                        : (currentItem as FormIdentificationItem).correctAnswer}
+                  </strong>
+                </div>
+              </div>
+              <Button onClick={continueTest} className="w-full">
+                {isLastItem ? 'Finish exercise' : 'Continue'}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

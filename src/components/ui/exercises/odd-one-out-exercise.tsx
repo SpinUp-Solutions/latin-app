@@ -17,9 +17,10 @@ import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 interface Props {
   exercise: OddOneOutExercise;
   onComplete?: (score: number) => void;
+  testMode?: boolean;
 }
 
-const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
+const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete, testMode = false }) => {
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [userExplanation, setUserExplanation] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -43,7 +44,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
   } = useExerciseFeedback(exercise.feedbackConfig);
 
   useDelayedExerciseReset({
-    shouldReset: shouldResetExercise,
+    shouldReset: !testMode && shouldResetExercise,
     delayMs: exercise.itemProgressionDelay,
     onReset: () => {
       setSelectedItemId(null);
@@ -80,6 +81,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
     } else {
       handleIncorrect();
       setIsProcessing(false);
+      if (testMode) onComplete?.(0);
     }
   };
 
@@ -202,14 +204,14 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
               className="bg-roman-terracotta hover:bg-roman-terracotta/90 text-white">
               {isProcessing ? 'Checking...' : 'Submit Answer'}
             </Button>
-          ) : (
+          ) : !testMode ? (
             <Button
               onClick={handleReset}
               variant="outline"
               className="border-roman-terracotta text-roman-terracotta hover:bg-roman-parchment">
               Try Again
             </Button>
-          )}
+          ) : null}
         </div>
 
         {/* Feedback Display */}

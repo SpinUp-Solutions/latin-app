@@ -16,9 +16,10 @@ import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 interface Props {
   exercise: TextSelectionExercise;
   onComplete?: (score: number) => void;
+  testMode?: boolean;
 }
 
-const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
+const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete, testMode = false }) => {
   const [selectedWordIndex, setSelectedWordIndex] = useState<number | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [correctAnswers, setCorrectAnswers] = useState(0);
@@ -43,7 +44,7 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
   } = useExerciseFeedback(exercise.feedbackConfig);
 
   useDelayedExerciseReset({
-    shouldReset: shouldResetExercise,
+    shouldReset: !testMode && shouldResetExercise,
     delayMs: exercise.itemProgressionDelay,
     onReset: () => {
       setSelectedWordIndex(null);
@@ -88,7 +89,17 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
       }
     } else {
       handleIncorrect();
-      setIsProcessing(false);
+      if (testMode) {
+        const finalScore = isLastItem ? Math.round((correctAnswers / exercise.data.questions.length) * 100) : null;
+        autoAdvanceIfEnabled(() => {
+          setSelectedWordIndex(null);
+          reset();
+          setIsProcessing(false);
+          if (finalScore !== null) onComplete?.(finalScore);
+        }, false);
+      } else {
+        setIsProcessing(false);
+      }
     }
   };
 
@@ -147,7 +158,8 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
           correctAnswer={exercise.data.passage.split(' ')[currentQuestion.correctWordIndex]}
           explanation={currentQuestion.explanation}
           showExplanation={showExplanation}
-          onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
+          onContinue={(isCorrect || testMode) && isAwaitingConfirmation ? confirmAdvance : undefined}
+          allowContinueOnIncorrect={testMode}
         />
       </div>
     </div>

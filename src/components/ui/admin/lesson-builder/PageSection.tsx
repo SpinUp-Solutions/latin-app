@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { ReactNode, useState } from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
 import { Plus, Trash2, GripVertical, Copy } from 'lucide-react';
@@ -41,6 +41,7 @@ interface PageSectionProps {
   onAddContent: (pageIndex: number, content: RenderableContentItem) => void;
   onEditContent: (pageIndex: number, itemIndex: number) => void;
   onRemoveContent: (pageIndex: number, itemIndex: number) => void;
+  renderContentItemMeta?: (pageIndex: number, item: RenderableContentItem, itemIndex: number) => ReactNode;
 }
 
 interface SortablePageProps {
@@ -53,6 +54,7 @@ interface SortablePageProps {
   onAddContent: (pageIndex: number, content: RenderableContentItem) => void;
   onEditContent: (pageIndex: number, itemIndex: number) => void;
   onRemoveContent: (pageIndex: number, itemIndex: number) => void;
+  renderContentItemMeta?: (pageIndex: number, item: RenderableContentItem, itemIndex: number) => ReactNode;
   onUpdatePageAutoAdvance: (pageIndex: number, autoAdvance: { enabled: boolean; delay: number }) => void;
   isAutoAdvanceExpanded: boolean;
   onToggleAutoAdvance: () => void;
@@ -68,6 +70,7 @@ const SortablePage: React.FC<SortablePageProps> = ({
   onAddContent,
   onEditContent,
   onRemoveContent,
+  renderContentItemMeta,
   onUpdatePageAutoAdvance,
   isAutoAdvanceExpanded,
   onToggleAutoAdvance,
@@ -123,6 +126,7 @@ const SortablePage: React.FC<SortablePageProps> = ({
         pageIndex={pageIndex}
         onEditContent={(itemIndex: number) => onEditContent(pageIndex, itemIndex)}
         onRemoveContent={(itemIndex: number) => onRemoveContent(pageIndex, itemIndex)}
+        renderItemMeta={(item, itemIndex) => renderContentItemMeta?.(pageIndex, item, itemIndex)}
       />
 
       <PageAutoAdvanceEditor
@@ -164,6 +168,7 @@ export const PageSection: React.FC<PageSectionProps> = ({
   onAddContent,
   onEditContent,
   onRemoveContent,
+  renderContentItemMeta,
 }) => {
   const dispatch = useDispatch();
   const [expandedAutoAdvancePageId, setExpandedAutoAdvancePageId] = useState<string | null>(null);
@@ -236,6 +241,7 @@ export const PageSection: React.FC<PageSectionProps> = ({
                 onAddContent={onAddContent}
                 onEditContent={onEditContent}
                 onRemoveContent={onRemoveContent}
+                renderContentItemMeta={renderContentItemMeta}
                 onUpdatePageAutoAdvance={handleUpdatePageAutoAdvance}
                 isAutoAdvanceExpanded={expandedAutoAdvancePageId === page.id}
                 onToggleAutoAdvance={() => handleToggleAutoAdvance(page.id)}

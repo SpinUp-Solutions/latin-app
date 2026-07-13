@@ -24,9 +24,10 @@ import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 interface Props {
   exercise: TableFillExercise;
   onComplete?: (score: number) => void;
+  testMode?: boolean;
 }
 
-const TableFillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
+const TableFillExerciseComponent: React.FC<Props> = ({ exercise, onComplete, testMode = false }) => {
   const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -50,7 +51,7 @@ const TableFillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
   } = useExerciseFeedback(exercise.feedbackConfig);
 
   useDelayedExerciseReset({
-    shouldReset: shouldResetExercise,
+    shouldReset: !testMode && shouldResetExercise,
     delayMs: exercise.itemProgressionDelay,
     onReset: () => {
       setUserAnswers({});
@@ -78,9 +79,11 @@ const TableFillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
     const validation = validateTableFillExercise(userAnswers, exercise);
     setCellResults(validation.cellResults);
 
+    const score =
+      validation.totalBlanks > 0 ? Math.round((validation.correctAnswers / validation.totalBlanks) * 100) : 0;
+
     if (validation.isCorrect) {
       handleCorrect();
-      const score = Math.round((validation.correctAnswers / validation.totalBlanks) * 100);
       const hasVisibleExplanation =
         (exercise.feedbackConfig.successMessage?.showExplanation ?? true) &&
         hasVisibleFeedbackContent(exercise.data.explanation);
@@ -92,6 +95,7 @@ const TableFillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
     } else {
       handleIncorrect();
       setIsProcessing(false);
+      if (testMode) onComplete?.(score);
     }
   };
 
@@ -213,7 +217,7 @@ const TableFillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
             </Button>
           )}
 
-          {hasSubmitted && isCorrect === false && (
+          {hasSubmitted && isCorrect === false && !testMode && (
             <Button onClick={handleReset} variant="outline" disabled={isProcessing} className="px-8">
               Try Again
             </Button>

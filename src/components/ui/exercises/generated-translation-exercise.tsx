@@ -23,9 +23,10 @@ import { normalizeCollection, buildLegacyPosConfigs } from '@/src/utils/exercise
 interface Props {
   exercise: GeneratedTranslationExercise;
   onComplete?: (score: number) => void;
+  testMode?: boolean;
 }
 
-const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
+const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onComplete, testMode = false }) => {
   const [userAnswer, setUserAnswer] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [correctAnswers, setCorrectAnswers] = useState(0);
@@ -118,7 +119,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
   } = useExerciseFeedback(exercise.feedbackConfig);
 
   useDelayedExerciseReset({
-    shouldReset: shouldResetExercise,
+    shouldReset: !testMode && shouldResetExercise,
     delayMs: exercise.itemProgressionDelay,
     onReset: () => {
       setUserAnswer('');
@@ -160,7 +161,17 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
       }
     } else {
       handleIncorrect();
-      setIsProcessing(false);
+      if (testMode) {
+        const finalScore = isLastItem ? Math.round((correctAnswers / items.length) * 100) : null;
+        autoAdvanceIfEnabled(() => {
+          setUserAnswer('');
+          reset();
+          setIsProcessing(false);
+          if (finalScore !== null) onComplete?.(finalScore);
+        }, false);
+      } else {
+        setIsProcessing(false);
+      }
     }
   };
 
@@ -255,7 +266,8 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
             hint={currentItem.hint}
             correctAnswer={currentItem.acceptedAnswers.join(' OR ')}
             showExplanation={showExplanation}
-            onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
+            onContinue={(isCorrect || testMode) && isAwaitingConfirmation ? confirmAdvance : undefined}
+            allowContinueOnIncorrect={testMode}
           />
         </CardContent>
       </Card>

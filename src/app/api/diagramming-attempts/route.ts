@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Timestamp } from 'firebase-admin/firestore';
 import { adminAuth, adminDb } from '@/src/services/firebase-admin';
-import { compareDiagramAnnotationSets, DiagramAnnotation } from '@/src/features/sentence-diagramming';
+import { compareDiagramAnnotationSets } from '@/src/features/sentence-diagramming/model';
+import type { DiagramAnnotation } from '@/src/features/sentence-diagramming/model';
 import type { Lesson } from '@/src/types/lesson';
 import type { SentenceDiagrammingExercise } from '@/src/types/exercises/sentence-diagramming';
 

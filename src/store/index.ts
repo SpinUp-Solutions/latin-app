@@ -12,6 +12,7 @@ import { vocabularyPoolApi } from './api/vocabularyPoolApi';
 import { vocabularyApi } from './api/vocabularyApi';
 import { advancedVocabularyApi } from './api/advancedVocabularyApi';
 import { vocabularyWordRequestsApi } from './api/vocabularyWordRequestsApi';
+import { testApi } from './api/testApi';
 
 export const store = configureStore({
   reducer: {
@@ -28,6 +29,7 @@ export const store = configureStore({
     [vocabularyApi.reducerPath]: vocabularyApi.reducer,
     [advancedVocabularyApi.reducerPath]: advancedVocabularyApi.reducer,
     [vocabularyWordRequestsApi.reducerPath]: vocabularyWordRequestsApi.reducer,
+    [testApi.reducerPath]: testApi.reducer,
   },
   middleware: getDefaultMiddleware =>
     getDefaultMiddleware({
@@ -37,7 +39,8 @@ export const store = configureStore({
       vocabularyPoolApi.middleware,
       vocabularyApi.middleware,
       advancedVocabularyApi.middleware,
-      vocabularyWordRequestsApi.middleware
+      vocabularyWordRequestsApi.middleware,
+      testApi.middleware
     ),
 });
 

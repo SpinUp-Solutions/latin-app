@@ -39,12 +39,18 @@ import { DiagramAttempt } from '@/src/features/sentence-diagramming';
 interface ContentRendererProps {
   content: ContentItem;
   onComplete?: (score: number) => void;
+  testMode?: boolean;
   pageIndex?: number;
   itemIndex?: number;
   onDiagrammingAttempt?: (attempt: DiagramAttempt) => void;
 }
 
-export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onComplete, onDiagrammingAttempt }) => {
+export const ContentRenderer: React.FC<ContentRendererProps> = ({
+  content,
+  onComplete,
+  testMode = false,
+  onDiagrammingAttempt,
+}) => {
   switch (content.type) {
     case 'text':
       const textContent = content as TextContent;
@@ -80,43 +86,74 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onCom
 
     case 'matching':
       const matchingExercise = content as MatchingExercise;
-      return <MatchingTable exercise={matchingExercise} onComplete={onComplete} />;
+      return <MatchingTable exercise={matchingExercise} onComplete={onComplete} testMode={testMode} />;
 
     case 'fill':
-      return <FillExercise exercise={content as FillExerciseType} onComplete={onComplete} />;
+      return <FillExercise exercise={content as FillExerciseType} onComplete={onComplete} testMode={testMode} />;
 
     case 'text-selection':
-      return <TextSelectionExercise exercise={content as TextSelectionExerciseType} onComplete={onComplete} />;
+      return (
+        <TextSelectionExercise
+          exercise={content as TextSelectionExerciseType}
+          onComplete={onComplete}
+          testMode={testMode}
+        />
+      );
 
     case 'fill-embolded-text':
-      return <FillEmboldedTextExercise exercise={content as FillEmboldedTextExerciseType} onComplete={onComplete} />;
+      return (
+        <FillEmboldedTextExercise
+          exercise={content as FillEmboldedTextExerciseType}
+          onComplete={onComplete}
+          testMode={testMode}
+        />
+      );
 
     case 'sentence-diagramming':
       return (
         <SentenceDiagrammingExercise
           exercise={content as SentenceDiagrammingExerciseType}
           onComplete={onComplete}
+          testMode={testMode}
           onAttempt={onDiagrammingAttempt}
         />
       );
 
     case 'multiple-choice':
-      return <MultipleChoiceExercise exercise={content as MultipleChoiceExerciseType} onComplete={onComplete} />;
+      return (
+        <MultipleChoiceExercise
+          exercise={content as MultipleChoiceExerciseType}
+          onComplete={onComplete}
+          testMode={testMode}
+        />
+      );
 
     case 'odd-one-out':
-      return <OddOneOutExercise exercise={content as OddOneOutExerciseType} onComplete={onComplete} />;
+      return (
+        <OddOneOutExercise exercise={content as OddOneOutExerciseType} onComplete={onComplete} testMode={testMode} />
+      );
 
     case 'table-fill':
-      return <TableFillExercise exercise={content as TableFillExerciseType} onComplete={onComplete} />;
+      return (
+        <TableFillExercise exercise={content as TableFillExerciseType} onComplete={onComplete} testMode={testMode} />
+      );
 
     case 'click-on-multiple-words':
       return (
-        <ClickOnMultipleWordsExercise exercise={content as ClickOnMultipleWordsExerciseType} onComplete={onComplete} />
+        <ClickOnMultipleWordsExercise
+          exercise={content as ClickOnMultipleWordsExerciseType}
+          onComplete={onComplete}
+          testMode={testMode}
+        />
       );
 
     case 'generated-translation':
       return (
-        <GeneratedTranslationExercise exercise={content as GeneratedTranslationExerciseType} onComplete={onComplete} />
+        <GeneratedTranslationExercise
+          exercise={content as GeneratedTranslationExerciseType}
+          onComplete={onComplete}
+          testMode={testMode}
+        />
       );
 
     case 'generated-form-identification':
@@ -124,6 +161,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onCom
         <GeneratedFormIdentificationExercise
           exercise={content as GeneratedFormIdentificationExerciseType}
           onComplete={onComplete}
+          testMode={testMode}
         />
       );
 

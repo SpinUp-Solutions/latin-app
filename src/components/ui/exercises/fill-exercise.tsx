@@ -15,9 +15,10 @@ import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 interface Props {
   exercise: FillExercise;
   onComplete?: (score: number) => void;
+  testMode?: boolean;
 }
 
-const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
+const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete, testMode = false }) => {
   const [userAnswer, setUserAnswer] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -43,7 +44,7 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
   } = useExerciseFeedback(exercise.feedbackConfig);
 
   useDelayedExerciseReset({
-    shouldReset: shouldResetExercise,
+    shouldReset: !testMode && shouldResetExercise,
     delayMs: exercise.itemProgressionDelay,
     onReset: () => {
       setUserAnswer('');
@@ -87,7 +88,17 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
       }
     } else {
       handleIncorrect();
-      setIsProcessing(false);
+      if (testMode) {
+        const finalScore = isLastItem ? Math.round((correctAnswers / exercise.data.items.length) * 100) : null;
+        autoAdvanceIfEnabled(() => {
+          setUserAnswer('');
+          reset();
+          setIsProcessing(false);
+          if (finalScore !== null) onComplete?.(finalScore);
+        }, false);
+      } else {
+        setIsProcessing(false);
+      }
     }
   };
 
@@ -145,7 +156,8 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
           correctAnswer={currentItem.answer}
           explanation={currentItem.explanation}
           showExplanation={showExplanation}
-          onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
+          onContinue={(isCorrect || testMode) && isAwaitingConfirmation ? confirmAdvance : undefined}
+          allowContinueOnIncorrect={testMode}
         />
       </div>
     </div>

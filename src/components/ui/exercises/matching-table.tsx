@@ -19,9 +19,10 @@ interface MatchingItem {
 interface MatchingTableProps {
   exercise: MatchingExercise;
   onComplete?: (score: number) => void;
+  testMode?: boolean;
 }
 
-export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComplete }) => {
+export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComplete, testMode = false }) => {
   const { leftColumn, rightColumn, answers: finalAnswer } = exercise.data;
   const totalRounds = exercise.data.requiredRepetitions || 1;
 
@@ -36,6 +37,8 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
 
   const [currentRound, setCurrentRound] = useState(1);
   const [roundScores, setRoundScores] = useState<number[]>([]);
+  const [testAttemptedLeftIds, setTestAttemptedLeftIds] = useState<Set<string>>(new Set());
+  const [testFirstAttemptCorrect, setTestFirstAttemptCorrect] = useState(0);
 
   const {
     isCorrect,
@@ -51,7 +54,7 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
   } = useExerciseFeedback(exercise.feedbackConfig);
 
   useDelayedExerciseReset({
-    shouldReset: shouldResetExercise,
+    shouldReset: !testMode && shouldResetExercise,
     delayMs: exercise.itemProgressionDelay,
     onReset: () => {
       setShuffledLeftColumn(leftColumn);
@@ -63,6 +66,8 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
       setShowIncorrectFlash(false);
       setCurrentRound(1);
       setRoundScores([]);
+      setTestAttemptedLeftIds(new Set());
+      setTestFirstAttemptCorrect(0);
       resetExercise();
     },
   });
@@ -78,6 +83,8 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
     setShowIncorrectFlash(false);
     setCurrentRound(1);
     setRoundScores([]);
+    setTestAttemptedLeftIds(new Set());
+    setTestFirstAttemptCorrect(0);
     reset();
   }, [leftColumn, rightColumn, finalAnswer, reset]);
 
@@ -107,8 +114,15 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
     // Auto-match if left item is already selected
     if (selectedLeft && matchingItem) {
       const validation = validateMatchingExercise(selectedLeft, matchingItem, exercise);
+      const isFirstTestAttempt = testMode && !testAttemptedLeftIds.has(selectedLeft.id);
+
+      if (isFirstTestAttempt) {
+        setTestAttemptedLeftIds(previous => new Set(previous).add(selectedLeft.id));
+      }
 
       if (validation.isCorrect) {
+        const nextTestFirstAttemptCorrect = testFirstAttemptCorrect + (isFirstTestAttempt ? 1 : 0);
+        if (isFirstTestAttempt) setTestFirstAttemptCorrect(nextTestFirstAttemptCorrect);
         const newMatches = { ...matches, [selectedLeft.id]: matchingItem.id };
         setMatches(newMatches);
 
@@ -125,7 +139,9 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
         if (isLastMatch) {
           const correctMatches = Object.keys(newMatches).length;
           const totalMatches = Object.keys(finalAnswer).length;
-          const roundScore = Math.round((correctMatches / totalMatches) * 100);
+          const roundScore = testMode
+            ? Math.round((nextTestFirstAttemptCorrect / totalMatches) * 100)
+            : Math.round((correctMatches / totalMatches) * 100);
 
           if (isLastRound) {
             const allScores = [...roundScores, roundScore];
@@ -140,6 +156,8 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
             setMatchedLeftIds(new Set());
             setShuffledLeftColumn(shuffleArray(leftColumn));
             setShuffledRightColumn(shuffleArray(rightColumn));
+            setTestAttemptedLeftIds(new Set());
+            setTestFirstAttemptCorrect(0);
             reset();
           }
         }

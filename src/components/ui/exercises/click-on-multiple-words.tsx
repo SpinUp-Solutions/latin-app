@@ -16,9 +16,10 @@ import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 interface Props {
   exercise: ClickOnMultipleWordsExercise;
   onComplete?: (score: number) => void;
+  testMode?: boolean;
 }
 
-const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete }) => {
+const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete, testMode = false }) => {
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -44,7 +45,7 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete }
   } = useExerciseFeedback(exercise.feedbackConfig);
 
   useDelayedExerciseReset({
-    shouldReset: shouldResetExercise,
+    shouldReset: !testMode && shouldResetExercise,
     delayMs: exercise.itemProgressionDelay,
     onReset: () => {
       setSelectedIndices(new Set());
@@ -95,6 +96,7 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete }
     } else {
       handleIncorrect();
       setIsProcessing(false);
+      if (testMode) onComplete?.(validation.score);
     }
   };
 
@@ -185,7 +187,7 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete }
             </Button>
           )}
 
-          {hasSubmitted && isCorrect === false && (
+          {hasSubmitted && isCorrect === false && !testMode && (
             <Button onClick={handleReset} variant="outline" disabled={isProcessing} className="px-8">
               Try Again
             </Button>

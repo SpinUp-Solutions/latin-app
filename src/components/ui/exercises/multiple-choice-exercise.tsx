@@ -16,9 +16,10 @@ import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 interface Props {
   exercise: MultipleChoiceExercise;
   onComplete?: (score: number) => void;
+  testMode?: boolean;
 }
 
-const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
+const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete, testMode = false }) => {
   const [selectedOptionIds, setSelectedOptionIds] = useState<string[]>([]);
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -41,7 +42,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
   } = useExerciseFeedback(exercise.feedbackConfig);
 
   useDelayedExerciseReset({
-    shouldReset: shouldResetExercise,
+    shouldReset: !testMode && shouldResetExercise,
     delayMs: exercise.itemProgressionDelay,
     onReset: () => {
       setSelectedOptionIds([]);
@@ -88,6 +89,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
     } else {
       handleIncorrect();
       setIsProcessing(false);
+      if (testMode) onComplete?.(0);
     }
   };
 
@@ -184,7 +186,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
         )}
 
         {/* Try Again Button */}
-        {hasSubmitted && isCorrect === false && (
+        {hasSubmitted && isCorrect === false && !testMode && (
           <div className="flex justify-center">
             <Button onClick={handleReset} variant="outline" disabled={isProcessing} className="px-8">
               Try Again

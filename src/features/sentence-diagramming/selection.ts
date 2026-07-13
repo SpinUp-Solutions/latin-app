@@ -1,5 +1,12 @@
 import { ANNOTATION_SPECS, AnnotationKind } from './annotation-spec';
-import { DiagramSpan, DiagramToken, getSpanText, snapSpanToSelectionMode } from './model';
+import {
+  createAnnotationId,
+  DiagramAnnotation,
+  DiagramSpan,
+  DiagramToken,
+  getSpanText,
+  snapSpanToSelectionMode,
+} from './model';
 
 export interface DiagramSelection {
   span: DiagramSpan;
@@ -152,4 +159,35 @@ export const describeSelectionForKind = (
   }
 
   return getSpanText(tokens, span);
+};
+
+export const getAnnotationsForSelection = (
+  selection: DiagramSelection | null,
+  annotations: DiagramAnnotation[],
+  tokens: DiagramToken[]
+) => {
+  if (!selection) {
+    return [];
+  }
+
+  return annotations.filter(annotation => {
+    const effectiveSpan = getSelectionSpanForKind(selection, annotation.kind, tokens);
+    return effectiveSpan ? annotation.id === createAnnotationId(annotation.kind, effectiveSpan) : false;
+  });
+};
+
+export const getActiveAnnotationKindsForSelection = (
+  selection: DiagramSelection | null,
+  annotations: DiagramAnnotation[],
+  availableTools: AnnotationKind[],
+  tokens: DiagramToken[]
+) => {
+  const selectedAnnotationIds = new Set(getAnnotationsForSelection(selection, annotations, tokens).map(item => item.id));
+
+  return new Set(
+    availableTools.filter(kind => {
+      const effectiveSpan = getSelectionSpanForKind(selection, kind, tokens);
+      return effectiveSpan ? selectedAnnotationIds.has(createAnnotationId(kind, effectiveSpan)) : false;
+    })
+  );
 };

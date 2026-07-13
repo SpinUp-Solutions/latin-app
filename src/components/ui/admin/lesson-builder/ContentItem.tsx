@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { ReactNode } from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Edit, Trash2, Type, Lightbulb, Table, Book, Library, Target, GripVertical, Copy } from 'lucide-react';
 import { RenderableContentItem } from '@/src/types/page';
@@ -13,6 +13,7 @@ interface ContentItemProps {
   onEdit: () => void;
   onRemove: () => void;
   isDraggable?: boolean;
+  meta?: ReactNode;
 }
 
 const getContentIcon = (type: string) => {
@@ -32,7 +33,7 @@ const getContentIcon = (type: string) => {
   }
 };
 
-export const ContentItem: React.FC<ContentItemProps> = ({ item, onEdit, onRemove, isDraggable = false }) => {
+export const ContentItem: React.FC<ContentItemProps> = ({ item, onEdit, onRemove, isDraggable = false, meta }) => {
   const Icon = getContentIcon(item.type);
   const { copyItem } = useClipboard();
 
@@ -74,7 +75,8 @@ export const ContentItem: React.FC<ContentItemProps> = ({ item, onEdit, onRemove
         </span>
         <span className="text-xs text-gray-500">({item.type})</span>
       </div>
-      <div className="flex gap-0.5">
+      <div className="flex items-center gap-0.5">
+        {meta}
         <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleCopy} title="Copy content">
           <Copy className="h-3 w-3" />
         </Button>

@@ -5,13 +5,17 @@ import { SentenceDiagrammingExercise as SentenceDiagrammingExerciseType } from '
 interface SentenceDiagrammingExerciseProps {
   exercise: SentenceDiagrammingExerciseType;
   onComplete?: (score: number) => void;
+  testMode?: boolean;
   onAttempt?: (attempt: DiagramAttempt) => void;
 }
 
 export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExerciseProps> = ({
   exercise,
   onComplete,
+  testMode = false,
   onAttempt,
 }) => {
-  return <SentenceDiagramStudent exercise={exercise} onComplete={onComplete} onAttempt={onAttempt} />;
+  return (
+    <SentenceDiagramStudent exercise={exercise} onComplete={onComplete} testMode={testMode} onAttempt={onAttempt} />
+  );
 };
