@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { BookOpen, Eye, FileCheck2, Sparkles } from 'lucide-react';
+import { BookOpen, FileCheck2 } from 'lucide-react';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
 import { Input } from '@/src/components/ui/input';
@@ -209,21 +209,12 @@ export function TestBuilder({ initialTest, onSave, saving = false }: TestBuilder
         </div>
 
         <div className="min-w-0 overflow-x-hidden overflow-y-auto border-t border-border bg-[#fbfaf7] lg:w-1/2 lg:flex-none lg:border-l lg:border-t-0">
-          <div className="sticky top-0 z-10 border-b border-amber-900/10 bg-white/95 px-4 py-3 shadow-[0_1px_0_rgba(120,53,15,0.04)] backdrop-blur md:px-5">
-            <div className="flex min-w-0 items-center gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-roman-red text-white shadow-sm shadow-red-950/20">
-                <Eye className="h-[18px] w-[18px]" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <h2 className="truncate font-serif text-lg font-semibold leading-tight text-gray-900">Live preview</h2>
-                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-800 ring-1 ring-inset ring-amber-700/15">
-                    <Sparkles className="h-2.5 w-2.5" /> Interactive
-                  </span>
-                </div>
-                <p className="truncate text-xs text-roman-stone">Student view · changes update as you edit</p>
-              </div>
-            </div>
+          <div className="sticky top-0 bg-white border-b border-border p-4 z-10">
+            <h2 className="text-xl font-serif text-gray-800 flex items-center gap-2">
+              <FileCheck2 className="h-5 w-5" />
+              Live Preview
+            </h2>
+            <p className="text-sm text-roman-stone">See how your test will look to students</p>
           </div>
           <div className="mx-auto w-full max-w-3xl p-3 pb-8 sm:p-4 md:p-5">
             {items.length > 0 ? (
