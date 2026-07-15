@@ -53,7 +53,14 @@ export const LessonBuilder: React.FC<LessonBuilderProps> = ({ initialLesson, onS
     onSave(currentLesson);
   };
 
-  const handleUpdateLessonInfo = (updates: Partial<Pick<Lesson, 'id' | 'title' | 'description'>>) => {
+  const handleUpdateLessonInfo = (
+    updates: Partial<
+      Pick<
+        Lesson,
+        'id' | 'title' | 'description' | 'type' | 'vocabulary_pool' | 'practiceCategoryIds' | 'practiceCategories'
+      >
+    >
+  ) => {
     dispatch(updateLessonInfo(updates));
   };
 
@@ -127,7 +134,12 @@ export const LessonBuilder: React.FC<LessonBuilderProps> = ({ initialLesson, onS
           </div>
 
           {/* Lesson Info */}
-          <LessonInfoForm lesson={currentLesson} onUpdateInfo={handleUpdateLessonInfo} isNewLesson={isNewLesson} />
+          <LessonInfoForm
+            lesson={currentLesson}
+            onUpdateInfo={handleUpdateLessonInfo}
+            isNewLesson={isNewLesson}
+            disabled={isSaving}
+          />
 
           {/* Pages */}
           <PageSection

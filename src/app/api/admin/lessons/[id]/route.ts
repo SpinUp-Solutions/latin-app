@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { practiceCategoryRouteErrorResponse } from '@/src/lib/practice-categories/api';
+import { practiceCategoryService } from '@/src/lib/practice-categories/service';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -21,15 +23,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Lesson not found' }, { status: 404 });
     }
 
+    const assignments = await practiceCategoryService.getLessonCategories(id);
     const lesson = {
       id: lessonDoc.id,
       ...lessonDoc.data(),
+      practiceCategoryIds: assignments.practiceCategoryIds,
+      practiceCategories: assignments.practiceCategories,
     };
 
     return NextResponse.json({ lesson });
   } catch (error) {
-    console.error('Error fetching lesson:', error);
-    return NextResponse.json({ error: 'Failed to fetch lesson' }, { status: 500 });
+    return practiceCategoryRouteErrorResponse(error, 'fetch lesson');
   }
 }
 
@@ -46,23 +50,16 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       return NextResponse.json({ error: 'Lesson ID is required' }, { status: 400 });
     }
 
-    // Check if lesson exists
-    const lessonDoc = await adminDb.collection('lessons').doc(id).get();
-    if (!lessonDoc.exists) {
-      return NextResponse.json({ error: 'Lesson not found' }, { status: 404 });
-    }
-
-    // Delete the lesson
-    await adminDb.collection('lessons').doc(id).delete();
+    const deletedMembershipCount = await practiceCategoryService.deleteLessonWithMemberships(id, user.uid);
 
     console.log(`Lesson ${id} deleted successfully by user ${user.uid}`);
 
     return NextResponse.json({
       success: true,
+      deletedMembershipCount,
       message: 'Lesson deleted successfully',
     });
   } catch (error) {
-    console.error('Error deleting lesson:', error);
-    return NextResponse.json({ error: 'Failed to delete lesson' }, { status: 500 });
+    return practiceCategoryRouteErrorResponse(error, 'delete lesson');
   }
 }

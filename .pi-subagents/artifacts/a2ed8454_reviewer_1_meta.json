@@ -1,0 +1,37 @@
+{
+  "runId": "a2ed8454",
+  "agent": "reviewer",
+  "task": "[Read from: /Users/harry/Documents/dev/chris/latin-app/plan.md, /Users/harry/Documents/dev/chris/latin-app/progress.md]\n\nAdversarial code review. Angle: AUTH, SECURITY BOUNDARIES, DESTRUCTIVE ADMIN OPERATIONS, INFRA.\n\nInspect the repository directly (run `git diff`, read files). Do NOT rely on any conversation summary. Current uncommitted diff on branch `misc` plus new untracked files is the review target.\n\nFocus files:\n- src/lib/verifyRequestAuth.ts (new)\n- src/app/api/admin/progress/migrate-stable-ids/route.ts (new — admin backfill migration)\n- src/app/api/admin/lessons/route.ts (added progression validation on PUT)\n- src/app/api/admin/lessons/update-publish-status/route.ts (added progression validation)\n- firestore.indexes.json (new category indexes added)\n- firestore.rules (read it to check for new-collection rules)\n- docs/practice-lesson-categorization.md (the plan)\n\nInvestigate specifically:\n1. verifyRequestAuth now returns `null` on bad/missing token instead of throwing. Audit EVERY caller (progress GET/POST, complete route, any others). Does any caller forget the `!currentUser` null check and proceed to use currentUser.uid (crash/500)? Compare to the old verifyAuth that threw — are there other routes still using a throwing pattern inconsistently? Is returning null + generic 401 leaking whether a token was present vs invalid (timing/enum)?\n2. Migration route (migrate-stable-ids): This is a destructive, full-collection admin operation. Check: dryRun default (`body.dryRun !== false` → defaults true only if key absent; if explicitly false it writes). confirmWrite gating. BATCH_SIZE logic: `pendingWrites >= BATCH_SIZE * 2` with `pendingWrites += 2` per doc — is the batching correct? Can the final `pendingWrites > 0` flush + the in-loop flush double-commit or miss a flush? Does it scan ALL userProgress AND ALL lessons on every call (cost/DoS)? Is the backup write to userProgressMigrationV2Backups unconditional and unbounded? Re-run safety/idempotency: a second run skips progressSchemaVersion===2 docs — but what about the backup collection growing unbounded? Is there any auth check that the caller is actually an admin (verifyAdminAccess) and is AdminAccessError handled at the right status code?\n3. update-publish-status/route.ts: the new validation `if (isLive) { ... return 400 }` is INSIDE the `for (lessonId of lessonIds)` loop. Does returning mid-loop leave earlier lessons in the batch already published and later ones not (partial/inconsistent publish state)? Is this atomic? Same question for the admin PUT route validation.\n4. firestore.indexes.json: three new composite indexes for `practiceCategories` and `practiceCategoryMemberships` were added, but per docs/practice-lesson-categorization.md the feature is ONLY a plan (Phase 0, no schema/code/rules implemented yet). Are these premature indexes? Does firestore.rules actually deny direct client access to these collections as the plan requires, or are they currently exposed/permissive? Flag the mismatch.\n5. Does firestore.rules need new rules for the two new collections (plan says they must be server-only / denied to clients)? Read the current rules and report whether the new collections are protected or open.\n6. Any PII / data exposure in the migration summary response (returns counts only — confirm no user data leaked)?\n\nReturn concise, evidence-backed findings with file:line references and suggested fixes. Prioritize by severity. This is review feedback, NOT a context summary. Do NOT edit any files.\n\n---\n**Output:**\nWrite your findings to exactly this path: /Users/harry/Documents/dev/chris/latin-app/.pi-subagents/artifacts/outputs/a2ed8454/review-security-infra.md\nThis path is authoritative for this run.\nIgnore any other output filename or output path mentioned elsewhere, including output destinations in the base agent prompt, system prompt, or task instructions.",
+  "exitCode": 0,
+  "usage": {
+    "input": 32701,
+    "output": 9025,
+    "cacheRead": 220928,
+    "cacheWrite": 0,
+    "cost": 0.14293267999999998,
+    "turns": 13
+  },
+  "model": "opencode-go/glm-5.2:high",
+  "attemptedModels": [
+    "opencode-go/glm-5.2:high"
+  ],
+  "modelAttempts": [
+    {
+      "model": "opencode-go/glm-5.2:high",
+      "success": true,
+      "exitCode": 0,
+      "usage": {
+        "input": 32701,
+        "output": 9025,
+        "cacheRead": 220928,
+        "cacheWrite": 0,
+        "cost": 0.14293267999999998,
+        "turns": 13
+      }
+    }
+  ],
+  "durationMs": 197981,
+  "toolCount": 25,
+  "transcriptPath": "/Users/harry/Documents/dev/chris/latin-app/.pi-subagents/artifacts/a2ed8454_reviewer_1_transcript.jsonl",
+  "timestamp": 1783990917511
+}

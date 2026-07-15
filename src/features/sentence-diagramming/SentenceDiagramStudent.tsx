@@ -336,7 +336,11 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
       <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
         <div className="px-5 py-3 border-b border-stone-100">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-base font-semibold text-stone-900">{exercise.title}</h3>
+            {exercise.title ? (
+              <div className="min-w-0 flex-1 text-base font-semibold text-stone-900" role="heading" aria-level={3}>
+                <SimpleRichDisplay content={exercise.title} />
+              </div>
+            ) : null}
             <Badge variant="outline" className="border-stone-200 text-[10px] text-stone-400">
               {exercise.data.difficulty}
             </Badge>

@@ -1,0 +1,37 @@
+{
+  "runId": "a2ed8454",
+  "agent": "reviewer",
+  "task": "[Read from: /Users/harry/Documents/dev/chris/latin-app/plan.md, /Users/harry/Documents/dev/chris/latin-app/progress.md]\n\nAdversarial code review. Angle: PROGRESS SCHEMA CORRECTNESS & REGRESSIONS.\n\nInspect the repository directly (run `git diff`, read files). Do NOT rely on any conversation summary. The current uncommitted diff on branch `misc` is the review target, plus these new untracked files.\n\nFocus files:\n- src/utils/lessonProgress.ts (new)\n- src/utils/progressMigration.ts (new)\n- src/app/api/progress/[userId]/[lessonId]/route.ts (rewritten)\n- src/app/api/progress/[userId]/[lessonId]/complete/route.ts (new)\n- src/app/api/lessons/route.ts (rewritten status computation)\n- src/types/lesson.d.ts (schema changes)\n- src/utils/lessonUtils.ts (legacy helpers now possibly dead)\n\nInvestigate specifically:\n1. Transaction atomicity in the POST route: read-then-write inside runTransaction for complete-exercise, visit-page, legacy-finish. Any read-after-write issues? Any path that writes outside the transaction? The `legacy-finish` branch returns {missingExercises} WITHOUT writing when incomplete — is that inside/outside the transaction correctly?\n2. furthestPageIndex monotonicity and clamping (getFurthestPageIndex). Does visit-page correctly never regress? Does the merge with `...existing` then overwriting currentPageIndex=furthestPageIndex ever lose data?\n3. Completion derivation: getRequiredExercises + getMissingExercises subset logic. Does an empty requiredExercises list (lesson with no exercises) mean it can NEVER auto-complete via complete-exercise (requiredExercises.length > 0 guard)? Is that intended? How does such a lesson complete — only via the /complete route?\n4. The discriminated-union `progressRequestSchema` and the manual `action` inference fallback. Can a malformed legacy payload bypass validation? Is `score: z.number().finite()` enough (NaN/Infinity)? Is the `.refine` on visit-page correct?\n5. resolveExerciseId legacy positional-ID parsing (`page0-item1`). Off-by-one? What if page items were reordered since v1 — does migration silently remap to the WRONG exercise?\n6. Backward compat: old v1 docs with only `currentPageIndex` (no furthestPageIndex, no progressSchemaVersion). Does isStoredLessonComplete / getFurthestPageIndex / calculateStoredProgress handle them? Does the `legacy-finish` hasLegacyCompletion path (`currentPageIndex >= totalPages`) double-count or conflict with status==='completed'?\n7. /lessons GET regression: processNormalLessons sequencing (previous lesson must be complete to unlock next) — was this preserved? processPracticeLessons now uses getStatusFromProgress for vocab/diagramming/listening which previously were 'completed'?'completed':'available' with no gating. Did this change student-visible gating/sequencing for practice lessons? Is `in-progress` now shown where 'available' was before?\n8. Dead/duplicate code: are calculateProgressFromPageIndex / isLessonComplete / getExerciseCountForPage / getCompletedExercisesForPage / parsePageIndex in lessonUtils still used anywhere, or now dead exports?\n9. The /complete route's finalPage check: `lesson.pages.at(-1)` — what if the last page has no id? What if pages is empty?\n\nReturn concise, evidence-backed findings with file:line references and suggested fixes. Prioritize by severity. This is review feedback, NOT a context summary. Do NOT edit any files.\n\n---\n**Output:**\nWrite your findings to exactly this path: /Users/harry/Documents/dev/chris/latin-app/.pi-subagents/artifacts/outputs/a2ed8454/review-progress-core.md\nThis path is authoritative for this run.\nIgnore any other output filename or output path mentioned elsewhere, including output destinations in the base agent prompt, system prompt, or task instructions.",
+  "exitCode": 0,
+  "usage": {
+    "input": 84947,
+    "output": 7949,
+    "cacheRead": 302336,
+    "cacheWrite": 0,
+    "cost": 0.23250876,
+    "turns": 20
+  },
+  "model": "opencode-go/glm-5.2:high",
+  "attemptedModels": [
+    "opencode-go/glm-5.2:high"
+  ],
+  "modelAttempts": [
+    {
+      "model": "opencode-go/glm-5.2:high",
+      "success": true,
+      "exitCode": 0,
+      "usage": {
+        "input": 84947,
+        "output": 7949,
+        "cacheRead": 302336,
+        "cacheWrite": 0,
+        "cost": 0.23250876,
+        "turns": 20
+      }
+    }
+  ],
+  "durationMs": 254010,
+  "toolCount": 34,
+  "transcriptPath": "/Users/harry/Documents/dev/chris/latin-app/.pi-subagents/artifacts/a2ed8454_reviewer_0_transcript.jsonl",
+  "timestamp": 1783990973534
+}

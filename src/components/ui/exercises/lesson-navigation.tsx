@@ -14,10 +14,12 @@ interface LessonNavigationProps {
   placement?: 'fixed' | 'contained';
   onPrevious: () => void;
   onNext: () => void;
+  onFinish: () => void;
   onGoToPage: (index: number) => void;
   onTogglePlay: () => void;
   isPlaying: boolean;
   hasAudio: boolean;
+  isFinishing?: boolean;
 }
 
 export const LessonNavigation: React.FC<LessonNavigationProps> = ({
@@ -27,10 +29,12 @@ export const LessonNavigation: React.FC<LessonNavigationProps> = ({
   placement = 'fixed',
   onPrevious,
   onNext,
+  onFinish,
   onGoToPage,
   onTogglePlay,
   isPlaying,
   hasAudio,
+  isFinishing = false,
 }) => {
   const [jumpOpen, setJumpOpen] = useState(false);
 
@@ -73,62 +77,71 @@ export const LessonNavigation: React.FC<LessonNavigationProps> = ({
             <span className="hidden sm:inline">Prev</span>
           </Button>
 
-        <div className="flex items-center gap-2">
-          {hasAudio && (
-            <Button variant="outline" size="icon" onClick={onTogglePlay} className="rounded-full">
-              {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-            </Button>
-          )}
-
-          <Popover open={jumpOpen} onOpenChange={setJumpOpen}>
-            <PopoverTrigger asChild>
-              <Button variant="ghost" className="gap-2 rounded-full px-3 text-roman-stone hover:text-foreground">
-                <LayoutGrid className="h-4 w-4" />
-                <span className="font-medium tabular-nums">
-                  Page {currentPageIndex + 1} / {totalPages}
-                </span>
+          <div className="flex items-center gap-2">
+            {hasAudio && (
+              <Button variant="outline" size="icon" onClick={onTogglePlay} className="rounded-full">
+                {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
               </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              side="top"
-              align="center"
-              sideOffset={12}
-              className="w-72 border-roman-red/15 bg-white/95 p-3 text-foreground shadow-xl ring-1 ring-black/5 backdrop-blur supports-[backdrop-filter]:bg-white/90">
-              <p className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-roman-stone">Jump to page</p>
-              <div className="grid max-h-64 grid-cols-5 gap-1.5 overflow-y-auto pr-1">
-                {Array.from({ length: totalPages }).map((_, index) => {
-                  const isCurrent = index === currentPageIndex;
-                  const rawTitle = pageTitles[index];
-                  const title = rawTitle ? stripHtmlTags(rawTitle) : '';
-                  return (
-                    <button
-                      key={index}
-                      type="button"
-                      onClick={() => handleSelectPage(index)}
-                      title={title ? `Page ${index + 1}: ${title}` : `Page ${index + 1}`}
-                      className={cn(
-                        'relative flex h-10 items-center justify-center rounded-md border text-sm font-medium tabular-nums transition-colors',
-                        isCurrent
-                          ? 'border-roman-red bg-roman-red text-white shadow-sm'
-                          : 'border-roman-red/15 bg-white text-roman-stone hover:border-roman-red/40 hover:bg-roman-red/5 hover:text-foreground'
-                      )}>
-                      {index + 1}
-                      {isCurrent && <Check className="absolute right-1 top-1 h-3 w-3" />}
-                    </button>
-                  );
-                })}
-              </div>
-            </PopoverContent>
-          </Popover>
-        </div>
+            )}
+
+            <Popover open={jumpOpen} onOpenChange={setJumpOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" className="gap-2 rounded-full px-3 text-roman-stone hover:text-foreground">
+                  <LayoutGrid className="h-4 w-4" />
+                  <span className="font-medium tabular-nums">
+                    Page {currentPageIndex + 1} / {totalPages}
+                  </span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                side="top"
+                align="center"
+                sideOffset={12}
+                className="w-72 border-roman-red/15 bg-white/95 p-3 text-foreground shadow-xl ring-1 ring-black/5 backdrop-blur supports-[backdrop-filter]:bg-white/90">
+                <p className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-roman-stone">Jump to page</p>
+                <div className="grid max-h-64 grid-cols-5 gap-1.5 overflow-y-auto pr-1">
+                  {Array.from({ length: totalPages }).map((_, index) => {
+                    const isCurrent = index === currentPageIndex;
+                    const rawTitle = pageTitles[index];
+                    const title = rawTitle ? stripHtmlTags(rawTitle) : '';
+                    return (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={() => handleSelectPage(index)}
+                        title={title ? `Page ${index + 1}: ${title}` : `Page ${index + 1}`}
+                        className={cn(
+                          'relative flex h-10 items-center justify-center rounded-md border text-sm font-medium tabular-nums transition-colors',
+                          isCurrent
+                            ? 'border-roman-red bg-roman-red text-white shadow-sm'
+                            : 'border-roman-red/15 bg-white text-roman-stone hover:border-roman-red/40 hover:bg-roman-red/5 hover:text-foreground'
+                        )}>
+                        {index + 1}
+                        {isCurrent && <Check className="absolute right-1 top-1 h-3 w-3" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
 
           <Button
             variant="outline"
-            onClick={onNext}
-            disabled={!canGoNext}
+            onClick={canGoNext ? onNext : onFinish}
+            disabled={isFinishing}
             className="rounded-full gap-1 px-3 sm:px-4">
-            <span className="hidden sm:inline">Next</span>
-            <ChevronRight className="h-4 w-4" />
+            {canGoNext ? (
+              <>
+                <span className="hidden sm:inline">Next</span>
+                <ChevronRight className="h-4 w-4" />
+              </>
+            ) : (
+              <>
+                <span>{isFinishing ? 'Finishing…' : 'Finish Lesson'}</span>
+                <Check className="h-4 w-4" />
+              </>
+            )}
           </Button>
         </div>
       </div>

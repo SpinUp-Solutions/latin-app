@@ -4,8 +4,20 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/src/components/ui/tabs';
-import { BookOpen, Edit, Trash2, Calendar, Eye, FileText, Clock, AlertTriangle, RotateCcw, Search, X } from 'lucide-react';
+import { Tabs, TabsContent } from '@/src/components/ui/tabs';
+import {
+  BookOpen,
+  Edit,
+  Trash2,
+  Calendar,
+  Eye,
+  FileText,
+  Clock,
+  AlertTriangle,
+  RotateCcw,
+  Search,
+  X,
+} from 'lucide-react';
 import { LessonSummary } from '@/src/types/lesson';
 import { toast } from 'sonner';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
@@ -23,6 +35,18 @@ import { isExerciseType } from '@/src/utils/lessonUtils';
 import { Input } from '@/src/components/ui/input';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { useDebounce } from '@/src/hooks/useDebounce';
+import { PracticeCategoryChips } from './practice-categories/PracticeCategoryChips';
+import { useGetPracticeCategoriesQuery } from '@/src/store/api/practiceCategoryApi';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
+import {
+  isPracticeLessonType,
+  lessonMatchesPracticeCategory,
+  lessonMatchesTextSearch,
+  type PracticeCategoryFilter,
+} from '@/src/utils/practiceCategoryLessons';
+import { LessonTypeTabs } from './LessonTypeTabs';
+
+type LessonTab = LessonSummary['type'];
 
 interface LessonManagerProps {
   onEditLesson: (lesson: LessonSummary) => void;
@@ -48,15 +72,24 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
 
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearchQuery = useDebounce(searchQuery, 200);
+  const [activeTab, setActiveTab] = useState<LessonTab>('normal');
+  const [categoryFilter, setCategoryFilter] = useState<PracticeCategoryFilter>('all');
+  const practiceTab = isPracticeLessonType(activeTab);
+  const {
+    data: activeCategories = [],
+    isLoading: loadingCategories,
+    isFetching: fetchingCategories,
+    isError: categoriesError,
+    isSuccess: categoriesLoaded,
+    refetch: refetchCategories,
+  } = useGetPracticeCategoriesQuery(
+    { lessonType: practiceTab ? activeTab : 'vocab', status: 'active' },
+    { skip: !practiceTab }
+  );
 
   const filteredLessons = useMemo(() => {
     if (!debouncedSearchQuery) return lessons;
-    const query = debouncedSearchQuery.toLowerCase();
-    return lessons.filter(
-      lesson =>
-        lesson.title.toLowerCase().includes(query) ||
-        (lesson.description && lesson.description.toLowerCase().includes(query))
-    );
+    return lessons.filter(lesson => lessonMatchesTextSearch(lesson, debouncedSearchQuery));
   }, [lessons, debouncedSearchQuery]);
 
   const filteredDrafts = useMemo(() => {
@@ -82,9 +115,17 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
   }, [recoveryItems, debouncedSearchQuery]);
 
   const normalLessons = filteredLessons.filter(l => l.type === 'normal');
-  const vocabLessons = filteredLessons.filter(l => l.type === 'vocab');
-  const diagrammingLessons = filteredLessons.filter(l => l.type === 'sentence-diagramming');
-  const listeningLessons = filteredLessons.filter(l => l.type === 'listening');
+  const vocabLessons = filteredLessons.filter(
+    l => l.type === 'vocab' && (activeTab !== 'vocab' || lessonMatchesPracticeCategory(l, categoryFilter))
+  );
+  const diagrammingLessons = filteredLessons.filter(
+    l =>
+      l.type === 'sentence-diagramming' &&
+      (activeTab !== 'sentence-diagramming' || lessonMatchesPracticeCategory(l, categoryFilter))
+  );
+  const listeningLessons = filteredLessons.filter(
+    l => l.type === 'listening' && (activeTab !== 'listening' || lessonMatchesPracticeCategory(l, categoryFilter))
+  );
 
   useEffect(() => {
     dispatch(loadDrafts());
@@ -101,6 +142,17 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
       toast.error(errorMessage);
     }
   }, [error]);
+
+  useEffect(() => {
+    if (
+      categoriesLoaded &&
+      categoryFilter !== 'all' &&
+      categoryFilter !== 'uncategorized' &&
+      !activeCategories.some(category => category.id === categoryFilter)
+    ) {
+      setCategoryFilter('all');
+    }
+  }, [activeCategories, categoriesLoaded, categoryFilter]);
 
   const handleDeleteLesson = (lessonId: string, lessonTitle: string) => {
     setDialogState({
@@ -199,6 +251,14 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
                 <SimpleRichDisplay content={lesson.description || 'No description provided'} />
               </div>
 
+              {lesson.type !== 'normal' && (
+                <PracticeCategoryChips
+                  categories={lesson.practiceCategories}
+                  maxVisible={3}
+                  emptyLabel="Uncategorized"
+                />
+              )}
+
               <div className="text-xs text-gray-500 space-y-1">
                 <div className="flex items-center gap-1">
                   <Calendar className="h-3 w-3" />
@@ -233,6 +293,45 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
             </CardContent>
           </Card>
         ))}
+      </div>
+    );
+  };
+
+  const renderCategoryFilter = () => {
+    if (!practiceTab) return null;
+
+    return (
+      <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border bg-white p-3">
+        <label htmlFor="lesson-category-filter" className="text-sm font-medium text-gray-700">
+          Category
+        </label>
+        <Select value={categoryFilter} onValueChange={setCategoryFilter} disabled={loadingCategories}>
+          <SelectTrigger id="lesson-category-filter" className="h-9 w-full sm:w-72" aria-label="Filter by category">
+            <SelectValue placeholder={loadingCategories ? 'Loading categories…' : 'All categories'} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All categories</SelectItem>
+            {activeCategories.map(category => (
+              <SelectItem key={category.id} value={category.id}>
+                {category.name}
+              </SelectItem>
+            ))}
+            <SelectItem value="uncategorized">Uncategorized</SelectItem>
+          </SelectContent>
+        </Select>
+        {fetchingCategories && !loadingCategories && (
+          <span className="text-xs text-gray-500" aria-live="polite">
+            Refreshing categories…
+          </span>
+        )}
+        {categoriesError && (
+          <div className="flex items-center gap-2 text-xs text-red-700">
+            <span>Categories could not be loaded.</span>
+            <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => void refetchCategories()}>
+              Retry
+            </Button>
+          </div>
+        )}
       </div>
     );
   };
@@ -430,7 +529,9 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
       )}
 
       <section>
-        <h2 className="text-xl font-serif text-gray-800 border-b pb-2 mb-4">Saved Lessons ({filteredLessons.length})</h2>
+        <h2 className="text-xl font-serif text-gray-800 border-b pb-2 mb-4">
+          Saved Lessons ({filteredLessons.length})
+        </h2>
         {lessons.length === 0 && Object.keys(drafts).length === 0 ? (
           <Card>
             <CardContent className="p-12 text-center">
@@ -459,17 +560,36 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
             )}
           </div>
         ) : (
-          <Tabs defaultValue="normal" className="w-full">
-            <TabsList>
-              <TabsTrigger value="normal">Normal Lessons ({normalLessons.length})</TabsTrigger>
-              <TabsTrigger value="vocab">Vocab Lessons ({vocabLessons.length})</TabsTrigger>
-              <TabsTrigger value="diagramming">Diagramming Lessons ({diagrammingLessons.length})</TabsTrigger>
-              <TabsTrigger value="listening">Listening Lessons ({listeningLessons.length})</TabsTrigger>
-            </TabsList>
-            <TabsContent value="normal">{renderLessonGrid(normalLessons)}</TabsContent>
-            <TabsContent value="vocab">{renderLessonGrid(vocabLessons)}</TabsContent>
-            <TabsContent value="diagramming">{renderLessonGrid(diagrammingLessons)}</TabsContent>
-            <TabsContent value="listening">{renderLessonGrid(listeningLessons)}</TabsContent>
+          <Tabs
+            value={activeTab}
+            onValueChange={value => {
+              setActiveTab(value as LessonTab);
+              if (categoryFilter !== 'all' && categoryFilter !== 'uncategorized') {
+                setCategoryFilter('all');
+              }
+            }}
+            className="w-full">
+            <LessonTypeTabs
+              counts={{
+                normal: normalLessons.length,
+                vocab: vocabLessons.length,
+                'sentence-diagramming': diagrammingLessons.length,
+                listening: listeningLessons.length,
+              }}
+            />
+            <TabsContent value="normal" className="mt-5">{renderLessonGrid(normalLessons)}</TabsContent>
+            <TabsContent value="vocab" className="mt-5">
+              {renderCategoryFilter()}
+              {renderLessonGrid(vocabLessons)}
+            </TabsContent>
+            <TabsContent value="sentence-diagramming" className="mt-5">
+              {renderCategoryFilter()}
+              {renderLessonGrid(diagrammingLessons)}
+            </TabsContent>
+            <TabsContent value="listening" className="mt-5">
+              {renderCategoryFilter()}
+              {renderLessonGrid(listeningLessons)}
+            </TabsContent>
           </Tabs>
         )}
       </section>

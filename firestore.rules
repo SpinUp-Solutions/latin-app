@@ -5,8 +5,26 @@ service cloud.firestore {
 
     // Audit records are written and read exclusively through authenticated API
     // routes. Keep student answers and expected answers out of direct client access.
+    match /practiceCategories/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /practiceCategoryMemberships/{document=**} {
+      allow read, write: if false;
+    }
+
+    // Lesson mutations run through server routes so category reconciliation,
+    // membership cleanup, and publishing invariants cannot be bypassed.
+    match /lessons/{document=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     match /{collection}/{document=**} {
-      allow read, write: if collection != 'diagramming_attempts';
+      allow read, write: if collection != 'diagramming_attempts'
+        && collection != 'lessons'
+        && collection != 'practiceCategories'
+        && collection != 'practiceCategoryMemberships';
     }
   }
 }

@@ -3,7 +3,20 @@
 import React, { useState } from 'react';
 import { Button } from '@/src/components/ui/button';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
-import { ArrowLeft, Shield, Plus, BookOpen, Globe, Filter, Clock, Database, Loader2, ClipboardList, FileCheck2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  Shield,
+  Plus,
+  BookOpen,
+  Globe,
+  Filter,
+  Clock,
+  Database,
+  Loader2,
+  ClipboardList,
+  FileCheck2,
+  Tags,
+} from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
@@ -117,6 +130,12 @@ function AdminPage() {
                   <Link href="/admin/lessons/live">
                     <Globe className="h-4 w-4 mr-2" />
                     Manage Live Lessons
+                  </Link>
+                </Button>
+                <Button asChild className="w-full justify-start" variant="outline">
+                  <Link href="/admin/practice-categories?lessonType=vocab&status=active">
+                    <Tags className="h-4 w-4 mr-2" />
+                    Manage Practice Categories
                   </Link>
                 </Button>
               </div>

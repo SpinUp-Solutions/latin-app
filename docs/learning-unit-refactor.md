@@ -690,6 +690,7 @@ There is no POC data migration. The `tests` collection is deleted during cleanup
 - Existing lesson exercises do not need `maxPoints`; the field is optional in the shared exercise type and required only during test-version validation.
 - Existing vocabulary lessons retain `type: 'vocab'` and their current dashboard, player, and progress behavior.
 - Normal tests use the same `isLive` and `liveOrder` fields and can therefore be sorted together with lessons.
+- Practice lesson categories remain in the independent `practiceCategories` and `practiceCategoryMemberships` collections. Memberships continue to reference `lessonId`, category fields are not added to `LearningUnitBase` or `TestUnit`, and every category mutation must require normalized `kind === 'lesson'` plus an eligible non-normal lesson `type`.
 - A `kind: 'lesson'` backfill for existing lesson documents is optional; the read-time normalizer makes it safe to run at any point or not at all.
 
 ## Implementation plan
@@ -728,6 +729,7 @@ There is no POC data migration. The `tests` collection is deleted during cleanup
 - Add Next.js learning-unit and test-version API routes.
 - Optionally backfill existing lessons with `kind: 'lesson'`; the normalizer covers unbackfilled documents either way.
 - Update the admin lesson list APIs and `LessonManager` to filter on `kind` so `TestUnit` documents in the shared `lessons` collection never appear in Lesson Management.
+- Preserve practice-category administration by returning only lesson summaries to its APIs; never migrate `PracticeCategoryMembership.lessonId` to a generic learning-unit reference or make tests category-eligible.
 - Save newly created containers and their first valid version atomically.
 - Lock down Firestore security rules and add the composite indexes required by the new collections (see Storage direction).
 - Retain compatibility routes and redirects during rollout.

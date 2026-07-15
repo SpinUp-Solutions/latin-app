@@ -1,6 +1,26 @@
 import { auth } from '@/src/services/firebase';
 import { useAuth } from './useAuth';
 
+export class AdminApiError extends Error {
+  readonly status: number;
+  readonly payload: unknown;
+
+  constructor(message: string, status: number, payload: unknown) {
+    super(message);
+    this.name = 'AdminApiError';
+    this.status = status;
+    this.payload = payload;
+  }
+}
+
+const getErrorMessage = (payload: unknown) => {
+  if (payload && typeof payload === 'object' && 'error' in payload && typeof payload.error === 'string') {
+    return payload.error;
+  }
+
+  return 'Admin request failed';
+};
+
 export const useAdminApi = () => {
   const { user, isAdmin } = useAuth();
 
@@ -29,8 +49,8 @@ export const useAdminApi = () => {
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Admin request failed');
+      const payload: unknown = await response.json().catch(() => null);
+      throw new AdminApiError(getErrorMessage(payload), response.status, payload);
     }
 
     return response.json();

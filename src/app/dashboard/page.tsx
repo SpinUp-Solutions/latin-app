@@ -15,7 +15,6 @@ import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card
 import { CircularProgressButton } from '@/src/components/ui/CircularProgressButton';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import 'swiper/css';
-import 'swiper/css/navigation';
 import { SwiperNavigation } from '@/src/components/ui/core/swiper-nav';
 import { PracticeSection } from '@/src/components/ui/core/PracticeSection';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
@@ -134,6 +133,11 @@ export default function DashboardPage() {
       }));
   }, [studentLessons]);
 
+  const practiceLessons = useMemo(
+    () => [...vocabLessons, ...diagrammingLessons, ...listeningLessons],
+    [vocabLessons, diagrammingLessons, listeningLessons]
+  );
+
   const completionStats = useMemo(() => {
     if (normalLessons.length === 0) return { percentage: 0, completed: 0, total: 0 };
     const completed = normalLessons.filter(l => l.status === 'completed').length;
@@ -239,7 +243,7 @@ export default function DashboardPage() {
 
         <FeedbackBanner />
 
-        <main className="px-8 py-12">
+        <main className="px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-12">
           <div className="max-w-[1800px] mx-auto">
             {/* Available Lessons - Full Width Priority */}
             <section className="mb-16">
@@ -275,26 +279,32 @@ export default function DashboardPage() {
               ) : (
                 <div className="relative ">
                   <Swiper
-                    modules={[]}
                     spaceBetween={0}
                     slidesPerView={1}
                     initialSlide={getInitialSlideIndex}
+                    speed={250}
+                    threshold={5}
+                    grabCursor
                     breakpoints={{
                       1024: { slidesPerView: 2 },
                       1280: { slidesPerView: 3 },
                     }}
-                    className="lesson-cards-carousel overflow-visible p-8"
+                    className="lesson-cards-carousel overflow-visible px-0 py-8 sm:p-8"
                     centeredSlides={true}
                     effect="slide">
-                    <div>
+                    <div slot="container-end">
                       <SwiperNavigation />
                     </div>
 
                     {normalLessons.map(lesson => (
-                      <SwiperSlide key={lesson.id} className="overflow-visible p-10 transition-transform duration-500">
+                      <SwiperSlide
+                        key={lesson.id}
+                        className="overflow-visible px-2 py-8 transition-transform duration-300 sm:p-6 lg:p-10">
                         {({ isActive }) => (
                           <div
-                            className={`transform transition-transform duration-300 ${isActive ? 'scale-125' : 'scale-95'}`}>
+                            className={`transform-gpu transition-transform duration-300 ${
+                              isActive ? 'scale-100 sm:scale-110 xl:scale-125' : 'scale-95'
+                            }`}>
                             <LessonCard lesson={lesson} onLessonClick={handleLessonClick} />
                           </div>
                         )}
@@ -306,11 +316,7 @@ export default function DashboardPage() {
             </section>
 
             <section className="mb-16">
-              <PracticeSection
-                vocabLessons={vocabLessons}
-                diagrammingLessons={diagrammingLessons}
-                listeningLessons={listeningLessons}
-              />
+              <PracticeSection lessons={practiceLessons} onLessonClick={handleLessonClick} />
             </section>
           </div>
         </main>

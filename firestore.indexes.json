@@ -463,6 +463,52 @@
       ]
     },
     {
+      "collectionGroup": "practiceCategories",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "lessonType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "categoryOrder",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "practiceCategories",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "lessonType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "normalizedName",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "practiceCategoryMemberships",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "categoryId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "lessonOrder",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "lesson_recovery",
       "queryScope": "COLLECTION",
       "fields": [

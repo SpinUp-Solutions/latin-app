@@ -1,4 +1,5 @@
 import { configureStore } from '@reduxjs/toolkit';
+import { setupListeners } from '@reduxjs/toolkit/query';
 import authReducer from './slices/authSlice';
 import lessonReducer from './slices/lessonSlice';
 import lessonEditorReducer from './slices/lessonEditorSlice';
@@ -13,6 +14,7 @@ import { vocabularyApi } from './api/vocabularyApi';
 import { advancedVocabularyApi } from './api/advancedVocabularyApi';
 import { vocabularyWordRequestsApi } from './api/vocabularyWordRequestsApi';
 import { testApi } from './api/testApi';
+import { practiceCategoryApi } from './api/practiceCategoryApi';
 
 export const store = configureStore({
   reducer: {
@@ -30,6 +32,7 @@ export const store = configureStore({
     [advancedVocabularyApi.reducerPath]: advancedVocabularyApi.reducer,
     [vocabularyWordRequestsApi.reducerPath]: vocabularyWordRequestsApi.reducer,
     [testApi.reducerPath]: testApi.reducer,
+    [practiceCategoryApi.reducerPath]: practiceCategoryApi.reducer,
   },
   middleware: getDefaultMiddleware =>
     getDefaultMiddleware({
@@ -40,9 +43,12 @@ export const store = configureStore({
       vocabularyApi.middleware,
       advancedVocabularyApi.middleware,
       vocabularyWordRequestsApi.middleware,
-      testApi.middleware
+      testApi.middleware,
+      practiceCategoryApi.middleware
     ),
 });
+
+setupListeners(store.dispatch);
 
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;

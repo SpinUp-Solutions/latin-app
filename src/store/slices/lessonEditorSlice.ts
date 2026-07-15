@@ -76,24 +76,41 @@ const lessonEditorSlice = createSlice({
   initialState,
   reducers: {
     setLesson: (state, action: PayloadAction<Lesson | undefined>) => {
-      state.currentLesson = action.payload || {
-        id: `lesson-${Date.now()}`,
-        title: 'New Lesson',
-        description: '',
-        type: 'normal',
-        pages: [],
-        isLive: false,
-        liveOrder: null,
-        publishedAt: null,
-        publishedBy: null,
-      };
+      state.currentLesson = action.payload
+        ? {
+            ...action.payload,
+            practiceCategoryIds:
+              action.payload.practiceCategoryIds ??
+              action.payload.practiceCategories?.map(category => category.id) ??
+              [],
+          }
+        : {
+            id: `lesson-${Date.now()}`,
+            title: 'New Lesson',
+            description: '',
+            type: 'normal',
+            pages: [],
+            isLive: false,
+            liveOrder: null,
+            publishedAt: null,
+            publishedBy: null,
+            practiceCategoryIds: [],
+            practiceCategories: [],
+          };
       state.error = null;
       state.dirty = false;
     },
 
     updateLessonInfo: (
       state,
-      action: PayloadAction<Partial<Pick<Lesson, 'id' | 'title' | 'description' | 'type' | 'vocabulary_pool'>>>
+      action: PayloadAction<
+        Partial<
+          Pick<
+            Lesson,
+            'id' | 'title' | 'description' | 'type' | 'vocabulary_pool' | 'practiceCategoryIds' | 'practiceCategories'
+          >
+        >
+      >
     ) => {
       if (state.currentLesson) {
         Object.assign(state.currentLesson, action.payload);

@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb, adminStorage } from '@/src/services/firebase-admin';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { PracticeCategoryError, practiceCategoryService } from '@/src/lib/practice-categories/service';
 
 const SNAPSHOT_PREFIX = 'lesson-snapshots/';
 const BATCH_SIZE = 200;
+const RESTORE_CONCURRENCY = 10;
 
 interface RestoreSnapshotRequest {
   snapshotPath?: string;
@@ -19,6 +21,22 @@ interface SnapshotPayload {
   snapshotId?: string;
   createdAt?: string;
   lessons?: SnapshotLesson[];
+}
+
+class SnapshotRestoreError extends Error {
+  constructor(
+    public readonly failures: Array<{ lessonId: string; cause: unknown }>,
+    public readonly restoredLessons: number,
+    public readonly batchesCommitted: number
+  ) {
+    const firstFailure = failures[0];
+    super(
+      `Snapshot restore stopped after ${failures.length} lesson ${failures.length === 1 ? 'failure' : 'failures'}; first failure was ${firstFailure.lessonId}: ${
+        firstFailure.cause instanceof Error ? firstFailure.cause.message : 'Unknown restore error'
+      }`
+    );
+    this.name = 'SnapshotRestoreError';
+  }
 }
 
 function parseBoolean(value: boolean | string | undefined, fallback = false): boolean {
@@ -43,23 +61,47 @@ function isSnapshotLesson(value: unknown): value is SnapshotLesson {
   return !!value && typeof value === 'object' && 'id' in value && typeof value.id === 'string';
 }
 
-async function restoreLessonsFromSnapshot(lessons: SnapshotLesson[]) {
+async function restoreSnapshotLesson(lesson: SnapshotLesson, actorId: string) {
+  const {
+    id,
+    practiceCategoryIds: _practiceCategoryIds,
+    practiceCategories: _practiceCategories,
+    ...lessonData
+  } = lesson;
+  const lessonRef = adminDb.collection('lessons').doc(id);
+
+  await adminDb.runTransaction(async transaction => {
+    await practiceCategoryService.reconcileLessonCategoriesInTransaction(transaction, {
+      lessonId: id,
+      lesson: lessonData,
+      actorId,
+    });
+    transaction.set(lessonRef, lessonData);
+  });
+}
+
+async function restoreLessonsFromSnapshot(lessons: SnapshotLesson[], actorId: string) {
   let batchesCommitted = 0;
+  let restoredLessons = 0;
 
   for (let index = 0; index < lessons.length; index += BATCH_SIZE) {
     const chunk = lessons.slice(index, index + BATCH_SIZE);
-    const batch = adminDb.batch();
-
-    for (const lesson of chunk) {
-      const { id, ...lessonData } = lesson;
-      batch.set(adminDb.collection('lessons').doc(id), lessonData);
+    for (let groupIndex = 0; groupIndex < chunk.length; groupIndex += RESTORE_CONCURRENCY) {
+      const group = chunk.slice(groupIndex, groupIndex + RESTORE_CONCURRENCY);
+      const results = await Promise.allSettled(group.map(lesson => restoreSnapshotLesson(lesson, actorId)));
+      const failures: Array<{ lessonId: string; cause: unknown }> = [];
+      results.forEach((result, resultIndex) => {
+        if (result.status === 'fulfilled') restoredLessons += 1;
+        else failures.push({ lessonId: group[resultIndex].id, cause: result.reason });
+      });
+      if (failures.length > 0) {
+        throw new SnapshotRestoreError(failures, restoredLessons, batchesCommitted);
+      }
     }
-
-    await batch.commit();
     batchesCommitted += 1;
   }
 
-  return batchesCommitted;
+  return { batchesCommitted, restoredLessons };
 }
 
 export const dynamic = 'force-dynamic';
@@ -95,7 +137,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Snapshot contains no lessons to restore' }, { status: 400 });
     }
 
-    const batchesCommitted = await restoreLessonsFromSnapshot(lessons);
+    const restoreResult = await restoreLessonsFromSnapshot(lessons, user.uid);
 
     return NextResponse.json({
       success: true,
@@ -104,13 +146,35 @@ export async function POST(request: NextRequest) {
         snapshotId: payload.snapshotId ?? null,
         snapshotPath,
         snapshotCreatedAt: payload.createdAt ?? null,
-        restoredLessons: lessons.length,
-        batchesCommitted,
+        restoredLessons: restoreResult.restoredLessons,
+        batchesCommitted: restoreResult.batchesCommitted,
         restoredBy: user.uid,
       },
     });
   } catch (error) {
     console.error('Error restoring lessons snapshot:', error);
+
+    if (error instanceof SnapshotRestoreError) {
+      const cause = error.failures[0].cause;
+      return NextResponse.json(
+        {
+          success: false,
+          error: error.message,
+          ...(cause instanceof PracticeCategoryError ? { code: cause.code } : {}),
+          data: {
+            partialRestore: error.restoredLessons > 0,
+            restoredLessons: error.restoredLessons,
+            batchesCommitted: error.batchesCommitted,
+            failedLessonIds: error.failures.map(failure => failure.lessonId),
+          },
+        },
+        { status: cause instanceof PracticeCategoryError ? cause.status : 500 }
+      );
+    }
+
+    if (error instanceof PracticeCategoryError) {
+      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
+    }
 
     if (error instanceof Error) {
       if (error.message === 'Unauthorized' || error.message === 'Forbidden') {

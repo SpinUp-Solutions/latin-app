@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { validateLessonProgression } from '@/src/utils/lessonProgress';
 
 interface UpdateRequest {
   lessonIds: string[];
@@ -45,6 +46,13 @@ export async function POST(request: NextRequest) {
 
       const currentData = lessonDoc.data();
       if (currentData?.isLive === isLive) continue; // Already in desired state
+
+      if (isLive) {
+        const progressionErrors = validateLessonProgression({ pages: currentData?.pages || [] });
+        if (progressionErrors.length > 0) {
+          return NextResponse.json({ error: `Cannot publish lesson ${lessonId}`, progressionErrors }, { status: 400 });
+        }
+      }
 
       const updateData: Record<string, string | number | boolean | null> = {
         isLive,

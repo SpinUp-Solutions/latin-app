@@ -12,7 +12,7 @@ import { DiagramAttempt } from '@/src/features/sentence-diagramming';
 interface PageTemplateProps {
   page: Page;
   pageIndex?: number;
-  onExerciseComplete?: (itemIndex: number, score: number) => void;
+  onExerciseComplete?: (exerciseId: string, score: number) => void;
   onPageComplete?: () => void;
   onDiagrammingAttempt?: (itemIndex: number, exerciseId: string, attempt: DiagramAttempt) => void;
 }
@@ -33,11 +33,9 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({
     (itemIndex: number, score: number) => {
       const item = page.items[itemIndex];
 
-      if (onExerciseComplete) {
-        onExerciseComplete(itemIndex, score);
-      }
-
       if (isExerciseType(item.type)) {
+        onExerciseComplete?.(item.id, score);
+
         const newCompleted = new Set(completedExercises);
         newCompleted.add(itemIndex);
         setCompletedExercises(newCompleted);
