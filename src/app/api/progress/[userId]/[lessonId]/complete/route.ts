@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { adminDb } from '@/src/services/firebase-admin';
 import { verifyRequestAuth } from '@/src/lib/verifyRequestAuth';
+import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 import { Lesson, UserProgress } from '@/src/types/lesson';
 import {
   getMissingExercises,
@@ -40,6 +41,7 @@ export async function POST(
         transaction.get(progressRef),
       ]);
       if (!lessonSnapshot.exists) return { kind: 'lesson-not-found' as const };
+      if (!isLessonDocumentData(lessonSnapshot.data())) return { kind: 'lesson-not-found' as const };
 
       const lesson = { id: lessonSnapshot.id, ...lessonSnapshot.data() } as Lesson;
       const finalPage = lesson.pages.at(-1);

@@ -2,7 +2,7 @@
 
 - Status: Working draft
 - Last updated: 2026-07-16
-- Implementation status: Phase 2 complete; pre-Phase 3 schema correction pending
+- Implementation status: Phase 2 complete; pre-Phase 3 schema correction complete — 2026-07-16
 
 ## Purpose
 
@@ -975,7 +975,7 @@ Implementation notes:
 
 ### Pre-Phase 3: Ownership-model correction
 
-Status: **Pending; must complete before any `TestUnit` document is persisted**
+Status: **Complete — 2026-07-16; must precede any `TestUnit` document persistence**
 
 - Remove `type` from `TestUnit`; retain lesson `type` unchanged and use `kind` as the learning-unit discriminator.
 - Replace `TestVersionReference` and nullable `mockTestId` with `RotationVersionReference { versionId }` and `TestUnit.rotationVersions`.
@@ -986,7 +986,24 @@ Status: **Pending; must complete before any `TestUnit` document is persisted**
 - Harden every legacy lesson endpoint that can read the shared `lessons` collection: read/project `kind`, exclude `kind: 'test'`, and only then apply legacy lesson defaults. In particular, remove any path where `data.type || 'normal'` can run on a test document.
 - Update the plan's schemas, workflows, risks, acceptance criteria, and decision history together; do not implement the new persistence API against the superseded Phase 1 shape.
 
+Implementation notes:
+
+- `TestUnit` now uses `kind: 'test'` as its only discriminator and stores `rotationVersions` containing only `{ versionId }` references. `TestVersion.name` remains the sole version label.
+- Persisted-document validation permits an empty rotation list only for non-live tests; the create and publication schemas require at least one rotation reference, while the ownership graph checks cross-document version existence when projected IDs are supplied.
+- The assignment validator now enforces unique normal ownership, unique active-mock ownership, no active rotation/mock overlap, active parent/version existence, live-test rotation eligibility, and archived-mock return to rotation without a backlink.
+- Legacy lesson projections and mutation paths now select or inspect `kind` before lesson defaults, exclude test documents, and persist `kind: 'lesson'` for new and updated lesson documents. Practice-category responses and counts remain lesson-only.
+- Focused domain coverage now includes empty non-live containers, create/publication requirements, ownership overlap and uniqueness, active dangling references, archived return-to-rotation behavior, and the absence of the superseded reference fields.
+
 ### Phase 3: Learning-unit API
+
+Status: **Pending — prerequisites complete; API persistence work not started**
+
+Progress checkpoint:
+
+- Complete: corrected `LearningUnit`/`TestUnit` schema and exclusive ownership model.
+- Complete: legacy lesson-only projections and mutation boundaries are kind-aware.
+- Complete: focused domain and compatibility regression coverage.
+- Next: introduce the injected Firestore-backed learning-unit/test-version service and thin API routes.
 
 - Build the learning-unit/test service and error modules on the corrected domain/schema, then add thin Next.js learning-unit and test-version API routes.
 - Optionally backfill existing lessons with `kind: 'lesson'`; the normalizer covers unbackfilled documents either way.

@@ -2,6 +2,7 @@
 
 import React, { memo, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/src/services/firebase';
 import { useGetStudentLessonsQuery } from '@/src/store/api/lessonApi';
@@ -96,7 +97,7 @@ export default function DashboardPage() {
   const normalLessons = useMemo(() => {
     if (!studentLessons) return [];
     return studentLessons
-      .filter(lesson => lesson.type === 'normal')
+      .filter(lesson => isLessonDocumentData(lesson) && lesson.type === 'normal')
       .map(lesson => ({
         ...lesson,
         totalPages: lesson.pages.length,
@@ -106,7 +107,7 @@ export default function DashboardPage() {
   const vocabLessons = useMemo(() => {
     if (!studentLessons) return [];
     return studentLessons
-      .filter(lesson => lesson.type === 'vocab')
+      .filter(lesson => isLessonDocumentData(lesson) && lesson.type === 'vocab')
       .map(lesson => ({
         ...lesson,
         totalPages: lesson.pages.length,
@@ -116,7 +117,7 @@ export default function DashboardPage() {
   const diagrammingLessons = useMemo(() => {
     if (!studentLessons) return [];
     return studentLessons
-      .filter(lesson => lesson.type === 'sentence-diagramming')
+      .filter(lesson => isLessonDocumentData(lesson) && lesson.type === 'sentence-diagramming')
       .map(lesson => ({
         ...lesson,
         totalPages: lesson.pages.length,
@@ -126,7 +127,7 @@ export default function DashboardPage() {
   const listeningLessons = useMemo(() => {
     if (!studentLessons) return [];
     return studentLessons
-      .filter(lesson => lesson.type === 'listening')
+      .filter(lesson => isLessonDocumentData(lesson) && lesson.type === 'listening')
       .map(lesson => ({
         ...lesson,
         totalPages: lesson.pages.length,

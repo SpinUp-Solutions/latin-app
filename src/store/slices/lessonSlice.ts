@@ -1,5 +1,6 @@
 import { createSlice, createSelector, PayloadAction } from '@reduxjs/toolkit';
 import { LessonSummary } from '@/src/types/lesson';
+import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 
 interface LessonState {
   lessons: LessonSummary[];
@@ -67,7 +68,9 @@ export const selectFilteredLessons = createSelector(
     (_: { lesson: LessonState }, __: 'all' | 'live' | 'draft', searchQuery: string = '') => searchQuery,
   ],
   (lessons, filter, searchQuery) => {
-    let filtered = lessons;
+    // This slice is still the lesson-only organizer. Mixed learning-unit
+    // projections belong to the later learning-path API.
+    let filtered = lessons.filter(lesson => isLessonDocumentData(lesson));
 
     // Filter by status
     if (filter === 'live') {

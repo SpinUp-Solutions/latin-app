@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { Lesson } from '@/src/types/lesson';
+import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 import { verifyAdminAccess } from '../../../../lib/verifyAdminAccess';
 import { getLessonContentCounts, toLessonSummary } from '@/src/utils/lessonSummary';
 import { validateLessonProgression } from '@/src/utils/lessonProgress';
@@ -10,6 +11,7 @@ import { practiceCategoryRouteErrorResponse } from '@/src/lib/practice-categorie
 
 const LESSON_SUMMARY_FIELDS = [
   'title',
+  'kind',
   'description',
   'type',
   'vocabulary_pool',
@@ -40,21 +42,24 @@ export async function GET(request: NextRequest) {
       .select(...LESSON_SUMMARY_FIELDS)
       .get();
 
+    const lessonDocs = snapshot.docs.filter(doc => isLessonDocumentData(doc.data()));
     const lessons = await Promise.all(
-      snapshot.docs.map(async doc => {
+      lessonDocs.map(async doc => {
         const data = doc.data() as Partial<Lesson>;
 
         if (data.totalPages === undefined || data.totalItems === undefined || data.totalExercises === undefined) {
           const fullDoc = await doc.ref.get();
-          return toLessonSummary(doc.id, fullDoc.data() as Partial<Lesson>);
+          const fullData = fullDoc.data();
+          return isLessonDocumentData(fullData) ? toLessonSummary(doc.id, fullData as Partial<Lesson>) : null;
         }
 
         return toLessonSummary(doc.id, data);
       })
     );
+    const lessonSummaries = lessons.filter((lesson): lesson is NonNullable<typeof lesson> => lesson !== null);
 
-    const assignments = await practiceCategoryService.getAssignmentsForLessonIds(lessons.map(lesson => lesson.id));
-    const lessonsWithCategories = lessons.map(lesson => {
+    const assignments = await practiceCategoryService.getAssignmentsForLessonIds(lessonSummaries.map(lesson => lesson.id));
+    const lessonsWithCategories = lessonSummaries.map(lesson => {
       const assignment = assignments.get(lesson.id)!;
       return {
         ...lesson,
@@ -83,6 +88,9 @@ export async function POST(request: NextRequest) {
     }
 
     const rawLesson = (await request.json()) as Lesson;
+    if (!isLessonDocumentData(rawLesson)) {
+      return NextResponse.json({ error: 'Only lesson documents can use the lesson endpoint' }, { status: 400 });
+    }
     const practiceCategoryIds = optionalPracticeCategoryIdsSchema.parse(rawLesson.practiceCategoryIds);
     const { practiceCategoryIds: _practiceCategoryIds, practiceCategories: _practiceCategories, ...lesson } = rawLesson;
 
@@ -94,6 +102,7 @@ export async function POST(request: NextRequest) {
     const now = new Date().toISOString();
     const lessonData = {
       ...lesson,
+      kind: 'lesson' as const,
       totalPages,
       totalItems,
       totalExercises,
@@ -149,6 +158,9 @@ export async function PUT(request: NextRequest) {
     }
 
     const rawLesson = (await request.json()) as Lesson;
+    if (!isLessonDocumentData(rawLesson)) {
+      return NextResponse.json({ error: 'Only lesson documents can use the lesson endpoint' }, { status: 400 });
+    }
     const practiceCategoryIds = optionalPracticeCategoryIdsSchema.parse(rawLesson.practiceCategoryIds);
     const { practiceCategoryIds: _practiceCategoryIds, practiceCategories: _practiceCategories, ...lesson } = rawLesson;
 
@@ -163,7 +175,11 @@ export async function PUT(request: NextRequest) {
       if (!existingLessonDoc.exists) {
         throw new PracticeCategoryError('LESSON_NOT_FOUND', 'Lesson not found', 404);
       }
-      const existingLesson = existingLessonDoc.data();
+      const existingLessonData = existingLessonDoc.data();
+      if (!isLessonDocumentData(existingLessonData)) {
+        throw new PracticeCategoryError('LESSON_NOT_FOUND', 'Lesson not found', 404);
+      }
+      const existingLesson = existingLessonData as Partial<Lesson>;
       if (existingLesson?.isLive) {
         const progressionErrors = validateLessonProgression({ pages: lesson.pages || [] });
         if (progressionErrors.length > 0) {
@@ -173,6 +189,7 @@ export async function PUT(request: NextRequest) {
 
       const updatedLessonData = {
         ...lesson,
+        kind: 'lesson' as const,
         totalPages,
         totalItems,
         totalExercises,

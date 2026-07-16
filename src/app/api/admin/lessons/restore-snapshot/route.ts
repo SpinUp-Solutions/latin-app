@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb, adminStorage } from '@/src/services/firebase-admin';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 import { PracticeCategoryError, practiceCategoryService } from '@/src/lib/practice-categories/service';
 
 const SNAPSHOT_PREFIX = 'lesson-snapshots/';
@@ -58,7 +59,13 @@ function parseBoolean(value: boolean | string | undefined, fallback = false): bo
 }
 
 function isSnapshotLesson(value: unknown): value is SnapshotLesson {
-  return !!value && typeof value === 'object' && 'id' in value && typeof value.id === 'string';
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    'id' in value &&
+    typeof value.id === 'string' &&
+    isLessonDocumentData(value)
+  );
 }
 
 async function restoreSnapshotLesson(lesson: SnapshotLesson, actorId: string) {
@@ -68,9 +75,14 @@ async function restoreSnapshotLesson(lesson: SnapshotLesson, actorId: string) {
     practiceCategories: _practiceCategories,
     ...lessonData
   } = lesson;
+  lessonData.kind = 'lesson';
   const lessonRef = adminDb.collection('lessons').doc(id);
 
   await adminDb.runTransaction(async transaction => {
+    const existingLesson = await transaction.get(lessonRef);
+    if (existingLesson.exists && !isLessonDocumentData(existingLesson.data())) {
+      throw new Error(`Learning unit ${id} is not a lesson`);
+    }
     await practiceCategoryService.reconcileLessonCategoriesInTransaction(transaction, {
       lessonId: id,
       lesson: lessonData,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { auth } from 'firebase-admin';
+import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 import { LessonWithProgress, UserProgress } from '@/src/types/lesson';
 import { calculateStoredProgress, getFurthestPageIndex, isStoredLessonComplete } from '@/src/utils/lessonProgress';
 import { isPracticeLessonType } from '@/src/utils/practiceCategoryLessons';
@@ -32,10 +33,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ lessons: [] });
     }
 
-    let allLessons = snapshot.docs.map(doc => {
+    // This route is a legacy lesson-only projection. Filter by the explicit
+    // discriminator before applying the legacy missing-type default.
+    let allLessons = snapshot.docs.filter(doc => isLessonDocumentData(doc.data())).map(doc => {
       const data = doc.data();
       return {
         id: doc.id,
+        kind: 'lesson' as const,
         title: data.title,
         description: data.description,
         type: data.type || 'normal',

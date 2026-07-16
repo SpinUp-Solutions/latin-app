@@ -18,6 +18,7 @@ import type {
   PracticeCategoryWithCounts,
   PracticeLessonType,
 } from '@/src/types/practice-category';
+import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 import { toLessonSummary } from '@/src/utils/lessonSummary';
 import { isCategorisableLesson, normalizeCategoryName } from './domain';
 import {
@@ -211,13 +212,17 @@ export class PracticeCategoryService {
       let draftLessonCount = 0;
       for (const membership of memberships) {
         const lesson = lessonsById.get(membership.lessonId);
-        if (!lesson) continue;
+        if (!lesson || !isCategorisableLesson(lesson) || lesson.type !== category.lessonType) continue;
         if (lesson.isLive) liveLessonCount += 1;
         else draftLessonCount += 1;
       }
+      const assignedLessonCount = memberships.filter(membership => {
+        const lesson = lessonsById.get(membership.lessonId);
+        return Boolean(lesson && isCategorisableLesson(lesson) && lesson.type === category.lessonType);
+      }).length;
       return {
         ...category,
-        assignedLessonCount: memberships.length,
+        assignedLessonCount,
         liveLessonCount,
         draftLessonCount,
       };
@@ -457,12 +462,15 @@ export class PracticeCategoryService {
       };
     });
 
-    const liveLessonCount = assignedSnapshots.filter(snapshot => snapshot.exists && snapshot.data()?.isLive).length;
+    const validLessonSnapshots = assignedSnapshots.filter(
+      snapshot => snapshot.exists && isCategorisableLesson(snapshot.data()) && snapshot.data()?.type === category.lessonType
+    );
+    const liveLessonCount = validLessonSnapshots.filter(snapshot => snapshot.data()?.isLive).length;
     const categoryWithCounts: PracticeCategoryWithCounts = {
       ...category,
-      assignedLessonCount: memberships.length,
+      assignedLessonCount: validLessonSnapshots.length,
       liveLessonCount,
-      draftLessonCount: assignedSnapshots.filter(snapshot => snapshot.exists).length - liveLessonCount,
+      draftLessonCount: validLessonSnapshots.length - liveLessonCount,
     };
 
     return { category: categoryWithCounts, lessons };
@@ -709,6 +717,9 @@ export class PracticeCategoryService {
     if (!lessonSnapshot.exists) {
       throw new PracticeCategoryError('LESSON_NOT_FOUND', 'Lesson not found', 404);
     }
+    if (!isLessonDocumentData(lessonSnapshot.data())) {
+      throw new PracticeCategoryError('LESSON_NOT_FOUND', 'Lesson not found', 404);
+    }
     return (await this.getAssignmentsForLessonIds([lessonId])).get(lessonId)!;
   }
 
@@ -720,6 +731,9 @@ export class PracticeCategoryService {
     return this.db.runTransaction(async transaction => {
       const lessonSnapshot = await transaction.get(this.db.collection('lessons').doc(lessonId));
       if (!lessonSnapshot.exists) {
+        throw new PracticeCategoryError('LESSON_NOT_FOUND', 'Lesson not found', 404);
+      }
+      if (!isLessonDocumentData(lessonSnapshot.data())) {
         throw new PracticeCategoryError('LESSON_NOT_FOUND', 'Lesson not found', 404);
       }
       return this.reconcileLessonCategoriesInTransaction(transaction, {
@@ -848,6 +862,9 @@ export class PracticeCategoryService {
     return this.db.runTransaction(async transaction => {
       const lessonSnapshot = await transaction.get(lessonRef);
       if (!lessonSnapshot.exists) {
+        throw new PracticeCategoryError('LESSON_NOT_FOUND', 'Lesson not found', 404);
+      }
+      if (!isLessonDocumentData(lessonSnapshot.data())) {
         throw new PracticeCategoryError('LESSON_NOT_FOUND', 'Lesson not found', 404);
       }
       const lessonMembershipSnapshot = await transaction.get(this.memberships.where('lessonId', '==', lessonId));

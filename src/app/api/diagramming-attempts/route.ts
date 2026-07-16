@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Timestamp } from 'firebase-admin/firestore';
 import { adminAuth, adminDb } from '@/src/services/firebase-admin';
+import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 import { compareDiagramAnnotationSets } from '@/src/features/sentence-diagramming/model';
 import type { DiagramAnnotation } from '@/src/features/sentence-diagramming/model';
 import type { Lesson } from '@/src/types/lesson';
@@ -39,6 +40,9 @@ export async function POST(request: NextRequest) {
     // The expected answer comes from Firestore, not the client, so each audit record
     // remains trustworthy even if a browser request is altered.
     const lessonSnapshot = await adminDb.collection('lessons').doc(lessonId).get();
+    if (!lessonSnapshot.exists || !isLessonDocumentData(lessonSnapshot.data())) {
+      return NextResponse.json({ error: 'Diagramming exercise not found' }, { status: 404 });
+    }
     const lesson = lessonSnapshot.data() as Lesson | undefined;
     const item = lesson?.pages?.[pageIndex]?.items?.[itemIndex];
 

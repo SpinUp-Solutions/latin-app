@@ -2,11 +2,8 @@ import type { Exercise } from './exercises';
 import type { RenderableContentItem } from './page';
 import type { Page } from './page';
 
-export interface TestVersionReference {
+export interface RotationVersionReference {
   versionId: string;
-  label: string;
-  /** null participates in normal rotation; a value identifies its mock-only card. */
-  mockTestId: string | null;
 }
 
 export interface TestVersion {

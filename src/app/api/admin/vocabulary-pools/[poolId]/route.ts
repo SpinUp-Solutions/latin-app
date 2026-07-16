@@ -4,6 +4,7 @@ import { FieldPath } from 'firebase-admin/firestore';
 import type { Word } from '@/src/types/admin-vocabulary';
 import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 import { buildPoolSearchTokens } from '@/src/utils/vocabularyPoolSummary';
+import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 
 export const dynamic = 'force-dynamic';
 
@@ -213,10 +214,11 @@ export async function DELETE(
   try {
     const { poolId } = await params;
 
-    const lessonsQuery = await adminDb.collection('lessons').where('vocabulary_pool', '==', poolId).limit(1).get();
+    const lessonsQuery = await adminDb.collection('lessons').where('vocabulary_pool', '==', poolId).get();
+    const lessonUsingPool = lessonsQuery.docs.find(doc => isLessonDocumentData(doc.data()));
 
-    if (!lessonsQuery.empty) {
-      const lessonData = lessonsQuery.docs[0].data();
+    if (lessonUsingPool) {
+      const lessonData = lessonUsingPool.data();
       return NextResponse.json(
         {
           success: false,

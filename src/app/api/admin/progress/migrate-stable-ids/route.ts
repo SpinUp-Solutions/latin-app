@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { adminDb } from '@/src/services/firebase-admin';
 import { AdminAccessError, verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 import { Lesson, UserProgress } from '@/src/types/lesson';
 import { migrateUserProgress } from '@/src/utils/progressMigration';
 
@@ -33,7 +34,11 @@ export async function POST(request: NextRequest) {
       adminDb.collection('userProgress').get(),
       adminDb.collection('lessons').get(),
     ]);
-    const lessons = new Map(lessonSnapshot.docs.map(doc => [doc.id, { id: doc.id, ...doc.data() } as Lesson]));
+    const lessons = new Map(
+      lessonSnapshot.docs
+        .filter(doc => isLessonDocumentData(doc.data()))
+        .map(doc => [doc.id, { id: doc.id, ...doc.data() } as Lesson])
+    );
     const now = new Date().toISOString();
     const summary = {
       dryRun,

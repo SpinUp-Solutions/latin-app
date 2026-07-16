@@ -4,6 +4,7 @@ import { PRACTICE_LESSON_TYPES } from '@/src/types/practice-category';
 export type CategorisableLessonCandidate = {
   kind?: unknown;
   type?: unknown;
+  isLive?: unknown;
 };
 
 export function normalizeCategoryName(name: string): string {

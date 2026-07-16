@@ -38,11 +38,9 @@ export const pageSchema = z
   })
   .passthrough();
 
-export const testVersionReferenceSchema = z
+export const rotationVersionReferenceSchema = z
   .object({
     versionId: firestoreDocumentIdSchema,
-    label: z.string().trim().min(1),
-    mockTestId: firestoreDocumentIdSchema.nullable(),
   })
   .strict();
 
@@ -92,41 +90,53 @@ export const lessonUnitSchema = lessonUnitShapeSchema.superRefine(refineLessonUn
 const testUnitShapeSchema = learningUnitBaseSchema
   .extend({
     kind: z.literal('test'),
-    type: z.literal('normal'),
-    versions: z.array(testVersionReferenceSchema).min(1),
+    rotationVersions: z.array(rotationVersionReferenceSchema),
     passingPercentage: passingPercentageSchema,
   })
   .strict();
 
-function refineTestUnit(value: z.infer<typeof testUnitShapeSchema>, context: z.RefinementCtx) {
-  const versionIds = value.versions.map(reference => reference.versionId);
+function refineTestUnit(
+  value: z.infer<typeof testUnitShapeSchema>,
+  context: z.RefinementCtx,
+  requireRotationVersion = false
+) {
+  const versionIds = value.rotationVersions.map(reference => reference.versionId);
   if (new Set(versionIds).size !== versionIds.length) {
     context.addIssue({
       code: 'custom',
       message: 'Version references must be unique',
-      path: ['versions'],
+      path: ['rotationVersions'],
     });
   }
 
-  const mockTestIds = value.versions.flatMap(reference => (reference.mockTestId ? [reference.mockTestId] : []));
-  if (new Set(mockTestIds).size !== mockTestIds.length) {
+  if (requireRotationVersion && value.rotationVersions.length === 0) {
     context.addIssue({
       code: 'custom',
-      message: 'A mock test can be assigned to only one version reference',
-      path: ['versions'],
+      message: 'A test must have at least one version in normal rotation when it is created or published',
+      path: ['rotationVersions'],
     });
   }
 
-  if (value.isLive && !value.versions.some(reference => reference.mockTestId === null)) {
+  if (value.isLive && value.rotationVersions.length === 0) {
     context.addIssue({
       code: 'custom',
       message: 'A live test must have at least one version in normal rotation',
-      path: ['versions'],
+      path: ['rotationVersions'],
     });
   }
 }
 
 export const testUnitSchema = testUnitShapeSchema.superRefine(refineTestUnit);
+export const testUnitCreateSchema = testUnitShapeSchema.superRefine((value, context) =>
+  refineTestUnit(value, context, true)
+);
+export const testUnitPublicationSchema = testUnitShapeSchema.superRefine((value, context) =>
+  refineTestUnit(value, context, true)
+);
+
+// Keep the longer name available to services that describe this boundary as a
+// creation schema rather than a create command.
+export const testUnitCreationSchema = testUnitCreateSchema;
 
 export const learningUnitDocumentSchema = z
   .discriminatedUnion('kind', [lessonUnitShapeSchema, testUnitShapeSchema])

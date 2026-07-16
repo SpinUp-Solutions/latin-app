@@ -66,6 +66,18 @@ const lessonDocument = (id: string, type: string, liveOrder: number) => ({
   }),
 });
 
+const testDocument = {
+  id: 'test-1',
+  data: () => ({
+    kind: 'test',
+    title: 'Chapter test',
+    description: 'Assessment',
+    isLive: true,
+    liveOrder: 2,
+    rotationVersions: [{ versionId: 'version-1' }],
+  }),
+};
+
 const request = () => ({ headers: { get: () => null } }) as never;
 
 describe('student lesson practice category enrichment', () => {
@@ -73,7 +85,7 @@ describe('student lesson practice category enrichment', () => {
     jest.clearAllMocks();
     mockLessonsGet.mockResolvedValue({
       empty: false,
-      docs: [lessonDocument('normal-1', 'normal', 0), lessonDocument('vocab-1', 'vocab', 1)],
+      docs: [lessonDocument('normal-1', 'normal', 0), lessonDocument('vocab-1', 'vocab', 1), testDocument],
     });
     mockCollection.mockImplementation((name: string) => {
       if (name !== 'lessons') throw new Error(`Unexpected collection: ${name}`);
@@ -110,6 +122,7 @@ describe('student lesson practice category enrichment', () => {
     expect(mockGetAssignments).toHaveBeenCalledWith(['vocab-1']);
     const vocabLesson = response.body.lessons.find(lesson => lesson.id === 'vocab-1');
     const normalLesson = response.body.lessons.find(lesson => lesson.id === 'normal-1');
+    expect(response.body.lessons.find(lesson => lesson.id === 'test-1')).toBeUndefined();
     expect(vocabLesson?.practiceCategories).toEqual([
       {
         id: activeCategory.id,

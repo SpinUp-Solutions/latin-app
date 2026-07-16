@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
 import { Tabs, TabsContent } from '@/src/components/ui/tabs';
@@ -88,8 +89,9 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
   );
 
   const filteredLessons = useMemo(() => {
-    if (!debouncedSearchQuery) return lessons;
-    return lessons.filter(lesson => lessonMatchesTextSearch(lesson, debouncedSearchQuery));
+    const lessonOnly = lessons.filter(lesson => isLessonDocumentData(lesson));
+    if (!debouncedSearchQuery) return lessonOnly;
+    return lessonOnly.filter(lesson => lessonMatchesTextSearch(lesson, debouncedSearchQuery));
   }, [lessons, debouncedSearchQuery]);
 
   const filteredDrafts = useMemo(() => {

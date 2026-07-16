@@ -1,4 +1,5 @@
 import { Lesson, LessonSummary } from '@/src/types/lesson';
+import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 import { isExerciseType } from '@/src/utils/lessonUtils';
 
 export function getLessonContentCounts(lesson: Pick<Lesson, 'pages'>): {
@@ -24,6 +25,10 @@ export function getLessonContentCounts(lesson: Pick<Lesson, 'pages'>): {
 }
 
 export function toLessonSummary(id: string, data: Partial<Lesson>): LessonSummary {
+  if (!isLessonDocumentData(data)) {
+    throw new Error(`Learning unit ${id} is not a lesson`);
+  }
+
   const counts = data.pages
     ? getLessonContentCounts({ pages: data.pages })
     : {
@@ -34,6 +39,7 @@ export function toLessonSummary(id: string, data: Partial<Lesson>): LessonSummar
 
   return {
     id,
+    kind: 'lesson',
     title: data.title || '',
     description: data.description,
     type: data.type || 'normal',

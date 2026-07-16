@@ -1,6 +1,10 @@
 import { isExerciseType, isTestEligibleExerciseType } from '@/src/lib/content/registry';
 import { normalizeLearningUnit } from '@/src/lib/learning-units/domain';
-import { learningUnitDocumentSchema } from '@/src/lib/learning-units/schemas';
+import {
+  learningUnitDocumentSchema,
+  testUnitCreateSchema,
+  testUnitPublicationSchema,
+} from '@/src/lib/learning-units/schemas';
 import { validateTestAssignmentGraph } from '@/src/lib/tests/domain';
 import { mockTestDocumentSchema, testVersionDocumentSchema, testVersionInputSchema } from '@/src/lib/tests/schemas';
 import type { TestUnit } from '@/src/types/learning-unit';
@@ -19,7 +23,6 @@ const versionPages = [
 const testUnit: TestUnit = {
   id: 'test-1',
   kind: 'test',
-  type: 'normal',
   title: 'Chapter test',
   description: '',
   isLive: false,
@@ -27,7 +30,7 @@ const testUnit: TestUnit = {
   publishedAt: null,
   publishedBy: null,
   passingPercentage: 70,
-  versions: [{ versionId: 'version-1', label: 'Version A', mockTestId: 'mock-1' }],
+  rotationVersions: [{ versionId: 'version-1' }],
 };
 
 const mockTest: MockTest = {
@@ -89,14 +92,22 @@ describe('learning-unit domain compatibility', () => {
     ).toBe(false);
   });
 
-  it('rejects live test containers with no rotation-eligible version', () => {
+  it('allows empty rotation lists only for non-live test containers', () => {
+    expect(
+      learningUnitDocumentSchema.safeParse({ ...testUnit, rotationVersions: [], isLive: false }).success
+    ).toBe(true);
+
     expect(learningUnitDocumentSchema.safeParse(testUnit).success).toBe(true);
 
-    const result = learningUnitDocumentSchema.safeParse({ ...testUnit, isLive: true, liveOrder: 2 });
+    const result = learningUnitDocumentSchema.safeParse({ ...testUnit, rotationVersions: [], isLive: true, liveOrder: 2 });
     expect(result.success).toBe(false);
     expect(result.error?.issues.map(issue => issue.message)).toContain(
       'A live test must have at least one version in normal rotation'
     );
+
+    expect(testUnitCreateSchema.safeParse({ ...testUnit, rotationVersions: [] }).success).toBe(false);
+    expect(testUnitPublicationSchema.safeParse({ ...testUnit, rotationVersions: [] }).success).toBe(false);
+    expect(testUnitCreateSchema.safeParse({ ...testUnit, type: 'normal' }).success).toBe(false);
   });
 });
 
@@ -167,23 +178,56 @@ describe('test-version boundaries', () => {
 });
 
 describe('mock assignment boundaries', () => {
-  it('enforces lifecycle and bidirectional parent links', () => {
+  it('enforces lifecycle and active-container ownership', () => {
     expect(mockTestDocumentSchema.safeParse(mockTest).success).toBe(true);
-    expect(validateTestAssignmentGraph({ tests: [testUnit], mocks: [mockTest] })).toEqual([]);
+    expect(
+      validateTestAssignmentGraph({
+        tests: [{ ...testUnit, rotationVersions: [] }],
+        mocks: [mockTest],
+        versionIds: ['version-1'],
+      })
+    ).toEqual([]);
 
-    const unlinkedTest: TestUnit = {
-      ...testUnit,
-      isLive: false,
-      versions: [{ ...testUnit.versions[0], mockTestId: null }],
-    };
-    expect(validateTestAssignmentGraph({ tests: [unlinkedTest], mocks: [mockTest] }).join(' ')).toContain(
-      'not linked from its parent'
+    const rotationAndMockOverlap = validateTestAssignmentGraph({
+      tests: [testUnit],
+      mocks: [mockTest],
+      versionIds: ['version-1'],
+    });
+    expect(rotationAndMockOverlap.join(' ')).toContain('still in normal rotation');
+
+    const standaloneOverlap = validateTestAssignmentGraph({
+      tests: [{ ...testUnit, rotationVersions: [] }],
+      mocks: [
+        mockTest,
+        { ...mockTest, id: 'mock-2', parent: { kind: 'standalone' } },
+      ],
+      versionIds: ['version-1'],
+    });
+    expect(standaloneOverlap.join(' ')).toContain('more than one active mock');
+
+    const duplicateRotation = validateTestAssignmentGraph({
+      tests: [
+        testUnit,
+        { ...testUnit, id: 'test-2', rotationVersions: [{ versionId: 'version-1' }] },
+      ],
+      mocks: [],
+      versionIds: ['version-1'],
+    });
+    expect(duplicateRotation.join(' ')).toContain('more than one test container');
+
+    const missingVersion = validateTestAssignmentGraph({
+      tests: [testUnit],
+      mocks: [mockTest],
+      versionIds: [],
+    });
+    expect(missingVersion.join(' ')).toEqual(
+      expect.stringContaining('missing rotation version version-1')
     );
 
     expect(mockTestDocumentSchema.safeParse({ ...mockTest, status: 'archived', isLive: true }).success).toBe(false);
   });
 
-  it('requires archived parent-linked mocks to retain their parent version', () => {
+  it('requires active parent links and allows archived mocks to return a version to rotation', () => {
     const archivedMock: MockTest = {
       ...mockTest,
       status: 'archived',
@@ -192,21 +236,41 @@ describe('mock assignment boundaries', () => {
     };
     const rotationTest: TestUnit = {
       ...testUnit,
-      versions: [{ ...testUnit.versions[0], mockTestId: null }],
+      rotationVersions: [{ versionId: 'version-1' }],
     };
 
-    expect(validateTestAssignmentGraph({ tests: [rotationTest], mocks: [archivedMock] })).toEqual([]);
-    expect(validateTestAssignmentGraph({ tests: [], mocks: [archivedMock] }).join(' ')).toContain(
-      'missing parent test'
-    );
+    expect(
+      validateTestAssignmentGraph({ tests: [rotationTest], mocks: [archivedMock], versionIds: ['version-1'] })
+    ).toEqual([]);
+    expect(validateTestAssignmentGraph({ tests: [], mocks: [archivedMock], versionIds: ['version-1'] })).toEqual([]);
 
-    const parentWithoutVersion: TestUnit = {
-      ...rotationTest,
-      versions: [{ versionId: 'version-2', label: 'Version B', mockTestId: null }],
-    };
-    expect(validateTestAssignmentGraph({ tests: [parentWithoutVersion], mocks: [archivedMock] }).join(' ')).toContain(
-      'missing version version-1'
-    );
+    const missingParent = validateTestAssignmentGraph({
+      tests: [],
+      mocks: [mockTest],
+      versionIds: ['version-1'],
+    });
+    expect(missingParent.join(' ')).toContain('missing parent test');
+
+    const missingStandaloneVersion = validateTestAssignmentGraph({
+      tests: [],
+      mocks: [{ ...mockTest, parent: { kind: 'standalone' } }],
+      versionIds: [],
+    });
+    expect(missingStandaloneVersion.join(' ')).toContain('missing version version-1');
+
+    const missingParentVersion = validateTestAssignmentGraph({
+      tests: [testUnit],
+      mocks: [mockTest],
+      versionIds: [],
+    });
+    expect(missingParentVersion.join(' ')).toContain('missing version version-1');
+
+    const archivedDanglingParent = validateTestAssignmentGraph({
+      tests: [],
+      mocks: [archivedMock],
+      versionIds: [],
+    });
+    expect(archivedDanglingParent).toEqual([]);
   });
 
   it('uses the shared server-safe registry for lesson and test classification', () => {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
+import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import { practiceCategoryRouteErrorResponse } from '@/src/lib/practice-categories/api';
 import { practiceCategoryService } from '@/src/lib/practice-categories/service';
@@ -20,6 +21,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const lessonDoc = await adminDb.collection('lessons').doc(id).get();
 
     if (!lessonDoc.exists) {
+      return NextResponse.json({ error: 'Lesson not found' }, { status: 404 });
+    }
+    if (!isLessonDocumentData(lessonDoc.data())) {
       return NextResponse.json({ error: 'Lesson not found' }, { status: 404 });
     }
 

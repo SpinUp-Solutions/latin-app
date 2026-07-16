@@ -1,12 +1,10 @@
 import type { Page } from './page';
 import type { UserProgress } from './lesson';
-import type { TestVersionReference } from './test';
+import type { RotationVersionReference } from './test';
 
 export const LESSON_UNIT_TYPES = ['vocab', 'normal', 'sentence-diagramming', 'listening'] as const;
 
 export type LessonUnitType = (typeof LESSON_UNIT_TYPES)[number];
-export type NonEmptyArray<T> = [T, ...T[]];
-
 export interface LearningUnitBase {
   id: string;
   kind: 'lesson' | 'test';
@@ -37,8 +35,7 @@ export interface LessonUnit extends LearningUnitBase {
 
 export interface TestUnit extends LearningUnitBase {
   kind: 'test';
-  type: 'normal';
-  versions: NonEmptyArray<TestVersionReference>;
+  rotationVersions: RotationVersionReference[];
   passingPercentage: number | null;
 }
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { adminDb } from '@/src/services/firebase-admin';
 import { verifyRequestAuth } from '@/src/lib/verifyRequestAuth';
+import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 import { Lesson, UserProgress } from '@/src/types/lesson';
 import {
   getFurthestPageIndex,
@@ -90,6 +91,7 @@ export async function POST(
           transaction.get(progressRef),
         ]);
         if (!lessonSnapshot.exists) throw new Error('LESSON_NOT_FOUND');
+        if (!isLessonDocumentData(lessonSnapshot.data())) throw new Error('LESSON_NOT_FOUND');
 
         const lesson = { id: lessonSnapshot.id, ...lessonSnapshot.data() } as Lesson;
         const exerciseId = resolveExerciseId(lesson, progressData.exerciseId);
@@ -144,6 +146,7 @@ export async function POST(
           transaction.get(progressRef),
         ]);
         if (!lessonSnapshot.exists) throw new Error('LESSON_NOT_FOUND');
+        if (!isLessonDocumentData(lessonSnapshot.data())) throw new Error('LESSON_NOT_FOUND');
 
         const lesson = { id: lessonSnapshot.id, ...lessonSnapshot.data() } as Lesson;
         const submittedIndex =
@@ -188,6 +191,7 @@ export async function POST(
           transaction.get(progressRef),
         ]);
         if (!lessonSnapshot.exists) throw new Error('LESSON_NOT_FOUND');
+        if (!isLessonDocumentData(lessonSnapshot.data())) throw new Error('LESSON_NOT_FOUND');
 
         const lesson = { id: lessonSnapshot.id, ...lessonSnapshot.data() } as Lesson;
         const existing = (progressSnapshot.data() || {}) as Partial<UserProgress>;

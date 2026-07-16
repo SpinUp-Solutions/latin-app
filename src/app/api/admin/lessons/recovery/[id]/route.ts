@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { Lesson } from '@/src/types/lesson';
+import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 import { verifyAdminAccess } from '../../../../../../lib/verifyAdminAccess';
 import { getLessonContentCounts } from '@/src/utils/lessonSummary';
 import { optionalPracticeCategoryIdsSchema } from '@/src/lib/practice-categories/schemas';
@@ -52,6 +53,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
 
       const rawLesson = recoveryData.rawLessonData as Lesson;
+      if (!isLessonDocumentData(rawLesson)) {
+        throw new RecoveryRouteError('Recovery item does not contain a lesson', 400);
+      }
       if (!rawLesson?.id || !rawLesson.title || !rawLesson.type) {
         throw new RecoveryRouteError('Recovery lesson ID, title, and type are required', 400);
       }
@@ -68,11 +72,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       const existingLessonDoc = await transaction.get(lessonRef);
       const lessonExists = existingLessonDoc.exists;
       const existingLesson = existingLessonDoc.data();
+      if (lessonExists && !isLessonDocumentData(existingLesson)) {
+        throw new RecoveryRouteError('A test cannot be recovered through the lesson endpoint', 404);
+      }
       const { totalPages, totalItems, totalExercises } = getLessonContentCounts(lesson);
       const now = new Date().toISOString();
       const lessonData = lessonExists
         ? {
             ...lesson,
+            kind: 'lesson' as const,
             totalPages,
             totalItems,
             totalExercises,
@@ -88,6 +96,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           }
         : {
             ...lesson,
+            kind: 'lesson' as const,
             totalPages,
             totalItems,
             totalExercises,
