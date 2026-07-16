@@ -1,4 +1,3 @@
-import { createApi } from '@reduxjs/toolkit/query/react';
 import type { LessonSummary } from '@/src/types/lesson';
 import type {
   PracticeCategory,
@@ -9,8 +8,8 @@ import type {
   PracticeLessonType,
 } from '@/src/types/practice-category';
 import { orderByIds } from '@/src/utils/orderByIds';
-import { lessonApi, PRACTICE_CATEGORY_ASSIGNMENTS_TAG } from './lessonApi';
-import { createAuthenticatedBaseQuery } from './baseQuery';
+import { appApi } from './appApi';
+import { PRACTICE_CATEGORY_ASSIGNMENTS_TAG } from './tags';
 
 export interface GetPracticeCategoriesArgs {
   lessonType: PracticeLessonType;
@@ -75,14 +74,7 @@ const categoryTags = (
   { type: 'PracticeCategory' as const, id: `${lessonType}:${status}` },
 ];
 
-export const practiceCategoryApi = createApi({
-  reducerPath: 'practiceCategoryApi',
-  baseQuery: createAuthenticatedBaseQuery(),
-  tagTypes: ['PracticeCategory'],
-  keepUnusedDataFor: 60 * 5,
-  refetchOnMountOrArgChange: 60 * 5,
-  refetchOnFocus: true,
-  refetchOnReconnect: true,
+export const practiceCategoryApi = appApi.injectEndpoints({
   endpoints: builder => ({
     getPracticeCategories: builder.query<PracticeCategory[], GetPracticeCategoriesArgs>({
       query: ({ lessonType, status = 'active' }) => ({
@@ -201,7 +193,7 @@ export const practiceCategoryApi = createApi({
             ],
       onQueryStarted(args, { dispatch, queryFulfilled }) {
         void afterSuccessfulMutation(queryFulfilled, () => {
-          dispatch(lessonApi.util.invalidateTags([PRACTICE_CATEGORY_ASSIGNMENTS_TAG]));
+          dispatch(appApi.util.invalidateTags([PRACTICE_CATEGORY_ASSIGNMENTS_TAG]));
         });
       },
     }),
@@ -219,7 +211,7 @@ export const practiceCategoryApi = createApi({
             ],
       onQueryStarted(args, { dispatch, queryFulfilled }) {
         void afterSuccessfulMutation(queryFulfilled, () => {
-          dispatch(lessonApi.util.invalidateTags([PRACTICE_CATEGORY_ASSIGNMENTS_TAG]));
+          dispatch(appApi.util.invalidateTags([PRACTICE_CATEGORY_ASSIGNMENTS_TAG]));
         });
       },
     }),
@@ -244,7 +236,7 @@ export const practiceCategoryApi = createApi({
 
         try {
           await queryFulfilled;
-          dispatch(lessonApi.util.invalidateTags([PRACTICE_CATEGORY_ASSIGNMENTS_TAG]));
+          dispatch(appApi.util.invalidateTags([PRACTICE_CATEGORY_ASSIGNMENTS_TAG]));
         } catch {
           patch.undo();
         }

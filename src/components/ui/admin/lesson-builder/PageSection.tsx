@@ -28,6 +28,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useDispatch } from 'react-redux';
 import { reorderPages, updatePageAutoAdvance } from '@/src/store/slices/lessonEditorSlice';
 import { PasteZone } from '../../core/clipboard';
+import type { PageDocumentEditorKind } from '@/src/lib/page-document-draft';
 
 interface PageSectionProps {
   title: string;
@@ -42,6 +43,7 @@ interface PageSectionProps {
   onEditContent: (pageIndex: number, itemIndex: number) => void;
   onRemoveContent: (pageIndex: number, itemIndex: number) => void;
   renderContentItemMeta?: (pageIndex: number, item: RenderableContentItem, itemIndex: number) => ReactNode;
+  editorKind?: PageDocumentEditorKind;
 }
 
 interface SortablePageProps {
@@ -58,6 +60,7 @@ interface SortablePageProps {
   onUpdatePageAutoAdvance: (pageIndex: number, autoAdvance: { enabled: boolean; delay: number }) => void;
   isAutoAdvanceExpanded: boolean;
   onToggleAutoAdvance: () => void;
+  editorKind: PageDocumentEditorKind;
 }
 
 const SortablePage: React.FC<SortablePageProps> = ({
@@ -74,6 +77,7 @@ const SortablePage: React.FC<SortablePageProps> = ({
   onUpdatePageAutoAdvance,
   isAutoAdvanceExpanded,
   onToggleAutoAdvance,
+  editorKind,
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: page.id });
 
@@ -84,7 +88,7 @@ const SortablePage: React.FC<SortablePageProps> = ({
   };
 
   const handleAddContent = (contentType: string) => {
-    const newContent = createNewContent(contentType);
+    const newContent = createNewContent(contentType, editorKind);
     onAddContent(pageIndex, newContent);
   };
 
@@ -169,6 +173,7 @@ export const PageSection: React.FC<PageSectionProps> = ({
   onEditContent,
   onRemoveContent,
   renderContentItemMeta,
+  editorKind = 'lesson',
 }) => {
   const dispatch = useDispatch();
   const [expandedAutoAdvancePageId, setExpandedAutoAdvancePageId] = useState<string | null>(null);
@@ -245,6 +250,7 @@ export const PageSection: React.FC<PageSectionProps> = ({
                 onUpdatePageAutoAdvance={handleUpdatePageAutoAdvance}
                 isAutoAdvanceExpanded={expandedAutoAdvancePageId === page.id}
                 onToggleAutoAdvance={() => handleToggleAutoAdvance(page.id)}
+                editorKind={editorKind}
               />
             ))}
           </SortableContext>

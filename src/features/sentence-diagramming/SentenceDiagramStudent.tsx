@@ -27,10 +27,14 @@ import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import type { FeedbackLevel } from '@/src/types/exercises/base';
 import { SentenceDiagrammingExercise } from '@/src/types/exercises/sentence-diagramming';
+import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
+import { resolveRuntimeMode } from '@/src/types/runtime-mode';
 
 export interface SentenceDiagramStudentProps {
   exercise: SentenceDiagrammingExercise;
   onComplete?: (score: number) => void;
+  runtimeMode?: RuntimeMode;
+  onAnswer?: ExerciseAnswerHandler;
   testMode?: boolean;
   onAttempt?: (attempt: DiagramAttempt) => void;
 }
@@ -158,9 +162,13 @@ const SentenceDiagramFeedbackPanel: React.FC<SentenceDiagramFeedbackPanelProps> 
 export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
   exercise,
   onComplete,
-  testMode = false,
+  runtimeMode,
+  onAnswer,
+  testMode,
   onAttempt,
 }) => {
+  const mode = resolveRuntimeMode(runtimeMode, testMode);
+  const assessmentMode = mode !== 'practice';
   const [annotations, setAnnotations] = useState<DiagramAnnotation[]>([]);
   const [selection, setSelection] = useState<DiagramSelection | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -204,7 +212,7 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
   );
 
   useDelayedExerciseReset({
-    shouldReset: !testMode && shouldResetExercise,
+    shouldReset: !assessmentMode && shouldResetExercise,
     delayMs: exercise.itemProgressionDelay,
     onReset: () => {
       historyRef.current = [];
@@ -279,7 +287,8 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
       tokens: exercise.data.tokens,
     });
 
-    if (testMode) {
+    if (assessmentMode) {
+      if (mode === 'test') onAnswer?.({ type: 'sentence-diagramming', annotations });
       setTestSubmitted(true);
       if (comparison.isComplete) handleCorrect(true);
       else handleIncorrect();
@@ -472,7 +481,7 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
         </div>
       </div>
 
-      <SentenceDiagramFeedbackPanel
+      {!assessmentMode && <SentenceDiagramFeedbackPanel
         isCorrect={isCorrect}
         message={feedbackMessage}
         level={level}
@@ -482,7 +491,7 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
         showExplanation={showExplanation}
         onContinue={isCorrect === true && isAwaitingConfirmation ? confirmAdvance : undefined}
         comparison={isCorrect === false ? comparison : undefined}
-      />
+      />}
     </div>
   );
 };

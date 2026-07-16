@@ -10,6 +10,8 @@ import { validateMatchingExercise } from '@/src/utils/exercises/matchingExercise
 import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
+import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
+import { resolveRuntimeMode } from '@/src/types/runtime-mode';
 
 interface MatchingItem {
   id: string;
@@ -19,10 +21,14 @@ interface MatchingItem {
 interface MatchingTableProps {
   exercise: MatchingExercise;
   onComplete?: (score: number) => void;
+  runtimeMode?: RuntimeMode;
+  onAnswer?: ExerciseAnswerHandler;
   testMode?: boolean;
 }
 
-export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComplete, testMode = false }) => {
+export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComplete, runtimeMode, onAnswer, testMode }) => {
+  const mode = resolveRuntimeMode(runtimeMode, testMode);
+  const assessmentMode = mode !== 'practice';
   const { leftColumn, rightColumn, answers: finalAnswer } = exercise.data;
   const totalRounds = exercise.data.requiredRepetitions || 1;
 
@@ -54,7 +60,7 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
   } = useExerciseFeedback(exercise.feedbackConfig);
 
   useDelayedExerciseReset({
-    shouldReset: !testMode && shouldResetExercise,
+    shouldReset: !assessmentMode && shouldResetExercise,
     delayMs: exercise.itemProgressionDelay,
     onReset: () => {
       setShuffledLeftColumn(leftColumn);
@@ -113,8 +119,9 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
 
     // Auto-match if left item is already selected
     if (selectedLeft && matchingItem) {
+      if (mode === 'test') onAnswer?.({ type: 'matching', matches: { ...matches, [selectedLeft.id]: matchingItem.id } });
       const validation = validateMatchingExercise(selectedLeft, matchingItem, exercise);
-      const isFirstTestAttempt = testMode && !testAttemptedLeftIds.has(selectedLeft.id);
+      const isFirstTestAttempt = assessmentMode && !testAttemptedLeftIds.has(selectedLeft.id);
 
       if (isFirstTestAttempt) {
         setTestAttemptedLeftIds(previous => new Set(previous).add(selectedLeft.id));
@@ -139,7 +146,7 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
         if (isLastMatch) {
           const correctMatches = Object.keys(newMatches).length;
           const totalMatches = Object.keys(finalAnswer).length;
-          const roundScore = testMode
+          const roundScore = assessmentMode
             ? Math.round((nextTestFirstAttemptCorrect / totalMatches) * 100)
             : Math.round((correctMatches / totalMatches) * 100);
 
@@ -164,7 +171,7 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
       } else {
         handleIncorrect();
 
-        setShowIncorrectFlash(true);
+        setShowIncorrectFlash(!assessmentMode);
 
         // Clear selections after showing red flash
         setTimeout(() => {
@@ -291,13 +298,13 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({ exercise, onComple
         </div>
 
         {/* Feedback Display */}
-        <FeedbackDisplay
+        {!assessmentMode && <FeedbackDisplay
           isCorrect={isCorrect}
           message={message}
           level={level}
           hint={exercise.data.hint}
           showExplanation={showExplanation}
-        />
+        />}
       </div>
     </div>
   );

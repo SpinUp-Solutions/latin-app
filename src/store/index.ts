@@ -8,13 +8,11 @@ import vocabularyPoolsReducer from './slices/vocabularyPoolSlice';
 import vocabularyReducer from './slices/vocabularySlice';
 import vocabularyEditReducer from './slices/vocabularyEditSlice';
 import advancedFiltersReducer from './slices/advancedFiltersSlice';
-import { lessonApi } from './api/lessonApi';
+import { appApi } from './api/appApi';
 import { vocabularyPoolApi } from './api/vocabularyPoolApi';
 import { vocabularyApi } from './api/vocabularyApi';
 import { advancedVocabularyApi } from './api/advancedVocabularyApi';
 import { vocabularyWordRequestsApi } from './api/vocabularyWordRequestsApi';
-import { testApi } from './api/testApi';
-import { practiceCategoryApi } from './api/practiceCategoryApi';
 
 export const store = configureStore({
   reducer: {
@@ -26,25 +24,21 @@ export const store = configureStore({
     vocabulary: vocabularyReducer,
     vocabularyEdit: vocabularyEditReducer,
     advancedFilters: advancedFiltersReducer,
-    [lessonApi.reducerPath]: lessonApi.reducer,
+    [appApi.reducerPath]: appApi.reducer,
     [vocabularyPoolApi.reducerPath]: vocabularyPoolApi.reducer,
     [vocabularyApi.reducerPath]: vocabularyApi.reducer,
     [advancedVocabularyApi.reducerPath]: advancedVocabularyApi.reducer,
     [vocabularyWordRequestsApi.reducerPath]: vocabularyWordRequestsApi.reducer,
-    [testApi.reducerPath]: testApi.reducer,
-    [practiceCategoryApi.reducerPath]: practiceCategoryApi.reducer,
   },
   middleware: getDefaultMiddleware =>
     getDefaultMiddleware({
       serializableCheck: false,
     }).concat(
-      lessonApi.middleware,
+      appApi.middleware,
       vocabularyPoolApi.middleware,
       vocabularyApi.middleware,
       advancedVocabularyApi.middleware,
-      vocabularyWordRequestsApi.middleware,
-      testApi.middleware,
-      practiceCategoryApi.middleware
+      vocabularyWordRequestsApi.middleware
     ),
 });
 

@@ -21,18 +21,28 @@ import { auth } from '@/src/services/firebase';
 import { DiagramAttempt } from '@/src/features/sentence-diagramming';
 import { RequiredExercise } from '@/src/utils/lessonProgress';
 import { stripHtmlTags } from '@/src/utils/exercises';
+import type { ExerciseAnswerEvent, RuntimeMode } from '@/src/types/runtime-mode';
+import type { ResolvedGeneratedExerciseState } from './content-renderer';
 
 interface LessonPlayerProps {
   lesson: LessonWithProgress;
   navigationPlacement?: 'fixed' | 'contained';
   trackProgress?: boolean;
+  runtimeMode?: RuntimeMode;
+  onAnswer?: (event: ExerciseAnswerEvent) => void;
+  resolvedExerciseState?: Record<string, ResolvedGeneratedExerciseState>;
 }
 
 export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   lesson,
   navigationPlacement = 'fixed',
   trackProgress = true,
+  runtimeMode,
+  onAnswer,
+  resolvedExerciseState,
 }) => {
+  const effectiveRuntimeMode = runtimeMode ?? (trackProgress ? 'practice' : 'preview');
+  const shouldTrackProgress = trackProgress && effectiveRuntimeMode === 'practice';
   const { user } = useAuth();
   const [markExerciseComplete] = useMarkExerciseCompleteMutation();
   const [updatePageProgress] = useUpdatePageProgressMutation();
@@ -48,12 +58,12 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   const totalPages = lesson.pages.length;
 
   useEffect(() => {
-    if (!trackProgress || !user?.uid || !currentPage?.id || lastVisitedPageId.current === currentPage.id) return;
+    if (!shouldTrackProgress || !user?.uid || !currentPage?.id || lastVisitedPageId.current === currentPage.id) return;
     lastVisitedPageId.current = currentPage.id;
     updatePageProgress({ userId: user.uid, lessonId: lesson.id, pageId: currentPage.id })
       .unwrap()
       .catch(() => toast.error('Unable to save your page progress.'));
-  }, [currentPage?.id, lesson.id, trackProgress, updatePageProgress, user?.uid]);
+  }, [currentPage?.id, lesson.id, shouldTrackProgress, updatePageProgress, user?.uid]);
 
   const handleNext = useCallback(() => {
     if (currentPageIndex < totalPages - 1) {
@@ -91,7 +101,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
 
   const handleExerciseComplete = useCallback(
     (exerciseId: string, score: number) => {
-      if (!trackProgress || !user?.uid) return;
+      if (!shouldTrackProgress || !user?.uid) return;
 
       markExerciseComplete({
         userId: user.uid,
@@ -102,7 +112,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
         .unwrap()
         .catch(() => toast.error('Unable to save your exercise progress. Please try again.'));
     },
-    [markExerciseComplete, user?.uid, lesson.id, trackProgress]
+    [markExerciseComplete, user?.uid, lesson.id, shouldTrackProgress]
   );
 
   const handleDiagrammingAttempt = useCallback(
@@ -134,7 +144,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   const isListeningLesson = lesson.type === 'listening';
   const isLessonCompleted = lesson.status === 'completed';
   const handleFinishLesson = useCallback(async () => {
-    if (!trackProgress) {
+    if (!shouldTrackProgress) {
       toast.info('Preview mode: progress is not tracked.');
       return;
     }
@@ -148,7 +158,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
       setMissingExercises(data?.missingExercises || []);
       toast.error(data?.error || 'Failed to finish the lesson.');
     }
-  }, [currentPage?.id, finishLesson, lesson.id, trackProgress, user?.uid]);
+  }, [currentPage?.id, finishLesson, lesson.id, shouldTrackProgress, user?.uid]);
 
   if (!lesson || !currentPage) {
     return (
@@ -226,6 +236,9 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
                   key={currentPage.id}
                   page={currentPage}
                   pageIndex={currentPageIndex}
+                  runtimeMode={effectiveRuntimeMode}
+                  onAnswer={onAnswer}
+                  resolvedExerciseState={resolvedExerciseState}
                   onExerciseComplete={handleExerciseComplete}
                   onPageComplete={handlePageComplete}
                   onDiagrammingAttempt={handleDiagrammingAttempt}

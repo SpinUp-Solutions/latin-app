@@ -3,10 +3,23 @@ import { Lesson, Page } from '@/src/types/lesson';
 import { RenderableContentItem } from '@/src/types/page';
 import { TooltipData } from '@/src/types/tooltip';
 import { regeneratePageIds } from '@/src/utils/idUtils';
+import type { TestVersion } from '@/src/types/test';
+import {
+  getPageDocumentDraftKey,
+  lessonToPageDocumentDraft,
+  testVersionToPageDocumentDraft,
+  type PageDocumentDraft,
+} from '@/src/lib/page-document-draft';
+
+interface PageDocumentDraftRecord {
+  document: PageDocumentDraft;
+  lastModified: string;
+}
 
 interface LessonEditorState {
   currentLesson: Lesson | null;
-  drafts: Record<string, { lesson: Lesson; lastModified: string }>;
+  currentPageDocument: PageDocumentDraft | null;
+  drafts: Record<string, PageDocumentDraftRecord>;
   editingContent: {
     content: RenderableContentItem;
     pageIndex: number;
@@ -20,6 +33,7 @@ interface LessonEditorState {
 
 const initialState: LessonEditorState = {
   currentLesson: null,
+  currentPageDocument: null,
   drafts: {},
   editingContent: null,
   isModalOpen: false,
@@ -28,12 +42,30 @@ const initialState: LessonEditorState = {
   error: null,
 };
 
-const DRAFTS_KEY = 'lesson_drafts';
+const DRAFTS_KEY = 'page_document_drafts';
+const LEGACY_DRAFTS_KEY = 'lesson_drafts';
+
+function getEditablePages(state: LessonEditorState) {
+  return state.currentPageDocument?.pages ?? state.currentLesson?.pages;
+}
 
 export const loadDrafts = createAsyncThunk('lessonEditor/loadDrafts', (_, { rejectWithValue }) => {
   try {
     const draftsData = sessionStorage.getItem(DRAFTS_KEY);
-    return draftsData ? JSON.parse(draftsData) : {};
+    if (draftsData) return JSON.parse(draftsData) as Record<string, PageDocumentDraftRecord>;
+
+    const legacyData = sessionStorage.getItem(LEGACY_DRAFTS_KEY);
+    if (!legacyData) return {};
+    const legacyDrafts = JSON.parse(legacyData) as Record<string, { lesson: Lesson; lastModified: string }>;
+    const migratedDrafts = Object.fromEntries(
+      Object.values(legacyDrafts).map(draft => {
+        const document = lessonToPageDocumentDraft(draft.lesson);
+        return [getPageDocumentDraftKey('lesson', draft.lesson.id), { document, lastModified: draft.lastModified }];
+      })
+    );
+    sessionStorage.setItem(DRAFTS_KEY, JSON.stringify(migratedDrafts));
+    sessionStorage.removeItem(LEGACY_DRAFTS_KEY);
+    return migratedDrafts;
   } catch {
     return rejectWithValue('Failed to load drafts');
   }
@@ -47,9 +79,11 @@ export const saveDraft = createAsyncThunk(
       const drafts = { ...state.lessonEditor.drafts };
       const timestamp = new Date().toISOString();
 
-      drafts[lesson.id] = { lesson, lastModified: timestamp };
+      const document = lessonToPageDocumentDraft(lesson, state.lessonEditor.tooltips);
+      const draftKey = getPageDocumentDraftKey('lesson', lesson.id);
+      drafts[draftKey] = { document, lastModified: timestamp };
       sessionStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts));
-      return { lessonId: lesson.id, draft: { lesson, lastModified: timestamp } };
+      return { draftKey, draft: { document, lastModified: timestamp } };
     } catch {
       return rejectWithValue('Failed to save draft');
     }
@@ -62,9 +96,44 @@ export const clearDraft = createAsyncThunk(
     try {
       const state = getState() as { lessonEditor: LessonEditorState };
       const drafts = { ...state.lessonEditor.drafts };
-      delete drafts[lessonId];
+      const draftKey = getPageDocumentDraftKey('lesson', lessonId);
+      delete drafts[draftKey];
       sessionStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts));
-      return lessonId;
+      return draftKey;
+    } catch {
+      return rejectWithValue('Failed to clear draft');
+    }
+  }
+);
+
+export const savePageDocumentDraft = createAsyncThunk(
+  'lessonEditor/savePageDocumentDraft',
+  async (document: PageDocumentDraft, { getState, rejectWithValue }) => {
+    try {
+      const state = getState() as { lessonEditor: LessonEditorState };
+      const drafts = { ...state.lessonEditor.drafts };
+      const lastModified = new Date().toISOString();
+      const draftKey = getPageDocumentDraftKey(document.editorKind, document.ownerId);
+      const draft = { document, lastModified };
+      drafts[draftKey] = draft;
+      sessionStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts));
+      return { draftKey, draft };
+    } catch {
+      return rejectWithValue('Failed to save draft');
+    }
+  }
+);
+
+export const clearPageDocumentDraft = createAsyncThunk(
+  'lessonEditor/clearPageDocumentDraft',
+  async ({ editorKind, ownerId }: Pick<PageDocumentDraft, 'editorKind' | 'ownerId'>, { getState, rejectWithValue }) => {
+    try {
+      const state = getState() as { lessonEditor: LessonEditorState };
+      const drafts = { ...state.lessonEditor.drafts };
+      const draftKey = getPageDocumentDraftKey(editorKind, ownerId);
+      delete drafts[draftKey];
+      sessionStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts));
+      return draftKey;
     } catch {
       return rejectWithValue('Failed to clear draft');
     }
@@ -76,6 +145,7 @@ const lessonEditorSlice = createSlice({
   initialState,
   reducers: {
     setLesson: (state, action: PayloadAction<Lesson | undefined>) => {
+      state.currentPageDocument = null;
       state.currentLesson = action.payload
         ? {
             ...action.payload,
@@ -101,6 +171,20 @@ const lessonEditorSlice = createSlice({
       state.dirty = false;
     },
 
+    setTestVersion: (state, action: PayloadAction<TestVersion>) => {
+      state.currentLesson = null;
+      state.currentPageDocument = testVersionToPageDocumentDraft(action.payload);
+      state.tooltips = {};
+      state.error = null;
+      state.dirty = false;
+    },
+
+    updatePageDocumentInfo: (state, action: PayloadAction<Partial<Pick<PageDocumentDraft, 'ownerId' | 'title' | 'description'>>>) => {
+      if (!state.currentPageDocument) return;
+      Object.assign(state.currentPageDocument, action.payload);
+      state.dirty = true;
+    },
+
     updateLessonInfo: (
       state,
       action: PayloadAction<
@@ -119,14 +203,15 @@ const lessonEditorSlice = createSlice({
     },
 
     addPage: state => {
-      if (state.currentLesson) {
+      const pages = getEditablePages(state);
+      if (pages) {
         const newPage: Page = {
           id: `page-${Date.now()}`,
           title: 'New Page',
           items: [],
           audioPath: null,
         };
-        state.currentLesson.pages.push(newPage);
+        pages.push(newPage);
         state.dirty = true;
       }
     },
@@ -139,8 +224,9 @@ const lessonEditorSlice = createSlice({
       }>
     ) => {
       const { pageIndex, title } = action.payload;
-      if (state.currentLesson) {
-        state.currentLesson.pages[pageIndex].title = title;
+      const pages = getEditablePages(state);
+      if (pages?.[pageIndex]) {
+        pages[pageIndex].title = title;
         state.dirty = true;
       }
     },
@@ -153,8 +239,9 @@ const lessonEditorSlice = createSlice({
       }>
     ) => {
       const { pageIndex, autoAdvance } = action.payload;
-      if (state.currentLesson?.pages[pageIndex]) {
-        state.currentLesson.pages[pageIndex].autoAdvance = autoAdvance;
+      const pages = getEditablePages(state);
+      if (pages?.[pageIndex]) {
+        pages[pageIndex].autoAdvance = autoAdvance;
         state.dirty = true;
       }
     },
@@ -167,8 +254,9 @@ const lessonEditorSlice = createSlice({
       }>
     ) => {
       const { pageIndex, content } = action.payload;
-      if (state.currentLesson) {
-        state.currentLesson.pages[pageIndex].items.push(content);
+      const pages = getEditablePages(state);
+      if (pages?.[pageIndex]) {
+        pages[pageIndex].items.push(content);
         state.dirty = true;
       }
     },
@@ -182,8 +270,9 @@ const lessonEditorSlice = createSlice({
       }>
     ) => {
       const { pageIndex, itemIndex, content } = action.payload;
-      if (state.currentLesson) {
-        state.currentLesson.pages[pageIndex].items[itemIndex] = content;
+      const pages = getEditablePages(state);
+      if (pages?.[pageIndex]) {
+        pages[pageIndex].items[itemIndex] = content;
         state.dirty = true;
       }
     },
@@ -196,8 +285,9 @@ const lessonEditorSlice = createSlice({
       }>
     ) => {
       const { pageIndex, itemIndex } = action.payload;
-      if (state.currentLesson) {
-        state.currentLesson.pages[pageIndex].items.splice(itemIndex, 1);
+      const pages = getEditablePages(state);
+      if (pages?.[pageIndex]) {
+        pages[pageIndex].items.splice(itemIndex, 1);
         state.dirty = true;
       }
     },
@@ -209,8 +299,9 @@ const lessonEditorSlice = createSlice({
       }>
     ) => {
       const { pageIndex } = action.payload;
-      if (state.currentLesson) {
-        state.currentLesson.pages.splice(pageIndex, 1);
+      const pages = getEditablePages(state);
+      if (pages?.[pageIndex]) {
+        pages.splice(pageIndex, 1);
         state.dirty = true;
       }
     },
@@ -222,10 +313,11 @@ const lessonEditorSlice = createSlice({
       }>
     ) => {
       const { pageIndex } = action.payload;
-      if (state.currentLesson) {
-        const pageToDuplicate = state.currentLesson.pages[pageIndex];
+      const pages = getEditablePages(state);
+      if (pages?.[pageIndex]) {
+        const pageToDuplicate = pages[pageIndex];
         const { page: newPage, tooltips: newTooltips } = regeneratePageIds(pageToDuplicate, state.tooltips);
-        state.currentLesson.pages.splice(pageIndex + 1, 0, newPage);
+        pages.splice(pageIndex + 1, 0, newPage);
         state.tooltips = { ...state.tooltips, ...newTooltips };
         state.dirty = true;
       }
@@ -239,9 +331,10 @@ const lessonEditorSlice = createSlice({
       }>
     ) => {
       const { pageIndex, itemIndex } = action.payload;
-      if (state.currentLesson) {
+      const pages = getEditablePages(state);
+      if (pages?.[pageIndex]?.items[itemIndex]) {
         state.editingContent = {
-          content: JSON.parse(JSON.stringify(state.currentLesson.pages[pageIndex].items[itemIndex])),
+          content: JSON.parse(JSON.stringify(pages[pageIndex].items[itemIndex])),
           pageIndex,
           itemIndex,
         };
@@ -252,18 +345,20 @@ const lessonEditorSlice = createSlice({
     updateEditingContent: (state, action: PayloadAction<RenderableContentItem>) => {
       if (state.editingContent) {
         state.editingContent.content = action.payload;
-        if (state.currentLesson) {
+        const pages = getEditablePages(state);
+        if (pages) {
           const { pageIndex, itemIndex } = state.editingContent;
-          state.currentLesson.pages[pageIndex].items[itemIndex] = action.payload;
+          pages[pageIndex].items[itemIndex] = action.payload;
           state.dirty = true;
         }
       }
     },
 
     saveEditingContent: state => {
-      if (state.editingContent && state.currentLesson) {
+      const pages = getEditablePages(state);
+      if (state.editingContent && pages) {
         const { pageIndex, itemIndex, content } = state.editingContent;
-        state.currentLesson.pages[pageIndex].items[itemIndex] = content;
+        pages[pageIndex].items[itemIndex] = content;
         state.editingContent = null;
         state.isModalOpen = false;
         state.dirty = true;
@@ -281,6 +376,7 @@ const lessonEditorSlice = createSlice({
 
     resetLessonState: state => {
       state.currentLesson = null;
+      state.currentPageDocument = null;
       state.editingContent = null;
       state.error = null;
       state.dirty = false;
@@ -313,8 +409,8 @@ const lessonEditorSlice = createSlice({
       }>
     ) => {
       const { fromIndex, toIndex } = action.payload;
-      if (state.currentLesson && fromIndex !== toIndex) {
-        const pages = state.currentLesson.pages;
+      const pages = getEditablePages(state);
+      if (pages && fromIndex !== toIndex) {
         const [movedPage] = pages.splice(fromIndex, 1);
         pages.splice(toIndex, 0, movedPage);
         state.dirty = true;
@@ -330,8 +426,9 @@ const lessonEditorSlice = createSlice({
       }>
     ) => {
       const { pageIndex, fromIndex, toIndex } = action.payload;
-      if (state.currentLesson && fromIndex !== toIndex) {
-        const items = state.currentLesson.pages[pageIndex].items;
+      const pages = getEditablePages(state);
+      if (pages && fromIndex !== toIndex) {
+        const items = pages[pageIndex].items;
         const [movedItem] = items.splice(fromIndex, 1);
         items.splice(toIndex, 0, movedItem);
         state.dirty = true;
@@ -348,9 +445,15 @@ const lessonEditorSlice = createSlice({
         state.drafts = action.payload;
       })
       .addCase(saveDraft.fulfilled, (state, action) => {
-        state.drafts[action.payload.lessonId] = action.payload.draft;
+        state.drafts[action.payload.draftKey] = action.payload.draft;
       })
       .addCase(clearDraft.fulfilled, (state, action) => {
+        delete state.drafts[action.payload];
+      })
+      .addCase(savePageDocumentDraft.fulfilled, (state, action) => {
+        state.drafts[action.payload.draftKey] = action.payload.draft;
+      })
+      .addCase(clearPageDocumentDraft.fulfilled, (state, action) => {
         delete state.drafts[action.payload];
       });
   },
@@ -358,6 +461,8 @@ const lessonEditorSlice = createSlice({
 
 export const {
   setLesson,
+  setTestVersion,
+  updatePageDocumentInfo,
   updateLessonInfo,
   addPage,
   updatePageTitle,
@@ -383,12 +488,18 @@ export const {
 } = lessonEditorSlice.actions;
 
 export const selectHasDraft = (state: { lessonEditor: LessonEditorState }, lessonId: string) =>
-  Boolean(state.lessonEditor.drafts[lessonId]);
+  Boolean(state.lessonEditor.drafts[getPageDocumentDraftKey('lesson', lessonId)]);
 
 export const selectDraftLastModified = (state: { lessonEditor: LessonEditorState }, lessonId: string) =>
-  state.lessonEditor.drafts[lessonId]?.lastModified;
+  state.lessonEditor.drafts[getPageDocumentDraftKey('lesson', lessonId)]?.lastModified;
 
 export const selectDraft = (state: { lessonEditor: LessonEditorState }, lessonId: string) =>
-  state.lessonEditor.drafts[lessonId];
+  state.lessonEditor.drafts[getPageDocumentDraftKey('lesson', lessonId)];
+
+export const selectPageDocumentDraft = (
+  state: { lessonEditor: LessonEditorState },
+  editorKind: PageDocumentDraft['editorKind'],
+  ownerId: string
+) => state.lessonEditor.drafts[getPageDocumentDraftKey(editorKind, ownerId)];
 
 export default lessonEditorSlice.reducer;

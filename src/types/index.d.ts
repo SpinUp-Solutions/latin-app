@@ -15,3 +15,13 @@ export type {
 export type { RenderableContentItem, BasePage } from './page';
 
 export type { Lesson } from './lesson';
+export type {
+  LearningUnitBase,
+  LessonUnit,
+  TestUnit,
+  LearningUnit,
+  TestUnitCompletionProgress,
+  LessonUnitProgress,
+  LearningUnitProgress,
+  LearningUnitProgressFor,
+} from './learning-unit';

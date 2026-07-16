@@ -2,8 +2,13 @@ import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import FillExercise from '@/src/components/ui/exercises/fill-exercise';
 import MultipleChoiceExercise from '@/src/components/ui/exercises/multiple-choice-exercise';
+import ContentRenderer from '@/src/components/ui/lesson/content-renderer';
 import type { FillExercise as FillExerciseType } from '@/src/types/exercises/fill';
 import type { MultipleChoiceExercise as MultipleChoiceExerciseType } from '@/src/types/exercises/multiple-choice';
+
+jest.mock('@/src/services/wordLookupService', () => ({}));
+jest.mock('@/src/components/ui/core/simple-rich-editor', () => ({ SimpleRichEditor: () => null }));
+jest.mock('@/src/hooks/useTranslationGrading', () => ({ useTranslationGrading: () => ({}) }));
 
 const manualProgression = {
   escalationLevels: [],
@@ -72,5 +77,45 @@ describe('exercise test mode scoring', () => {
     fireEvent.click(screen.getByRole('button', { name: /continue/i }));
 
     expect(onComplete).toHaveBeenCalledWith(50);
+  });
+
+  it('emits a raw runtime-mode answer under the persisted exercise ID', () => {
+    const onAnswer = jest.fn();
+    const exercise: MultipleChoiceExerciseType = {
+      id: 'persisted-question-id',
+      type: 'multiple-choice',
+      title: 'Question',
+      instructions: '',
+      feedbackConfig: manualProgression,
+      data: {
+        question: 'Choose one',
+        allowMultipleSelections: false,
+        options: [
+          { id: 'a', text: 'Alpha', isCorrect: false },
+          { id: 'b', text: 'Beta', isCorrect: true },
+        ],
+      },
+    };
+
+    render(
+      <ContentRenderer
+        content={exercise}
+        runtimeMode="test"
+        pageIndex={2}
+        itemIndex={3}
+        onAnswer={onAnswer}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /alpha/i }));
+    fireEvent.click(screen.getByRole('button', { name: /submit answer/i }));
+
+    expect(onAnswer).toHaveBeenCalledWith({
+      exerciseId: 'persisted-question-id',
+      pageIndex: 2,
+      itemIndex: 3,
+      answer: { type: 'multiple-choice', selectedOptionIds: ['a'] },
+    });
+    expect(screen.queryByText(/correct answer/i)).not.toBeInTheDocument();
   });
 });

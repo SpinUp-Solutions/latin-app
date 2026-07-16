@@ -1,28 +1,15 @@
-import { Page } from './page';
 import type { VocabularyPoolWithWords } from './vocabulary-pool';
 import type { PracticeCategoryPlacement, PracticeCategorySummary } from './practice-category';
+import type { LessonUnit } from './learning-unit';
 
-export interface Lesson {
-  id: string;
-  title: string;
+/**
+ * Temporary compatibility shape for callers that still create legacy lesson
+ * objects without an explicit kind or description.
+ */
+export type Lesson = Omit<LessonUnit, 'kind' | 'description' | 'vocabulary_pool'> & {
+  kind?: 'lesson';
   description?: string;
-  type: 'vocab' | 'normal' | 'sentence-diagramming' | 'listening';
   vocabulary_pool?: string;
-  pages: Page[];
-
-  isLive: boolean;
-  liveOrder: number | null;
-  publishedAt: string | null;
-  publishedBy: string | null;
-
-  createdAt?: string;
-  createdBy?: string;
-  updatedAt?: string;
-  updatedBy?: string;
-  version?: number;
-  totalPages?: number;
-  totalItems?: number;
-  totalExercises?: number;
 
   /** Mutation/local-only category IDs. Never persisted on lesson documents. */
   practiceCategoryIds?: string[];
@@ -30,7 +17,7 @@ export interface Lesson {
   practiceCategories?: PracticeCategorySummary[];
   /** Response-only student ordering metadata. Never persisted on lesson documents. */
   practiceCategoryPlacements?: PracticeCategoryPlacement[];
-}
+};
 
 export type LessonSummary = Omit<Lesson, 'pages'> & {
   totalPages: number;
@@ -38,13 +25,13 @@ export type LessonSummary = Omit<Lesson, 'pages'> & {
   totalExercises: number;
 };
 
-export interface LessonWithVocabularyPool extends Lesson {
+export type LessonWithVocabularyPool = Lesson & {
   vocabularyPoolData?: VocabularyPoolWithWords;
-}
+};
 
 export type LessonStatus = 'available' | 'in-progress' | 'completed' | 'locked';
 
-export interface LessonWithProgress extends Lesson {
+export type LessonWithProgress = Lesson & {
   progress?: number;
   status?: LessonStatus;
   furthestPageIndex?: number;
@@ -55,7 +42,7 @@ export interface LessonWithProgress extends Lesson {
   score?: number;
   lastAccessedAt?: string;
   progressSchemaVersion?: number;
-}
+};
 
 export interface ExerciseProgress {
   exerciseId: string;

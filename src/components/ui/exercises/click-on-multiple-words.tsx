@@ -12,14 +12,20 @@ import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { MultiClickableRichDisplay } from '../core/multi-clickable-rich-display';
 import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
+import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
+import { resolveRuntimeMode } from '@/src/types/runtime-mode';
 
 interface Props {
   exercise: ClickOnMultipleWordsExercise;
   onComplete?: (score: number) => void;
+  runtimeMode?: RuntimeMode;
+  onAnswer?: ExerciseAnswerHandler;
   testMode?: boolean;
 }
 
-const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete, testMode = false }) => {
+const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete, runtimeMode, onAnswer, testMode }) => {
+  const mode = resolveRuntimeMode(runtimeMode, testMode);
+  const assessmentMode = mode !== 'practice';
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -45,7 +51,7 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete, 
   } = useExerciseFeedback(exercise.feedbackConfig);
 
   useDelayedExerciseReset({
-    shouldReset: !testMode && shouldResetExercise,
+    shouldReset: !assessmentMode && shouldResetExercise,
     delayMs: exercise.itemProgressionDelay,
     onReset: () => {
       setSelectedIndices(new Set());
@@ -79,6 +85,9 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete, 
 
     setIsProcessing(true);
     setHasSubmitted(true);
+    if (mode === 'test') {
+      onAnswer?.({ type: 'click-on-multiple-words', selectedWordIndices: Array.from(selectedIndices).sort((a, b) => a - b) });
+    }
 
     const validation = validateClickOnMultipleWords(selectedIndices, exercise);
     setValidationResult(validation);
@@ -96,7 +105,7 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete, 
     } else {
       handleIncorrect();
       setIsProcessing(false);
-      if (testMode) onComplete?.(validation.score);
+      if (assessmentMode) onComplete?.(validation.score);
     }
   };
 
@@ -108,7 +117,7 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete, 
   };
 
   const getSelectionSummary = () => {
-    if (!validationResult) {
+    if (!validationResult || assessmentMode) {
       return `${selectedIndices.size} of ${exercise.data.correctWordIndices.length} words selected`;
     }
 
@@ -166,15 +175,15 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete, 
             onWordClick={handleWordClick}
             selectedWordIndices={selectedIndices}
             correctIndices={
-              validationResult
+              validationResult && !assessmentMode
                 ? new Set(
                     Array.from(validationResult.selectedIndices).filter(i => validationResult.correctIndices.has(i))
                   )
                 : undefined
             }
-            incorrectIndices={validationResult?.extraIndices}
-            missedIndices={validationResult?.missedIndices}
-            isSubmitted={hasSubmitted}
+            incorrectIndices={assessmentMode ? undefined : validationResult?.extraIndices}
+            missedIndices={assessmentMode ? undefined : validationResult?.missedIndices}
+            isSubmitted={!assessmentMode && hasSubmitted}
             className="min-w-[300px]"
           />
         </div>
@@ -187,7 +196,7 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete, 
             </Button>
           )}
 
-          {hasSubmitted && isCorrect === false && !testMode && (
+          {hasSubmitted && isCorrect === false && !assessmentMode && (
             <Button onClick={handleReset} variant="outline" disabled={isProcessing} className="px-8">
               Try Again
             </Button>
@@ -195,7 +204,7 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete, 
         </div>
 
         {/* Selection Details (after submission) */}
-        {hasSubmitted && validationResult && (
+        {!assessmentMode && hasSubmitted && validationResult && (
           <div className="mt-4 p-3 bg-gray-50 rounded text-sm">
             <div className="text-center space-y-1">
               <div>✅ Correct selections: {validationResult.correctSelections}</div>
@@ -210,7 +219,7 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete, 
         )}
 
         {/* Feedback Display */}
-        <FeedbackDisplay
+        {!assessmentMode && <FeedbackDisplay
           isCorrect={isCorrect}
           message={message}
           level={level}
@@ -222,7 +231,7 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete, 
           explanation={exercise.data.explanation}
           showExplanation={showExplanation}
           onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
-        />
+        />}
       </div>
     </div>
   );

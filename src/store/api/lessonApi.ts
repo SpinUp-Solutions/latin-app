@@ -1,23 +1,11 @@
-import { createApi } from '@reduxjs/toolkit/query/react';
 import { Lesson, LessonSummary, LessonWithProgress } from '@/src/types/lesson';
 import { extractTooltipsFromLesson } from '@/src/utils/tooltipUtils';
 import { TooltipData } from '@/src/types/tooltip';
-import { createAuthenticatedBaseQuery } from './baseQuery';
 import { buildLessonMutationPayload } from '@/src/utils/practiceCategoryLessons';
+import { appApi } from './appApi';
+import { PRACTICE_CATEGORY_ASSIGNMENTS_TAG } from './tags';
 
-export const PRACTICE_CATEGORY_ASSIGNMENTS_TAG = {
-  type: 'PracticeCategoryAssignments' as const,
-  id: 'ALL',
-};
-
-export const lessonApi = createApi({
-  reducerPath: 'lessonApi',
-  baseQuery: createAuthenticatedBaseQuery(),
-  tagTypes: ['Lesson', 'LessonList', 'StudentLesson', 'Recovery', 'PracticeCategoryAssignments'],
-  keepUnusedDataFor: 60 * 5,
-  refetchOnMountOrArgChange: 30,
-  refetchOnFocus: true,
-  refetchOnReconnect: true,
+export const lessonApi = appApi.injectEndpoints({
   endpoints: builder => ({
     getLessons: builder.query<LessonSummary[], void>({
       query: () => '/admin/lessons',

@@ -47,14 +47,28 @@ import {
 import { hasSelectedForm } from '@/src/utils/exercises/formSelection';
 import { formatLabel } from '@/src/utils/label-formatter';
 import { normalizeCollection, buildLegacyParadigmConfigs } from '@/src/utils/exercises/legacyExerciseCompat';
+import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
+import { resolveRuntimeMode } from '@/src/types/runtime-mode';
 
 interface Props {
   exercise: GeneratedFormIdentificationExercise;
   onComplete?: (score: number) => void;
+  runtimeMode?: RuntimeMode;
+  onAnswer?: ExerciseAnswerHandler;
+  resolvedItems?: Array<FormIdentificationItem | SingleFieldFormIdentificationItem | MultiAnswerFormIdentificationItem>;
   testMode?: boolean;
 }
 
-const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercise, onComplete, testMode = false }) => {
+const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
+  exercise,
+  onComplete,
+  runtimeMode,
+  onAnswer,
+  resolvedItems,
+  testMode,
+}) => {
+  const mode = resolveRuntimeMode(runtimeMode, testMode);
+  const assessmentMode = mode !== 'practice';
   const [userAnswer, setUserAnswer] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [correctAnswers, setCorrectAnswers] = useState(0);
@@ -63,6 +77,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
   const [testEarnedUnits, setTestEarnedUnits] = useState(0);
   const [testSubmitted, setTestSubmitted] = useState(false);
   const [pendingTestEarnedUnits, setPendingTestEarnedUnits] = useState(0);
+  const [submittedAnswers, setSubmittedAnswers] = useState<Record<string, string>>({});
 
   const config = exercise.data.generatorConfig;
   const isSingleField = exercise.data.mode === 'single-field';
@@ -80,18 +95,22 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
     ? exercise.data.paradigmConfigs
     : buildLegacyParadigmConfigs(config as Parameters<typeof buildLegacyParadigmConfigs>[0]);
 
-  const { data, isLoading, isError } = useGetMultiParadigmWordsQuery({
-    exerciseType: 'generated-form-identification',
-    collection: normalizeCollection(config.collection),
-    wordSource: config.wordSource || 'filters',
-    poolId: config.poolId ?? null,
-    poolWordLimit: config.poolWordLimit ?? null,
-    count: config.count,
-    paradigmConfigs,
-  });
+  const { data, isLoading, isError } = useGetMultiParadigmWordsQuery(
+    {
+      exerciseType: 'generated-form-identification',
+      collection: normalizeCollection(config.collection),
+      wordSource: config.wordSource || 'filters',
+      poolId: config.poolId ?? null,
+      poolWordLimit: config.poolWordLimit ?? null,
+      count: config.count,
+      paradigmConfigs,
+    },
+    { skip: mode === 'test' || resolvedItems !== undefined }
+  );
 
   type ItemType = FormIdentificationItem | SingleFieldFormIdentificationItem | MultiAnswerFormIdentificationItem;
   const items: ItemType[] = useMemo(() => {
+    if (resolvedItems) return resolvedItems;
     if (!data?.words) return [];
 
     const words = data.words as unknown as ExerciseWordResponse[];
@@ -255,7 +274,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
         } as FormIdentificationItem;
       });
     });
-  }, [data?.words, exercise.data, wordAnswers, isSingleField, isMultiAnswerMode]);
+  }, [data?.words, exercise.data, wordAnswers, isSingleField, isMultiAnswerMode, resolvedItems]);
 
   const validatedItems = useMemo(() => {
     if (isSingleField) {
@@ -330,7 +349,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
   } = useExerciseFeedback(exercise.feedbackConfig);
 
   useDelayedExerciseReset({
-    shouldReset: !testMode && shouldResetExercise,
+    shouldReset: !assessmentMode && shouldResetExercise,
     delayMs: exercise.itemProgressionDelay,
     onReset: () => {
       setUserAnswer('');
@@ -348,9 +367,12 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
     if (currentIndex >= validatedItems.length) return;
 
     const currentItem = validatedItems[currentIndex];
+    const nextAnswers = { ...submittedAnswers, [currentItem.id]: userAnswer };
+    setSubmittedAnswers(nextAnswers);
+    if (mode === 'test') onAnswer?.({ type: 'generated-form-identification', answers: nextAnswers });
     setIsProcessing(true);
 
-    if (testMode) {
+    if (assessmentMode) {
       let earnedUnits = 0;
       let fullyCorrect = false;
 
@@ -511,7 +533,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
     nextItem();
   };
 
-  if (isLoading) {
+  if (!resolvedItems && isLoading) {
     return (
       <Card>
         <CardContent className="p-6">
@@ -524,7 +546,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
     );
   }
 
-  if (isError) {
+  if (!resolvedItems && isError) {
     return (
       <Card>
         <CardContent className="p-6">
@@ -667,7 +689,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
             disabled={isProcessing || testSubmitted}
           />
 
-          <FeedbackDisplay
+          {!assessmentMode && <FeedbackDisplay
             isCorrect={isCorrect}
             message={message}
             level={level}
@@ -680,32 +702,11 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({ exercis
                   : (currentItem as FormIdentificationItem).correctAnswer
             }
             showExplanation={showExplanation}
-            onContinue={!testMode && isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
-          />
-          {testMode && testSubmitted && (
+            onContinue={!assessmentMode && isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
+          />}
+          {assessmentMode && testSubmitted && (
             <div className="space-y-3">
-              <div className="rounded-md bg-gray-50 p-3 text-sm">
-                Credit for this answer: <strong>{pendingTestEarnedUnits}</strong>
-                {isSingleField && (
-                  <>
-                    {' '}
-                    /{' '}
-                    {(currentItem as SingleFieldFormIdentificationItem).primaryFormPaths.length *
-                      (currentItem as SingleFieldFormIdentificationItem).steps.length}{' '}
-                    fields
-                  </>
-                )}
-                <div className="mt-2 text-gray-600">
-                  Correct answer:{' '}
-                  <strong>
-                    {isSingleField
-                      ? (currentItem as SingleFieldFormIdentificationItem).correctAnswerDisplay
-                      : isMultiAnswerMode
-                        ? (currentItem as MultiAnswerFormIdentificationItem).correctAnswerDisplay
-                        : (currentItem as FormIdentificationItem).correctAnswer}
-                  </strong>
-                </div>
-              </div>
+              <div className="rounded-md bg-gray-50 p-3 text-sm">Answer recorded.</div>
               <Button onClick={continueTest} className="w-full">
                 {isLastItem ? 'Finish exercise' : 'Continue'}
               </Button>

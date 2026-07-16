@@ -35,6 +35,7 @@ import {
 import { useBeforeUnload } from '@/src/hooks/useLessonDraft';
 import { UnifiedDialog } from '@/src/components/ui/core/UnifiedDialog';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
+import { getPageDocumentDraftKey, type PageDocumentDraft } from '@/src/lib/page-document-draft';
 
 function CreateLessonPage() {
   const router = useRouter();
@@ -143,7 +144,7 @@ function CreateLessonPage() {
       const continueDraft = urlParams.get('continue');
       const lessonId = urlParams.get('lessonId');
 
-      let loadedDrafts: Record<string, { lesson: Lesson; lastModified: string }> = {};
+      let loadedDrafts: Record<string, { document: PageDocumentDraft; lastModified: string }> = {};
       try {
         loadedDrafts = await dispatch(loadDrafts()).unwrap();
       } catch {
@@ -169,10 +170,16 @@ function CreateLessonPage() {
 
         // Continue with draft loading
         setIsContinuingDraft(true);
-        const draft = loadedDrafts[lessonId];
-        if (draft) {
-          setOriginalDraft(JSON.parse(JSON.stringify(draft.lesson)));
-          dispatch(setLesson(draft.lesson));
+        const draft = loadedDrafts[getPageDocumentDraftKey('lesson', lessonId)];
+        if (draft?.document.sourceLesson) {
+          const restoredLesson = {
+            ...draft.document.sourceLesson,
+            title: draft.document.title,
+            description: draft.document.description,
+            pages: draft.document.pages,
+          };
+          setOriginalDraft(JSON.parse(JSON.stringify(restoredLesson)));
+          dispatch(setLesson(restoredLesson));
         } else {
           setIsContinuingDraft(false);
           dispatch(setLesson(undefined));

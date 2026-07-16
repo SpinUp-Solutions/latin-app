@@ -33,10 +33,19 @@ jest.mock('sonner', () => ({
 
 jest.mock('@/src/components/ui/lesson/page-template', () => ({
   __esModule: true,
-  default: ({ onExerciseComplete }: { onExerciseComplete: (exerciseId: string, score: number) => void }) => (
-    <button type="button" onClick={() => onExerciseComplete('exercise-1', 100)}>
-      Complete exercise
-    </button>
+  default: ({
+    onExerciseComplete,
+    runtimeMode,
+  }: {
+    onExerciseComplete: (exerciseId: string, score: number) => void;
+    runtimeMode: string;
+  }) => (
+    <>
+      <span>Runtime mode: {runtimeMode}</span>
+      <button type="button" onClick={() => onExerciseComplete('exercise-1', 100)}>
+        Complete exercise
+      </button>
+    </>
   ),
 }));
 
@@ -76,6 +85,7 @@ describe('LessonPlayer preview mode', () => {
   it('does not persist page, exercise, or completion progress', async () => {
     render(<LessonPlayer lesson={lesson} trackProgress={false} />);
 
+    expect(screen.getByText('Runtime mode: preview')).toBeInTheDocument();
     await waitFor(() => expect(mockUpdatePageProgress).not.toHaveBeenCalled());
     fireEvent.click(screen.getByRole('button', { name: 'Complete exercise' }));
     fireEvent.click(screen.getByRole('button', { name: 'Finish lesson' }));

@@ -6,6 +6,8 @@ import {
   createSentenceDiagramFeedbackContent,
   DEFAULT_STUDENT_TOOLS,
 } from '@/src/features/sentence-diagramming';
+import { isExerciseType } from '@/src/lib/content/registry';
+import type { PageDocumentEditorKind } from '@/src/lib/page-document-draft';
 
 export const generateId = (prefix?: string): string => {
   const timestamp = Date.now();
@@ -13,28 +15,36 @@ export const generateId = (prefix?: string): string => {
   return prefix ? `${prefix}-${timestamp}-${random}` : `${timestamp}-${random}`;
 };
 
-export const createNewContent = (type: string): RenderableContentItem => {
+export const createNewContent = (
+  type: string,
+  editorKind: PageDocumentEditorKind = 'lesson'
+): RenderableContentItem => {
   const baseId = generateId(type);
+
+  const withScoring = <T extends RenderableContentItem>(content: T): T => {
+    if (editorKind !== 'test-version' || !isExerciseType(content.type)) return content;
+    return { ...content, maxPoints: 1 };
+  };
 
   switch (type) {
     case 'text':
-      return {
+      return withScoring({
         id: baseId,
         type: 'text',
         title: 'New Text Block',
         content: 'Enter your text here...',
         audioPath: null,
-      };
+      });
     case 'emphasis':
-      return {
+      return withScoring({
         id: baseId,
         type: 'emphasis',
         title: 'Important Note',
         content: 'Enter emphasized content here...',
         audioPath: null,
-      };
+      });
     case 'table':
-      return {
+      return withScoring({
         id: baseId,
         type: 'table',
         title: 'New Table',
@@ -52,24 +62,24 @@ export const createNewContent = (type: string): RenderableContentItem => {
             },
           ],
         },
-      };
+      });
     case 'vocabulary':
-      return {
+      return withScoring({
         id: baseId,
         type: 'vocabulary',
         title: 'Vocabulary List',
         vocabularyItems: [],
         studyMode: 'flashcards',
-      };
+      });
     case 'vocabulary-pool':
-      return {
+      return withScoring({
         id: baseId,
         type: 'vocabulary-pool',
         title: 'Vocabulary Pool',
         studyMode: 'flashcards',
-      };
+      });
     case 'matching':
-      return {
+      return withScoring({
         id: baseId,
         type: 'matching',
         title: 'Matching Exercise',
@@ -91,9 +101,9 @@ export const createNewContent = (type: string): RenderableContentItem => {
             [`left-${Date.now()}-2`]: `right-${Date.now()}-2`,
           },
         },
-      };
+      });
     case 'fill':
-      return {
+      return withScoring({
         id: baseId,
         type: 'fill',
         title: 'Fill in the Blanks',
@@ -109,9 +119,9 @@ export const createNewContent = (type: string): RenderableContentItem => {
             },
           ],
         },
-      };
+      });
     case 'text-selection':
-      return {
+      return withScoring({
         id: baseId,
         type: 'text-selection',
         title: 'Text Selection Exercise',
@@ -130,9 +140,9 @@ export const createNewContent = (type: string): RenderableContentItem => {
             },
           ],
         },
-      };
+      });
     case 'fill-embolded-text':
-      return {
+      return withScoring({
         id: baseId,
         type: 'fill-embolded-text',
         title: 'Fill In Embolded Text Exercise',
@@ -144,9 +154,9 @@ export const createNewContent = (type: string): RenderableContentItem => {
           passage: 'Passage with embolded text to analyze.',
           words: [],
         },
-      };
+      });
     case 'sentence-diagramming': {
-      return {
+      return withScoring({
         id: baseId,
         type: 'sentence-diagramming',
         title: 'Sentence Diagramming Exercise',
@@ -164,10 +174,10 @@ export const createNewContent = (type: string): RenderableContentItem => {
           ),
           difficulty: 'beginner',
         }),
-      };
+      });
     }
     case 'multiple-choice':
-      return {
+      return withScoring({
         id: baseId,
         type: 'multiple-choice',
         title: 'Multiple Choice Question',
@@ -202,9 +212,9 @@ export const createNewContent = (type: string): RenderableContentItem => {
           explanation: 'This explains why the correct answer is right.',
           allowMultipleSelections: false,
         },
-      };
+      });
     case 'odd-one-out':
-      return {
+      return withScoring({
         id: baseId,
         type: 'odd-one-out',
         title: 'Odd One Out Exercise',
@@ -239,9 +249,9 @@ export const createNewContent = (type: string): RenderableContentItem => {
           explanation: 'This item is different because...',
           requireExplanation: false,
         },
-      };
+      });
     case 'table-fill':
-      return {
+      return withScoring({
         id: baseId,
         type: 'table-fill',
         title: 'Table Fill Exercise',
@@ -265,9 +275,9 @@ export const createNewContent = (type: string): RenderableContentItem => {
             },
           ],
         },
-      };
+      });
     case 'click-on-multiple-words':
-      return {
+      return withScoring({
         id: baseId,
         type: 'click-on-multiple-words',
         title: 'Click On Multiple Words',
@@ -286,9 +296,9 @@ export const createNewContent = (type: string): RenderableContentItem => {
           allowOverSelection: false,
           minimumCorrect: undefined,
         },
-      };
+      });
     case 'generated-translation':
-      return {
+      return withScoring({
         id: baseId,
         type: 'generated-translation',
         title: 'Generated Translation Exercise',
@@ -307,9 +317,9 @@ export const createNewContent = (type: string): RenderableContentItem => {
           },
           posConfigs: {},
         },
-      };
+      });
     case 'generated-form-identification':
-      return {
+      return withScoring({
         id: baseId,
         type: 'generated-form-identification',
         title: 'Generated Form Identification Exercise',
@@ -328,9 +338,9 @@ export const createNewContent = (type: string): RenderableContentItem => {
           },
           paradigmConfigs: {},
         },
-      };
+      });
     case 'translation-grading':
-      return {
+      return withScoring({
         id: baseId,
         type: 'translation-grading',
         title: '[WIP] Translation Grading Exercise',
@@ -342,9 +352,9 @@ export const createNewContent = (type: string): RenderableContentItem => {
         data: {
           items: [{ latinText: 'Puella rosam videt.' }],
         },
-      };
+      });
     case 'listening-passage':
-      return {
+      return withScoring({
         id: baseId,
         type: 'listening-passage',
         title: 'Listening Passage',
@@ -357,7 +367,7 @@ export const createNewContent = (type: string): RenderableContentItem => {
           translation: 'Marcus walks in the forum.',
           passageAudioPath: null,
         },
-      };
+      });
     default:
       throw new Error(`Unknown content type: ${type}`);
   }

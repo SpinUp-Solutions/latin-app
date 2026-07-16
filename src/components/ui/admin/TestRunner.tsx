@@ -155,7 +155,7 @@ export function TestRunner({ test, embedded = false }: TestRunnerProps) {
 
       <Card className="min-w-0 overflow-hidden">
         <CardContent className="min-w-0 overflow-x-auto p-4 sm:p-5 md:p-8" key={`${runKey}-${content.id}`}>
-          <ContentRenderer content={content} onComplete={scoredExercise ? completeExercise : undefined} testMode />
+          <ContentRenderer content={content} onComplete={scoredExercise ? completeExercise : undefined} runtimeMode="test" />
         </CardContent>
       </Card>
 

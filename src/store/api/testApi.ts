@@ -1,11 +1,7 @@
-import { createApi } from '@reduxjs/toolkit/query/react';
 import type { TestDefinition, TestSummary } from '@/src/types/test';
-import { createAuthenticatedBaseQuery } from './baseQuery';
+import { appApi } from './appApi';
 
-export const testApi = createApi({
-  reducerPath: 'testApi',
-  baseQuery: createAuthenticatedBaseQuery(),
-  tagTypes: ['Test', 'TestList'],
+export const testApi = appApi.injectEndpoints({
   endpoints: builder => ({
     getTests: builder.query<TestSummary[], void>({
       query: () => '/admin/tests',

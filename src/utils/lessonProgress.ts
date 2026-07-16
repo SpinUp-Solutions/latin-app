@@ -10,27 +10,38 @@ export interface RequiredExercise {
   pageIndex: number;
 }
 
-export function validateLessonProgression(lesson: Pick<Lesson, 'pages'>): string[] {
+interface StableIdPage {
+  id: string;
+  items: readonly { id: string }[];
+}
+
+export function validatePageDocumentIds(pages: readonly StableIdPage[], documentName: string = 'Lesson'): string[] {
   const errors: string[] = [];
-  if (!Array.isArray(lesson.pages) || lesson.pages.length === 0) {
-    return ['Lesson must contain at least one page.'];
+  if (pages.length === 0) {
+    return [`${documentName} must contain at least one page.`];
   }
 
   const pageIds = new Set<string>();
   const itemIds = new Set<string>();
-  lesson.pages.forEach((page, pageIndex) => {
-    if (!page.id) errors.push(`Page ${pageIndex + 1} is missing an ID.`);
-    else if (pageIds.has(page.id)) errors.push(`Page ${pageIndex + 1} has a duplicate ID.`);
-    else pageIds.add(page.id);
+  pages.forEach((page, pageIndex) => {
+    const pageId = page.id?.trim();
+    if (!pageId) errors.push(`Page ${pageIndex + 1} is missing an ID.`);
+    else if (pageIds.has(pageId)) errors.push(`Page ${pageIndex + 1} has a duplicate ID.`);
+    else pageIds.add(pageId);
 
-    (page.items || []).forEach((item, itemIndex) => {
-      if (!item.id) errors.push(`Item ${itemIndex + 1} on page ${pageIndex + 1} is missing an ID.`);
-      else if (itemIds.has(item.id)) errors.push(`Item ${itemIndex + 1} on page ${pageIndex + 1} has a duplicate ID.`);
-      else itemIds.add(item.id);
+    page.items.forEach((item, itemIndex) => {
+      const itemId = item.id?.trim();
+      if (!itemId) errors.push(`Item ${itemIndex + 1} on page ${pageIndex + 1} is missing an ID.`);
+      else if (itemIds.has(itemId)) errors.push(`Item ${itemIndex + 1} on page ${pageIndex + 1} has a duplicate ID.`);
+      else itemIds.add(itemId);
     });
   });
 
   return errors;
+}
+
+export function validateLessonProgression(lesson: Pick<Lesson, 'pages'>): string[] {
+  return validatePageDocumentIds(lesson.pages);
 }
 
 export function getRequiredExercises(lesson: Pick<Lesson, 'pages'>): RequiredExercise[] {

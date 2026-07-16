@@ -1,9 +1,5 @@
 import { Lesson, ExerciseProgress } from '@/src/types/lesson';
-import { EXERCISE_TYPES } from './contentTypeConstants';
-
-function isExerciseType(contentType: string): boolean {
-  return EXERCISE_TYPES.some(exercise => exercise.type === contentType);
-}
+import { isExerciseType } from '@/src/lib/content/registry';
 
 export function calculateProgressFromPageIndex(currentPageIndex: number, totalPages: number): number {
   if (totalPages === 0) return 0;

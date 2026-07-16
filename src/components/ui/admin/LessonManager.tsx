@@ -93,13 +93,13 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
   }, [lessons, debouncedSearchQuery]);
 
   const filteredDrafts = useMemo(() => {
-    const draftEntries = Object.entries(drafts);
+    const draftEntries = Object.entries(drafts).filter(([, draft]) => draft.document.editorKind === 'lesson');
     if (!debouncedSearchQuery) return draftEntries;
     const query = debouncedSearchQuery.toLowerCase();
     return draftEntries.filter(([, draft]) => {
       return (
-        draft.lesson.title.toLowerCase().includes(query) ||
-        (draft.lesson.description && draft.lesson.description.toLowerCase().includes(query))
+        draft.document.title.toLowerCase().includes(query) ||
+        (draft.document.description && draft.document.description.toLowerCase().includes(query))
       );
     });
   }, [drafts, debouncedSearchQuery]);
@@ -467,14 +467,16 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredDrafts
               .sort(([, a], [, b]) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime())
-              .map(([lessonId, draft]) => (
-                <Card key={lessonId} className="hover:shadow-lg transition-shadow border-amber-300 bg-amber-50/50">
+              .map(([draftKey, draft]) => {
+                const lessonId = draft.document.ownerId;
+                return (
+                <Card key={draftKey} className="hover:shadow-lg transition-shadow border-amber-300 bg-amber-50/50">
                   <CardHeader>
                     <CardTitle className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0 flex-1">
                         <FileText className="h-5 w-5 text-amber-600 flex-shrink-0" />
                         <div className="truncate min-w-0">
-                          <SimpleRichDisplay content={draft.lesson.title} className="truncate" />
+                           <SimpleRichDisplay content={draft.document.title} className="truncate" />
                         </div>
                       </div>
                       <span className="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded-full flex-shrink-0">
@@ -484,7 +486,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="text-sm text-gray-600 line-clamp-3">
-                      <SimpleRichDisplay content={draft.lesson.description || 'No description provided'} />
+                       <SimpleRichDisplay content={draft.document.description || 'No description provided'} />
                     </div>
 
                     <div className="text-xs text-gray-500 space-y-1">
@@ -495,15 +497,15 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
                     </div>
 
                     <div className="flex justify-between text-xs text-gray-600">
-                      <span>{draft.lesson.pages.length} total pages</span>
+                       <span>{draft.document.pages.length} total pages</span>
                       <span>
-                        {draft.lesson.pages.reduce(
+                         {draft.document.pages.reduce(
                           (count, page) => count + page.items.filter(item => isExerciseType(item.type)).length,
                           0
                         )}{' '}
                         exercises
                       </span>
-                      <span>{draft.lesson.pages.reduce((count, page) => count + page.items.length, 0)} items</span>
+                       <span>{draft.document.pages.reduce((count, page) => count + page.items.length, 0)} items</span>
                     </div>
 
                     <div className="flex gap-2 pt-2">
@@ -517,13 +519,14 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
                       <Button
                         size="sm"
                         variant="destructive"
-                        onClick={() => handleDeleteDraft(lessonId, draft.lesson.title)}>
+                         onClick={() => handleDeleteDraft(lessonId, draft.document.title)}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </CardContent>
-                </Card>
-              ))}
+                 </Card>
+                );
+              })}
           </div>
         </section>
       )}

@@ -8,11 +8,16 @@ import { ExerciseErrorBoundary } from './exercise-error-boundary';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { isExerciseType } from '@/src/utils/lessonUtils';
 import { DiagramAttempt } from '@/src/features/sentence-diagramming';
+import type { ExerciseAnswerEvent, RuntimeMode } from '@/src/types/runtime-mode';
+import type { ResolvedGeneratedExerciseState } from './content-renderer';
 
 interface PageTemplateProps {
   page: Page;
   pageIndex?: number;
   onExerciseComplete?: (exerciseId: string, score: number) => void;
+  runtimeMode?: RuntimeMode;
+  onAnswer?: (event: ExerciseAnswerEvent) => void;
+  resolvedExerciseState?: Record<string, ResolvedGeneratedExerciseState>;
   onPageComplete?: () => void;
   onDiagrammingAttempt?: (itemIndex: number, exerciseId: string, attempt: DiagramAttempt) => void;
 }
@@ -21,6 +26,9 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({
   page,
   pageIndex,
   onExerciseComplete,
+  runtimeMode = 'practice',
+  onAnswer,
+  resolvedExerciseState,
   onPageComplete,
   onDiagrammingAttempt,
 }) => {
@@ -79,6 +87,9 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({
               content={item}
               pageIndex={pageIndex}
               itemIndex={index}
+              runtimeMode={runtimeMode}
+              onAnswer={onAnswer}
+              resolvedExerciseState={resolvedExerciseState?.[item.id]}
               onComplete={(score: number) => handleItemComplete(index, score)}
               onDiagrammingAttempt={attempt => onDiagrammingAttempt?.(index, item.id, attempt)}
             />

@@ -12,14 +12,21 @@ import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { cn } from '@/src/lib/utils';
 import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
+import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
+import { resolveRuntimeMode } from '@/src/types/runtime-mode';
 
 interface Props {
   exercise: MultipleChoiceExercise;
   onComplete?: (score: number) => void;
+  runtimeMode?: RuntimeMode;
+  onAnswer?: ExerciseAnswerHandler;
+  /** @deprecated Use runtimeMode="test". */
   testMode?: boolean;
 }
 
-const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete, testMode = false }) => {
+const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete, runtimeMode, onAnswer, testMode }) => {
+  const mode = resolveRuntimeMode(runtimeMode, testMode);
+  const assessmentMode = mode !== 'practice';
   const [selectedOptionIds, setSelectedOptionIds] = useState<string[]>([]);
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -42,7 +49,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
   } = useExerciseFeedback(exercise.feedbackConfig);
 
   useDelayedExerciseReset({
-    shouldReset: !testMode && shouldResetExercise,
+    shouldReset: !assessmentMode && shouldResetExercise,
     delayMs: exercise.itemProgressionDelay,
     onReset: () => {
       setSelectedOptionIds([]);
@@ -72,6 +79,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
 
     setIsProcessing(true);
     setHasSubmitted(true);
+    if (mode === 'test') onAnswer?.({ type: 'multiple-choice', selectedOptionIds });
 
     const validation = validateMultipleChoiceExercise(selectedOptionIds, exercise);
 
@@ -89,7 +97,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
     } else {
       handleIncorrect();
       setIsProcessing(false);
-      if (testMode) onComplete?.(0);
+      if (assessmentMode) onComplete?.(0);
     }
   };
 
@@ -106,11 +114,11 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
 
     const option = exercise.data.options.find(opt => opt.id === optionId);
     const isSelected = selectedOptionIds.includes(optionId);
-    const shouldRevealAnswers = isCorrect || level?.showAnswer;
+    const shouldRevealAnswers = !assessmentMode && (isCorrect || level?.showAnswer);
 
     if (option?.isCorrect && shouldRevealAnswers) {
       return 'bg-green-50 border-green-300 text-green-900';
-    } else if (isSelected && !option?.isCorrect) {
+    } else if (!assessmentMode && isSelected && !option?.isCorrect) {
       return 'bg-red-50 border-red-300 text-red-900';
     }
 
@@ -186,7 +194,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
         )}
 
         {/* Try Again Button */}
-        {hasSubmitted && isCorrect === false && !testMode && (
+        {hasSubmitted && isCorrect === false && !assessmentMode && (
           <div className="flex justify-center">
             <Button onClick={handleReset} variant="outline" disabled={isProcessing} className="px-8">
               Try Again
@@ -194,7 +202,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
           </div>
         )}
 
-        <FeedbackDisplay
+        {!assessmentMode && <FeedbackDisplay
           isCorrect={isCorrect}
           message={message}
           level={level}
@@ -206,7 +214,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
           explanation={exercise.data.explanation}
           showExplanation={showExplanation}
           onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
-        />
+        />}
       </div>
     </div>
   );

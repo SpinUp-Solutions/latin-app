@@ -67,8 +67,10 @@ describe('practice-category lesson integration', () => {
 
     await store.dispatch(saveDraft(currentLesson!));
 
-    const persistedDrafts = JSON.parse(sessionStorage.getItem('lesson_drafts') ?? '{}');
-    expect(persistedDrafts[lesson.id].lesson.practiceCategoryIds).toEqual([archivedCategory.id]);
+    const persistedDrafts = JSON.parse(sessionStorage.getItem('page_document_drafts') ?? '{}');
+    expect(persistedDrafts[`lesson:${lesson.id}`].document.sourceLesson.practiceCategoryIds).toEqual([
+      archivedCategory.id,
+    ]);
     expect(store.getState().lessonEditor.dirty).toBe(true);
   });
 

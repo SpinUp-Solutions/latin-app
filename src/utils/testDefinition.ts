@@ -2,34 +2,29 @@ import type { Exercise } from '@/src/types/exercises';
 import type { RenderableContentItem } from '@/src/types/page';
 import type { Page } from '@/src/types/page';
 import type { ScoredTestExercise, TestDefinition, TestItem, TestSummary } from '@/src/types/test';
+import { TEST_ELIGIBLE_EXERCISE_TYPES } from '@/src/lib/content/registry';
 
-export const SUPPORTED_TEST_EXERCISE_TYPES = new Set([
-  'matching',
-  'fill',
-  'multiple-choice',
-  'odd-one-out',
-  'text-selection',
-  'fill-embolded-text',
-  'sentence-diagramming',
-  'table-fill',
-  'click-on-multiple-words',
-  'generated-translation',
-  'generated-form-identification',
-]);
+export const SUPPORTED_TEST_EXERCISE_TYPES = new Set<string>(TEST_ELIGIBLE_EXERCISE_TYPES);
 
 export const isScoredTestExercise = (item: TestItem): item is ScoredTestExercise => 'exercise' in item;
 
-export const getTestItems = (test: Pick<TestDefinition, 'items' | 'exercises'> | Partial<TestDefinition>): TestItem[] =>
-  test.items?.length ? test.items : test.exercises || [];
+export const getTestItems = (
+  test: Pick<TestDefinition, 'items' | 'exercises'> | Partial<TestDefinition>
+): TestItem[] => (test.items?.length ? test.items : test.exercises || []);
 
-export const getTestExercises = (test: Pick<TestDefinition, 'items' | 'exercises'> | Partial<TestDefinition>): ScoredTestExercise[] =>
-  getTestItems(test).filter(isScoredTestExercise);
+export const getTestExercises = (
+  test: Pick<TestDefinition, 'items' | 'exercises'> | Partial<TestDefinition>
+): ScoredTestExercise[] => getTestItems(test).filter(isScoredTestExercise);
 
 export const getTestPages = (test: Partial<TestDefinition>): Page[] => {
   if (test.pages?.length) return test.pages;
-  return [{ id: `test-page-${test.id || 'new'}`, title: 'Test', items: getTestItems(test).map(item =>
-    isScoredTestExercise(item) ? item.exercise : item.content
-  ) }];
+  return [
+    {
+      id: `test-page-${test.id || 'new'}`,
+      title: 'Test',
+      items: getTestItems(test).map(item => (isScoredTestExercise(item) ? item.exercise : item.content)),
+    },
+  ];
 };
 
 export const calculateTestTotal = (value: TestItem[] | Pick<TestDefinition, 'items' | 'exercises'>): number => {

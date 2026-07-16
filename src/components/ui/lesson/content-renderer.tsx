@@ -35,10 +35,25 @@ import { VocabularyViewer } from './VocabularyViewer';
 import { VocabularyPoolViewer } from './VocabularyPoolViewer';
 import TextComponent from './text-component';
 import { DiagramAttempt } from '@/src/features/sentence-diagramming';
+import type { ExerciseAnswerEvent, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
+import type { GeneratedTranslationItem } from '@/src/utils/exercises/generatedTranslationExercise';
+import type {
+  FormIdentificationItem,
+  MultiAnswerFormIdentificationItem,
+  SingleFieldFormIdentificationItem,
+} from '@/src/types/exercises/schemas/form-identification';
+
+export interface ResolvedGeneratedExerciseState {
+  items: unknown[];
+}
 
 interface ContentRendererProps {
   content: ContentItem;
   onComplete?: (score: number) => void;
+  runtimeMode?: RuntimeMode;
+  onAnswer?: (event: ExerciseAnswerEvent) => void;
+  resolvedExerciseState?: ResolvedGeneratedExerciseState;
+  /** @deprecated Use runtimeMode="test". */
   testMode?: boolean;
   pageIndex?: number;
   itemIndex?: number;
@@ -48,9 +63,19 @@ interface ContentRendererProps {
 export const ContentRenderer: React.FC<ContentRendererProps> = ({
   content,
   onComplete,
-  testMode = false,
+  runtimeMode,
+  testMode,
+  pageIndex,
+  itemIndex,
+  onAnswer,
+  resolvedExerciseState,
   onDiagrammingAttempt,
 }) => {
+  const handleAnswer: ExerciseAnswerHandler | undefined = onAnswer
+    ? answer => onAnswer({ exerciseId: content.id, answer, pageIndex, itemIndex })
+    : undefined;
+  const modeProps = { runtimeMode, testMode, onAnswer: handleAnswer };
+
   switch (content.type) {
     case 'text':
       const textContent = content as TextContent;
@@ -86,17 +111,17 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
 
     case 'matching':
       const matchingExercise = content as MatchingExercise;
-      return <MatchingTable exercise={matchingExercise} onComplete={onComplete} testMode={testMode} />;
+      return <MatchingTable exercise={matchingExercise} onComplete={onComplete} {...modeProps} />;
 
     case 'fill':
-      return <FillExercise exercise={content as FillExerciseType} onComplete={onComplete} testMode={testMode} />;
+      return <FillExercise exercise={content as FillExerciseType} onComplete={onComplete} {...modeProps} />;
 
     case 'text-selection':
       return (
         <TextSelectionExercise
           exercise={content as TextSelectionExerciseType}
           onComplete={onComplete}
-          testMode={testMode}
+          {...modeProps}
         />
       );
 
@@ -105,7 +130,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
         <FillEmboldedTextExercise
           exercise={content as FillEmboldedTextExerciseType}
           onComplete={onComplete}
-          testMode={testMode}
+          {...modeProps}
         />
       );
 
@@ -114,7 +139,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
         <SentenceDiagrammingExercise
           exercise={content as SentenceDiagrammingExerciseType}
           onComplete={onComplete}
-          testMode={testMode}
+          {...modeProps}
           onAttempt={onDiagrammingAttempt}
         />
       );
@@ -124,18 +149,18 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
         <MultipleChoiceExercise
           exercise={content as MultipleChoiceExerciseType}
           onComplete={onComplete}
-          testMode={testMode}
+          {...modeProps}
         />
       );
 
     case 'odd-one-out':
       return (
-        <OddOneOutExercise exercise={content as OddOneOutExerciseType} onComplete={onComplete} testMode={testMode} />
+        <OddOneOutExercise exercise={content as OddOneOutExerciseType} onComplete={onComplete} {...modeProps} />
       );
 
     case 'table-fill':
       return (
-        <TableFillExercise exercise={content as TableFillExerciseType} onComplete={onComplete} testMode={testMode} />
+        <TableFillExercise exercise={content as TableFillExerciseType} onComplete={onComplete} {...modeProps} />
       );
 
     case 'click-on-multiple-words':
@@ -143,7 +168,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
         <ClickOnMultipleWordsExercise
           exercise={content as ClickOnMultipleWordsExerciseType}
           onComplete={onComplete}
-          testMode={testMode}
+          {...modeProps}
         />
       );
 
@@ -152,7 +177,8 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
         <GeneratedTranslationExercise
           exercise={content as GeneratedTranslationExerciseType}
           onComplete={onComplete}
-          testMode={testMode}
+          {...modeProps}
+          resolvedItems={resolvedExerciseState?.items as GeneratedTranslationItem[] | undefined}
         />
       );
 
@@ -161,7 +187,12 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
         <GeneratedFormIdentificationExercise
           exercise={content as GeneratedFormIdentificationExerciseType}
           onComplete={onComplete}
-          testMode={testMode}
+          {...modeProps}
+          resolvedItems={
+            resolvedExerciseState?.items as Array<
+              FormIdentificationItem | MultiAnswerFormIdentificationItem | SingleFieldFormIdentificationItem
+            > | undefined
+          }
         />
       );
 
