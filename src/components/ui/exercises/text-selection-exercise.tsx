@@ -14,6 +14,8 @@ import { ClickableRichDisplay } from '../core/clickable-rich-display';
 import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
 import { resolveRuntimeMode } from '@/src/types/runtime-mode';
+import { RecordedAnswerControls } from './recorded-answer-controls';
+import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
 interface Props {
   exercise: TextSelectionExercise;
@@ -29,14 +31,21 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete,
   const [selectedWordIndex, setSelectedWordIndex] = useState<number | null>(null);
   const [submittedIndices, setSubmittedIndices] = useState<number[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [correctAnswers, setCorrectAnswers] = useState(0);
+  const [testSubmitted, setTestSubmitted] = useState(false);
 
-  const { currentIndex, isLastItem, isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance, resetIndex } =
-    useExerciseProgression({
-      totalItems: exercise.data.questions.length,
-      itemProgressionDelay: exercise.itemProgressionDelay,
-      progressionRules: exercise.feedbackConfig.progressionRules,
-    });
+  const {
+    currentIndex,
+    isLastItem,
+    isAwaitingConfirmation,
+    autoAdvanceIfEnabled,
+    confirmAdvance,
+    resetIndex,
+    nextItem,
+  } = useExerciseProgression({
+    totalItems: exercise.data.questions.length,
+    itemProgressionDelay: exercise.itemProgressionDelay,
+    progressionRules: exercise.feedbackConfig.progressionRules,
+  });
 
   const {
     isCorrect,
@@ -55,8 +64,9 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete,
     delayMs: exercise.itemProgressionDelay,
     onReset: () => {
       setSelectedWordIndex(null);
-      setCorrectAnswers(0);
       setIsProcessing(false);
+      setTestSubmitted(false);
+      setSubmittedIndices([]);
       resetIndex();
       resetExercise();
     },
@@ -69,13 +79,22 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete,
     const nextIndices = [...submittedIndices];
     nextIndices[currentIndex] = wordIndex;
     setSubmittedIndices(nextIndices);
-    if (mode === 'test') onAnswer?.({ type: 'text-selection', selectedWordIndices: nextIndices });
-    const validation = validateTextSelectionExercise(wordIndex, exercise, currentIndex);
     setIsProcessing(true);
 
+    if (mode === 'test') {
+      onAnswer?.({ type: 'text-selection', selectedWordIndices: nextIndices });
+      setTestSubmitted(true);
+      return;
+    }
+
+    const validation = validateTextSelectionExercise(wordIndex, exercise, currentIndex);
+    const finalScore = isLastItem
+      ? Math.round(
+          gradeExercisePercentage({ exercise }, { type: 'text-selection', selectedWordIndices: nextIndices })
+        )
+      : null;
+
     if (validation.isCorrect) {
-      const newCorrectAnswers = correctAnswers + 1;
-      setCorrectAnswers(newCorrectAnswers);
       handleCorrect(isLastItem);
 
       const hasVisibleExplanation =
@@ -83,13 +102,11 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete,
         hasVisibleFeedbackContent(currentQuestion.explanation);
 
       if (isLastItem) {
-        const finalScore = Math.round((newCorrectAnswers / exercise.data.questions.length) * 100);
-
         autoAdvanceIfEnabled(() => {
           setSelectedWordIndex(null);
           reset();
           setIsProcessing(false);
-          onComplete?.(finalScore);
+          onComplete?.(finalScore!);
         }, hasVisibleExplanation);
       } else {
         autoAdvanceIfEnabled(() => {
@@ -101,7 +118,6 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete,
     } else {
       handleIncorrect();
       if (assessmentMode) {
-        const finalScore = isLastItem ? Math.round((correctAnswers / exercise.data.questions.length) * 100) : null;
         autoAdvanceIfEnabled(() => {
           setSelectedWordIndex(null);
           reset();
@@ -115,6 +131,18 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete,
   };
 
   const currentQuestion = exercise.data.questions[currentIndex];
+
+  const continueTest = () => {
+    if (isLastItem) {
+      onComplete?.(0);
+      return;
+    }
+    setSelectedWordIndex(null);
+    setTestSubmitted(false);
+    setIsProcessing(false);
+    reset();
+    nextItem();
+  };
 
   return (
     <div className="space-y-6 max-w-full">
@@ -161,17 +189,23 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete,
           />
         </div>
 
-        <FeedbackDisplay
-          isCorrect={isCorrect}
-          message={assessmentMode ? '' : message}
-          level={assessmentMode ? null : level}
-          hint={assessmentMode ? undefined : currentQuestion.hint}
-          correctAnswer={assessmentMode ? undefined : exercise.data.passage.split(' ')[currentQuestion.correctWordIndex]}
-          explanation={assessmentMode ? undefined : currentQuestion.explanation}
-          showExplanation={!assessmentMode && showExplanation}
-          onContinue={(isCorrect || assessmentMode) && isAwaitingConfirmation ? confirmAdvance : undefined}
-          allowContinueOnIncorrect={assessmentMode}
-        />
+        {mode === 'test' ? (
+          testSubmitted && <RecordedAnswerControls isLastItem={isLastItem} onContinue={continueTest} />
+        ) : (
+          <FeedbackDisplay
+            isCorrect={isCorrect}
+            message={assessmentMode ? '' : message}
+            level={assessmentMode ? null : level}
+            hint={assessmentMode ? undefined : currentQuestion.hint}
+            correctAnswer={
+              assessmentMode ? undefined : exercise.data.passage.split(' ')[currentQuestion.correctWordIndex]
+            }
+            explanation={assessmentMode ? undefined : currentQuestion.explanation}
+            showExplanation={!assessmentMode && showExplanation}
+            onContinue={(isCorrect || assessmentMode) && isAwaitingConfirmation ? confirmAdvance : undefined}
+            allowContinueOnIncorrect={assessmentMode}
+          />
+        )}
       </div>
     </div>
   );

@@ -5,7 +5,7 @@ import {
   applyDiagramAnnotation,
   compareDiagramAnnotationSets,
   DiagramAnnotation,
-  DiagramAttempt,
+  DiagramAuditSubmission,
   DiagramComparisonResult,
   normalizeSentenceDiagramFeedbackContent,
   resetDiagramColorAnnotations,
@@ -29,6 +29,7 @@ import type { FeedbackLevel } from '@/src/types/exercises/base';
 import { SentenceDiagrammingExercise } from '@/src/types/exercises/sentence-diagramming';
 import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
 import { resolveRuntimeMode } from '@/src/types/runtime-mode';
+import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
 export interface SentenceDiagramStudentProps {
   exercise: SentenceDiagrammingExercise;
@@ -36,7 +37,7 @@ export interface SentenceDiagramStudentProps {
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
   testMode?: boolean;
-  onAttempt?: (attempt: DiagramAttempt) => void;
+  onAttempt?: (attempt: DiagramAuditSubmission) => void;
 }
 
 interface SentenceDiagramFeedbackPanelProps {
@@ -50,6 +51,8 @@ interface SentenceDiagramFeedbackPanelProps {
   onContinue?: () => void;
   comparison?: DiagramComparisonResult;
 }
+
+const EMPTY_SOLUTION_ANNOTATIONS: DiagramAnnotation[] = [];
 
 const SentenceDiagramFeedbackPanel: React.FC<SentenceDiagramFeedbackPanelProps> = ({
   isCorrect,
@@ -177,9 +180,10 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
   const historyRef = useRef<DiagramAnnotation[][]>([]);
   const normalizedTools = normalizeAnnotationTools(exercise.data.availableStudentTools);
   const availableTools = normalizedTools.length ? normalizedTools : DEFAULT_STUDENT_TOOLS;
+  const solutionAnnotations = exercise.data.solutionAnnotations || EMPTY_SOLUTION_ANNOTATIONS;
   const comparison = useMemo(
-    () => compareDiagramAnnotationSets(annotations, exercise.data.solutionAnnotations, exercise.data.tokens),
-    [annotations, exercise.data.solutionAnnotations, exercise.data.tokens]
+    () => compareDiagramAnnotationSets(annotations, solutionAnnotations, exercise.data.tokens),
+    [annotations, solutionAnnotations, exercise.data.tokens]
   );
   const {
     isCorrect,
@@ -279,20 +283,22 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
 
   const handleSubmit = () => {
     if (testSubmitted) return;
+    onAttempt?.({ studentAnnotations: annotations });
 
-    onAttempt?.({
-      comparison,
-      studentAnnotations: annotations,
-      solutionAnnotations: exercise.data.solutionAnnotations,
-      tokens: exercise.data.tokens,
-    });
+    if (mode === 'test') {
+      onAnswer?.({ type: 'sentence-diagramming', annotations });
+      setTestSubmitted(true);
+      onComplete?.(0);
+      return;
+    }
+
+    const score = Math.round(gradeExercisePercentage({ exercise }, { type: 'sentence-diagramming', annotations }));
 
     if (assessmentMode) {
-      if (mode === 'test') onAnswer?.({ type: 'sentence-diagramming', annotations });
       setTestSubmitted(true);
       if (comparison.isComplete) handleCorrect(true);
       else handleIncorrect();
-      onComplete?.(Math.round(comparison.accuracy));
+      onComplete?.(score);
       return;
     }
 
@@ -302,7 +308,7 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
         (exercise.feedbackConfig.successMessage?.showExplanation ?? true) && Boolean(explanationContent);
 
       autoAdvanceIfEnabled(() => {
-        onComplete?.(Math.round(comparison.accuracy));
+        onComplete?.(score);
       }, hasVisibleExplanation);
       return;
     }
@@ -330,7 +336,7 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
         content={{
           text: exercise.data.latin,
           tokens: exercise.data.tokens,
-          annotations: exercise.data.solutionAnnotations,
+          annotations: solutionAnnotations,
         }}
         translation={exercise.data.translation}
       />
@@ -423,7 +429,7 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
           />
         </div>
 
-        {(exercise.feedbackConfig.progressionRules?.showProgress ?? true) ? (
+        {mode !== 'test' && (exercise.feedbackConfig.progressionRules?.showProgress ?? true) ? (
           <div className="mx-5 mb-3 space-y-1.5">
             <div className="flex items-center gap-3">
               <div className="flex-1 h-1.5 rounded-full bg-stone-100 overflow-hidden">
@@ -481,17 +487,19 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
         </div>
       </div>
 
-      {!assessmentMode && <SentenceDiagramFeedbackPanel
-        isCorrect={isCorrect}
-        message={feedbackMessage}
-        level={level}
-        hint={hintBody}
-        correctAnswer={correctAnswerContent}
-        explanation={explanationBody}
-        showExplanation={showExplanation}
-        onContinue={isCorrect === true && isAwaitingConfirmation ? confirmAdvance : undefined}
-        comparison={isCorrect === false ? comparison : undefined}
-      />}
+      {!assessmentMode && (
+        <SentenceDiagramFeedbackPanel
+          isCorrect={isCorrect}
+          message={feedbackMessage}
+          level={level}
+          hint={hintBody}
+          correctAnswer={correctAnswerContent}
+          explanation={explanationBody}
+          showExplanation={showExplanation}
+          onContinue={isCorrect === true && isAwaitingConfirmation ? confirmAdvance : undefined}
+          comparison={isCorrect === false ? comparison : undefined}
+        />
+      )}
     </div>
   );
 };

@@ -18,7 +18,7 @@ import {
 import { useAuth } from '@/src/hooks/useAuth';
 import { toast } from 'sonner';
 import { auth } from '@/src/services/firebase';
-import { DiagramAttempt } from '@/src/features/sentence-diagramming';
+import { DiagramAuditSubmission } from '@/src/features/sentence-diagramming';
 import { RequiredExercise } from '@/src/utils/lessonProgress';
 import { stripHtmlTags } from '@/src/utils/exercises';
 import type { ExerciseAnswerEvent, RuntimeMode } from '@/src/types/runtime-mode';
@@ -31,6 +31,7 @@ interface LessonPlayerProps {
   runtimeMode?: RuntimeMode;
   onAnswer?: (event: ExerciseAnswerEvent) => void;
   resolvedExerciseState?: Record<string, ResolvedGeneratedExerciseState>;
+  testAttemptId?: string;
 }
 
 export const LessonPlayer: React.FC<LessonPlayerProps> = ({
@@ -40,6 +41,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   runtimeMode,
   onAnswer,
   resolvedExerciseState,
+  testAttemptId,
 }) => {
   const effectiveRuntimeMode = runtimeMode ?? (trackProgress ? 'practice' : 'preview');
   const shouldTrackProgress = trackProgress && effectiveRuntimeMode === 'practice';
@@ -116,18 +118,24 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   );
 
   const handleDiagrammingAttempt = useCallback(
-    async (itemIndex: number, exerciseId: string, attempt: DiagramAttempt) => {
+    async (itemIndex: number, exerciseId: string, attempt: DiagramAuditSubmission) => {
+      if (effectiveRuntimeMode === 'preview') return;
       const token = await auth.currentUser?.getIdToken();
       if (!token) return;
+      const source =
+        effectiveRuntimeMode === 'test'
+          ? testAttemptId
+            ? { attemptId: testAttemptId }
+            : null
+          : { lessonId: lesson.id, pageIndex: currentPageIndex, itemIndex };
+      if (!source) return;
 
       try {
         await fetch('/api/diagramming-attempts', {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            lessonId: lesson.id,
-            pageIndex: currentPageIndex,
-            itemIndex,
+            ...source,
             exerciseId,
             appVersion: process.env.NEXT_PUBLIC_APP_VERSION || 'unknown',
             studentAnnotations: attempt.studentAnnotations,
@@ -138,7 +146,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
         console.warn('Unable to record diagramming attempt', error);
       }
     },
-    [lesson.id, currentPageIndex]
+    [currentPageIndex, effectiveRuntimeMode, lesson.id, testAttemptId]
   );
 
   const isListeningLesson = lesson.type === 'listening';

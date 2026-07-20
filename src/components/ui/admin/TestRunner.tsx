@@ -167,7 +167,8 @@ export function TestRunner({ test, version, embedded = false }: TestRunnerProps)
           <ContentRenderer
             content={content}
             onComplete={scoredExercise ? completeExercise : undefined}
-            runtimeMode="test"
+            // Use local preview scoring until Phase 4B supplies frozen attempt delivery.
+            runtimeMode="preview"
           />
         </CardContent>
       </Card>

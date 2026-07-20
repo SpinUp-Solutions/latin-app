@@ -2,6 +2,7 @@ import type { Exercise } from './exercises';
 import type { TestUnit } from './learning-unit';
 import type { RenderableContentItem } from './page';
 import type { Page } from './page';
+import type { ExerciseAnswer } from './runtime-mode';
 
 export interface RotationVersionReference {
   versionId: string;
@@ -51,6 +52,75 @@ export interface MockTest {
   createdBy?: string;
   updatedAt?: string;
   updatedBy?: string;
+}
+
+export type TestAttemptOrigin = { kind: 'normal-test'; testId: string } | { kind: 'mock-test'; mockTestId: string };
+
+export interface TestAttemptDeliveryState {
+  versionId: string;
+  pages: Page[];
+  resolvedExercises: Record<string, { items: unknown[] }>;
+}
+
+export interface TestAttemptBase {
+  id: string;
+  studentId: string;
+  versionId: string;
+  passingPercentage: number | null;
+  origin: TestAttemptOrigin;
+  startedAt: string;
+  updatedAt: string;
+}
+
+export interface InProgressTestAttempt extends TestAttemptBase {
+  status: 'in-progress';
+  answers: Record<string, ExerciseAnswer>;
+  deliveryState: TestAttemptDeliveryState;
+}
+
+export interface TestAttemptExerciseResult {
+  title?: string;
+  awardedPoints: number;
+  maxPoints: number;
+}
+
+export interface SubmittedTestAttempt extends TestAttemptBase {
+  status: 'submitted';
+  exerciseResults: Record<string, TestAttemptExerciseResult>;
+  score: number;
+  maxScore: number;
+  percentage: number;
+  outcome: 'score-only' | 'passed' | 'not-passed';
+  submittedAt: string;
+}
+
+export type TestAttempt = InProgressTestAttempt | SubmittedTestAttempt;
+
+export interface TestAttemptSession {
+  id: string;
+  studentId: string;
+  origin: TestAttemptOrigin;
+  attemptId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StudentTestDelivery {
+  versionId: string;
+  pages: unknown[];
+  resolvedExercises: Record<string, { items: unknown[] }>;
+}
+
+export type StudentInProgressTestAttempt = Omit<InProgressTestAttempt, 'studentId' | 'deliveryState'> & {
+  delivery: StudentTestDelivery;
+};
+
+export type StudentSubmittedTestAttempt = Omit<SubmittedTestAttempt, 'studentId'>;
+export type StudentTestAttempt = StudentInProgressTestAttempt | StudentSubmittedTestAttempt;
+
+export interface StartTestAttemptResult {
+  attempt: StudentInProgressTestAttempt;
+  resumed: boolean;
 }
 
 export interface ScoredTestExercise {

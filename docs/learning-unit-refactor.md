@@ -1,8 +1,8 @@
 # Learning Unit and Test Schema Refactor
 
 - Status: Working draft
-- Last updated: 2026-07-16
-- Implementation status: Phase 3 complete — 2026-07-16
+- Last updated: 2026-07-20
+- Implementation status: Phase 4B complete — 2026-07-20
 
 ## Purpose
 
@@ -1029,13 +1029,32 @@ Phase 4 ships as three independently reviewable changes behind non-live test con
 
 #### Phase 4A: Grading and frozen-delivery foundation
 
+Status: **Complete — 2026-07-20**
+
 - Extract one pure grader and canonical answer schema per allowlisted exercise type, then use it from both practice UI and server submission.
 - Extract the existing vocabulary query/generator logic into reusable server helpers, resolve generated exercises at attempt start, and freeze the resolved items into `deliveryState`.
 - Return only sanitized attempt content to the client; grading inputs never leave the server.
 - Grade against frozen delivery state rather than the current editable test version.
 - Add focused contract tests proving both runtimes call the shared graders, component-level partial credit in both generated-exercise modes, normalization to different `maxPoints` values, and no grading-input leakage.
 
+Implementation notes:
+
+- Added strict canonical answer parsing and one server-safe grading entry point covering every allowlisted exercise type. The registry delegates to the same pure validation helpers used by practice components, then normalizes full-precision component credit to the exercise's authored `maxPoints`. Every allowlisted practice/preview component now obtains its completion score through that same grading entry point; component-local validators remain only for interactive feedback.
+- Extracted generated translation and morphology item construction from the React components into shared pure helpers. Added an injectable Firestore word loader that applies the existing pool/filter, paradigm, form-selection, and random-start behavior without calling an internal HTTP route or importing client state.
+- Added a frozen delivery snapshot that copies the selected version pages, resolves generated items once, and grades only from that snapshot. Later edits to the source `TestVersion` cannot affect the result.
+- Added a separate student projection that strips static answer keys, correct-option flags, diagram solutions, generator configuration, resolved accepted answers, form paths, hints, and feedback configuration before delivery.
+- Test-mode renderers now inject a safe assessment-only feedback policy, collect raw answers without invoking client graders, and render sanitized static and generated payloads without reconstructing private answer keys.
+- Matching answers retain one committed selection per pair and authored repetition. The sanitized matching payload carries only `expectedMatchCount`, allowing the renderer to finish exercises with unmapped left-side distractors without revealing which pairs are authored answers.
+- Sparse multi-answer morphology submissions return partial credit instead of throwing, and duplicate generated vocabulary documents receive unique frozen answer identities.
+- Review hardening now penalizes extra sentence-diagram annotations, preserves multi-select interaction after correct-option flags are sanitized, and keeps standard step-by-step morphology credit on one compatible form path instead of combining individually valid fields from incompatible paths.
+- Kept the current admin `TestRunner` explicitly in `preview` mode. It continues to fetch generated items and calculate local preview scores until Phase 4B provides frozen resolved items, persisted answers, and server-side attempt grading; it must not use the new `test` runtime contract without that attempt infrastructure.
+- Preserved full-precision click-selection scores in the shared grader while rounding only the legacy UI completion callback. The Firestore generated-word loader now ignores empty comma-separated filters instead of issuing an invalid `in []` query, applies the same broad gendered/personal-pronoun overlap filter as the existing browser loader, and passes skipped exercises through the same positive-integer `maxPoints` validation as answered exercises.
+- Simplified the generated-item sanitizer after its type branches were made exhaustive.
+- Added focused contracts for allowlist/schema coverage, frozen-state grading, generated morphology partial credit, point normalization, grading-input sanitization, sanitized delivery rendering, matching rounds and public completion counts, sparse steps, duplicate generated IDs, admin preview scoring, UI rounding, empty Firestore filters, and unanswered-point validation. Final verification passed: TypeScript, all 38 Jest suites/164 tests, `git diff --check`, ESLint with zero errors (five pre-existing warnings), and the Next.js 16.2.9 production build. Attempt documents, routes, version selection, and persistence remain scoped to Phase 4B.
+
 #### Phase 4B: Attempt lifecycle and version selection
+
+Status: **Complete — 2026-07-20**
 
 - Persist attempts separately from lesson progress before tests enter the normal flow.
 - Enforce one in-progress attempt per student and origin through the deterministic `testAttemptSessions` pointer; attempt start resumes an existing attempt, and duplicate submissions return the stored result idempotently.
@@ -1045,6 +1064,19 @@ Phase 4 ships as three independently reviewable changes behind non-live test con
 - Temporarily retain answers and resolved delivery state, including grading inputs and `maxPoints`, so an in-progress attempt resumes consistently; guard against the Firestore document size limit at attempt start.
 - Add the attempt start/resume and committed-answer-save endpoints to the existing injected `testApi`; do not use raw `fetch` in the player.
 - Add focused tests for concurrent starts, refresh/resume, stable version/generated-data selection, projected-history least-used behavior, and assignment changes that occur after an attempt starts.
+
+Implementation notes:
+
+- Added strict attempt, origin, active-session, frozen-delivery, submitted-result, start-command, and committed-answer schemas plus shared persisted/student response types. Student projections omit `studentId` and private `deliveryState`, return only the sanitizer output, and may restore the student's own canonical answers.
+- Added a SHA-256 session scope derived from `[studentId, origin.kind, originId]`. Attempt start reads that deterministic pointer and its attempt in one Firestore transaction, resumes a matching in-progress attempt, or atomically creates one attempt and replaces a stale pointer. A stored pointer is also checked against its student and origin before it is trusted.
+- Normal starts query the complete submitted history for that student and normal-test origin with a `versionId`/`submittedAt` projection and no `limit()`. The pure selector counts only currently eligible versions, chooses among the least-used set, and avoids the immediately previous version when another tied candidate exists. Added the matching `testAttempts` composite index definition; no index was deployed.
+- Mock starts use the active, live mock container's single `versionId`. Normal starts validate every referenced rotation version before selection rather than only the selected document. Both origin paths copy the container's current `passingPercentage`, resolve generated content once, and persist a serializable frozen delivery snapshot before returning sanitized content.
+- Guarded the complete in-progress document at a conservative 900 KiB threshold before its initial write and after answer changes using a Firestore-aware upper-bound estimator rather than JSON byte length, leaving headroom below Firestore's 1 MiB document limit. Single-field indexing is explicitly disabled for the large `deliveryState` and `answers` maps. Oversized/configuration failures return stable codes and student-safe messages while logging actionable server details; the index configuration was updated locally but not deployed.
+- Added authenticated `POST /api/test-attempts/start`, `GET /api/test-attempts/[attemptId]`, and `PATCH /api/test-attempts/[attemptId]/answers` handlers. They derive the student ID only from the verified token, validate strict inputs, and delegate relationship logic to the injected service.
+- Added `startTestAttempt`, `getTestAttempt`, and `saveTestAttemptAnswer` to the existing injected `testApi`; the UID remains a client cache partition but is never sent as authoritative request data. Committed answers use the canonical per-exercise schema and exercise-type check, replace the validated answer map in a transaction instead of using dynamic field paths, and use explicit `null` to clear an answer.
+- Concurrent-start, full-history projection, normal/mock selection, full-rotation validation, assignment-change resume, generated-question stability, answer save/clear, ownership, sanitization, session hashing, Firestore-aware size-limit, authentication, and route-validation contracts were added. The concurrency fake now executes starts concurrently, detects the session-document version conflict, and proves the losing transaction callback retries before both calls converge.
+- Independent review identified grading parity, delivery sanitization, morphology-path, Firestore sizing/indexing, generated-word parity, full-rotation validation, concurrency-test, generated-morphology completion, and sentence-diagram audit gaps. All findings were addressed with focused regressions. Sentence-diagram test submissions now emit raw annotations only, preview performs no audit write, and the authenticated audit route resolves the private solution and source positions from the attempt's frozen delivery state before comparing server-side. Final verification passed: TypeScript, all 42 Jest suites/190 tests, `git diff --check`, valid Firestore index JSON, ESLint with zero errors (five pre-existing warnings), and the Next.js 16.2.9 production build. The latest review reported no remaining code, security, or privacy findings; its sole progress-note request is reflected here.
+- Phase 4B defines the submitted-attempt branch needed to recognize stale session pointers, but does not add the submit command. Transactional grading, duplicate-submit idempotency, session-pointer clearing, frozen result statistics, sticky completion, and summaries remain together in Phase 4C so submission and completion are not split across phases.
 
 #### Phase 4C: Submission, completion, and summaries
 

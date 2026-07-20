@@ -15,6 +15,7 @@ import { CheckCircle2 } from 'lucide-react';
 import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
 import { resolveRuntimeMode } from '@/src/types/runtime-mode';
+import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
 interface Props {
   exercise: OddOneOutExercise;
@@ -71,8 +72,15 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete, run
 
     setIsProcessing(true);
     setHasSubmitted(true);
-    if (mode === 'test') onAnswer?.({ type: 'odd-one-out', selectedItemId, explanation: userExplanation });
+    if (mode === 'test') {
+      onAnswer?.({ type: 'odd-one-out', selectedItemId, explanation: userExplanation });
+      setIsProcessing(false);
+      onComplete?.(0);
+      return;
+    }
 
+    const answer = { type: 'odd-one-out' as const, selectedItemId, explanation: userExplanation };
+    const score = Math.round(gradeExercisePercentage({ exercise }, answer));
     const validation = validateOddOneOutExercise(selectedItemId, userExplanation, exercise);
 
     if (validation.isCorrect) {
@@ -83,12 +91,12 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete, run
 
       autoAdvanceIfEnabled(() => {
         setIsProcessing(false);
-        onComplete?.(100);
+        onComplete?.(score);
       }, hasVisibleExplanation);
     } else {
       handleIncorrect();
       setIsProcessing(false);
-      if (assessmentMode) onComplete?.(0);
+      if (assessmentMode) onComplete?.(score);
     }
   };
 
@@ -141,8 +149,10 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete, run
             const isSelected = selectedItemId === item.id;
             const isCorrectItem = item.isOddOneOut;
             // Only show correct answer when user got it right OR feedback system says to show answer
-            const showCorrectHighlight = !assessmentMode && hasSubmitted && isCorrectItem && (isCorrect === true || level?.showAnswer);
-            const showIncorrectHighlight = !assessmentMode && hasSubmitted && isSelected && !isCorrectItem && level?.showAnswer;
+            const showCorrectHighlight =
+              !assessmentMode && hasSubmitted && isCorrectItem && (isCorrect === true || level?.showAnswer);
+            const showIncorrectHighlight =
+              !assessmentMode && hasSubmitted && isSelected && !isCorrectItem && level?.showAnswer;
 
             return (
               <button
@@ -222,16 +232,18 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete, run
         </div>
 
         {/* Feedback Display */}
-        {!assessmentMode && <FeedbackDisplay
-          isCorrect={isCorrect}
-          message={message}
-          level={level}
-          hint={exercise.data.hint}
-          correctAnswer={exercise.data.items.find(item => item.isOddOneOut)?.text}
-          explanation={exercise.data.explanation}
-          showExplanation={showExplanation}
-          onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
-        />}
+        {!assessmentMode && (
+          <FeedbackDisplay
+            isCorrect={isCorrect}
+            message={message}
+            level={level}
+            hint={exercise.data.hint}
+            correctAnswer={exercise.data.items.find(item => item.isOddOneOut)?.text}
+            explanation={exercise.data.explanation}
+            showExplanation={showExplanation}
+            onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
+          />
+        )}
       </div>
     </div>
   );

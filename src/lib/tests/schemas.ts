@@ -163,6 +163,94 @@ export const mockTestDocumentSchema = mockTestShapeSchema.superRefine((value, co
   }
 });
 
+export const testAttemptOriginSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('normal-test'), testId: firestoreDocumentIdSchema }).strict(),
+  z.object({ kind: z.literal('mock-test'), mockTestId: firestoreDocumentIdSchema }).strict(),
+]);
+
+const testAttemptDeliveryStateSchema = z
+  .object({
+    versionId: firestoreDocumentIdSchema,
+    pages: z.array(pageSchema).min(1),
+    resolvedExercises: z.record(z.string(), z.object({ items: z.array(z.unknown()) }).strict()),
+  })
+  .strict();
+
+const testAttemptBaseShape = {
+  id: firestoreDocumentIdSchema,
+  studentId: z.string().min(1),
+  versionId: firestoreDocumentIdSchema,
+  passingPercentage: passingPercentageSchema,
+  origin: testAttemptOriginSchema,
+  startedAt: z.string().min(1),
+  updatedAt: z.string().min(1),
+};
+
+const inProgressTestAttemptDocumentSchema = z
+  .object({
+    ...testAttemptBaseShape,
+    status: z.literal('in-progress'),
+    answers: z.record(z.string(), z.unknown()),
+    deliveryState: testAttemptDeliveryStateSchema,
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.versionId !== value.deliveryState.versionId) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Attempt versionId must match deliveryState.versionId',
+        path: ['deliveryState', 'versionId'],
+      });
+    }
+  });
+
+const submittedTestAttemptDocumentSchema = z
+  .object({
+    ...testAttemptBaseShape,
+    status: z.literal('submitted'),
+    exerciseResults: z.record(
+      z.string(),
+      z
+        .object({
+          title: z.string().optional(),
+          awardedPoints: z.number().finite().nonnegative(),
+          maxPoints: z.number().finite().positive(),
+        })
+        .strict()
+    ),
+    score: z.number().finite().nonnegative(),
+    maxScore: z.number().finite().positive(),
+    percentage: z.number().finite().min(0).max(100),
+    outcome: z.enum(['score-only', 'passed', 'not-passed']),
+    submittedAt: z.string().min(1),
+  })
+  .strict();
+
+export const testAttemptDocumentSchema = z.union([
+  inProgressTestAttemptDocumentSchema,
+  submittedTestAttemptDocumentSchema,
+]);
+
+export const testAttemptSessionDocumentSchema = z
+  .object({
+    id: firestoreDocumentIdSchema,
+    studentId: z.string().min(1),
+    origin: testAttemptOriginSchema,
+    attemptId: firestoreDocumentIdSchema,
+    createdAt: z.string().min(1),
+    updatedAt: z.string().min(1),
+  })
+  .strict();
+
+export const startTestAttemptInputSchema = z.object({ origin: testAttemptOriginSchema }).strict();
+
+export const saveTestAttemptAnswerInputSchema = z
+  .object({
+    exerciseId: z.string().trim().min(1).max(1500),
+    answer: z.unknown().refine(value => value !== undefined, 'answer is required; use null to clear it'),
+  })
+  .strict();
+
 export const createTestUnitInputSchema = z
   .object({
     id: firestoreDocumentIdSchema,
@@ -203,3 +291,6 @@ export type CreateTestWithVersionInput = z.infer<typeof createTestWithVersionSch
 export type UpdateTestUnitInput = z.infer<typeof updateTestUnitInputSchema>;
 export type UpdateTestWithVersionInput = z.infer<typeof updateTestWithVersionInputSchema>;
 export type MockTestDocument = z.infer<typeof mockTestDocumentSchema>;
+export type TestAttemptOriginInput = z.infer<typeof testAttemptOriginSchema>;
+export type StartTestAttemptInput = z.infer<typeof startTestAttemptInputSchema>;
+export type SaveTestAttemptAnswerInput = z.infer<typeof saveTestAttemptAnswerInputSchema>;

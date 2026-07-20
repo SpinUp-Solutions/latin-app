@@ -22,6 +22,7 @@ import { cn } from '@/src/lib/utils';
 import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
 import { resolveRuntimeMode } from '@/src/types/runtime-mode';
+import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
 interface Props {
   exercise: TableFillExercise;
@@ -81,13 +82,17 @@ const TableFillExerciseComponent: React.FC<Props> = ({ exercise, onComplete, run
 
     setIsProcessing(true);
     setHasSubmitted(true);
-    if (mode === 'test') onAnswer?.({ type: 'table-fill', answers: userAnswers });
+    if (mode === 'test') {
+      onAnswer?.({ type: 'table-fill', answers: userAnswers });
+      setIsProcessing(false);
+      onComplete?.(0);
+      return;
+    }
 
     const validation = validateTableFillExercise(userAnswers, exercise);
     setCellResults(validation.cellResults);
 
-    const score =
-      validation.totalBlanks > 0 ? Math.round((validation.correctAnswers / validation.totalBlanks) * 100) : 0;
+    const score = Math.round(gradeExercisePercentage({ exercise }, { type: 'table-fill', answers: userAnswers }));
 
     if (validation.isCorrect) {
       handleCorrect();
@@ -231,15 +236,17 @@ const TableFillExerciseComponent: React.FC<Props> = ({ exercise, onComplete, run
           )}
         </div>
 
-        {!assessmentMode && <FeedbackDisplay
-          isCorrect={isCorrect}
-          message={message}
-          level={level}
-          hint={exercise.data.hint}
-          explanation={exercise.data.explanation}
-          showExplanation={showExplanation}
-          onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
-        />}
+        {!assessmentMode && (
+          <FeedbackDisplay
+            isCorrect={isCorrect}
+            message={message}
+            level={level}
+            hint={exercise.data.hint}
+            explanation={exercise.data.explanation}
+            showExplanation={showExplanation}
+            onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
+          />
+        )}
       </div>
     </div>
   );

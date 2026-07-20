@@ -14,6 +14,7 @@ import { MultiClickableRichDisplay } from '../core/multi-clickable-rich-display'
 import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
 import { resolveRuntimeMode } from '@/src/types/runtime-mode';
+import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
 interface Props {
   exercise: ClickOnMultipleWordsExercise;
@@ -86,11 +87,26 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete, 
     setIsProcessing(true);
     setHasSubmitted(true);
     if (mode === 'test') {
-      onAnswer?.({ type: 'click-on-multiple-words', selectedWordIndices: Array.from(selectedIndices).sort((a, b) => a - b) });
+      onAnswer?.({
+        type: 'click-on-multiple-words',
+        selectedWordIndices: Array.from(selectedIndices).sort((a, b) => a - b),
+      });
+      setIsProcessing(false);
+      onComplete?.(0);
+      return;
     }
 
     const validation = validateClickOnMultipleWords(selectedIndices, exercise);
     setValidationResult(validation);
+    const score = Math.round(
+      gradeExercisePercentage(
+        { exercise },
+        {
+          type: 'click-on-multiple-words',
+          selectedWordIndices: Array.from(selectedIndices).sort((a, b) => a - b),
+        }
+      )
+    );
 
     if (validation.isCorrect) {
       handleCorrect();
@@ -100,12 +116,12 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete, 
 
       autoAdvanceIfEnabled(() => {
         setIsProcessing(false);
-        onComplete?.(validation.score);
+        onComplete?.(score);
       }, hasVisibleExplanation);
     } else {
       handleIncorrect();
       setIsProcessing(false);
-      if (assessmentMode) onComplete?.(validation.score);
+      if (assessmentMode) onComplete?.(score);
     }
   };
 
@@ -117,11 +133,13 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete, 
   };
 
   const getSelectionSummary = () => {
-    if (!validationResult || assessmentMode) {
-      return `${selectedIndices.size} of ${exercise.data.correctWordIndices.length} words selected`;
+    const requiredCount = exercise.data.correctWordIndices?.length ?? 0;
+    if (assessmentMode) return `${selectedIndices.size} words selected`;
+    if (!validationResult) {
+      return `${selectedIndices.size} of ${requiredCount} words selected`;
     }
 
-    return `${validationResult.correctSelections} of ${validationResult.totalRequired} correct • Score: ${validationResult.score}%`;
+    return `${validationResult.correctSelections} of ${validationResult.totalRequired} correct • Score: ${Math.round(validationResult.score)}%`;
   };
 
   return (
@@ -219,19 +237,21 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete, 
         )}
 
         {/* Feedback Display */}
-        {!assessmentMode && <FeedbackDisplay
-          isCorrect={isCorrect}
-          message={message}
-          level={level}
-          hint={exercise.data.hint}
-          correctAnswer={exercise.data.passage
-            .split(' ')
-            .filter((_, i) => exercise.data.correctWordIndices.includes(i))
-            .join(', ')}
-          explanation={exercise.data.explanation}
-          showExplanation={showExplanation}
-          onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
-        />}
+        {!assessmentMode && (
+          <FeedbackDisplay
+            isCorrect={isCorrect}
+            message={message}
+            level={level}
+            hint={exercise.data.hint}
+            correctAnswer={exercise.data.passage
+              .split(' ')
+              .filter((_, i) => exercise.data.correctWordIndices.includes(i))
+              .join(', ')}
+            explanation={exercise.data.explanation}
+            showExplanation={showExplanation}
+            onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
+          />
+        )}
       </div>
     </div>
   );

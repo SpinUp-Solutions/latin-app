@@ -1,0 +1,271 @@
+import React from 'react';
+import { fireEvent, render, screen } from '@testing-library/react';
+import ContentRenderer from '@/src/components/ui/lesson/content-renderer';
+import { sanitizeTestDeliveryState, type FrozenTestDeliveryState } from '@/src/lib/tests/delivery';
+import type { ContentItem } from '@/src/types/lesson';
+import type {
+  FillExercise,
+  GeneratedFormIdentificationExercise,
+  GeneratedTranslationExercise,
+  MatchingExercise,
+  MultipleChoiceExercise,
+  SentenceDiagrammingExercise,
+} from '@/src/types/exercises';
+import { createAnnotationId, createEmptySentenceDiagramDocument } from '@/src/features/sentence-diagramming';
+
+jest.mock('@/src/store/api/advancedVocabularyApi', () => ({
+  useGetMultiPosWordsQuery: () => ({ data: undefined, isLoading: false, isError: false }),
+  useGetMultiParadigmWordsQuery: () => ({ data: undefined, isLoading: false, isError: false }),
+}));
+jest.mock('@/src/services/wordLookupService', () => ({}));
+jest.mock('@/src/components/ui/core/simple-rich-editor', () => ({ SimpleRichEditor: () => null }));
+jest.mock('@/src/hooks/useTranslationGrading', () => ({ useTranslationGrading: () => ({}) }));
+
+const feedbackConfig = { escalationLevels: [] };
+
+const sanitizeExercise = (
+  exercise:
+    | FillExercise
+    | GeneratedTranslationExercise
+    | GeneratedFormIdentificationExercise
+    | MatchingExercise
+    | MultipleChoiceExercise
+    | SentenceDiagrammingExercise
+) => {
+  const state: FrozenTestDeliveryState = {
+    versionId: 'version',
+    pages: [{ id: 'page', items: [exercise] }],
+    resolvedExercises: {},
+  };
+  return { state, content: sanitizeTestDeliveryState(state).pages[0] as { items: ContentItem[] } };
+};
+
+describe('sanitized test delivery rendering', () => {
+  it('records a static exercise answer without shipping or invoking its answer key', () => {
+    const exercise: FillExercise = {
+      id: 'fill',
+      type: 'fill',
+      title: 'Fill',
+      instructions: '',
+      maxPoints: 1,
+      feedbackConfig,
+      data: { items: [{ text: 'Question', answer: 'secret' }] },
+    };
+    const { content } = sanitizeExercise(exercise);
+    const onAnswer = jest.fn();
+
+    render(<ContentRenderer content={content.items[0]} runtimeMode="test" onAnswer={onAnswer} />);
+    fireEvent.change(screen.getByPlaceholderText('Type your answer'), { target: { value: 'response' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Check' }));
+
+    expect(screen.getByText('Answer recorded.')).toBeInTheDocument();
+    expect(onAnswer).toHaveBeenCalledWith(expect.objectContaining({ answer: { type: 'fill', answers: ['response'] } }));
+  });
+
+  it('uses the public match count when the sanitized delivery contains an unmapped left item', () => {
+    const exercise: MatchingExercise = {
+      id: 'matching',
+      type: 'matching',
+      title: 'Matching',
+      instructions: '',
+      maxPoints: 1,
+      feedbackConfig,
+      data: {
+        leftColumn: [
+          { id: 'left', value: 'Alpha' },
+          { id: 'distractor', value: 'Distractor' },
+        ],
+        rightColumn: [{ id: 'right', value: 'One' }],
+        answers: { left: 'right' },
+      },
+    };
+    const { content } = sanitizeExercise(exercise);
+    const onAnswer = jest.fn();
+    const onComplete = jest.fn();
+    const sanitized = content.items[0] as MatchingExercise;
+
+    expect(sanitized.data.answers).toBeUndefined();
+    expect(sanitized.data.expectedMatchCount).toBe(1);
+
+    render(<ContentRenderer content={sanitized} runtimeMode="test" onAnswer={onAnswer} onComplete={onComplete} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Alpha' }));
+    fireEvent.click(screen.getByRole('button', { name: 'One' }));
+
+    expect(onAnswer).toHaveBeenCalledWith(
+      expect.objectContaining({ answer: { type: 'matching', rounds: [{ left: 'right' }] } })
+    );
+    expect(onComplete).toHaveBeenCalledWith(0);
+  });
+
+  it('preserves multi-select behavior after stripping multiple-choice answer flags', () => {
+    const exercise: MultipleChoiceExercise = {
+      id: 'multiple-choice',
+      type: 'multiple-choice',
+      title: 'Select both',
+      instructions: '',
+      maxPoints: 1,
+      feedbackConfig,
+      data: {
+        question: 'Which two?',
+        allowMultipleSelections: false,
+        options: [
+          { id: 'a', text: 'Alpha', isCorrect: true },
+          { id: 'b', text: 'Beta', isCorrect: true },
+          { id: 'c', text: 'Gamma', isCorrect: false },
+        ],
+      },
+    };
+    const { content } = sanitizeExercise(exercise);
+    const sanitized = content.items[0] as MultipleChoiceExercise;
+    const onAnswer = jest.fn();
+
+    expect(sanitized.data.allowMultipleSelections).toBe(true);
+    expect(sanitized.data.options.every(option => option.isCorrect === undefined)).toBe(true);
+
+    render(<ContentRenderer content={sanitized} runtimeMode="test" onAnswer={onAnswer} />);
+    fireEvent.click(screen.getByRole('button', { name: /Alpha/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Beta/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Submit Answer' }));
+
+    expect(onAnswer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        answer: { type: 'multiple-choice', selectedOptionIds: ['a', 'b'] },
+      })
+    );
+  });
+
+  it('renders and records sanitized generated translation items', () => {
+    const exercise: GeneratedTranslationExercise = {
+      id: 'translation',
+      type: 'generated-translation',
+      title: 'Translation',
+      instructions: '',
+      maxPoints: 1,
+      feedbackConfig,
+      data: {
+        generatorConfig: { collection: 'words', wordSource: 'filters', count: 1 },
+        posConfigs: {},
+      },
+    };
+    const { state, content } = sanitizeExercise(exercise);
+    state.resolvedExercises.translation = {
+      items: [{ text: 'amo', acceptedAnswers: ['love'], hint: 'secret hint' }],
+    };
+    const resolvedItems = sanitizeTestDeliveryState(state).resolvedExercises.translation;
+
+    render(<ContentRenderer content={content.items[0]} runtimeMode="test" resolvedExerciseState={resolvedItems} />);
+    fireEvent.change(screen.getByPlaceholderText('Type your answer...'), { target: { value: 'response' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Check' }));
+
+    expect(screen.getByText('Answer recorded.')).toBeInTheDocument();
+  });
+
+  it('renders and records sanitized generated morphology items', () => {
+    const exercise: GeneratedFormIdentificationExercise = {
+      id: 'morphology',
+      type: 'generated-form-identification',
+      title: 'Morphology',
+      instructions: '',
+      maxPoints: 1,
+      feedbackConfig,
+      data: {
+        mode: 'single-field',
+        generatorConfig: { collection: 'words', wordSource: 'filters', count: 1 },
+        paradigmConfigs: {},
+      },
+    };
+    const { state, content } = sanitizeExercise(exercise);
+    state.resolvedExercises.morphology = {
+      items: [
+        {
+          id: 'word',
+          wordId: 'word',
+          word: 'amamus',
+          root_word: 'amo',
+          dictionary_entry: 'amo, amare',
+          selected_form: 'amamus',
+          hasSelectedForm: true,
+          steps: ['person', 'number'],
+          correctAnswerDisplay: 'first,plural',
+          primaryFormPaths: [{ person: 'first', number: 'plural' }],
+          optionalFormPaths: [],
+        },
+      ],
+    };
+    const resolvedItems = sanitizeTestDeliveryState(state).resolvedExercises.morphology;
+    const onComplete = jest.fn();
+
+    render(
+      <ContentRenderer
+        content={content.items[0]}
+        runtimeMode="test"
+        resolvedExerciseState={resolvedItems}
+        onComplete={onComplete}
+      />
+    );
+    fireEvent.change(screen.getByPlaceholderText(/e.g., value,value/i), { target: { value: 'response' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Check' }));
+
+    expect(screen.getByText('Answer recorded.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Finish exercise' }));
+    expect(onComplete).toHaveBeenCalledWith(0);
+  });
+
+  it('emits a raw-only sentence-diagram audit event in test mode', () => {
+    const data = createEmptySentenceDiagramDocument('amat', 'he loves');
+    const span = {
+      startTokenIndex: 0,
+      endTokenIndex: 0,
+      startCharOffset: 0,
+      endCharOffset: 4,
+    };
+    data.availableStudentTools = ['verb'];
+    data.solutionAnnotations = [{ id: createAnnotationId('verb', span), kind: 'verb', span }];
+    const exercise: SentenceDiagrammingExercise = {
+      id: 'diagram',
+      type: 'sentence-diagramming',
+      title: 'Diagram',
+      instructions: '',
+      maxPoints: 1,
+      feedbackConfig,
+      data,
+    };
+    const { content } = sanitizeExercise(exercise);
+    const sanitized = content.items[0] as SentenceDiagrammingExercise;
+    const onAnswer = jest.fn();
+    const onComplete = jest.fn();
+    const onDiagrammingAttempt = jest.fn();
+
+    expect(sanitized.data.solutionAnnotations).toBeUndefined();
+    render(
+      <ContentRenderer
+        content={sanitized}
+        runtimeMode="test"
+        onAnswer={onAnswer}
+        onComplete={onComplete}
+        onDiagrammingAttempt={onDiagrammingAttempt}
+      />
+    );
+
+    const token = screen.getByText('amat').closest('[data-diagram-token-index]');
+    expect(token).not.toBeNull();
+    fireEvent.mouseUp(token as Element);
+    fireEvent.click(screen.getByRole('button', { name: 'Finite Verb' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Check' }));
+
+    expect(onDiagrammingAttempt).toHaveBeenCalledTimes(1);
+    const auditPayload = onDiagrammingAttempt.mock.calls[0][0];
+    expect(Object.keys(auditPayload)).toEqual(['studentAnnotations']);
+    expect(auditPayload.studentAnnotations).toEqual([{ id: createAnnotationId('verb', span), kind: 'verb', span }]);
+    expect(auditPayload).not.toHaveProperty('solutionAnnotations');
+    expect(auditPayload).not.toHaveProperty('comparison');
+    expect(auditPayload).not.toHaveProperty('tokens');
+    expect(onAnswer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        exerciseId: 'diagram',
+        answer: { type: 'sentence-diagramming', annotations: auditPayload.studentAnnotations },
+      })
+    );
+    expect(onComplete).toHaveBeenCalledWith(0);
+  });
+});

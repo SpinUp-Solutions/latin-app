@@ -1,6 +1,7 @@
 import { TestService, TEST_VERSION_SUMMARY_FIELDS } from '@/src/lib/tests/service';
 
 jest.mock('@/src/services/firebase-admin', () => ({ adminDb: {} }));
+jest.mock('firebase-admin/firestore', () => ({ FieldPath: { documentId: jest.fn() } }));
 
 const timestamp = '2026-07-16T12:00:00.000Z';
 const pages = [

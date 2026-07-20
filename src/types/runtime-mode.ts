@@ -1,9 +1,10 @@
 import type { DiagramAnnotation } from '@/src/features/sentence-diagramming/model';
+import type { FeedbackConfig } from '@/src/types/exercises/base';
 
 export type RuntimeMode = 'practice' | 'test' | 'preview';
 
 export type ExerciseAnswer =
-  | { type: 'matching'; matches: Record<string, string> }
+  | { type: 'matching'; rounds: Record<string, string>[] }
   | { type: 'fill'; answers: string[] }
   | { type: 'multiple-choice'; selectedOptionIds: string[] }
   | { type: 'odd-one-out'; selectedItemId: string; explanation: string }
@@ -23,6 +24,16 @@ export interface ExerciseAnswerEvent {
 }
 
 export type ExerciseAnswerHandler = (answer: ExerciseAnswer) => void;
+
+export const TEST_RUNTIME_FEEDBACK_CONFIG: FeedbackConfig = {
+  escalationLevels: [],
+  successMessage: { showExplanation: false },
+  progressionRules: {
+    autoAdvanceOnCorrect: false,
+    pauseForExplanation: true,
+    showProgress: true,
+  },
+};
 
 export const resolveRuntimeMode = (runtimeMode?: RuntimeMode, testMode?: boolean): RuntimeMode =>
   runtimeMode ?? (testMode ? 'test' : 'practice');

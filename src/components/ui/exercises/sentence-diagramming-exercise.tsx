@@ -1,5 +1,5 @@
 import React from 'react';
-import { DiagramAttempt, SentenceDiagramStudent } from '@/src/features/sentence-diagramming';
+import { DiagramAuditSubmission, SentenceDiagramStudent } from '@/src/features/sentence-diagramming';
 import { SentenceDiagrammingExercise as SentenceDiagrammingExerciseType } from '@/src/types/exercises/sentence-diagramming';
 import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
 
@@ -9,7 +9,7 @@ interface SentenceDiagrammingExerciseProps {
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
   testMode?: boolean;
-  onAttempt?: (attempt: DiagramAttempt) => void;
+  onAttempt?: (attempt: DiagramAuditSubmission) => void;
 }
 
 export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExerciseProps> = ({

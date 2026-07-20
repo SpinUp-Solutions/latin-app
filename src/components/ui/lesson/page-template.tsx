@@ -7,7 +7,7 @@ import ContentRenderer from './content-renderer';
 import { ExerciseErrorBoundary } from './exercise-error-boundary';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { isExerciseType } from '@/src/utils/lessonUtils';
-import { DiagramAttempt } from '@/src/features/sentence-diagramming';
+import { DiagramAuditSubmission } from '@/src/features/sentence-diagramming';
 import type { ExerciseAnswerEvent, RuntimeMode } from '@/src/types/runtime-mode';
 import type { ResolvedGeneratedExerciseState } from './content-renderer';
 
@@ -19,7 +19,7 @@ interface PageTemplateProps {
   onAnswer?: (event: ExerciseAnswerEvent) => void;
   resolvedExerciseState?: Record<string, ResolvedGeneratedExerciseState>;
   onPageComplete?: () => void;
-  onDiagrammingAttempt?: (itemIndex: number, exerciseId: string, attempt: DiagramAttempt) => void;
+  onDiagrammingAttempt?: (itemIndex: number, exerciseId: string, attempt: DiagramAuditSubmission) => void;
 }
 
 export const PageTemplate: React.FC<PageTemplateProps> = ({

@@ -120,3 +120,46 @@ export function validateTestAssignmentGraph({ tests, mocks, versions, versionIds
 
   return errors;
 }
+
+export interface SubmittedVersionSelectionRecord {
+  versionId: string;
+  submittedAt: string;
+}
+
+/**
+ * Selects from the least-used eligible versions across the complete submitted
+ * history. When possible, the immediately previous version is removed from an
+ * otherwise tied candidate set before the random choice is made.
+ */
+export function selectLeastUsedTestVersion(
+  eligibleVersionIds: readonly string[],
+  submittedHistory: readonly SubmittedVersionSelectionRecord[],
+  random: () => number = Math.random
+): string {
+  if (eligibleVersionIds.length === 0) throw new Error('A test needs at least one eligible rotation version');
+
+  const uniqueVersionIds = [...new Set(eligibleVersionIds)];
+  if (uniqueVersionIds.length !== eligibleVersionIds.length) {
+    throw new Error('Eligible rotation version IDs must be unique');
+  }
+
+  const usage = new Map(uniqueVersionIds.map(versionId => [versionId, 0]));
+  for (const attempt of submittedHistory) {
+    if (usage.has(attempt.versionId)) usage.set(attempt.versionId, usage.get(attempt.versionId)! + 1);
+  }
+
+  const leastUses = Math.min(...usage.values());
+  let candidates = uniqueVersionIds.filter(versionId => usage.get(versionId) === leastUses);
+  const previous = submittedHistory.reduce<SubmittedVersionSelectionRecord | undefined>(
+    (latest, attempt) => (!latest || attempt.submittedAt >= latest.submittedAt ? attempt : latest),
+    undefined
+  );
+
+  if (candidates.length > 1 && previous && candidates.includes(previous.versionId)) {
+    candidates = candidates.filter(versionId => versionId !== previous.versionId);
+  }
+
+  const randomValue = random();
+  const boundedRandom = Number.isFinite(randomValue) ? Math.min(Math.max(randomValue, 0), 0.9999999999999999) : 0;
+  return candidates[Math.floor(boundedRandom * candidates.length)];
+}

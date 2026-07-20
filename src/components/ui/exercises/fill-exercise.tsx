@@ -13,6 +13,8 @@ import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
 import { resolveRuntimeMode } from '@/src/types/runtime-mode';
+import { RecordedAnswerControls } from './recorded-answer-controls';
+import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
 interface Props {
   exercise: FillExercise;
@@ -29,15 +31,21 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete, runtimeM
   const [userAnswer, setUserAnswer] = useState('');
   const [submittedAnswers, setSubmittedAnswers] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [testSubmitted, setTestSubmitted] = useState(false);
 
-  const [correctAnswers, setCorrectAnswers] = useState(0);
-
-  const { currentIndex, isLastItem, isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance, resetIndex } =
-    useExerciseProgression({
-      totalItems: exercise.data.items.length,
-      itemProgressionDelay: exercise.itemProgressionDelay,
-      progressionRules: exercise.feedbackConfig.progressionRules,
-    });
+  const {
+    currentIndex,
+    isLastItem,
+    isAwaitingConfirmation,
+    autoAdvanceIfEnabled,
+    confirmAdvance,
+    resetIndex,
+    nextItem,
+  } = useExerciseProgression({
+    totalItems: exercise.data.items.length,
+    itemProgressionDelay: exercise.itemProgressionDelay,
+    progressionRules: exercise.feedbackConfig.progressionRules,
+  });
 
   const {
     isCorrect,
@@ -56,8 +64,9 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete, runtimeM
     delayMs: exercise.itemProgressionDelay,
     onReset: () => {
       setUserAnswer('');
-      setCorrectAnswers(0);
       setIsProcessing(false);
+      setTestSubmitted(false);
+      setSubmittedAnswers([]);
       resetIndex();
       resetExercise();
     },
@@ -66,16 +75,23 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete, runtimeM
   const handleSubmit = () => {
     if (isProcessing) return;
 
-    const validation = validateFillExercise(userAnswer, exercise, currentIndex);
     const nextAnswers = [...submittedAnswers];
     nextAnswers[currentIndex] = userAnswer;
     setSubmittedAnswers(nextAnswers);
-    if (mode === 'test') onAnswer?.({ type: 'fill', answers: nextAnswers });
     setIsProcessing(true);
 
+    if (mode === 'test') {
+      onAnswer?.({ type: 'fill', answers: nextAnswers });
+      setTestSubmitted(true);
+      return;
+    }
+
+    const validation = validateFillExercise(userAnswer, exercise, currentIndex);
+    const finalScore = isLastItem
+      ? Math.round(gradeExercisePercentage({ exercise }, { type: 'fill', answers: nextAnswers }))
+      : null;
+
     if (validation.isCorrect) {
-      const newCorrectAnswers = correctAnswers + 1;
-      setCorrectAnswers(newCorrectAnswers);
       handleCorrect(isLastItem);
 
       const hasVisibleExplanation =
@@ -83,13 +99,11 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete, runtimeM
         hasVisibleFeedbackContent(currentItem.explanation);
 
       if (isLastItem) {
-        const finalScore = Math.round((newCorrectAnswers / exercise.data.items.length) * 100);
-
         autoAdvanceIfEnabled(() => {
           setUserAnswer('');
           reset();
           setIsProcessing(false);
-          onComplete?.(finalScore);
+          onComplete?.(finalScore!);
         }, hasVisibleExplanation);
       } else {
         autoAdvanceIfEnabled(() => {
@@ -101,7 +115,6 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete, runtimeM
     } else {
       handleIncorrect();
       if (assessmentMode) {
-        const finalScore = isLastItem ? Math.round((correctAnswers / exercise.data.items.length) * 100) : null;
         autoAdvanceIfEnabled(() => {
           setUserAnswer('');
           reset();
@@ -116,6 +129,18 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete, runtimeM
 
   const handleAnswerChange = (value: string) => {
     setUserAnswer(value);
+  };
+
+  const continueTest = () => {
+    if (isLastItem) {
+      onComplete?.(0);
+      return;
+    }
+    setUserAnswer('');
+    setTestSubmitted(false);
+    setIsProcessing(false);
+    reset();
+    nextItem();
   };
 
   const currentItem = exercise.data.items[currentIndex];
@@ -160,17 +185,21 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete, runtimeM
           disabled={isProcessing}
         />
 
-        <FeedbackDisplay
-          isCorrect={isCorrect}
-          message={assessmentMode ? '' : message}
-          level={assessmentMode ? null : level}
-          hint={assessmentMode ? undefined : currentItem.hint}
-          correctAnswer={assessmentMode ? undefined : currentItem.answer}
-          explanation={assessmentMode ? undefined : currentItem.explanation}
-          showExplanation={!assessmentMode && showExplanation}
-          onContinue={(isCorrect || assessmentMode) && isAwaitingConfirmation ? confirmAdvance : undefined}
-          allowContinueOnIncorrect={assessmentMode}
-        />
+        {mode === 'test' ? (
+          testSubmitted && <RecordedAnswerControls isLastItem={isLastItem} onContinue={continueTest} />
+        ) : (
+          <FeedbackDisplay
+            isCorrect={isCorrect}
+            message={assessmentMode ? '' : message}
+            level={assessmentMode ? null : level}
+            hint={assessmentMode ? undefined : currentItem.hint}
+            correctAnswer={assessmentMode ? undefined : currentItem.answer}
+            explanation={assessmentMode ? undefined : currentItem.explanation}
+            showExplanation={!assessmentMode && showExplanation}
+            onContinue={(isCorrect || assessmentMode) && isAwaitingConfirmation ? confirmAdvance : undefined}
+            allowContinueOnIncorrect={assessmentMode}
+          />
+        )}
       </div>
     </div>
   );

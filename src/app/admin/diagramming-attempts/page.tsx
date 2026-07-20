@@ -99,12 +99,22 @@ function DiagrammingAttemptsPage() {
             <details key={String(attempt.id)} className="rounded border bg-white p-4">
               <summary className="cursor-pointer list-none">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-medium">{String(attempt.lessonId)} · {String(attempt.exerciseId)}</span>
+                  <span className="font-medium">
+                    {attempt.sourceKind === 'test-attempt'
+                      ? `Test attempt ${String(attempt.testAttemptId)}`
+                      : `Lesson ${String(attempt.lessonId)}`}{' '}
+                    · {String(attempt.exerciseId)}
+                  </span>
                   <span className="text-sm tabular-nums text-roman-stone">
-                    raw {String(attempt.rawStudentCount)}/{String(attempt.rawSolutionCount)} · canonical {String(attempt.canonicalStudentCount)}/{String(attempt.canonicalSolutionCount)} · matched {String(attempt.matched)}/{String(attempt.expected)}
+                    raw {String(attempt.rawStudentCount)}/{String(attempt.rawSolutionCount)} · canonical{' '}
+                    {String(attempt.canonicalStudentCount)}/{String(attempt.canonicalSolutionCount)} · matched{' '}
+                    {String(attempt.matched)}/{String(attempt.expected)}
                   </span>
                 </div>
-                <div className="mt-1 text-xs text-roman-stone">User: {String(attempt.userId)} · page {Number(attempt.pageIndex) + 1}, item {Number(attempt.itemIndex) + 1}</div>
+                <div className="mt-1 text-xs text-roman-stone">
+                  User: {String(attempt.userId)} · page {Number(attempt.pageIndex) + 1}, item{' '}
+                  {Number(attempt.itemIndex) + 1}
+                </div>
               </summary>
               <pre className="mt-4 max-h-[32rem] overflow-auto rounded bg-slate-950 p-4 text-xs text-slate-100">
                 {JSON.stringify(attempt, null, 2)}

@@ -61,6 +61,28 @@
       ]
     },
     {
+      "collectionGroup": "testAttempts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "studentId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "origin.kind",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "origin.testId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "lessons",
       "queryScope": "COLLECTION",
       "fields": [
@@ -573,5 +595,16 @@
       ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    {
+      "collectionGroup": "testAttempts",
+      "fieldPath": "answers",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "testAttempts",
+      "fieldPath": "deliveryState",
+      "indexes": []
+    }
+  ]
 }
