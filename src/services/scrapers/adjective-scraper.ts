@@ -37,7 +37,7 @@ export class AdjectiveScraper extends BaseScraper {
       if (await table.count()) {
         result.adjectiveDeclensionTable = await this.extractAdjectiveTableData(table);
       }
-    } catch (error) {
+    } catch {
       // Silently fail for optional data
     }
   }

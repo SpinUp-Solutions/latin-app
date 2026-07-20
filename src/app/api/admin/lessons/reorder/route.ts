@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 
 interface ReorderUpdate {
   lessonId: string;
@@ -24,6 +25,10 @@ export async function POST(request: NextRequest) {
 
     for (const { lessonId, liveOrder } of updates) {
       const lessonRef = adminDb.collection('lessons').doc(lessonId);
+      const lessonDoc = await lessonRef.get();
+      if (!lessonDoc.exists || !isLessonDocumentData(lessonDoc.data())) {
+        return NextResponse.json({ error: `Lesson ${lessonId} not found` }, { status: 404 });
+      }
       batch.update(lessonRef, { liveOrder, updatedAt: new Date().toISOString() });
     }
 

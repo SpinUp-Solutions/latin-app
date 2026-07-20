@@ -1,13 +1,25 @@
-import globals from 'globals';
-import pluginJs from '@eslint/js';
+import nextConfig from 'eslint-config-next';
 import tseslint from 'typescript-eslint';
-import pluginReact from 'eslint-plugin-react';
+import prettierConfig from 'eslint-config-prettier';
 
-/** @type {import('eslint').Linter.Config[]} */
 export default [
-  { files: ['**/*.{js,mjs,cjs,ts,jsx,tsx}'] },
-  { languageOptions: { globals: globals.browser } },
-  pluginJs.configs.recommended,
+  {
+    ignores: ['.next/**', 'node_modules/**', 'functions/**', 'public/**'],
+  },
+  ...nextConfig,
   ...tseslint.configs.recommended,
-  pluginReact.configs.flat.recommended,
+  prettierConfig,
+  {
+    rules: {
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-explicit-any': 'error',
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/static-components': 'off',
+      'react-hooks/preserve-manual-memoization': 'off',
+      'react-hooks/immutability': 'off',
+      'react-hooks/refs': 'off',
+      'react-hooks/incompatible-library': 'off',
+      '@typescript-eslint/no-empty-object-type': 'off',
+    },
+  },
 ];

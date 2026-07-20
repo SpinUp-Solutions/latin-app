@@ -1,13 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { Lesson } from '@/src/types/lesson';
+import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 import { verifyAdminAccess } from '../../../../../../lib/verifyAdminAccess';
 import { getLessonContentCounts } from '@/src/utils/lessonSummary';
+import { optionalPracticeCategoryIdsSchema } from '@/src/lib/practice-categories/schemas';
+import { practiceCategoryService } from '@/src/lib/practice-categories/service';
+import { practiceCategoryRouteErrorResponse } from '@/src/lib/practice-categories/api';
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
+}
+
+class RecoveryRouteError extends Error {
+  constructor(
+    message: string,
+    public readonly status: 400 | 403 | 404 | 409,
+    public readonly details?: Record<string, unknown>
+  ) {
+    super(message);
+    this.name = 'RecoveryRouteError';
+  }
 }
 
 // POST - Retry save from recovery (creates or updates the lesson)
@@ -18,96 +33,118 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const recoveryId = params.id;
+    const { id } = await params;
+    const recoveryId = id;
+    const recoveryRef = adminDb.collection('lesson_recovery').doc(recoveryId);
+    const result = await adminDb.runTransaction(async transaction => {
+      const recoveryDoc = await transaction.get(recoveryRef);
+      if (!recoveryDoc.exists) {
+        throw new RecoveryRouteError('Recovery item not found', 404);
+      }
+      const recoveryData = recoveryDoc.data();
+      if (!recoveryData) {
+        throw new RecoveryRouteError('Recovery data is empty', 404);
+      }
+      if (recoveryData.userId !== user.uid) {
+        throw new RecoveryRouteError('Forbidden', 403);
+      }
+      if (recoveryData.status !== 'pending') {
+        throw new RecoveryRouteError('Recovery item is no longer pending', 409);
+      }
 
-    // Get recovery item
-    const recoveryDoc = await adminDb.collection('lesson_recovery').doc(recoveryId).get();
-    if (!recoveryDoc.exists) {
-      return NextResponse.json({ error: 'Recovery item not found' }, { status: 404 });
-    }
-
-    const recoveryData = recoveryDoc.data();
-    if (!recoveryData) {
-      return NextResponse.json({ error: 'Recovery data is empty' }, { status: 404 });
-    }
-
-    // Verify ownership
-    if (recoveryData.userId !== user.uid) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
-    const lesson = recoveryData.rawLessonData as Lesson;
-
-    // Check if lesson already exists
-    const existingLessonDoc = await adminDb.collection('lessons').doc(lesson.id).get();
-    const lessonExists = existingLessonDoc.exists;
-
-    const { totalPages, totalItems, totalExercises } = getLessonContentCounts(lesson);
-
-    let lessonData;
-    if (lessonExists) {
-      // Update existing lesson
+      const rawLesson = recoveryData.rawLessonData as Lesson;
+      if (!isLessonDocumentData(rawLesson)) {
+        throw new RecoveryRouteError('Recovery item does not contain a lesson', 400);
+      }
+      if (!rawLesson?.id || !rawLesson.title || !rawLesson.type) {
+        throw new RecoveryRouteError('Recovery lesson ID, title, and type are required', 400);
+      }
+      const fallbackCategoryIds = rawLesson.practiceCategories?.map(category => category.id);
+      const practiceCategoryIds = optionalPracticeCategoryIdsSchema.parse(
+        rawLesson.practiceCategoryIds ?? fallbackCategoryIds
+      );
+      const {
+        practiceCategoryIds: _practiceCategoryIds,
+        practiceCategories: _practiceCategories,
+        ...lesson
+      } = rawLesson;
+      const lessonRef = adminDb.collection('lessons').doc(lesson.id);
+      const existingLessonDoc = await transaction.get(lessonRef);
+      const lessonExists = existingLessonDoc.exists;
       const existingLesson = existingLessonDoc.data();
-      lessonData = {
-        ...lesson,
-        totalPages,
-        totalItems,
-        totalExercises,
-        createdAt: existingLesson?.createdAt || new Date().toISOString(),
-        createdBy: existingLesson?.createdBy || user.uid,
-        updatedAt: new Date().toISOString(),
-        updatedBy: user.uid,
-        version: (existingLesson?.version || 0) + 1,
-        isLive: existingLesson?.isLive ?? false,
-        liveOrder: existingLesson?.liveOrder ?? null,
-        publishedAt: existingLesson?.publishedAt || null,
-        publishedBy: existingLesson?.publishedBy || null,
-      };
-      console.log(`[RECOVERY] Updating existing lesson "${lesson.title}" (${lesson.id}) from recovery`);
-    } else {
-      // Create new lesson
-      lessonData = {
-        ...lesson,
-        totalPages,
-        totalItems,
-        totalExercises,
-        createdAt: new Date().toISOString(),
-        createdBy: user.uid,
-        updatedAt: new Date().toISOString(),
-        updatedBy: user.uid,
-        version: 1,
-        isLive: false,
-        liveOrder: null,
-        publishedAt: null,
-        publishedBy: null,
-      };
-      console.log(`[RECOVERY] Creating new lesson "${lesson.title}" (${lesson.id}) from recovery`);
-    }
+      if (lessonExists && !isLessonDocumentData(existingLesson)) {
+        throw new RecoveryRouteError('A test cannot be recovered through the lesson endpoint', 404);
+      }
+      const { totalPages, totalItems, totalExercises } = getLessonContentCounts(lesson);
+      const now = new Date().toISOString();
+      const lessonData = lessonExists
+        ? {
+            ...lesson,
+            kind: 'lesson' as const,
+            totalPages,
+            totalItems,
+            totalExercises,
+            createdAt: existingLesson?.createdAt || now,
+            createdBy: existingLesson?.createdBy || user.uid,
+            updatedAt: now,
+            updatedBy: user.uid,
+            version: (existingLesson?.version || 0) + 1,
+            isLive: existingLesson?.isLive ?? false,
+            liveOrder: existingLesson?.liveOrder ?? null,
+            publishedAt: existingLesson?.publishedAt || null,
+            publishedBy: existingLesson?.publishedBy || null,
+          }
+        : {
+            ...lesson,
+            kind: 'lesson' as const,
+            totalPages,
+            totalItems,
+            totalExercises,
+            createdAt: now,
+            createdBy: user.uid,
+            updatedAt: now,
+            updatedBy: user.uid,
+            version: 1,
+            isLive: false,
+            liveOrder: null,
+            publishedAt: null,
+            publishedBy: null,
+          };
 
-    // Save lesson to Firestore
-    await adminDb.collection('lessons').doc(lesson.id).set(lessonData);
-
-    // Mark recovery item as recovered
-    await adminDb.collection('lesson_recovery').doc(recoveryId).update({
-      status: 'recovered',
-      recoveredAt: new Date().toISOString(),
+      const assignments = await practiceCategoryService.reconcileLessonCategoriesInTransaction(transaction, {
+        lessonId: lesson.id,
+        lesson: lessonData,
+        desiredCategoryIds: lessonExists ? practiceCategoryIds : (practiceCategoryIds ?? []),
+        actorId: user.uid,
+      });
+      transaction.set(lessonRef, lessonData);
+      transaction.update(recoveryRef, { status: 'recovered', recoveredAt: now });
+      return { lessonExists, lessonData, assignments };
     });
+
+    const lesson = result.lessonData;
+    console.log(
+      `[RECOVERY] ${result.lessonExists ? 'Updated' : 'Created'} lesson "${lesson.title}" (${lesson.id}) from recovery`
+    );
 
     console.log(`[RECOVERY] Successfully recovered lesson "${lesson.title}" (${lesson.id}) by user ${user.uid}`);
 
     return NextResponse.json({
       success: true,
-      lesson: lessonData,
-      message: lessonExists ? 'Lesson updated successfully from recovery' : 'Lesson created successfully from recovery',
+      lesson: {
+        ...result.lessonData,
+        practiceCategoryIds: result.assignments.practiceCategoryIds,
+        practiceCategories: result.assignments.practiceCategories,
+      },
+      message: result.lessonExists
+        ? 'Lesson updated successfully from recovery'
+        : 'Lesson created successfully from recovery',
     });
   } catch (error) {
-    console.error('Error retrying from recovery:', error);
-    if (error instanceof Error) {
-      if (error.message === 'Unauthorized' || error.message === 'Forbidden') {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      }
+    if (error instanceof RecoveryRouteError) {
+      return NextResponse.json({ error: error.message, ...error.details }, { status: error.status });
     }
-    return NextResponse.json({ error: 'Failed to retry from recovery' }, { status: 500 });
+    return practiceCategoryRouteErrorResponse(error, 'retry lesson from recovery');
   }
 }
 
@@ -119,7 +156,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const recoveryId = params.id;
+    const { id } = await params;
+    const recoveryId = id;
 
     // Get recovery item to verify ownership
     const recoveryDoc = await adminDb.collection('lesson_recovery').doc(recoveryId).get();

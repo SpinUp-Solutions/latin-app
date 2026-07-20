@@ -4,6 +4,7 @@ import { FieldPath } from 'firebase-admin/firestore';
 import type { Word } from '@/src/types/admin-vocabulary';
 import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 import { buildPoolSearchTokens } from '@/src/utils/vocabularyPoolSummary';
+import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,9 +14,12 @@ const serializePoolMetadata = (metadata: FirebaseFirestore.DocumentData) => ({
   updatedAt: metadata.updatedAt?.toDate ? metadata.updatedAt.toDate() : metadata.updatedAt,
 });
 
-export async function GET(request: NextRequest, { params }: { params: { poolId: string } }): Promise<NextResponse> {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ poolId: string }> }
+): Promise<NextResponse> {
   try {
-    const { poolId } = params;
+    const { poolId } = await params;
 
     const poolDoc = await adminDb.collection('vocabulary_pools').doc(poolId).get();
     if (!poolDoc.exists) {
@@ -132,9 +136,12 @@ export async function GET(request: NextRequest, { params }: { params: { poolId: 
   }
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { poolId: string } }): Promise<NextResponse> {
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ poolId: string }> }
+): Promise<NextResponse> {
   try {
-    const { poolId } = params;
+    const { poolId } = await params;
     const updates = await request.json();
 
     if (updates.name !== undefined && updates.name.length > 100) {
@@ -200,14 +207,18 @@ export async function PUT(request: NextRequest, { params }: { params: { poolId: 
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { poolId: string } }): Promise<NextResponse> {
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ poolId: string }> }
+): Promise<NextResponse> {
   try {
-    const { poolId } = params;
+    const { poolId } = await params;
 
-    const lessonsQuery = await adminDb.collection('lessons').where('vocabulary_pool', '==', poolId).limit(1).get();
+    const lessonsQuery = await adminDb.collection('lessons').where('vocabulary_pool', '==', poolId).get();
+    const lessonUsingPool = lessonsQuery.docs.find(doc => isLessonDocumentData(doc.data()));
 
-    if (!lessonsQuery.empty) {
-      const lessonData = lessonsQuery.docs[0].data();
+    if (lessonUsingPool) {
+      const lessonData = lessonUsingPool.data();
       return NextResponse.json(
         {
           success: false,

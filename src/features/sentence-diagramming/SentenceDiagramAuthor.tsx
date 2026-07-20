@@ -73,9 +73,9 @@ const DiagramAnnotationEditor: React.FC<DiagramAnnotationEditorProps> = ({
 
     if (!span) {
       setMessage(
-        kind.startsWith('person-')
-          ? 'Select exact ending letters inside one token before using a person tool.'
-          : 'Select one or more tokens before applying a diagramming tool.'
+        ANNOTATION_SPECS[kind].selectionMode === 'exact'
+          ? 'Select exact characters within one word before using this tool.'
+          : 'Select one or more words before applying a diagramming tool.'
       );
       return;
     }

@@ -11,14 +11,22 @@ import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
+import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
+import { resolveRuntimeMode } from '@/src/types/runtime-mode';
 
 interface Props {
   exercise: FillEmboldedTextExercise;
   onComplete?: (score: number) => void;
+  runtimeMode?: RuntimeMode;
+  onAnswer?: ExerciseAnswerHandler;
+  testMode?: boolean;
 }
 
-const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
+const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComplete, runtimeMode, onAnswer, testMode }) => {
+  const mode = resolveRuntimeMode(runtimeMode, testMode);
+  const assessmentMode = mode !== 'practice';
   const [userAnswer, setUserAnswer] = useState('');
+  const [submittedAnswers, setSubmittedAnswers] = useState<string[]>([]);
   const [selectedWordIndex, setSelectedWordIndex] = useState<number | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [correctAnswers, setCorrectAnswers] = useState(0);
@@ -44,7 +52,7 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
   } = useExerciseFeedback(exercise.feedbackConfig);
 
   useDelayedExerciseReset({
-    shouldReset: shouldResetExercise,
+    shouldReset: !assessmentMode && shouldResetExercise,
     delayMs: exercise.itemProgressionDelay,
     onReset: () => {
       setUserAnswer('');
@@ -78,6 +86,10 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
     if (isProcessing) return;
 
     const validation = validateFillEmboldedTextExercise(userAnswer, exercise, currentIndex);
+    const nextAnswers = [...submittedAnswers];
+    nextAnswers[currentIndex] = userAnswer;
+    setSubmittedAnswers(nextAnswers);
+    if (mode === 'test') onAnswer?.({ type: 'fill-embolded-text', answers: nextAnswers });
     setIsProcessing(true);
 
     if (validation.isCorrect) {
@@ -109,7 +121,18 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
       }
     } else {
       handleIncorrect();
-      setIsProcessing(false);
+      if (assessmentMode) {
+        const finalScore = isLastItem ? Math.round((correctAnswers / exercise.data.words.length) * 100) : null;
+        autoAdvanceIfEnabled(() => {
+          setUserAnswer('');
+          setSelectedWordIndex(null);
+          reset();
+          setIsProcessing(false);
+          if (finalScore !== null) onComplete?.(finalScore);
+        }, false);
+      } else {
+        setIsProcessing(false);
+      }
     }
   };
 
@@ -185,13 +208,14 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
 
         <FeedbackDisplay
           isCorrect={isCorrect}
-          message={message}
-          level={level}
-          hint={currentWord.hint}
-          correctAnswer={currentWord.correctAnswer}
-          explanation={currentWord.explanation}
-          showExplanation={showExplanation}
-          onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
+          message={assessmentMode ? '' : message}
+          level={assessmentMode ? null : level}
+          hint={assessmentMode ? undefined : currentWord.hint}
+          correctAnswer={assessmentMode ? undefined : currentWord.correctAnswer}
+          explanation={assessmentMode ? undefined : currentWord.explanation}
+          showExplanation={!assessmentMode && showExplanation}
+          onContinue={(isCorrect || assessmentMode) && isAwaitingConfirmation ? confirmAdvance : undefined}
+          allowContinueOnIncorrect={assessmentMode}
         />
       </div>
     </div>

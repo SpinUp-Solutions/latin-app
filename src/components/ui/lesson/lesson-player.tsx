@@ -1,12 +1,11 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { LessonWithProgress } from '@/src/types/lesson';
-import { BookOpen, CheckCircle } from 'lucide-react';
+import { BookOpen, Headphones, CheckCircle } from 'lucide-react';
 import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
-import { LessonProgress } from '../core/lesson-progress';
 import { Button } from '@/src/components/ui/button';
 import PageTemplate from './page-template';
 import useAudio from '@/src/hooks/useAudio';
@@ -14,42 +13,65 @@ import LessonNavigation from '../exercises/lesson-navigation';
 import {
   useMarkExerciseCompleteMutation,
   useUpdatePageProgressMutation,
-  useMarkLessonCompleteMutation,
+  useFinishLessonMutation,
 } from '@/src/store/api/lessonApi';
 import { useAuth } from '@/src/hooks/useAuth';
 import { toast } from 'sonner';
+import { auth } from '@/src/services/firebase';
+import { DiagramAttempt } from '@/src/features/sentence-diagramming';
+import { RequiredExercise } from '@/src/utils/lessonProgress';
+import { stripHtmlTags } from '@/src/utils/exercises';
+import type { ExerciseAnswerEvent, RuntimeMode } from '@/src/types/runtime-mode';
+import type { ResolvedGeneratedExerciseState } from './content-renderer';
 
 interface LessonPlayerProps {
   lesson: LessonWithProgress;
+  navigationPlacement?: 'fixed' | 'contained';
+  trackProgress?: boolean;
+  runtimeMode?: RuntimeMode;
+  onAnswer?: (event: ExerciseAnswerEvent) => void;
+  resolvedExerciseState?: Record<string, ResolvedGeneratedExerciseState>;
 }
 
-export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
+export const LessonPlayer: React.FC<LessonPlayerProps> = ({
+  lesson,
+  navigationPlacement = 'fixed',
+  trackProgress = true,
+  runtimeMode,
+  onAnswer,
+  resolvedExerciseState,
+}) => {
+  const effectiveRuntimeMode = runtimeMode ?? (trackProgress ? 'practice' : 'preview');
+  const shouldTrackProgress = trackProgress && effectiveRuntimeMode === 'practice';
   const { user } = useAuth();
   const [markExerciseComplete] = useMarkExerciseCompleteMutation();
   const [updatePageProgress] = useUpdatePageProgressMutation();
-  const [markLessonComplete] = useMarkLessonCompleteMutation();
+  const [finishLesson, { isLoading: isFinishing }] = useFinishLessonMutation();
+  const [missingExercises, setMissingExercises] = useState<RequiredExercise[]>([]);
+  const lastVisitedPageId = useRef<string | null>(null);
 
   const [currentPageIndex, setCurrentPageIndex] = useState(
-    Math.min(lesson.currentPageIndex || 0, lesson.pages.length - 1)
+    Math.max(0, Math.min(lesson.furthestPageIndex ?? lesson.currentPageIndex ?? 0, lesson.pages.length - 1))
   );
 
   const currentPage = lesson.pages[currentPageIndex];
   const totalPages = lesson.pages.length;
 
+  useEffect(() => {
+    if (!shouldTrackProgress || !user?.uid || !currentPage?.id || lastVisitedPageId.current === currentPage.id) return;
+    lastVisitedPageId.current = currentPage.id;
+    updatePageProgress({ userId: user.uid, lessonId: lesson.id, pageId: currentPage.id })
+      .unwrap()
+      .catch(() => toast.error('Unable to save your page progress.'));
+  }, [currentPage?.id, lesson.id, shouldTrackProgress, updatePageProgress, user?.uid]);
+
   const handleNext = useCallback(() => {
     if (currentPageIndex < totalPages - 1) {
       const newPageIndex = currentPageIndex + 1;
       setCurrentPageIndex(newPageIndex);
-
-      if (user?.uid && newPageIndex > (lesson.currentPageIndex || 0)) {
-        updatePageProgress({
-          userId: user.uid,
-          lessonId: lesson.id,
-          currentPageIndex: newPageIndex,
-        });
-      }
+      setMissingExercises([]);
     }
-  }, [currentPageIndex, totalPages, user?.uid, lesson.id, lesson.currentPageIndex, updatePageProgress]);
+  }, [currentPageIndex, totalPages]);
 
   const handlePageComplete = useCallback(() => {
     handleNext();
@@ -58,8 +80,18 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
   const handlePrevious = useCallback(() => {
     if (currentPageIndex > 0) {
       setCurrentPageIndex(currentPageIndex - 1);
+      setMissingExercises([]);
     }
   }, [currentPageIndex]);
+
+  const handleGoToPage = useCallback(
+    (newPageIndex: number) => {
+      if (newPageIndex < 0 || newPageIndex >= totalPages || newPageIndex === currentPageIndex) return;
+      setCurrentPageIndex(newPageIndex);
+      setMissingExercises([]);
+    },
+    [currentPageIndex, totalPages]
+  );
 
   const handleAudioEnded = useCallback(() => {
     handleNext();
@@ -68,32 +100,65 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
   const { audioRef, isPlaying, togglePlay } = useAudio(currentPage?.audioPath, handleAudioEnded);
 
   const handleExerciseComplete = useCallback(
-    (itemIndex: number, score: number) => {
-      if (!user?.uid) return;
+    (exerciseId: string, score: number) => {
+      if (!shouldTrackProgress || !user?.uid) return;
 
-      const exerciseId = `page${currentPageIndex}-item${itemIndex}`;
       markExerciseComplete({
         userId: user.uid,
         lessonId: lesson.id,
         exerciseId,
         score,
-      });
+      })
+        .unwrap()
+        .catch(() => toast.error('Unable to save your exercise progress. Please try again.'));
     },
-    [markExerciseComplete, user?.uid, lesson.id, currentPageIndex]
+    [markExerciseComplete, user?.uid, lesson.id, shouldTrackProgress]
+  );
+
+  const handleDiagrammingAttempt = useCallback(
+    async (itemIndex: number, exerciseId: string, attempt: DiagramAttempt) => {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) return;
+
+      try {
+        await fetch('/api/diagramming-attempts', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            lessonId: lesson.id,
+            pageIndex: currentPageIndex,
+            itemIndex,
+            exerciseId,
+            appVersion: process.env.NEXT_PUBLIC_APP_VERSION || 'unknown',
+            studentAnnotations: attempt.studentAnnotations,
+          }),
+        });
+      } catch (error) {
+        // Auditing must never block a student from receiving exercise feedback.
+        console.warn('Unable to record diagramming attempt', error);
+      }
+    },
+    [lesson.id, currentPageIndex]
   );
 
   const isListeningLesson = lesson.type === 'listening';
   const isLessonCompleted = lesson.status === 'completed';
-
-  const handleMarkLessonComplete = useCallback(async () => {
-    if (!user?.uid) return;
-    try {
-      await markLessonComplete({ userId: user.uid, lessonId: lesson.id, score: 100 }).unwrap();
-      toast.success('Lesson marked as completed!');
-    } catch {
-      toast.error('Failed to mark lesson as completed');
+  const handleFinishLesson = useCallback(async () => {
+    if (!shouldTrackProgress) {
+      toast.info('Preview mode: progress is not tracked.');
+      return;
     }
-  }, [user?.uid, lesson.id, markLessonComplete]);
+    if (!user?.uid || !currentPage?.id) return;
+    try {
+      await finishLesson({ userId: user.uid, lessonId: lesson.id, finalPageId: currentPage.id }).unwrap();
+      setMissingExercises([]);
+      toast.success('Lesson completed!');
+    } catch (error) {
+      const data = (error as { data?: { error?: string; missingExercises?: RequiredExercise[] } }).data;
+      setMissingExercises(data?.missingExercises || []);
+      toast.error(data?.error || 'Failed to finish the lesson.');
+    }
+  }, [currentPage?.id, finishLesson, lesson.id, shouldTrackProgress, user?.uid]);
 
   if (!lesson || !currentPage) {
     return (
@@ -110,27 +175,60 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
       <audio ref={audioRef} className="hidden" controls preload="auto" />
 
       <RomanCard>
-        <RomanCardHeader>
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-full bg-roman-parchment flex items-center justify-center flex-shrink-0 border border-roman-terracotta/20">
-              <BookOpen className="h-6 w-6 text-roman-terracotta" />
+        <RomanCardHeader className="relative overflow-hidden border-b border-roman-red/10 bg-roman-parchment/30">
+          {/* Decorative top accent bar */}
+          <div className="absolute top-0 left-0 right-0 h-1.5 bg-roman-red" />
+
+          <div className="relative flex items-start gap-4 pt-3">
+            <div className="relative flex-shrink-0">
+              <div className="w-14 h-14 rounded-full bg-roman-parchment flex items-center justify-center border-2 border-roman-gold/40 shadow-sm">
+                {isListeningLesson ? (
+                  <Headphones className="h-7 w-7 text-roman-red" />
+                ) : (
+                  <BookOpen className="h-7 w-7 text-roman-red" />
+                )}
+              </div>
+              {isLessonCompleted && (
+                <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-roman-green text-white flex items-center justify-center border-2 border-white shadow-sm">
+                  <CheckCircle className="h-3.5 w-3.5" />
+                </div>
+              )}
             </div>
-            <div>
-              <h3 className="text-xl font-serif">
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="inline-flex items-center gap-1 rounded-full bg-roman-red/8 px-2.5 py-0.5 text-xs font-medium text-roman-red border border-roman-red/15">
+                  {isListeningLesson ? (
+                    <>
+                      <Headphones className="h-3 w-3" />
+                      Listening
+                    </>
+                  ) : (
+                    <>
+                      <BookOpen className="h-3 w-3" />
+                      Lesson
+                    </>
+                  )}
+                </span>
+                <span className="text-xs text-roman-stone tabular-nums">
+                  Page {currentPageIndex + 1} of {totalPages}
+                </span>
+              </div>
+
+              <h3 className="text-2xl font-serif text-roman-red leading-tight tracking-wide">
                 <SimpleRichDisplay content={lesson.title} />
               </h3>
-              <div className="text-sm text-roman-stone">
-                <SimpleRichDisplay content={lesson.description || ''} />
-              </div>
+
+              {lesson.description && (
+                <div className="text-sm text-roman-stone mt-1 leading-relaxed line-clamp-2">
+                  <SimpleRichDisplay content={lesson.description} />
+                </div>
+              )}
             </div>
           </div>
         </RomanCardHeader>
 
         <RomanCardContent>
-          <div className="mb-4">
-            <LessonProgress currentPage={currentPageIndex} totalPages={totalPages} />
-          </div>
-
           <div className="mb-6">
             <div className="lesson-content">
               <AnimatePresence mode="wait">
@@ -138,43 +236,52 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson }) => {
                   key={currentPage.id}
                   page={currentPage}
                   pageIndex={currentPageIndex}
+                  runtimeMode={effectiveRuntimeMode}
+                  onAnswer={onAnswer}
+                  resolvedExerciseState={resolvedExerciseState}
                   onExerciseComplete={handleExerciseComplete}
                   onPageComplete={handlePageComplete}
+                  onDiagrammingAttempt={handleDiagrammingAttempt}
                 />
               </AnimatePresence>
             </div>
           </div>
 
-          <div className="flex items-center justify-between border-t border-border pt-4">
-            <LessonNavigation
-              onPrevious={handlePrevious}
-              onNext={handleNext}
-              onTogglePlay={togglePlay}
-              isPlaying={isPlaying}
-              hasAudio={hasAudio}
-              canGoPrevious={currentPageIndex > 0}
-              canGoNext={currentPageIndex < totalPages - 1}
-            />
-          </div>
-
-          {isListeningLesson && (
-            <div className="flex justify-center pt-4 border-t border-border mt-4">
-              {isLessonCompleted ? (
-                <div className="text-roman-green font-medium flex items-center gap-2">
-                  <CheckCircle className="h-5 w-5" />
-                  Completed
-                </div>
-              ) : (
-                <Button
-                  onClick={handleMarkLessonComplete}
-                  variant="outline"
-                  className="text-roman-green border-roman-green/30 hover:bg-roman-green/10">
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Mark as Completed
-                </Button>
-              )}
+          {currentPageIndex === totalPages - 1 && missingExercises.length > 0 && (
+            <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4">
+              <p className="font-medium text-amber-900">
+                Complete {missingExercises.length} remaining {missingExercises.length === 1 ? 'exercise' : 'exercises'}{' '}
+                before finishing.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {missingExercises.map(exercise => (
+                  <Button
+                    key={exercise.exerciseId}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleGoToPage(exercise.pageIndex)}>
+                    Page {exercise.pageIndex + 1}: {stripHtmlTags(exercise.title)}
+                  </Button>
+                ))}
+              </div>
             </div>
           )}
+
+          <LessonNavigation
+            currentPageIndex={currentPageIndex}
+            totalPages={totalPages}
+            pageTitles={lesson.pages.map(page => page.title)}
+            placement={navigationPlacement}
+            onPrevious={handlePrevious}
+            onNext={handleNext}
+            onFinish={handleFinishLesson}
+            onGoToPage={handleGoToPage}
+            onTogglePlay={togglePlay}
+            isPlaying={isPlaying}
+            hasAudio={hasAudio}
+            isFinishing={isFinishing}
+          />
         </RomanCardContent>
       </RomanCard>
     </div>

@@ -3,6 +3,7 @@ import { adminDb } from '@/src/services/firebase-admin';
 import type { Lesson } from '@/src/types/lesson';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import { getLessonContentCounts } from '@/src/utils/lessonSummary';
+import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 
 const BATCH_SIZE = 400;
 
@@ -19,7 +20,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const dryRun = searchParams.get('dryRun') === 'true';
     const snapshot = await adminDb.collection('lessons').get();
 
-    const updates = snapshot.docs
+    const lessonDocs = snapshot.docs.filter(doc => isLessonDocumentData(doc.data()));
+    const updates = lessonDocs
       .map(doc => {
         const data = doc.data() as Lesson;
         const counts = getLessonContentCounts(data);
@@ -51,7 +53,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       success: true,
       data: {
         dryRun,
-        scannedLessons: snapshot.docs.length,
+        scannedLessons: lessonDocs.length,
         lessonsToUpdate: updates.length,
         updatedLessons: dryRun ? 0 : updates.length,
         sample: updates.slice(0, 10).map(({ id, counts }) => ({ id, ...counts })),

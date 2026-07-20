@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useGetStudentLessonsQuery } from '@/src/store/api/lessonApi';
@@ -9,13 +9,53 @@ import LessonPlayer from '@/src/components/ui/lesson/lesson-player';
 import LessonSidebar from '@/src/components/ui/lesson/lesson-sidebar';
 import PracticeSidebar from '@/src/components/ui/lesson/practice-sidebar';
 import { FeedbackBanner } from '@/src/components/ui/core/feedback-banner';
+import { useAuth } from '@/src/hooks/useAuth';
+
+const SIDEBAR_COLLAPSE_KEY = 'lesson-sidebar-collapse';
+
+const defaultCollapseState = { left: false, right: false };
 
 export default function DynamicLessonPage() {
   const params = useParams();
   const router = useRouter();
   const lessonId = params.lessonId as string;
+  const { user, loading: authLoading } = useAuth();
 
-  const { data: studentLessons, isLoading: loading, error } = useGetStudentLessonsQuery();
+  const {
+    data: studentLessons,
+    isLoading: lessonsLoading,
+    error,
+  } = useGetStudentLessonsQuery(user?.uid, {
+    skip: !user?.uid,
+  });
+
+  const [collapsed, setCollapsed] = useState<{ left: boolean; right: boolean }>(() => {
+    if (typeof window === 'undefined') return defaultCollapseState;
+    try {
+      const stored = sessionStorage.getItem(SIDEBAR_COLLAPSE_KEY);
+      if (stored) return { ...defaultCollapseState, ...JSON.parse(stored) };
+    } catch {
+      /* ignore */
+    }
+    return defaultCollapseState;
+  });
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(SIDEBAR_COLLAPSE_KEY, JSON.stringify(collapsed));
+    } catch {
+      /* ignore */
+    }
+  }, [collapsed]);
+
+  const toggleLeft = () => setCollapsed(prev => ({ ...prev, left: !prev.left }));
+  const toggleRight = () => setCollapsed(prev => ({ ...prev, right: !prev.right }));
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/login');
+    }
+  }, [authLoading, user, router]);
 
   const currentLesson = useMemo(() => {
     if (!studentLessons || !lessonId) return null;
@@ -24,7 +64,7 @@ export default function DynamicLessonPage() {
 
   const isLocked = currentLesson?.status === 'locked';
 
-  if (loading) {
+  if (authLoading || !user || lessonsLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-roman-marble">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>
@@ -115,10 +155,15 @@ export default function DynamicLessonPage() {
         <Link
           href="/dashboard"
           aria-label="Back to dashboard"
-          className="flex items-center gap-2 rounded hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-roman-red">
-          <div className="w-10 h-10 rounded-full bg-roman-red flex items-center justify-center text-white font-serif">
-            <span className="text-xl">L</span>
-          </div>
+          className="flex items-center gap-3 rounded hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-roman-red">
+          <Image
+            src="/assets/logos/wakeforest_shield.png"
+            alt="Wake Forest University"
+            width={1000}
+            height={736}
+            className="h-10 w-auto"
+            priority
+          />
           <h1 className="text-xl font-serif tracking-wide">Wake Forest University Latin</h1>
         </Link>
       </header>
@@ -126,14 +171,21 @@ export default function DynamicLessonPage() {
       <FeedbackBanner />
 
       <div className="flex flex-1 overflow-hidden">
-        <LessonSidebar currentLessonId={lessonId} />
-        <main className="flex-1 overflow-y-auto px-6 py-8">
+        <LessonSidebar
+          currentLessonId={lessonId}
+          isCollapsed={collapsed.left}
+          onToggleCollapse={toggleLeft}
+        />
+        <main className="flex-1 overflow-y-auto px-6 pt-6 pb-28">
           <div className="max-w-3xl mx-auto">
-            <h2 className="text-2xl font-serif text-gray-800 mb-6">{currentLesson.title}</h2>
             <LessonPlayer key={currentLesson.id} lesson={currentLesson} />
           </div>
         </main>
-        <PracticeSidebar currentLessonId={lessonId} />
+        <PracticeSidebar
+          currentLessonId={lessonId}
+          isCollapsed={collapsed.right}
+          onToggleCollapse={toggleRight}
+        />
       </div>
     </div>
   );

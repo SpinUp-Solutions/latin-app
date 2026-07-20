@@ -8,6 +8,7 @@ import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { useAppSelector } from '@/src/store/hooks';
 import { useGetPoolQuery } from '@/src/store/api/vocabularyPoolApi';
 import { useGetStudentLessonsQuery } from '@/src/store/api/lessonApi';
+import { useAuth } from '@/src/hooks/useAuth';
 import type { VocabularyPoolContent } from '@/src/types/vocabulary';
 import type { Word } from '@/src/types/admin-vocabulary';
 import { VocabularyStudyView, type VocabularyStudyItem } from './VocabularyStudyView';
@@ -20,12 +21,13 @@ export function VocabularyPoolViewer({ content }: VocabularyPoolViewerProps) {
   const params = useParams();
   const lessonIdParam = params?.lessonId;
   const lessonId = Array.isArray(lessonIdParam) ? lessonIdParam[0] : lessonIdParam;
+  const { user } = useAuth();
 
   const currentLesson = useAppSelector(state => state.lessonEditor.currentLesson);
   const poolIdFromEditor = currentLesson?.vocabulary_pool || '';
 
-  const { data: studentLessons, isLoading: lessonsLoading } = useGetStudentLessonsQuery(undefined, {
-    skip: Boolean(poolIdFromEditor) || !lessonId,
+  const { data: studentLessons, isLoading: lessonsLoading } = useGetStudentLessonsQuery(user?.uid, {
+    skip: Boolean(poolIdFromEditor) || !lessonId || !user?.uid,
   });
 
   const poolIdFromLesson =
@@ -158,15 +160,13 @@ export function VocabularyPoolViewer({ content }: VocabularyPoolViewerProps) {
     notes: selectDefinitionLine(word),
   }));
 
-  const defaultMode = content.studyMode === 'quiz' ? 'flashcards' : content.studyMode || 'flashcards';
-
   return (
     <VocabularyStudyView
       title={content.title || vocabularyPool.name}
       subtitle={`From: ${vocabularyPool.name} • ${items.length} words`}
       items={items}
       audioPath={content.audioPath}
-      defaultMode={defaultMode}
+      defaultMode="flashcards"
       showPronunciation={false}
       showNotes={false}
     />

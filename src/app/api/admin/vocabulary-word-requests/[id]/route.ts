@@ -6,9 +6,13 @@ import { cleanForFirestore, requestCollection, routeError, serializeRequestSnaps
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }): Promise<NextResponse> {
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+): Promise<NextResponse> {
   try {
     await verifyAdminAccess(request);
+    const { id } = await params;
     const body = await request.json();
     const draftWordResult = VocabularyWordSchema.safeParse(body?.draftWord);
 
@@ -19,7 +23,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       return NextResponse.json({ success: false, error: `Invalid draft word: ${errorMessage}` }, { status: 400 });
     }
 
-    const docRef = requestCollection().doc(params.id);
+    const docRef = requestCollection().doc(id);
     const snapshot = await docRef.get();
     if (!snapshot.exists) {
       return NextResponse.json({ success: false, error: 'Request not found' }, { status: 404 });

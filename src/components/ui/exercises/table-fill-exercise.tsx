@@ -20,13 +20,20 @@ import {
 } from '../core/roman-table';
 import { cn } from '@/src/lib/utils';
 import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
+import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
+import { resolveRuntimeMode } from '@/src/types/runtime-mode';
 
 interface Props {
   exercise: TableFillExercise;
   onComplete?: (score: number) => void;
+  runtimeMode?: RuntimeMode;
+  onAnswer?: ExerciseAnswerHandler;
+  testMode?: boolean;
 }
 
-const TableFillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
+const TableFillExerciseComponent: React.FC<Props> = ({ exercise, onComplete, runtimeMode, onAnswer, testMode }) => {
+  const mode = resolveRuntimeMode(runtimeMode, testMode);
+  const assessmentMode = mode !== 'practice';
   const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -50,7 +57,7 @@ const TableFillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
   } = useExerciseFeedback(exercise.feedbackConfig);
 
   useDelayedExerciseReset({
-    shouldReset: shouldResetExercise,
+    shouldReset: !assessmentMode && shouldResetExercise,
     delayMs: exercise.itemProgressionDelay,
     onReset: () => {
       setUserAnswers({});
@@ -74,13 +81,16 @@ const TableFillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
 
     setIsProcessing(true);
     setHasSubmitted(true);
+    if (mode === 'test') onAnswer?.({ type: 'table-fill', answers: userAnswers });
 
     const validation = validateTableFillExercise(userAnswers, exercise);
     setCellResults(validation.cellResults);
 
+    const score =
+      validation.totalBlanks > 0 ? Math.round((validation.correctAnswers / validation.totalBlanks) * 100) : 0;
+
     if (validation.isCorrect) {
       handleCorrect();
-      const score = Math.round((validation.correctAnswers / validation.totalBlanks) * 100);
       const hasVisibleExplanation =
         (exercise.feedbackConfig.successMessage?.showExplanation ?? true) &&
         hasVisibleFeedbackContent(exercise.data.explanation);
@@ -92,6 +102,7 @@ const TableFillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
     } else {
       handleIncorrect();
       setIsProcessing(false);
+      if (assessmentMode) onComplete?.(score);
     }
   };
 
@@ -105,7 +116,7 @@ const TableFillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
   const getCellClassName = (cellKey: string, isBlank: boolean) => {
     if (!isBlank) return '';
 
-    if (hasSubmitted && cellKey in cellResults) {
+    if (!assessmentMode && hasSubmitted && cellKey in cellResults) {
       return cellResults[cellKey] ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300';
     }
 
@@ -213,14 +224,14 @@ const TableFillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
             </Button>
           )}
 
-          {hasSubmitted && isCorrect === false && (
+          {hasSubmitted && isCorrect === false && !assessmentMode && (
             <Button onClick={handleReset} variant="outline" disabled={isProcessing} className="px-8">
               Try Again
             </Button>
           )}
         </div>
 
-        <FeedbackDisplay
+        {!assessmentMode && <FeedbackDisplay
           isCorrect={isCorrect}
           message={message}
           level={level}
@@ -228,7 +239,7 @@ const TableFillExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
           explanation={exercise.data.explanation}
           showExplanation={showExplanation}
           onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
-        />
+        />}
       </div>
     </div>
   );

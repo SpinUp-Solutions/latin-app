@@ -19,14 +19,31 @@ import {
 } from '@/src/utils/exercises/generatedTranslationExercise';
 import { getExerciseDisplayForm, hasSelectedForm } from '@/src/utils/exercises/formSelection';
 import { normalizeCollection, buildLegacyPosConfigs } from '@/src/utils/exercises/legacyExerciseCompat';
+import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
+import { resolveRuntimeMode } from '@/src/types/runtime-mode';
+import { getContentTypeLabel } from '@/src/lib/content/registry';
 
 interface Props {
   exercise: GeneratedTranslationExercise;
   onComplete?: (score: number) => void;
+  runtimeMode?: RuntimeMode;
+  onAnswer?: ExerciseAnswerHandler;
+  resolvedItems?: GeneratedTranslationItem[];
+  testMode?: boolean;
 }
 
-const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
+const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
+  exercise,
+  onComplete,
+  runtimeMode,
+  onAnswer,
+  resolvedItems,
+  testMode,
+}) => {
+  const mode = resolveRuntimeMode(runtimeMode, testMode);
+  const assessmentMode = mode !== 'practice';
   const [userAnswer, setUserAnswer] = useState('');
+  const [submittedAnswers, setSubmittedAnswers] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [correctAnswers, setCorrectAnswers] = useState(0);
 
@@ -44,17 +61,21 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
     ? exercise.data.posConfigs
     : buildLegacyPosConfigs(config as Parameters<typeof buildLegacyPosConfigs>[0]);
 
-  const { data, isLoading, isError } = useGetMultiPosWordsQuery({
-    exerciseType: 'generated-translation',
-    collection: normalizeCollection(config.collection),
-    wordSource: config.wordSource || 'filters',
-    poolId: config.poolId ?? null,
-    poolWordLimit: config.poolWordLimit ?? null,
-    count: config.count,
-    posConfigs,
-  });
+  const { data, isLoading, isError } = useGetMultiPosWordsQuery(
+    {
+      exerciseType: 'generated-translation',
+      collection: normalizeCollection(config.collection),
+      wordSource: config.wordSource || 'filters',
+      poolId: config.poolId ?? null,
+      poolWordLimit: config.poolWordLimit ?? null,
+      count: config.count,
+      posConfigs,
+    },
+    { skip: mode === 'test' || resolvedItems !== undefined }
+  );
 
   const items: GeneratedTranslationItem[] = useMemo(() => {
+    if (resolvedItems) return resolvedItems;
     if (!data?.words) return [];
 
     const words = data.words as unknown as ExerciseWordResponse[];
@@ -96,7 +117,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
     });
 
     return mapped.filter((item): item is GeneratedTranslationItem => item !== null);
-  }, [data, translationDirection]);
+  }, [data, resolvedItems, translationDirection]);
 
   const { currentIndex, isLastItem, isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance, resetIndex } =
     useExerciseProgression({
@@ -118,7 +139,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
   } = useExerciseFeedback(exercise.feedbackConfig);
 
   useDelayedExerciseReset({
-    shouldReset: shouldResetExercise,
+    shouldReset: !assessmentMode && shouldResetExercise,
     delayMs: exercise.itemProgressionDelay,
     onReset: () => {
       setUserAnswer('');
@@ -133,6 +154,10 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
     if (isProcessing || items.length === 0) return;
 
     const currentItem = items[currentIndex];
+    const nextAnswers = [...submittedAnswers];
+    nextAnswers[currentIndex] = userAnswer;
+    setSubmittedAnswers(nextAnswers);
+    if (mode === 'test') onAnswer?.({ type: 'generated-translation', answers: nextAnswers });
     const validation = validateGeneratedTranslationExercise(userAnswer, currentItem);
 
     setIsProcessing(true);
@@ -160,7 +185,17 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
       }
     } else {
       handleIncorrect();
-      setIsProcessing(false);
+      if (assessmentMode) {
+        const finalScore = isLastItem ? Math.round((correctAnswers / items.length) * 100) : null;
+        autoAdvanceIfEnabled(() => {
+          setUserAnswer('');
+          reset();
+          setIsProcessing(false);
+          if (finalScore !== null) onComplete?.(finalScore);
+        }, false);
+      } else {
+        setIsProcessing(false);
+      }
     }
   };
 
@@ -168,7 +203,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
     setUserAnswer(value);
   };
 
-  if (isLoading) {
+  if (!resolvedItems && isLoading) {
     return (
       <Card>
         <CardContent className="p-6">
@@ -181,7 +216,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
     );
   }
 
-  if (isError) {
+  if (!resolvedItems && isError) {
     return (
       <Card>
         <CardContent className="p-6">
@@ -214,18 +249,16 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-start">
-        {exercise.title && (
-          <h3 className="text-lg font-serif text-roman-red mb-2">
-            <SimpleRichDisplay content={exercise.title} />
-          </h3>
-        )}
+        <h3 className="text-lg font-serif text-roman-red mb-2">
+          <SimpleRichDisplay content={exercise.title || getContentTypeLabel(exercise.type)} />
+        </h3>
         {exercise.audioPath && <AudioPlayButton audioPath={exercise.audioPath} />}
       </div>
 
       {exercise.instructions && exercise.instructions.replace(/<[^>]*>/g, '').trim() !== '' && (
-        <p className="text-roman-stone">
+        <div className="text-roman-stone">
           <SimpleRichDisplay content={exercise.instructions} />
-        </p>
+        </div>
       )}
 
       <ExerciseProgress
@@ -250,12 +283,13 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({ exercise, onCo
 
           <FeedbackDisplay
             isCorrect={isCorrect}
-            message={message}
-            level={level}
-            hint={currentItem.hint}
-            correctAnswer={currentItem.acceptedAnswers.join(' OR ')}
-            showExplanation={showExplanation}
-            onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
+            message={assessmentMode ? '' : message}
+            level={assessmentMode ? null : level}
+            hint={assessmentMode ? undefined : currentItem.hint}
+            correctAnswer={assessmentMode ? undefined : currentItem.acceptedAnswers.join(' OR ')}
+            showExplanation={!assessmentMode && showExplanation}
+            onContinue={(isCorrect || assessmentMode) && isAwaitingConfirmation ? confirmAdvance : undefined}
+            allowContinueOnIncorrect={assessmentMode}
           />
         </CardContent>
       </Card>

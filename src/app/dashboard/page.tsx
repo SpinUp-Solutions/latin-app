@@ -2,6 +2,7 @@
 
 import React, { memo, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/src/services/firebase';
 import { useGetStudentLessonsQuery } from '@/src/store/api/lessonApi';
@@ -15,7 +16,6 @@ import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card
 import { CircularProgressButton } from '@/src/components/ui/CircularProgressButton';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import 'swiper/css';
-import 'swiper/css/navigation';
 import { SwiperNavigation } from '@/src/components/ui/core/swiper-nav';
 import { PracticeSection } from '@/src/components/ui/core/PracticeSection';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
@@ -90,14 +90,14 @@ export default function DashboardPage() {
   const router = useRouter();
   const { user, loading, displayName } = useAuth();
 
-  const { data: studentLessons, isLoading: lessonsLoading } = useGetStudentLessonsQuery(undefined, {
+  const { data: studentLessons, isLoading: lessonsLoading } = useGetStudentLessonsQuery(user?.uid, {
     skip: !user?.uid,
   });
 
   const normalLessons = useMemo(() => {
     if (!studentLessons) return [];
     return studentLessons
-      .filter(lesson => lesson.type === 'normal')
+      .filter(lesson => isLessonDocumentData(lesson) && lesson.type === 'normal')
       .map(lesson => ({
         ...lesson,
         totalPages: lesson.pages.length,
@@ -107,7 +107,7 @@ export default function DashboardPage() {
   const vocabLessons = useMemo(() => {
     if (!studentLessons) return [];
     return studentLessons
-      .filter(lesson => lesson.type === 'vocab')
+      .filter(lesson => isLessonDocumentData(lesson) && lesson.type === 'vocab')
       .map(lesson => ({
         ...lesson,
         totalPages: lesson.pages.length,
@@ -117,7 +117,7 @@ export default function DashboardPage() {
   const diagrammingLessons = useMemo(() => {
     if (!studentLessons) return [];
     return studentLessons
-      .filter(lesson => lesson.type === 'sentence-diagramming')
+      .filter(lesson => isLessonDocumentData(lesson) && lesson.type === 'sentence-diagramming')
       .map(lesson => ({
         ...lesson,
         totalPages: lesson.pages.length,
@@ -127,12 +127,17 @@ export default function DashboardPage() {
   const listeningLessons = useMemo(() => {
     if (!studentLessons) return [];
     return studentLessons
-      .filter(lesson => lesson.type === 'listening')
+      .filter(lesson => isLessonDocumentData(lesson) && lesson.type === 'listening')
       .map(lesson => ({
         ...lesson,
         totalPages: lesson.pages.length,
       }));
   }, [studentLessons]);
+
+  const practiceLessons = useMemo(
+    () => [...vocabLessons, ...diagrammingLessons, ...listeningLessons],
+    [vocabLessons, diagrammingLessons, listeningLessons]
+  );
 
   const completionStats = useMemo(() => {
     if (normalLessons.length === 0) return { percentage: 0, completed: 0, total: 0 };
@@ -210,9 +215,9 @@ export default function DashboardPage() {
             <Image
               src="/assets/logos/wakeforest_shield.png"
               alt="Wake Forest University"
-              width={64}
-              height={64}
-              className="w-14 h-14"
+              width={1000}
+              height={736}
+              className="h-14 w-auto"
               priority
             />
             <div>
@@ -239,7 +244,7 @@ export default function DashboardPage() {
 
         <FeedbackBanner />
 
-        <main className="px-8 py-12">
+        <main className="px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-12">
           <div className="max-w-[1800px] mx-auto">
             {/* Available Lessons - Full Width Priority */}
             <section className="mb-16">
@@ -275,26 +280,32 @@ export default function DashboardPage() {
               ) : (
                 <div className="relative ">
                   <Swiper
-                    modules={[]}
                     spaceBetween={0}
                     slidesPerView={1}
                     initialSlide={getInitialSlideIndex}
+                    speed={250}
+                    threshold={5}
+                    grabCursor
                     breakpoints={{
                       1024: { slidesPerView: 2 },
                       1280: { slidesPerView: 3 },
                     }}
-                    className="lesson-cards-carousel overflow-visible p-8"
+                    className="lesson-cards-carousel overflow-visible px-0 py-8 sm:p-8"
                     centeredSlides={true}
                     effect="slide">
-                    <div>
+                    <div slot="container-end">
                       <SwiperNavigation />
                     </div>
 
                     {normalLessons.map(lesson => (
-                      <SwiperSlide key={lesson.id} className="overflow-visible p-10 transition-transform duration-500">
+                      <SwiperSlide
+                        key={lesson.id}
+                        className="overflow-visible px-2 py-8 transition-transform duration-300 sm:p-6 lg:p-10">
                         {({ isActive }) => (
                           <div
-                            className={`transform transition-transform duration-300 ${isActive ? 'scale-125' : 'scale-95'}`}>
+                            className={`transform-gpu transition-transform duration-300 ${
+                              isActive ? 'scale-100 sm:scale-110 xl:scale-125' : 'scale-95'
+                            }`}>
                             <LessonCard lesson={lesson} onLessonClick={handleLessonClick} />
                           </div>
                         )}
@@ -306,11 +317,7 @@ export default function DashboardPage() {
             </section>
 
             <section className="mb-16">
-              <PracticeSection
-                vocabLessons={vocabLessons}
-                diagrammingLessons={diagrammingLessons}
-                listeningLessons={listeningLessons}
-              />
+              <PracticeSection lessons={practiceLessons} onLessonClick={handleLessonClick} />
             </section>
           </div>
         </main>

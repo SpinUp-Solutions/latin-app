@@ -11,9 +11,12 @@ const toDateValue = (value: unknown) =>
     ? value.toDate()
     : value;
 
-export async function GET(request: NextRequest, { params }: { params: { poolId: string } }): Promise<NextResponse> {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ poolId: string }> }
+): Promise<NextResponse> {
   try {
-    const { poolId } = params;
+    const { poolId } = await params;
 
     const snapshot = await adminDb
       .collection('vocabulary_pools')

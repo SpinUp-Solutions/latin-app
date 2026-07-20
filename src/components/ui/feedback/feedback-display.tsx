@@ -16,6 +16,7 @@ interface FeedbackDisplayProps {
   showExplanation?: boolean;
   className?: string;
   onContinue?: () => void;
+  allowContinueOnIncorrect?: boolean;
 }
 
 const renderFeedbackBody = (content: FeedbackBody, className?: string) => {
@@ -36,13 +37,15 @@ export const FeedbackDisplay: React.FC<FeedbackDisplayProps> = ({
   showExplanation = false,
   className = '',
   onContinue,
+  allowContinueOnIncorrect = false,
 }) => {
   const shouldShowHint = !isCorrect && Boolean(level?.showHint) && hasVisibleFeedbackContent(hint);
   const shouldShowAnswer = !isCorrect && Boolean(level?.showAnswer) && hasVisibleFeedbackContent(correctAnswer);
   const shouldShowExplanationPanel = Boolean(isCorrect && showExplanation && hasVisibleFeedbackContent(explanation));
   const hasPrimaryMessage = Boolean(message);
   const shouldRender =
-    isCorrect !== null && (hasPrimaryMessage || shouldShowHint || shouldShowAnswer || shouldShowExplanationPanel);
+    isCorrect !== null &&
+    (hasPrimaryMessage || shouldShowHint || shouldShowAnswer || shouldShowExplanationPanel || Boolean(onContinue));
   if (!shouldRender) return null;
 
   const baseClasses = 'mt-4 p-3 rounded-lg shadow-md border transition-all duration-200';
@@ -101,10 +104,12 @@ export const FeedbackDisplay: React.FC<FeedbackDisplayProps> = ({
         </div>
       )}
 
-      {isCorrect && onContinue && (
+      {(isCorrect || allowContinueOnIncorrect) && onContinue && (
         <button
           onClick={onContinue}
-          className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors">
+          className={`mt-3 w-full flex items-center justify-center gap-2 px-4 py-2.5 text-white font-medium rounded-lg transition-colors ${
+            isCorrect ? 'bg-green-600 hover:bg-green-700' : 'bg-roman-red hover:bg-red-700'
+          }`}>
           Continue
           <ChevronRight className="h-4 w-4" />
         </button>

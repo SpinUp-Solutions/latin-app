@@ -120,6 +120,55 @@ export const validateSingleFieldFormIdentificationExercise = (
   };
 };
 
+export interface SingleFieldPartialCredit {
+  earnedUnits: number;
+  availableUnits: number;
+}
+
+/**
+ * Scores each requested grammatical field independently. Submitted paths are
+ * paired with distinct expected paths to produce the highest legitimate score;
+ * missing and extra values receive no credit and never subtract points.
+ */
+export const scoreSingleFieldFormIdentificationAnswer = (
+  userAnswer: string,
+  currentItem: SingleFieldFormIdentificationItem
+): SingleFieldPartialCredit => {
+  const validatedItem = SingleFieldFormIdentificationItemSchema.parse(currentItem);
+  const expectedPaths = validatedItem.primaryFormPaths;
+  const steps = validatedItem.steps;
+  const availableUnits = expectedPaths.length * steps.length;
+  const userPaths = userAnswer
+    .split(';')
+    .map(path => path.split(',').map(normalize))
+    .filter(path => path.some(Boolean));
+
+  const pathScores = userPaths.map(userPath =>
+    expectedPaths.map(expectedPath =>
+      steps.reduce((score, step, stepIndex) => {
+        const expected = expectedPath[step];
+        if (!expected || !userPath[stepIndex]) return score;
+        const accepted = getAcceptedAnswersForStep(expected).map(normalize);
+        return score + (accepted.includes(userPath[stepIndex]) ? 1 : 0);
+      }, 0)
+    )
+  );
+
+  const search = (userIndex: number, usedExpected: Set<number>): number => {
+    if (userIndex >= pathScores.length) return 0;
+    let best = search(userIndex + 1, usedExpected);
+    for (let expectedIndex = 0; expectedIndex < expectedPaths.length; expectedIndex++) {
+      if (usedExpected.has(expectedIndex)) continue;
+      usedExpected.add(expectedIndex);
+      best = Math.max(best, pathScores[userIndex][expectedIndex] + search(userIndex + 1, usedExpected));
+      usedExpected.delete(expectedIndex);
+    }
+    return best;
+  };
+
+  return { earnedUnits: search(0, new Set()), availableUnits };
+};
+
 export interface MultiAnswerStepValidationResult extends ValidationResult {
   answerSlots: string[];
 }

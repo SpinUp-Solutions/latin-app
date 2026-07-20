@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
 import { BookOpen, Library } from 'lucide-react';
 import { Lesson } from '@/src/types/lesson';
@@ -6,14 +6,52 @@ import { Input } from '@/src/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { SimpleRichEditor } from '../../core/simple-rich-editor';
 import { VocabularyPoolSelector } from '../vocabulary-pools/VocabularyPoolSelector';
+import { PracticeCategorySelector } from '../practice-categories/PracticeCategorySelector';
+import { ConfirmationDialog } from '../../core/ConfirmationDialog';
+import { getLessonPracticeCategoryIds, isPracticeLessonType } from '@/src/utils/practiceCategoryLessons';
 
 interface LessonInfoFormProps {
   lesson: Lesson;
-  onUpdateInfo: (updates: Partial<Pick<Lesson, 'id' | 'title' | 'description' | 'type' | 'vocabulary_pool'>>) => void;
+  onUpdateInfo: (
+    updates: Partial<
+      Pick<
+        Lesson,
+        'id' | 'title' | 'description' | 'type' | 'vocabulary_pool' | 'practiceCategoryIds' | 'practiceCategories'
+      >
+    >
+  ) => void;
   isNewLesson?: boolean;
+  disabled?: boolean;
 }
 
-export const LessonInfoForm: React.FC<LessonInfoFormProps> = ({ lesson, onUpdateInfo, isNewLesson = false }) => {
+export const LessonInfoForm: React.FC<LessonInfoFormProps> = ({
+  lesson,
+  onUpdateInfo,
+  isNewLesson = false,
+  disabled = false,
+}) => {
+  const [pendingType, setPendingType] = useState<Lesson['type'] | null>(null);
+  const selectedCategoryIds = getLessonPracticeCategoryIds(lesson);
+
+  const applyTypeChange = (nextType: Lesson['type']) => {
+    onUpdateInfo({
+      type: nextType,
+      practiceCategoryIds: [],
+      practiceCategories: [],
+    });
+  };
+
+  const handleTypeChange = (nextType: Lesson['type']) => {
+    if (nextType === lesson.type) return;
+
+    if (selectedCategoryIds.length > 0) {
+      setPendingType(nextType);
+      return;
+    }
+
+    applyTypeChange(nextType);
+  };
+
   return (
     <div className="space-y-3">
       <Card>
@@ -49,8 +87,8 @@ export const LessonInfoForm: React.FC<LessonInfoFormProps> = ({ lesson, onUpdate
             <label className="block text-xs font-medium mb-1 text-gray-600">Type</label>
             <Select
               value={lesson.type}
-              onValueChange={value => onUpdateInfo({ type: value as Lesson['type'] })}
-              disabled={!isNewLesson}>
+              onValueChange={value => handleTypeChange(value as Lesson['type'])}
+              disabled={!isNewLesson || disabled}>
               <SelectTrigger className="h-8 text-sm">
                 <SelectValue />
               </SelectTrigger>
@@ -63,6 +101,20 @@ export const LessonInfoForm: React.FC<LessonInfoFormProps> = ({ lesson, onUpdate
             </Select>
             {!isNewLesson && <p className="text-xs text-gray-500 mt-1">Type cannot be changed</p>}
           </div>
+          {isPracticeLessonType(lesson.type) && (
+            <div>
+              <label className="block text-xs font-medium mb-1 text-gray-600">Categories</label>
+              <PracticeCategorySelector
+                lessonType={lesson.type}
+                selectedIds={selectedCategoryIds}
+                assignedCategories={lesson.practiceCategories}
+                disabled={disabled}
+                onChange={(practiceCategoryIds, practiceCategories) =>
+                  onUpdateInfo({ practiceCategoryIds, practiceCategories })
+                }
+              />
+            </div>
+          )}
           <div>
             <label className="block text-xs font-medium mb-1 text-gray-600">Description</label>
             <SimpleRichEditor
@@ -90,6 +142,19 @@ export const LessonInfoForm: React.FC<LessonInfoFormProps> = ({ lesson, onUpdate
           />
         </CardContent>
       </Card>
+
+      <ConfirmationDialog
+        isOpen={pendingType !== null}
+        onClose={() => setPendingType(null)}
+        onConfirm={() => {
+          if (pendingType) applyTypeChange(pendingType);
+          setPendingType(null);
+        }}
+        title="Change lesson type?"
+        description="Changing the lesson type will clear the selected practice categories because categories only apply to one lesson type. This cannot be undone after you confirm."
+        confirmText="Change type and clear categories"
+        cancelText="Keep current type"
+      />
     </div>
   );
 };

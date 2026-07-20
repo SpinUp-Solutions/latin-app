@@ -20,7 +20,7 @@ export const getEditorTitle = (contentType: string): string => {
     case 'table':
       return 'Edit Table Content';
     case 'vocabulary':
-      return 'Edit Vocabulary Content';
+      return 'Edit Special Vocabulary';
     case 'vocabulary-pool':
       return 'Edit Vocabulary Pool Content';
     case 'matching':
@@ -42,11 +42,11 @@ export const getEditorTitle = (contentType: string): string => {
     case 'click-on-multiple-words':
       return 'Edit Click On Multiple Words Exercise';
     case 'generated-translation':
-      return 'Edit Generated Translation Exercise';
+      return 'Edit Definitions and Dictionary Entries';
     case 'generated-form-identification':
-      return 'Edit Generated Form Identification Exercise';
+      return 'Edit Morphology';
     case 'translation-grading':
-      return 'Edit Translation Grading Exercise';
+      return 'Edit Grade Translation';
     case 'listening-passage':
       return 'Edit Listening Passage';
     default:

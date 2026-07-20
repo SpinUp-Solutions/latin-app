@@ -34,15 +34,48 @@ import {
 import { VocabularyViewer } from './VocabularyViewer';
 import { VocabularyPoolViewer } from './VocabularyPoolViewer';
 import TextComponent from './text-component';
+import { DiagramAttempt } from '@/src/features/sentence-diagramming';
+import type { ExerciseAnswerEvent, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
+import type { GeneratedTranslationItem } from '@/src/utils/exercises/generatedTranslationExercise';
+import type {
+  FormIdentificationItem,
+  MultiAnswerFormIdentificationItem,
+  SingleFieldFormIdentificationItem,
+} from '@/src/types/exercises/schemas/form-identification';
+
+export interface ResolvedGeneratedExerciseState {
+  items: unknown[];
+}
 
 interface ContentRendererProps {
   content: ContentItem;
   onComplete?: (score: number) => void;
+  runtimeMode?: RuntimeMode;
+  onAnswer?: (event: ExerciseAnswerEvent) => void;
+  resolvedExerciseState?: ResolvedGeneratedExerciseState;
+  /** @deprecated Use runtimeMode="test". */
+  testMode?: boolean;
   pageIndex?: number;
   itemIndex?: number;
+  onDiagrammingAttempt?: (attempt: DiagramAttempt) => void;
 }
 
-export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onComplete }) => {
+export const ContentRenderer: React.FC<ContentRendererProps> = ({
+  content,
+  onComplete,
+  runtimeMode,
+  testMode,
+  pageIndex,
+  itemIndex,
+  onAnswer,
+  resolvedExerciseState,
+  onDiagrammingAttempt,
+}) => {
+  const handleAnswer: ExerciseAnswerHandler | undefined = onAnswer
+    ? answer => onAnswer({ exerciseId: content.id, answer, pageIndex, itemIndex })
+    : undefined;
+  const modeProps = { runtimeMode, testMode, onAnswer: handleAnswer };
+
   switch (content.type) {
     case 'text':
       const textContent = content as TextContent;
@@ -78,39 +111,75 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onCom
 
     case 'matching':
       const matchingExercise = content as MatchingExercise;
-      return <MatchingTable exercise={matchingExercise} onComplete={onComplete} />;
+      return <MatchingTable exercise={matchingExercise} onComplete={onComplete} {...modeProps} />;
 
     case 'fill':
-      return <FillExercise exercise={content as FillExerciseType} onComplete={onComplete} />;
+      return <FillExercise exercise={content as FillExerciseType} onComplete={onComplete} {...modeProps} />;
 
     case 'text-selection':
-      return <TextSelectionExercise exercise={content as TextSelectionExerciseType} onComplete={onComplete} />;
+      return (
+        <TextSelectionExercise
+          exercise={content as TextSelectionExerciseType}
+          onComplete={onComplete}
+          {...modeProps}
+        />
+      );
 
     case 'fill-embolded-text':
-      return <FillEmboldedTextExercise exercise={content as FillEmboldedTextExerciseType} onComplete={onComplete} />;
+      return (
+        <FillEmboldedTextExercise
+          exercise={content as FillEmboldedTextExerciseType}
+          onComplete={onComplete}
+          {...modeProps}
+        />
+      );
 
     case 'sentence-diagramming':
       return (
-        <SentenceDiagrammingExercise exercise={content as SentenceDiagrammingExerciseType} onComplete={onComplete} />
+        <SentenceDiagrammingExercise
+          exercise={content as SentenceDiagrammingExerciseType}
+          onComplete={onComplete}
+          {...modeProps}
+          onAttempt={onDiagrammingAttempt}
+        />
       );
 
     case 'multiple-choice':
-      return <MultipleChoiceExercise exercise={content as MultipleChoiceExerciseType} onComplete={onComplete} />;
+      return (
+        <MultipleChoiceExercise
+          exercise={content as MultipleChoiceExerciseType}
+          onComplete={onComplete}
+          {...modeProps}
+        />
+      );
 
     case 'odd-one-out':
-      return <OddOneOutExercise exercise={content as OddOneOutExerciseType} onComplete={onComplete} />;
+      return (
+        <OddOneOutExercise exercise={content as OddOneOutExerciseType} onComplete={onComplete} {...modeProps} />
+      );
 
     case 'table-fill':
-      return <TableFillExercise exercise={content as TableFillExerciseType} onComplete={onComplete} />;
+      return (
+        <TableFillExercise exercise={content as TableFillExerciseType} onComplete={onComplete} {...modeProps} />
+      );
 
     case 'click-on-multiple-words':
       return (
-        <ClickOnMultipleWordsExercise exercise={content as ClickOnMultipleWordsExerciseType} onComplete={onComplete} />
+        <ClickOnMultipleWordsExercise
+          exercise={content as ClickOnMultipleWordsExerciseType}
+          onComplete={onComplete}
+          {...modeProps}
+        />
       );
 
     case 'generated-translation':
       return (
-        <GeneratedTranslationExercise exercise={content as GeneratedTranslationExerciseType} onComplete={onComplete} />
+        <GeneratedTranslationExercise
+          exercise={content as GeneratedTranslationExerciseType}
+          onComplete={onComplete}
+          {...modeProps}
+          resolvedItems={resolvedExerciseState?.items as GeneratedTranslationItem[] | undefined}
+        />
       );
 
     case 'generated-form-identification':
@@ -118,6 +187,12 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content, onCom
         <GeneratedFormIdentificationExercise
           exercise={content as GeneratedFormIdentificationExerciseType}
           onComplete={onComplete}
+          {...modeProps}
+          resolvedItems={
+            resolvedExerciseState?.items as Array<
+              FormIdentificationItem | MultiAnswerFormIdentificationItem | SingleFieldFormIdentificationItem
+            > | undefined
+          }
         />
       );
 

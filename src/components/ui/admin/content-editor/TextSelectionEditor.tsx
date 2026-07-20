@@ -56,15 +56,6 @@ export const TextSelectionEditor: React.FC = () => {
   };
 
   const handleWordClick = (wordIndex: number, questionIndex: number) => {
-    const passageWords = editingContent.data.passage.split(' ').filter(w => w.trim());
-    const selectedWord = passageWords[wordIndex];
-    console.log('TextSelectionEditor - Word selected:', {
-      wordIndex,
-      selectedWord,
-      questionIndex,
-      passageWords,
-      totalWords: passageWords.length,
-    });
     updateQuestion(questionIndex, 'correctWordIndex', wordIndex);
   };
 
@@ -169,7 +160,7 @@ export const TextSelectionEditor: React.FC = () => {
 
         <div className="space-y-4">
           {editingContent.data.questions.map((question, index) => (
-            <Card key={question.id}>
+            <Card key={`question-${index}`}>
               <CardContent className="p-4">
                 <div className="flex items-start justify-between mb-3">
                   <h4 className="font-medium">Question {index + 1}</h4>

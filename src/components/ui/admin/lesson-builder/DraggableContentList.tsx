@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { ReactNode } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -20,6 +20,7 @@ interface DraggableContentListProps {
   pageIndex: number;
   onEditContent: (itemIndex: number) => void;
   onRemoveContent: (itemIndex: number) => void;
+  renderItemMeta?: (item: RenderableContentItem, itemIndex: number) => ReactNode;
 }
 
 export const DraggableContentList: React.FC<DraggableContentListProps> = ({
@@ -27,6 +28,7 @@ export const DraggableContentList: React.FC<DraggableContentListProps> = ({
   pageIndex,
   onEditContent,
   onRemoveContent,
+  renderItemMeta,
 }) => {
   const dispatch = useDispatch();
   const sensors = useSensors(
@@ -72,6 +74,7 @@ export const DraggableContentList: React.FC<DraggableContentListProps> = ({
               onEdit={() => onEditContent(itemIndex)}
               onRemove={() => onRemoveContent(itemIndex)}
               isDraggable={true}
+              meta={renderItemMeta?.(item, itemIndex)}
             />
           ))}
         </div>

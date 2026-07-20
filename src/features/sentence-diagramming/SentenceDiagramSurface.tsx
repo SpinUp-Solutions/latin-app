@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { ANNOTATION_SPECS, AnnotationKind } from './annotation-spec';
 import { DiagramAnnotation, DiagramToken, getSpanText } from './model';
 import { buildDiagramRenderTree, buildTokenRenderState, DiagramRenderNode } from './rendering';
@@ -13,6 +13,7 @@ interface SentenceDiagramSurfaceProps {
   message?: string | null;
   disabled?: boolean;
   className?: string;
+  resetKey?: number;
 }
 
 const segmentOverlapsSelection = (
@@ -87,6 +88,7 @@ export const SentenceDiagramSurface: React.FC<SentenceDiagramSurfaceProps> = ({
   message,
   disabled = false,
   className,
+  resetKey,
 }) => {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const anchorTokenRef = useRef<number | null>(null);
@@ -95,6 +97,11 @@ export const SentenceDiagramSurface: React.FC<SentenceDiagramSurfaceProps> = ({
     [annotations, tokens]
   );
   const renderTree = useMemo(() => buildDiagramRenderTree(tokens, annotations), [annotations, tokens]);
+
+  useEffect(() => {
+    anchorTokenRef.current = null;
+    window.getSelection()?.removeAllRanges();
+  }, [resetKey]);
 
   const selectTokenRange = useCallback(
     (startIndex: number, endIndex: number) => {
@@ -176,6 +183,9 @@ export const SentenceDiagramSurface: React.FC<SentenceDiagramSurfaceProps> = ({
         }
 
         const tooltip = getTokenTooltip(annotations, tokenState.token.index);
+        const personAnnotations = tokenState.annotations
+          .filter(annotation => annotation.kind.startsWith('person-'))
+          .sort((left, right) => left.span.startCharOffset - right.span.startCharOffset);
         let cursor = 0;
 
         return (
@@ -203,6 +213,7 @@ export const SentenceDiagramSurface: React.FC<SentenceDiagramSurfaceProps> = ({
                     className={cn(
                       'sentence-diagram-token-segment',
                       segment.underlineExact && 'sentence-diagram-exact-underline',
+                      segment.italicExact && 'italic',
                       isSelected && 'sentence-diagram-selected-segment'
                     )}>
                     {segment.text}
@@ -210,6 +221,18 @@ export const SentenceDiagramSurface: React.FC<SentenceDiagramSurfaceProps> = ({
                 );
               })}
             </span>
+            {personAnnotations.length > 0 ? (
+              <span className="ml-1 inline-flex align-super" aria-label="Person labels">
+                {personAnnotations.map(annotation => (
+                  <span
+                    key={`${annotation.id}-label`}
+                    className="rounded border border-stone-300 bg-white px-1 py-0.5 text-[9px] font-semibold leading-none text-stone-700"
+                    title={ANNOTATION_SPECS[annotation.kind].label}>
+                    {ANNOTATION_SPECS[annotation.kind].shortLabel}
+                  </span>
+                ))}
+              </span>
+            ) : null}
           </span>
         );
       }

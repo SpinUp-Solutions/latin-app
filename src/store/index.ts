@@ -1,4 +1,5 @@
 import { configureStore } from '@reduxjs/toolkit';
+import { setupListeners } from '@reduxjs/toolkit/query';
 import authReducer from './slices/authSlice';
 import lessonReducer from './slices/lessonSlice';
 import lessonEditorReducer from './slices/lessonEditorSlice';
@@ -7,7 +8,7 @@ import vocabularyPoolsReducer from './slices/vocabularyPoolSlice';
 import vocabularyReducer from './slices/vocabularySlice';
 import vocabularyEditReducer from './slices/vocabularyEditSlice';
 import advancedFiltersReducer from './slices/advancedFiltersSlice';
-import { lessonApi } from './api/lessonApi';
+import { appApi } from './api/appApi';
 import { vocabularyPoolApi } from './api/vocabularyPoolApi';
 import { vocabularyApi } from './api/vocabularyApi';
 import { advancedVocabularyApi } from './api/advancedVocabularyApi';
@@ -23,7 +24,7 @@ export const store = configureStore({
     vocabulary: vocabularyReducer,
     vocabularyEdit: vocabularyEditReducer,
     advancedFilters: advancedFiltersReducer,
-    [lessonApi.reducerPath]: lessonApi.reducer,
+    [appApi.reducerPath]: appApi.reducer,
     [vocabularyPoolApi.reducerPath]: vocabularyPoolApi.reducer,
     [vocabularyApi.reducerPath]: vocabularyApi.reducer,
     [advancedVocabularyApi.reducerPath]: advancedVocabularyApi.reducer,
@@ -33,13 +34,15 @@ export const store = configureStore({
     getDefaultMiddleware({
       serializableCheck: false,
     }).concat(
-      lessonApi.middleware,
+      appApi.middleware,
       vocabularyPoolApi.middleware,
       vocabularyApi.middleware,
       advancedVocabularyApi.middleware,
       vocabularyWordRequestsApi.middleware
     ),
 });
+
+setupListeners(store.dispatch);
 
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;

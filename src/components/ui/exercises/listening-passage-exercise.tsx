@@ -20,9 +20,9 @@ const ListeningPassageExercise: React.FC<ListeningPassageExerciseProps> = ({ exe
       )}
 
       {exercise.instructions && (
-        <p className="text-roman-stone">
+        <div className="text-roman-stone">
           <SimpleRichDisplay content={exercise.instructions} />
-        </p>
+        </div>
       )}
 
       <div className="rounded-2xl border border-roman-terracotta/20 bg-gradient-to-br from-roman-parchment/50 to-white p-6 space-y-4">

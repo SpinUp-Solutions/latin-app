@@ -14,7 +14,7 @@ export abstract class BaseScraper {
         const text = await etymologyLocator.textContent();
         if (text) result.etymology = text.trim();
       }
-    } catch (error) {
+    } catch {
       // Silently fail for optional data
     }
   }
@@ -31,7 +31,7 @@ export abstract class BaseScraper {
         const text = await pronunciationLocator.textContent();
         if (text) result.pronunciation = text.trim();
       }
-    } catch (error) {
+    } catch {
       // Silently fail for optional data
     }
   }
@@ -166,7 +166,9 @@ export abstract class BaseScraper {
           result.declension = headingText.trim();
         }
       }
-    } catch (error) {}
+    } catch {
+      // Silently fail for optional data
+    }
   }
 
   protected static async extractVerbHeadingInfo(verbDiv: Locator, result: WiktionaryData): Promise<void> {
@@ -180,7 +182,7 @@ export abstract class BaseScraper {
           result.isDeponent = headingText.includes('deponent');
         }
       }
-    } catch (error) {
+    } catch {
       // Silently fail for optional data
     }
   }
@@ -198,7 +200,7 @@ export abstract class BaseScraper {
           if (text) result.definitions.push(text.trim());
         }
       }
-    } catch (error) {
+    } catch {
       // Silently fail for optional data
     }
   }
@@ -214,7 +216,7 @@ export abstract class BaseScraper {
           if (text) result.definitions.push(text.trim());
         }
       }
-    } catch (error) {
+    } catch {
       // Silently fail for optional data
     }
   }
@@ -230,7 +232,7 @@ export abstract class BaseScraper {
           if (text) result.definitions.push(text.trim());
         }
       }
-    } catch (error) {
+    } catch {
       // Silently fail for optional data
     }
   }

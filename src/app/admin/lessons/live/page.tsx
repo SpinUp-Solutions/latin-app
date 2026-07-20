@@ -28,7 +28,7 @@ import {
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/src/components/ui/tabs';
+import { Tabs, TabsContent } from '@/src/components/ui/tabs';
 import { RomanCard, RomanCardContent, RomanCardHeader } from '@/src/components/ui/core/roman-card';
 import { Badge } from '@/src/components/ui/badge';
 import { Checkbox } from '@/src/components/ui/checkbox';
@@ -37,6 +37,9 @@ import { toast } from 'sonner';
 import Link from 'next/link';
 import { SortableLessonItem } from '@/src/components/admin/SortableLessonItem';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
+import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
+import { PracticeCategoryChips } from '@/src/components/ui/admin/practice-categories/PracticeCategoryChips';
+import { LessonTypeTabs } from '@/src/components/ui/admin/LessonTypeTabs';
 
 function LiveLessonsPage() {
   const dispatch = useDispatch();
@@ -103,11 +106,13 @@ function LiveLessonsPage() {
   }, [lessonType]);
 
   useEffect(() => {
-    if (!hasInitializedSelection) {
-      setSelectedLessons(originalLiveIds);
+    if (serverLessons && !hasInitializedSelection) {
+      setSelectedLessons(
+        new Set(serverLessons.filter(lesson => lesson.isLive && lesson.type === lessonType).map(lesson => lesson.id))
+      );
       setHasInitializedSelection(true);
     }
-  }, [hasInitializedSelection, originalLiveIds]);
+  }, [hasInitializedSelection, lessonType, serverLessons]);
 
   // Use the new parameterized selector for efficient filtering
   const filteredLessons = useSelector((state: RootState) => selectFilteredLessons(state, filterStatus, searchQuery));
@@ -162,7 +167,7 @@ function LiveLessonsPage() {
         dispatch(setUnsavedChanges(false));
       }
       toast.success('Lesson order saved successfully');
-    } catch (error) {
+    } catch {
       toast.error('Failed to save lesson order');
     }
   };
@@ -220,7 +225,7 @@ function LiveLessonsPage() {
         setHasInitializedSelection(false);
       }
       toast.success('Changes applied successfully');
-    } catch (error) {
+    } catch {
       toast.error('Failed to publish lessons');
     }
 
@@ -272,22 +277,16 @@ function LiveLessonsPage() {
           value={lessonType}
           onValueChange={value => setLessonType(value as 'normal' | 'vocab' | 'sentence-diagramming' | 'listening')}
           className="mb-6">
-          <TabsList>
-            <TabsTrigger value="normal">
-              Normal Lessons ({normalLiveLessons.length + normalAvailableLessons.length})
-            </TabsTrigger>
-            <TabsTrigger value="vocab">
-              Vocab Lessons ({vocabLiveLessons.length + vocabAvailableLessons.length})
-            </TabsTrigger>
-            <TabsTrigger value="sentence-diagramming">
-              Diagramming Lessons ({diagrammingLiveLessons.length + diagrammingAvailableLessons.length})
-            </TabsTrigger>
-            <TabsTrigger value="listening">
-              Listening Lessons ({listeningLiveLessons.length + listeningAvailableLessons.length})
-            </TabsTrigger>
-          </TabsList>
+          <LessonTypeTabs
+            counts={{
+              normal: normalLiveLessons.length + normalAvailableLessons.length,
+              vocab: vocabLiveLessons.length + vocabAvailableLessons.length,
+              'sentence-diagramming': diagrammingLiveLessons.length + diagrammingAvailableLessons.length,
+              listening: listeningLiveLessons.length + listeningAvailableLessons.length,
+            }}
+          />
 
-          <TabsContent value={lessonType}>
+          <TabsContent value={lessonType} className="mt-5">
             <div className="grid grid-cols-3 gap-4 mb-8">
               <RomanCard>
                 <RomanCardContent className="p-4">
@@ -442,14 +441,27 @@ function LiveLessonsPage() {
                                   <div className="flex items-start justify-between">
                                     <div>
                                       <div className="flex items-center gap-2 mb-1">
-                                        <h3 className="font-serif text-lg">{lesson.title}</h3>
+                                        <div className="font-serif text-lg" role="heading" aria-level={3}>
+                                          <SimpleRichDisplay content={lesson.title} />
+                                        </div>
                                         <Badge variant={lesson.isLive ? 'default' : 'secondary'}>
                                           {lesson.isLive ? 'Live' : 'Draft'}
                                         </Badge>
                                       </div>
                                       {lesson.description && (
-                                        <p className="text-sm text-gray-600 mb-2">{lesson.description}</p>
+                                        <div className="text-sm text-gray-600 mb-2">
+                                          <SimpleRichDisplay content={lesson.description} />
+                                        </div>
                                       )}
+                                      {lesson.type !== 'normal' &&
+                                        lesson.practiceCategories &&
+                                        lesson.practiceCategories.length > 0 && (
+                                          <PracticeCategoryChips
+                                            categories={lesson.practiceCategories}
+                                            maxVisible={2}
+                                            className="mb-2"
+                                          />
+                                        )}
                                       <div className="flex items-center gap-4 text-xs text-gray-500">
                                         <span>{lesson.totalPages} pages</span>
                                       </div>

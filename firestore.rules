@@ -3,8 +3,60 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    match /{document=**} {
-      allow read, write;
+    // Audit records are written and read exclusively through authenticated API
+    // routes. Keep student answers and expected answers out of direct client access.
+    match /practiceCategories/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /practiceCategoryMemberships/{document=**} {
+      allow read, write: if false;
+    }
+
+    // Lesson mutations run through server routes so category reconciliation,
+    // membership cleanup, and publishing invariants cannot be bypassed.
+    match /lessons/{document=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Assessment content, attempts, and gate-controlling progress are available
+    // only through authenticated server routes. The Admin SDK bypasses rules.
+    match /testVersions/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /testAttempts/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /testAttemptSessions/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /mockTests/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /userProgress/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /userProgressMigrationV2Backups/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /{collection}/{document=**} {
+      allow read, write: if collection != 'diagramming_attempts'
+        && collection != 'lessons'
+        && collection != 'practiceCategories'
+        && collection != 'practiceCategoryMemberships'
+        && collection != 'testVersions'
+        && collection != 'testAttempts'
+        && collection != 'testAttemptSessions'
+        && collection != 'mockTests'
+        && collection != 'userProgress'
+        && collection != 'userProgressMigrationV2Backups';
     }
   }
 }

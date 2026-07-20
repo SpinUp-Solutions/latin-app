@@ -19,7 +19,7 @@ export function VocabularyViewer({ content }: VocabularyViewerProps) {
       <div className="space-y-6">
         <div className="text-center space-y-2">
           <h2 className="text-2xl font-serif text-gray-800">
-            <SimpleRichDisplay content={content.title || 'Vocabulary'} />
+            <SimpleRichDisplay content={content.title || 'Special Vocabulary'} />
           </h2>
           <p className="text-roman-stone">No vocabulary items available</p>
         </div>
@@ -33,15 +33,13 @@ export function VocabularyViewer({ content }: VocabularyViewerProps) {
     );
   }
 
-  const defaultMode = content.studyMode === 'quiz' ? 'flashcards' : content.studyMode || 'flashcards';
-
   return (
     <VocabularyStudyView
-      title={content.title || 'Vocabulary'}
+      title={content.title || 'Special Vocabulary'}
       subtitle={`Study these ${vocabularyItems.length} words`}
       items={vocabularyItems}
       audioPath={content.audioPath}
-      defaultMode={defaultMode}
+      defaultMode="flashcards"
     />
   );
 }

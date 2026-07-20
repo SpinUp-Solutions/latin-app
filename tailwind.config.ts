@@ -46,6 +46,10 @@ const config: Config = {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
+        popover: {
+          DEFAULT: 'hsl(var(--popover))',
+          foreground: 'hsl(var(--popover-foreground))',
+        },
         roman: {
           red: '#8B2635',
           gold: '#D4AF37',
@@ -98,7 +102,7 @@ const config: Config = {
         serif: ['Trajan Pro', 'Georgia', 'serif'],
         sans: ['Open Sans', 'Roboto', 'sans-serif'],
       },
-      typography: (theme: (path: string) => any) => ({
+      typography: (theme: (path: string) => string) => ({
         DEFAULT: {
           css: {
             'h1, h2, h3, h4, h5, h6': {

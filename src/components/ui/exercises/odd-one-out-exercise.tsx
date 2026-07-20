@@ -13,13 +13,20 @@ import { SimpleRichEditor } from '../core/simple-rich-editor';
 import { Button } from '../button';
 import { CheckCircle2 } from 'lucide-react';
 import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
+import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
+import { resolveRuntimeMode } from '@/src/types/runtime-mode';
 
 interface Props {
   exercise: OddOneOutExercise;
   onComplete?: (score: number) => void;
+  runtimeMode?: RuntimeMode;
+  onAnswer?: ExerciseAnswerHandler;
+  testMode?: boolean;
 }
 
-const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
+const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete, runtimeMode, onAnswer, testMode }) => {
+  const mode = resolveRuntimeMode(runtimeMode, testMode);
+  const assessmentMode = mode !== 'practice';
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [userExplanation, setUserExplanation] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -43,7 +50,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
   } = useExerciseFeedback(exercise.feedbackConfig);
 
   useDelayedExerciseReset({
-    shouldReset: shouldResetExercise,
+    shouldReset: !assessmentMode && shouldResetExercise,
     delayMs: exercise.itemProgressionDelay,
     onReset: () => {
       setSelectedItemId(null);
@@ -64,6 +71,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
 
     setIsProcessing(true);
     setHasSubmitted(true);
+    if (mode === 'test') onAnswer?.({ type: 'odd-one-out', selectedItemId, explanation: userExplanation });
 
     const validation = validateOddOneOutExercise(selectedItemId, userExplanation, exercise);
 
@@ -80,6 +88,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
     } else {
       handleIncorrect();
       setIsProcessing(false);
+      if (assessmentMode) onComplete?.(0);
     }
   };
 
@@ -132,8 +141,8 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
             const isSelected = selectedItemId === item.id;
             const isCorrectItem = item.isOddOneOut;
             // Only show correct answer when user got it right OR feedback system says to show answer
-            const showCorrectHighlight = hasSubmitted && isCorrectItem && (isCorrect === true || level?.showAnswer);
-            const showIncorrectHighlight = hasSubmitted && isSelected && !isCorrectItem && level?.showAnswer;
+            const showCorrectHighlight = !assessmentMode && hasSubmitted && isCorrectItem && (isCorrect === true || level?.showAnswer);
+            const showIncorrectHighlight = !assessmentMode && hasSubmitted && isSelected && !isCorrectItem && level?.showAnswer;
 
             return (
               <button
@@ -202,18 +211,18 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
               className="bg-roman-terracotta hover:bg-roman-terracotta/90 text-white">
               {isProcessing ? 'Checking...' : 'Submit Answer'}
             </Button>
-          ) : (
+          ) : !assessmentMode ? (
             <Button
               onClick={handleReset}
               variant="outline"
               className="border-roman-terracotta text-roman-terracotta hover:bg-roman-parchment">
               Try Again
             </Button>
-          )}
+          ) : null}
         </div>
 
         {/* Feedback Display */}
-        <FeedbackDisplay
+        {!assessmentMode && <FeedbackDisplay
           isCorrect={isCorrect}
           message={message}
           level={level}
@@ -222,7 +231,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) =
           explanation={exercise.data.explanation}
           showExplanation={showExplanation}
           onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
-        />
+        />}
       </div>
     </div>
   );

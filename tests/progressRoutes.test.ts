@@ -1,0 +1,193 @@
+import { POST as migrateProgress } from '@/src/app/api/admin/progress/migrate-stable-ids/route';
+import { POST as updateProgress } from '@/src/app/api/progress/[userId]/[lessonId]/route';
+import { POST as finishLesson } from '@/src/app/api/progress/[userId]/[lessonId]/complete/route';
+
+const mockTransactionSet = jest.fn();
+const mockVerifyAdminAccess = jest.fn(async () => ({ uid: 'admin-1' }));
+const mockVerifyIdToken = jest.fn(async () => ({ uid: 'user-1' }));
+const mockRunTransaction = jest.fn();
+const mockCollection = jest.fn((collection: string) => ({
+  doc: (id: string) => ({ collection, id }),
+}));
+
+jest.mock('next/server', () => ({
+  NextResponse: {
+    json: (body: unknown, init?: { status?: number }) => ({ body, status: init?.status || 200 }),
+  },
+}));
+
+jest.mock('firebase-admin', () => ({
+  auth: () => ({ verifyIdToken: mockVerifyIdToken }),
+}));
+
+jest.mock('@/src/lib/verifyAdminAccess', () => {
+  class AdminAccessError extends Error {
+    status = 401;
+  }
+
+  return {
+    AdminAccessError,
+    verifyAdminAccess: () => mockVerifyAdminAccess(),
+  };
+});
+
+jest.mock('@/src/services/firebase-admin', () => ({
+  adminDb: {
+    collection: (collection: string) => mockCollection(collection),
+    runTransaction: (...args: unknown[]) => mockRunTransaction(...args),
+  },
+}));
+
+const lesson = {
+  title: 'Lesson',
+  type: 'normal',
+  pages: [
+    {
+      id: 'page-1',
+      items: [{ id: 'exercise-1', type: 'fill', title: 'Required exercise' }],
+    },
+    { id: 'page-2', items: [{ id: 'text-2', type: 'text', content: 'Finish' }] },
+  ],
+};
+
+function request(body: unknown) {
+  return {
+    headers: { get: () => 'Bearer token' },
+    json: async () => body,
+  } as never;
+}
+
+function configureTransaction(progressData: Record<string, unknown> | undefined) {
+  mockRunTransaction.mockImplementation(async callback =>
+    callback({
+      get: async (ref: { collection: string; id: string }) =>
+        ref.collection === 'lessons'
+          ? { exists: true, id: ref.id, data: () => lesson }
+          : { exists: Boolean(progressData), id: ref.id, data: () => progressData },
+      set: mockTransactionSet,
+    })
+  );
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockVerifyIdToken.mockResolvedValue({ uid: 'user-1' });
+});
+
+describe('progress update route', () => {
+  it('rejects a request for another user', async () => {
+    const response = (await updateProgress(request({ action: 'visit-page', pageId: 'page-1' }), {
+      params: Promise.resolve({ userId: 'user-2', lessonId: 'lesson-1' }),
+    })) as unknown as { status: number };
+
+    expect(response.status).toBe(401);
+    expect(mockRunTransaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invalid exercise score before starting a transaction', async () => {
+    const response = (await updateProgress(
+      request({ action: 'complete-exercise', exerciseId: 'exercise-1', score: '20' }),
+      { params: Promise.resolve({ userId: 'user-1', lessonId: 'lesson-1' }) }
+    )) as unknown as { body: { error: string }; status: number };
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe('Invalid progress request');
+    expect(mockRunTransaction).not.toHaveBeenCalled();
+  });
+
+  it('silently marks the lesson complete when the final required exercise is recorded', async () => {
+    configureTransaction({
+      userId: 'user-1',
+      lessonId: 'lesson-1',
+      status: 'in-progress',
+      furthestPageIndex: 0,
+      progressSchemaVersion: 2,
+      exerciseProgress: [],
+    });
+
+    const response = (await updateProgress(
+      request({
+        action: 'complete-exercise',
+        exerciseId: 'exercise-1',
+        score: 20,
+      }),
+      { params: Promise.resolve({ userId: 'user-1', lessonId: 'lesson-1' }) }
+    )) as unknown as {
+      body: { success: boolean; lessonCompleted: boolean };
+      status: number;
+    };
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ success: true, lessonCompleted: true });
+    expect(mockTransactionSet).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ status: 'completed', progressSchemaVersion: 2 }),
+      { merge: true }
+    );
+  });
+
+  it('never regresses the furthest page', async () => {
+    configureTransaction({ status: 'in-progress', furthestPageIndex: 1, progressSchemaVersion: 2 });
+
+    const response = (await updateProgress(request({ action: 'visit-page', pageId: 'page-1' }), {
+      params: Promise.resolve({ userId: 'user-1', lessonId: 'lesson-1' }),
+    })) as unknown as { body: { furthestPageIndex: number } };
+
+    expect(response.body.furthestPageIndex).toBe(1);
+    expect(mockTransactionSet).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ furthestPageIndex: 1 }),
+      { merge: true }
+    );
+  });
+});
+
+describe('progress migration route', () => {
+  it('rejects malformed JSON instead of starting a collection scan', async () => {
+    const response = (await migrateProgress({
+      headers: { get: () => 'Bearer token' },
+      json: async () => {
+        throw new SyntaxError('Invalid JSON');
+      },
+    } as never)) as unknown as { body: { error: string }; status: number };
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe('Invalid migration request');
+    expect(mockCollection).not.toHaveBeenCalled();
+  });
+});
+
+describe('finish route', () => {
+  it('returns missing exercise details for an incomplete exercise lesson', async () => {
+    configureTransaction({ status: 'in-progress', exerciseProgress: [], progressSchemaVersion: 2 });
+
+    const response = (await finishLesson(request({ finalPageId: 'page-2' }), {
+      params: Promise.resolve({ userId: 'user-1', lessonId: 'lesson-1' }),
+    })) as unknown as {
+      body: { missingExercises: Array<{ exerciseId: string; pageIndex: number }> };
+      status: number;
+    };
+
+    expect(response.status).toBe(422);
+    expect(response.body.missingExercises).toEqual([
+      expect.objectContaining({ exerciseId: 'exercise-1', pageIndex: 0 }),
+    ]);
+    expect(mockTransactionSet).not.toHaveBeenCalled();
+  });
+
+  it('is idempotent for an already-completed lesson', async () => {
+    configureTransaction({ status: 'completed', completedAt: '2026-01-01', exerciseProgress: [] });
+
+    const response = (await finishLesson(request({ finalPageId: 'page-2' }), {
+      params: Promise.resolve({ userId: 'user-1', lessonId: 'lesson-1' }),
+    })) as unknown as { body: { success: boolean; alreadyCompleted: boolean }; status: number };
+
+    expect(response.status).toBe(200);
+    expect(response.body.alreadyCompleted).toBe(true);
+    expect(mockTransactionSet).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ status: 'completed', completedAt: '2026-01-01' }),
+      { merge: true }
+    );
+  });
+});

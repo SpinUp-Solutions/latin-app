@@ -409,8 +409,8 @@ export async function autocompleteVocabularyWord(request: AIAutocompleteRequest)
 
     const existing = request.existingData ?? {};
     console.log('[Autocomplete] Existing data fields:', Object.keys(existing));
-    console.log('[Autocomplete] Existing principal_parts:', (existing as any).principal_parts);
-    console.log('[Autocomplete] Existing alternate_form:', (existing as any).alternate_form);
+    console.log('[Autocomplete] Existing principal_parts:', (existing as Record<string, unknown>).principal_parts);
+    console.log('[Autocomplete] Existing alternate_form:', (existing as Record<string, unknown>).alternate_form);
 
     const selectedFields = request.fieldsToComplete
       ? selectFields(request.part_of_speech, request.fieldsToComplete)

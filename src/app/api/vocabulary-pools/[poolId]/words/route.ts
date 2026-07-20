@@ -7,9 +7,12 @@ import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: NextRequest, { params }: { params: { poolId: string } }): Promise<NextResponse> {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ poolId: string }> }
+): Promise<NextResponse> {
   try {
-    const { poolId } = params;
+    const { poolId } = await params;
 
     // Get pool data
     const poolDoc = await adminDb.collection('vocabulary_pools').doc(poolId).get();

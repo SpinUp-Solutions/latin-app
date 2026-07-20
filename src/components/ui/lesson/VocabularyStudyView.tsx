@@ -101,9 +101,9 @@ export function VocabularyStudyView({
                       <SimpleRichDisplay content={currentItem.latin} />
                     </h3>
                     {showPronunciation && currentItem.pronunciation && (
-                      <p className="text-xs text-roman-stone italic">
+                      <div className="text-xs text-roman-stone italic">
                         /<SimpleRichDisplay content={currentItem.pronunciation} />/
-                      </p>
+                      </div>
                     )}
                     {currentItem.audioPath && (
                       <AudioPlayButton audioPath={currentItem.audioPath} variant="vocabulary" size="sm" />
@@ -123,16 +123,16 @@ export function VocabularyStudyView({
                       </Badge>
                     )}
                     {currentItem.example && (
-                      <p className="text-xs text-roman-stone italic">
+                      <div className="text-xs text-roman-stone italic">
                         &ldquo;
                         <SimpleRichDisplay content={currentItem.example} />
                         &rdquo;
-                      </p>
+                      </div>
                     )}
                     {showNotes && currentItem.notes && (
-                      <p className="text-xs text-roman-stone">
+                      <div className="text-xs text-roman-stone">
                         <SimpleRichDisplay content={currentItem.notes} />
-                      </p>
+                      </div>
                     )}
                     <div className="pt-2">
                       <p className="text-xs text-roman-stone">Click to see Latin word</p>
@@ -182,9 +182,9 @@ export function VocabularyStudyView({
                 )}
                 {item.audioPath && <AudioPlayButton audioPath={item.audioPath} variant="vocabulary" size="sm" />}
               </div>
-              <p className="text-lg text-gray-800">
+              <div className="text-lg text-gray-800">
                 <SimpleRichDisplay content={item.english} />
-              </p>
+              </div>
               <div className="flex items-center gap-2">
                 {item.partOfSpeech && (
                   <Badge variant="secondary">
@@ -193,16 +193,16 @@ export function VocabularyStudyView({
                 )}
               </div>
               {item.example && (
-                <p className="text-sm text-roman-stone italic">
+                <div className="text-sm text-roman-stone italic">
                   &ldquo;
                   <SimpleRichDisplay content={item.example} />
                   &rdquo;
-                </p>
+                </div>
               )}
               {showNotes && item.notes && (
-                <p className="text-xs text-roman-stone">
+                <div className="text-xs text-roman-stone">
                   <SimpleRichDisplay content={item.notes} />
-                </p>
+                </div>
               )}
             </div>
           </RomanCardContent>

@@ -21,6 +21,7 @@ interface ExerciseProgressionActions {
   resetIndex: () => void;
   nextItem: () => void;
   previousItem: () => void;
+  cancelPendingAdvance: () => void;
 }
 
 export function useExerciseProgression({
@@ -59,11 +60,8 @@ export function useExerciseProgression({
         clearTimeout(autoAdvanceTimerRef.current);
         autoAdvanceTimerRef.current = null;
       }
-      const pendingCb = pendingTimerCallbackRef.current;
-      if (pendingCb) {
-        pendingTimerCallbackRef.current = null;
-        pendingCb();
-      }
+      pendingTimerCallbackRef.current = null;
+      pendingAdvanceRef.current = null;
     };
   }, []);
 
@@ -99,6 +97,12 @@ export function useExerciseProgression({
     setIsAwaitingConfirmation(false);
     clearAutoAdvanceTimer();
     setCurrentIndex(0);
+  }, [clearAutoAdvanceTimer]);
+
+  const cancelPendingAdvance = useCallback(() => {
+    pendingAdvanceRef.current = null;
+    setIsAwaitingConfirmation(false);
+    clearAutoAdvanceTimer();
   }, [clearAutoAdvanceTimer]);
 
   const autoAdvanceIfEnabled = useCallback(
@@ -158,5 +162,6 @@ export function useExerciseProgression({
     resetIndex,
     nextItem,
     previousItem,
+    cancelPendingAdvance,
   };
 }

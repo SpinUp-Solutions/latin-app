@@ -4,7 +4,7 @@ import { Plus } from 'lucide-react';
 import { VocabularyContent } from '@/src/types/lesson';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonEditorSlice';
-import { SimpleInput, SimpleSelect } from '@/src/components/ui/form-components';
+import { SimpleInput } from '@/src/components/ui/form-components';
 import { VocabularyItemCard } from '@/src/components/ui/form-components/VocabularyItemCard';
 import { AudioUploadSection } from './AudioUploadSection';
 
@@ -58,16 +58,6 @@ export const VocabularyEditor: React.FC = () => {
         placeholder="Enter vocabulary list title..."
       />
 
-      <SimpleSelect
-        label="Study Mode"
-        value={editingContent.studyMode || 'flashcards'}
-        onChange={value => updateContent({ studyMode: value as 'flashcards' | 'list' | 'quiz' })}
-        options={[
-          { value: 'flashcards', label: 'Flashcards' },
-          { value: 'list', label: 'List' },
-          { value: 'quiz', label: 'Quiz' },
-        ]}
-      />
 
       <AudioUploadSection
         audioPath={editingContent.audioPath}

@@ -5,6 +5,7 @@ export interface DiagramTextSegment {
   key: string;
   text: string;
   underlineExact: boolean;
+  italicExact: boolean;
 }
 
 export interface DiagramTokenRenderState {
@@ -115,7 +116,7 @@ const getTokenClassName = (annotations: DiagramAnnotation[], allAnnotations?: Di
     classNames.push(underlineClass);
   }
 
-  if (annotations.some(annotation => annotation.kind === 'active')) {
+  if (annotations.some(annotation => annotation.kind === 'active' || annotation.kind === 'deponent')) {
     classNames.push('font-bold');
   }
 
@@ -125,10 +126,6 @@ const getTokenClassName = (annotations: DiagramAnnotation[], allAnnotations?: Di
 
   if (annotations.some(annotation => annotation.kind === 'locative')) {
     classNames.push('font-semibold');
-  }
-
-  if (annotations.some(annotation => annotation.kind === 'particle')) {
-    classNames.push('italic');
   }
 
   if (annotations.some(annotation => annotation.kind === 'vocative')) {
@@ -145,9 +142,13 @@ const getTokenClassName = (annotations: DiagramAnnotation[], allAnnotations?: Di
 };
 
 const buildSegmentsForToken = (token: DiagramToken, annotations: DiagramAnnotation[]) => {
-  const exactAnnotations = annotations.filter(
+  const personAnnotations = annotations.filter(
     annotation => annotation.kind.startsWith('person-') && annotation.span.startTokenIndex === token.index
   );
+  const particleAnnotations = annotations.filter(
+    annotation => annotation.kind === 'particle' && annotation.span.startTokenIndex === token.index
+  );
+  const exactAnnotations = [...personAnnotations, ...particleAnnotations];
 
   if (!exactAnnotations.length) {
     return [
@@ -155,6 +156,7 @@ const buildSegmentsForToken = (token: DiagramToken, annotations: DiagramAnnotati
         key: `${token.id}-segment-0`,
         text: token.text,
         underlineExact: false,
+        italicExact: false,
       },
     ];
   }
@@ -177,7 +179,10 @@ const buildSegmentsForToken = (token: DiagramToken, annotations: DiagramAnnotati
       continue;
     }
 
-    const underlineExact = exactAnnotations.some(
+    const underlineExact = personAnnotations.some(
+      annotation => annotation.span.startCharOffset <= start && annotation.span.endCharOffset >= end
+    );
+    const italicExact = particleAnnotations.some(
       annotation => annotation.span.startCharOffset <= start && annotation.span.endCharOffset >= end
     );
 
@@ -185,6 +190,7 @@ const buildSegmentsForToken = (token: DiagramToken, annotations: DiagramAnnotati
       key: `${token.id}-segment-${start}-${end}`,
       text,
       underlineExact,
+      italicExact,
     });
   }
 

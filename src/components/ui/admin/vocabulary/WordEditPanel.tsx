@@ -96,7 +96,7 @@ const cloneTableData = (value: unknown): Record<string, unknown> => {
   if (value === undefined || value === null) return {};
   try {
     return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
-  } catch (error) {
+  } catch {
     return {};
   }
 };

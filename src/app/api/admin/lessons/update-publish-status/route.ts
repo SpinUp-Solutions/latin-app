@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
+import type { Lesson } from '@/src/types/lesson';
+import { validateLessonProgression } from '@/src/utils/lessonProgress';
 
 interface UpdateRequest {
   lessonIds: string[];
@@ -27,14 +30,14 @@ export async function POST(request: NextRequest) {
 
     // Get current max order if publishing and no startOrder provided
     if (isLive && nextOrder === undefined) {
-      const maxOrderDoc = await adminDb
+      const maxOrderSnapshot = await adminDb
         .collection('lessons')
         .where('isLive', '==', true)
         .orderBy('liveOrder', 'desc')
-        .limit(1)
         .get();
+      const maxOrderDoc = maxOrderSnapshot.docs.find(doc => isLessonDocumentData(doc.data()));
 
-      nextOrder = maxOrderDoc.empty ? 0 : maxOrderDoc.docs[0].data().liveOrder + 1;
+      nextOrder = maxOrderDoc ? maxOrderDoc.data().liveOrder + 1 : 0;
     }
 
     for (const lessonId of lessonIds) {
@@ -44,7 +47,16 @@ export async function POST(request: NextRequest) {
       if (!lessonDoc.exists) continue;
 
       const currentData = lessonDoc.data();
-      if (currentData?.isLive === isLive) continue; // Already in desired state
+      if (!isLessonDocumentData(currentData)) continue;
+      const lessonData = currentData as Partial<Lesson>;
+      if (lessonData.isLive === isLive) continue; // Already in desired state
+
+      if (isLive) {
+        const progressionErrors = validateLessonProgression({ pages: lessonData.pages || [] });
+        if (progressionErrors.length > 0) {
+          return NextResponse.json({ error: `Cannot publish lesson ${lessonId}`, progressionErrors }, { status: 400 });
+        }
+      }
 
       const updateData: Record<string, string | number | boolean | null> = {
         isLive,

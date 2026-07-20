@@ -17,6 +17,7 @@ import {
   getAcceptedAnswersForStep,
   getDisplayForm,
   enrichPathsWithSteps,
+  getAnswerableStepsForWord,
 } from '@/src/utils/exercises/formIdentificationHelpers';
 import { WordSourceSection } from './WordSourceSection';
 import { MultiParadigmConfigSection } from './MultiParadigmConfigSection';
@@ -159,7 +160,10 @@ const GeneratedFormIdentificationEditorView: React.FC<{
     const pronounPerson = word.part_of_speech === 'pronoun' ? (word.person as PronounPerson | undefined) : undefined;
     const paradigm = deriveParadigm(word.part_of_speech as PartOfSpeech, pronounType, pronounPerson);
     if (!paradigm) return [];
-    return editingContent.data.paradigmConfigs?.[paradigm]?.steps || [];
+    const basePrimaryPaths = (word.primary_form_paths || (word.form_path ? [word.form_path] : [])) as Array<
+      Record<string, string | undefined>
+    >;
+    return getAnswerableStepsForWord(word, editingContent.data.paradigmConfigs?.[paradigm]?.steps || [], basePrimaryPaths);
   };
 
   return (

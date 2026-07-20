@@ -14,12 +14,10 @@ export interface VocabularyItem {
 export interface VocabularyContent extends ContentItem {
   type: 'vocabulary';
   vocabularyItems: VocabularyItem[];
-  studyMode?: 'flashcards' | 'list' | 'quiz';
 }
 
 export interface VocabularyPoolContent extends ContentItem {
   type: 'vocabulary-pool';
-  studyMode?: 'flashcards' | 'list' | 'quiz';
 }
 
 export interface ParsedEntry {

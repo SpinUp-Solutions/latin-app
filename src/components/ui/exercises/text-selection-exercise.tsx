@@ -12,14 +12,22 @@ import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { ClickableRichDisplay } from '../core/clickable-rich-display';
 import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
+import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
+import { resolveRuntimeMode } from '@/src/types/runtime-mode';
 
 interface Props {
   exercise: TextSelectionExercise;
   onComplete?: (score: number) => void;
+  runtimeMode?: RuntimeMode;
+  onAnswer?: ExerciseAnswerHandler;
+  testMode?: boolean;
 }
 
-const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete }) => {
+const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete, runtimeMode, onAnswer, testMode }) => {
+  const mode = resolveRuntimeMode(runtimeMode, testMode);
+  const assessmentMode = mode !== 'practice';
   const [selectedWordIndex, setSelectedWordIndex] = useState<number | null>(null);
+  const [submittedIndices, setSubmittedIndices] = useState<number[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [correctAnswers, setCorrectAnswers] = useState(0);
 
@@ -43,7 +51,7 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
   } = useExerciseFeedback(exercise.feedbackConfig);
 
   useDelayedExerciseReset({
-    shouldReset: shouldResetExercise,
+    shouldReset: !assessmentMode && shouldResetExercise,
     delayMs: exercise.itemProgressionDelay,
     onReset: () => {
       setSelectedWordIndex(null);
@@ -58,6 +66,10 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
     if (isProcessing) return; // Prevent multiple rapid clicks
 
     setSelectedWordIndex(wordIndex);
+    const nextIndices = [...submittedIndices];
+    nextIndices[currentIndex] = wordIndex;
+    setSubmittedIndices(nextIndices);
+    if (mode === 'test') onAnswer?.({ type: 'text-selection', selectedWordIndices: nextIndices });
     const validation = validateTextSelectionExercise(wordIndex, exercise, currentIndex);
     setIsProcessing(true);
 
@@ -88,7 +100,17 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
       }
     } else {
       handleIncorrect();
-      setIsProcessing(false);
+      if (assessmentMode) {
+        const finalScore = isLastItem ? Math.round((correctAnswers / exercise.data.questions.length) * 100) : null;
+        autoAdvanceIfEnabled(() => {
+          setSelectedWordIndex(null);
+          reset();
+          setIsProcessing(false);
+          if (finalScore !== null) onComplete?.(finalScore);
+        }, false);
+      } else {
+        setIsProcessing(false);
+      }
     }
   };
 
@@ -141,13 +163,14 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete 
 
         <FeedbackDisplay
           isCorrect={isCorrect}
-          message={message}
-          level={level}
-          hint={currentQuestion.hint}
-          correctAnswer={exercise.data.passage.split(' ')[currentQuestion.correctWordIndex]}
-          explanation={currentQuestion.explanation}
-          showExplanation={showExplanation}
-          onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
+          message={assessmentMode ? '' : message}
+          level={assessmentMode ? null : level}
+          hint={assessmentMode ? undefined : currentQuestion.hint}
+          correctAnswer={assessmentMode ? undefined : exercise.data.passage.split(' ')[currentQuestion.correctWordIndex]}
+          explanation={assessmentMode ? undefined : currentQuestion.explanation}
+          showExplanation={!assessmentMode && showExplanation}
+          onContinue={(isCorrect || assessmentMode) && isAwaitingConfirmation ? confirmAdvance : undefined}
+          allowContinueOnIncorrect={assessmentMode}
         />
       </div>
     </div>

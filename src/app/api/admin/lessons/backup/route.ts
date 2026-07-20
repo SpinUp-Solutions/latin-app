@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 
 const serializeFirestoreValue = (value: unknown): unknown => {
   if (Array.isArray(value)) {
@@ -35,6 +36,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const snapshot = await adminDb.collection('lessons').get();
 
     const lessons = snapshot.docs
+      .filter(doc => isLessonDocumentData(doc.data()))
       .map(doc => {
         const serializedData = serializeFirestoreValue(doc.data()) as Record<string, unknown>;
 
