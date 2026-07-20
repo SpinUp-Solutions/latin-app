@@ -11,6 +11,7 @@ import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { Button } from '@/src/components/ui/button';
 import { Textarea } from '@/src/components/ui/textarea';
+import { getContentTypeLabel } from '@/src/lib/content/registry';
 import { Loader2, ChevronLeft, ChevronRight, Check, Lightbulb } from 'lucide-react';
 import {
   RomanTable,
@@ -134,11 +135,9 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center mb-2">
-        {exercise.title && (
-          <h3 className="text-md font-serif text-roman-red">
-            <SimpleRichDisplay content={exercise.title} />
-          </h3>
-        )}
+        <h3 className="text-md font-serif text-roman-red">
+          <SimpleRichDisplay content={exercise.title || getContentTypeLabel(exercise.type)} />
+        </h3>
         {exercise.audioPath && (
           <AudioPlayButton
             audioPath={exercise.audioPath}

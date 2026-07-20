@@ -1,12 +1,12 @@
 import { BaseExercise } from './base';
 import type {
-  AnnotationKind,
   DiagramAnnotation,
   DiagramDifficulty,
   DiagramSpan,
   DiagramToken,
   SentenceDiagramDocument,
-} from '@/src/features/sentence-diagramming';
+} from '@/src/features/sentence-diagramming/model';
+import type { AnnotationKind } from '@/src/features/sentence-diagramming/annotation-spec';
 
 export type SentenceWord = DiagramToken;
 export type DiagramMarkType = AnnotationKind;

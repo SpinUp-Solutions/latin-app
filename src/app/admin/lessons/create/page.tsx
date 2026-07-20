@@ -35,6 +35,7 @@ import {
 import { useBeforeUnload } from '@/src/hooks/useLessonDraft';
 import { UnifiedDialog } from '@/src/components/ui/core/UnifiedDialog';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
+import { getPageDocumentDraftKey, type PageDocumentDraft } from '@/src/lib/page-document-draft';
 
 function CreateLessonPage() {
   const router = useRouter();
@@ -42,7 +43,7 @@ function CreateLessonPage() {
   const [createLesson, { isLoading: saving, isError: saveFailed }] = useCreateLessonMutation();
   const [checkLessonExists] = useLazyGetLessonByIdQuery();
   const [saveToRecovery, { isLoading: savingToRecovery }] = useSaveToRecoveryMutation();
-  const { drafts, currentLesson, dirty } = useSelector((state: RootState) => state.lessonEditor);
+  const { currentLesson, dirty } = useSelector((state: RootState) => state.lessonEditor);
   const [isCheckingLesson, setIsCheckingLesson] = useState(false);
 
   // Error dialog state
@@ -70,6 +71,21 @@ function CreateLessonPage() {
 
   const hasDraft = useSelector((state: RootState) => (currentLesson ? selectHasDraft(state, currentLesson.id) : false));
 
+  const saveCurrentDraftAndExit = async () => {
+    if (!currentLesson) return;
+    try {
+      await dispatch(saveDraft(currentLesson)).unwrap();
+      setIsNavigating(true);
+      setDialogState(null);
+      setTimeout(() => {
+        dispatch(resetLessonState());
+        router.push('/admin');
+      }, 0);
+    } catch {
+      toast.error('The lesson draft could not be saved. Your changes are still open.');
+    }
+  };
+
   const handleBrowserBackButton = () => {
     if (!currentLesson) return;
 
@@ -90,14 +106,7 @@ function CreateLessonPage() {
       description: 'What would you like to do with your changes?',
       confirmText: 'Save as Draft & Exit',
       alternateText: isContinuingDraft ? 'Revert to Original & Exit' : 'Discard Changes & Exit',
-      onConfirm: () => {
-        setIsNavigating(true);
-        setDialogState(null);
-        setTimeout(() => {
-          dispatch(resetLessonState());
-          router.push('/admin');
-        }, 0);
-      },
+      onConfirm: () => void saveCurrentDraftAndExit(),
       onAlternate: () => {
         if (isContinuingDraft && originalDraft) {
           dispatch(saveDraft(originalDraft));
@@ -135,7 +144,12 @@ function CreateLessonPage() {
       const continueDraft = urlParams.get('continue');
       const lessonId = urlParams.get('lessonId');
 
-      dispatch(loadDrafts());
+      let loadedDrafts: Record<string, { document: PageDocumentDraft; lastModified: string }> = {};
+      try {
+        loadedDrafts = await dispatch(loadDrafts()).unwrap();
+      } catch {
+        toast.error('Saved lesson drafts could not be loaded. You can still create a new lesson.');
+      }
 
       if (continueDraft === 'true' && lessonId) {
         // Check if this lesson already exists in Firebase
@@ -156,13 +170,21 @@ function CreateLessonPage() {
 
         // Continue with draft loading
         setIsContinuingDraft(true);
-        setTimeout(() => {
-          const draft = drafts[lessonId];
-          if (draft) {
-            setOriginalDraft(JSON.parse(JSON.stringify(draft.lesson)));
-            dispatch(setLesson(draft.lesson));
-          }
-        }, 100);
+        const draft = loadedDrafts[getPageDocumentDraftKey('lesson', lessonId)];
+        if (draft?.document.sourceLesson) {
+          const restoredLesson = {
+            ...draft.document.sourceLesson,
+            title: draft.document.title,
+            description: draft.document.description,
+            pages: draft.document.pages,
+          };
+          setOriginalDraft(JSON.parse(JSON.stringify(restoredLesson)));
+          dispatch(setLesson(restoredLesson));
+        } else {
+          setIsContinuingDraft(false);
+          dispatch(setLesson(undefined));
+          toast.error('That lesson draft is no longer available. A new lesson has been opened instead.');
+        }
       } else {
         setIsContinuingDraft(false);
         setOriginalDraft(null);
@@ -190,7 +212,6 @@ function CreateLessonPage() {
       }, 1000);
       return () => clearTimeout(timer);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentLesson, dispatch]);
 
   const handleSaveLesson = async (lesson: Lesson) => {
@@ -300,13 +321,7 @@ function CreateLessonPage() {
         description: 'What would you like to do with your changes?',
         confirmText: 'Save as Draft & Exit',
         alternateText: isContinuingDraft ? 'Revert to Original & Exit' : 'Discard Changes & Exit',
-        onConfirm: () => {
-          setIsNavigating(true);
-          setTimeout(() => {
-            dispatch(resetLessonState());
-            router.push('/admin');
-          }, 0);
-        },
+        onConfirm: () => void saveCurrentDraftAndExit(),
         onAlternate: () => {
           if (isContinuingDraft && originalDraft) {
             dispatch(saveDraft(originalDraft));

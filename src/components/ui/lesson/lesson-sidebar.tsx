@@ -2,6 +2,7 @@
 
 import React, { useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 import { useGetStudentLessonsQuery } from '@/src/store/api/lessonApi';
 import { LessonStatus } from '@/src/types/lesson';
 import { BookOpen, CheckCircle, Lock, Play, ChevronLeft } from 'lucide-react';
@@ -67,7 +68,7 @@ export default function LessonSidebar({ currentLessonId, isCollapsed = false, on
   const lessons = useMemo(() => {
     if (!studentLessons) return [];
     return studentLessons
-      .filter(lesson => lesson.type === 'normal')
+      .filter(lesson => isLessonDocumentData(lesson) && lesson.type === 'normal')
       .map(lesson => ({
         ...lesson,
         totalPages: lesson.pages.length,

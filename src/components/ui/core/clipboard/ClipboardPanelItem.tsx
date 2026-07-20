@@ -2,6 +2,7 @@ import React from 'react';
 import { Type, Lightbulb, Table, Book, Target } from 'lucide-react';
 import { ClipboardItem } from '@/src/types/clipboard';
 import { SimpleRichDisplay } from '../simple-rich-display';
+import { getContentTypeLabel } from '@/src/lib/content/registry';
 
 interface ClipboardPanelItemProps {
   item: ClipboardItem;
@@ -28,7 +29,7 @@ const getContentIcon = (type: string) => {
 export const ClipboardPanelItem: React.FC<ClipboardPanelItemProps> = ({ item, index, isSelected, onToggle }) => {
   const Icon = getContentIcon(item.content.type);
   const title = item.content.title || 'Untitled';
-  const type = item.content.type;
+  const typeLabel = getContentTypeLabel(item.content.type);
   const copiedTime = new Date(item.copiedAt).toLocaleTimeString([], {
     hour: '2-digit',
     minute: '2-digit',
@@ -60,7 +61,7 @@ export const ClipboardPanelItem: React.FC<ClipboardPanelItemProps> = ({ item, in
           <SimpleRichDisplay content={title} />
         </div>
         <div className="text-xs text-gray-500">
-          {type} • {copiedTime}
+          {typeLabel} • {copiedTime}
           {item.source?.lesson && ` • from ${item.source.lesson}`}
         </div>
       </div>

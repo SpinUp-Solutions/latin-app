@@ -17,55 +17,58 @@ import {
   Languages,
   Headphones,
 } from 'lucide-react';
+import type { ComponentType } from 'react';
+import {
+  CONTENT_TYPE_METADATA,
+  CREATABLE_CONTENT_TYPE_METADATA,
+  EXERCISE_TYPE_METADATA,
+  TEST_ELIGIBLE_CONTENT_TYPE_METADATA,
+  type ContentType,
+} from '@/src/lib/content/registry';
 
-export const ALL_CONTENT_TYPES = [
-  { type: 'text', icon: Type, label: 'Text Block' },
-  { type: 'emphasis', icon: Lightbulb, label: 'Emphasis' },
-  { type: 'table', icon: Table, label: 'Table' },
-  { type: 'vocabulary', icon: Book, label: 'Vocabulary' },
-  { type: 'vocabulary-pool', icon: Library, label: 'Vocabulary Pool' },
-  { type: 'matching', icon: Target, label: 'Matching' },
-  { type: 'fill', icon: Target, label: 'Fill-in-Blank' },
-  { type: 'multiple-choice', icon: CheckSquare, label: 'Multiple Choice' },
-  { type: 'odd-one-out', icon: Filter, label: 'Odd One Out' },
-  { type: 'text-selection', icon: Search, label: 'Text Selection' },
-  { type: 'fill-embolded-text', icon: Zap, label: 'Fill In Embolded Text' },
-  { type: 'sentence-diagramming', icon: Pencil, label: 'Sentence Diagramming' },
-  { type: 'table-fill', icon: TableProperties, label: 'Table Fill Exercise' },
-  { type: 'click-on-multiple-words', icon: MousePointerClick, label: 'Click On Multiple Words' },
-  { type: 'generated-translation', icon: Sparkles, label: 'Generated Translation Exercise' },
-  { type: 'generated-form-identification', icon: Fingerprint, label: 'Generated Form Identification Exercise' },
-  { type: 'translation-grading', icon: Languages, label: '[WIP] Translation Grading' },
-  { type: 'listening-passage', icon: Headphones, label: 'Listening Passage' },
-] as const;
+const CONTENT_TYPE_ICONS = {
+  text: Type,
+  emphasis: Lightbulb,
+  table: Table,
+  vocabulary: Book,
+  'vocabulary-pool': Library,
+  matching: Target,
+  fill: Target,
+  'multiple-choice': CheckSquare,
+  'odd-one-out': Filter,
+  'text-selection': Search,
+  'fill-embolded-text': Zap,
+  'sentence-diagramming': Pencil,
+  'table-fill': TableProperties,
+  'click-on-multiple-words': MousePointerClick,
+  'generated-translation': Sparkles,
+  'generated-form-identification': Fingerprint,
+  'translation-grading': Languages,
+  'listening-passage': Headphones,
+} satisfies Record<ContentType, ComponentType<{ className?: string }>>;
 
-export const CONTENT_TYPES = [
-  { type: 'text', icon: Type, label: 'Text Block' },
-  { type: 'emphasis', icon: Lightbulb, label: 'Emphasis' },
-  { type: 'table', icon: Table, label: 'Table' },
-  { type: 'vocabulary', icon: Book, label: 'Vocabulary' },
-  { type: 'vocabulary-pool', icon: Library, label: 'Vocabulary Pool' },
-] as const;
+const withIcon = (metadata: (typeof CONTENT_TYPE_METADATA)[number]) => ({
+  type: metadata.type,
+  label: metadata.label,
+  icon: CONTENT_TYPE_ICONS[metadata.type],
+});
 
-export const SENTENCE_DIAGRAMMING_LESSON_CONTENT_TYPES = [
-  { type: 'sentence-diagramming', icon: Pencil, label: 'Sentence Diagramming' },
-] as const;
+export const ALL_CONTENT_TYPES = CREATABLE_CONTENT_TYPE_METADATA.map(withIcon);
 
-export const EXERCISE_TYPES = [
-  { type: 'matching', icon: Target, label: 'Matching' },
-  { type: 'fill', icon: Target, label: 'Fill-in-Blank' },
-  { type: 'multiple-choice', icon: CheckSquare, label: 'Multiple Choice' },
-  { type: 'odd-one-out', icon: Filter, label: 'Odd One Out' },
-  { type: 'text-selection', icon: Search, label: 'Text Selection' },
-  { type: 'fill-embolded-text', icon: Zap, label: 'Fill In Embolded Text' },
-  { type: 'sentence-diagramming', icon: Pencil, label: 'Sentence Diagramming' },
-  { type: 'table-fill', icon: TableProperties, label: 'Table Fill Exercise' },
-  { type: 'click-on-multiple-words', icon: MousePointerClick, label: 'Click On Multiple Words' },
-  { type: 'generated-translation', icon: Sparkles, label: 'Generated Translation Exercise' },
-  { type: 'generated-form-identification', icon: Fingerprint, label: 'Generated Form Identification Exercise' },
-  { type: 'translation-grading', icon: Languages, label: '[WIP] Translation Grading' },
-] as const;
+export const CONTENT_TYPES = CREATABLE_CONTENT_TYPE_METADATA.filter(metadata => metadata.kind === 'content')
+  .filter(metadata => metadata.type !== 'listening-passage')
+  .map(withIcon);
 
-export const LISTENING_LESSON_CONTENT_TYPES = [
-  { type: 'listening-passage', icon: Headphones, label: 'Listening Passage' },
-] as const;
+export const SENTENCE_DIAGRAMMING_LESSON_CONTENT_TYPES = CONTENT_TYPE_METADATA.filter(
+  metadata => metadata.type === 'sentence-diagramming'
+).map(withIcon);
+
+export const EXERCISE_TYPES = EXERCISE_TYPE_METADATA.filter(metadata => metadata.creatable).map(withIcon);
+
+export const TEST_VERSION_CONTENT_TYPES = TEST_ELIGIBLE_CONTENT_TYPE_METADATA.filter(metadata => metadata.creatable).map(
+  withIcon
+);
+
+export const LISTENING_LESSON_CONTENT_TYPES = CONTENT_TYPE_METADATA.filter(
+  metadata => metadata.type === 'listening-passage'
+).map(withIcon);

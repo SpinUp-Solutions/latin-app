@@ -56,6 +56,25 @@ export interface DiagramComparisonResult {
   matchedIds: string[];
   missingIds: string[];
   extraIds: string[];
+  differences: DiagramAnnotationDifference[];
+  canonicalStudentAnnotations: DiagramAnnotation[];
+  canonicalSolutionAnnotations: DiagramAnnotation[];
+}
+
+/** The complete client-side snapshot captured when a student submits an answer. */
+export interface DiagramAttempt {
+  comparison: DiagramComparisonResult;
+  studentAnnotations: DiagramAnnotation[];
+  solutionAnnotations: DiagramAnnotation[];
+  tokens: DiagramToken[];
+}
+
+export interface DiagramAnnotationDifference {
+  type: 'missing' | 'extra' | 'kind-mismatch';
+  span: DiagramSpan;
+  text: string;
+  expectedKind?: AnnotationKind;
+  actualKind?: AnnotationKind;
 }
 
 export interface ApplyAnnotationResult {
@@ -381,8 +400,8 @@ export const applyDiagramAnnotation = ({
       annotations,
       error:
         spec.selectionMode === 'exact'
-          ? 'Select exact ending letters inside a single token for this tool.'
-          : 'Select one or more tokens before applying this annotation.',
+          ? 'Select exact characters within a single word for this tool.'
+          : 'Select one or more words before applying this annotation.',
     };
   }
 
@@ -435,11 +454,6 @@ export const resetDiagramColorAnnotations = (annotations: DiagramAnnotation[], t
     tokens
   );
 
-interface CanonicalComparisonAnnotation {
-  id: string;
-  kind: AnnotationKind;
-}
-
 interface ExactInterval {
   start: number;
   end: number;
@@ -473,12 +487,12 @@ const mergeIntervals = (intervals: ExactInterval[]) => {
   return merged;
 };
 
-const buildCanonicalComparisonAnnotations = (
+export const canonicalizeDiagramAnnotations = (
   annotations: DiagramAnnotation[],
   tokens: DiagramToken[]
-): CanonicalComparisonAnnotation[] => {
+): DiagramAnnotation[] => {
   const normalized = normalizeDiagramAnnotations(annotations, tokens);
-  const canonical = new Map<string, CanonicalComparisonAnnotation>();
+  const canonical = new Map<string, DiagramAnnotation>();
   const tokenCoverageByKind = new Map<AnnotationKind, ExactInterval[]>();
   const exactCoverageByKindAndToken = new Map<string, ExactInterval[]>();
 
@@ -489,6 +503,7 @@ const buildCanonicalComparisonAnnotations = (
       canonical.set(annotation.id, {
         id: annotation.id,
         kind: annotation.kind,
+        span: annotation.span,
       });
       return;
     }
@@ -521,7 +536,7 @@ const buildCanonicalComparisonAnnotations = (
         endCharOffset: getTokenLength(tokens[interval.end - 1]),
       };
       const id = createAnnotationId(kind, span);
-      canonical.set(id, { id, kind });
+      canonical.set(id, { id, kind, span });
     });
   });
 
@@ -537,11 +552,67 @@ const buildCanonicalComparisonAnnotations = (
         endCharOffset: interval.end,
       };
       const id = createAnnotationId(kind as AnnotationKind, span);
-      canonical.set(id, { id, kind: kind as AnnotationKind });
+      canonical.set(id, { id, kind: kind as AnnotationKind, span });
     });
   });
 
   return [...canonical.values()].sort((left, right) => left.id.localeCompare(right.id));
+};
+
+const canPairAsKindMismatch = (missing: DiagramAnnotation, extra: DiagramAnnotation) => {
+  const missingGroup = ANNOTATION_SPECS[missing.kind].exclusivityGroup;
+  const extraGroup = ANNOTATION_SPECS[extra.kind].exclusivityGroup;
+
+  return Boolean(missingGroup && missingGroup === extraGroup && spansEqual(missing.span, extra.span));
+};
+
+const buildComparisonDifferences = (
+  missingAnnotations: DiagramAnnotation[],
+  extraAnnotations: DiagramAnnotation[],
+  tokens: DiagramToken[]
+): DiagramAnnotationDifference[] => {
+  const pairedExtraIds = new Set<string>();
+  const differences: DiagramAnnotationDifference[] = [];
+
+  missingAnnotations.forEach(missing => {
+    const matchingExtra = extraAnnotations.find(
+      extra => !pairedExtraIds.has(extra.id) && canPairAsKindMismatch(missing, extra)
+    );
+
+    if (matchingExtra) {
+      pairedExtraIds.add(matchingExtra.id);
+      differences.push({
+        type: 'kind-mismatch',
+        span: missing.span,
+        text: getSpanText(tokens, missing.span),
+        expectedKind: missing.kind,
+        actualKind: matchingExtra.kind,
+      });
+      return;
+    }
+
+    differences.push({
+      type: 'missing',
+      span: missing.span,
+      text: getSpanText(tokens, missing.span),
+      expectedKind: missing.kind,
+    });
+  });
+
+  extraAnnotations.forEach(extra => {
+    if (pairedExtraIds.has(extra.id)) {
+      return;
+    }
+
+    differences.push({
+      type: 'extra',
+      span: extra.span,
+      text: getSpanText(tokens, extra.span),
+      actualKind: extra.kind,
+    });
+  });
+
+  return differences;
 };
 
 export const compareDiagramAnnotationSets = (
@@ -549,8 +620,8 @@ export const compareDiagramAnnotationSets = (
   solutionAnnotations: DiagramAnnotation[],
   tokens: DiagramToken[]
 ): DiagramComparisonResult => {
-  const canonicalStudent = buildCanonicalComparisonAnnotations(studentAnnotations, tokens);
-  const canonicalSolution = buildCanonicalComparisonAnnotations(solutionAnnotations, tokens);
+  const canonicalStudent = canonicalizeDiagramAnnotations(studentAnnotations, tokens);
+  const canonicalSolution = canonicalizeDiagramAnnotations(solutionAnnotations, tokens);
   const solutionIds = new Set(canonicalSolution.map(annotation => annotation.id));
   const studentIds = new Set(canonicalStudent.map(annotation => annotation.id));
   const matchedIds = canonicalStudent
@@ -562,6 +633,8 @@ export const compareDiagramAnnotationSets = (
   const extraIds = canonicalStudent
     .filter(annotation => !solutionIds.has(annotation.id))
     .map(annotation => annotation.id);
+  const missingAnnotations = canonicalSolution.filter(annotation => !studentIds.has(annotation.id));
+  const extraAnnotations = canonicalStudent.filter(annotation => !solutionIds.has(annotation.id));
   const matched = matchedIds.length;
   const expected = canonicalSolution.length;
   const extra = extraIds.length;
@@ -575,5 +648,8 @@ export const compareDiagramAnnotationSets = (
     matchedIds,
     missingIds,
     extraIds,
+    differences: buildComparisonDifferences(missingAnnotations, extraAnnotations, tokens),
+    canonicalStudentAnnotations: canonicalStudent,
+    canonicalSolutionAnnotations: canonicalSolution,
   };
 };

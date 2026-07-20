@@ -7,15 +7,31 @@ import ContentRenderer from './content-renderer';
 import { ExerciseErrorBoundary } from './exercise-error-boundary';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { isExerciseType } from '@/src/utils/lessonUtils';
+import { DiagramAttempt } from '@/src/features/sentence-diagramming';
+import type { ExerciseAnswerEvent, RuntimeMode } from '@/src/types/runtime-mode';
+import type { ResolvedGeneratedExerciseState } from './content-renderer';
 
 interface PageTemplateProps {
   page: Page;
   pageIndex?: number;
-  onExerciseComplete?: (itemIndex: number, score: number) => void;
+  onExerciseComplete?: (exerciseId: string, score: number) => void;
+  runtimeMode?: RuntimeMode;
+  onAnswer?: (event: ExerciseAnswerEvent) => void;
+  resolvedExerciseState?: Record<string, ResolvedGeneratedExerciseState>;
   onPageComplete?: () => void;
+  onDiagrammingAttempt?: (itemIndex: number, exerciseId: string, attempt: DiagramAttempt) => void;
 }
 
-export const PageTemplate: React.FC<PageTemplateProps> = ({ page, pageIndex, onExerciseComplete, onPageComplete }) => {
+export const PageTemplate: React.FC<PageTemplateProps> = ({
+  page,
+  pageIndex,
+  onExerciseComplete,
+  runtimeMode = 'practice',
+  onAnswer,
+  resolvedExerciseState,
+  onPageComplete,
+  onDiagrammingAttempt,
+}) => {
   const [completedExercises, setCompletedExercises] = useState(new Set<number>());
 
   const exerciseItems = page.items.filter(item => isExerciseType(item.type));
@@ -25,11 +41,9 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({ page, pageIndex, onE
     (itemIndex: number, score: number) => {
       const item = page.items[itemIndex];
 
-      if (onExerciseComplete) {
-        onExerciseComplete(itemIndex, score);
-      }
-
       if (isExerciseType(item.type)) {
+        onExerciseComplete?.(item.id, score);
+
         const newCompleted = new Set(completedExercises);
         newCompleted.add(itemIndex);
         setCompletedExercises(newCompleted);
@@ -73,7 +87,11 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({ page, pageIndex, onE
               content={item}
               pageIndex={pageIndex}
               itemIndex={index}
+              runtimeMode={runtimeMode}
+              onAnswer={onAnswer}
+              resolvedExerciseState={resolvedExerciseState?.[item.id]}
               onComplete={(score: number) => handleItemComplete(index, score)}
+              onDiagrammingAttempt={attempt => onDiagrammingAttempt?.(index, item.id, attempt)}
             />
           </ExerciseErrorBoundary>
         </motion.div>

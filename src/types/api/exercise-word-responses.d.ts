@@ -4,6 +4,8 @@ export type VerbFormPath = {
   mood: string;
   person: string;
   number: string;
+  case?: string;
+  gender?: string;
 };
 
 export type NounFormPath = {

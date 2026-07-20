@@ -8,6 +8,8 @@ import { Button } from '@/src/components/ui/button';
 import { LessonSummary } from '@/src/types/lesson';
 import Link from 'next/link';
 import React from 'react';
+import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
+import { PracticeCategoryChips } from '@/src/components/ui/admin/practice-categories/PracticeCategoryChips';
 
 interface SortableLessonItemProps {
   lesson: LessonSummary;
@@ -42,13 +44,23 @@ export function SortableLessonItem({ lesson, id }: SortableLessonItemProps) {
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
-          <h3 className="font-medium text-gray-900 truncate">{lesson.title}</h3>
+          <div className="min-w-0 flex-1 font-medium text-gray-900" role="heading" aria-level={3}>
+            <SimpleRichDisplay content={lesson.title} className="truncate" />
+          </div>
           <Badge variant="default" className="shrink-0">
             Live
           </Badge>
         </div>
 
-        {lesson.description && <p className="text-sm text-gray-600 line-clamp-1 mb-2">{lesson.description}</p>}
+        {lesson.description && (
+          <div className="text-sm text-gray-600 line-clamp-1 mb-2">
+            <SimpleRichDisplay content={lesson.description} />
+          </div>
+        )}
+
+        {lesson.type !== 'normal' && lesson.practiceCategories && lesson.practiceCategories.length > 0 && (
+          <PracticeCategoryChips categories={lesson.practiceCategories} maxVisible={2} className="mb-2" />
+        )}
 
         <div className="flex items-center gap-4 text-xs text-gray-500">
           <div className="flex items-center gap-1">

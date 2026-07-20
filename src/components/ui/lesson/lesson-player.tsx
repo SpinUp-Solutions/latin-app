@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { LessonWithProgress } from '@/src/types/lesson';
 import { BookOpen, Headphones, CheckCircle } from 'lucide-react';
@@ -13,43 +13,65 @@ import LessonNavigation from '../exercises/lesson-navigation';
 import {
   useMarkExerciseCompleteMutation,
   useUpdatePageProgressMutation,
-  useMarkLessonCompleteMutation,
+  useFinishLessonMutation,
 } from '@/src/store/api/lessonApi';
 import { useAuth } from '@/src/hooks/useAuth';
 import { toast } from 'sonner';
+import { auth } from '@/src/services/firebase';
+import { DiagramAttempt } from '@/src/features/sentence-diagramming';
+import { RequiredExercise } from '@/src/utils/lessonProgress';
+import { stripHtmlTags } from '@/src/utils/exercises';
+import type { ExerciseAnswerEvent, RuntimeMode } from '@/src/types/runtime-mode';
+import type { ResolvedGeneratedExerciseState } from './content-renderer';
 
 interface LessonPlayerProps {
   lesson: LessonWithProgress;
   navigationPlacement?: 'fixed' | 'contained';
+  trackProgress?: boolean;
+  runtimeMode?: RuntimeMode;
+  onAnswer?: (event: ExerciseAnswerEvent) => void;
+  resolvedExerciseState?: Record<string, ResolvedGeneratedExerciseState>;
 }
 
-export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson, navigationPlacement = 'fixed' }) => {
+export const LessonPlayer: React.FC<LessonPlayerProps> = ({
+  lesson,
+  navigationPlacement = 'fixed',
+  trackProgress = true,
+  runtimeMode,
+  onAnswer,
+  resolvedExerciseState,
+}) => {
+  const effectiveRuntimeMode = runtimeMode ?? (trackProgress ? 'practice' : 'preview');
+  const shouldTrackProgress = trackProgress && effectiveRuntimeMode === 'practice';
   const { user } = useAuth();
   const [markExerciseComplete] = useMarkExerciseCompleteMutation();
   const [updatePageProgress] = useUpdatePageProgressMutation();
-  const [markLessonComplete] = useMarkLessonCompleteMutation();
+  const [finishLesson, { isLoading: isFinishing }] = useFinishLessonMutation();
+  const [missingExercises, setMissingExercises] = useState<RequiredExercise[]>([]);
+  const lastVisitedPageId = useRef<string | null>(null);
 
   const [currentPageIndex, setCurrentPageIndex] = useState(
-    Math.min(lesson.currentPageIndex || 0, lesson.pages.length - 1)
+    Math.max(0, Math.min(lesson.furthestPageIndex ?? lesson.currentPageIndex ?? 0, lesson.pages.length - 1))
   );
 
   const currentPage = lesson.pages[currentPageIndex];
   const totalPages = lesson.pages.length;
 
+  useEffect(() => {
+    if (!shouldTrackProgress || !user?.uid || !currentPage?.id || lastVisitedPageId.current === currentPage.id) return;
+    lastVisitedPageId.current = currentPage.id;
+    updatePageProgress({ userId: user.uid, lessonId: lesson.id, pageId: currentPage.id })
+      .unwrap()
+      .catch(() => toast.error('Unable to save your page progress.'));
+  }, [currentPage?.id, lesson.id, shouldTrackProgress, updatePageProgress, user?.uid]);
+
   const handleNext = useCallback(() => {
     if (currentPageIndex < totalPages - 1) {
       const newPageIndex = currentPageIndex + 1;
       setCurrentPageIndex(newPageIndex);
-
-      if (user?.uid && newPageIndex > (lesson.currentPageIndex || 0)) {
-        updatePageProgress({
-          userId: user.uid,
-          lessonId: lesson.id,
-          currentPageIndex: newPageIndex,
-        });
-      }
+      setMissingExercises([]);
     }
-  }, [currentPageIndex, totalPages, user?.uid, lesson.id, lesson.currentPageIndex, updatePageProgress]);
+  }, [currentPageIndex, totalPages]);
 
   const handlePageComplete = useCallback(() => {
     handleNext();
@@ -58,6 +80,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson, navigationPl
   const handlePrevious = useCallback(() => {
     if (currentPageIndex > 0) {
       setCurrentPageIndex(currentPageIndex - 1);
+      setMissingExercises([]);
     }
   }, [currentPageIndex]);
 
@@ -65,16 +88,9 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson, navigationPl
     (newPageIndex: number) => {
       if (newPageIndex < 0 || newPageIndex >= totalPages || newPageIndex === currentPageIndex) return;
       setCurrentPageIndex(newPageIndex);
-
-      if (user?.uid && newPageIndex > (lesson.currentPageIndex || 0)) {
-        updatePageProgress({
-          userId: user.uid,
-          lessonId: lesson.id,
-          currentPageIndex: newPageIndex,
-        });
-      }
+      setMissingExercises([]);
     },
-    [currentPageIndex, totalPages, user?.uid, lesson.id, lesson.currentPageIndex, updatePageProgress]
+    [currentPageIndex, totalPages]
   );
 
   const handleAudioEnded = useCallback(() => {
@@ -84,32 +100,65 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson, navigationPl
   const { audioRef, isPlaying, togglePlay } = useAudio(currentPage?.audioPath, handleAudioEnded);
 
   const handleExerciseComplete = useCallback(
-    (itemIndex: number, score: number) => {
-      if (!user?.uid) return;
+    (exerciseId: string, score: number) => {
+      if (!shouldTrackProgress || !user?.uid) return;
 
-      const exerciseId = `page${currentPageIndex}-item${itemIndex}`;
       markExerciseComplete({
         userId: user.uid,
         lessonId: lesson.id,
         exerciseId,
         score,
-      });
+      })
+        .unwrap()
+        .catch(() => toast.error('Unable to save your exercise progress. Please try again.'));
     },
-    [markExerciseComplete, user?.uid, lesson.id, currentPageIndex]
+    [markExerciseComplete, user?.uid, lesson.id, shouldTrackProgress]
+  );
+
+  const handleDiagrammingAttempt = useCallback(
+    async (itemIndex: number, exerciseId: string, attempt: DiagramAttempt) => {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) return;
+
+      try {
+        await fetch('/api/diagramming-attempts', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            lessonId: lesson.id,
+            pageIndex: currentPageIndex,
+            itemIndex,
+            exerciseId,
+            appVersion: process.env.NEXT_PUBLIC_APP_VERSION || 'unknown',
+            studentAnnotations: attempt.studentAnnotations,
+          }),
+        });
+      } catch (error) {
+        // Auditing must never block a student from receiving exercise feedback.
+        console.warn('Unable to record diagramming attempt', error);
+      }
+    },
+    [lesson.id, currentPageIndex]
   );
 
   const isListeningLesson = lesson.type === 'listening';
   const isLessonCompleted = lesson.status === 'completed';
-
-  const handleMarkLessonComplete = useCallback(async () => {
-    if (!user?.uid) return;
-    try {
-      await markLessonComplete({ userId: user.uid, lessonId: lesson.id, score: 100 }).unwrap();
-      toast.success('Lesson marked as completed!');
-    } catch {
-      toast.error('Failed to mark lesson as completed');
+  const handleFinishLesson = useCallback(async () => {
+    if (!shouldTrackProgress) {
+      toast.info('Preview mode: progress is not tracked.');
+      return;
     }
-  }, [user?.uid, lesson.id, markLessonComplete]);
+    if (!user?.uid || !currentPage?.id) return;
+    try {
+      await finishLesson({ userId: user.uid, lessonId: lesson.id, finalPageId: currentPage.id }).unwrap();
+      setMissingExercises([]);
+      toast.success('Lesson completed!');
+    } catch (error) {
+      const data = (error as { data?: { error?: string; missingExercises?: RequiredExercise[] } }).data;
+      setMissingExercises(data?.missingExercises || []);
+      toast.error(data?.error || 'Failed to finish the lesson.');
+    }
+  }, [currentPage?.id, finishLesson, lesson.id, shouldTrackProgress, user?.uid]);
 
   if (!lesson || !currentPage) {
     return (
@@ -187,29 +236,35 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson, navigationPl
                   key={currentPage.id}
                   page={currentPage}
                   pageIndex={currentPageIndex}
+                  runtimeMode={effectiveRuntimeMode}
+                  onAnswer={onAnswer}
+                  resolvedExerciseState={resolvedExerciseState}
                   onExerciseComplete={handleExerciseComplete}
                   onPageComplete={handlePageComplete}
+                  onDiagrammingAttempt={handleDiagrammingAttempt}
                 />
               </AnimatePresence>
             </div>
           </div>
 
-          {isListeningLesson && (
-            <div className="flex justify-center pt-4 border-t border-border mt-4">
-              {isLessonCompleted ? (
-                <div className="text-roman-green font-medium flex items-center gap-2">
-                  <CheckCircle className="h-5 w-5" />
-                  Completed
-                </div>
-              ) : (
-                <Button
-                  onClick={handleMarkLessonComplete}
-                  variant="outline"
-                  className="text-roman-green border-roman-green/30 hover:bg-roman-green/10">
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Mark as Completed
-                </Button>
-              )}
+          {currentPageIndex === totalPages - 1 && missingExercises.length > 0 && (
+            <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4">
+              <p className="font-medium text-amber-900">
+                Complete {missingExercises.length} remaining {missingExercises.length === 1 ? 'exercise' : 'exercises'}{' '}
+                before finishing.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {missingExercises.map(exercise => (
+                  <Button
+                    key={exercise.exerciseId}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleGoToPage(exercise.pageIndex)}>
+                    Page {exercise.pageIndex + 1}: {stripHtmlTags(exercise.title)}
+                  </Button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -220,10 +275,12 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ lesson, navigationPl
             placement={navigationPlacement}
             onPrevious={handlePrevious}
             onNext={handleNext}
+            onFinish={handleFinishLesson}
             onGoToPage={handleGoToPage}
             onTogglePlay={togglePlay}
             isPlaying={isPlaying}
             hasAudio={hasAudio}
+            isFinishing={isFinishing}
           />
         </RomanCardContent>
       </RomanCard>

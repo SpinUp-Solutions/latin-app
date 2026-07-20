@@ -77,6 +77,8 @@ export interface FeedbackMachineConfig {
 
 export interface BaseExercise extends ContentItem {
   instructions: string;
+  /** Required only when the exercise is persisted inside a test version. */
+  maxPoints?: number;
   itemProgressionDelay?: number;
   feedbackConfig: FeedbackConfig;
 }

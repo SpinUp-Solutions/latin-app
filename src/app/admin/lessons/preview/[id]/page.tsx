@@ -82,7 +82,7 @@ function AdminLessonPreviewPage() {
       <main className="container mx-auto px-6 py-8">
         <div className="max-w-3xl mx-auto">
           <h2 className="text-2xl font-serif text-gray-800 mb-6">{previewLesson.title}</h2>
-          <LessonPlayer lesson={previewLesson} />
+          <LessonPlayer lesson={previewLesson} trackProgress={false} />
         </div>
       </main>
     </div>

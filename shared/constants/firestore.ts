@@ -1,2 +1,9 @@
 export const VOCABULARY_WORDS_COLLECTION = 'vocabulary_words_v5';
 export const VOCABULARY_WORD_REQUESTS_COLLECTION = 'vocabulary_word_requests';
+export const PRACTICE_CATEGORIES_COLLECTION = 'practiceCategories';
+export const PRACTICE_CATEGORY_MEMBERSHIPS_COLLECTION = 'practiceCategoryMemberships';
+export const LEARNING_UNITS_COLLECTION = 'lessons';
+export const TEST_VERSIONS_COLLECTION = 'testVersions';
+export const MOCK_TESTS_COLLECTION = 'mockTests';
+export const TEST_ATTEMPTS_COLLECTION = 'testAttempts';
+export const TEST_ATTEMPT_SESSIONS_COLLECTION = 'testAttemptSessions';

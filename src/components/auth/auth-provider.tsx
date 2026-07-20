@@ -1,14 +1,16 @@
 'use client';
 
-import React, { useEffect } from 'react';
-import { useDispatch } from 'react-redux';
+import React, { useEffect, useRef } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '@/src/services/firebase';
 import { setUser, CustomUser, FirestoreUserDataSchema } from '@/src/store/slices/authSlice';
+import { appApi } from '@/src/store/api/appApi';
+import { useAppDispatch } from '@/src/store/hooks';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const dispatch = useDispatch();
+  const dispatch = useAppDispatch();
+  const authenticatedUid = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
     let unsubDoc: (() => void) | null = null;
@@ -27,6 +29,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const unsubAuth = onAuthStateChanged(auth, firebaseUser => {
       cleanupDoc();
+
+      const nextUid = firebaseUser?.uid ?? null;
+      if (authenticatedUid.current !== undefined && authenticatedUid.current !== nextUid) {
+        dispatch(appApi.util.resetApiState());
+      }
+      authenticatedUid.current = nextUid;
 
       if (firebaseUser) {
         // Use onSnapshot instead of getDoc so we react immediately when

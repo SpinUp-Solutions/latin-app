@@ -1,25 +1,23 @@
-import { createApi } from '@reduxjs/toolkit/query/react';
 import { Lesson, LessonSummary, LessonWithProgress } from '@/src/types/lesson';
 import { extractTooltipsFromLesson } from '@/src/utils/tooltipUtils';
 import { TooltipData } from '@/src/types/tooltip';
-import { createAuthenticatedBaseQuery } from './baseQuery';
+import { buildLessonMutationPayload } from '@/src/utils/practiceCategoryLessons';
+import { appApi } from './appApi';
+import { PRACTICE_CATEGORY_ASSIGNMENTS_TAG } from './tags';
 
-export const lessonApi = createApi({
-  reducerPath: 'lessonApi',
-  baseQuery: createAuthenticatedBaseQuery(),
-  tagTypes: ['Lesson', 'LessonList', 'StudentLesson', 'Recovery'],
-  keepUnusedDataFor: 60 * 5,
-  refetchOnMountOrArgChange: 30,
-  refetchOnFocus: true,
-  refetchOnReconnect: true,
+export const lessonApi = appApi.injectEndpoints({
   endpoints: builder => ({
     getLessons: builder.query<LessonSummary[], void>({
       query: () => '/admin/lessons',
       transformResponse: (response: { lessons: LessonSummary[] }) => response.lessons,
       providesTags: result =>
         result
-          ? [...result.map(({ id }) => ({ type: 'Lesson' as const, id })), { type: 'LessonList', id: 'LIST' }]
-          : [{ type: 'LessonList', id: 'LIST' }],
+          ? [
+              ...result.map(({ id }) => ({ type: 'Lesson' as const, id })),
+              { type: 'LessonList', id: 'LIST' },
+              PRACTICE_CATEGORY_ASSIGNMENTS_TAG,
+            ]
+          : [{ type: 'LessonList', id: 'LIST' }, PRACTICE_CATEGORY_ASSIGNMENTS_TAG],
     }),
 
     getStudentLessons: builder.query<LessonWithProgress[], string | void>({
@@ -38,14 +36,17 @@ export const lessonApi = createApi({
         const tooltips = extractTooltipsFromLesson(lesson);
         return { lesson, tooltips };
       },
-      providesTags: (result, error, { lessonId }) => [{ type: 'Lesson', id: lessonId }],
+      providesTags: (result, error, { lessonId }) => [
+        { type: 'Lesson', id: lessonId },
+        PRACTICE_CATEGORY_ASSIGNMENTS_TAG,
+      ],
     }),
 
     createLesson: builder.mutation<{ lesson: Lesson }, Lesson>({
       query: lesson => ({
         url: '/admin/lessons',
         method: 'POST',
-        body: lesson,
+        body: buildLessonMutationPayload(lesson),
       }),
       invalidatesTags: [{ type: 'LessonList', id: 'LIST' }],
     }),
@@ -54,7 +55,7 @@ export const lessonApi = createApi({
       query: lesson => ({
         url: '/admin/lessons',
         method: 'PUT',
-        body: lesson,
+        body: buildLessonMutationPayload(lesson),
       }),
       invalidatesTags: (result, error, lesson) => [
         { type: 'Lesson', id: lesson.id },
@@ -98,46 +99,44 @@ export const lessonApi = createApi({
     }),
 
     markExerciseComplete: builder.mutation<
-      { success: boolean },
+      { success: boolean; lessonCompleted: boolean },
       { userId: string; lessonId: string; exerciseId: string; score: number }
     >({
       query: ({ userId, lessonId, exerciseId, score }) => ({
         url: `/progress/${userId}/${lessonId}`,
         method: 'POST',
         body: {
+          action: 'complete-exercise',
           exerciseId,
           score,
-          completedAt: new Date().toISOString(),
         },
       }),
       invalidatesTags: () => [{ type: 'StudentLesson', id: 'LIST' }],
     }),
 
     updatePageProgress: builder.mutation<
-      { success: boolean },
-      { userId: string; lessonId: string; currentPageIndex: number }
+      { success: boolean; furthestPageIndex: number },
+      { userId: string; lessonId: string; pageId: string }
     >({
-      query: ({ userId, lessonId, currentPageIndex }) => ({
+      query: ({ userId, lessonId, pageId }) => ({
         url: `/progress/${userId}/${lessonId}`,
         method: 'POST',
         body: {
-          currentPageIndex,
-          completedAt: new Date().toISOString(),
+          action: 'visit-page',
+          pageId,
         },
       }),
       invalidatesTags: () => [{ type: 'StudentLesson', id: 'LIST' }],
     }),
 
-    markLessonComplete: builder.mutation<{ success: boolean }, { userId: string; lessonId: string; score?: number }>({
-      query: ({ userId, lessonId, score }) => ({
-        url: `/progress/${userId}/${lessonId}`,
+    finishLesson: builder.mutation<
+      { success: boolean; lessonCompleted: boolean; alreadyCompleted: boolean },
+      { userId: string; lessonId: string; finalPageId: string }
+    >({
+      query: ({ userId, lessonId, finalPageId }) => ({
+        url: `/progress/${userId}/${lessonId}/complete`,
         method: 'POST',
-        body: {
-          status: 'completed',
-          completedAt: new Date().toISOString(),
-          progress: 100,
-          score,
-        },
+        body: { finalPageId },
       }),
       invalidatesTags: () => [{ type: 'StudentLesson', id: 'LIST' }],
     }),
@@ -177,7 +176,7 @@ export const lessonApi = createApi({
       query: data => ({
         url: '/admin/lessons/recovery',
         method: 'POST',
-        body: data,
+        body: { ...data, lesson: buildLessonMutationPayload(data.lesson) },
       }),
       invalidatesTags: [{ type: 'Recovery', id: 'LIST' }],
     }),
@@ -215,7 +214,7 @@ export const {
   useReorderLessonsMutation,
   useMarkExerciseCompleteMutation,
   useUpdatePageProgressMutation,
-  useMarkLessonCompleteMutation,
+  useFinishLessonMutation,
   // Recovery hooks
   useGetRecoveryItemsQuery,
   useSaveToRecoveryMutation,

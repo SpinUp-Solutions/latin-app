@@ -2,7 +2,7 @@ import React from 'react';
 import { VocabularyPoolContent } from '@/src/types/lesson';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonEditorSlice';
-import { SimpleInput, SimpleSelect } from '@/src/components/ui/form-components';
+import { SimpleInput } from '@/src/components/ui/form-components';
 import { AudioUploadSection } from './AudioUploadSection';
 
 export const VocabularyPoolEditor: React.FC = () => {
@@ -26,16 +26,6 @@ export const VocabularyPoolEditor: React.FC = () => {
         placeholder="Enter vocabulary pool title..."
       />
 
-      <SimpleSelect
-        label="Study Mode"
-        value={editingContent.studyMode || 'flashcards'}
-        onChange={value => updateContent({ studyMode: value as 'flashcards' | 'list' | 'quiz' })}
-        options={[
-          { value: 'flashcards', label: 'Flashcards' },
-          { value: 'list', label: 'List' },
-          { value: 'quiz', label: 'Quiz' },
-        ]}
-      />
 
       <AudioUploadSection
         audioPath={editingContent.audioPath}

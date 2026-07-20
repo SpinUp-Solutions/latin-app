@@ -66,6 +66,7 @@ export const SentenceDiagramToolbar: React.FC<SentenceDiagramToolbarProps> = ({
               <button
                 key={tool.kind}
                 type="button"
+                aria-pressed={Boolean(isActive)}
                 disabled={disabled}
                 onMouseDown={event => event.preventDefault()}
                 onClick={() => onToolClick(tool.kind)}

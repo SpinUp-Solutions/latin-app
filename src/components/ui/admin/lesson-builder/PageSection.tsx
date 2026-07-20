@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { ReactNode, useState } from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
 import { Plus, Trash2, GripVertical, Copy } from 'lucide-react';
@@ -28,6 +28,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useDispatch } from 'react-redux';
 import { reorderPages, updatePageAutoAdvance } from '@/src/store/slices/lessonEditorSlice';
 import { PasteZone } from '../../core/clipboard';
+import type { PageDocumentEditorKind } from '@/src/lib/page-document-draft';
 
 interface PageSectionProps {
   title: string;
@@ -41,6 +42,8 @@ interface PageSectionProps {
   onAddContent: (pageIndex: number, content: RenderableContentItem) => void;
   onEditContent: (pageIndex: number, itemIndex: number) => void;
   onRemoveContent: (pageIndex: number, itemIndex: number) => void;
+  renderContentItemMeta?: (pageIndex: number, item: RenderableContentItem, itemIndex: number) => ReactNode;
+  editorKind?: PageDocumentEditorKind;
 }
 
 interface SortablePageProps {
@@ -53,9 +56,11 @@ interface SortablePageProps {
   onAddContent: (pageIndex: number, content: RenderableContentItem) => void;
   onEditContent: (pageIndex: number, itemIndex: number) => void;
   onRemoveContent: (pageIndex: number, itemIndex: number) => void;
+  renderContentItemMeta?: (pageIndex: number, item: RenderableContentItem, itemIndex: number) => ReactNode;
   onUpdatePageAutoAdvance: (pageIndex: number, autoAdvance: { enabled: boolean; delay: number }) => void;
   isAutoAdvanceExpanded: boolean;
   onToggleAutoAdvance: () => void;
+  editorKind: PageDocumentEditorKind;
 }
 
 const SortablePage: React.FC<SortablePageProps> = ({
@@ -68,9 +73,11 @@ const SortablePage: React.FC<SortablePageProps> = ({
   onAddContent,
   onEditContent,
   onRemoveContent,
+  renderContentItemMeta,
   onUpdatePageAutoAdvance,
   isAutoAdvanceExpanded,
   onToggleAutoAdvance,
+  editorKind,
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: page.id });
 
@@ -81,7 +88,7 @@ const SortablePage: React.FC<SortablePageProps> = ({
   };
 
   const handleAddContent = (contentType: string) => {
-    const newContent = createNewContent(contentType);
+    const newContent = createNewContent(contentType, editorKind);
     onAddContent(pageIndex, newContent);
   };
 
@@ -123,6 +130,7 @@ const SortablePage: React.FC<SortablePageProps> = ({
         pageIndex={pageIndex}
         onEditContent={(itemIndex: number) => onEditContent(pageIndex, itemIndex)}
         onRemoveContent={(itemIndex: number) => onRemoveContent(pageIndex, itemIndex)}
+        renderItemMeta={(item, itemIndex) => renderContentItemMeta?.(pageIndex, item, itemIndex)}
       />
 
       <PageAutoAdvanceEditor
@@ -164,6 +172,8 @@ export const PageSection: React.FC<PageSectionProps> = ({
   onAddContent,
   onEditContent,
   onRemoveContent,
+  renderContentItemMeta,
+  editorKind = 'lesson',
 }) => {
   const dispatch = useDispatch();
   const [expandedAutoAdvancePageId, setExpandedAutoAdvancePageId] = useState<string | null>(null);
@@ -236,9 +246,11 @@ export const PageSection: React.FC<PageSectionProps> = ({
                 onAddContent={onAddContent}
                 onEditContent={onEditContent}
                 onRemoveContent={onRemoveContent}
+                renderContentItemMeta={renderContentItemMeta}
                 onUpdatePageAutoAdvance={handleUpdatePageAutoAdvance}
                 isAutoAdvanceExpanded={expandedAutoAdvancePageId === page.id}
                 onToggleAutoAdvance={() => handleToggleAutoAdvance(page.id)}
+                editorKind={editorKind}
               />
             ))}
           </SortableContext>

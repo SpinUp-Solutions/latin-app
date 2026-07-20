@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { ReactNode } from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Edit, Trash2, Type, Lightbulb, Table, Book, Library, Target, GripVertical, Copy } from 'lucide-react';
 import { RenderableContentItem } from '@/src/types/page';
@@ -7,12 +7,14 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useClipboard } from '../../core/clipboard';
 import { toast } from 'sonner';
+import { getContentTypeLabel } from '@/src/lib/content/registry';
 
 interface ContentItemProps {
   item: RenderableContentItem;
   onEdit: () => void;
   onRemove: () => void;
   isDraggable?: boolean;
+  meta?: ReactNode;
 }
 
 const getContentIcon = (type: string) => {
@@ -32,8 +34,9 @@ const getContentIcon = (type: string) => {
   }
 };
 
-export const ContentItem: React.FC<ContentItemProps> = ({ item, onEdit, onRemove, isDraggable = false }) => {
+export const ContentItem: React.FC<ContentItemProps> = ({ item, onEdit, onRemove, isDraggable = false, meta }) => {
   const Icon = getContentIcon(item.type);
+  const typeLabel = getContentTypeLabel(item.type);
   const { copyItem } = useClipboard();
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -49,7 +52,7 @@ export const ContentItem: React.FC<ContentItemProps> = ({ item, onEdit, onRemove
 
   const handleCopy = () => {
     copyItem(item);
-    toast.success(`Copied "${item.title || item.type}" to clipboard`);
+    toast.success(`Copied "${item.title || typeLabel}" to clipboard`);
   };
 
   return (
@@ -72,9 +75,10 @@ export const ContentItem: React.FC<ContentItemProps> = ({ item, onEdit, onRemove
         <span className="text-sm font-medium">
           <SimpleRichDisplay content={item.title || ''} />
         </span>
-        <span className="text-xs text-gray-500">({item.type})</span>
+        <span className="text-xs text-gray-500">({typeLabel})</span>
       </div>
-      <div className="flex gap-0.5">
+      <div className="flex items-center gap-0.5">
+        {meta}
         <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleCopy} title="Copy content">
           <Copy className="h-3 w-3" />
         </Button>
