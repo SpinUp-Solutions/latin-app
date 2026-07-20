@@ -67,16 +67,14 @@ export const createNewContent = (
       return withScoring({
         id: baseId,
         type: 'vocabulary',
-        title: 'Vocabulary List',
+        title: 'Special Vocabulary',
         vocabularyItems: [],
-        studyMode: 'flashcards',
       });
     case 'vocabulary-pool':
       return withScoring({
         id: baseId,
         type: 'vocabulary-pool',
         title: 'Vocabulary Pool',
-        studyMode: 'flashcards',
       });
     case 'matching':
       return withScoring({
@@ -301,7 +299,7 @@ export const createNewContent = (
       return withScoring({
         id: baseId,
         type: 'generated-translation',
-        title: 'Generated Translation Exercise',
+        title: 'Definitions and Dictionary Entries',
         instructions: 'Translate between Latin and English based on the prompt.',
         audioPath: null,
         itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
@@ -322,7 +320,7 @@ export const createNewContent = (
       return withScoring({
         id: baseId,
         type: 'generated-form-identification',
-        title: 'Generated Form Identification Exercise',
+        title: 'Morphology',
         instructions: 'Identify the grammatical features of each Latin word.',
         audioPath: null,
         itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
@@ -343,7 +341,7 @@ export const createNewContent = (
       return withScoring({
         id: baseId,
         type: 'translation-grading',
-        title: '[WIP] Translation Grading Exercise',
+        title: 'Grade Translation',
         instructions: 'Translate the Latin sentence into English.',
         audioPath: null,
         itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,

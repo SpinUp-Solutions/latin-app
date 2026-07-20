@@ -2,7 +2,7 @@
 
 - Status: Working draft
 - Last updated: 2026-07-16
-- Implementation status: Phase 2 complete; pre-Phase 3 schema correction complete — 2026-07-16
+- Implementation status: Phase 3 complete — 2026-07-16
 
 ## Purpose
 
@@ -15,9 +15,9 @@ This document is the shared planning space for the refactor. Settled choices are
 - Lesson documents are stored in the Firestore `lessons` collection and use the `Lesson` schema.
 - Lesson behavior is specialized with `type: vocab | normal | sentence-diagramming | listening`.
 - Lessons contain ordered pages with both instructional content and exercises.
-- The test POC stores a separate `TestDefinition` in the `tests` collection. It now persists lesson-style `pages` plus redundant `items` and deprecated `exercises` adapters for compatibility with the original flat POC.
-- POC point values live in `ScoredTestExercise` wrappers and in a separate local points map rather than inline on exercise content.
-- The POC test builder loads a lesson-shaped authoring document into `lessonEditorSlice` to reuse the existing page and content editors. The adapter is not persisted as a lesson.
+- Normal-test containers are stored as `kind: 'test'` documents in the shared `lessons` collection, while their independently editable page content is stored in `testVersions`. Creating a test saves its non-live container and first valid rotation version atomically.
+- The shared test-version editor persists lesson-style `pages` with inline exercise `maxPoints`; the server validates content and recomputes page, item, exercise, and point summaries on every version write.
+- The former POC `tests` collection is no longer read or written by the admin test APIs. Its compatibility types and utilities remain isolated until Phase 7 cleanup; POC documents are not migrated.
 - Test attempts and preview scores are held in browser memory and are not persisted.
 - Admin lesson, test, and practice-category data flow through one authenticated RTK Query `appApi` using `createAuthenticatedBaseQuery`. The store registers that shared reducer and middleware once; the unrelated vocabulary APIs remain separate until they are touched.
 - Lesson exercise progress now uses persisted content-item IDs. Schema-v1 positional exercise IDs are normalized to stable IDs on server writes and can be migrated through the admin progress migration route.
@@ -154,11 +154,7 @@ type LearningUnit = LessonUnit | TestUnit;
 Example for Test 3 after Version D is assigned as a mock:
 
 ```ts
-rotationVersions: [
-  { versionId: 'a' },
-  { versionId: 'b' },
-  { versionId: 'c' },
-];
+rotationVersions: [{ versionId: 'a' }, { versionId: 'b' }, { versionId: 'c' }];
 ```
 
 Only A, B, and C are eligible for normal Test 3 attempts. An indexed query for active mocks with `parent.testId === 'test-3'` joins D's mock card into the same admin overview.
@@ -996,14 +992,15 @@ Implementation notes:
 
 ### Phase 3: Learning-unit API
 
-Status: **Pending — prerequisites complete; API persistence work not started**
+Status: **Complete — 2026-07-16**
 
 Progress checkpoint:
 
 - Complete: corrected `LearningUnit`/`TestUnit` schema and exclusive ownership model.
 - Complete: legacy lesson-only projections and mutation boundaries are kind-aware.
 - Complete: focused domain and compatibility regression coverage.
-- Next: introduce the injected Firestore-backed learning-unit/test-version service and thin API routes.
+- Complete: Firestore-backed learning-unit/test-version services, routes, client endpoints, and admin editor migration.
+- Complete: server-only security-rule boundaries and the composite-index configuration required by the implemented container query and upcoming mock projections.
 
 - Build the learning-unit/test service and error modules on the corrected domain/schema, then add thin Next.js learning-unit and test-version API routes.
 - Optionally backfill existing lessons with `kind: 'lesson'`; the normalizer covers unbackfilled documents either way.
@@ -1013,6 +1010,18 @@ Progress checkpoint:
 - Recompute and persist the four `TestVersion` summary fields on every write; list endpoints project summaries rather than page bodies.
 - Lock down `testVersions`, `testAttempts`, `testAttemptSessions`, `mockTests`, `userProgress`, and `userProgressMigrationV2Backups` in Firestore security rules, and add the composite indexes required by the new collections (see Storage direction).
 - Retain compatibility routes and redirects during rollout.
+
+Implementation notes:
+
+- Added injectable `LearningUnitService` and `TestService` modules with typed domain errors and shared route error mapping. Normal-test queries read `kind: 'test'` documents from `lessons`; version content reads and writes use `testVersions`.
+- Replaced the POC `/api/admin/tests` persistence with thin authenticated container routes: list/create at `/api/admin/tests`, detail/atomic editor saves at `/api/admin/tests/[id]`, rotation-version list/create at `/api/admin/tests/[id]/versions`, and full version read/update at `/api/admin/test-versions/[versionId]`.
+- Test creation validates the container and first version, derives all four version summaries, then creates both documents in one Firestore transaction. Adding another rotation version is also transactional and only accepts a new version ID, preventing the API from attaching an already-owned version to a second container.
+- Full version writes accept only `id`/`name`/`pages` on create or `name`/`pages` on update. The service recomputes `totalPages`, `totalItems`, `totalExercises`, and `totalPoints`; list and container-detail reads use a Firestore field mask that excludes `pages`.
+- Migrated `testApi` and the current create/edit/manage/preview screens from `TestDefinition` to `TestUnit` plus `TestVersion`. The existing `/admin/tests/edit/[id]` and `/admin/tests/try/[id]` URLs remain usable and now load the container's first rotation version, so the rollout does not depend on the old `tests` collection.
+- Rechecked every shared-collection legacy consumer. Admin lesson summaries select `kind`; student lessons, `LessonManager`, lesson ordering/publication, progress, recovery, vocabulary-pool guards, and practice-category paths reject test documents before applying lesson defaults. Practice membership remains `lessonId`-based and lesson-only.
+- Added explicit Firestore-rule denials and wildcard exclusions for `testVersions`, `testAttempts`, `testAttemptSessions`, `mockTests`, `userProgress`, and `userProgressMigrationV2Backups`. Added the `kind + updatedAt` container index plus the planned mock dashboard and parent/status indexes. Attempt-history indexes remain deferred until Phase 4 introduces the concrete queries they must support.
+- Did not run the optional lesson `kind` backfill because read-time normalization already covers legacy documents. No Firestore rules, indexes, application code, or data were deployed.
+- Added focused service tests for atomic first-save and editor-update behavior, server-derived summaries, and page-free list projections, plus thin-route tests for strict creation validation. Final verification passed: TypeScript, all 30 Jest suites/121 tests, `git diff --check`, ESLint with zero errors (five pre-existing warnings), and the Next.js 16.2.9 production build.
 
 ### Phase 4: Attempts and retakes
 
@@ -1216,8 +1225,8 @@ The current schema, invariants, workflows, and implementation phases are authori
 | 2026-07-15 | Use a typed shared page-document draft over `lessonEditorSlice` and persist inline exercise `maxPoints`.                                                                             | The existing page, drag/drop, clipboard, tooltip, and content-editor stack stays singular without preserving the POC's redundant test shape.                                                  |
 | 2026-07-15 | Extract one environment-agnostic grader per exercise and call it from practice UI and server submission.                                                                             | Server authority no longer requires a second scoring implementation that can drift from the student exercise behavior.                                                                        |
 | 2026-07-15 | Use a deterministic `testAttemptSessions` pointer for one active attempt per student/origin.                                                                                         | Concurrent starts converge transactionally without relying on an empty query race, while submitted attempts retain independent history IDs.                                                   |
-| 2026-07-16 | Omit `type` from `TestUnit` and harden legacy lesson endpoints by `kind` before applying lesson defaults.                                                                             | `kind: 'test'` already discriminates the union; removing the redundant collision prevents tests from becoming zero-page normal lessons while preserving legacy lesson compatibility.           |
-| 2026-07-16 | Represent delivery through exclusive active-container ownership: `TestUnit.rotationVersions` for normal delivery or one active `MockTest` for mock delivery.                         | Assignment is an atomic ownership transfer, not a mirrored pointer/back-pointer state; a slim exclusivity validator remains necessary because Firestore has no cross-document constraints.     |
-| 2026-07-16 | Use `TestVersion.name` as the only version display name and join parent-linked mocks into test overviews by `parent.testId`.                                                          | Removing the reference label prevents name drift, while the existing mock-parent index preserves the complete admin overview without a parent backlink.                                       |
-| 2026-07-16 | Select least-used versions from the complete projected submitted history for one student/origin; introduce no usage aggregate initially.                                             | A fixed `limit()` would change the all-history guarantee; slim projected histories are expected to stay small, and a rebuildable aggregate remains a monitored scaling escape hatch.           |
-| 2026-07-16 | Split Phase 4 into grading/frozen delivery, attempt lifecycle/selection, and submission/completion/summaries; require explicit removal of `testMode` in cleanup.                      | Independently reviewable changes reduce rollout risk, and a searchable zero-use criterion prevents the temporary compatibility adapter from becoming permanent.                               |
+| 2026-07-16 | Omit `type` from `TestUnit` and harden legacy lesson endpoints by `kind` before applying lesson defaults.                                                                            | `kind: 'test'` already discriminates the union; removing the redundant collision prevents tests from becoming zero-page normal lessons while preserving legacy lesson compatibility.          |
+| 2026-07-16 | Represent delivery through exclusive active-container ownership: `TestUnit.rotationVersions` for normal delivery or one active `MockTest` for mock delivery.                         | Assignment is an atomic ownership transfer, not a mirrored pointer/back-pointer state; a slim exclusivity validator remains necessary because Firestore has no cross-document constraints.    |
+| 2026-07-16 | Use `TestVersion.name` as the only version display name and join parent-linked mocks into test overviews by `parent.testId`.                                                         | Removing the reference label prevents name drift, while the existing mock-parent index preserves the complete admin overview without a parent backlink.                                       |
+| 2026-07-16 | Select least-used versions from the complete projected submitted history for one student/origin; introduce no usage aggregate initially.                                             | A fixed `limit()` would change the all-history guarantee; slim projected histories are expected to stay small, and a rebuildable aggregate remains a monitored scaling escape hatch.          |
+| 2026-07-16 | Split Phase 4 into grading/frozen delivery, attempt lifecycle/selection, and submission/completion/summaries; require explicit removal of `testMode` in cleanup.                     | Independently reviewable changes reduce rollout risk, and a searchable zero-use criterion prevents the temporary compatibility adapter from becoming permanent.                               |

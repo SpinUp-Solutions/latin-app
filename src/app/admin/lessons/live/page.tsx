@@ -106,11 +106,13 @@ function LiveLessonsPage() {
   }, [lessonType]);
 
   useEffect(() => {
-    if (!hasInitializedSelection) {
-      setSelectedLessons(originalLiveIds);
+    if (serverLessons && !hasInitializedSelection) {
+      setSelectedLessons(
+        new Set(serverLessons.filter(lesson => lesson.isLive && lesson.type === lessonType).map(lesson => lesson.id))
+      );
       setHasInitializedSelection(true);
     }
-  }, [hasInitializedSelection, originalLiveIds]);
+  }, [hasInitializedSelection, lessonType, serverLessons]);
 
   // Use the new parameterized selector for efficient filtering
   const filteredLessons = useSelector((state: RootState) => selectFilteredLessons(state, filterStatus, searchQuery));

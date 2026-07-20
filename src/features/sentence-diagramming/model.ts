@@ -400,8 +400,8 @@ export const applyDiagramAnnotation = ({
       annotations,
       error:
         spec.selectionMode === 'exact'
-          ? 'Select exact ending letters inside a single token for this tool.'
-          : 'Select one or more tokens before applying this annotation.',
+          ? 'Select exact characters within a single word for this tool.'
+          : 'Select one or more words before applying this annotation.',
     };
   }
 

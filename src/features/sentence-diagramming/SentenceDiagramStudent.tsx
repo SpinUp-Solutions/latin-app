@@ -254,8 +254,8 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
 
     if (!span) {
       setMessage(
-        kind.startsWith('person-')
-          ? 'Select exact ending letters inside one word before using a person tool.'
+        ANNOTATION_SPECS[kind].selectionMode === 'exact'
+          ? 'Select exact characters within one word before using this tool.'
           : 'Select one or more words before applying a label.'
       );
       return;

@@ -1,7 +1,7 @@
 // Main admin components
 export { LessonBuilder } from './LessonBuilder';
 export { LessonManager } from './LessonManager';
-export { TestBuilder } from './TestBuilder';
+export { TestVersionEditor } from './TestBuilder';
 export { TestManager } from './TestManager';
 export { TestRunner } from './TestRunner';
 

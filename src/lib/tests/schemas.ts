@@ -6,6 +6,12 @@ import { getTestVersionSummaryFields } from './domain';
 
 const optionalAuditFieldSchema = z.string().min(1).optional();
 
+const optionalDescriptionSchema = z
+  .string()
+  .trim()
+  .optional()
+  .transform(value => value ?? '');
+
 const testVersionContentShape = {
   id: firestoreDocumentIdSchema,
   name: z.string().trim().min(1),
@@ -14,7 +20,10 @@ const testVersionContentShape = {
 
 const testVersionInputShapeSchema = z.object(testVersionContentShape).strict();
 
-function refineTestVersionContent(value: z.infer<typeof testVersionInputShapeSchema>, context: z.RefinementCtx) {
+function refineTestVersionContent(
+  value: Pick<z.infer<typeof testVersionInputShapeSchema>, 'pages'>,
+  context: z.RefinementCtx
+) {
   for (const message of validatePageDocumentIds(value.pages, 'Test version')) {
     context.addIssue({ code: 'custom', message, path: ['pages'] });
   }
@@ -73,6 +82,15 @@ function refineTestVersionContent(value: z.infer<typeof testVersionInputShapeSch
 
 export const testVersionInputSchema = testVersionInputShapeSchema.superRefine(refineTestVersionContent);
 
+const testVersionUpdateShapeSchema = z
+  .object({
+    name: testVersionContentShape.name,
+    pages: testVersionContentShape.pages,
+  })
+  .strict();
+
+export const updateTestVersionInputSchema = testVersionUpdateShapeSchema.superRefine(refineTestVersionContent);
+
 const testVersionDocumentShapeSchema = z
   .object({
     ...testVersionContentShape,
@@ -86,6 +104,8 @@ const testVersionDocumentShapeSchema = z
     updatedBy: optionalAuditFieldSchema,
   })
   .strict();
+
+export const testVersionSummaryDocumentSchema = testVersionDocumentShapeSchema.omit({ pages: true });
 
 export const testVersionDocumentSchema = testVersionDocumentShapeSchema.superRefine((value, context) => {
   refineTestVersionContent(value, context);
@@ -143,5 +163,43 @@ export const mockTestDocumentSchema = mockTestShapeSchema.superRefine((value, co
   }
 });
 
+export const createTestUnitInputSchema = z
+  .object({
+    id: firestoreDocumentIdSchema,
+    title: z.string().trim().min(1),
+    description: optionalDescriptionSchema,
+    passingPercentage: passingPercentageSchema,
+  })
+  .strict();
+
+export const createTestWithVersionSchema = z
+  .object({
+    test: createTestUnitInputSchema,
+    version: testVersionInputSchema,
+  })
+  .strict();
+
+export const updateTestUnitInputSchema = z
+  .object({
+    title: z.string().trim().min(1).optional(),
+    description: z.string().trim().optional(),
+    passingPercentage: passingPercentageSchema.optional(),
+  })
+  .strict()
+  .refine(value => Object.keys(value).length > 0, 'At least one test setting must be provided');
+
+export const updateTestWithVersionInputSchema = z
+  .object({
+    versionId: firestoreDocumentIdSchema,
+    test: updateTestUnitInputSchema,
+    version: updateTestVersionInputSchema,
+  })
+  .strict();
+
 export type TestVersionInput = z.infer<typeof testVersionInputSchema>;
+export type UpdateTestVersionInput = z.infer<typeof updateTestVersionInputSchema>;
+export type CreateTestUnitInput = z.infer<typeof createTestUnitInputSchema>;
+export type CreateTestWithVersionInput = z.infer<typeof createTestWithVersionSchema>;
+export type UpdateTestUnitInput = z.infer<typeof updateTestUnitInputSchema>;
+export type UpdateTestWithVersionInput = z.infer<typeof updateTestWithVersionInputSchema>;
 export type MockTestDocument = z.infer<typeof mockTestDocumentSchema>;

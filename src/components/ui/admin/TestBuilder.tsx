@@ -25,58 +25,57 @@ import {
   updatePageTitle,
 } from '@/src/store/slices/lessonEditorSlice';
 import { TEST_VERSION_CONTENT_TYPES } from '@/src/utils/contentTypeConstants';
-import { getTestItems, getTestPages, isScoredTestExercise } from '@/src/utils/testDefinition';
 import { isExerciseType } from '@/src/lib/content/registry';
 import { getTestVersionSummaryFields } from '@/src/lib/tests/domain';
 import { pageDocumentDraftToTestVersion } from '@/src/lib/page-document-draft';
-import type { Exercise } from '@/src/types/exercises';
+import type { CreateTestUnitInput, TestVersionInput } from '@/src/lib/tests/schemas';
+import type { TestUnit } from '@/src/types/learning-unit';
 import type { RenderableContentItem } from '@/src/types/page';
-import type { TestDefinition, TestVersion } from '@/src/types/test';
+import type { TestVersion } from '@/src/types/test';
 import { PageSection } from './lesson-builder/PageSection';
 import { ClipboardProvider } from '@/src/components/ui/core/clipboard';
 import { PassingRequirementControl } from './test-version/PassingRequirementControl';
 import { TestVersionPreview } from './test-version/TestVersionPreview';
 
-interface TestBuilderProps {
-  initialTest?: TestDefinition;
-  onSave: (test: TestDefinition) => Promise<void> | void;
+interface TestVersionEditorProps {
+  initialTest?: TestUnit;
+  initialVersion?: TestVersion;
+  onSave: (value: TestVersionEditorValue) => Promise<void> | void;
   saving?: boolean;
 }
 
-function toInitialVersion(test: TestDefinition | undefined, id: string): TestVersion {
-  const points = new Map(
-    getTestItems(test ?? {}).filter(isScoredTestExercise).map(item => [item.exercise.id, item.maxPoints])
-  );
-  const pages = getTestPages(test ?? { id }).map(page => ({
-    ...page,
-    items: page.items.map(item =>
-      isExerciseType(item.type) ? { ...item, maxPoints: item.maxPoints ?? points.get(item.id) ?? 1 } : item
-    ),
-  }));
+export interface TestVersionEditorValue {
+  test: CreateTestUnitInput;
+  version: TestVersionInput;
+}
+
+function toInitialVersion(version: TestVersion | undefined, id: string): TestVersion {
+  const pages = version?.pages ?? [];
   const summary = getTestVersionSummaryFields(pages);
 
   return {
     id,
-    name: 'Version A',
+    name: version?.name ?? 'Version A',
     pages,
     ...summary,
-    createdAt: test?.createdAt,
-    createdBy: test?.createdBy,
-    updatedAt: test?.updatedAt,
-    updatedBy: test?.updatedBy,
+    createdAt: version?.createdAt,
+    createdBy: version?.createdBy,
+    updatedAt: version?.updatedAt,
+    updatedBy: version?.updatedBy,
   };
 }
 
-export function TestVersionEditor({ initialTest, onSave, saving = false }: TestBuilderProps) {
+export function TestVersionEditor({ initialTest, initialVersion, onSave, saving = false }: TestVersionEditorProps) {
   const dispatch = useAppDispatch();
   const document = useAppSelector(state => state.lessonEditor.currentPageDocument);
-  const [testId] = useState(() => initialTest?.id || `test-${Date.now()}`);
+  const [testId] = useState(() => initialTest?.id || `test-${globalThis.crypto.randomUUID()}`);
+  const [versionId] = useState(() => initialVersion?.id || `${testId}-version-a`);
   const [testTitle, setTestTitle] = useState(initialTest?.title || 'New Test');
   const [description, setDescription] = useState(initialTest?.description || '');
   const [passingPercentage, setPassingPercentage] = useState<number | null>(initialTest?.passingPercentage ?? null);
 
   useEffect(() => {
-    dispatch(setTestVersion(toInitialVersion(initialTest, testId)));
+    dispatch(setTestVersion(toInitialVersion(initialVersion, versionId)));
     return () => {
       dispatch(resetLessonState());
     };
@@ -94,37 +93,40 @@ export function TestVersionEditor({ initialTest, onSave, saving = false }: TestB
 
   const save = () => {
     if (!document) return;
-    const version = pageDocumentDraftToTestVersion(document, summary, initialTest);
-    const items = version.pages.flatMap(page => page.items).map(content =>
-      isExerciseType(content.type)
-        ? { exercise: content as Exercise, maxPoints: content.maxPoints ?? 1 }
-        : { content }
-    );
-    const exercises = items.filter(isScoredTestExercise);
+    const version = pageDocumentDraftToTestVersion(document, summary, initialVersion);
 
-    void Promise.resolve(onSave({
-      id: version.id,
-      title: testTitle.trim(),
-      description: description.trim(),
-      pages: version.pages,
-      items,
-      exercises,
-      totalPoints: version.totalPoints,
-      passingPercentage,
-      createdAt: version.createdAt,
-      createdBy: version.createdBy,
-      updatedAt: version.updatedAt,
-      updatedBy: version.updatedBy,
-      version: initialTest?.version,
-    })).then(() => dispatch(clearPageDocumentDraft({ editorKind: 'test-version', ownerId: version.id })));
+    void Promise.resolve(
+      onSave({
+        test: {
+          id: testId,
+          title: testTitle.trim(),
+          description: description.trim(),
+          passingPercentage,
+        },
+        version: {
+          id: version.id,
+          name: version.name,
+          pages: version.pages.map(page => ({
+            ...page,
+            items: page.items.map(item =>
+              isExerciseType(item.type) ? { ...item, maxPoints: item.maxPoints ?? 1 } : { ...item }
+            ),
+          })),
+        },
+      })
+    )
+      .then(() => dispatch(clearPageDocumentDraft({ editorKind: 'test-version', ownerId: version.id })))
+      .catch(() => undefined);
   };
 
   const updatePoints = (pageIndex: number, itemIndex: number, item: RenderableContentItem, value: string) => {
-    dispatch(updateContentItem({
-      pageIndex,
-      itemIndex,
-      content: { ...item, maxPoints: Math.max(1, Math.floor(Number(value) || 1)) },
-    }));
+    dispatch(
+      updateContentItem({
+        pageIndex,
+        itemIndex,
+        content: { ...item, maxPoints: Math.max(1, Math.floor(Number(value) || 1)) },
+      })
+    );
   };
 
   if (!document) return <div className="p-8 text-center text-gray-500">Loading test builder...</div>;
@@ -142,7 +144,9 @@ export function TestVersionEditor({ initialTest, onSave, saving = false }: TestB
                 <h1 className="flex items-center gap-2 text-xl font-semibold">
                   <FileCheck2 className="h-5 w-5 text-roman-red" /> Test Version Editor
                 </h1>
-                <p className="text-sm text-gray-500">Build scored exercises and supporting content across multiple pages.</p>
+                <p className="text-sm text-gray-500">
+                  Build scored exercises and supporting content across multiple pages.
+                </p>
               </div>
               <div className="flex items-center gap-3">
                 <div className="rounded-md bg-roman-parchment px-3 py-2 text-sm font-medium">
@@ -158,7 +162,9 @@ export function TestVersionEditor({ initialTest, onSave, saving = false }: TestB
           </div>
 
           <Card>
-            <CardHeader><CardTitle className="text-base">Test settings</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle className="text-base">Test settings</CardTitle>
+            </CardHeader>
             <CardContent className="space-y-5">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
@@ -180,12 +186,18 @@ export function TestVersionEditor({ initialTest, onSave, saving = false }: TestB
               </div>
               <div className="space-y-2">
                 <Label htmlFor="test-description">Description</Label>
-                <Textarea id="test-description" value={description} onChange={event => setDescription(event.target.value)} />
+                <Textarea
+                  id="test-description"
+                  value={description}
+                  onChange={event => setDescription(event.target.value)}
+                />
               </div>
               <PassingRequirementControl value={passingPercentage} onChange={setPassingPercentage} />
               {passingPercentage !== null && summary.totalPoints > 0 && (
                 <p className="text-sm text-gray-500">
-                  {passingPercentage}% = {(summary.totalPoints * passingPercentage / 100).toFixed(2).replace(/\.00$/, '')} of {summary.totalPoints} points
+                  {passingPercentage}% ={' '}
+                  {((summary.totalPoints * passingPercentage) / 100).toFixed(2).replace(/\.00$/, '')} of{' '}
+                  {summary.totalPoints} points
                 </p>
               )}
             </CardContent>
@@ -204,20 +216,24 @@ export function TestVersionEditor({ initialTest, onSave, saving = false }: TestB
             onAddContent={(pageIndex, content) => dispatch(addContentToPage({ pageIndex, content }))}
             onEditContent={(pageIndex, itemIndex) => dispatch(startEditingContent({ pageIndex, itemIndex }))}
             onRemoveContent={(pageIndex, itemIndex) => dispatch(removeContent({ pageIndex, itemIndex }))}
-            renderContentItemMeta={(pageIndex, item, itemIndex) => isExerciseType(item.type) ? (
-              <div className="flex items-center gap-1.5" onPointerDown={event => event.stopPropagation()}>
-                <Label htmlFor={`points-${item.id}`} className="text-xs">Points</Label>
-                <Input
-                  id={`points-${item.id}`}
-                  type="number"
-                  min={1}
-                  step={1}
-                  className="h-7 w-16 text-xs"
-                  value={item.maxPoints ?? 1}
-                  onChange={event => updatePoints(pageIndex, itemIndex, item, event.target.value)}
-                />
-              </div>
-            ) : null}
+            renderContentItemMeta={(pageIndex, item, itemIndex) =>
+              isExerciseType(item.type) ? (
+                <div className="flex items-center gap-1.5" onPointerDown={event => event.stopPropagation()}>
+                  <Label htmlFor={`points-${item.id}`} className="text-xs">
+                    Points
+                  </Label>
+                  <Input
+                    id={`points-${item.id}`}
+                    type="number"
+                    min={1}
+                    step={1}
+                    className="h-7 w-16 text-xs"
+                    value={item.maxPoints ?? 1}
+                    onChange={event => updatePoints(pageIndex, itemIndex, item, event.target.value)}
+                  />
+                </div>
+              ) : null
+            }
           />
         </div>
 
@@ -237,6 +253,3 @@ export function TestVersionEditor({ initialTest, onSave, saving = false }: TestB
     </ClipboardProvider>
   );
 }
-
-// Keep the existing route imports stable until the container API lands in Phase 3.
-export const TestBuilder = TestVersionEditor;

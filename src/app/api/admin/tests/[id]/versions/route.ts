@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { firestoreDocumentIdSchema } from '@/src/lib/learning-units/schemas';
 import { testRouteErrorResponse } from '@/src/lib/tests/api';
-import { updateTestWithVersionInputSchema } from '@/src/lib/tests/schemas';
+import { testVersionInputSchema } from '@/src/lib/tests/schemas';
 import { testService } from '@/src/lib/tests/service';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 
@@ -11,20 +11,20 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
   try {
     await verifyAdminAccess(request);
     const id = firestoreDocumentIdSchema.parse((await params).id);
-    return NextResponse.json(await testService.getTest(id));
+    return NextResponse.json({ versions: await testService.listTestVersions(id) });
   } catch (error) {
-    return testRouteErrorResponse(error, 'fetch test');
+    return testRouteErrorResponse(error, 'fetch test versions');
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: RouteContext) {
+export async function POST(request: NextRequest, { params }: RouteContext) {
   try {
     const actor = await verifyAdminAccess(request);
     const id = firestoreDocumentIdSchema.parse((await params).id);
-    const input = updateTestWithVersionInputSchema.parse(await request.json().catch(() => null));
-    const result = await testService.updateTestWithVersion(id, input, actor.uid);
-    return NextResponse.json({ success: true, ...result });
+    const input = testVersionInputSchema.parse(await request.json().catch(() => null));
+    const result = await testService.addTestVersion(id, input, actor.uid);
+    return NextResponse.json({ success: true, ...result }, { status: 201 });
   } catch (error) {
-    return testRouteErrorResponse(error, 'update test');
+    return testRouteErrorResponse(error, 'create test version');
   }
 }

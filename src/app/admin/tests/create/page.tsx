@@ -4,23 +4,24 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/src/components/ui/button';
-import { TestBuilder } from '@/src/components/ui/admin';
+import { TestVersionEditor } from '@/src/components/ui/admin';
+import type { TestVersionEditorValue } from '@/src/components/ui/admin/TestBuilder';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 import { useCreateTestMutation } from '@/src/store/api/testApi';
-import type { TestDefinition } from '@/src/types/test';
 import { toast } from 'sonner';
 
 function CreateTestPage() {
   const router = useRouter();
   const [createTest, { isLoading }] = useCreateTestMutation();
-  const save = async (test: TestDefinition) => {
+  const save = async (value: TestVersionEditorValue) => {
     try {
-      const result = await createTest(test).unwrap();
+      const result = await createTest(value).unwrap();
       toast.success('Test created');
       router.push(`/admin/tests/edit/${result.test.id}`);
     } catch (error) {
       const message = (error as { data?: { error?: string } })?.data?.error || 'Failed to create test';
       toast.error(message);
+      throw error;
     }
   };
   return (
@@ -34,7 +35,7 @@ function CreateTestPage() {
         </Button>
       </div>
       <div className="flex-1 overflow-hidden">
-        <TestBuilder onSave={save} saving={isLoading} />
+        <TestVersionEditor onSave={save} saving={isLoading} />
       </div>
     </div>
   );

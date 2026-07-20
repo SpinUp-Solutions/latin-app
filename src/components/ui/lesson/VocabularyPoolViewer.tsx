@@ -160,15 +160,13 @@ export function VocabularyPoolViewer({ content }: VocabularyPoolViewerProps) {
     notes: selectDefinitionLine(word),
   }));
 
-  const defaultMode = content.studyMode === 'quiz' ? 'flashcards' : content.studyMode || 'flashcards';
-
   return (
     <VocabularyStudyView
       title={content.title || vocabularyPool.name}
       subtitle={`From: ${vocabularyPool.name} • ${items.length} words`}
       items={items}
       audioPath={content.audioPath}
-      defaultMode={defaultMode}
+      defaultMode="flashcards"
       showPronunciation={false}
       showNotes={false}
     />

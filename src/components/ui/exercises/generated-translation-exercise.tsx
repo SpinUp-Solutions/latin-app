@@ -21,6 +21,7 @@ import { getExerciseDisplayForm, hasSelectedForm } from '@/src/utils/exercises/f
 import { normalizeCollection, buildLegacyPosConfigs } from '@/src/utils/exercises/legacyExerciseCompat';
 import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
 import { resolveRuntimeMode } from '@/src/types/runtime-mode';
+import { getContentTypeLabel } from '@/src/lib/content/registry';
 
 interface Props {
   exercise: GeneratedTranslationExercise;
@@ -248,11 +249,9 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-start">
-        {exercise.title && (
-          <h3 className="text-lg font-serif text-roman-red mb-2">
-            <SimpleRichDisplay content={exercise.title} />
-          </h3>
-        )}
+        <h3 className="text-lg font-serif text-roman-red mb-2">
+          <SimpleRichDisplay content={exercise.title || getContentTypeLabel(exercise.type)} />
+        </h3>
         {exercise.audioPath && <AudioPlayButton audioPath={exercise.audioPath} />}
       </div>
 

@@ -213,6 +213,7 @@ export const SentenceDiagramSurface: React.FC<SentenceDiagramSurfaceProps> = ({
                     className={cn(
                       'sentence-diagram-token-segment',
                       segment.underlineExact && 'sentence-diagram-exact-underline',
+                      segment.italicExact && 'italic',
                       isSelected && 'sentence-diagram-selected-segment'
                     )}>
                     {segment.text}

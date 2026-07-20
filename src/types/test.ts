@@ -1,4 +1,5 @@
 import type { Exercise } from './exercises';
+import type { TestUnit } from './learning-unit';
 import type { RenderableContentItem } from './page';
 import type { Page } from './page';
 
@@ -18,6 +19,19 @@ export interface TestVersion {
   createdBy?: string;
   updatedAt?: string;
   updatedBy?: string;
+}
+
+export type TestVersionSummary = Omit<TestVersion, 'pages'>;
+
+export type TestUnitSummary = Omit<TestUnit, 'rotationVersions'> & {
+  rotationVersionCount: number;
+  minTotalPoints: number;
+  maxTotalPoints: number;
+};
+
+export interface TestUnitDetail {
+  test: TestUnit;
+  versions: TestVersionSummary[];
 }
 
 export type MockTestParent = { kind: 'test'; testId: string } | { kind: 'standalone' };

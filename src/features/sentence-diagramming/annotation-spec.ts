@@ -9,6 +9,7 @@ export type AnnotationKind =
   | 'participle'
   | 'active'
   | 'passive'
+  | 'deponent'
   | 'person-1s'
   | 'person-2s'
   | 'person-3s'
@@ -124,8 +125,8 @@ const SPEC_LIST: AnnotationSpec[] = [
   },
   {
     kind: 'verb',
-    label: 'Verb',
-    shortLabel: 'Verb',
+    label: 'Finite Verb',
+    shortLabel: 'Finite Verb',
     groupTitle: 'Verbal Forms',
     selectionMode: 'token',
     exclusivityGroup: 'shape',
@@ -180,6 +181,16 @@ const SPEC_LIST: AnnotationSpec[] = [
     selectionMode: 'token',
     exclusivityGroup: 'voice',
     tone: 'blue',
+    isWrapper: false,
+    resettableColor: true,
+  },
+  {
+    kind: 'deponent',
+    label: 'Deponent',
+    shortLabel: 'Deponent',
+    groupTitle: 'Verbal Forms',
+    selectionMode: 'token',
+    tone: 'default',
     isWrapper: false,
     resettableColor: true,
   },
@@ -383,10 +394,10 @@ const SPEC_LIST: AnnotationSpec[] = [
   },
   {
     kind: 'particle',
-    label: 'Conj./Adv./Interj.',
-    shortLabel: 'Conj./Adv./Interj.',
-    groupTitle: 'Conj./Adv./Interj.',
-    selectionMode: 'token',
+    label: 'Particle',
+    shortLabel: 'Particle',
+    groupTitle: 'Particle',
+    selectionMode: 'exact',
     tone: 'default',
     isWrapper: false,
     resettableColor: false,
@@ -417,6 +428,7 @@ export const ANNOTATION_TOOL_GROUPS: AnnotationToolGroup[] = [
       'participle',
       'active',
       'passive',
+      'deponent',
       'person-1s',
       'person-2s',
       'person-3s',
@@ -443,7 +455,7 @@ export const ANNOTATION_TOOL_GROUPS: AnnotationToolGroup[] = [
     ],
   },
   {
-    title: 'Conj./Adv./Interj.',
+    title: 'Particle',
     tools: ['particle'],
   },
 ];

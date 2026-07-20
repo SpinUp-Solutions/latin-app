@@ -1,11 +1,9 @@
 export const APP_API_TAG_TYPES = [
-  // Compatibility tags used by the existing lesson and test POC endpoints.
+  // Compatibility tags used by the existing lesson endpoints.
   'Lesson',
   'LessonList',
   'StudentLesson',
   'Recovery',
-  'Test',
-  'TestList',
   'PracticeCategory',
   'PracticeCategoryAssignments',
   // Shared learning-unit and assessment tags used by the refactor.

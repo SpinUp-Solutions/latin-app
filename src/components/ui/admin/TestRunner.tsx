@@ -7,30 +7,34 @@ import { Button } from '@/src/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
 import { Progress } from '@/src/components/ui/progress';
 import ContentRenderer from '@/src/components/ui/lesson/content-renderer';
-import type { TestContentItem, TestDefinition, TestExerciseResult } from '@/src/types/test';
-import { getTestItems, getTestPages, isScoredTestExercise } from '@/src/utils/testDefinition';
+import { isExerciseType } from '@/src/lib/content/registry';
+import type { TestUnit } from '@/src/types/learning-unit';
+import type { TestExerciseResult, TestVersion } from '@/src/types/test';
 
 interface TestRunnerProps {
-  test: TestDefinition;
+  test: TestUnit;
+  version: TestVersion;
   embedded?: boolean;
 }
 
 const formatPoints = (value: number) => value.toFixed(2).replace(/\.00$/, '');
 
-export function TestRunner({ test, embedded = false }: TestRunnerProps) {
-  const items = getTestItems(test);
-  const pages = getTestPages(test);
+export function TestRunner({ test, version, embedded = false }: TestRunnerProps) {
+  const pages = version.pages;
+  const items = useMemo(
+    () => pages.flatMap((page, pageIndex) => page.items.map(content => ({ content, pageIndex }))),
+    [pages]
+  );
   const [currentIndex, setCurrentIndex] = useState(0);
   const [results, setResults] = useState<TestExerciseResult[]>([]);
   const [currentResult, setCurrentResult] = useState<TestExerciseResult | null>(null);
   const [runKey, setRunKey] = useState(0);
   const finished = currentIndex >= items.length;
   const earnedPoints = results.reduce((sum, result) => sum + result.earnedPoints, 0);
-  const percentage = test.totalPoints > 0 ? Math.round((earnedPoints / test.totalPoints) * 100) : 0;
+  const percentage = version.totalPoints > 0 ? Math.round((earnedPoints / version.totalPoints) * 100) : 0;
 
   const progress = useMemo(
-    () =>
-      items.length > 0 ? (Math.min(currentIndex, items.length) / items.length) * 100 : 0,
+    () => (items.length > 0 ? (Math.min(currentIndex, items.length) / items.length) * 100 : 0),
     [currentIndex, items.length]
   );
 
@@ -53,7 +57,7 @@ export function TestRunner({ test, embedded = false }: TestRunnerProps) {
             </div>
             <div className="text-4xl font-semibold text-roman-red">{percentage}%</div>
             <div className="text-lg">
-              {formatPoints(earnedPoints)} / {formatPoints(test.totalPoints)} points
+              {formatPoints(earnedPoints)} / {formatPoints(version.totalPoints)} points
             </div>
           </CardContent>
         </Card>
@@ -95,19 +99,20 @@ export function TestRunner({ test, embedded = false }: TestRunnerProps) {
   }
 
   const currentItem = items[currentIndex]!;
-  const scoredExercise = isScoredTestExercise(currentItem) ? currentItem : null;
-  const content = scoredExercise ? scoredExercise.exercise : (currentItem as TestContentItem).content;
-  const currentPageIndex = pages.findIndex(page => page.items.some(item => item.id === content.id));
+  const content = currentItem.content;
+  const scoredExercise = isExerciseType(content.type);
+  const maxPoints = scoredExercise ? (content.maxPoints ?? 1) : 0;
+  const currentPageIndex = currentItem.pageIndex;
   const currentPage = pages[currentPageIndex];
   const completeExercise = (scorePercent: number) => {
     if (!scoredExercise || currentResult) return;
     const boundedPercent = Math.max(0, Math.min(100, scorePercent));
     setCurrentResult({
-      exerciseId: scoredExercise.exercise.id,
-      title: scoredExercise.exercise.title || scoredExercise.exercise.type,
+      exerciseId: content.id,
+      title: content.title || content.type,
       scorePercent: boundedPercent,
-      earnedPoints: scoredExercise.maxPoints * (boundedPercent / 100),
-      maxPoints: scoredExercise.maxPoints,
+      earnedPoints: maxPoints * (boundedPercent / 100),
+      maxPoints,
     });
   };
 
@@ -137,15 +142,19 @@ export function TestRunner({ test, embedded = false }: TestRunnerProps) {
           <div className="space-y-2.5">
             <div className="flex min-w-0 items-center justify-between gap-3 text-xs text-red-100/75">
               <div className="flex min-w-0 items-center gap-2">
-                <span className="shrink-0 font-semibold text-white">Item {currentIndex + 1} / {items.length}</span>
+                <span className="shrink-0 font-semibold text-white">
+                  Item {currentIndex + 1} / {items.length}
+                </span>
                 {currentPage && (
                   <span className="truncate border-l border-white/20 pl-2" title={currentPage.title || undefined}>
-                    Page {currentPageIndex + 1} / {pages.length}{currentPage.title ? ` · ${currentPage.title}` : ''}
+                    Page {currentPageIndex + 1} / {pages.length}
+                    {currentPage.title ? ` · ${currentPage.title}` : ''}
                   </span>
                 )}
               </div>
               <span className="shrink-0 tabular-nums">
-                <strong className="font-semibold text-white">{formatPoints(earnedPoints)}</strong> / {formatPoints(test.totalPoints)} pts
+                <strong className="font-semibold text-white">{formatPoints(earnedPoints)}</strong> /{' '}
+                {formatPoints(version.totalPoints)} pts
               </span>
             </div>
             <Progress value={progress} className="h-1.5 w-full overflow-hidden bg-black/15 [&>div]:bg-amber-200" />
@@ -155,7 +164,11 @@ export function TestRunner({ test, embedded = false }: TestRunnerProps) {
 
       <Card className="min-w-0 overflow-hidden">
         <CardContent className="min-w-0 overflow-x-auto p-4 sm:p-5 md:p-8" key={`${runKey}-${content.id}`}>
-          <ContentRenderer content={content} onComplete={scoredExercise ? completeExercise : undefined} runtimeMode="test" />
+          <ContentRenderer
+            content={content}
+            onComplete={scoredExercise ? completeExercise : undefined}
+            runtimeMode="test"
+          />
         </CardContent>
       </Card>
 
@@ -169,9 +182,7 @@ export function TestRunner({ test, embedded = false }: TestRunnerProps) {
                 {Math.round(currentResult.scorePercent)}%).
               </div>
             </div>
-            <Button onClick={continueToNext}>
-              {currentIndex === items.length - 1 ? 'View results' : 'Continue'}
-            </Button>
+            <Button onClick={continueToNext}>{currentIndex === items.length - 1 ? 'View results' : 'Continue'}</Button>
           </CardContent>
         </Card>
       )}
