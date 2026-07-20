@@ -41,6 +41,8 @@ import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display'
 import { PracticeCategoryChips } from '@/src/components/ui/admin/practice-categories/PracticeCategoryChips';
 import { LessonTypeTabs } from '@/src/components/ui/admin/LessonTypeTabs';
 
+type LessonType = 'normal' | 'vocab' | 'sentence-diagramming' | 'listening';
+
 function LiveLessonsPage() {
   const dispatch = useDispatch();
   const { data: serverLessons, isLoading: loading, refetch } = useGetLessonsQuery();
@@ -50,11 +52,11 @@ function LiveLessonsPage() {
   const availableLessons = useSelector(selectAvailableLessons);
   const hasUnsavedChanges = useSelector(selectHasUnsavedChanges);
 
-  const [lessonType, setLessonType] = useState<'normal' | 'vocab' | 'sentence-diagramming' | 'listening'>('normal');
+  const [lessonType, setLessonType] = useState<LessonType>('normal');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'live' | 'draft'>('live');
   const [selectedLessons, setSelectedLessons] = useState<Set<string>>(new Set());
-  const [hasInitializedSelection, setHasInitializedSelection] = useState(false);
+  const [initializedSelectionKey, setInitializedSelectionKey] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
   const shouldPreserveLocalOrderRef = useRef(false);
 
@@ -98,26 +100,29 @@ function LiveLessonsPage() {
     }
   }, [serverLessons, dispatch]);
 
-  const originalLiveIds = useMemo(() => new Set(currentLiveLessons.map(l => l.id)), [currentLiveLessons]);
+  const originalLiveIds = useMemo(
+    () =>
+      new Set(
+        (serverLessons ?? []).filter(lesson => lesson.isLive && lesson.type === lessonType).map(lesson => lesson.id)
+      ),
+    [lessonType, serverLessons]
+  );
+  const selectionKey = serverLessons ? JSON.stringify([lessonType, ...Array.from(originalLiveIds).sort()]) : null;
+  const isSelectionReady = selectionKey !== null && initializedSelectionKey === selectionKey;
 
   useEffect(() => {
-    setSelectedLessons(new Set());
-    setHasInitializedSelection(false);
-  }, [lessonType]);
-
-  useEffect(() => {
-    if (serverLessons && !hasInitializedSelection) {
-      setSelectedLessons(
-        new Set(serverLessons.filter(lesson => lesson.isLive && lesson.type === lessonType).map(lesson => lesson.id))
-      );
-      setHasInitializedSelection(true);
+    if (selectionKey && initializedSelectionKey !== selectionKey) {
+      setSelectedLessons(new Set(originalLiveIds));
+      setInitializedSelectionKey(selectionKey);
     }
-  }, [hasInitializedSelection, lessonType, serverLessons]);
+  }, [initializedSelectionKey, originalLiveIds, selectionKey]);
 
   // Use the new parameterized selector for efficient filtering
   const filteredLessons = useSelector((state: RootState) => selectFilteredLessons(state, filterStatus, searchQuery));
 
   const handleSelectLesson = (lessonId: string) => {
+    if (!isSelectionReady || isPublishing) return;
+
     setSelectedLessons(prev => {
       const newSet = new Set(prev);
       if (newSet.has(lessonId)) {
@@ -130,12 +135,14 @@ function LiveLessonsPage() {
   };
 
   const hasChanges = useMemo(() => {
+    if (!isSelectionReady) return false;
     if (originalLiveIds.size !== selectedLessons.size) return true;
     for (const id of Array.from(originalLiveIds)) {
       if (!selectedLessons.has(id)) return true;
     }
     return false;
-  }, [originalLiveIds, selectedLessons]);
+  }, [isSelectionReady, originalLiveIds, selectedLessons]);
+  const wouldLeaveTypeWithoutLiveLessons = isSelectionReady && originalLiveIds.size > 0 && selectedLessons.size === 0;
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -181,8 +188,18 @@ function LiveLessonsPage() {
   };
 
   const handleApplyChanges = async () => {
+    if (!isSelectionReady || isPublishing) return;
+
     const toPublish = Array.from(selectedLessons).filter(id => !originalLiveIds.has(id));
     const toUnpublish = Array.from(originalLiveIds).filter(id => !selectedLessons.has(id));
+    const expectedLiveLessonIds = Array.from(originalLiveIds);
+    const expectedLiveLessonIdsAfterPublish = [...expectedLiveLessonIds, ...toPublish];
+
+    if (toPublish.length === 0 && toUnpublish.length === 0) return;
+    if (wouldLeaveTypeWithoutLiveLessons) {
+      toast.error('At least one lesson of this type must remain live. Publish a replacement first.');
+      return;
+    }
 
     setIsPublishing(true);
 
@@ -191,6 +208,8 @@ function LiveLessonsPage() {
         await updatePublishStatus({
           lessonIds: toPublish,
           isLive: true,
+          lessonType,
+          expectedLiveLessonIds,
         }).unwrap();
       }
 
@@ -199,6 +218,8 @@ function LiveLessonsPage() {
           await updatePublishStatus({
             lessonIds: toUnpublish,
             isLive: false,
+            lessonType,
+            expectedLiveLessonIds: expectedLiveLessonIdsAfterPublish,
           }).unwrap();
         } catch {
           if (toPublish.length > 0) {
@@ -206,6 +227,8 @@ function LiveLessonsPage() {
               await updatePublishStatus({
                 lessonIds: toPublish,
                 isLive: false,
+                lessonType,
+                expectedLiveLessonIds: expectedLiveLessonIdsAfterPublish,
               }).unwrap();
               toast.error('Failed to unpublish lessons. New publish changes have been rolled back.');
             } catch {
@@ -222,7 +245,7 @@ function LiveLessonsPage() {
       const refreshedLessons = await refetch();
       if (refreshedLessons.data && !shouldPreserveLocalOrderRef.current) {
         dispatch(syncLessonsFromRTQ(refreshedLessons.data));
-        setHasInitializedSelection(false);
+        setInitializedSelectionKey(null);
       }
       toast.success('Changes applied successfully');
     } catch {
@@ -259,10 +282,14 @@ function LiveLessonsPage() {
 
           {hasChanges && (
             <div className="flex items-center gap-3">
-              <span className="text-sm text-roman-stone">{selectedLessons.size} lessons selected</span>
+              <span className="text-sm text-roman-stone">
+                {wouldLeaveTypeWithoutLiveLessons
+                  ? 'At least one lesson must remain live'
+                  : `${selectedLessons.size} lessons selected`}
+              </span>
               <Button
                 onClick={handleApplyChanges}
-                disabled={isPublishing}
+                disabled={isPublishing || wouldLeaveTypeWithoutLiveLessons}
                 className="bg-roman-green hover:bg-roman-green/90">
                 <CheckCircle className="h-4 w-4 mr-2" />
                 Apply Changes
@@ -273,10 +300,7 @@ function LiveLessonsPage() {
       </header>
 
       <main className="container mx-auto py-8 px-4 max-w-6xl">
-        <Tabs
-          value={lessonType}
-          onValueChange={value => setLessonType(value as 'normal' | 'vocab' | 'sentence-diagramming' | 'listening')}
-          className="mb-6">
+        <Tabs value={lessonType} onValueChange={value => setLessonType(value as LessonType)} className="mb-6">
           <LessonTypeTabs
             counts={{
               normal: normalLiveLessons.length + normalAvailableLessons.length,
@@ -434,6 +458,7 @@ function LiveLessonsPage() {
                                 <Checkbox
                                   checked={selectedLessons.has(lesson.id)}
                                   onCheckedChange={() => handleSelectLesson(lesson.id)}
+                                  disabled={!isSelectionReady || isPublishing}
                                   className="mt-1"
                                 />
 

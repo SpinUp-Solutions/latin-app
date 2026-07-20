@@ -76,12 +76,18 @@ export const lessonApi = appApi.injectEndpoints({
 
     updateLessonsPublishStatus: builder.mutation<
       { success: boolean },
-      { lessonIds: string[]; isLive: boolean; startOrder?: number }
+      {
+        lessonIds: string[];
+        isLive: boolean;
+        lessonType: 'normal' | 'vocab' | 'sentence-diagramming' | 'listening';
+        expectedLiveLessonIds: string[];
+        startOrder?: number;
+      }
     >({
-      query: ({ lessonIds, isLive, startOrder }) => ({
+      query: ({ lessonIds, isLive, lessonType, expectedLiveLessonIds, startOrder }) => ({
         url: '/admin/lessons/update-publish-status',
         method: 'POST',
-        body: { lessonIds, isLive, startOrder },
+        body: { lessonIds, isLive, lessonType, expectedLiveLessonIds, startOrder },
       }),
       invalidatesTags: (result, error, { lessonIds }) => [
         ...lessonIds.map(id => ({ type: 'Lesson' as const, id })),
