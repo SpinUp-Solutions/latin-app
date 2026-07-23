@@ -1,4 +1,4 @@
-export default {
+const commitlintConfig = {
   rules: {
     // Disable all rules by setting them to 0 (off)
     'type-enum': [0],
@@ -13,3 +13,5 @@ export default {
     'footer-leading-blank': [0],
   },
 };
+
+export default commitlintConfig;

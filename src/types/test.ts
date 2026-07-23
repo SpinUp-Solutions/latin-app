@@ -123,6 +123,29 @@ export interface StartTestAttemptResult {
   resumed: boolean;
 }
 
+export interface SubmitTestAttemptResult {
+  attempt: StudentSubmittedTestAttempt;
+  /** True only when this submission newly wrote the sticky normal-flow completion record. */
+  completionGranted: boolean;
+}
+
+export interface TestAttemptResultSummary {
+  attemptId: string;
+  score: number;
+  maxScore: number;
+  percentage: number;
+  outcome: SubmittedTestAttempt['outcome'];
+  submittedAt: string;
+}
+
+export interface TestAttemptOriginSummary {
+  origin: TestAttemptOrigin;
+  inProgressAttemptId: string | null;
+  attemptCount: number;
+  best: TestAttemptResultSummary | null;
+  latest: TestAttemptResultSummary | null;
+}
+
 export interface ScoredTestExercise {
   exercise: Exercise;
   maxPoints: number;

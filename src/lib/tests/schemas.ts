@@ -204,7 +204,7 @@ const inProgressTestAttemptDocumentSchema = z
     }
   });
 
-const submittedTestAttemptDocumentSchema = z
+export const submittedTestAttemptDocumentSchema = z
   .object({
     ...testAttemptBaseShape,
     status: z.literal('submitted'),
@@ -218,6 +218,17 @@ const submittedTestAttemptDocumentSchema = z
         })
         .strict()
     ),
+    score: z.number().finite().nonnegative(),
+    maxScore: z.number().finite().positive(),
+    percentage: z.number().finite().min(0).max(100),
+    outcome: z.enum(['score-only', 'passed', 'not-passed']),
+    submittedAt: z.string().min(1),
+  })
+  .strict();
+
+/** Slim projection used by best/latest dashboard summary queries. */
+export const submittedAttemptResultProjectionSchema = z
+  .object({
     score: z.number().finite().nonnegative(),
     maxScore: z.number().finite().positive(),
     percentage: z.number().finite().min(0).max(100),
@@ -243,6 +254,13 @@ export const testAttemptSessionDocumentSchema = z
   .strict();
 
 export const startTestAttemptInputSchema = z.object({ origin: testAttemptOriginSchema }).strict();
+
+export const attemptSummaryQuerySchema = z
+  .object({
+    originKind: z.enum(['normal-test', 'mock-test']),
+    originId: firestoreDocumentIdSchema,
+  })
+  .strict();
 
 export const saveTestAttemptAnswerInputSchema = z
   .object({
@@ -294,3 +312,4 @@ export type MockTestDocument = z.infer<typeof mockTestDocumentSchema>;
 export type TestAttemptOriginInput = z.infer<typeof testAttemptOriginSchema>;
 export type StartTestAttemptInput = z.infer<typeof startTestAttemptInputSchema>;
 export type SaveTestAttemptAnswerInput = z.infer<typeof saveTestAttemptAnswerInputSchema>;
+export type AttemptSummaryQuery = z.infer<typeof attemptSummaryQuerySchema>;

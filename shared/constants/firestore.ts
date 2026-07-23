@@ -7,3 +7,4 @@ export const TEST_VERSIONS_COLLECTION = 'testVersions';
 export const MOCK_TESTS_COLLECTION = 'mockTests';
 export const TEST_ATTEMPTS_COLLECTION = 'testAttempts';
 export const TEST_ATTEMPT_SESSIONS_COLLECTION = 'testAttemptSessions';
+export const USER_PROGRESS_COLLECTION = 'userProgress';

@@ -5,20 +5,26 @@ import {
   TEST_ATTEMPTS_COLLECTION,
   TEST_ATTEMPT_SESSIONS_COLLECTION,
   TEST_VERSIONS_COLLECTION,
+  USER_PROGRESS_COLLECTION,
 } from '@/shared/constants/firestore';
 import { isExerciseType, isTestEligibleExerciseType } from '@/src/lib/content/registry';
 import { LearningUnitService, LearningUnitServiceError } from '@/src/lib/learning-units/service';
 import { testUnitCreateSchema, testUnitSchema } from '@/src/lib/learning-units/schemas';
 import { adminDb } from '@/src/services/firebase-admin';
-import type { TestUnit } from '@/src/types/learning-unit';
+import type { TestUnit, TestUnitCompletionProgress } from '@/src/types/learning-unit';
 import type {
   InProgressTestAttempt,
   MockTest,
   StartTestAttemptResult,
   StudentInProgressTestAttempt,
+  StudentSubmittedTestAttempt,
   StudentTestAttempt,
+  SubmitTestAttemptResult,
+  SubmittedTestAttempt,
   TestAttempt,
   TestAttemptOrigin,
+  TestAttemptOriginSummary,
+  TestAttemptResultSummary,
   TestAttemptSession,
   TestUnitDetail,
   TestUnitSummary,
@@ -26,7 +32,13 @@ import type {
   TestVersionSummary,
 } from '@/src/types/test';
 import { isAnswerForExercise, parseExerciseAnswer } from './answer-schemas';
-import { createFrozenTestDeliveryState, sanitizeTestDeliveryState, type FrozenTestDeliveryState } from './delivery';
+import {
+  createFrozenTestDeliveryState,
+  gradeFrozenTestDelivery,
+  sanitizeTestDeliveryState,
+  type FrozenDeliveryScore,
+  type FrozenTestDeliveryState,
+} from './delivery';
 import { getTestVersionSummaryFields, selectLeastUsedTestVersion } from './domain';
 import { TestServiceError } from './errors';
 import { estimateFirestoreDocumentBytes } from './firestore-size';
@@ -37,6 +49,8 @@ import {
   mockTestDocumentSchema,
   saveTestAttemptAnswerInputSchema,
   startTestAttemptInputSchema,
+  submittedAttemptResultProjectionSchema,
+  submittedTestAttemptDocumentSchema,
   testAttemptDocumentSchema,
   testAttemptSessionDocumentSchema,
   testVersionDocumentSchema,
@@ -57,6 +71,12 @@ import {
 export { TestServiceError } from './errors';
 
 export const MAX_TEST_ATTEMPT_DOCUMENT_BYTES = 900 * 1024;
+
+/**
+ * Tolerates floating-point representation error at the passing boundary while
+ * remaining orders of magnitude below the smallest meaningful score gap.
+ */
+export const PASSING_THRESHOLD_TOLERANCE = 1e-9;
 
 export const TEST_VERSION_SUMMARY_FIELDS = [
   'name',
@@ -243,6 +263,10 @@ export class TestService {
     return this.db.collection(TEST_ATTEMPT_SESSIONS_COLLECTION);
   }
 
+  private get progress() {
+    return this.db.collection(USER_PROGRESS_COLLECTION);
+  }
+
   private async getVersionSummaries(versionIds: string[]): Promise<TestVersionSummary[]> {
     if (versionIds.length === 0) return [];
 
@@ -280,13 +304,18 @@ export class TestService {
     }) as TestVersion;
   }
 
-  private submittedHistoryQuery(studentId: string, origin: Extract<TestAttemptOrigin, { kind: 'normal-test' }>) {
-    return this.attempts
+  private submittedAttemptsQuery(studentId: string, origin: TestAttemptOrigin) {
+    const scoped = this.attempts
       .where('studentId', '==', studentId)
       .where('origin.kind', '==', origin.kind)
-      .where('origin.testId', '==', origin.testId)
-      .where('status', '==', 'submitted')
-      .select('versionId', 'submittedAt');
+      .where('status', '==', 'submitted');
+    return origin.kind === 'normal-test'
+      ? scoped.where('origin.testId', '==', origin.testId)
+      : scoped.where('origin.mockTestId', '==', origin.mockTestId);
+  }
+
+  private submittedHistoryQuery(studentId: string, origin: Extract<TestAttemptOrigin, { kind: 'normal-test' }>) {
+    return this.submittedAttemptsQuery(studentId, origin).select('versionId', 'submittedAt');
   }
 
   private configurationError(message: string, error?: unknown): TestServiceError {
@@ -323,7 +352,7 @@ export class TestService {
       );
       throw new TestServiceError(
         'ATTEMPT_TOO_LARGE',
-        'This test is too large to start safely. Please ask an administrator to reduce its content size.',
+        'This test attempt is too large to save safely. Please ask an administrator to review its content size.',
         422
       );
     }
@@ -363,12 +392,25 @@ export class TestService {
       throw new TestServiceError('TEST_NOT_AVAILABLE', 'Test is not available', 404);
     }
 
-    const rotationVersions = await Promise.all(
-      test.rotationVersions.map(async reference =>
-        this.parseAttemptVersion(await transaction.get(this.versions.doc(reference.versionId)), origin)
-      )
-    );
-    const versionsById = new Map(rotationVersions.map(version => [version.id, version]));
+    // Cold-start rotation validation stays inexpensive: every referenced version
+    // must exist and carry its server-derived summary (written transactionally
+    // with validated pages), but full page bodies load only for the selected
+    // version.
+    const rotationSummarySnapshots = test.rotationVersions.length
+      ? await transaction.getAll(...test.rotationVersions.map(reference => this.versions.doc(reference.versionId)), {
+          fieldMask: [...TEST_VERSION_SUMMARY_FIELDS],
+        })
+      : [];
+    for (const summarySnapshot of rotationSummarySnapshots) {
+      try {
+        parseVersionSummarySnapshot(summarySnapshot);
+      } catch (error) {
+        throw this.configurationError(
+          `Normal test ${origin.testId} references an unavailable rotation version ${summarySnapshot.id}`,
+          error
+        );
+      }
+    }
 
     const history = historySnapshot.docs.map(snapshot => {
       const data = snapshot.data();
@@ -391,10 +433,7 @@ export class TestService {
       throw this.configurationError(`Normal test ${origin.testId} has no valid rotation selection`, error);
     }
 
-    const version = versionsById.get(versionId);
-    if (!version) {
-      throw this.configurationError(`Normal test ${origin.testId} selected an unvalidated rotation version ${versionId}`);
-    }
+    const version = this.parseAttemptVersion(await transaction.get(this.versions.doc(versionId)), origin);
     return { version, passingPercentage: test.passingPercentage };
   }
 
@@ -691,6 +730,252 @@ export class TestService {
       this.assertAttemptDocumentSize(updated);
       transaction.set(attemptRef, updated);
       return toStudentAttempt(updated) as StudentInProgressTestAttempt;
+    });
+  }
+
+  async submitAttempt(attemptId: string, studentId: string): Promise<SubmitTestAttemptResult> {
+    const attemptRef = this.attempts.doc(attemptId);
+
+    return this.db.runTransaction(async transaction => {
+      const attempt = parseAttemptSnapshot(await transaction.get(attemptRef));
+      assertAttemptOwner(attempt, studentId);
+      if (attempt.status === 'submitted') {
+        // Idempotent resubmission: return the frozen result without regrading.
+        return { attempt: toStudentAttempt(attempt) as StudentSubmittedTestAttempt, completionGranted: false };
+      }
+
+      let frozenScore: FrozenDeliveryScore;
+      try {
+        frozenScore = gradeFrozenTestDelivery(attempt.deliveryState as FrozenTestDeliveryState, attempt.answers);
+      } catch (error) {
+        throw this.configurationError(`Could not grade attempt ${attempt.id} from its frozen delivery state`, error);
+      }
+
+      const timestamp = this.now();
+      const percentage = (frozenScore.awardedPoints / frozenScore.maxPoints) * 100;
+      const outcome =
+        attempt.passingPercentage === null
+          ? 'score-only'
+          : percentage + PASSING_THRESHOLD_TOLERANCE >= attempt.passingPercentage
+            ? 'passed'
+            : 'not-passed';
+
+      let submitted: SubmittedTestAttempt;
+      try {
+        submitted = submittedTestAttemptDocumentSchema.parse({
+          id: attempt.id,
+          studentId: attempt.studentId,
+          versionId: attempt.versionId,
+          passingPercentage: attempt.passingPercentage,
+          origin: attempt.origin,
+          startedAt: attempt.startedAt,
+          updatedAt: timestamp,
+          status: 'submitted',
+          exerciseResults: Object.fromEntries(
+            frozenScore.exerciseResults.map(result => [
+              result.exerciseId,
+              { title: result.title, awardedPoints: result.awardedPoints, maxPoints: result.maxPoints },
+            ])
+          ),
+          score: frozenScore.awardedPoints,
+          maxScore: frozenScore.maxPoints,
+          percentage,
+          outcome,
+          submittedAt: timestamp,
+        }) as SubmittedTestAttempt;
+      } catch (error) {
+        throw this.configurationError(`Could not freeze the result of attempt ${attempt.id}`, error);
+      }
+
+      // All transaction reads must precede writes: read the completion record
+      // before freezing the attempt, clearing the session pointer, and granting
+      // sticky normal-flow completion.
+      const origin = attempt.origin;
+      const completionTestId = origin.kind === 'normal-test' && outcome !== 'not-passed' ? origin.testId : null;
+      const completionRef = completionTestId ? this.progress.doc(`${studentId}_${completionTestId}`) : null;
+      const sessionRef = this.attemptSessions.doc(getTestAttemptSessionId(studentId, origin));
+      const [sessionSnapshot, completionSnapshot] = await Promise.all([
+        transaction.get(sessionRef),
+        completionRef ? transaction.get(completionRef) : Promise.resolve(null),
+      ]);
+
+      let shouldClearSession = false;
+      if (sessionSnapshot.exists) {
+        try {
+          const session = parseSessionSnapshot(sessionSnapshot);
+          shouldClearSession =
+            session.attemptId === attempt.id && session.studentId === studentId && sameOrigin(session.origin, origin);
+        } catch (error) {
+          console.error(`Attempt session ${sessionSnapshot.id} contains invalid persisted data`, error);
+        }
+      }
+
+      transaction.set(attemptRef, submitted);
+      if (shouldClearSession) transaction.delete(sessionRef);
+
+      let completionGranted = false;
+      if (completionRef && completionSnapshot && completionTestId) {
+        const existing = completionSnapshot.data() as Partial<TestUnitCompletionProgress> | undefined;
+        if (existing?.status !== 'completed') {
+          const record: TestUnitCompletionProgress = {
+            userId: studentId,
+            lessonId: completionTestId,
+            status: 'completed',
+            exerciseProgress: [],
+            completedAt: typeof existing?.completedAt === 'string' ? existing.completedAt : timestamp,
+            lastAccessedAt: timestamp,
+            updatedAt: timestamp,
+            progressSchemaVersion: 2,
+          };
+          transaction.set(completionRef, record);
+          completionGranted = true;
+        }
+      }
+
+      return { attempt: toStudentAttempt(submitted) as StudentSubmittedTestAttempt, completionGranted };
+    });
+  }
+
+  async getAttemptSummary(origin: TestAttemptOrigin, studentId: string): Promise<TestAttemptOriginSummary> {
+    const submittedQuery = this.submittedAttemptsQuery(studentId, origin);
+    const resultFields = ['score', 'maxScore', 'percentage', 'outcome', 'submittedAt'] as const;
+
+    const [countSnapshot, bestSnapshot, latestSnapshot, sessionSnapshot] = await Promise.all([
+      submittedQuery.count().get(),
+      submittedQuery
+        .orderBy('percentage', 'desc')
+        .orderBy('submittedAt', 'desc')
+        .select(...resultFields)
+        .limit(1)
+        .get(),
+      submittedQuery
+        .orderBy('submittedAt', 'desc')
+        .select(...resultFields)
+        .limit(1)
+        .get(),
+      this.attemptSessions.doc(getTestAttemptSessionId(studentId, origin)).get(),
+    ]);
+
+    const toResultSummary = (snapshot: DocumentSnapshot): TestAttemptResultSummary => {
+      try {
+        const projection = submittedAttemptResultProjectionSchema.parse(snapshot.data());
+        return { attemptId: snapshot.id, ...projection };
+      } catch (error) {
+        throw this.configurationError(`Submitted attempt ${snapshot.id} contains invalid summary fields`, error);
+      }
+    };
+
+    return {
+      origin,
+      inProgressAttemptId: await this.activeAttemptIdForSession(sessionSnapshot, studentId, origin),
+      attemptCount: countSnapshot.data().count,
+      best: bestSnapshot.docs.length ? toResultSummary(bestSnapshot.docs[0]) : null,
+      latest: latestSnapshot.docs.length ? toResultSummary(latestSnapshot.docs[0]) : null,
+    };
+  }
+
+  private async activeAttemptIdForSession(
+    sessionSnapshot: DocumentSnapshot,
+    studentId: string,
+    origin: TestAttemptOrigin
+  ): Promise<string | null> {
+    if (!sessionSnapshot.exists) return null;
+
+    let session: TestAttemptSession;
+    try {
+      session = parseSessionSnapshot(sessionSnapshot);
+    } catch (error) {
+      console.error(`Attempt session ${sessionSnapshot.id} contains invalid persisted data`, error);
+      return null;
+    }
+    if (session.studentId !== studentId || !sameOrigin(session.origin, origin)) {
+      console.error(`Attempt session ${sessionSnapshot.id} points outside its student/origin scope`);
+      return null;
+    }
+
+    let activeAttempt: TestAttempt;
+    try {
+      activeAttempt = parseAttemptSnapshot(await this.attempts.doc(session.attemptId).get());
+    } catch (error) {
+      console.error(`Attempt session ${sessionSnapshot.id} points at invalid persisted attempt data`, error);
+      return null;
+    }
+    if (activeAttempt.status !== 'in-progress') return null;
+    if (activeAttempt.studentId !== studentId || !sameOrigin(activeAttempt.origin, origin)) {
+      console.error(`Attempt session ${sessionSnapshot.id} points at an attempt outside its student/origin scope`);
+      return null;
+    }
+    return activeAttempt.id;
+  }
+
+  /**
+   * Authorized repair for a trapped session scope. A valid resumable attempt is
+   * never abandoned (the exit from an unwanted attempt is submitting it), but a
+   * pointer that is corrupt, out of scope, or aimed at a missing, corrupt, or
+   * already submitted attempt is cleared so the student can start again. The
+   * pointed-at attempt document is always preserved for diagnosis.
+   */
+  async recoverAttemptSession(input: StartTestAttemptInput, studentId: string): Promise<{ recovered: boolean }> {
+    const { origin } = startTestAttemptInputSchema.parse(input) as { origin: TestAttemptOrigin };
+    const sessionId = getTestAttemptSessionId(studentId, origin);
+    const sessionRef = this.attemptSessions.doc(sessionId);
+
+    return this.db.runTransaction(async transaction => {
+      const sessionSnapshot = await transaction.get(sessionRef);
+      if (!sessionSnapshot.exists) return { recovered: false };
+
+      let session: TestAttemptSession;
+      try {
+        session = parseSessionSnapshot(sessionSnapshot);
+      } catch (error) {
+        console.error(`Clearing corrupt attempt session ${sessionId}`, error);
+        transaction.delete(sessionRef);
+        return { recovered: true };
+      }
+
+      if (session.studentId !== studentId || !sameOrigin(session.origin, origin)) {
+        console.error(`Clearing attempt session ${sessionId} outside its student/origin scope`);
+        transaction.delete(sessionRef);
+        return { recovered: true };
+      }
+
+      const attemptSnapshot = await transaction.get(this.attempts.doc(session.attemptId));
+      if (attemptSnapshot.exists) {
+        let attempt: TestAttempt;
+        try {
+          attempt = parseAttemptSnapshot(attemptSnapshot);
+        } catch (error) {
+          console.error(
+            `Clearing attempt session ${sessionId} pointing at corrupt attempt ${session.attemptId}`,
+            error
+          );
+          transaction.delete(sessionRef);
+          return { recovered: true };
+        }
+
+        if (attempt.status === 'in-progress' && attempt.studentId === studentId && sameOrigin(attempt.origin, origin)) {
+          try {
+            // An attempt whose frozen delivery can no longer be graded can never
+            // be submitted, so it is treated as recoverable corruption.
+            gradeFrozenTestDelivery(attempt.deliveryState as FrozenTestDeliveryState, attempt.answers);
+            return { recovered: false };
+          } catch (error) {
+            console.error(`Clearing attempt session ${sessionId} pointing at ungradable attempt ${attempt.id}`, error);
+            transaction.delete(sessionRef);
+            return { recovered: true };
+          }
+        }
+
+        console.error(
+          `Clearing stale attempt session ${sessionId} pointing at ${attempt.status} attempt ${attempt.id}`
+        );
+        transaction.delete(sessionRef);
+        return { recovered: true };
+      }
+
+      console.error(`Clearing attempt session ${sessionId} pointing at missing attempt ${session.attemptId}`);
+      transaction.delete(sessionRef);
+      return { recovered: true };
     });
   }
 }

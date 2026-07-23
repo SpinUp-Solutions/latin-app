@@ -59,7 +59,6 @@ export const TableEditor: React.FC = () => {
       ...editingContent.tableData,
       columns: editingContent.tableData.columns.filter((col: Column) => col.id !== columnId),
       rows: editingContent.tableData.rows.map((row: TableRow) => {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { [columnId]: _, ...remainingCells } = row.cells;
         return { ...row, cells: remainingCells };
       }),

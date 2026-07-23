@@ -10,7 +10,9 @@ import type {
   StartTestAttemptResult,
   StudentInProgressTestAttempt,
   StudentTestAttempt,
+  SubmitTestAttemptResult,
   TestAttemptOrigin,
+  TestAttemptOriginSummary,
   TestUnitDetail,
   TestUnitSummary,
   TestVersion,
@@ -136,6 +138,34 @@ export const testApi = appApi.injectEndpoints({
       transformResponse: (response: { attempt: StudentInProgressTestAttempt }) => response.attempt,
       invalidatesTags: (result, error, { attemptId }) => (result ? [{ type: 'TestAttempt', id: attemptId }] : []),
     }),
+    submitTestAttempt: builder.mutation<SubmitTestAttemptResult, { uid: string; attemptId: string }>({
+      query: ({ attemptId }) => ({ url: `/test-attempts/${attemptId}/submit`, method: 'POST' }),
+      invalidatesTags: (result, error, { uid, attemptId }) =>
+        result
+          ? [
+              { type: 'TestAttempt', id: attemptId },
+              { type: 'AttemptSummary', id: attemptSummaryTag(uid, result.attempt.origin) },
+              // A lost first response makes the idempotent retry report
+              // completionGranted: false, so gate on the outcome instead.
+              ...(result.attempt.origin.kind === 'normal-test' && result.attempt.outcome !== 'not-passed'
+                ? [{ type: 'StudentLearningPath' as const, id: uid }]
+                : []),
+            ]
+          : [],
+    }),
+    getTestAttemptSummary: builder.query<TestAttemptOriginSummary, { uid: string; origin: TestAttemptOrigin }>({
+      query: ({ origin }) => {
+        const originId = origin.kind === 'normal-test' ? origin.testId : origin.mockTestId;
+        return `/test-attempts/summaries?originKind=${origin.kind}&originId=${encodeURIComponent(originId)}`;
+      },
+      transformResponse: (response: { summary: TestAttemptOriginSummary }) => response.summary,
+      providesTags: (result, error, { uid, origin }) => [{ type: 'AttemptSummary', id: attemptSummaryTag(uid, origin) }],
+    }),
+    recoverTestAttemptSession: builder.mutation<{ recovered: boolean }, StartTestAttemptInput & { uid: string }>({
+      query: ({ uid: _uid, ...input }) => ({ url: '/test-attempts/recover', method: 'POST', body: input }),
+      invalidatesTags: (result, error, { uid, origin }) =>
+        result?.recovered ? [{ type: 'AttemptSummary', id: attemptSummaryTag(uid, origin) }] : [],
+    }),
   }),
 });
 
@@ -151,4 +181,7 @@ export const {
   useStartTestAttemptMutation,
   useGetTestAttemptQuery,
   useSaveTestAttemptAnswerMutation,
+  useSubmitTestAttemptMutation,
+  useGetTestAttemptSummaryQuery,
+  useRecoverTestAttemptSessionMutation,
 } = testApi;

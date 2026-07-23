@@ -2,7 +2,7 @@ import nextConfig from 'eslint-config-next';
 import tseslint from 'typescript-eslint';
 import prettierConfig from 'eslint-config-prettier';
 
-export default [
+const eslintConfig = [
   {
     ignores: ['.next/**', 'node_modules/**', 'functions/**', 'public/**'],
   },
@@ -23,3 +23,5 @@ export default [
     },
   },
 ];
+
+export default eslintConfig;
