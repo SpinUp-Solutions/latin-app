@@ -27,8 +27,7 @@ import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import type { FeedbackLevel } from '@/src/types/exercises/base';
 import { SentenceDiagrammingExercise } from '@/src/types/exercises/sentence-diagramming';
-import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
-import { resolveRuntimeMode } from '@/src/types/runtime-mode';
+import type { ExerciseAnswer, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
 export interface SentenceDiagramStudentProps {
@@ -36,7 +35,7 @@ export interface SentenceDiagramStudentProps {
   onComplete?: (score: number) => void;
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
-  testMode?: boolean;
+  initialAnswer?: ExerciseAnswer;
   onAttempt?: (attempt: DiagramAuditSubmission) => void;
 }
 
@@ -167,16 +166,19 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
   onComplete,
   runtimeMode,
   onAnswer,
-  testMode,
+  initialAnswer,
   onAttempt,
 }) => {
-  const mode = resolveRuntimeMode(runtimeMode, testMode);
+  const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
-  const [annotations, setAnnotations] = useState<DiagramAnnotation[]>([]);
+  const testAnswerMode = mode === 'test';
+  const [annotations, setAnnotations] = useState<DiagramAnnotation[]>(
+    initialAnswer?.type === 'sentence-diagramming' ? initialAnswer.annotations : []
+  );
   const [selection, setSelection] = useState<DiagramSelection | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [surfaceResetKey, setSurfaceResetKey] = useState(0);
-  const [testSubmitted, setTestSubmitted] = useState(false);
+  const [testSubmitted, setTestSubmitted] = useState(initialAnswer?.type === 'sentence-diagramming');
   const historyRef = useRef<DiagramAnnotation[][]>([]);
   const normalizedTools = normalizeAnnotationTools(exercise.data.availableStudentTools);
   const availableTools = normalizedTools.length ? normalizedTools : DEFAULT_STUDENT_TOOLS;
@@ -285,7 +287,7 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
     if (testSubmitted) return;
     onAttempt?.({ studentAnnotations: annotations });
 
-    if (mode === 'test') {
+    if (testAnswerMode) {
       onAnswer?.({ type: 'sentence-diagramming', annotations });
       setTestSubmitted(true);
       onComplete?.(0);
@@ -404,9 +406,10 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
           <SentenceDiagramToolbar
             availableTools={availableTools}
             activeKinds={activeKinds}
-            disabled={isCorrect === true}
+            disabled={isCorrect === true || testSubmitted}
             onToolClick={applyTool}
             onResetColors={() => {
+              if (isCorrect === true || testSubmitted) return;
               pushHistory(annotations);
               setAnnotations(currentAnnotations =>
                 resetDiagramColorAnnotations(currentAnnotations, exercise.data.tokens)
@@ -415,7 +418,7 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
               clearFeedback();
             }}
             onClear={() => {
-              if (isCorrect === true) {
+              if (isCorrect === true || testSubmitted) {
                 return;
               }
 
@@ -429,7 +432,7 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
           />
         </div>
 
-        {mode !== 'test' && (exercise.feedbackConfig.progressionRules?.showProgress ?? true) ? (
+        {!testAnswerMode && (exercise.feedbackConfig.progressionRules?.showProgress ?? true) ? (
           <div className="mx-5 mb-3 space-y-1.5">
             <div className="flex items-center gap-3">
               <div className="flex-1 h-1.5 rounded-full bg-stone-100 overflow-hidden">

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { adminDb } from '@/src/services/firebase-admin';
 import { verifyRequestAuth } from '@/src/lib/verifyRequestAuth';
 import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
+import { getLessonProgressAccessInTransaction } from '@/src/lib/learning-units/progression-access';
 import { Lesson, UserProgress } from '@/src/types/lesson';
 import {
   getFurthestPageIndex,
@@ -94,6 +95,18 @@ export async function POST(
         if (!isLessonDocumentData(lessonSnapshot.data())) throw new Error('LESSON_NOT_FOUND');
 
         const lesson = { id: lessonSnapshot.id, ...lessonSnapshot.data() } as Lesson;
+        const access = await getLessonProgressAccessInTransaction(
+          transaction,
+          adminDb,
+          lesson,
+          userId,
+          progressSnapshot.exists
+        );
+        if (access !== 'allowed') {
+          throw Object.assign(new Error(access), {
+            code: access === 'locked' ? 'LESSON_LOCKED' : 'LESSON_NOT_FOUND',
+          });
+        }
         const exerciseId = resolveExerciseId(lesson, progressData.exerciseId);
         if (!exerciseId) throw new Error('EXERCISE_NOT_FOUND');
 
@@ -149,6 +162,18 @@ export async function POST(
         if (!isLessonDocumentData(lessonSnapshot.data())) throw new Error('LESSON_NOT_FOUND');
 
         const lesson = { id: lessonSnapshot.id, ...lessonSnapshot.data() } as Lesson;
+        const access = await getLessonProgressAccessInTransaction(
+          transaction,
+          adminDb,
+          lesson,
+          userId,
+          progressSnapshot.exists
+        );
+        if (access !== 'allowed') {
+          throw Object.assign(new Error(access), {
+            code: access === 'locked' ? 'LESSON_LOCKED' : 'LESSON_NOT_FOUND',
+          });
+        }
         const submittedIndex =
           typeof progressData.pageId === 'string'
             ? lesson.pages.findIndex(page => page.id === progressData.pageId)
@@ -194,6 +219,18 @@ export async function POST(
         if (!isLessonDocumentData(lessonSnapshot.data())) throw new Error('LESSON_NOT_FOUND');
 
         const lesson = { id: lessonSnapshot.id, ...lessonSnapshot.data() } as Lesson;
+        const access = await getLessonProgressAccessInTransaction(
+          transaction,
+          adminDb,
+          lesson,
+          userId,
+          progressSnapshot.exists
+        );
+        if (access !== 'allowed') {
+          throw Object.assign(new Error(access), {
+            code: access === 'locked' ? 'LESSON_LOCKED' : 'LESSON_NOT_FOUND',
+          });
+        }
         const existing = (progressSnapshot.data() || {}) as Partial<UserProgress>;
         const exerciseProgress = normalizeExerciseProgress(lesson, existing.exerciseProgress);
         const missingExercises = getMissingExercises(getRequiredExercises(lesson), exerciseProgress);
@@ -236,6 +273,17 @@ export async function POST(
 
     return NextResponse.json({ error: 'Unsupported progress action' }, { status: 400 });
   } catch (error) {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      (error.code === 'LESSON_LOCKED' || error.code === 'LESSON_NOT_FOUND')
+    ) {
+      return NextResponse.json(
+        { error: error.code === 'LESSON_LOCKED' ? 'Lesson is locked' : 'Lesson not found' },
+        { status: error.code === 'LESSON_LOCKED' ? 403 : 404 }
+      );
+    }
     const message = error instanceof Error ? error.message : '';
     if (message === 'LESSON_NOT_FOUND') return NextResponse.json({ error: 'Lesson not found' }, { status: 404 });
     if (message === 'PAGE_NOT_FOUND') return NextResponse.json({ error: 'Page not found' }, { status: 400 });

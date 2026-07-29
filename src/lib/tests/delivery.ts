@@ -21,6 +21,7 @@ import type { GeneratedWordLoader } from './generated-exercises';
 import { resolveGeneratedExerciseItems } from './generated-exercises';
 import type { GeneratedTranslationItem } from '@/src/utils/exercises/generatedTranslationExercise';
 import { gradeExercise, maxPointsFor, type ExerciseScore, type ResolvedGeneratedItem } from './grading';
+import type { VocabularyPoolLoader } from './vocabulary-pool-loader.server';
 
 export interface FrozenTestDeliveryState extends TestAttemptDeliveryState {
   resolvedExercises: Record<string, { items: ResolvedGeneratedItem[] }>;
@@ -41,10 +42,21 @@ const cloneSerializable = <T>(value: T): T => JSON.parse(JSON.stringify(value)) 
 
 export async function createFrozenTestDeliveryState(
   version: TestVersion,
-  loadGeneratedWords: GeneratedWordLoader
+  loadGeneratedWords: GeneratedWordLoader,
+  loadVocabularyPool?: VocabularyPoolLoader
 ): Promise<FrozenTestDeliveryState> {
   const pages = cloneSerializable(version.pages);
   const resolvedExercises: FrozenTestDeliveryState['resolvedExercises'] = {};
+  const usesVocabularyPoolContent = pages.some(page =>
+    page.items.some(item => item.type === 'vocabulary-pool')
+  );
+  const vocabularyPool = version.vocabularyPoolId && usesVocabularyPoolContent
+    ? cloneSerializable(
+        await (loadVocabularyPool
+          ? loadVocabularyPool(version.vocabularyPoolId)
+          : Promise.reject(new Error(`No vocabulary pool loader was provided for ${version.vocabularyPoolId}`)))
+      )
+    : undefined;
 
   for (const page of pages) {
     for (const item of page.items) {
@@ -55,7 +67,12 @@ export async function createFrozenTestDeliveryState(
     }
   }
 
-  return { versionId: version.id, pages, resolvedExercises };
+  return {
+    versionId: version.id,
+    pages,
+    resolvedExercises,
+    ...(vocabularyPool ? { vocabularyPool } : {}),
+  };
 }
 
 /**
@@ -394,14 +411,14 @@ function sanitizeResolvedItem(item: ResolvedGeneratedItem): unknown {
   return projectGeneratedTranslationItem(item as GeneratedTranslationItem);
 }
 
-function sanitizePage(page: Page): Record<string, unknown> {
+function sanitizePage(page: Page): Page {
   return compact({
     id: page.id,
     title: page.title,
     audioPath: page.audioPath,
     autoAdvance: page.autoAdvance,
     items: page.items.map(sanitizeContentItem),
-  });
+  }) as unknown as Page;
 }
 
 export function sanitizeTestDeliveryState(state: FrozenTestDeliveryState): StudentTestDelivery {
@@ -414,6 +431,24 @@ export function sanitizeTestDeliveryState(state: FrozenTestDeliveryState): Stude
         { items: resolved.items.map(sanitizeResolvedItem) },
       ])
     ),
+    ...(state.vocabularyPool
+      ? {
+          vocabularyPool: {
+            id: state.vocabularyPool.id,
+            name: state.vocabularyPool.name,
+            items: state.vocabularyPool.items.map(item => ({
+              id: item.id,
+              latin: item.latin,
+              english: item.english,
+              pronunciation: item.pronunciation,
+              audioPath: item.audioPath,
+              example: item.example,
+              partOfSpeech: item.partOfSpeech,
+              notes: item.notes,
+            })),
+          },
+        }
+      : {}),
   };
 }
 

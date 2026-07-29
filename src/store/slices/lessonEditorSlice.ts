@@ -10,6 +10,7 @@ import {
   testVersionToPageDocumentDraft,
   type PageDocumentDraft,
 } from '@/src/lib/page-document-draft';
+import { getLessonPracticeCategorySelections } from '@/src/utils/practiceCategoryLessons';
 
 interface PageDocumentDraftRecord {
   document: PageDocumentDraft;
@@ -149,8 +150,11 @@ const lessonEditorSlice = createSlice({
       state.currentLesson = action.payload
         ? {
             ...action.payload,
+            showWordSearch: action.payload.showWordSearch ?? true,
+            practiceCategorySelections: getLessonPracticeCategorySelections(action.payload),
             practiceCategoryIds:
               action.payload.practiceCategoryIds ??
+              action.payload.practiceCategorySelections?.map(selection => selection.categoryId) ??
               action.payload.practiceCategories?.map(category => category.id) ??
               [],
           }
@@ -164,6 +168,8 @@ const lessonEditorSlice = createSlice({
             liveOrder: null,
             publishedAt: null,
             publishedBy: null,
+            showWordSearch: false,
+            practiceCategorySelections: [],
             practiceCategoryIds: [],
             practiceCategories: [],
           };
@@ -179,7 +185,10 @@ const lessonEditorSlice = createSlice({
       state.dirty = false;
     },
 
-    updatePageDocumentInfo: (state, action: PayloadAction<Partial<Pick<PageDocumentDraft, 'ownerId' | 'title' | 'description'>>>) => {
+    updatePageDocumentInfo: (
+      state,
+      action: PayloadAction<Partial<Pick<PageDocumentDraft, 'ownerId' | 'title' | 'description'>>>
+    ) => {
       if (!state.currentPageDocument) return;
       Object.assign(state.currentPageDocument, action.payload);
       state.dirty = true;
@@ -191,7 +200,15 @@ const lessonEditorSlice = createSlice({
         Partial<
           Pick<
             Lesson,
-            'id' | 'title' | 'description' | 'type' | 'vocabulary_pool' | 'practiceCategoryIds' | 'practiceCategories'
+            | 'id'
+            | 'title'
+            | 'description'
+            | 'type'
+            | 'vocabulary_pool'
+            | 'showWordSearch'
+            | 'practiceCategorySelections'
+            | 'practiceCategoryIds'
+            | 'practiceCategories'
           >
         >
       >

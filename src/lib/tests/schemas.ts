@@ -5,6 +5,12 @@ import { validatePageDocumentIds } from '@/src/utils/lessonProgress';
 import { getTestVersionSummaryFields } from './domain';
 
 const optionalAuditFieldSchema = z.string().min(1).optional();
+const isoTimestampSchema = z
+  .string()
+  .refine(
+    value => Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value,
+    'Expected a canonical ISO-8601 timestamp'
+  );
 
 const optionalDescriptionSchema = z
   .string()
@@ -16,6 +22,7 @@ const testVersionContentShape = {
   id: firestoreDocumentIdSchema,
   name: z.string().trim().min(1),
   pages: z.array(pageSchema).min(1),
+  vocabularyPoolId: firestoreDocumentIdSchema.nullable().optional(),
 };
 
 const testVersionInputShapeSchema = z.object(testVersionContentShape).strict();
@@ -86,10 +93,18 @@ const testVersionUpdateShapeSchema = z
   .object({
     name: testVersionContentShape.name,
     pages: testVersionContentShape.pages,
+    vocabularyPoolId: testVersionContentShape.vocabularyPoolId,
   })
   .strict();
 
 export const updateTestVersionInputSchema = testVersionUpdateShapeSchema.superRefine(refineTestVersionContent);
+
+export const duplicateTestVersionInputSchema = z
+  .object({
+    requestId: firestoreDocumentIdSchema,
+    name: z.string().trim().min(1).optional(),
+  })
+  .strict();
 
 const testVersionDocumentShapeSchema = z
   .object({
@@ -163,6 +178,55 @@ export const mockTestDocumentSchema = mockTestShapeSchema.superRefine((value, co
   }
 });
 
+const mockSettingsShape = {
+  title: z.string().trim().min(1),
+  description: z.string().trim().default(''),
+  passingPercentage: passingPercentageSchema,
+  isLive: z.boolean(),
+};
+
+export const createStandaloneMockInputSchema = z
+  .object({
+    mock: z.object({ id: firestoreDocumentIdSchema, ...mockSettingsShape }).strict(),
+    version: testVersionInputSchema,
+  })
+  .strict();
+
+export const assignVersionToMockInputSchema = z
+  .object({
+    testId: firestoreDocumentIdSchema,
+    versionId: firestoreDocumentIdSchema,
+    title: z.string().trim().min(1),
+    description: z.string().trim().default(''),
+    passingPercentage: passingPercentageSchema,
+    isLive: z.boolean(),
+  })
+  .strict();
+
+export const updateMockTestInputSchema = z
+  .object({
+    title: z.string().trim().min(1).optional(),
+    description: z.string().trim().optional(),
+    passingPercentage: passingPercentageSchema.optional(),
+    isLive: z.boolean().optional(),
+  })
+  .strict()
+  .refine(value => Object.keys(value).length > 0, 'At least one mock setting must be provided');
+
+/** Standalone reactivation is deliberately explicit about future visibility. */
+export const reactivateStandaloneMockInputSchema = z.object({ isLive: z.boolean() }).strict();
+export const moveStandaloneMockToTestInputSchema = z.object({ testId: firestoreDocumentIdSchema }).strict();
+export const duplicateStandaloneMockVersionIntoTestInputSchema = z
+  .object({
+    testId: firestoreDocumentIdSchema,
+    requestId: firestoreDocumentIdSchema,
+  })
+  .strict();
+export const reorderMockTestsInputSchema = z
+  .object({ mockIds: z.array(firestoreDocumentIdSchema).min(1).max(500) })
+  .strict()
+  .refine(value => new Set(value.mockIds).size === value.mockIds.length, 'Mock IDs must be unique');
+
 export const testAttemptOriginSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('normal-test'), testId: firestoreDocumentIdSchema }).strict(),
   z.object({ kind: z.literal('mock-test'), mockTestId: firestoreDocumentIdSchema }).strict(),
@@ -173,6 +237,27 @@ const testAttemptDeliveryStateSchema = z
     versionId: firestoreDocumentIdSchema,
     pages: z.array(pageSchema).min(1),
     resolvedExercises: z.record(z.string(), z.object({ items: z.array(z.unknown()) }).strict()),
+    vocabularyPool: z
+      .object({
+        id: firestoreDocumentIdSchema,
+        name: z.string().trim().min(1),
+        items: z.array(
+          z
+            .object({
+              id: z.string().min(1),
+              latin: z.string(),
+              english: z.string(),
+              pronunciation: z.string().nullable().optional(),
+              audioPath: z.string().nullable().optional(),
+              example: z.string().optional(),
+              partOfSpeech: z.string().optional(),
+              notes: z.string().optional(),
+            })
+            .strict()
+        ),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -222,7 +307,7 @@ export const submittedTestAttemptDocumentSchema = z
     maxScore: z.number().finite().positive(),
     percentage: z.number().finite().min(0).max(100),
     outcome: z.enum(['score-only', 'passed', 'not-passed']),
-    submittedAt: z.string().min(1),
+    submittedAt: isoTimestampSchema,
   })
   .strict();
 
@@ -233,7 +318,15 @@ export const submittedAttemptResultProjectionSchema = z
     maxScore: z.number().finite().positive(),
     percentage: z.number().finite().min(0).max(100),
     outcome: z.enum(['score-only', 'passed', 'not-passed']),
-    submittedAt: z.string().min(1),
+    submittedAt: isoTimestampSchema,
+  })
+  .strict();
+
+/** Narrow projection used for mock-card history queries. */
+export const submittedAttemptTrendProjectionSchema = z
+  .object({
+    percentage: z.number().finite().min(0).max(100),
+    submittedAt: isoTimestampSchema,
   })
   .strict();
 
@@ -255,19 +348,16 @@ export const testAttemptSessionDocumentSchema = z
 
 export const startTestAttemptInputSchema = z.object({ origin: testAttemptOriginSchema }).strict();
 
-export const attemptSummaryQuerySchema = z
+export const saveTestAttemptAnswersInputSchema = z
   .object({
-    originKind: z.enum(['normal-test', 'mock-test']),
-    originId: firestoreDocumentIdSchema,
+    answers: z.record(
+      z.string().trim().min(1).max(1500),
+      z.unknown().refine(value => value !== undefined, 'answer is required; use null to clear it')
+    ),
   })
-  .strict();
-
-export const saveTestAttemptAnswerInputSchema = z
-  .object({
-    exerciseId: z.string().trim().min(1).max(1500),
-    answer: z.unknown().refine(value => value !== undefined, 'answer is required; use null to clear it'),
-  })
-  .strict();
+  .strict()
+  .refine(value => Object.keys(value.answers).length > 0, 'At least one answer is required')
+  .refine(value => Object.keys(value.answers).length <= 100, 'No more than 100 answers may be saved at once');
 
 export const createTestUnitInputSchema = z
   .object({
@@ -304,12 +394,19 @@ export const updateTestWithVersionInputSchema = z
 
 export type TestVersionInput = z.infer<typeof testVersionInputSchema>;
 export type UpdateTestVersionInput = z.infer<typeof updateTestVersionInputSchema>;
+export type DuplicateTestVersionInput = z.infer<typeof duplicateTestVersionInputSchema>;
 export type CreateTestUnitInput = z.infer<typeof createTestUnitInputSchema>;
 export type CreateTestWithVersionInput = z.infer<typeof createTestWithVersionSchema>;
 export type UpdateTestUnitInput = z.infer<typeof updateTestUnitInputSchema>;
 export type UpdateTestWithVersionInput = z.infer<typeof updateTestWithVersionInputSchema>;
-export type MockTestDocument = z.infer<typeof mockTestDocumentSchema>;
-export type TestAttemptOriginInput = z.infer<typeof testAttemptOriginSchema>;
+export type CreateStandaloneMockInput = z.infer<typeof createStandaloneMockInputSchema>;
+export type AssignVersionToMockInput = z.infer<typeof assignVersionToMockInputSchema>;
+export type UpdateMockTestInput = z.infer<typeof updateMockTestInputSchema>;
+export type ReactivateStandaloneMockInput = z.infer<typeof reactivateStandaloneMockInputSchema>;
+export type MoveStandaloneMockToTestInput = z.infer<typeof moveStandaloneMockToTestInputSchema>;
+export type DuplicateStandaloneMockVersionIntoTestInput = z.infer<
+  typeof duplicateStandaloneMockVersionIntoTestInputSchema
+>;
+export type ReorderMockTestsInput = z.infer<typeof reorderMockTestsInputSchema>;
 export type StartTestAttemptInput = z.infer<typeof startTestAttemptInputSchema>;
-export type SaveTestAttemptAnswerInput = z.infer<typeof saveTestAttemptAnswerInputSchema>;
-export type AttemptSummaryQuery = z.infer<typeof attemptSummaryQuerySchema>;
+export type SaveTestAttemptAnswersInput = z.infer<typeof saveTestAttemptAnswersInputSchema>;

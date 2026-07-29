@@ -34,6 +34,3 @@ export const TEST_RUNTIME_FEEDBACK_CONFIG: FeedbackConfig = {
     showProgress: true,
   },
 };
-
-export const resolveRuntimeMode = (runtimeMode?: RuntimeMode, testMode?: boolean): RuntimeMode =>
-  runtimeMode ?? (testMode ? 'test' : 'practice');

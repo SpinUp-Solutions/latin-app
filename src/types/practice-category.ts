@@ -4,6 +4,22 @@ export const PRACTICE_LESSON_TYPES = ['vocab', 'sentence-diagramming', 'listenin
 
 export type PracticeLessonType = (typeof PRACTICE_LESSON_TYPES)[number];
 export type PracticeCategoryStatus = 'active' | 'archived';
+export type PracticeTagStatus = 'active' | 'archived';
+
+export interface PracticeTagSummary {
+  id: string;
+  name: string;
+  status: PracticeTagStatus;
+  tagOrder: number;
+}
+
+export interface PracticeTag extends PracticeTagSummary {
+  normalizedName: string;
+  createdAt: string;
+  createdBy: string;
+  updatedAt: string;
+  updatedBy: string;
+}
 
 export interface PracticeCategorySummary {
   id: string;
@@ -12,9 +28,11 @@ export interface PracticeCategorySummary {
   description?: string;
   status: PracticeCategoryStatus;
   categoryOrder: number;
+  tags: PracticeTagSummary[];
 }
 
 export interface PracticeCategory extends PracticeCategorySummary {
+  tags: PracticeTag[];
   normalizedName: string;
   createdAt: string;
   createdBy: string;
@@ -27,15 +45,21 @@ export interface PracticeCategoryMembership {
   categoryId: string;
   lessonId: string;
   lessonOrder: number;
+  tagIds: string[];
   createdAt: string;
   createdBy: string;
   updatedAt: string;
   updatedBy: string;
 }
 
-/** Student-facing ordering metadata for one lesson inside one practice category. */
-export interface PracticeCategoryPlacement {
+/** Complete desired category/tag assignment submitted by lesson editors. */
+export interface PracticeCategorySelection {
   categoryId: string;
+  tagIds: string[];
+}
+
+/** Student-facing ordering metadata for one lesson inside one practice category. */
+export interface PracticeCategoryPlacement extends PracticeCategorySelection {
   lessonOrder: number;
 }
 
@@ -48,4 +72,5 @@ export interface PracticeCategoryWithCounts extends PracticeCategory {
 export type PracticeCategoryLesson = LessonSummary & {
   membershipId: string;
   lessonOrder: number;
+  tagIds: string[];
 };

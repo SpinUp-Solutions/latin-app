@@ -20,6 +20,10 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /learningPaths/{document=**} {
+      allow read, write: if false;
+    }
+
     // Assessment content, attempts, and gate-controlling progress are available
     // only through authenticated server routes. The Admin SDK bypasses rules.
     match /testVersions/{document=**} {
@@ -38,6 +42,10 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /mockTestOrdering/{document=**} {
+      allow read, write: if false;
+    }
+
     match /userProgress/{document=**} {
       allow read, write: if false;
     }
@@ -49,12 +57,14 @@ service cloud.firestore {
     match /{collection}/{document=**} {
       allow read, write: if collection != 'diagramming_attempts'
         && collection != 'lessons'
+        && collection != 'learningPaths'
         && collection != 'practiceCategories'
         && collection != 'practiceCategoryMemberships'
         && collection != 'testVersions'
         && collection != 'testAttempts'
         && collection != 'testAttemptSessions'
         && collection != 'mockTests'
+        && collection != 'mockTestOrdering'
         && collection != 'userProgress'
         && collection != 'userProgressMigrationV2Backups';
     }

@@ -12,8 +12,7 @@ import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { ClickableRichDisplay } from '../core/clickable-rich-display';
 import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
-import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
-import { resolveRuntimeMode } from '@/src/types/runtime-mode';
+import type { ExerciseAnswer, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
 import { RecordedAnswerControls } from './recorded-answer-controls';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
@@ -22,16 +21,25 @@ interface Props {
   onComplete?: (score: number) => void;
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
-  testMode?: boolean;
+  initialAnswer?: ExerciseAnswer;
 }
 
-const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete, runtimeMode, onAnswer, testMode }) => {
-  const mode = resolveRuntimeMode(runtimeMode, testMode);
+const TextSelectionExerciseComponent: React.FC<Props> = ({
+  exercise,
+  onComplete,
+  runtimeMode,
+  onAnswer,
+  initialAnswer,
+}) => {
+  const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
-  const [selectedWordIndex, setSelectedWordIndex] = useState<number | null>(null);
-  const [submittedIndices, setSubmittedIndices] = useState<number[]>([]);
+  const testAnswerMode = mode === 'test';
+  const restoredIndices = initialAnswer?.type === 'text-selection' ? initialAnswer.selectedWordIndices : [];
+  const restoredIndex = Math.min(restoredIndices.length, Math.max(exercise.data.questions.length - 1, 0));
+  const [selectedWordIndex, setSelectedWordIndex] = useState<number | null>(restoredIndices[restoredIndex] ?? null);
+  const [submittedIndices, setSubmittedIndices] = useState<number[]>(restoredIndices);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [testSubmitted, setTestSubmitted] = useState(false);
+  const [testSubmitted, setTestSubmitted] = useState(restoredIndices[restoredIndex] !== undefined);
 
   const {
     currentIndex,
@@ -43,6 +51,7 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete,
     nextItem,
   } = useExerciseProgression({
     totalItems: exercise.data.questions.length,
+    initialIndex: restoredIndex,
     itemProgressionDelay: exercise.itemProgressionDelay,
     progressionRules: exercise.feedbackConfig.progressionRules,
   });
@@ -81,7 +90,7 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete,
     setSubmittedIndices(nextIndices);
     setIsProcessing(true);
 
-    if (mode === 'test') {
+    if (testAnswerMode) {
       onAnswer?.({ type: 'text-selection', selectedWordIndices: nextIndices });
       setTestSubmitted(true);
       return;
@@ -89,9 +98,7 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete,
 
     const validation = validateTextSelectionExercise(wordIndex, exercise, currentIndex);
     const finalScore = isLastItem
-      ? Math.round(
-          gradeExercisePercentage({ exercise }, { type: 'text-selection', selectedWordIndices: nextIndices })
-        )
+      ? Math.round(gradeExercisePercentage({ exercise }, { type: 'text-selection', selectedWordIndices: nextIndices }))
       : null;
 
     if (validation.isCorrect) {
@@ -189,7 +196,7 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({ exercise, onComplete,
           />
         </div>
 
-        {mode === 'test' ? (
+        {testAnswerMode ? (
           testSubmitted && <RecordedAnswerControls isLastItem={isLastItem} onContinue={continueTest} />
         ) : (
           <FeedbackDisplay

@@ -53,6 +53,8 @@ import {
 import { Input } from '@/src/components/ui/input';
 import { Skeleton } from '@/src/components/ui/skeleton';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
+import { PracticeTagManager } from '@/src/components/ui/admin/practice-categories/PracticeTagManager';
+import { PracticeTagPicker } from '@/src/components/ui/admin/practice-categories/PracticeTagPicker';
 import { getApiErrorMessage, hasApiErrorStatus } from '@/src/store/api/baseQuery';
 import {
   useAddPracticeCategoryLessonsMutation,
@@ -61,6 +63,7 @@ import {
   useLazyGetAvailablePracticeCategoryLessonsQuery,
   useRemovePracticeCategoryLessonMutation,
   useReorderPracticeCategoryLessonsMutation,
+  useUpdatePracticeMembershipTagsMutation,
   useUpdatePracticeCategoryMutation,
 } from '@/src/store/api/practiceCategoryApi';
 import type { LessonSummary } from '@/src/types/lesson';
@@ -69,6 +72,7 @@ import type {
   PracticeCategoryStatus,
   PracticeCategoryWithCounts,
   PracticeLessonType,
+  PracticeTag,
 } from '@/src/types/practice-category';
 import { haveSameIdOrder, orderByIds } from '@/src/utils/orderByIds';
 
@@ -88,6 +92,50 @@ const plainRichText = (value: string) =>
     .replace(/\s+/g, ' ')
     .trim();
 
+function MembershipTagPicker({
+  tags,
+  selectedTagIds,
+  disabled,
+  pending,
+  allowNewSelections,
+  onCommit,
+}: {
+  tags: PracticeTag[];
+  selectedTagIds: string[];
+  disabled: boolean;
+  pending: boolean;
+  allowNewSelections: boolean;
+  onCommit: (tagIds: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [draftTagIds, setDraftTagIds] = useState(selectedTagIds);
+
+  useEffect(() => {
+    if (!open) setDraftTagIds(selectedTagIds);
+  }, [open, selectedTagIds]);
+
+  return (
+    <PracticeTagPicker
+      tags={tags}
+      selectedTagIds={draftTagIds}
+      onChange={setDraftTagIds}
+      onOpenChange={nextOpen => {
+        setOpen(nextOpen);
+        if (
+          !nextOpen &&
+          (draftTagIds.length !== selectedTagIds.length ||
+            draftTagIds.some((tagId, index) => tagId !== selectedTagIds[index]))
+        ) {
+          onCommit(draftTagIds);
+        }
+      }}
+      disabled={disabled || pending}
+      allowNewSelections={allowNewSelections}
+      className="max-w-full"
+    />
+  );
+}
+
 interface SortableMembershipRowProps {
   lesson: PracticeCategoryLesson;
   position: number;
@@ -95,9 +143,13 @@ interface SortableMembershipRowProps {
   orderingEnabled: boolean;
   mutationDisabled: boolean;
   removePending: boolean;
+  tags: PracticeTag[];
+  tagsPending: boolean;
+  allowNewTagSelections: boolean;
   onMove: (offset: -1 | 1) => void;
   onOpenLesson: () => void;
   onRemove: () => void;
+  onTagsChange: (tagIds: string[]) => void;
 }
 
 function SortableMembershipRow({
@@ -107,9 +159,13 @@ function SortableMembershipRow({
   orderingEnabled,
   mutationDisabled,
   removePending,
+  tags,
+  tagsPending,
+  allowNewTagSelections,
   onMove,
   onOpenLesson,
   onRemove,
+  onTagsChange,
 }: SortableMembershipRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: lesson.id,
@@ -181,6 +237,16 @@ function SortableMembershipRow({
         {lesson.description && (
           <SimpleRichDisplay content={lesson.description} className="mt-1 line-clamp-2 text-sm text-roman-stone" />
         )}
+        <div className="mt-2">
+          <MembershipTagPicker
+            tags={tags}
+            selectedTagIds={lesson.tagIds}
+            onCommit={onTagsChange}
+            disabled={mutationDisabled}
+            pending={tagsPending}
+            allowNewSelections={allowNewTagSelections}
+          />
+        </div>
       </div>
 
       <Button
@@ -394,10 +460,14 @@ function PracticeCategoryDetailPage() {
   const [originType, setOriginType] = useState<PracticeLessonType>('vocab');
   const [originStatus, setOriginStatus] = useState<PracticeCategoryStatus>('active');
   const [lessonOrder, setLessonOrder] = useState<string[] | null>(null);
+  const [tagOrder, setTagOrder] = useState<string[] | null>(null);
+  const [lessonSearch, setLessonSearch] = useState('');
+  const [lessonTagFilters, setLessonTagFilters] = useState<string[]>([]);
   const [formOpen, setFormOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [removeLesson, setRemoveLesson] = useState<PracticeCategoryLesson | null>(null);
   const [removePendingId, setRemovePendingId] = useState<string | null>(null);
+  const [tagUpdatePendingId, setTagUpdatePendingId] = useState<string | null>(null);
   const [categoryAction, setCategoryAction] = useState<CategoryAction | null>(null);
   const [discardNavigationOpen, setDiscardNavigationOpen] = useState(false);
   const [pendingHref, setPendingHref] = useState<string | null>(null);
@@ -418,6 +488,7 @@ function PracticeCategoryDetailPage() {
   const [addCategoryLessons] = useAddPracticeCategoryLessonsMutation();
   const [removeCategoryLesson] = useRemovePracticeCategoryLessonMutation();
   const [reorderCategoryLessons, { isLoading: orderPending }] = useReorderPracticeCategoryLessonsMutation();
+  const [updateMembershipTags] = useUpdatePracticeMembershipTagsMutation();
   const loading = !urlReady || (detailQueryLoading && !cachedDetail);
   const category = cachedDetail?.category ?? null;
   const serverLessons = cachedDetail?.lessons ?? EMPTY_LESSONS;
@@ -425,7 +496,33 @@ function PracticeCategoryDetailPage() {
     () => (lessonOrder ? orderByIds(serverLessons, lessonOrder) : serverLessons),
     [lessonOrder, serverLessons]
   );
-  const dirty = lessonOrder !== null && !haveSameIdOrder(lessonIds(lessons), lessonIds(serverLessons));
+  const lessonOrderDirty = lessonOrder !== null && !haveSameIdOrder(lessonIds(lessons), lessonIds(serverLessons));
+  const activeServerTagIds = useMemo(
+    () =>
+      (category?.tags ?? [])
+        .filter(tag => tag.status === 'active')
+        .sort((a, b) => a.tagOrder - b.tagOrder || a.id.localeCompare(b.id))
+        .map(tag => tag.id),
+    [category?.tags]
+  );
+  const tagOrderDirty = tagOrder !== null && !haveSameIdOrder(tagOrder, activeServerTagIds);
+  const dirty = lessonOrderDirty || tagOrderDirty;
+  const normalizedLessonSearch = lessonSearch.trim().toLocaleLowerCase();
+  const lessonFiltersActive = normalizedLessonSearch.length > 0 || lessonTagFilters.length > 0;
+  const visibleLessons = useMemo(
+    () =>
+      lessons.filter(lesson => {
+        const matchesSearch =
+          !normalizedLessonSearch ||
+          `${plainRichText(lesson.title)}\n${plainRichText(lesson.description ?? '')}`
+            .toLocaleLowerCase()
+            .includes(normalizedLessonSearch);
+        const matchesTags =
+          lessonTagFilters.length === 0 || lesson.tagIds.some(tagId => lessonTagFilters.includes(tagId));
+        return matchesSearch && matchesTags;
+      }),
+    [lessonTagFilters, lessons, normalizedLessonSearch]
+  );
   const loadError = detailQueryError ? getApiErrorMessage(detailQueryError, 'Unable to load this category') : null;
   const categoryActionPending = updatePending || deletePending;
 
@@ -434,7 +531,7 @@ function PracticeCategoryDetailPage() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  useBrowserNavigationProtection(dirty, 'lesson order changes');
+  useBrowserNavigationProtection(dirty, tagOrderDirty ? 'tag order changes' : 'lesson order changes');
 
   useEffect(() => {
     if (!cachedDetail || hasOriginContext.current) return;
@@ -462,7 +559,7 @@ function PracticeCategoryDetailPage() {
   }, [addOpen, lessons, loading]);
 
   const listHref = `/admin/practice-categories?lessonType=${originType}&status=${originStatus}`;
-  const orderingEnabled = category?.status === 'active' && !orderPending;
+  const orderingEnabled = category?.status === 'active' && !orderPending && !tagOrderDirty && !lessonFiltersActive;
 
   const guardHref = (href: string) => {
     if (orderPending) return;
@@ -499,6 +596,7 @@ function PracticeCategoryDetailPage() {
   const continuePendingNavigation = () => {
     const href = pendingHref;
     setLessonOrder(null);
+    setTagOrder(null);
     setDiscardNavigationOpen(false);
     setPendingHref(null);
     if (href) router.push(href);
@@ -583,6 +681,29 @@ function PracticeCategoryDetailPage() {
     } finally {
       setRemovePendingId(null);
     }
+  };
+
+  const saveMembershipTags = async (lesson: PracticeCategoryLesson, tagIds: string[]) => {
+    if (!category) return;
+    setTagUpdatePendingId(lesson.id);
+    try {
+      await updateMembershipTags({
+        categoryId: category.id,
+        lessonId: lesson.id,
+        tagIds,
+      }).unwrap();
+      toast.success(`Tags updated for ${plainRichText(lesson.title) || 'lesson'}`);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Unable to update lesson tags'));
+    } finally {
+      setTagUpdatePendingId(null);
+    }
+  };
+
+  const filterLessonsByTag = (tagId: string) => {
+    setLessonTagFilters([tagId]);
+    setLessonSearch('');
+    requestAnimationFrame(() => document.getElementById('membership-heading')?.scrollIntoView({ behavior: 'smooth' }));
   };
 
   const confirmCategoryAction = async () => {
@@ -714,137 +835,222 @@ function PracticeCategoryDetailPage() {
         ) : loadError ? (
           <InlineLoadError message={loadError} onRetry={() => void refetchDetail()} />
         ) : category ? (
-          <section className="rounded-xl border bg-white/70 p-4 shadow-sm sm:p-6" aria-labelledby="membership-heading">
-            <div className="flex flex-col gap-4 border-b pb-5 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 id="membership-heading" className="font-serif text-xl text-gray-900" tabIndex={-1}>
-                  Lessons in this category
-                </h2>
-                <p className="mt-1 text-sm text-roman-stone">
-                  {category.status === 'active'
-                    ? 'Order here is independent from publishing order and from every other category.'
-                    : 'Assignments remain visible and removable. Restore the category to add or reorder lessons.'}
-                </p>
-              </div>
-              {category.status === 'active' && (
-                <Button
-                  type="button"
-                  className="shrink-0"
-                  disabled={dirty || addLoading}
-                  title={dirty ? 'Save or discard lesson order changes first' : undefined}
-                  onClick={() => void openAddLessons()}>
-                  {addLoading ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
-                  )}
-                  {addLoading ? 'Loading lessons…' : 'Add lessons'}
-                </Button>
-              )}
-            </div>
-
-            {dirty && (
-              <p className="mt-4 text-sm font-medium text-amber-700" role="status">
-                Lesson order has unsaved changes. Save or discard it before changing memberships.
-              </p>
-            )}
-
-            <div className="mt-5">
-              {lessons.length === 0 ? (
-                <div className="rounded-lg border border-dashed bg-white px-6 py-12 text-center">
-                  {category.status === 'active' ? (
-                    <>
-                      <h3 className="font-serif text-lg text-gray-900">No lessons in this category yet</h3>
-                      <p className="mt-2 text-sm text-roman-stone">
-                        Add live or draft {practiceLessonTypeLabel(category.lessonType)} lessons.
-                      </p>
-                      <Button
-                        type="button"
-                        className="mt-5"
-                        disabled={addLoading}
-                        onClick={() => void openAddLessons()}>
-                        {addLoading ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-                        ) : (
-                          <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
-                        )}
-                        {addLoading ? 'Loading lessons…' : 'Add lessons'}
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <h3 className="font-serif text-lg text-gray-900">This archived category has no lessons</h3>
-                      <p className="mt-2 text-sm text-roman-stone">
-                        Restore it to add lessons, or permanently delete it if it is no longer needed.
-                      </p>
-                      <div className="mt-5 flex flex-wrap justify-center gap-2">
-                        <Button type="button" onClick={() => setCategoryAction('restore')}>
-                          <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" /> Restore
-                        </Button>
-                        <Button type="button" variant="destructive" onClick={() => setCategoryAction('delete')}>
-                          <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" /> Delete permanently
-                        </Button>
-                      </div>
-                    </>
-                  )}
+          <>
+            <PracticeTagManager
+              category={category}
+              usageCounts={cachedDetail?.tagUsageCounts ?? {}}
+              orderedTagIds={tagOrder}
+              onOrderChange={setTagOrder}
+              orderingBlocked={lessonOrderDirty}
+              onFilterLessons={filterLessonsByTag}
+            />
+            <section
+              className="rounded-xl border bg-white/70 p-4 shadow-sm sm:p-6"
+              aria-labelledby="membership-heading">
+              <div className="flex flex-col gap-4 border-b pb-5 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 id="membership-heading" className="font-serif text-xl text-gray-900" tabIndex={-1}>
+                    Lessons in this category
+                  </h2>
+                  <p className="mt-1 text-sm text-roman-stone">
+                    {category.status === 'active'
+                      ? 'Order here is independent from publishing order and from every other category.'
+                      : 'Assignments remain visible and removable. Restore the category to add or reorder lessons.'}
+                  </p>
                 </div>
-              ) : (
-                <DndContext
-                  sensors={sensors}
-                  onDragEnd={handleDragEnd}
-                  accessibility={{
-                    announcements: {
-                      onDragStart: ({ active }) => {
-                        const lesson = lessons.find(item => item.id === active.id);
-                        return lesson ? `Picked up ${plainRichText(lesson.title)}` : 'Picked up lesson';
-                      },
-                      onDragOver: ({ active, over }) => {
-                        const lesson = lessons.find(item => item.id === active.id);
-                        const nextPosition = over ? lessons.findIndex(item => item.id === over.id) + 1 : 0;
-                        return lesson && nextPosition
-                          ? `${plainRichText(lesson.title)} is over position ${nextPosition}`
-                          : 'Lesson is no longer over a valid position';
-                      },
-                      onDragEnd: ({ active, over }) => {
-                        const lesson = lessons.find(item => item.id === active.id);
-                        const nextPosition = over ? lessons.findIndex(item => item.id === over.id) + 1 : 0;
-                        return lesson && nextPosition
-                          ? `${plainRichText(lesson.title)} moved to position ${nextPosition}`
-                          : 'Lesson movement ended';
-                      },
-                      onDragCancel: ({ active }) => {
-                        const lesson = lessons.find(item => item.id === active.id);
-                        return lesson
-                          ? `Movement cancelled for ${plainRichText(lesson.title)}`
-                          : 'Lesson movement cancelled';
-                      },
-                    },
-                  }}>
-                  <SortableContext items={lessonIds(lessons)} strategy={verticalListSortingStrategy}>
-                    <div className="space-y-3">
-                      {lessons.map((lesson, index) => (
-                        <SortableMembershipRow
-                          key={lesson.id}
-                          lesson={lesson}
-                          position={index + 1}
-                          total={lessons.length}
-                          orderingEnabled={Boolean(orderingEnabled)}
-                          mutationDisabled={dirty}
-                          removePending={removePendingId === lesson.id}
-                          onMove={offset => moveLesson(lesson.id, offset)}
-                          onOpenLesson={() => guardHref(`/admin/lessons/edit/${lesson.id}`)}
-                          onRemove={() => setRemoveLesson(lesson)}
-                        />
-                      ))}
-                    </div>
-                  </SortableContext>
-                </DndContext>
+                {category.status === 'active' && (
+                  <Button
+                    type="button"
+                    className="shrink-0"
+                    disabled={dirty || addLoading}
+                    title={dirty ? 'Save or discard the current order changes first' : undefined}
+                    onClick={() => void openAddLessons()}>
+                    {addLoading ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+                    )}
+                    {addLoading ? 'Loading lessons…' : 'Add lessons'}
+                  </Button>
+                )}
+              </div>
+
+              {lessonOrderDirty && (
+                <p className="mt-4 text-sm font-medium text-amber-700" role="status">
+                  Lesson order has unsaved changes. Save or discard it before changing memberships.
+                </p>
               )}
-            </div>
-          </section>
+
+              {lessons.length > 0 && (
+                <div className="mt-5 flex flex-col gap-3 rounded-lg border bg-white p-3 sm:flex-row sm:items-center">
+                  <div className="relative min-w-0 flex-1">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <Input
+                      value={lessonSearch}
+                      className="pl-9 pr-9"
+                      placeholder="Search lessons"
+                      aria-label="Search lessons in this category"
+                      onChange={event => setLessonSearch(event.target.value)}
+                    />
+                    {lessonSearch && (
+                      <button
+                        type="button"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-500 hover:bg-muted"
+                        onClick={() => setLessonSearch('')}
+                        aria-label="Clear lesson search">
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                  <PracticeTagPicker
+                    tags={category.tags}
+                    selectedTagIds={lessonTagFilters}
+                    onChange={setLessonTagFilters}
+                    triggerLabel="Filter by tag"
+                    allowArchivedSelection
+                    className="sm:min-w-52"
+                  />
+                  {lessonFiltersActive && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setLessonSearch('');
+                        setLessonTagFilters([]);
+                      }}>
+                      Clear filters
+                    </Button>
+                  )}
+                  <span className="text-sm text-roman-stone" aria-live="polite">
+                    {lessonFiltersActive ? `${visibleLessons.length} of ${lessons.length}` : lessons.length}{' '}
+                    {lessons.length === 1 ? 'lesson' : 'lessons'}
+                  </span>
+                </div>
+              )}
+
+              {lessonFiltersActive && lessons.length > 1 && (
+                <p className="mt-2 text-xs text-amber-700">Clear lesson filters to reorder the complete list.</p>
+              )}
+
+              <div className="mt-5">
+                {lessons.length === 0 ? (
+                  <div className="rounded-lg border border-dashed bg-white px-6 py-12 text-center">
+                    {category.status === 'active' ? (
+                      <>
+                        <h3 className="font-serif text-lg text-gray-900">No lessons in this category yet</h3>
+                        <p className="mt-2 text-sm text-roman-stone">
+                          Add live or draft {practiceLessonTypeLabel(category.lessonType)} lessons.
+                        </p>
+                        <Button
+                          type="button"
+                          className="mt-5"
+                          disabled={addLoading}
+                          onClick={() => void openAddLessons()}>
+                          {addLoading ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                          ) : (
+                            <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+                          )}
+                          {addLoading ? 'Loading lessons…' : 'Add lessons'}
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <h3 className="font-serif text-lg text-gray-900">This archived category has no lessons</h3>
+                        <p className="mt-2 text-sm text-roman-stone">
+                          Restore it to add lessons, or permanently delete it if it is no longer needed.
+                        </p>
+                        <div className="mt-5 flex flex-wrap justify-center gap-2">
+                          <Button type="button" onClick={() => setCategoryAction('restore')}>
+                            <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" /> Restore
+                          </Button>
+                          <Button type="button" variant="destructive" onClick={() => setCategoryAction('delete')}>
+                            <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" /> Delete permanently
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ) : visibleLessons.length === 0 ? (
+                  <div className="rounded-lg border border-dashed bg-white px-6 py-10 text-center">
+                    <h3 className="font-serif text-lg text-gray-900">No lessons match these filters</h3>
+                    <p className="mt-2 text-sm text-roman-stone">
+                      Search and selected tags combine to narrow this category.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="mt-4"
+                      onClick={() => {
+                        setLessonSearch('');
+                        setLessonTagFilters([]);
+                      }}>
+                      Clear filters
+                    </Button>
+                  </div>
+                ) : (
+                  <DndContext
+                    sensors={sensors}
+                    onDragEnd={handleDragEnd}
+                    accessibility={{
+                      announcements: {
+                        onDragStart: ({ active }) => {
+                          const lesson = visibleLessons.find(item => item.id === active.id);
+                          return lesson ? `Picked up ${plainRichText(lesson.title)}` : 'Picked up lesson';
+                        },
+                        onDragOver: ({ active, over }) => {
+                          const lesson = visibleLessons.find(item => item.id === active.id);
+                          const nextPosition = over ? visibleLessons.findIndex(item => item.id === over.id) + 1 : 0;
+                          return lesson && nextPosition
+                            ? `${plainRichText(lesson.title)} is over position ${nextPosition}`
+                            : 'Lesson is no longer over a valid position';
+                        },
+                        onDragEnd: ({ active, over }) => {
+                          const lesson = visibleLessons.find(item => item.id === active.id);
+                          const nextPosition = over ? visibleLessons.findIndex(item => item.id === over.id) + 1 : 0;
+                          return lesson && nextPosition
+                            ? `${plainRichText(lesson.title)} moved to position ${nextPosition}`
+                            : 'Lesson movement ended';
+                        },
+                        onDragCancel: ({ active }) => {
+                          const lesson = visibleLessons.find(item => item.id === active.id);
+                          return lesson
+                            ? `Movement cancelled for ${plainRichText(lesson.title)}`
+                            : 'Lesson movement cancelled';
+                        },
+                      },
+                    }}>
+                    <SortableContext items={lessonIds(visibleLessons)} strategy={verticalListSortingStrategy}>
+                      <div className="space-y-3">
+                        {visibleLessons.map((lesson, index) => (
+                          <SortableMembershipRow
+                            key={lesson.id}
+                            lesson={lesson}
+                            position={index + 1}
+                            total={visibleLessons.length}
+                            orderingEnabled={Boolean(orderingEnabled)}
+                            mutationDisabled={lessonOrderDirty}
+                            removePending={removePendingId === lesson.id}
+                            tags={category.tags}
+                            tagsPending={tagUpdatePendingId === lesson.id}
+                            allowNewTagSelections={category.status === 'active'}
+                            onMove={offset => moveLesson(lesson.id, offset)}
+                            onOpenLesson={() => guardHref(`/admin/lessons/edit/${lesson.id}`)}
+                            onRemove={() => setRemoveLesson(lesson)}
+                            onTagsChange={tagIds => void saveMembershipTags(lesson, tagIds)}
+                          />
+                        ))}
+                      </div>
+                    </SortableContext>
+                  </DndContext>
+                )}
+              </div>
+            </section>
+          </>
         ) : null}
 
-        {dirty && (
+        {lessonOrderDirty && (
           <div
             className="sticky bottom-4 z-30 flex flex-col gap-3 rounded-lg border border-amber-300 bg-white p-4 shadow-xl sm:flex-row sm:items-center sm:justify-between"
             role="status">
@@ -934,8 +1140,10 @@ function PracticeCategoryDetailPage() {
           setDiscardNavigationOpen(open);
           if (!open) setPendingHref(null);
         }}
-        title="Discard unsaved lesson order?"
-        description="Your reordered lessons have not been saved. Leaving this page will restore the last server-confirmed order."
+        title={`Discard unsaved ${tagOrderDirty ? 'tag' : 'lesson'} order?`}
+        description={`Your reordered ${
+          tagOrderDirty ? 'tags' : 'lessons'
+        } have not been saved. Leaving this page will restore the last server-confirmed order.`}
         confirmLabel="Discard and continue"
         destructive
         onConfirm={continuePendingNavigation}

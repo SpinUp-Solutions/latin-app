@@ -1,7 +1,30 @@
-import type { MockTest } from '@/src/types/test';
+import type { MockTest, TestUnitSummary, TestVersionSummary } from '@/src/types/test';
 import type { TestVersion } from '@/src/types/test';
 import type { TestUnit } from '@/src/types/learning-unit';
 import { isExerciseType } from '@/src/lib/content/registry';
+
+export const TEST_VERSION_SUMMARY_FIELDS = [
+  'name',
+  'totalPages',
+  'totalItems',
+  'totalExercises',
+  'totalPoints',
+  'createdAt',
+  'createdBy',
+  'updatedAt',
+  'updatedBy',
+] as const;
+
+export function toTestUnitSummary(test: TestUnit, versions: readonly TestVersionSummary[]): TestUnitSummary {
+  const totals = versions.map(version => version.totalPoints);
+  const { rotationVersions: _rotationVersions, ...metadata } = test;
+  return {
+    ...metadata,
+    rotationVersionCount: versions.length,
+    minTotalPoints: totals.length ? Math.min(...totals) : 0,
+    maxTotalPoints: totals.length ? Math.max(...totals) : 0,
+  };
+}
 
 export interface TestVersionSummaryFields {
   totalPages: number;
@@ -97,9 +120,6 @@ export function validateTestAssignmentGraph({ tests, mocks, versions, versionIds
       if (knownVersionIds && !knownVersionIds.has(reference.versionId)) {
         errors.push(`Test ${test.id} references missing rotation version ${reference.versionId}`);
       }
-    }
-    if (test.isLive && test.rotationVersions.length === 0) {
-      errors.push(`Live test ${test.id} must have at least one valid rotation version`);
     }
   }
 

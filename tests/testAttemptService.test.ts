@@ -1,7 +1,8 @@
-import { getTestAttemptSessionId, TestService } from '@/src/lib/tests/service';
+import { getTestAttemptSessionId, TestAttemptService } from '@/src/lib/tests/attempt-service';
+import { MockTestService } from '@/src/lib/tests/mock-service';
 import type { TestAttemptOrigin } from '@/src/types/test';
 
-jest.mock('@/src/services/firebase-admin', () => ({ adminDb: {} }));
+jest.mock('@/src/services/firebase-admin', () => jest.requireActual('./helpers/routeMocks'));
 jest.mock('firebase-admin/firestore', () => ({ FieldPath: { documentId: jest.fn() } }));
 
 const timestamp = '2026-07-20T12:00:00.000Z';
@@ -45,6 +46,16 @@ class FakeFirestore {
   transactionCallbackCount = 0;
   readonly queryLog: Array<{ collection: string; selectedFields?: string[]; limitUsed: boolean }> = [];
   readonly writeLog: string[] = [];
+
+  constructor() {
+    this.seed('learningPaths', 'default', {
+      id: 'default',
+      revision: 1,
+      unitIds: ['test-1'],
+      updatedAt: timestamp,
+      updatedBy: 'admin-1',
+    });
+  }
 
   private documentKey(collection: string, id: string) {
     return `${collection}/${id}`;
@@ -240,14 +251,22 @@ const testDocument = (rotationVersions = ['version-a', 'version-b']) => ({
   description: '',
   passingPercentage: 70,
   rotationVersions: rotationVersions.map(versionId => ({ versionId })),
-  isLive: true,
-  liveOrder: 1,
-  publishedAt: timestamp,
-  publishedBy: 'admin-1',
   createdAt: timestamp,
   createdBy: 'admin-1',
   updatedAt: timestamp,
   updatedBy: 'admin-1',
+});
+
+const lessonDocument = () => ({
+  kind: 'lesson',
+  title: 'Lesson',
+  description: '',
+  type: 'normal',
+  pages: [{ id: 'lesson-page', items: [] }],
+  isLive: false,
+  liveOrder: null,
+  publishedAt: null,
+  publishedBy: null,
 });
 
 const seedNormalTest = (db: FakeFirestore, versions = ['version-a', 'version-b']) => {
@@ -259,7 +278,7 @@ describe('test attempt persistence service', () => {
   it('converges concurrent starts on one resumable attempt and freezes assignment settings', async () => {
     const db = new FakeFirestore();
     seedNormalTest(db);
-    const service = new TestService(db as never, () => timestamp, { random: () => 0 });
+    const service = new TestAttemptService(db as never, () => timestamp, { random: () => 0 });
     const input = { origin: { kind: 'normal-test' as const, testId: 'test-1' } };
 
     const [first, second] = await Promise.all([
@@ -297,7 +316,7 @@ describe('test attempt persistence service', () => {
       versionId: 'version-a',
       submittedAt: '2026-01-01T00:00:00.000Z',
     });
-    const service = new TestService(db as never, () => timestamp, { random: () => 0 });
+    const service = new TestAttemptService(db as never, () => timestamp, { random: () => 0 });
 
     const result = await service.startAttempt({ origin: { kind: 'normal-test', testId: 'test-1' } }, 'student-1');
 
@@ -313,7 +332,7 @@ describe('test attempt persistence service', () => {
     const db = new FakeFirestore();
     db.seed('lessons', 'test-1', testDocument(['version-a', 'missing-version']));
     db.seed('testVersions', 'version-a', versionDocument('version-a'));
-    const service = new TestService(db as never, () => timestamp, { random: () => 0 });
+    const service = new TestAttemptService(db as never, () => timestamp, { random: () => 0 });
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
 
     await expect(
@@ -322,6 +341,181 @@ describe('test attempt persistence service', () => {
     expect(db.readAll('testAttempts')).toHaveLength(0);
     expect(db.readAll('testAttemptSessions')).toHaveLength(0);
     consoleError.mockRestore();
+  });
+
+  it('fails closed when the active ownership graph includes a malformed kind:test document', async () => {
+    const db = new FakeFirestore();
+    seedNormalTest(db, ['version-a']);
+    db.seed('lessons', 'corrupt-test-owner', { kind: 'test', title: 'Broken owner' });
+    const service = new TestAttemptService(db as never, () => timestamp, { random: () => 0 });
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await expect(
+      service.startAttempt({ origin: { kind: 'normal-test', testId: 'test-1' } }, 'student-1')
+    ).rejects.toMatchObject({ code: 'TEST_CONFIGURATION_ERROR', status: 409 });
+    expect(db.readAll('testAttempts')).toHaveLength(0);
+    consoleError.mockRestore();
+  });
+
+  it('uses active Learning Path membership as the sole normal-test placement authority', async () => {
+    const db = new FakeFirestore();
+    seedNormalTest(db, ['version-a', 'version-b']);
+    db.seed('lessons', 'test-1', testDocument(['version-a']));
+    const service = new TestAttemptService(db as never, () => timestamp, {
+      random: () => 0,
+    });
+
+    await expect(
+      service.startAttempt({ origin: { kind: 'normal-test', testId: 'test-1' } }, 'student-1')
+    ).resolves.toMatchObject({ resumed: false });
+
+    const unavailableDb = new FakeFirestore();
+    seedNormalTest(unavailableDb, ['version-a']);
+    unavailableDb.seed('learningPaths', 'default', {
+      id: 'default',
+      revision: 2,
+      unitIds: [],
+      updatedAt: timestamp,
+      updatedBy: 'admin-1',
+    });
+    const unavailableService = new TestAttemptService(unavailableDb as never, () => timestamp, { random: () => 0 });
+
+    await expect(
+      unavailableService.startAttempt({ origin: { kind: 'normal-test', testId: 'test-1' } }, 'student-1')
+    ).rejects.toMatchObject({ code: 'TEST_NOT_AVAILABLE', status: 404 });
+    expect(unavailableDb.readAll('testAttempts')).toHaveLength(0);
+  });
+
+  it('enforces Learning Path gates before starting a normal test', async () => {
+    const db = new FakeFirestore();
+    seedNormalTest(db, ['version-a', 'version-b']);
+    db.seed('lessons', 'lesson-1', lessonDocument());
+    db.seed('learningPaths', 'default', {
+      id: 'default',
+      revision: 2,
+      unitIds: ['lesson-1', 'test-1'],
+      updatedAt: timestamp,
+      updatedBy: 'admin-1',
+    });
+    const service = new TestAttemptService(db as never, () => timestamp, { random: () => 0 });
+
+    await expect(
+      service.startAttempt({ origin: { kind: 'normal-test', testId: 'test-1' } }, 'student-1')
+    ).rejects.toMatchObject({ code: 'TEST_NOT_AVAILABLE', status: 404 });
+    expect(db.readAll('testAttempts')).toHaveLength(0);
+    expect(db.queryLog).toContainEqual({
+      collection: 'testAttempts',
+      selectedFields: ['origin', 'status'],
+      limitUsed: false,
+    });
+
+    db.seed('userProgress', 'student-1_lesson-1', {
+      userId: 'student-1',
+      lessonId: 'lesson-1',
+      status: 'completed',
+    });
+    await expect(
+      service.startAttempt({ origin: { kind: 'normal-test', testId: 'test-1' } }, 'student-1')
+    ).resolves.toMatchObject({ resumed: false });
+  });
+
+  it('matches dashboard gating after dangling path references are skipped', async () => {
+    const firstDb = new FakeFirestore();
+    seedNormalTest(firstDb, ['version-a']);
+    firstDb.seed('learningPaths', 'default', {
+      id: 'default',
+      revision: 2,
+      unitIds: ['missing-unit', 'test-1'],
+      updatedAt: timestamp,
+      updatedBy: 'admin-1',
+    });
+    const firstService = new TestAttemptService(firstDb as never, () => timestamp, { random: () => 0 });
+    await expect(
+      firstService.startAttempt({ origin: { kind: 'normal-test', testId: 'test-1' } }, 'student-1')
+    ).resolves.toMatchObject({ resumed: false });
+
+    const precededDb = new FakeFirestore();
+    seedNormalTest(precededDb, ['version-a']);
+    precededDb.seed('lessons', 'lesson-1', lessonDocument());
+    precededDb.seed('learningPaths', 'default', {
+      id: 'default',
+      revision: 2,
+      unitIds: ['lesson-1', 'missing-unit', 'test-1'],
+      updatedAt: timestamp,
+      updatedBy: 'admin-1',
+    });
+    precededDb.seed('userProgress', 'legacy-noncanonical-id', {
+      userId: 'student-1',
+      lessonId: 'lesson-1',
+      status: 'completed',
+    });
+    const precededService = new TestAttemptService(precededDb as never, () => timestamp, { random: () => 0 });
+    await expect(
+      precededService.startAttempt({ origin: { kind: 'normal-test', testId: 'test-1' } }, 'student-1')
+    ).resolves.toMatchObject({ resumed: false });
+  });
+
+  it('uses attempts on every path test as sticky-frontier evidence', async () => {
+    const db = new FakeFirestore();
+    seedNormalTest(db, ['version-a']);
+    db.seed('learningPaths', 'default', {
+      id: 'default',
+      revision: 2,
+      unitIds: ['lesson-1', 'test-1', 'later-test'],
+      updatedAt: timestamp,
+      updatedBy: 'admin-1',
+    });
+    db.seed('lessons', 'lesson-1', lessonDocument());
+    db.seed('lessons', 'later-test', testDocument(['later-version']));
+    db.seed('testVersions', 'later-version', versionDocument('later-version'));
+    db.seed('testAttempts', 'later-failed-attempt', {
+      studentId: 'student-1',
+      origin: { kind: 'normal-test', testId: 'later-test' },
+      status: 'submitted',
+      versionId: 'later-version',
+      submittedAt: timestamp,
+    });
+    const service = new TestAttemptService(db as never, () => timestamp, { random: () => 0 });
+
+    await expect(
+      service.startAttempt({ origin: { kind: 'normal-test', testId: 'test-1' } }, 'student-1')
+    ).resolves.toMatchObject({ resumed: false });
+  });
+
+  it('blocks every in-progress lifecycle operation after a normal test leaves the active path', async () => {
+    const db = new FakeFirestore();
+    seedNormalTest(db, ['version-a']);
+    const service = new TestAttemptService(db as never, () => timestamp, { random: () => 0 });
+    const input = { origin: { kind: 'normal-test' as const, testId: 'test-1' } };
+    const started = await service.startAttempt(input, 'student-1');
+
+    db.seed('learningPaths', 'default', {
+      id: 'default',
+      revision: 2,
+      unitIds: [],
+      updatedAt: timestamp,
+      updatedBy: 'admin-1',
+    });
+
+    await expect(service.startAttempt(input, 'student-1')).rejects.toMatchObject({
+      code: 'TEST_NOT_AVAILABLE',
+      status: 404,
+    });
+    await expect(
+      service.saveAttemptAnswers(
+        started.attempt.id,
+        {
+          answers: {
+            'fill.with.punctuation': { type: 'fill', answers: ['love'] },
+          },
+        },
+        'student-1'
+      )
+    ).rejects.toMatchObject({ code: 'TEST_NOT_AVAILABLE', status: 404 });
+    await expect(service.submitAttempt(started.attempt.id, 'student-1')).rejects.toMatchObject({
+      code: 'TEST_NOT_AVAILABLE',
+      status: 404,
+    });
   });
 
   it('always starts a live mock card owned version', async () => {
@@ -338,38 +532,133 @@ describe('test attempt persistence service', () => {
       isLive: true,
       mockOrder: 0,
     });
-    const service = new TestService(db as never, () => timestamp);
+    const service = new TestAttemptService(db as never, () => timestamp);
 
     const result = await service.startAttempt({ origin: { kind: 'mock-test', mockTestId: 'mock-1' } }, 'student-1');
 
     expect(result.attempt).toMatchObject({ versionId: 'mock-version', passingPercentage: 80 });
   });
 
+  it('allows only the owning frozen mock session to resume after the card becomes unavailable', async () => {
+    const db = new FakeFirestore();
+    db.seed('testVersions', 'mock-version', versionDocument('mock-version'));
+    db.seed('mockTests', 'mock-1', {
+      id: 'mock-1',
+      versionId: 'mock-version',
+      parent: { kind: 'standalone' },
+      title: 'Mock test',
+      description: '',
+      passingPercentage: null,
+      status: 'active',
+      isLive: true,
+      mockOrder: 0,
+    });
+    const service = new TestAttemptService(db as never, () => timestamp);
+    const mocks = new MockTestService(db as never, () => timestamp, service);
+    const origin = { kind: 'mock-test' as const, mockTestId: 'mock-1' };
+    const started = await service.startAttempt({ origin }, 'student-1');
+    db.seed('mockTests', 'mock-1', {
+      id: 'mock-1',
+      versionId: 'mock-version',
+      parent: { kind: 'standalone' },
+      title: 'Mock test',
+      description: '',
+      passingPercentage: null,
+      status: 'archived',
+      isLive: false,
+      mockOrder: null,
+    });
+
+    const detail = await mocks.getStudentMockDetail('mock-1', 'student-1');
+    expect(detail).toMatchObject({ mock: { status: 'archived', isLive: false }, attempt: { id: started.attempt.id } });
+    expect(JSON.stringify(detail)).not.toContain('answer');
+    await expect(mocks.getStudentMockDetail('mock-1', 'student-2')).rejects.toMatchObject({
+      code: 'MOCK_TEST_NOT_AVAILABLE',
+    });
+    await expect(service.startAttempt({ origin }, 'student-2')).rejects.toMatchObject({
+      code: 'MOCK_TEST_NOT_AVAILABLE',
+    });
+    await expect(
+      service.saveAttemptAnswers(
+        started.attempt.id,
+        { answers: { 'fill.with.punctuation': { type: 'fill', answers: ['love'] } } },
+        'student-1'
+      )
+    ).resolves.toMatchObject({ id: started.attempt.id });
+    await expect(service.submitAttempt(started.attempt.id, 'student-1')).resolves.toMatchObject({
+      attempt: { status: 'submitted' },
+    });
+    await expect(mocks.getStudentMockDetail('mock-1', 'student-1')).rejects.toMatchObject({
+      code: 'MOCK_TEST_NOT_AVAILABLE',
+    });
+  });
+
   it('persists and explicitly clears canonical answers by whole-map writes', async () => {
     const db = new FakeFirestore();
     seedNormalTest(db, ['version-a']);
-    const service = new TestService(db as never, () => timestamp);
+    const service = new TestAttemptService(db as never, () => timestamp);
     const started = await service.startAttempt({ origin: { kind: 'normal-test', testId: 'test-1' } }, 'student-1');
 
-    const answered = await service.saveAttemptAnswer(
+    const answered = await service.saveAttemptAnswers(
       started.attempt.id,
       {
-        exerciseId: 'fill.with.punctuation',
-        answer: { type: 'fill', answers: ['love'] },
+        answers: {
+          'fill.with.punctuation': { type: 'fill', answers: ['love'] },
+        },
       },
       'student-1'
     );
     expect(answered.answers['fill.with.punctuation']).toEqual({ type: 'fill', answers: ['love'] });
-    await expect(service.getAttempt(started.attempt.id, 'student-2')).rejects.toMatchObject({
+    await expect(
+      service.saveAttemptAnswers(started.attempt.id, { answers: { 'fill.with.punctuation': null } }, 'student-2')
+    ).rejects.toMatchObject({
       code: 'ATTEMPT_NOT_FOUND',
     });
 
-    const cleared = await service.saveAttemptAnswer(
+    const cleared = await service.saveAttemptAnswers(
       started.attempt.id,
-      { exerciseId: 'fill.with.punctuation', answer: null },
+      { answers: { 'fill.with.punctuation': null } },
       'student-1'
     );
     expect(cleared.answers).toEqual({});
+  });
+
+  it('coalesces multiple committed answers into one transactional save', async () => {
+    const db = new FakeFirestore();
+    db.seed('lessons', 'test-1', testDocument(['version-a']));
+    db.seed('testVersions', 'version-a', {
+      id: 'version-a',
+      name: 'Version A',
+      pages: [
+        {
+          id: 'page-a',
+          items: [fillExercise, { ...fillExercise, id: 'fill.second', title: 'Second fill' }],
+        },
+      ],
+      totalPages: 1,
+      totalItems: 2,
+      totalExercises: 2,
+      totalPoints: 6,
+    });
+    const service = new TestAttemptService(db as never, () => timestamp, {
+      random: () => 0,
+    });
+    const started = await service.startAttempt({ origin: { kind: 'normal-test', testId: 'test-1' } }, 'student-1');
+    const transactionsBeforeSave = db.transactionCallbackCount;
+
+    const saved = await service.saveAttemptAnswers(
+      started.attempt.id,
+      {
+        answers: {
+          'fill.with.punctuation': { type: 'fill', answers: ['love'] },
+          'fill.second': { type: 'fill', answers: ['love'] },
+        },
+      },
+      'student-1'
+    );
+
+    expect(db.transactionCallbackCount).toBe(transactionsBeforeSave + 1);
+    expect(Object.keys(saved.answers)).toEqual(['fill.with.punctuation', 'fill.second']);
   });
 
   it('resumes the same frozen generated questions without resolving them again', async () => {
@@ -399,7 +688,9 @@ describe('test attempt persistence service', () => {
         part_of_speech: 'verb',
       },
     ]);
-    const service = new TestService(db as never, () => timestamp, { loadGeneratedWords: loadGeneratedWords as never });
+    const service = new TestAttemptService(db as never, () => timestamp, {
+      loadGeneratedWords: loadGeneratedWords as never,
+    });
 
     const first = await service.startAttempt({ origin: { kind: 'normal-test', testId: 'test-1' } }, 'student-1');
     const second = await service.startAttempt({ origin: { kind: 'normal-test', testId: 'test-1' } }, 'student-1');
@@ -414,7 +705,7 @@ describe('test attempt persistence service', () => {
     const db = new FakeFirestore();
     seedNormalTest(db, ['version-a']);
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
-    const service = new TestService(db as never, () => timestamp, { maxAttemptDocumentBytes: 100 });
+    const service = new TestAttemptService(db as never, () => timestamp, { maxAttemptDocumentBytes: 100 });
 
     await expect(
       service.startAttempt({ origin: { kind: 'normal-test', testId: 'test-1' } }, 'student-1')
@@ -431,6 +722,74 @@ describe('test attempt persistence service', () => {
     expect(getTestAttemptSessionId('student', normal)).toHaveLength(64);
     expect(getTestAttemptSessionId('student', normal)).toBe(getTestAttemptSessionId('student', normal));
     expect(getTestAttemptSessionId('student', normal)).not.toBe(getTestAttemptSessionId('student', mock));
+  });
+});
+
+describe('mock ownership mutations', () => {
+  it('creates a standalone mock and preserves the deterministic parent mock ID across assignment retries', async () => {
+    const db = new FakeFirestore();
+    seedNormalTest(db, ['version-a', 'version-b']);
+    const service = new MockTestService(db as never, () => timestamp);
+    const standalone = await service.createStandaloneMock(
+      {
+        mock: { id: 'standalone-1', title: 'Standalone', description: '', passingPercentage: null, isLive: false },
+        version: { id: 'standalone-version', name: 'Standalone version', pages: versionDocument('x').pages as never },
+      },
+      'admin-1'
+    );
+    expect(standalone.mock.parent).toEqual({ kind: 'standalone' });
+    const input = {
+      testId: 'test-1',
+      versionId: 'version-a',
+      title: 'Assigned',
+      description: '',
+      passingPercentage: 70,
+      isLive: false,
+    };
+    const first = await service.assignVersionToMock(input, 'admin-1');
+    const second = await service.assignVersionToMock(input, 'admin-1');
+    expect(second.id).toBe(first.id);
+    expect(db.readAll('mockTests')).toHaveLength(2);
+    expect(db.read('lessons', 'test-1')?.rotationVersions).toEqual([{ versionId: 'version-b' }]);
+  });
+
+  it('rejects making a placed parent test mock-only and requires complete live reorder scope', async () => {
+    const db = new FakeFirestore();
+    seedNormalTest(db, ['version-a']);
+    const service = new MockTestService(db as never, () => timestamp);
+    await expect(
+      service.assignVersionToMock(
+        {
+          testId: 'test-1',
+          versionId: 'version-a',
+          title: 'Assigned',
+          description: '',
+          passingPercentage: 70,
+          isLive: false,
+        },
+        'admin-1'
+      )
+    ).rejects.toMatchObject({ code: 'PLACED_TEST_REQUIRES_ROTATION_VERSION' });
+    await service.createStandaloneMock(
+      {
+        mock: { id: 'mock-a', title: 'A', description: '', passingPercentage: null, isLive: true },
+        version: { id: 'mock-version-a', name: 'A', pages: versionDocument('a').pages as never },
+      },
+      'admin-1'
+    );
+    await service.createStandaloneMock(
+      {
+        mock: { id: 'mock-b', title: 'B', description: '', passingPercentage: null, isLive: true },
+        version: { id: 'mock-version-b', name: 'B', pages: versionDocument('b').pages as never },
+      },
+      'admin-1'
+    );
+    await expect(service.reorderMocks({ mockIds: ['mock-a'] }, 'admin-1')).rejects.toMatchObject({
+      code: 'MOCK_TEST_INVALID_OPERATION',
+    });
+    expect(
+      (await service.reorderMocks({ mockIds: ['mock-b', 'mock-a'] }, 'admin-1')).map(mock => mock.mockOrder)
+    ).toEqual([0, 1]);
   });
 });
 
@@ -499,14 +858,14 @@ describe('test attempt submission and sticky completion', () => {
   const startInput = { origin: normalOrigin };
 
   const startAnswerSubmit = async (
-    service: TestService,
+    service: TestAttemptService,
     db: FakeFirestore,
     answer: { type: 'fill'; answers: string[] } | null,
     exerciseId = 'fill.with.punctuation'
   ) => {
     const started = await service.startAttempt(startInput, 'student-1');
     if (answer) {
-      await service.saveAttemptAnswer(started.attempt.id, { exerciseId, answer }, 'student-1');
+      await service.saveAttemptAnswers(started.attempt.id, { answers: { [exerciseId]: answer } }, 'student-1');
     }
     return service.submitAttempt(started.attempt.id, 'student-1');
   };
@@ -516,13 +875,17 @@ describe('test attempt submission and sticky completion', () => {
     const items = Array.from({ length: 10 }, (_, index) => ({ text: `Q${index + 1}`, answer: `a${index + 1}` }));
     db.seed('lessons', 'test-1', testDocument(['version-a']));
     db.seed('testVersions', 'version-a', versionDocumentWith('version-a', fillExerciseWith('fill-ten', items, 5), 5));
-    const service = new TestService(db as never, () => timestamp);
+    const service = new TestAttemptService(db as never, () => timestamp);
     const started = await service.startAttempt(startInput, 'student-1');
-    await service.saveAttemptAnswer(
+    await service.saveAttemptAnswers(
       started.attempt.id,
       {
-        exerciseId: 'fill-ten',
-        answer: { type: 'fill', answers: ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'x', 'y', 'z'] },
+        answers: {
+          'fill-ten': {
+            type: 'fill',
+            answers: ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'x', 'y', 'z'],
+          },
+        },
       },
       'student-1'
     );
@@ -563,7 +926,7 @@ describe('test attempt submission and sticky completion', () => {
     const db = new FakeFirestore();
     db.seed('lessons', 'test-1', { ...testDocument(['version-a']), passingPercentage: null });
     db.seed('testVersions', 'version-a', versionDocument('version-a'));
-    const service = new TestService(db as never, () => timestamp);
+    const service = new TestAttemptService(db as never, () => timestamp);
 
     const result = await startAnswerSubmit(service, db, null);
 
@@ -575,7 +938,7 @@ describe('test attempt submission and sticky completion', () => {
   it('does not grant completion after a failed submission', async () => {
     const db = new FakeFirestore();
     seedNormalTest(db, ['version-a']);
-    const service = new TestService(db as never, () => timestamp);
+    const service = new TestAttemptService(db as never, () => timestamp);
 
     const result = await startAnswerSubmit(service, db, { type: 'fill', answers: ['wrong'] });
 
@@ -592,7 +955,7 @@ describe('test attempt submission and sticky completion', () => {
     const db = new FakeFirestore();
     seedNormalTest(db, ['version-a']);
     let now = '2026-07-20T12:00:00.000Z';
-    const service = new TestService(db as never, () => now);
+    const service = new TestAttemptService(db as never, () => now);
 
     const passed = await startAnswerSubmit(service, db, { type: 'fill', answers: ['love'] });
     expect(passed.completionGranted).toBe(true);
@@ -618,11 +981,11 @@ describe('test attempt submission and sticky completion', () => {
   it('returns the stored result idempotently for duplicate submissions', async () => {
     const db = new FakeFirestore();
     seedNormalTest(db, ['version-a']);
-    const service = new TestService(db as never, () => timestamp);
+    const service = new TestAttemptService(db as never, () => timestamp);
     const started = await service.startAttempt(startInput, 'student-1');
-    await service.saveAttemptAnswer(
+    await service.saveAttemptAnswers(
       started.attempt.id,
-      { exerciseId: 'fill.with.punctuation', answer: { type: 'fill', answers: ['love'] } },
+      { answers: { 'fill.with.punctuation': { type: 'fill', answers: ['love'] } } },
       'student-1'
     );
 
@@ -638,7 +1001,7 @@ describe('test attempt submission and sticky completion', () => {
   it('does not clear a session pointer that belongs to a newer active attempt', async () => {
     const db = new FakeFirestore();
     seedNormalTest(db, ['version-a']);
-    const service = new TestService(db as never, () => timestamp);
+    const service = new TestAttemptService(db as never, () => timestamp);
     const active = await service.startAttempt(startInput, 'student-1');
     const activeDocument = db.read('testAttempts', active.attempt.id)!;
     db.seed('testAttempts', 'orphan-attempt', { ...activeDocument, id: 'orphan-attempt' });
@@ -660,13 +1023,17 @@ describe('test attempt submission and sticky completion', () => {
     const items = Array.from({ length: 10 }, (_, index) => ({ text: `Q${index + 1}`, answer: `a${index + 1}` }));
     db.seed('lessons', 'test-1', { ...testDocument(['version-a']), passingPercentage: 90 });
     db.seed('testVersions', 'version-a', versionDocumentWith('version-a', fillExerciseWith('fill-ten', items, 9), 9));
-    const service = new TestService(db as never, () => timestamp);
+    const service = new TestAttemptService(db as never, () => timestamp);
     const started = await service.startAttempt({ origin: { kind: 'normal-test', testId: 'test-1' } }, 'student-1');
-    await service.saveAttemptAnswer(
+    await service.saveAttemptAnswers(
       started.attempt.id,
       {
-        exerciseId: 'fill-ten',
-        answer: { type: 'fill', answers: ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8', 'a9', 'x'] },
+        answers: {
+          'fill-ten': {
+            type: 'fill',
+            answers: ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8', 'a9', 'x'],
+          },
+        },
       },
       'student-1'
     );
@@ -693,11 +1060,11 @@ describe('test attempt submission and sticky completion', () => {
       isLive: true,
       mockOrder: 0,
     });
-    const service = new TestService(db as never, () => timestamp);
+    const service = new TestAttemptService(db as never, () => timestamp);
     const started = await service.startAttempt({ origin: { kind: 'mock-test', mockTestId: 'mock-1' } }, 'student-1');
-    await service.saveAttemptAnswer(
+    await service.saveAttemptAnswers(
       started.attempt.id,
-      { exerciseId: 'fill.with.punctuation', answer: { type: 'fill', answers: ['love'] } },
+      { answers: { 'fill.with.punctuation': { type: 'fill', answers: ['love'] } } },
       'student-1'
     );
 
@@ -747,7 +1114,7 @@ describe('test attempt submission and sticky completion', () => {
       getTestAttemptSessionId('student-1', normalOrigin),
       sessionDocument(getTestAttemptSessionId('student-1', normalOrigin), 'student-1', normalOrigin, 'attempt-corrupt')
     );
-    const service = new TestService(db as never, () => timestamp);
+    const service = new TestAttemptService(db as never, () => timestamp);
 
     await expect(service.submitAttempt('attempt-corrupt', 'student-1')).rejects.toMatchObject({
       code: 'TEST_CONFIGURATION_ERROR',
@@ -801,7 +1168,7 @@ describe('test attempt summaries', () => {
       submittedAttemptDocument('noise-other-test', { origin: { kind: 'normal-test', testId: 'test-2' } })
     );
     db.seed('testAttempts', 'active-attempt', inProgressAttemptDocument('active-attempt'));
-    const service = new TestService(db as never, () => timestamp);
+    const service = new TestAttemptService(db as never, () => timestamp);
 
     const summary = await service.getAttemptSummary(normalOrigin, 'student-1');
 
@@ -830,7 +1197,7 @@ describe('test attempt summaries', () => {
       studentId: 'student-1',
       status: 'in-progress',
     });
-    const service = new TestService(db as never, () => timestamp);
+    const service = new TestAttemptService(db as never, () => timestamp);
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
 
     await expect(service.getAttemptSummary(normalOrigin, 'student-1')).resolves.toMatchObject({
@@ -868,7 +1235,7 @@ describe('test attempt summaries', () => {
         submittedAt: '2026-02-01T00:00:00.000Z',
       })
     );
-    const service = new TestService(db as never, () => timestamp);
+    const service = new TestAttemptService(db as never, () => timestamp);
 
     const summary = await service.getAttemptSummary(mockOrigin, 'student-1');
 
@@ -885,7 +1252,7 @@ describe('attempt size message and rotation validation cost', () => {
     const db = new FakeFirestore();
     seedNormalTest(db, ['version-a']);
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
-    const constrained = new TestService(db as never, () => timestamp, { maxAttemptDocumentBytes: 100 });
+    const constrained = new TestAttemptService(db as never, () => timestamp, { maxAttemptDocumentBytes: 100 });
 
     const startFailure = await constrained
       .startAttempt({ origin: normalOrigin }, 'student-1')
@@ -894,12 +1261,12 @@ describe('attempt size message and rotation validation cost', () => {
     expect((startFailure as Error).message).toContain('too large to save safely');
     expect((startFailure as Error).message).not.toContain('too large to start');
 
-    const service = new TestService(db as never, () => timestamp);
+    const service = new TestAttemptService(db as never, () => timestamp);
     const started = await service.startAttempt({ origin: normalOrigin }, 'student-1');
     const saveFailure = await constrained
-      .saveAttemptAnswer(
+      .saveAttemptAnswers(
         started.attempt.id,
-        { exerciseId: 'fill.with.punctuation', answer: { type: 'fill', answers: ['love'] } },
+        { answers: { 'fill.with.punctuation': { type: 'fill', answers: ['love'] } } },
         'student-1'
       )
       .catch((error: unknown) => error);
@@ -922,7 +1289,7 @@ describe('attempt size message and rotation validation cost', () => {
       totalExercises: 1,
       totalPoints: 3,
     });
-    const service = new TestService(db as never, () => timestamp, { random: () => 0 });
+    const service = new TestAttemptService(db as never, () => timestamp, { random: () => 0 });
 
     const result = await service.startAttempt({ origin: normalOrigin }, 'student-1');
 
@@ -934,118 +1301,13 @@ describe('attempt size message and rotation validation cost', () => {
     db.seed('lessons', 'test-1', testDocument(['version-a', 'version-b']));
     db.seed('testVersions', 'version-a', versionDocument('version-a'));
     db.seed('testVersions', 'version-b', { id: 'version-b', name: 'version-b', pages: [], totalPages: 'wrong' });
-    const service = new TestService(db as never, () => timestamp, { random: () => 0 });
+    const service = new TestAttemptService(db as never, () => timestamp, { random: () => 0 });
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
 
     await expect(service.startAttempt({ origin: normalOrigin }, 'student-1')).rejects.toMatchObject({
       code: 'TEST_CONFIGURATION_ERROR',
     });
     expect(db.readAll('testAttempts')).toHaveLength(0);
-    consoleError.mockRestore();
-  });
-});
-
-describe('test attempt session recovery', () => {
-  const normalOrigin: TestAttemptOrigin = { kind: 'normal-test', testId: 'test-1' };
-  const input = { origin: normalOrigin };
-
-  it('clears a pointer to a corrupt attempt while preserving the document, then starts cleanly', async () => {
-    const db = new FakeFirestore();
-    seedNormalTest(db, ['version-a']);
-    const sessionId = getTestAttemptSessionId('student-1', normalOrigin);
-    db.seed('testAttempts', 'attempt-bad', { id: 'attempt-bad', unexpected: 'garbage' });
-    db.seed('testAttemptSessions', sessionId, sessionDocument(sessionId, 'student-1', normalOrigin, 'attempt-bad'));
-    const service = new TestService(db as never, () => timestamp);
-    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
-
-    await expect(service.startAttempt(input, 'student-1')).rejects.toMatchObject({ code: 'STALE_TEST_ATTEMPT_DATA' });
-
-    await expect(service.recoverAttemptSession(input, 'student-1')).resolves.toEqual({ recovered: true });
-    expect(db.readAll('testAttemptSessions')).toHaveLength(0);
-    expect(db.read('testAttempts', 'attempt-bad')).toBeDefined();
-
-    const restarted = await service.startAttempt(input, 'student-1');
-    expect(restarted.resumed).toBe(false);
-    consoleError.mockRestore();
-  });
-
-  it('clears a pointer to a parseable but ungradable attempt while preserving the document', async () => {
-    const db = new FakeFirestore();
-    const sessionId = getTestAttemptSessionId('student-1', normalOrigin);
-    db.seed('testAttempts', 'attempt-ungradable', {
-      id: 'attempt-ungradable',
-      studentId: 'student-1',
-      versionId: 'version-a',
-      passingPercentage: 70,
-      origin: normalOrigin,
-      status: 'in-progress',
-      answers: {},
-      startedAt: timestamp,
-      updatedAt: timestamp,
-      deliveryState: {
-        versionId: 'version-a',
-        pages: [
-          {
-            id: 'page',
-            items: [
-              {
-                id: 'unscored',
-                type: 'fill',
-                title: 'Fill',
-                instructions: '',
-                feedbackConfig: { escalationLevels: [] },
-                data: { items: [{ text: 'Q', answer: 'a' }] },
-              },
-            ],
-          },
-        ],
-        resolvedExercises: {},
-      },
-    });
-    db.seed(
-      'testAttemptSessions',
-      sessionId,
-      sessionDocument(sessionId, 'student-1', normalOrigin, 'attempt-ungradable')
-    );
-    const service = new TestService(db as never, () => timestamp);
-    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
-
-    await expect(service.recoverAttemptSession(input, 'student-1')).resolves.toEqual({ recovered: true });
-    expect(db.readAll('testAttemptSessions')).toHaveLength(0);
-    expect(db.read('testAttempts', 'attempt-ungradable')).toBeDefined();
-    consoleError.mockRestore();
-  });
-
-  it('never abandons a valid resumable attempt', async () => {
-    const db = new FakeFirestore();
-    seedNormalTest(db, ['version-a']);
-    const service = new TestService(db as never, () => timestamp);
-    await service.startAttempt(input, 'student-1');
-
-    await expect(service.recoverAttemptSession(input, 'student-1')).resolves.toEqual({ recovered: false });
-    expect(db.readAll('testAttemptSessions')).toHaveLength(1);
-  });
-
-  it('clears pointers to missing or submitted attempts and reports no pointer as a no-op', async () => {
-    const db = new FakeFirestore();
-    const sessionId = getTestAttemptSessionId('student-1', normalOrigin);
-    db.seed('testAttemptSessions', sessionId, sessionDocument(sessionId, 'student-1', normalOrigin, 'missing-attempt'));
-    const service = new TestService(db as never, () => timestamp);
-    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
-
-    await expect(service.recoverAttemptSession(input, 'student-1')).resolves.toEqual({ recovered: true });
-    expect(db.readAll('testAttemptSessions')).toHaveLength(0);
-
-    db.seed('testAttempts', 'submitted-attempt', submittedAttemptDocument('submitted-attempt'));
-    db.seed(
-      'testAttemptSessions',
-      sessionId,
-      sessionDocument(sessionId, 'student-1', normalOrigin, 'submitted-attempt')
-    );
-    await expect(service.recoverAttemptSession(input, 'student-1')).resolves.toEqual({ recovered: true });
-    expect(db.readAll('testAttemptSessions')).toHaveLength(0);
-
-    await expect(service.recoverAttemptSession(input, 'student-1')).resolves.toEqual({ recovered: false });
     consoleError.mockRestore();
   });
 });

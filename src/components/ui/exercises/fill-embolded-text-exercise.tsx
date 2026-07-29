@@ -11,8 +11,7 @@ import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
-import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
-import { resolveRuntimeMode } from '@/src/types/runtime-mode';
+import type { ExerciseAnswer, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
 import { RecordedAnswerControls } from './recorded-answer-controls';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
@@ -21,7 +20,7 @@ interface Props {
   onComplete?: (score: number) => void;
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
-  testMode?: boolean;
+  initialAnswer?: ExerciseAnswer;
 }
 
 const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
@@ -29,15 +28,19 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
   onComplete,
   runtimeMode,
   onAnswer,
-  testMode,
+  initialAnswer,
 }) => {
-  const mode = resolveRuntimeMode(runtimeMode, testMode);
+  const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
-  const [userAnswer, setUserAnswer] = useState('');
-  const [submittedAnswers, setSubmittedAnswers] = useState<string[]>([]);
+  const testAnswerMode = mode === 'test';
+  const restoredAnswers = initialAnswer?.type === 'fill-embolded-text' ? initialAnswer.answers : [];
+  const firstIncompleteIndex = exercise.data.words.findIndex((_, index) => !restoredAnswers[index]?.trim());
+  const restoredIndex = firstIncompleteIndex >= 0 ? firstIncompleteIndex : Math.max(exercise.data.words.length - 1, 0);
+  const [userAnswer, setUserAnswer] = useState(restoredAnswers[restoredIndex] ?? '');
+  const [submittedAnswers, setSubmittedAnswers] = useState<string[]>(restoredAnswers);
   const [selectedWordIndex, setSelectedWordIndex] = useState<number | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [testSubmitted, setTestSubmitted] = useState(false);
+  const [testSubmitted, setTestSubmitted] = useState(Boolean(restoredAnswers[restoredIndex]?.trim()));
 
   const {
     currentIndex,
@@ -49,6 +52,7 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
     nextItem,
   } = useExerciseProgression({
     totalItems: exercise.data.words.length,
+    initialIndex: restoredIndex,
     itemProgressionDelay: exercise.itemProgressionDelay,
     progressionRules: exercise.feedbackConfig.progressionRules,
   });
@@ -99,14 +103,14 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
   }
 
   const handleSubmit = () => {
-    if (isProcessing) return;
+    if (isProcessing || !userAnswer.trim()) return;
 
     const nextAnswers = [...submittedAnswers];
     nextAnswers[currentIndex] = userAnswer;
     setSubmittedAnswers(nextAnswers);
     setIsProcessing(true);
 
-    if (mode === 'test') {
+    if (testAnswerMode) {
       onAnswer?.({ type: 'fill-embolded-text', answers: nextAnswers });
       setTestSubmitted(true);
       return;
@@ -168,9 +172,10 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
       onComplete?.(0);
       return;
     }
-    setUserAnswer('');
+    const nextAnswer = submittedAnswers[currentIndex + 1] ?? '';
+    setUserAnswer(nextAnswer);
     setSelectedWordIndex(null);
-    setTestSubmitted(false);
+    setTestSubmitted(Boolean(nextAnswer.trim()));
     setIsProcessing(false);
     reset();
     nextItem();
@@ -239,7 +244,7 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
           />
         </div>
 
-        {mode === 'test' ? (
+        {testAnswerMode ? (
           testSubmitted && <RecordedAnswerControls isLastItem={isLastItem} onContinue={continueTest} />
         ) : (
           <FeedbackDisplay

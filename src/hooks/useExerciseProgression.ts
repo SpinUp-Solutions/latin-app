@@ -4,6 +4,7 @@ import { DEFAULT_ITEM_PROGRESSION_DELAY } from '@/src/utils/feedbackDefaults';
 
 interface ExerciseProgressionOptions {
   totalItems: number;
+  initialIndex?: number;
   itemProgressionDelay?: number;
   progressionRules?: ProgressionRules;
 }
@@ -26,10 +27,13 @@ interface ExerciseProgressionActions {
 
 export function useExerciseProgression({
   totalItems,
+  initialIndex = 0,
   itemProgressionDelay,
   progressionRules,
 }: ExerciseProgressionOptions): ExerciseProgressionState & ExerciseProgressionActions {
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(() =>
+    totalItems <= 0 ? 0 : Math.max(0, Math.min(initialIndex, totalItems - 1))
+  );
   const [isAwaitingConfirmation, setIsAwaitingConfirmation] = useState(false);
   const pendingAdvanceRef = useRef<(() => void) | null>(null);
   const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);

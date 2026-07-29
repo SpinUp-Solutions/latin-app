@@ -14,9 +14,10 @@ import { PracticeCategoryChips } from '@/src/components/ui/admin/practice-catego
 interface SortableLessonItemProps {
   lesson: LessonSummary;
   id: string;
+  onNavigate?: (href: string) => void;
 }
 
-export function SortableLessonItem({ lesson, id }: SortableLessonItemProps) {
+export function SortableLessonItem({ lesson, id, onNavigate }: SortableLessonItemProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 
   const style = {
@@ -72,7 +73,15 @@ export function SortableLessonItem({ lesson, id }: SortableLessonItemProps) {
 
       <div className="flex items-center gap-2">
         <Button size="sm" variant="outline" asChild>
-          <Link href={`/admin/lessons/edit/${lesson.id}`}>Edit</Link>
+          <Link
+            href={`/admin/lessons/edit/${lesson.id}`}
+            onClick={event => {
+              if (!onNavigate) return;
+              event.preventDefault();
+              onNavigate(`/admin/lessons/edit/${lesson.id}`);
+            }}>
+            Edit
+          </Link>
         </Button>
       </div>
     </div>

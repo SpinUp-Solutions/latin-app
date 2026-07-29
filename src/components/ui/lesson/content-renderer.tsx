@@ -37,9 +37,9 @@ import TextComponent from './text-component';
 import { DiagramAuditSubmission } from '@/src/features/sentence-diagramming';
 import {
   TEST_RUNTIME_FEEDBACK_CONFIG,
-  resolveRuntimeMode,
   type ExerciseAnswerEvent,
   type ExerciseAnswerHandler,
+  type ExerciseAnswer,
   type RuntimeMode,
 } from '@/src/types/runtime-mode';
 import { isExerciseType } from '@/src/lib/content/registry';
@@ -49,6 +49,7 @@ import type {
   MultiAnswerFormIdentificationItem,
   SingleFieldFormIdentificationItem,
 } from '@/src/types/exercises/schemas/form-identification';
+import type { VocabularyPoolStudyData } from '@/src/types/vocabulary';
 
 export interface ResolvedGeneratedExerciseState {
   items: unknown[];
@@ -59,9 +60,11 @@ interface ContentRendererProps {
   onComplete?: (score: number) => void;
   runtimeMode?: RuntimeMode;
   onAnswer?: (event: ExerciseAnswerEvent) => void;
+  initialAnswer?: ExerciseAnswer;
   resolvedExerciseState?: ResolvedGeneratedExerciseState;
-  /** @deprecated Use runtimeMode="test". */
-  testMode?: boolean;
+  allowGeneratedExerciseQueries?: boolean;
+  vocabularyPoolId?: string | null;
+  resolvedVocabularyPool?: VocabularyPoolStudyData;
   pageIndex?: number;
   itemIndex?: number;
   onDiagrammingAttempt?: (attempt: DiagramAuditSubmission) => void;
@@ -71,14 +74,17 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
   content,
   onComplete,
   runtimeMode,
-  testMode,
   pageIndex,
   itemIndex,
   onAnswer,
+  initialAnswer,
   resolvedExerciseState,
+  allowGeneratedExerciseQueries = false,
+  vocabularyPoolId,
+  resolvedVocabularyPool,
   onDiagrammingAttempt,
 }) => {
-  const mode = resolveRuntimeMode(runtimeMode, testMode);
+  const mode = runtimeMode ?? 'practice';
   const renderedContent =
     mode === 'test' && isExerciseType(content.type)
       ? ({ ...content, feedbackConfig: TEST_RUNTIME_FEEDBACK_CONFIG } as ContentItem)
@@ -86,7 +92,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
   const handleAnswer: ExerciseAnswerHandler | undefined = onAnswer
     ? answer => onAnswer({ exerciseId: content.id, answer, pageIndex, itemIndex })
     : undefined;
-  const modeProps = { runtimeMode, testMode, onAnswer: handleAnswer };
+  const modeProps = { runtimeMode: mode, onAnswer: handleAnswer, initialAnswer };
 
   switch (renderedContent.type) {
     case 'text':
@@ -119,7 +125,13 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
       return <VocabularyViewer content={renderedContent as VocabularyContent} />;
 
     case 'vocabulary-pool':
-      return <VocabularyPoolViewer content={renderedContent as VocabularyPoolContent} />;
+      return (
+        <VocabularyPoolViewer
+          content={renderedContent as VocabularyPoolContent}
+          poolId={vocabularyPoolId}
+          resolvedPool={resolvedVocabularyPool}
+        />
+      );
 
     case 'matching':
       const matchingExercise = renderedContent as MatchingExercise;
@@ -190,6 +202,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
           exercise={renderedContent as GeneratedTranslationExerciseType}
           onComplete={onComplete}
           {...modeProps}
+          allowGeneratedExerciseQueries={allowGeneratedExerciseQueries}
           resolvedItems={resolvedExerciseState?.items as GeneratedTranslationItem[] | undefined}
         />
       );
@@ -200,6 +213,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
           exercise={renderedContent as GeneratedFormIdentificationExerciseType}
           onComplete={onComplete}
           {...modeProps}
+          allowGeneratedExerciseQueries={allowGeneratedExerciseQueries}
           resolvedItems={
             resolvedExerciseState?.items as
               | Array<FormIdentificationItem | MultiAnswerFormIdentificationItem | SingleFieldFormIdentificationItem>

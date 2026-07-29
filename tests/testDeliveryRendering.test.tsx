@@ -62,6 +62,31 @@ describe('sanitized test delivery rendering', () => {
     expect(onAnswer).toHaveBeenCalledWith(expect.objectContaining({ answer: { type: 'fill', answers: ['response'] } }));
   });
 
+  it('restores the authenticated student committed answer when an attempt resumes', () => {
+    const exercise: FillExercise = {
+      id: 'fill',
+      type: 'fill',
+      title: 'Fill',
+      instructions: '',
+      maxPoints: 1,
+      feedbackConfig,
+      data: { items: [{ text: 'Question', answer: 'secret' }] },
+    };
+    const { content } = sanitizeExercise(exercise);
+
+    render(
+      <ContentRenderer
+        content={content.items[0]}
+        runtimeMode="test"
+        initialAnswer={{ type: 'fill', answers: ['saved response'] }}
+      />
+    );
+
+    expect(screen.getByDisplayValue('saved response')).toBeInTheDocument();
+    expect(screen.getByText('Answer recorded.')).toBeInTheDocument();
+    expect(screen.queryByText('secret')).not.toBeInTheDocument();
+  });
+
   it('uses the public match count when the sanitized delivery contains an unmapped left item', () => {
     const exercise: MatchingExercise = {
       id: 'matching',

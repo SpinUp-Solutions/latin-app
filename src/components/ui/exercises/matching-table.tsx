@@ -10,8 +10,7 @@ import { validateMatchingExercise } from '@/src/utils/exercises/matchingExercise
 import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
-import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
-import { resolveRuntimeMode } from '@/src/types/runtime-mode';
+import type { ExerciseAnswer, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
 interface MatchingItem {
@@ -24,7 +23,7 @@ interface MatchingTableProps {
   onComplete?: (score: number) => void;
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
-  testMode?: boolean;
+  initialAnswer?: ExerciseAnswer;
 }
 
 export const MatchingTable: React.FC<MatchingTableProps> = ({
@@ -32,27 +31,43 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({
   onComplete,
   runtimeMode,
   onAnswer,
-  testMode,
+  initialAnswer,
 }) => {
-  const mode = resolveRuntimeMode(runtimeMode, testMode);
+  const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
+  const testAnswerMode = mode === 'test';
   const { leftColumn, rightColumn } = exercise.data;
   const finalAnswer = useMemo(() => exercise.data.answers || {}, [exercise.data.answers]);
-  const totalMatches =
-    mode === 'test' ? (exercise.data.expectedMatchCount ?? leftColumn.length) : Object.keys(finalAnswer).length;
+  const totalMatches = testAnswerMode
+    ? (exercise.data.expectedMatchCount ?? leftColumn.length)
+    : Object.keys(finalAnswer).length;
   const totalRounds = exercise.data.requiredRepetitions || 1;
+  const restoredRounds = useMemo(
+    () => (initialAnswer?.type === 'matching' ? initialAnswer.rounds : []),
+    [initialAnswer]
+  );
+  const lastRestoredRoundComplete =
+    restoredRounds.length > 0 && Object.keys(restoredRounds[restoredRounds.length - 1] ?? {}).length >= totalMatches;
+  const restoredRound =
+    lastRestoredRoundComplete && restoredRounds.length < totalRounds
+      ? restoredRounds.length + 1
+      : Math.min(Math.max(restoredRounds.length, 1), totalRounds);
+  const restoredMatches = useMemo(
+    () => (restoredRound > restoredRounds.length ? {} : (restoredRounds[restoredRound - 1] ?? {})),
+    [restoredRound, restoredRounds]
+  );
 
   const [selectedLeft, setSelectedLeft] = useState<MatchingItem | null>(null);
   const [selectedRight, setSelectedRight] = useState<MatchingItem | null>(null);
-  const [matches, setMatches] = useState<Record<string, string>>({}); // leftId -> rightId
-  const [matchedLeftIds, setMatchedLeftIds] = useState<Set<string>>(new Set());
+  const [matches, setMatches] = useState<Record<string, string>>(restoredMatches); // leftId -> rightId
+  const [matchedLeftIds, setMatchedLeftIds] = useState<Set<string>>(new Set(Object.keys(restoredMatches)));
   const [showIncorrectFlash, setShowIncorrectFlash] = useState(false);
 
   const [shuffledLeftColumn, setShuffledLeftColumn] = useState<MatchingItem[]>(leftColumn);
   const [shuffledRightColumn, setShuffledRightColumn] = useState<MatchingItem[]>(rightColumn);
 
-  const [currentRound, setCurrentRound] = useState(1);
-  const [testRounds, setTestRounds] = useState<Record<string, string>[]>([]);
+  const [currentRound, setCurrentRound] = useState(restoredRound);
+  const [testRounds, setTestRounds] = useState<Record<string, string>[]>(restoredRounds);
 
   const {
     isCorrect,
@@ -90,13 +105,13 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({
     setShuffledRightColumn(rightColumn);
     setSelectedLeft(null);
     setSelectedRight(null);
-    setMatches({});
-    setMatchedLeftIds(new Set());
+    setMatches(restoredMatches);
+    setMatchedLeftIds(new Set(Object.keys(restoredMatches)));
     setShowIncorrectFlash(false);
-    setCurrentRound(1);
-    setTestRounds([]);
+    setCurrentRound(restoredRound);
+    setTestRounds(restoredRounds);
     reset();
-  }, [leftColumn, rightColumn, finalAnswer, reset]);
+  }, [leftColumn, rightColumn, finalAnswer, reset, restoredMatches, restoredRound, restoredRounds]);
 
   const handleLeftSelect = (item: string, index?: number) => {
     const matchingItem = shuffledLeftColumn[index!];
@@ -132,14 +147,13 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({
         setMatchedLeftIds(previous => new Set(previous).add(selectedLeft.id));
         setSelectedLeft(null);
         setSelectedRight(null);
-        if (mode === 'test') onAnswer?.({ type: 'matching', rounds: nextRounds });
+        if (testAnswerMode) onAnswer?.({ type: 'matching', rounds: nextRounds });
 
         if (Object.keys(nextMatches).length === totalMatches) {
           if (currentRound >= totalRounds) {
-            const score =
-              mode === 'test'
-                ? 0
-                : Math.round(gradeExercisePercentage({ exercise }, { type: 'matching', rounds: nextRounds }));
+            const score = testAnswerMode
+              ? 0
+              : Math.round(gradeExercisePercentage({ exercise }, { type: 'matching', rounds: nextRounds }));
             onComplete?.(score);
           } else {
             setCurrentRound(previous => previous + 1);

@@ -57,7 +57,15 @@ export const LessonBuilder: React.FC<LessonBuilderProps> = ({ initialLesson, onS
     updates: Partial<
       Pick<
         Lesson,
-        'id' | 'title' | 'description' | 'type' | 'vocabulary_pool' | 'practiceCategoryIds' | 'practiceCategories'
+        | 'id'
+        | 'title'
+        | 'description'
+        | 'type'
+        | 'vocabulary_pool'
+        | 'showWordSearch'
+        | 'practiceCategorySelections'
+        | 'practiceCategoryIds'
+        | 'practiceCategories'
       >
     >
   ) => {

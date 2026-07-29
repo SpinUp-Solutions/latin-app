@@ -357,4 +357,57 @@ describe('test grading foundation', () => {
     expect(serialized).not.toContain('secret hint');
     expect(serialized).not.toContain('feedbackConfig');
   });
+
+  it('freezes the version vocabulary pool into student-safe attempt delivery', async () => {
+    const version = {
+      ...makeVersion(),
+      vocabularyPoolId: 'pool-one',
+      pages: [
+        {
+          id: 'page-one',
+          items: [fillExercise, { id: 'pool-content', type: 'vocabulary-pool' as const }],
+        },
+      ],
+    };
+    const loadVocabularyPool = jest.fn(async () => ({
+      id: 'pool-one',
+      name: 'Chapter words',
+      items: [
+        {
+          id: 'amo',
+          latin: 'amō',
+          english: 'I love',
+          partOfSpeech: 'verb',
+          notes: 'First conjugation',
+          futurePrivate: 'secret-pool-field',
+        },
+      ],
+    }));
+
+    const state = await createFrozenTestDeliveryState(
+      version,
+      async () => [],
+      loadVocabularyPool as never
+    );
+    const delivery = sanitizeTestDeliveryState(state);
+
+    expect(loadVocabularyPool).toHaveBeenCalledWith('pool-one');
+    expect(delivery.vocabularyPool).toEqual({
+      id: 'pool-one',
+      name: 'Chapter words',
+      items: [
+        {
+          id: 'amo',
+          latin: 'amō',
+          english: 'I love',
+          pronunciation: undefined,
+          audioPath: undefined,
+          example: undefined,
+          partOfSpeech: 'verb',
+          notes: 'First conjugation',
+        },
+      ],
+    });
+    expect(JSON.stringify(delivery)).not.toContain('secret-pool-field');
+  });
 });

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/src/components/ui/button';
 import { TestVersionEditor } from '@/src/components/ui/admin';
-import type { TestVersionEditorValue } from '@/src/components/ui/admin/TestBuilder';
+import type { TestVersionEditorValue } from '@/src/components/ui/admin/TestVersionEditor';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 import { useCreateTestMutation } from '@/src/store/api/testApi';
 import { toast } from 'sonner';
@@ -35,7 +35,7 @@ function CreateTestPage() {
         </Button>
       </div>
       <div className="flex-1 overflow-hidden">
-        <TestVersionEditor onSave={save} saving={isLoading} />
+        <TestVersionEditor creationScope="normal-test-create" onSave={save} saving={isLoading} />
       </div>
     </div>
   );

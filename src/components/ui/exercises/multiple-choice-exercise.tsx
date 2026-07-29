@@ -12,8 +12,7 @@ import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { cn } from '@/src/lib/utils';
 import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
-import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
-import { resolveRuntimeMode } from '@/src/types/runtime-mode';
+import type { ExerciseAnswer, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
 interface Props {
@@ -21,8 +20,8 @@ interface Props {
   onComplete?: (score: number) => void;
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
+  initialAnswer?: ExerciseAnswer;
   /** @deprecated Use runtimeMode="test". */
-  testMode?: boolean;
 }
 
 const MultipleChoiceExerciseComponent: React.FC<Props> = ({
@@ -30,12 +29,14 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({
   onComplete,
   runtimeMode,
   onAnswer,
-  testMode,
+  initialAnswer,
 }) => {
-  const mode = resolveRuntimeMode(runtimeMode, testMode);
+  const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
-  const [selectedOptionIds, setSelectedOptionIds] = useState<string[]>([]);
-  const [hasSubmitted, setHasSubmitted] = useState(false);
+  const testAnswerMode = mode === 'test';
+  const restoredOptionIds = initialAnswer?.type === 'multiple-choice' ? initialAnswer.selectedOptionIds : [];
+  const [selectedOptionIds, setSelectedOptionIds] = useState<string[]>(restoredOptionIds);
+  const [hasSubmitted, setHasSubmitted] = useState(restoredOptionIds.length > 0);
   const [isProcessing, setIsProcessing] = useState(false);
   const { isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance } = useExerciseProgression({
     totalItems: 1,
@@ -86,16 +87,14 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({
 
     setIsProcessing(true);
     setHasSubmitted(true);
-    if (mode === 'test') {
+    if (testAnswerMode) {
       onAnswer?.({ type: 'multiple-choice', selectedOptionIds });
       setIsProcessing(false);
       onComplete?.(0);
       return;
     }
 
-    const score = Math.round(
-      gradeExercisePercentage({ exercise }, { type: 'multiple-choice', selectedOptionIds })
-    );
+    const score = Math.round(gradeExercisePercentage({ exercise }, { type: 'multiple-choice', selectedOptionIds }));
     const validation = validateMultipleChoiceExercise(selectedOptionIds, exercise);
 
     if (validation.isCorrect) {

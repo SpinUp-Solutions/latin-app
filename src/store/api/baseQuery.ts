@@ -19,6 +19,11 @@ export const getApiErrorMessage = (error: unknown, fallback: string) => {
 
 export const hasApiErrorStatus = (error: unknown, status: number) => isObject(error) && error.status === status;
 
+export const getApiErrorCode = (error: unknown): string | undefined => {
+  if (!isObject(error) || !isObject(error.data)) return undefined;
+  return typeof error.data.code === 'string' ? error.data.code : undefined;
+};
+
 export const createAuthenticatedBaseQuery = () =>
   fetchBaseQuery({
     baseUrl: '/api',

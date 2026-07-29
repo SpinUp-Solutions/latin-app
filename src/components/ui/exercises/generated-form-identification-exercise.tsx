@@ -30,8 +30,7 @@ import {
 } from '@/src/utils/exercises/generatedFormIdentificationExercise';
 import { formatLabel } from '@/src/utils/label-formatter';
 import { normalizeCollection, buildLegacyParadigmConfigs } from '@/src/utils/exercises/legacyExerciseCompat';
-import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
-import { resolveRuntimeMode } from '@/src/types/runtime-mode';
+import type { ExerciseAnswer, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
 import { getContentTypeLabel } from '@/src/lib/content/registry';
 import { createGeneratedFormIdentificationItems } from '@/src/lib/tests/generated-exercises';
 import { RecordedAnswerControls } from './recorded-answer-controls';
@@ -42,8 +41,9 @@ interface Props {
   onComplete?: (score: number) => void;
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
+  initialAnswer?: ExerciseAnswer;
   resolvedItems?: Array<FormIdentificationItem | SingleFieldFormIdentificationItem | MultiAnswerFormIdentificationItem>;
-  testMode?: boolean;
+  allowGeneratedExerciseQueries?: boolean;
 }
 
 type ItemType = FormIdentificationItem | SingleFieldFormIdentificationItem | MultiAnswerFormIdentificationItem;
@@ -60,17 +60,15 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
   onComplete,
   runtimeMode,
   onAnswer,
+  initialAnswer,
   resolvedItems,
-  testMode,
+  allowGeneratedExerciseQueries = false,
 }) => {
-  const mode = resolveRuntimeMode(runtimeMode, testMode);
+  const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
-  const [userAnswer, setUserAnswer] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
+  const testAnswerMode = mode === 'test';
   const [wordAnswers, setWordAnswers] = useState<Record<string, Record<string, string>>>({});
   const [multiAnswerSlots, setMultiAnswerSlots] = useState<Record<string, string[][]>>({});
-  const [testSubmitted, setTestSubmitted] = useState(false);
-  const [submittedAnswers, setSubmittedAnswers] = useState<Record<string, string>>({});
 
   const config = exercise.data.generatorConfig ?? {
     collection: '',
@@ -102,7 +100,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
       count: config.count,
       paradigmConfigs,
     },
-    { skip: mode === 'test' || resolvedItems !== undefined }
+    { skip: (mode === 'test' && !allowGeneratedExerciseQueries) || resolvedItems !== undefined }
   );
 
   const items: ItemType[] = useMemo(() => {
@@ -162,6 +160,16 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
       .filter((result): result is { success: true; data: FormIdentificationItem } => result.success)
       .map(result => result.data);
   }, [items, isSingleField, isMultiAnswerMode, mode]);
+  const restoredAnswers = initialAnswer?.type === 'generated-form-identification' ? initialAnswer.answers : {};
+  const firstUnansweredIndex = validatedItems.findIndex(item => !restoredAnswers[item.id]?.trim());
+  const restoredIndex = firstUnansweredIndex >= 0 ? firstUnansweredIndex : Math.max(validatedItems.length - 1, 0);
+  const restoredItemId = validatedItems[restoredIndex]?.id;
+  const [userAnswer, setUserAnswer] = useState(restoredItemId ? (restoredAnswers[restoredItemId] ?? '') : '');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [testSubmitted, setTestSubmitted] = useState(
+    Boolean(restoredItemId && restoredAnswers[restoredItemId]?.trim())
+  );
+  const [submittedAnswers, setSubmittedAnswers] = useState<Record<string, string>>(restoredAnswers);
 
   const {
     currentIndex,
@@ -173,6 +181,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
     nextItem,
   } = useExerciseProgression({
     totalItems: validatedItems.length,
+    initialIndex: restoredIndex,
     itemProgressionDelay: exercise.itemProgressionDelay,
     progressionRules: exercise.feedbackConfig.progressionRules,
   });
@@ -203,7 +212,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
   });
 
   const handleSubmit = () => {
-    if (isProcessing || validatedItems.length === 0) return;
+    if (isProcessing || validatedItems.length === 0 || !userAnswer.trim()) return;
     if (currentIndex >= validatedItems.length) return;
 
     const currentItem = validatedItems[currentIndex];
@@ -211,7 +220,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
     setSubmittedAnswers(nextAnswers);
     setIsProcessing(true);
 
-    if (mode === 'test') {
+    if (testAnswerMode) {
       onAnswer?.({ type: 'generated-form-identification', answers: nextAnswers });
       setTestSubmitted(true);
       return;
@@ -359,18 +368,19 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
 
   const continueTest = () => {
     if (isLastItem) {
-      const score =
-        mode === 'test'
-          ? 0
-          : gradeExercisePercentage(
-              { exercise, resolvedItems: validatedItems },
-              { type: 'generated-form-identification', answers: submittedAnswers }
-            );
+      const score = testAnswerMode
+        ? 0
+        : gradeExercisePercentage(
+            { exercise, resolvedItems: validatedItems },
+            { type: 'generated-form-identification', answers: submittedAnswers }
+          );
       onComplete?.(score);
       return;
     }
-    setUserAnswer('');
-    setTestSubmitted(false);
+    const nextItemId = validatedItems[currentIndex + 1]?.id;
+    const nextAnswer = nextItemId ? (submittedAnswers[nextItemId] ?? '') : '';
+    setUserAnswer(nextAnswer);
+    setTestSubmitted(Boolean(nextAnswer.trim()));
     setIsProcessing(false);
     reset();
     nextItem();

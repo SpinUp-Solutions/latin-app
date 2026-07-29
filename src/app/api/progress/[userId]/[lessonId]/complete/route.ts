@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { adminDb } from '@/src/services/firebase-admin';
 import { verifyRequestAuth } from '@/src/lib/verifyRequestAuth';
 import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
+import { getLessonProgressAccessInTransaction } from '@/src/lib/learning-units/progression-access';
 import { Lesson, UserProgress } from '@/src/types/lesson';
 import {
   getMissingExercises,
@@ -44,6 +45,18 @@ export async function POST(
       if (!isLessonDocumentData(lessonSnapshot.data())) return { kind: 'lesson-not-found' as const };
 
       const lesson = { id: lessonSnapshot.id, ...lessonSnapshot.data() } as Lesson;
+      const access = await getLessonProgressAccessInTransaction(
+        transaction,
+        adminDb,
+        lesson,
+        userId,
+        progressSnapshot.exists
+      );
+      if (access !== 'allowed') {
+        throw Object.assign(new Error(access), {
+          code: access === 'locked' ? 'LESSON_LOCKED' : 'LESSON_NOT_FOUND',
+        });
+      }
       const finalPage = lesson.pages.at(-1);
       if (!finalPage || finalPage.id !== finalPageId) return { kind: 'invalid-final-page' as const };
 
@@ -101,6 +114,17 @@ export async function POST(
 
     return NextResponse.json({ success: true, lessonCompleted: true, alreadyCompleted: result.alreadyCompleted });
   } catch (error) {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      (error.code === 'LESSON_LOCKED' || error.code === 'LESSON_NOT_FOUND')
+    ) {
+      return NextResponse.json(
+        { error: error.code === 'LESSON_LOCKED' ? 'Lesson is locked' : 'Lesson not found' },
+        { status: error.code === 'LESSON_LOCKED' ? 403 : 404 }
+      );
+    }
     console.error('Error completing lesson:', error);
     return NextResponse.json({ error: 'Failed to complete lesson' }, { status: 500 });
   }

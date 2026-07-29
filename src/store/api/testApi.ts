@@ -3,27 +3,22 @@ import type {
   StartTestAttemptInput,
   TestVersionInput,
   UpdateTestWithVersionInput,
-  UpdateTestVersionInput,
+  UpdateTestUnitInput,
 } from '@/src/lib/tests/schemas';
 import type { TestUnit } from '@/src/types/learning-unit';
 import type {
   StartTestAttemptResult,
   StudentInProgressTestAttempt,
-  StudentTestAttempt,
   SubmitTestAttemptResult,
-  TestAttemptOrigin,
-  TestAttemptOriginSummary,
   TestUnitDetail,
   TestUnitSummary,
   TestVersion,
-  TestVersionSummary,
 } from '@/src/types/test';
 import type { ExerciseAnswer } from '@/src/types/runtime-mode';
 import { appApi } from './appApi';
+import { getAttemptSummaryTagId, STUDENT_DASHBOARD_TAG } from './tags';
 
 const testVersionsForTestTag = (testId: string) => `FOR_TEST:${testId}`;
-const attemptSummaryTag = (uid: string, origin: TestAttemptOrigin) =>
-  `${origin.kind}:${origin.kind === 'normal-test' ? origin.testId : origin.mockTestId}:${uid}`;
 
 export const testApi = appApi.injectEndpoints({
   endpoints: builder => ({
@@ -58,16 +53,14 @@ export const testApi = appApi.injectEndpoints({
               { type: 'LearningUnit', id: 'LIST' },
               { type: 'TestVersion', id: changes.versionId },
               { type: 'TestVersion', id: testVersionsForTestTag(id) },
+              STUDENT_DASHBOARD_TAG,
             ]
           : [],
     }),
-    getTestVersions: builder.query<TestVersionSummary[], string>({
-      query: testId => `/admin/tests/${testId}/versions`,
-      transformResponse: (response: { versions: TestVersionSummary[] }) => response.versions,
-      providesTags: (result, error, testId) => [
-        ...(result ?? []).map(version => ({ type: 'TestVersion' as const, id: version.id })),
-        { type: 'TestVersion', id: testVersionsForTestTag(testId) },
-      ],
+    updateTestSettings: builder.mutation<{ test: TestUnit }, { id: string; changes: UpdateTestUnitInput }>({
+      query: ({ id, changes }) => ({ url: `/admin/tests/${id}/settings`, method: 'PATCH', body: changes }),
+      invalidatesTags: (result, error, { id }) =>
+        result ? [{ type: 'LearningUnit', id }, { type: 'LearningUnit', id: 'LIST' }, STUDENT_DASHBOARD_TAG] : [],
     }),
     createTestVersion: builder.mutation<
       { test: TestUnit; version: TestVersion },
@@ -84,6 +77,7 @@ export const testApi = appApi.injectEndpoints({
               { type: 'LearningUnit', id: testId },
               { type: 'LearningUnit', id: 'LIST' },
               { type: 'TestVersion', id: testVersionsForTestTag(testId) },
+              STUDENT_DASHBOARD_TAG,
             ]
           : [],
     }),
@@ -92,22 +86,23 @@ export const testApi = appApi.injectEndpoints({
       transformResponse: (response: { version: TestVersion }) => response.version,
       providesTags: (result, error, versionId) => [{ type: 'TestVersion', id: versionId }],
     }),
-    updateTestVersion: builder.mutation<
-      { version: TestVersion },
-      { testId: string; versionId: string; changes: UpdateTestVersionInput }
+    duplicateTestVersion: builder.mutation<
+      { test: TestUnit; version: TestVersion },
+      { testId: string; versionId: string; requestId: string; name?: string }
     >({
-      query: ({ versionId, changes }) => ({
-        url: `/admin/test-versions/${versionId}`,
-        method: 'PATCH',
-        body: changes,
+      query: ({ testId, versionId, ...body }) => ({
+        url: `/admin/tests/${testId}/versions/${versionId}/duplicate`,
+        method: 'POST',
+        body,
       }),
-      invalidatesTags: (result, error, { testId, versionId }) =>
+      invalidatesTags: (result, error, { testId }) =>
         result
           ? [
-              { type: 'TestVersion', id: versionId },
-              { type: 'TestVersion', id: testVersionsForTestTag(testId) },
               { type: 'LearningUnit', id: testId },
               { type: 'LearningUnit', id: 'LIST' },
+              { type: 'TestVersion', id: result.version.id },
+              { type: 'TestVersion', id: testVersionsForTestTag(testId) },
+              STUDENT_DASHBOARD_TAG,
             ]
           : [],
     }),
@@ -117,23 +112,23 @@ export const testApi = appApi.injectEndpoints({
         result
           ? [
               { type: 'TestAttempt', id: result.attempt.id },
-              { type: 'AttemptSummary', id: attemptSummaryTag(uid, origin) },
+              { type: 'AttemptSummary', id: getAttemptSummaryTagId(uid, origin) },
+              ...(origin.kind === 'mock-test' ? [{ type: 'MockTest' as const, id: 'STUDENT' }] : []),
             ]
           : [],
     }),
-    getTestAttempt: builder.query<StudentTestAttempt, { uid: string; attemptId: string }>({
-      query: ({ attemptId }) => `/test-attempts/${attemptId}`,
-      transformResponse: (response: { attempt: StudentTestAttempt }) => response.attempt,
-      providesTags: (result, error, { attemptId }) => [{ type: 'TestAttempt', id: attemptId }],
-    }),
-    saveTestAttemptAnswer: builder.mutation<
+    saveTestAttemptAnswers: builder.mutation<
       StudentInProgressTestAttempt,
-      { uid: string; attemptId: string; exerciseId: string; answer: ExerciseAnswer | null }
+      {
+        uid: string;
+        attemptId: string;
+        answers: Record<string, ExerciseAnswer | null>;
+      }
     >({
-      query: ({ uid: _uid, attemptId, exerciseId, answer }) => ({
+      query: ({ uid: _uid, attemptId, answers }) => ({
         url: `/test-attempts/${attemptId}/answers`,
         method: 'PATCH',
-        body: { exerciseId, answer },
+        body: { answers },
       }),
       transformResponse: (response: { attempt: StudentInProgressTestAttempt }) => response.attempt,
       invalidatesTags: (result, error, { attemptId }) => (result ? [{ type: 'TestAttempt', id: attemptId }] : []),
@@ -144,27 +139,21 @@ export const testApi = appApi.injectEndpoints({
         result
           ? [
               { type: 'TestAttempt', id: attemptId },
-              { type: 'AttemptSummary', id: attemptSummaryTag(uid, result.attempt.origin) },
+              { type: 'AttemptSummary', id: getAttemptSummaryTagId(uid, result.attempt.origin) },
+              ...(result.attempt.origin.kind === 'mock-test'
+                ? [
+                    { type: 'MockTest' as const, id: 'STUDENT' },
+                    // Refresh the frozen-session detail as well as the live
+                    // student-card collection after a mock submission.
+                    { type: 'MockTest' as const, id: result.attempt.origin.mockTestId },
+                  ]
+                : []),
               // A lost first response makes the idempotent retry report
               // completionGranted: false, so gate on the outcome instead.
-              ...(result.attempt.origin.kind === 'normal-test' && result.attempt.outcome !== 'not-passed'
-                ? [{ type: 'StudentLearningPath' as const, id: uid }]
-                : []),
+              { type: 'StudentLearningPath' as const, id: uid },
+              STUDENT_DASHBOARD_TAG,
             ]
           : [],
-    }),
-    getTestAttemptSummary: builder.query<TestAttemptOriginSummary, { uid: string; origin: TestAttemptOrigin }>({
-      query: ({ origin }) => {
-        const originId = origin.kind === 'normal-test' ? origin.testId : origin.mockTestId;
-        return `/test-attempts/summaries?originKind=${origin.kind}&originId=${encodeURIComponent(originId)}`;
-      },
-      transformResponse: (response: { summary: TestAttemptOriginSummary }) => response.summary,
-      providesTags: (result, error, { uid, origin }) => [{ type: 'AttemptSummary', id: attemptSummaryTag(uid, origin) }],
-    }),
-    recoverTestAttemptSession: builder.mutation<{ recovered: boolean }, StartTestAttemptInput & { uid: string }>({
-      query: ({ uid: _uid, ...input }) => ({ url: '/test-attempts/recover', method: 'POST', body: input }),
-      invalidatesTags: (result, error, { uid, origin }) =>
-        result?.recovered ? [{ type: 'AttemptSummary', id: attemptSummaryTag(uid, origin) }] : [],
     }),
   }),
 });
@@ -174,14 +163,11 @@ export const {
   useGetTestByIdQuery,
   useCreateTestMutation,
   useUpdateTestMutation,
-  useGetTestVersionsQuery,
+  useUpdateTestSettingsMutation,
   useCreateTestVersionMutation,
   useGetTestVersionByIdQuery,
-  useUpdateTestVersionMutation,
+  useDuplicateTestVersionMutation,
   useStartTestAttemptMutation,
-  useGetTestAttemptQuery,
-  useSaveTestAttemptAnswerMutation,
+  useSaveTestAttemptAnswersMutation,
   useSubmitTestAttemptMutation,
-  useGetTestAttemptSummaryQuery,
-  useRecoverTestAttemptSessionMutation,
 } = testApi;

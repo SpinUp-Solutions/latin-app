@@ -1,9 +1,10 @@
-import { Lesson, LessonSummary, LessonWithProgress } from '@/src/types/lesson';
+import { Lesson, LessonSummary, LessonWithProgress, StudentDashboard } from '@/src/types/lesson';
 import { extractTooltipsFromLesson } from '@/src/utils/tooltipUtils';
 import { TooltipData } from '@/src/types/tooltip';
+import type { AdminLearningPathView, LearningPathDocument } from '@/src/types/learning-unit';
 import { buildLessonMutationPayload } from '@/src/utils/practiceCategoryLessons';
 import { appApi } from './appApi';
-import { PRACTICE_CATEGORY_ASSIGNMENTS_TAG } from './tags';
+import { getAttemptSummaryTagId, PRACTICE_CATEGORY_ASSIGNMENTS_TAG, STUDENT_DASHBOARD_TAG } from './tags';
 
 export const lessonApi = appApi.injectEndpoints({
   endpoints: builder => ({
@@ -20,11 +21,59 @@ export const lessonApi = appApi.injectEndpoints({
           : [{ type: 'LessonList', id: 'LIST' }, PRACTICE_CATEGORY_ASSIGNMENTS_TAG],
     }),
 
-    getStudentLessons: builder.query<LessonWithProgress[], string | void>({
-      query: () => '/lessons',
-      transformResponse: (response: { lessons: LessonWithProgress[] }) => response.lessons,
-      providesTags: [{ type: 'StudentLesson', id: 'LIST' }],
+    getStudentDashboard: builder.query<StudentDashboard, string>({
+      query: () => '/student-dashboard',
+      transformResponse: (response: { dashboard: StudentDashboard }) => response.dashboard,
+      providesTags: (result, error, userId) => [
+        { type: 'StudentLearningPath', id: userId },
+        { type: 'StudentLesson', id: 'LIST' },
+        ...(result?.learningPath
+          .filter(unit => unit.kind === 'test')
+          .map(test => ({
+            type: 'AttemptSummary' as const,
+            id: getAttemptSummaryTagId(userId, {
+              kind: 'normal-test',
+              testId: test.id,
+            }),
+          })) ?? []),
+        ...(result?.mockTests?.map(mock => ({
+          type: 'AttemptSummary' as const,
+          id: getAttemptSummaryTagId(userId, { kind: 'mock-test', mockTestId: mock.id }),
+        })) ?? []),
+      ],
     }),
+
+    getStudentLesson: builder.query<LessonWithProgress, { lessonId: string; userId: string }>({
+      query: ({ lessonId }) => `/lessons/${encodeURIComponent(lessonId)}`,
+      transformResponse: (response: { lesson: LessonWithProgress }) => response.lesson,
+      providesTags: (result, error, { lessonId, userId }) => [
+        { type: 'StudentLesson', id: lessonId },
+        { type: 'StudentLearningPath', id: userId },
+      ],
+    }),
+
+    getLearningPath: builder.query<AdminLearningPathView, void>({
+      query: () => '/admin/learning-path',
+      providesTags: [{ type: 'LearningPath', id: 'default' }],
+    }),
+
+    saveLearningPath: builder.mutation<{ path: LearningPathDocument }, { expectedRevision: number; unitIds: string[] }>(
+      {
+        query: input => ({
+          url: '/admin/learning-path',
+          method: 'PUT',
+          body: input,
+        }),
+        invalidatesTags: result =>
+          result
+            ? [
+                { type: 'LearningPath', id: 'default' },
+                { type: 'LearningUnit', id: 'LIST' },
+                { type: 'StudentLearningPath' },
+              ]
+            : [],
+      }
+    ),
 
     getLessonById: builder.query<{ lesson: Lesson; tooltips: Record<string, TooltipData> }, { lessonId: string }>({
       query: ({ lessonId }) => `/admin/lessons/${lessonId}`,
@@ -48,7 +97,8 @@ export const lessonApi = appApi.injectEndpoints({
         method: 'POST',
         body: buildLessonMutationPayload(lesson),
       }),
-      invalidatesTags: [{ type: 'LessonList', id: 'LIST' }],
+      invalidatesTags: (result, error) =>
+        error || !result ? [] : [{ type: 'LessonList', id: 'LIST' }, STUDENT_DASHBOARD_TAG],
     }),
 
     updateLesson: builder.mutation<{ lesson: Lesson }, Lesson>({
@@ -57,10 +107,15 @@ export const lessonApi = appApi.injectEndpoints({
         method: 'PUT',
         body: buildLessonMutationPayload(lesson),
       }),
-      invalidatesTags: (result, error, lesson) => [
-        { type: 'Lesson', id: lesson.id },
-        { type: 'LessonList', id: 'LIST' },
-      ],
+      invalidatesTags: (result, error, lesson) =>
+        error || !result
+          ? []
+          : [
+              { type: 'Lesson', id: lesson.id },
+              { type: 'LessonList', id: 'LIST' },
+              { type: 'StudentLesson', id: lesson.id },
+              STUDENT_DASHBOARD_TAG,
+            ],
     }),
 
     deleteLesson: builder.mutation<void, string>({
@@ -68,10 +123,15 @@ export const lessonApi = appApi.injectEndpoints({
         url: `/admin/lessons/${lessonId}`,
         method: 'DELETE',
       }),
-      invalidatesTags: (result, error, lessonId) => [
-        { type: 'Lesson', id: lessonId },
-        { type: 'LessonList', id: 'LIST' },
-      ],
+      invalidatesTags: (result, error, lessonId) =>
+        error
+          ? []
+          : [
+              { type: 'Lesson', id: lessonId },
+              { type: 'LessonList', id: 'LIST' },
+              { type: 'StudentLesson', id: lessonId },
+              STUDENT_DASHBOARD_TAG,
+            ],
     }),
 
     updateLessonsPublishStatus: builder.mutation<
@@ -89,10 +149,15 @@ export const lessonApi = appApi.injectEndpoints({
         method: 'POST',
         body: { lessonIds, isLive, lessonType, expectedLiveLessonIds, startOrder },
       }),
-      invalidatesTags: (result, error, { lessonIds }) => [
-        ...lessonIds.map(id => ({ type: 'Lesson' as const, id })),
-        { type: 'LessonList', id: 'LIST' },
-      ],
+      invalidatesTags: (result, error, { lessonIds }) =>
+        error || !result
+          ? []
+          : [
+              ...lessonIds.map(id => ({ type: 'Lesson' as const, id })),
+              ...lessonIds.map(id => ({ type: 'StudentLesson' as const, id })),
+              { type: 'LessonList', id: 'LIST' },
+              STUDENT_DASHBOARD_TAG,
+            ],
     }),
 
     reorderLessons: builder.mutation<{ success: boolean }, { lessonId: string; liveOrder: number }[]>({
@@ -101,7 +166,17 @@ export const lessonApi = appApi.injectEndpoints({
         method: 'POST',
         body: { updates },
       }),
-      invalidatesTags: [{ type: 'LessonList', id: 'LIST' }],
+      invalidatesTags: (result, error, updates) =>
+        error || !result
+          ? []
+          : [
+              { type: 'LessonList', id: 'LIST' },
+              ...updates.map(({ lessonId }) => ({
+                type: 'StudentLesson' as const,
+                id: lessonId,
+              })),
+              STUDENT_DASHBOARD_TAG,
+            ],
     }),
 
     markExerciseComplete: builder.mutation<
@@ -117,7 +192,13 @@ export const lessonApi = appApi.injectEndpoints({
           score,
         },
       }),
-      invalidatesTags: () => [{ type: 'StudentLesson', id: 'LIST' }],
+      invalidatesTags: (result, error, { userId, lessonId }) =>
+        error || !result
+          ? []
+          : [
+              { type: 'StudentLesson', id: lessonId },
+              { type: 'StudentLearningPath', id: userId },
+            ],
     }),
 
     updatePageProgress: builder.mutation<
@@ -132,7 +213,13 @@ export const lessonApi = appApi.injectEndpoints({
           pageId,
         },
       }),
-      invalidatesTags: () => [{ type: 'StudentLesson', id: 'LIST' }],
+      invalidatesTags: (result, error, { userId, lessonId }) =>
+        error || !result
+          ? []
+          : [
+              { type: 'StudentLesson', id: lessonId },
+              { type: 'StudentLearningPath', id: userId },
+            ],
     }),
 
     finishLesson: builder.mutation<
@@ -144,7 +231,13 @@ export const lessonApi = appApi.injectEndpoints({
         method: 'POST',
         body: { finalPageId },
       }),
-      invalidatesTags: () => [{ type: 'StudentLesson', id: 'LIST' }],
+      invalidatesTags: (result, error, { userId, lessonId }) =>
+        error || !result
+          ? []
+          : [
+              { type: 'StudentLesson', id: lessonId },
+              { type: 'StudentLearningPath', id: userId },
+            ],
     }),
 
     // Recovery endpoints
@@ -210,7 +303,10 @@ export const lessonApi = appApi.injectEndpoints({
 
 export const {
   useGetLessonsQuery,
-  useGetStudentLessonsQuery,
+  useGetStudentDashboardQuery,
+  useGetStudentLessonQuery,
+  useGetLearningPathQuery,
+  useSaveLearningPathMutation,
   useGetLessonByIdQuery,
   useLazyGetLessonByIdQuery,
   useCreateLessonMutation,

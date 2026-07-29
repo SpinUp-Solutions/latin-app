@@ -1,8 +1,7 @@
-import type { Exercise } from './exercises';
 import type { TestUnit } from './learning-unit';
-import type { RenderableContentItem } from './page';
 import type { Page } from './page';
 import type { ExerciseAnswer } from './runtime-mode';
+import type { VocabularyPoolStudyData } from './vocabulary';
 
 export interface RotationVersionReference {
   versionId: string;
@@ -12,6 +11,7 @@ export interface TestVersion {
   id: string;
   name: string;
   pages: Page[];
+  vocabularyPoolId?: string | null;
   totalPages: number;
   totalItems: number;
   totalExercises: number;
@@ -28,11 +28,13 @@ export type TestUnitSummary = Omit<TestUnit, 'rotationVersions'> & {
   rotationVersionCount: number;
   minTotalPoints: number;
   maxTotalPoints: number;
+  configurationStatus?: 'ready' | 'unavailable';
 };
 
 export interface TestUnitDetail {
   test: TestUnit;
   versions: TestVersionSummary[];
+  mocks?: Array<MockTest & { version: TestVersionSummary }>;
 }
 
 export type MockTestParent = { kind: 'test'; testId: string } | { kind: 'standalone' };
@@ -54,12 +56,41 @@ export interface MockTest {
   updatedBy?: string;
 }
 
+export interface MockTestSummary extends MockTest {
+  totalPoints: number;
+}
+
+export interface StudentMockTestSummary {
+  id: string;
+  title: string;
+  description: string;
+  passingPercentage: number | null;
+  totalPoints: number;
+  attemptSummary: TestAttemptOriginSummary;
+  scoreTrend: Array<{ percentage: number; submittedAt: string }>;
+}
+
+/**
+ * Deliberately small origin projection used by the mock player.  An inactive
+ * card is only ever returned with an already-frozen in-progress attempt; the
+ * attempt delivery is the source of truth for resuming after an ownership or
+ * visibility change.
+ */
+export interface StudentMockTestDetail {
+  mock: Pick<
+    MockTest,
+    'id' | 'title' | 'description' | 'passingPercentage' | 'status' | 'isLive'
+  >;
+  attempt: Omit<StudentInProgressTestAttempt, 'answers'> | null;
+}
+
 export type TestAttemptOrigin = { kind: 'normal-test'; testId: string } | { kind: 'mock-test'; mockTestId: string };
 
 export interface TestAttemptDeliveryState {
   versionId: string;
   pages: Page[];
   resolvedExercises: Record<string, { items: unknown[] }>;
+  vocabularyPool?: VocabularyPoolStudyData;
 }
 
 export interface TestAttemptBase {
@@ -107,8 +138,9 @@ export interface TestAttemptSession {
 
 export interface StudentTestDelivery {
   versionId: string;
-  pages: unknown[];
+  pages: Page[];
   resolvedExercises: Record<string, { items: unknown[] }>;
+  vocabularyPool?: VocabularyPoolStudyData;
 }
 
 export type StudentInProgressTestAttempt = Omit<InProgressTestAttempt, 'studentId' | 'deliveryState'> & {
@@ -144,51 +176,4 @@ export interface TestAttemptOriginSummary {
   attemptCount: number;
   best: TestAttemptResultSummary | null;
   latest: TestAttemptResultSummary | null;
-}
-
-export interface ScoredTestExercise {
-  exercise: Exercise;
-  maxPoints: number;
-}
-
-/** A non-scored item shown as part of a test, such as instructions or vocabulary. */
-export interface TestContentItem {
-  content: RenderableContentItem;
-}
-
-export type TestItem = ScoredTestExercise | TestContentItem;
-
-export interface TestDefinition {
-  id: string;
-  title: string;
-  description: string;
-  /** Ordered test content. Exercises carry points; other content is informational. */
-  items?: TestItem[];
-  /** Test pages, matching the authoring structure used by lessons. */
-  pages?: Page[];
-  /** @deprecated Kept so existing tests can be read and migrated transparently. */
-  exercises: ScoredTestExercise[];
-  totalPoints: number;
-  /** Temporary POC compatibility until test containers are persisted in Phase 3. */
-  passingPercentage?: number | null;
-  createdAt?: string;
-  createdBy?: string;
-  updatedAt?: string;
-  updatedBy?: string;
-  version?: number;
-}
-
-export type TestSummary = Pick<
-  TestDefinition,
-  'id' | 'title' | 'description' | 'totalPoints' | 'createdAt' | 'updatedAt' | 'version'
-> & {
-  exerciseCount: number;
-};
-
-export interface TestExerciseResult {
-  exerciseId: string;
-  title: string;
-  earnedPoints: number;
-  maxPoints: number;
-  scorePercent: number;
 }

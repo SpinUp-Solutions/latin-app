@@ -2,60 +2,28 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Edit, Loader2, Play } from 'lucide-react';
+import { Eye, FileCheck2, Loader2, Search } from 'lucide-react';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent } from '@/src/components/ui/card';
+import { Input } from '@/src/components/ui/input';
+import { useGetLearningPathQuery } from '@/src/store/api/lessonApi';
+import { useGetMocksQuery } from '@/src/store/api/mockTestApi';
 import { useGetTestsQuery } from '@/src/store/api/testApi';
 
+type Filter = 'all' | 'normal' | 'mock' | 'in-path' | 'unplaced' | 'live-mocks' | 'archived-mocks';
+const filters: Array<[Filter, string]> = [['all', 'All'], ['normal', 'Normal tests'], ['mock', 'Mock tests'], ['in-path', 'In Learning Path'], ['unplaced', 'Unplaced'], ['live-mocks', 'Live mocks'], ['archived-mocks', 'Archived mocks']];
+
 export function TestManager() {
-  const { data: tests = [], isLoading, isError } = useGetTestsQuery();
-
-  if (isLoading)
-    return (
-      <div className="flex justify-center p-12">
-        <Loader2 className="h-7 w-7 animate-spin" />
-      </div>
-    );
-  if (isError)
-    return <div className="rounded-md border border-red-200 bg-red-50 p-6 text-red-700">Unable to load tests.</div>;
-
-  return (
-    <div className="space-y-3">
-      {tests.length === 0 && (
-        <Card>
-          <CardContent className="p-10 text-center text-gray-500">No tests have been created yet.</CardContent>
-        </Card>
-      )}
-      {tests.map(test => (
-        <Card key={test.id}>
-          <CardContent className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h2 className="font-serif text-lg">{test.title}</h2>
-              <p className="text-sm text-gray-500">{test.description || 'No description'}</p>
-              <div className="mt-2 text-xs text-gray-500">
-                {test.rotationVersionCount} {test.rotationVersionCount === 1 ? 'version' : 'versions'} ·{' '}
-                {test.minTotalPoints === test.maxTotalPoints
-                  ? `${test.minTotalPoints} points`
-                  : `${test.minTotalPoints}–${test.maxTotalPoints} points`}
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button asChild variant="default" size="sm">
-                <Link href={`/admin/tests/try/${test.id}`}>
-                  <Play className="mr-1 h-4 w-4" />
-                  Try
-                </Link>
-              </Button>
-              <Button asChild variant="outline" size="sm">
-                <Link href={`/admin/tests/edit/${test.id}`}>
-                  <Edit className="mr-1 h-4 w-4" />
-                  Edit
-                </Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  );
+  const { data: tests = [], isLoading: loadingTests, isError: testsError, refetch: refetchTests } = useGetTestsQuery();
+  const { data: mocks = [], isLoading: loadingMocks, isError: mocksError, refetch: refetchMocks } = useGetMocksQuery();
+  const { data: path, isLoading: loadingPath, isError: pathError, refetch: refetchPath } = useGetLearningPathQuery();
+  const [filter, setFilter] = React.useState<Filter>('all'); const [query, setQuery] = React.useState('');
+  const pathIds = new Set(path?.effectiveUnitIds ?? []);
+  const items = [
+    ...tests.map(test => ({ kind: 'normal' as const, id: test.id, title: test.title, description: test.description, test, inPath: pathIds.has(test.id), activeMockCount: mocks.filter(mock => mock.status === 'active' && mock.parent.kind === 'test' && mock.parent.testId === test.id).length, updatedAt: test.updatedAt })),
+    ...mocks.map(mock => ({ kind: 'mock' as const, id: mock.id, title: mock.title, description: mock.description, mock, updatedAt: mock.updatedAt })),
+  ].filter(item => { const haystack = `${item.title} ${item.description}`.toLowerCase(); if (!haystack.includes(query.toLowerCase())) return false; if (filter === 'all') return true; if (filter === 'normal') return item.kind === 'normal'; if (filter === 'mock') return item.kind === 'mock'; if (filter === 'in-path') return item.kind === 'normal' && item.inPath; if (filter === 'unplaced') return item.kind === 'normal' && !item.inPath; if (filter === 'live-mocks') return item.kind === 'mock' && item.mock.status === 'active' && item.mock.isLive; return item.kind === 'mock' && item.mock.status === 'archived'; });
+  if (loadingTests || loadingMocks || loadingPath) return <div className="flex justify-center p-12" role="status"><Loader2 className="h-7 w-7 animate-spin" /><span className="sr-only">Loading test inventory and Learning Path placement</span></div>;
+  if (testsError || mocksError || pathError || !path) return <div role="alert" className="rounded-md border border-red-200 bg-red-50 p-6 text-red-700"><p>Unable to load the test inventory and canonical Learning Path placement.</p><Button className="mt-3" size="sm" variant="outline" onClick={() => { void refetchTests(); void refetchMocks(); void refetchPath(); }}>Retry loading inventory</Button></div>;
+  return <div className="space-y-5"><div className="flex flex-col gap-3"><div className="relative max-w-lg"><Search className="absolute left-3 top-3 h-4 w-4 text-gray-500" /><Input aria-label="Search tests" className="pl-9" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search tests and mock cards" /></div><div className="flex flex-wrap gap-2" role="group" aria-label="Inventory filters">{filters.map(([value, label]) => <Button key={value} size="sm" variant={filter === value ? 'default' : 'outline'} onClick={() => setFilter(value)}>{label}</Button>)}</div></div>{items.length ? <div className="space-y-3">{items.map(item => <Card key={`${item.kind}-${item.id}`} className={item.kind === 'mock' ? 'border-indigo-200' : undefined}><CardContent className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between"><div><div className="mb-1 flex flex-wrap gap-2"><span className="rounded bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-800">{item.kind === 'normal' ? 'NORMAL TEST' : 'MOCK TEST'}</span><span className="text-xs text-gray-600">{item.kind === 'normal' ? (item.inPath ? 'In Learning Path' : 'Unplaced') : (item.mock.status === 'archived' ? item.mock.parent.kind === 'test' ? 'Assignment ended — back in parent rotation' : 'Archived standalone — version may be unowned or in normal rotation' : item.mock.isLive ? 'Live to students' : 'Hidden from students (still mock-only)')}</span></div><h2 className="font-serif text-lg">{item.title}</h2><p className="text-sm text-gray-500">{item.description || 'No description'}</p>{item.kind === 'normal' && <p className="mt-2 text-xs text-gray-600">{item.activeMockCount} active linked {item.activeMockCount === 1 ? 'mock' : 'mocks'}</p>}<p className="mt-2 text-xs text-gray-600">{item.kind === 'normal' ? `${item.test.rotationVersionCount} rotation versions · ${item.test.minTotalPoints}–${item.test.maxTotalPoints} points · ${item.test.passingPercentage === null ? 'Score only' : `Pass ≥ ${item.test.passingPercentage}%`}` : `One version · ${item.mock.totalPoints} points · ${item.mock.passingPercentage === null ? 'Score only' : `Pass ≥ ${item.mock.passingPercentage}%`}`} · last edited {item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : 'unknown'}</p></div><Button asChild size="sm" variant="outline"><Link href={item.kind === 'normal' ? `/admin/tests/edit/${item.id}` : `/admin/mock-tests/${item.id}`}><Eye className="mr-1 h-4 w-4" />Manage</Link></Button></CardContent></Card>)}</div> : <Card><CardContent className="p-10 text-center text-gray-500"><FileCheck2 className="mx-auto mb-2 h-7 w-7" />No tests match this view.</CardContent></Card>}</div>;
 }

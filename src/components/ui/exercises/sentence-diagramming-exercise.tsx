@@ -1,14 +1,14 @@
 import React from 'react';
 import { DiagramAuditSubmission, SentenceDiagramStudent } from '@/src/features/sentence-diagramming';
 import { SentenceDiagrammingExercise as SentenceDiagrammingExerciseType } from '@/src/types/exercises/sentence-diagramming';
-import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
+import type { ExerciseAnswer, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
 
 interface SentenceDiagrammingExerciseProps {
   exercise: SentenceDiagrammingExerciseType;
   onComplete?: (score: number) => void;
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
-  testMode?: boolean;
+  initialAnswer?: ExerciseAnswer;
   onAttempt?: (attempt: DiagramAuditSubmission) => void;
 }
 
@@ -17,7 +17,7 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
   onComplete,
   runtimeMode,
   onAnswer,
-  testMode,
+  initialAnswer,
   onAttempt,
 }) => {
   return (
@@ -26,7 +26,7 @@ export const SentenceDiagrammingExercise: React.FC<SentenceDiagrammingExercisePr
       onComplete={onComplete}
       runtimeMode={runtimeMode}
       onAnswer={onAnswer}
-      testMode={testMode}
+      initialAnswer={initialAnswer}
       onAttempt={onAttempt}
     />
   );

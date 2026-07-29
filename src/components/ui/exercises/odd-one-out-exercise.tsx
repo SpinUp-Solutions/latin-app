@@ -13,8 +13,7 @@ import { SimpleRichEditor } from '../core/simple-rich-editor';
 import { Button } from '../button';
 import { CheckCircle2 } from 'lucide-react';
 import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
-import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
-import { resolveRuntimeMode } from '@/src/types/runtime-mode';
+import type { ExerciseAnswer, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
 interface Props {
@@ -22,16 +21,28 @@ interface Props {
   onComplete?: (score: number) => void;
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
-  testMode?: boolean;
+  initialAnswer?: ExerciseAnswer;
 }
 
-const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete, runtimeMode, onAnswer, testMode }) => {
-  const mode = resolveRuntimeMode(runtimeMode, testMode);
+const OddOneOutExerciseComponent: React.FC<Props> = ({
+  exercise,
+  onComplete,
+  runtimeMode,
+  onAnswer,
+  initialAnswer,
+}) => {
+  const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
-  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [userExplanation, setUserExplanation] = useState('');
+  const testAnswerMode = mode === 'test';
+  const restoredAnswer = initialAnswer?.type === 'odd-one-out' ? initialAnswer : null;
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(restoredAnswer?.selectedItemId ?? null);
+  const [userExplanation, setUserExplanation] = useState(restoredAnswer?.explanation ?? '');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [hasSubmitted, setHasSubmitted] = useState(false);
+  const hasRequiredExplanation = (value: string) =>
+    !exercise.data.requireExplanation || value.replace(/<[^>]*>/g, '').trim().length > 0;
+  const [hasSubmitted, setHasSubmitted] = useState(
+    Boolean(restoredAnswer?.selectedItemId && hasRequiredExplanation(restoredAnswer.explanation))
+  );
   const { isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance } = useExerciseProgression({
     totalItems: 1,
     itemProgressionDelay: exercise.itemProgressionDelay,
@@ -68,11 +79,11 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete, run
   };
 
   const handleSubmit = () => {
-    if (isProcessing || !selectedItemId) return;
+    if (isProcessing || !selectedItemId || !hasRequiredExplanation(userExplanation)) return;
 
     setIsProcessing(true);
     setHasSubmitted(true);
-    if (mode === 'test') {
+    if (testAnswerMode) {
       onAnswer?.({ type: 'odd-one-out', selectedItemId, explanation: userExplanation });
       setIsProcessing(false);
       onComplete?.(0);
@@ -217,7 +228,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete, run
           {!hasSubmitted ? (
             <Button
               onClick={handleSubmit}
-              disabled={!selectedItemId || isProcessing}
+              disabled={!selectedItemId || isProcessing || !hasRequiredExplanation(userExplanation)}
               className="bg-roman-terracotta hover:bg-roman-terracotta/90 text-white">
               {isProcessing ? 'Checking...' : 'Submit Answer'}
             </Button>

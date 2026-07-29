@@ -19,6 +19,7 @@ const makeCategory = (
   description,
   status: 'active',
   categoryOrder,
+  tags: [],
   createdAt: '2026-07-14T00:00:00.000Z',
   createdBy: 'admin',
   updatedAt: '2026-07-14T00:00:00.000Z',
@@ -51,6 +52,96 @@ const gridLessonNames = () =>
     .map(button => button.getAttribute('aria-label'));
 
 describe('PracticeSection', () => {
+  it('filters a selected category by its own tags with match-any semantics while All includes untagged lessons', async () => {
+    const user = userEvent.setup();
+    const baseAuthors = makeCategory('authors', 'Authors', 'vocab', 0);
+    const authors: PracticeCategory = {
+      ...baseAuthors,
+      tags: [
+        {
+          id: 'cicero',
+          name: 'Cicero',
+          normalizedName: 'cicero',
+          status: 'active',
+          tagOrder: 0,
+          createdAt: 'now',
+          createdBy: 'admin',
+          updatedAt: 'now',
+          updatedBy: 'admin',
+        },
+        {
+          id: 'virgil',
+          name: 'Virgil',
+          normalizedName: 'virgil',
+          status: 'active',
+          tagOrder: 1,
+          createdAt: 'now',
+          createdBy: 'admin',
+          updatedAt: 'now',
+          updatedBy: 'admin',
+        },
+        {
+          id: 'caesar',
+          name: 'Caesar',
+          normalizedName: 'caesar',
+          status: 'active',
+          tagOrder: 2,
+          createdAt: 'now',
+          createdBy: 'admin',
+          updatedAt: 'now',
+          updatedBy: 'admin',
+        },
+        {
+          id: 'archived-author',
+          name: 'Archived author',
+          normalizedName: 'archived author',
+          status: 'archived',
+          tagOrder: 3,
+          createdAt: 'now',
+          createdBy: 'admin',
+          updatedAt: 'now',
+          updatedBy: 'admin',
+        },
+      ],
+    };
+    const lessons = [
+      makeLesson('general', 'General author review', 'vocab', {
+        practiceCategories: [authors],
+        practiceCategoryPlacements: [{ categoryId: authors.id, lessonOrder: 0, tagIds: [] }],
+      }),
+      makeLesson('cicero-lesson', 'Cicero vocabulary', 'vocab', {
+        practiceCategories: [authors],
+        practiceCategoryPlacements: [{ categoryId: authors.id, lessonOrder: 1, tagIds: ['cicero'] }],
+      }),
+      makeLesson('virgil-lesson', 'Virgil vocabulary', 'vocab', {
+        practiceCategories: [authors],
+        practiceCategoryPlacements: [{ categoryId: authors.id, lessonOrder: 2, tagIds: ['virgil'] }],
+      }),
+    ];
+
+    render(<PracticeSection lessons={lessons} onLessonClick={jest.fn()} />);
+    await user.click(
+      within(screen.getByRole('radiogroup', { name: 'Vocabulary categories' })).getByRole('radio', {
+        name: /Authors/,
+      })
+    );
+
+    expect(screen.getByRole('button', { name: 'Show all Authors lessons' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('button', { name: /Caesar/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Archived author/ })).not.toBeInTheDocument();
+    expect(gridLessonNames()).toHaveLength(3);
+
+    await user.click(screen.getByRole('button', { name: /Cicero 1/ }));
+    expect(gridLessonNames()).toEqual(['Start practice: Cicero vocabulary']);
+    expect(screen.queryByRole('button', { name: 'Start practice: General author review' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Virgil 1/ }));
+    expect(gridLessonNames()).toEqual(['Start practice: Cicero vocabulary', 'Start practice: Virgil vocabulary']);
+
+    await user.click(screen.getByRole('button', { name: 'Show all Authors lessons' }));
+    expect(gridLessonNames()).toHaveLength(3);
+  });
+
   it('uses type then category filtering and applies each category curated order', async () => {
     const user = userEvent.setup();
     const authors = makeCategory('authors', 'Authors', 'vocab', 0, 'Practice vocabulary by author.');
@@ -60,14 +151,14 @@ describe('PracticeSection', () => {
       makeLesson('caesar', 'Caesar vocabulary', 'vocab', {
         liveOrder: 1,
         practiceCategories: [authors],
-        practiceCategoryPlacements: [{ categoryId: authors.id, lessonOrder: 1 }],
+        practiceCategoryPlacements: [{ categoryId: authors.id, lessonOrder: 1, tagIds: [] }],
       }),
       makeLesson('virgil', 'Virgil vocabulary', 'vocab', {
         liveOrder: 2,
         practiceCategories: [authors, themes],
         practiceCategoryPlacements: [
-          { categoryId: authors.id, lessonOrder: 0 },
-          { categoryId: themes.id, lessonOrder: 0 },
+          { categoryId: authors.id, lessonOrder: 0, tagIds: [] },
+          { categoryId: themes.id, lessonOrder: 0, tagIds: [] },
         ],
       }),
     ];
@@ -98,7 +189,7 @@ describe('PracticeSection', () => {
     const lessons = [
       makeLesson('diagram-1', 'Diagram a clause', 'sentence-diagramming', {
         practiceCategories: [syntax],
-        practiceCategoryPlacements: [{ categoryId: syntax.id, lessonOrder: 0 }],
+        practiceCategoryPlacements: [{ categoryId: syntax.id, lessonOrder: 0, tagIds: [] }],
       }),
       makeLesson('listening-1', 'Listen to Cicero', 'listening'),
     ];

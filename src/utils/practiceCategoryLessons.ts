@@ -1,5 +1,5 @@
 import type { Lesson, LessonSummary } from '@/src/types/lesson';
-import type { PracticeLessonType } from '@/src/types/practice-category';
+import type { PracticeCategorySelection, PracticeLessonType } from '@/src/types/practice-category';
 import { PRACTICE_LESSON_TYPES } from '@/src/types/practice-category';
 import { stripHtmlTags } from '@/src/utils/exercises/helpers';
 
@@ -14,13 +14,40 @@ export function isPracticeLessonType(type: Lesson['type']): type is PracticeLess
  * removes every assignment. Joined objects are only a response fallback.
  */
 export function getLessonPracticeCategoryIds(
-  lesson: Pick<Lesson, 'practiceCategoryIds' | 'practiceCategories'>
+  lesson: Pick<Lesson, 'practiceCategorySelections' | 'practiceCategoryIds' | 'practiceCategories'>
 ): string[] {
-  return lesson.practiceCategoryIds ?? lesson.practiceCategories?.map(category => category.id) ?? [];
+  return (
+    lesson.practiceCategorySelections?.map(selection => selection.categoryId) ??
+    lesson.practiceCategoryIds ??
+    lesson.practiceCategories?.map(category => category.id) ??
+    []
+  );
+}
+
+export function getLessonPracticeCategorySelections(
+  lesson: Pick<
+    Lesson,
+    'practiceCategorySelections' | 'practiceCategoryIds' | 'practiceCategories' | 'practiceCategoryPlacements'
+  >
+): PracticeCategorySelection[] {
+  if (lesson.practiceCategorySelections) {
+    return lesson.practiceCategorySelections.map(selection => ({
+      categoryId: selection.categoryId,
+      tagIds: [...selection.tagIds],
+    }));
+  }
+
+  const placementTags = new Map(
+    (lesson.practiceCategoryPlacements ?? []).map(placement => [placement.categoryId, placement.tagIds ?? []])
+  );
+  return getLessonPracticeCategoryIds(lesson).map(categoryId => ({
+    categoryId,
+    tagIds: [...(placementTags.get(categoryId) ?? [])],
+  }));
 }
 
 export function lessonMatchesPracticeCategory(
-  lesson: Pick<Lesson, 'practiceCategoryIds' | 'practiceCategories'>,
+  lesson: Pick<Lesson, 'practiceCategorySelections' | 'practiceCategoryIds' | 'practiceCategories'>,
   categoryFilter: PracticeCategoryFilter
 ): boolean {
   if (categoryFilter === 'all') return true;
@@ -40,16 +67,25 @@ export function lessonMatchesTextSearch(
   return title.includes(query) || description.includes(query);
 }
 
-/** Strip response-only category data while retaining the desired ID set. */
+/** Strip response-only category data while retaining the desired category/tag set. */
 export function buildLessonMutationPayload(lesson: Lesson): Omit<
   Lesson,
-  'practiceCategories' | 'practiceCategoryPlacements'
+  'practiceCategories' | 'practiceCategoryPlacements' | 'practiceCategoryIds'
 > & {
-  practiceCategoryIds: string[];
+  practiceCategorySelections: PracticeCategorySelection[];
 } {
-  const { practiceCategories, practiceCategoryPlacements: _practiceCategoryPlacements, ...lessonData } = lesson;
+  const {
+    practiceCategories,
+    practiceCategoryPlacements,
+    practiceCategoryIds: _practiceCategoryIds,
+    ...lessonData
+  } = lesson;
   return {
     ...lessonData,
-    practiceCategoryIds: lesson.practiceCategoryIds ?? practiceCategories?.map(category => category.id) ?? [],
+    practiceCategorySelections: getLessonPracticeCategorySelections({
+      ...lesson,
+      practiceCategories,
+      practiceCategoryPlacements,
+    }),
   };
 }

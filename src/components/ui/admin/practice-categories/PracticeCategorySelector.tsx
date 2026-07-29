@@ -18,13 +18,20 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/src/components/ui/popover';
 import { cn } from '@/src/lib/utils';
 import { useGetPracticeCategoriesQuery } from '@/src/store/api/practiceCategoryApi';
-import type { PracticeCategorySummary, PracticeLessonType } from '@/src/types/practice-category';
+import type {
+  PracticeCategorySelection,
+  PracticeCategorySummary,
+  PracticeLessonType,
+} from '@/src/types/practice-category';
+import { PracticeTagPicker } from './PracticeTagPicker';
 
 interface PracticeCategorySelectorProps {
   lessonType: PracticeLessonType;
-  selectedIds: string[];
+  selectedIds?: string[];
+  selectedSelections?: PracticeCategorySelection[];
   assignedCategories?: PracticeCategorySummary[];
-  onChange: (categoryIds: string[], selectedCategories: PracticeCategorySummary[]) => void;
+  onChange?: (categoryIds: string[], selectedCategories: PracticeCategorySummary[]) => void;
+  onSelectionChange?: (selections: PracticeCategorySelection[], selectedCategories: PracticeCategorySummary[]) => void;
   disabled?: boolean;
 }
 
@@ -50,9 +57,11 @@ function SelectorChip({ category }: { category: PracticeCategorySummary }) {
 
 export function PracticeCategorySelector({
   lessonType,
-  selectedIds,
+  selectedIds = [],
+  selectedSelections,
   assignedCategories = [],
   onChange,
+  onSelectionChange,
   disabled = false,
 }: PracticeCategorySelectorProps) {
   const [open, setOpen] = useState(false);
@@ -64,6 +73,16 @@ export function PracticeCategorySelector({
     isError,
     refetch,
   } = useGetPracticeCategoriesQuery({ lessonType, status: 'active' });
+  const selections = useMemo(
+    () =>
+      selectedSelections ??
+      selectedIds.map(categoryId => ({
+        categoryId,
+        tagIds: [],
+      })),
+    [selectedIds, selectedSelections]
+  );
+  const resolvedSelectedIds = useMemo(() => selections.map(selection => selection.categoryId), [selections]);
 
   const allKnownCategories = useMemo(() => {
     const byId = new Map<string, PracticeCategorySummary>();
@@ -74,34 +93,45 @@ export function PracticeCategorySelector({
 
   const selectedCategories = useMemo(
     () =>
-      selectedIds
+      resolvedSelectedIds
         .map(id => allKnownCategories.get(id))
         .filter((category): category is PracticeCategorySummary => Boolean(category))
         .sort(categorySort),
-    [allKnownCategories, selectedIds]
+    [allKnownCategories, resolvedSelectedIds]
   );
 
   const selectedActiveCategories = selectedCategories.filter(category => category.status === 'active');
   const selectedArchivedCategories = selectedCategories.filter(category => category.status === 'archived');
+  const selectedTagCount = selections.reduce((total, selection) => total + selection.tagIds.length, 0);
   const availableCategories = [...activeCategories]
-    .filter(category => !selectedIds.includes(category.id))
+    .filter(category => !resolvedSelectedIds.includes(category.id))
     .sort(categorySort);
   const visibleChips = selectedCategories.slice(0, 3);
   const overflowCount = Math.max(0, selectedCategories.length - visibleChips.length);
 
   const handleToggle = (category: PracticeCategorySummary) => {
-    const nextIds = selectedIds.includes(category.id)
-      ? selectedIds.filter(id => id !== category.id)
-      : [...selectedIds, category.id];
+    const nextSelections = resolvedSelectedIds.includes(category.id)
+      ? selections.filter(selection => selection.categoryId !== category.id)
+      : [...selections, { categoryId: category.id, tagIds: [] }];
+    const nextIds = nextSelections.map(selection => selection.categoryId);
     const nextCategories = nextIds
       .map(id => allKnownCategories.get(id))
       .filter((value): value is PracticeCategorySummary => Boolean(value))
       .sort(categorySort);
-    onChange(nextIds, nextCategories);
+    onChange?.(nextIds, nextCategories);
+    onSelectionChange?.(nextSelections, nextCategories);
+  };
+
+  const handleTagsChange = (categoryId: string, tagIds: string[]) => {
+    const nextSelections = selections.map(selection =>
+      selection.categoryId === categoryId ? { ...selection, tagIds } : selection
+    );
+    onSelectionChange?.(nextSelections, selectedCategories);
+    onChange?.(resolvedSelectedIds, selectedCategories);
   };
 
   const renderOption = (category: PracticeCategorySummary) => {
-    const selected = selectedIds.includes(category.id);
+    const selected = resolvedSelectedIds.includes(category.id);
     const archived = category.status === 'archived';
     return (
       <CommandItem
@@ -188,7 +218,7 @@ export function PracticeCategorySelector({
             </CommandList>
             <div className="flex items-center justify-between gap-2 border-t px-3 py-2">
               <span className="text-xs text-gray-500" aria-live="polite">
-                {selectedIds.length === 0 ? 'No categories selected' : `${selectedIds.length} selected`}
+                {resolvedSelectedIds.length === 0 ? 'No categories selected' : `${resolvedSelectedIds.length} selected`}
               </span>
               {isFetching && !isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-500" />}
             </div>
@@ -198,9 +228,11 @@ export function PracticeCategorySelector({
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-gray-500" aria-live="polite">
-          {selectedIds.length === 0
+          {resolvedSelectedIds.length === 0
             ? 'No categories assigned'
-            : `${selectedIds.length} ${selectedIds.length === 1 ? 'category' : 'categories'} assigned`}
+            : `${resolvedSelectedIds.length} ${
+                resolvedSelectedIds.length === 1 ? 'category' : 'categories'
+              } assigned · ${selectedTagCount} ${selectedTagCount === 1 ? 'tag' : 'tags'} selected`}
         </p>
         <Link
           href={`/admin/practice-categories?lessonType=${encodeURIComponent(lessonType)}&status=active`}
@@ -219,6 +251,42 @@ export function PracticeCategorySelector({
           <Button type="button" variant="ghost" size="sm" className="h-7 px-2" onClick={() => void refetch()}>
             <RefreshCw className="mr-1 h-3 w-3" /> Retry
           </Button>
+        </div>
+      )}
+
+      {selectedCategories.length > 0 && (
+        <div className="space-y-2 pt-1">
+          {selectedCategories.map(category => {
+            const selection = selections.find(candidate => candidate.categoryId === category.id);
+            return (
+              <div
+                key={category.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-gray-200 bg-gray-50/70 px-2.5 py-2">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="truncate text-xs font-medium text-gray-800">{category.name}</span>
+                    {category.status === 'archived' && (
+                      <Badge variant="outline" className="px-1 py-0 text-[10px] text-gray-500">
+                        Archived
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-[11px] text-gray-500">
+                    {(selection?.tagIds.length ?? 0) === 0
+                      ? 'No tags selected — this lesson appears under All.'
+                      : 'Tags apply only inside this category.'}
+                  </p>
+                </div>
+                <PracticeTagPicker
+                  tags={category.tags ?? []}
+                  selectedTagIds={selection?.tagIds ?? []}
+                  onChange={tagIds => handleTagsChange(category.id, tagIds)}
+                  disabled={disabled}
+                  allowNewSelections={category.status === 'active'}
+                />
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

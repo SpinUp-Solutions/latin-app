@@ -46,6 +46,7 @@ const makeCategory = (
   normalizedName: name.toLocaleLowerCase(),
   status,
   categoryOrder,
+  tags: [],
   createdAt: '2026-07-14T00:00:00.000Z',
   createdBy: 'admin',
   updatedAt: '2026-07-14T00:00:00.000Z',
@@ -95,12 +96,48 @@ describe('practice category lesson controls', () => {
 
     expect(mockUseGetPracticeCategoriesQuery).toHaveBeenCalledWith({ lessonType: 'vocab', status: 'active' });
     expect(screen.getByRole('combobox', { name: 'Select practice categories' })).toHaveTextContent('Archived');
-    expect(screen.getByText('1 category assigned')).toBeInTheDocument();
+    expect(screen.getByText('1 category assigned · 0 tags selected')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('combobox', { name: 'Select practice categories' }));
     await userEvent.click(screen.getByRole('option', { name: 'Remove Old topics archived category' }));
 
     expect(onChange).toHaveBeenCalledWith([], []);
+  });
+
+  it('keeps tag selections nested under their owning category in the lesson editor control', async () => {
+    const authors: PracticeCategory = {
+      ...makeCategory('authors', 'Authors', 0),
+      tags: [
+        {
+          id: 'cicero',
+          name: 'Cicero',
+          normalizedName: 'cicero',
+          status: 'active',
+          tagOrder: 0,
+          createdAt: 'now',
+          createdBy: 'admin',
+          updatedAt: 'now',
+          updatedBy: 'admin',
+        },
+      ],
+    };
+    mockActiveCategories.push(authors);
+    const onSelectionChange = jest.fn();
+
+    render(
+      <PracticeCategorySelector
+        lessonType="vocab"
+        selectedSelections={[{ categoryId: authors.id, tagIds: [] }]}
+        assignedCategories={[authors]}
+        onSelectionChange={onSelectionChange}
+      />
+    );
+
+    expect(screen.getByText('No tags selected — this lesson appears under All.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('combobox', { name: 'Select practice tags' }));
+    await userEvent.click(screen.getByRole('option', { name: /Cicero/ }));
+
+    expect(onSelectionChange).toHaveBeenCalledWith([{ categoryId: authors.id, tagIds: ['cicero'] }], [authors]);
   });
 
   it('keeps category form values open and focuses the inline field error after a name conflict', async () => {

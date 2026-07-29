@@ -1,12 +1,12 @@
 'use client';
 
 import React, { useId, useMemo, useState } from 'react';
-import { BookOpen, Headphones, Layers3, Pencil, Search } from 'lucide-react';
+import { BookOpen, Check, Headphones, Layers3, Pencil, Search } from 'lucide-react';
 import { Input } from '@/src/components/ui/input';
 import { PracticeLessonCard, type PracticeCardTheme } from '@/src/components/ui/core/practice-lesson-card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { cn } from '@/src/lib/utils';
-import type { LessonWithProgress } from '@/src/types/lesson';
+import type { LessonWithProgress, StudentLessonSummary } from '@/src/types/lesson';
 import type { PracticeCategorySummary, PracticeLessonType } from '@/src/types/practice-category';
 import { stripHtmlTags } from '@/src/utils/exercises/helpers';
 import { lessonMatchesTextSearch } from '@/src/utils/practiceCategoryLessons';
@@ -18,10 +18,14 @@ type PracticeTabConfig = PracticeCardTheme & {
   icon: React.ElementType;
   activeSurface: string;
   emptyLabel: string;
+  tagSelected: string;
+  tagHover: string;
 };
 
+type PracticeLesson = LessonWithProgress | StudentLessonSummary;
+
 interface PracticeSectionProps {
-  lessons: LessonWithProgress[];
+  lessons: PracticeLesson[];
   onLessonClick: (lessonId: string) => void;
 }
 
@@ -38,6 +42,8 @@ const tabConfig: Record<PracticeTab, PracticeTabConfig> = {
     progress: 'bg-amber-500',
     glow: 'from-amber-300/35 via-amber-100/20 to-transparent',
     emptyLabel: 'No vocabulary practice is available yet.',
+    tagSelected: 'border-amber-300 bg-amber-100 text-amber-950',
+    tagHover: 'hover:border-amber-200 hover:bg-amber-50 hover:text-amber-900',
   },
   'sentence-diagramming': {
     label: 'Sentence Diagramming',
@@ -49,6 +55,8 @@ const tabConfig: Record<PracticeTab, PracticeTabConfig> = {
     progress: 'bg-sky-500',
     glow: 'from-sky-300/35 via-sky-100/20 to-transparent',
     emptyLabel: 'No diagramming practice is available yet.',
+    tagSelected: 'border-sky-300 bg-sky-100 text-sky-950',
+    tagHover: 'hover:border-sky-200 hover:bg-sky-50 hover:text-sky-900',
   },
   listening: {
     label: 'Listening',
@@ -60,18 +68,23 @@ const tabConfig: Record<PracticeTab, PracticeTabConfig> = {
     progress: 'bg-violet-500',
     glow: 'from-violet-300/35 via-violet-100/20 to-transparent',
     emptyLabel: 'No listening practice is available yet.',
+    tagSelected: 'border-violet-300 bg-violet-100 text-violet-950',
+    tagHover: 'hover:border-violet-200 hover:bg-violet-50 hover:text-violet-900',
   },
 };
 
-const getDefaultTab = (lessons: LessonWithProgress[]): PracticeTab =>
+const getDefaultTab = (lessons: PracticeLesson[]): PracticeTab =>
   tabOrder.find(type => lessons.some(lesson => lesson.type === type)) ?? 'vocab';
 
-const lessonHasCategory = (lesson: LessonWithProgress, categoryId: string) =>
+const lessonHasCategory = (lesson: PracticeLesson, categoryId: string) =>
   lesson.practiceCategories?.some(category => category.status === 'active' && category.id === categoryId) ?? false;
 
-const getCategoryLessonOrder = (lesson: LessonWithProgress, categoryId: string) =>
+const getCategoryLessonOrder = (lesson: PracticeLesson, categoryId: string) =>
   lesson.practiceCategoryPlacements?.find(placement => placement.categoryId === categoryId)?.lessonOrder ??
   Number.MAX_SAFE_INTEGER;
+
+const getCategoryTagIds = (lesson: PracticeLesson, categoryId: string) =>
+  lesson.practiceCategoryPlacements?.find(placement => placement.categoryId === categoryId)?.tagIds ?? [];
 
 function CollectionOption({
   label,
@@ -107,10 +120,11 @@ export const PracticeSection: React.FC<PracticeSectionProps> = ({ lessons, onLes
   const panelId = useId();
   const [activeTab, setActiveTab] = useState<PracticeTab>(() => getDefaultTab(lessons));
   const [selectedCategoryId, setSelectedCategoryId] = useState('all');
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
   const lessonsByType = useMemo(() => {
-    const grouped: Record<PracticeTab, LessonWithProgress[]> = {
+    const grouped: Record<PracticeTab, PracticeLesson[]> = {
       vocab: [],
       'sentence-diagramming': [],
       listening: [],
@@ -161,9 +175,30 @@ export const PracticeSection: React.FC<PracticeSectionProps> = ({ lessons, onLes
       );
   }, [activeCategoryId, activeTypeLessons]);
 
+  const visibleTags = useMemo(() => {
+    if (!selectedCategory) return [];
+    const counts = new Map<string, number>();
+    collectionLessons.forEach(lesson => {
+      getCategoryTagIds(lesson, selectedCategory.id).forEach(tagId => {
+        counts.set(tagId, (counts.get(tagId) ?? 0) + 1);
+      });
+    });
+    return (selectedCategory.tags ?? [])
+      .filter(tag => tag.status === 'active' && (counts.get(tag.id) ?? 0) > 0)
+      .sort((a, b) => a.tagOrder - b.tagOrder || a.id.localeCompare(b.id))
+      .map(tag => ({ ...tag, lessonCount: counts.get(tag.id) ?? 0 }));
+  }, [collectionLessons, selectedCategory]);
+
+  const tagFilteredLessons = useMemo(() => {
+    if (!selectedCategory || selectedTagIds.length === 0) return collectionLessons;
+    return collectionLessons.filter(lesson =>
+      getCategoryTagIds(lesson, selectedCategory.id).some(tagId => selectedTagIds.includes(tagId))
+    );
+  }, [collectionLessons, selectedCategory, selectedTagIds]);
+
   const visibleLessons = useMemo(
-    () => collectionLessons.filter(lesson => lessonMatchesTextSearch(lesson, searchQuery)),
-    [collectionLessons, searchQuery]
+    () => tagFilteredLessons.filter(lesson => lessonMatchesTextSearch(lesson, searchQuery)),
+    [searchQuery, tagFilteredLessons]
   );
 
   if (lessons.length === 0) return null;
@@ -174,15 +209,29 @@ export const PracticeSection: React.FC<PracticeSectionProps> = ({ lessons, onLes
   const collectionDescription =
     selectedCategory?.description ??
     `Browse every ${config.shortLabel.toLocaleLowerCase()} practice lesson in one place.`;
+  const filtersActive = selectedTagIds.length > 0 || searchQuery.trim().length > 0;
 
   const selectTab = (tab: PracticeTab) => {
     setActiveTab(tab);
     setSelectedCategoryId('all');
+    setSelectedTagIds([]);
     setSearchQuery('');
   };
 
   const selectCategory = (categoryId: string) => {
     setSelectedCategoryId(categoryId);
+    setSelectedTagIds([]);
+    setSearchQuery('');
+  };
+
+  const toggleTag = (tagId: string) => {
+    setSelectedTagIds(current =>
+      current.includes(tagId) ? current.filter(currentId => currentId !== tagId) : [...current, tagId]
+    );
+  };
+
+  const clearFilters = () => {
+    setSelectedTagIds([]);
     setSearchQuery('');
   };
 
@@ -313,7 +362,10 @@ export const PracticeSection: React.FC<PracticeSectionProps> = ({ lessons, onLes
                 <div className="min-w-0">
                   <h4 className="truncate text-xl font-serif text-slate-950 sm:text-2xl">{collectionTitle}</h4>
                   <p className="text-xs font-medium text-slate-500">
-                    {collectionLessons.length} {collectionLessons.length === 1 ? 'lesson' : 'lessons'}
+                    {filtersActive
+                      ? `${visibleLessons.length} of ${collectionLessons.length}`
+                      : collectionLessons.length}{' '}
+                    {collectionLessons.length === 1 ? 'lesson' : 'lessons'}
                   </p>
                 </div>
               </div>
@@ -332,6 +384,55 @@ export const PracticeSection: React.FC<PracticeSectionProps> = ({ lessons, onLes
             </div>
           </div>
 
+          {selectedCategory && visibleTags.length > 0 && (
+            <div
+              className="-mx-4 mb-6 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0"
+              role="group"
+              aria-label={`Filter ${selectedCategory.name} lessons by tag`}>
+              <button
+                type="button"
+                aria-pressed={selectedTagIds.length === 0}
+                aria-label={`Show all ${selectedCategory.name} lessons`}
+                onClick={() => setSelectedTagIds([])}
+                className={cn(
+                  'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-roman-red focus-visible:ring-offset-2',
+                  selectedTagIds.length === 0
+                    ? config.tagSelected
+                    : `border-slate-200 bg-white text-slate-600 ${config.tagHover}`
+                )}>
+                {selectedTagIds.length === 0 && <Check className="h-3.5 w-3.5" />}
+                All
+                <span className="tabular-nums opacity-70">{collectionLessons.length}</span>
+              </button>
+              {visibleTags.map(tag => {
+                const selected = selectedTagIds.includes(tag.id);
+                return (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => toggleTag(tag.id)}
+                    className={cn(
+                      'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-roman-red focus-visible:ring-offset-2',
+                      selected ? config.tagSelected : `border-slate-200 bg-white text-slate-600 ${config.tagHover}`
+                    )}>
+                    {selected && <Check className="h-3.5 w-3.5" />}
+                    {tag.name}
+                    <span className="tabular-nums opacity-70">{tag.lessonCount}</span>
+                  </button>
+                );
+              })}
+              {filtersActive && (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="shrink-0 rounded-full px-2 text-xs font-semibold text-roman-red hover:bg-roman-red/5 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-roman-red">
+                  Clear filters
+                </button>
+              )}
+            </div>
+          )}
+
           {activeTypeLessons.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 px-6 py-14 text-center">
               <div
@@ -348,13 +449,31 @@ export const PracticeSection: React.FC<PracticeSectionProps> = ({ lessons, onLes
             <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 px-6 py-14 text-center">
               <Search className="mx-auto mb-4 h-8 w-8 text-slate-300" />
               <h5 className="text-lg font-serif text-slate-800">No matching lessons</h5>
-              <p className="mt-1 text-sm text-slate-500">Try another title or clear your search.</p>
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="mt-4 rounded-lg px-3 py-2 text-sm font-semibold text-roman-red hover:bg-roman-red/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-roman-red">
-                Clear search
-              </button>
+              <p className="mt-1 text-sm text-slate-500">
+                {selectedCategory && selectedTagIds.length > 0 && searchQuery.trim()
+                  ? `Nothing in ${selectedCategory.name} matches this search with the selected tags.`
+                  : selectedTagIds.length > 0
+                    ? 'No lessons match the selected tags.'
+                    : 'Try another title or clear your search.'}
+              </p>
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
+                {searchQuery.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="rounded-lg px-3 py-2 text-sm font-semibold text-roman-red hover:bg-roman-red/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-roman-red">
+                    Clear search
+                  </button>
+                )}
+                {selectedTagIds.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    className="rounded-lg px-3 py-2 text-sm font-semibold text-roman-red hover:bg-roman-red/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-roman-red">
+                    Clear tags and search
+                  </button>
+                )}
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3" data-testid="practice-lesson-grid">
@@ -364,6 +483,10 @@ export const PracticeSection: React.FC<PracticeSectionProps> = ({ lessons, onLes
                   lesson={lesson}
                   theme={config}
                   showCategoryChips={activeCategoryId === 'all'}
+                  categoryTags={selectedCategory?.tags}
+                  lessonTagIds={selectedCategory ? getCategoryTagIds(lesson, selectedCategory.id) : undefined}
+                  selectedTagIds={selectedTagIds}
+                  tagSelectedClass={config.tagSelected}
                   onLessonClick={onLessonClick}
                 />
               ))}

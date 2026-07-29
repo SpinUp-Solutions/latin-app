@@ -2,15 +2,19 @@
 
 import React, { memo, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/src/services/firebase';
-import { useGetStudentLessonsQuery } from '@/src/store/api/lessonApi';
+import { useGetStudentDashboardQuery } from '@/src/store/api/lessonApi';
 import { useAuth } from '@/src/hooks/useAuth';
-import { LessonStatus, LessonWithProgress } from '@/src/types/lesson';
+import {
+  LessonStatus,
+  StudentLessonSummary,
+  type StudentLearningUnitSummary,
+  type StudentTestSummary,
+} from '@/src/types/lesson';
 import { Button } from '@/src/components/ui/button';
 import { toast } from 'sonner';
-import { BookOpen, User } from 'lucide-react';
+import { BookOpen, ClipboardCheck, FileCheck2, Lock, Trophy, User } from 'lucide-react';
 import Image from 'next/image';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { CircularProgressButton } from '@/src/components/ui/CircularProgressButton';
@@ -20,6 +24,7 @@ import { SwiperNavigation } from '@/src/components/ui/core/swiper-nav';
 import { PracticeSection } from '@/src/components/ui/core/PracticeSection';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { FeedbackBanner } from '@/src/components/ui/core/feedback-banner';
+import type { StudentMockTestSummary } from '@/src/types/test';
 
 const statusConfig: Record<LessonStatus, { card: string }> = {
   completed: {
@@ -37,13 +42,7 @@ const statusConfig: Record<LessonStatus, { card: string }> = {
 };
 
 const LessonCard = memo(
-  ({
-    lesson,
-    onLessonClick,
-  }: {
-    lesson: LessonWithProgress & { totalPages: number };
-    onLessonClick: (id: string) => void;
-  }) => {
+  ({ lesson, onLessonClick }: { lesson: StudentLessonSummary; onLessonClick: (id: string) => void }) => {
     const config = statusConfig[lesson.status || 'available'] || statusConfig.available;
 
     const handleClick = () => {
@@ -86,92 +85,281 @@ const LessonCard = memo(
 
 LessonCard.displayName = 'LessonCard';
 
+const formatPoints = (value: number) =>
+  value
+    .toFixed(2)
+    .replace(/\.00$/, '')
+    .replace(/(\.\d)0$/, '$1');
+
+export const TestCard = memo(
+  ({ test, onTestClick }: { test: StudentTestSummary; onTestClick: (id: string) => void }) => {
+    const summary = test.attemptSummary;
+    const unavailable = test.configurationStatus === 'unavailable';
+    const action = summary.inProgressAttemptId
+      ? 'Continue Test'
+      : summary.attemptCount > 0
+        ? 'Retake Test'
+        : 'Start Test';
+    const locked = test.status === 'locked';
+    const latestOutcome =
+      summary.latest?.outcome === 'not-passed'
+        ? test.status === 'completed'
+          ? 'Latest: Not passed · completion retained'
+          : 'Latest: Not passed'
+        : summary.latest?.outcome === 'passed'
+          ? 'Latest: Passed'
+          : summary.latest?.outcome === 'score-only'
+            ? 'Latest: Completed'
+            : null;
+
+    const handleClick = () => {
+      if (unavailable) {
+        toast.error('This test is temporarily unavailable. Please try again later.');
+        return;
+      }
+      if (locked) {
+        toast.error(test.lockedReason || 'Complete the previous learning unit to unlock');
+        return;
+      }
+      onTestClick(test.id);
+    };
+
+    return (
+      <RomanCard
+        className={`group cursor-pointer rounded-3xl border shadow-xl transition-all duration-300 hover:-translate-y-2 hover:scale-[1.02] hover:shadow-2xl ${
+          locked
+            ? 'border-gray-300 bg-gradient-to-br from-gray-100 to-gray-50'
+            : test.passingPercentage === null
+              ? 'border-sky-300 bg-gradient-to-br from-sky-50 via-indigo-50 to-white'
+              : 'border-indigo-300 bg-gradient-to-br from-indigo-100/90 via-violet-50 to-white'
+        }`}
+        onClick={handleClick}>
+        <RomanCardContent className="relative space-y-4 p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-indigo-700 px-2.5 py-1 text-xs font-semibold tracking-wide text-white">
+                <FileCheck2 className="h-3.5 w-3.5" aria-hidden="true" />
+                Test
+              </div>
+              <h3 className="truncate font-serif text-xl text-gray-950">{test.title}</h3>
+              <div className="mt-1 line-clamp-2 text-sm text-gray-600">
+                <SimpleRichDisplay content={test.description || ''} />
+              </div>
+            </div>
+            <div
+              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${
+                locked ? 'bg-gray-200 text-gray-500' : 'bg-indigo-700 text-white'
+              }`}>
+              {locked ? (
+                <Lock className="h-5 w-5" aria-hidden="true" />
+              ) : (
+                <FileCheck2 className="h-5 w-5" aria-hidden="true" />
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2 text-xs font-medium">
+            <span className="rounded-full bg-white/80 px-2.5 py-1 text-indigo-900 ring-1 ring-indigo-200">
+              {test.passingPercentage === null ? 'Score only · cannot fail' : `Pass ≥ ${test.passingPercentage}%`}
+            </span>
+            {summary.inProgressAttemptId && (
+              <span className="rounded-full bg-amber-100 px-2.5 py-1 text-amber-900">In progress</span>
+            )}
+          </div>
+
+          {locked ? (
+            <p className="text-sm font-medium text-gray-600">
+              {test.lockedReason || 'Complete the previous learning unit to unlock'}
+            </p>
+          ) : summary.best ? (
+            <div className="grid grid-cols-2 gap-3 rounded-xl border border-indigo-100 bg-white/70 p-3">
+              <div>
+                <div className="flex items-center gap-1 text-xs text-gray-500">
+                  <Trophy className="h-3.5 w-3.5" aria-hidden="true" />
+                  Best
+                </div>
+                <div className="text-2xl font-semibold text-indigo-800">{Math.round(summary.best.percentage)}%</div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500">Latest</div>
+                <div className="font-medium text-gray-900">
+                  {formatPoints(summary.latest?.score ?? 0)} / {formatPoints(summary.latest?.maxScore ?? 0)}
+                </div>
+                <div className="text-xs text-gray-600">{Math.round(summary.latest?.percentage ?? 0)}%</div>
+                {latestOutcome && (
+                  <div
+                    className={`mt-1 text-xs font-semibold ${
+                      summary.latest?.outcome === 'not-passed' ? 'text-amber-700' : 'text-emerald-700'
+                    }`}>
+                    {latestOutcome}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-600">
+              {test.minTotalPoints === test.maxTotalPoints
+                ? `${formatPoints(test.minTotalPoints)} total points`
+                : `${formatPoints(test.minTotalPoints)}–${formatPoints(test.maxTotalPoints)} total points`}
+            </p>
+          )}
+
+          {summary.latest?.outcome === 'not-passed' && test.relatedLiveMocks?.[0] && (
+            <a
+              className="block rounded-lg border border-teal-200 bg-teal-50 p-3 text-sm font-medium text-teal-950 underline-offset-2 hover:underline"
+              href={`/test/${encodeURIComponent(test.relatedLiveMocks[0].id)}?origin=mock`}
+              onClick={event => event.stopPropagation()}>
+              Practice with the {test.relatedLiveMocks[0].title} Mock Test before retaking.
+            </a>
+          )}
+
+          <Button
+            type="button"
+            className="w-full bg-indigo-700 text-white hover:bg-indigo-800"
+            disabled={locked || unavailable}
+            onClick={event => {
+              event.stopPropagation();
+              handleClick();
+            }}>
+            {unavailable ? 'Unavailable' : locked ? 'Locked' : action}
+          </Button>
+        </RomanCardContent>
+      </RomanCard>
+    );
+  }
+);
+
+TestCard.displayName = 'TestCard';
+
+export const MockTestCard = memo(({ mock, onMockClick }: { mock: StudentMockTestSummary; onMockClick: (id: string) => void }) => {
+  const summary = mock.attemptSummary;
+  const action = summary.inProgressAttemptId ? 'Continue Mock Test' : summary.attemptCount ? 'Retake Mock Test' : 'Start Mock Test';
+  const latest = summary.latest;
+  // Outcomes are frozen on submission. The mock's current setting only
+  // describes a future attempt, so it must never reinterpret history.
+  const latestOutcome = latest
+    ? latest.outcome === 'passed'
+      ? 'Passed — informational only'
+      : latest.outcome === 'not-passed'
+        ? 'Not passed — informational only'
+        : 'Completed — score-only attempt'
+    : null;
+
+  return (
+    <RomanCard className="group h-full rounded-3xl border border-teal-300 bg-gradient-to-br from-teal-50 via-cyan-50 to-white shadow-lg transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
+      <RomanCardContent className="flex h-full flex-col space-y-4 p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-teal-700 px-2.5 py-1 text-xs font-semibold tracking-wide text-white">
+              <ClipboardCheck className="h-3.5 w-3.5" aria-hidden="true" />
+              Mock test
+            </div>
+            <h3 className="truncate font-serif text-xl text-gray-950">{mock.title}</h3>
+            <div className="mt-1 line-clamp-2 text-sm text-gray-600"><SimpleRichDisplay content={mock.description || ''} /></div>
+          </div>
+          <ClipboardCheck className="h-10 w-10 shrink-0 rounded-full bg-teal-700 p-2 text-white" aria-hidden="true" />
+        </div>
+        <div className="flex flex-wrap gap-2 text-xs font-medium">
+          <span className="rounded-full bg-white px-2.5 py-1 text-teal-900 ring-1 ring-teal-200">
+            {mock.passingPercentage === null ? 'Score only · practice never gates your path' : `Pass ≥ ${mock.passingPercentage}% · informational`}
+          </span>
+          {summary.inProgressAttemptId && <span className="rounded-full bg-amber-100 px-2.5 py-1 text-amber-900">In progress</span>}
+        </div>
+        {summary.best ? (
+          <div className="grid grid-cols-2 gap-3 rounded-xl border border-teal-100 bg-white/80 p-3">
+            <div><div className="flex items-center gap-1 text-xs text-gray-500"><Trophy className="h-3.5 w-3.5" aria-hidden="true" />Best</div><div className="text-2xl font-semibold text-teal-800">{Math.round(summary.best.percentage)}%</div></div>
+            <div><div className="text-xs text-gray-500">Latest</div><div className="font-medium text-gray-900">{formatPoints(latest?.score ?? 0)} / {formatPoints(latest?.maxScore ?? 0)}</div><div className="text-xs text-gray-600">{Math.round(latest?.percentage ?? 0)}%</div></div>
+          </div>
+        ) : <p className="text-sm text-gray-600">Not attempted · {formatPoints(mock.totalPoints)} total points</p>}
+        <p className="text-sm text-gray-700" aria-label={`Recent scores: ${mock.scoreTrend.length ? mock.scoreTrend.map(score => `${Math.round(score.percentage)} percent`).join(', ') : 'no submitted attempts'}`}>
+          {mock.scoreTrend.length ? `Recent scores: ${mock.scoreTrend.map(score => `${Math.round(score.percentage)}%`).join(' → ')}` : 'Your practice attempts will appear here.'}
+        </p>
+        <div className="mt-auto flex items-center justify-between gap-3 text-sm"><span>{summary.attemptCount === 1 ? '1 practice attempt' : `${summary.attemptCount} practice attempts`}</span>{latestOutcome && <span className={latest?.outcome === 'passed' || latest?.outcome === 'score-only' ? 'font-semibold text-emerald-700' : 'font-semibold text-amber-700'}>{latestOutcome}</span>}</div>
+        <Button type="button" className="w-full bg-teal-700 text-white hover:bg-teal-800" onClick={() => onMockClick(mock.id)}>{action}</Button>
+      </RomanCardContent>
+    </RomanCard>
+  );
+});
+
+MockTestCard.displayName = 'MockTestCard';
+
 export default function DashboardPage() {
   const router = useRouter();
   const { user, loading, displayName } = useAuth();
 
-  const { data: studentLessons, isLoading: lessonsLoading } = useGetStudentLessonsQuery(user?.uid, {
+  const {
+    data: studentDashboard,
+    isLoading: lessonsLoading,
+    isError: dashboardError,
+    refetch: refetchDashboard,
+  } = useGetStudentDashboardQuery(user?.uid ?? '', {
     skip: !user?.uid,
   });
 
-  const normalLessons = useMemo(() => {
-    if (!studentLessons) return [];
-    return studentLessons
-      .filter(lesson => isLessonDocumentData(lesson) && lesson.type === 'normal')
-      .map(lesson => ({
-        ...lesson,
-        totalPages: lesson.pages.length,
-      }));
-  }, [studentLessons]);
+  const learningUnits = useMemo(() => {
+    return studentDashboard?.learningPath ?? [];
+  }, [studentDashboard]);
 
   const vocabLessons = useMemo(() => {
-    if (!studentLessons) return [];
-    return studentLessons
-      .filter(lesson => isLessonDocumentData(lesson) && lesson.type === 'vocab')
-      .map(lesson => ({
-        ...lesson,
-        totalPages: lesson.pages.length,
-      }));
-  }, [studentLessons]);
+    return studentDashboard?.practiceLessons.filter(lesson => lesson.type === 'vocab') ?? [];
+  }, [studentDashboard]);
 
   const diagrammingLessons = useMemo(() => {
-    if (!studentLessons) return [];
-    return studentLessons
-      .filter(lesson => isLessonDocumentData(lesson) && lesson.type === 'sentence-diagramming')
-      .map(lesson => ({
-        ...lesson,
-        totalPages: lesson.pages.length,
-      }));
-  }, [studentLessons]);
+    return studentDashboard?.practiceLessons.filter(lesson => lesson.type === 'sentence-diagramming') ?? [];
+  }, [studentDashboard]);
 
   const listeningLessons = useMemo(() => {
-    if (!studentLessons) return [];
-    return studentLessons
-      .filter(lesson => isLessonDocumentData(lesson) && lesson.type === 'listening')
-      .map(lesson => ({
-        ...lesson,
-        totalPages: lesson.pages.length,
-      }));
-  }, [studentLessons]);
+    return studentDashboard?.practiceLessons.filter(lesson => lesson.type === 'listening') ?? [];
+  }, [studentDashboard]);
 
   const practiceLessons = useMemo(
     () => [...vocabLessons, ...diagrammingLessons, ...listeningLessons],
     [vocabLessons, diagrammingLessons, listeningLessons]
   );
+  const mockTests = useMemo(() => studentDashboard?.mockTests ?? [], [studentDashboard]);
 
   const completionStats = useMemo(() => {
-    if (normalLessons.length === 0) return { percentage: 0, completed: 0, total: 0 };
-    const completed = normalLessons.filter(l => l.status === 'completed').length;
-    const percentage = Math.round((completed / normalLessons.length) * 100);
-    return { percentage, completed, total: normalLessons.length };
-  }, [normalLessons]);
+    if (learningUnits.length === 0) return { percentage: 0, completed: 0, total: 0 };
+    const completed = learningUnits.filter(unit => unit.status === 'completed').length;
+    const percentage = Math.round((completed / learningUnits.length) * 100);
+    return { percentage, completed, total: learningUnits.length };
+  }, [learningUnits]);
 
   const getInitialSlideIndex = useMemo(() => {
-    if (normalLessons.length === 0) return 0;
+    if (learningUnits.length === 0) return 0;
 
-    const inProgressIndex = normalLessons.findIndex(lesson => lesson.status === 'in-progress');
+    const inProgressIndex = learningUnits.findIndex(unit => unit.status === 'in-progress');
     if (inProgressIndex !== -1) return inProgressIndex;
 
-    const availableIndex = normalLessons.findIndex(lesson => lesson.status === 'available');
+    const availableIndex = learningUnits.findIndex(unit => unit.status === 'available');
     if (availableIndex !== -1) return availableIndex;
 
     return 0;
-  }, [normalLessons]);
+  }, [learningUnits]);
 
   const handleLessonClick = useCallback(
     (lessonId: string) => {
-      const allLessons = [...normalLessons, ...vocabLessons, ...diagrammingLessons, ...listeningLessons];
-      const lesson = allLessons.find(l => l.id === lessonId);
+      const allUnits: StudentLearningUnitSummary[] = [
+        ...learningUnits,
+        ...vocabLessons,
+        ...diagrammingLessons,
+        ...listeningLessons,
+      ];
+      const unit = allUnits.find(candidate => candidate.id === lessonId);
 
-      if (lesson?.status === 'locked') {
-        toast.error('Complete the previous lesson to unlock this one');
+      if (unit?.status === 'locked') {
+        toast.error(unit.lockedReason || 'Complete the previous learning unit to unlock');
         return;
       }
 
-      router.push(`/lesson/${lessonId}`);
+      router.push(unit?.kind === 'test' ? `/test/${lessonId}` : `/lesson/${lessonId}`);
     },
-    [router, normalLessons, vocabLessons, diagrammingLessons, listeningLessons]
+    [router, learningUnits, vocabLessons, diagrammingLessons, listeningLessons]
   );
+
+  const handleMockClick = useCallback((mockTestId: string) => {
+    router.push(`/test/${encodeURIComponent(mockTestId)}?origin=mock`);
+  }, [router]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -193,6 +381,22 @@ export default function DashboardPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-roman-marble">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>
+      </div>
+    );
+  }
+
+  if (dashboardError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-roman-marble p-6">
+        <RomanCard className="w-full max-w-lg">
+          <RomanCardContent className="space-y-4 p-8 text-center">
+            <h1 className="font-serif text-2xl text-gray-900">Unable to load your dashboard</h1>
+            <p className="text-gray-600">Your Learning Path could not be loaded. Please try again.</p>
+            <Button type="button" onClick={() => void refetchDashboard()}>
+              Retry
+            </Button>
+          </RomanCardContent>
+        </RomanCard>
       </div>
     );
   }
@@ -255,23 +459,23 @@ export default function DashboardPage() {
                     Continue your journey through Latin mastery
                   </p>
                 </div>
-                {normalLessons.length > 0 && (
+                {learningUnits.length > 0 && (
                   <div className="text-right">
                     <div className="text-4xl font-serif text-transparent bg-clip-text bg-gradient-to-r from-roman-red to-roman-terracotta mb-2">
                       {completionStats.percentage}% Complete
                     </div>
                     <div className="text-lg text-roman-stone leading-relaxed">
-                      {completionStats.completed} of {completionStats.total} lessons finished
+                      {completionStats.completed} of {completionStats.total} learning units finished
                     </div>
                   </div>
                 )}
               </div>
 
-              {normalLessons.length === 0 ? (
+              {learningUnits.length === 0 ? (
                 <RomanCard>
                   <RomanCardContent className="p-12 text-center">
                     <BookOpen className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                    <h3 className="text-2xl font-serif text-gray-700 mb-2">No Lessons Available</h3>
+                    <h3 className="text-2xl font-serif text-gray-700 mb-2">No Learning Units Available</h3>
                     <p className="text-gray-500">
                       Check back soon! Your instructors are preparing amazing Latin lessons for you.
                     </p>
@@ -297,16 +501,20 @@ export default function DashboardPage() {
                       <SwiperNavigation />
                     </div>
 
-                    {normalLessons.map(lesson => (
+                    {learningUnits.map(unit => (
                       <SwiperSlide
-                        key={lesson.id}
+                        key={unit.id}
                         className="overflow-visible px-2 py-8 transition-transform duration-300 sm:p-6 lg:p-10">
                         {({ isActive }) => (
                           <div
                             className={`transform-gpu transition-transform duration-300 ${
                               isActive ? 'scale-100 sm:scale-110 xl:scale-125' : 'scale-95'
                             }`}>
-                            <LessonCard lesson={lesson} onLessonClick={handleLessonClick} />
+                            {unit.kind === 'test' ? (
+                              <TestCard test={unit} onTestClick={handleLessonClick} />
+                            ) : (
+                              <LessonCard lesson={unit} onLessonClick={handleLessonClick} />
+                            )}
                           </div>
                         )}
                       </SwiperSlide>
@@ -315,6 +523,18 @@ export default function DashboardPage() {
                 </div>
               )}
             </section>
+
+            {mockTests.length > 0 && (
+              <section className="mb-16" aria-labelledby="mock-tests-heading">
+                <div className="mb-8">
+                  <h2 id="mock-tests-heading" className="text-4xl font-serif text-gray-900">Mock Tests</h2>
+                  <p className="mt-2 text-lg text-roman-stone">Practice under test conditions. Your scores here never unlock or block your Learning Path.</p>
+                </div>
+                <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+                  {mockTests.map(mock => <MockTestCard key={mock.id} mock={mock} onMockClick={handleMockClick} />)}
+                </div>
+              </section>
+            )}
 
             <section className="mb-16">
               <PracticeSection lessons={practiceLessons} onLessonClick={handleLessonClick} />

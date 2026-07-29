@@ -15,6 +15,7 @@ import {
   Loader2,
   ClipboardList,
   FileCheck2,
+  ClipboardCheck,
   Tags,
 } from 'lucide-react';
 import Image from 'next/image';
@@ -139,6 +140,13 @@ function AdminPage() {
                   </Link>
                 </Button>
               </div>
+            </RomanCardContent>
+          </RomanCard>
+
+          <RomanCard className="hover:shadow-lg transition-shadow">
+            <RomanCardContent className="p-6">
+              <div className="flex items-center gap-4 mb-4"><div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center"><ClipboardCheck className="h-6 w-6 text-indigo-600" /></div><div><h3 className="text-lg font-serif text-gray-800">Mock Tests</h3><p className="text-sm text-roman-stone">Manage independent rehearsal cards</p></div></div>
+              <Button asChild className="w-full justify-start" variant="outline"><Link href="/admin/mock-tests"><ClipboardCheck className="h-4 w-4 mr-2" />Manage Mock Tests</Link></Button>
             </RomanCardContent>
           </RomanCard>
 

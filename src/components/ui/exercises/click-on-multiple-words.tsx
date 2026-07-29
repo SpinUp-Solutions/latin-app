@@ -12,8 +12,7 @@ import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { MultiClickableRichDisplay } from '../core/multi-clickable-rich-display';
 import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
-import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
-import { resolveRuntimeMode } from '@/src/types/runtime-mode';
+import type { ExerciseAnswer, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
 interface Props {
@@ -21,14 +20,22 @@ interface Props {
   onComplete?: (score: number) => void;
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
-  testMode?: boolean;
+  initialAnswer?: ExerciseAnswer;
 }
 
-const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete, runtimeMode, onAnswer, testMode }) => {
-  const mode = resolveRuntimeMode(runtimeMode, testMode);
+const ClickOnMultipleWordsComponent: React.FC<Props> = ({
+  exercise,
+  onComplete,
+  runtimeMode,
+  onAnswer,
+  initialAnswer,
+}) => {
+  const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
-  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
-  const [hasSubmitted, setHasSubmitted] = useState(false);
+  const testAnswerMode = mode === 'test';
+  const restoredIndices = initialAnswer?.type === 'click-on-multiple-words' ? initialAnswer.selectedWordIndices : [];
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set(restoredIndices));
+  const [hasSubmitted, setHasSubmitted] = useState(restoredIndices.length > 0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [validationResult, setValidationResult] = useState<ReturnType<typeof validateClickOnMultipleWords> | null>(
     null
@@ -86,7 +93,7 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({ exercise, onComplete, 
 
     setIsProcessing(true);
     setHasSubmitted(true);
-    if (mode === 'test') {
+    if (testAnswerMode) {
       onAnswer?.({
         type: 'click-on-multiple-words',
         selectedWordIndices: Array.from(selectedIndices).sort((a, b) => a - b),

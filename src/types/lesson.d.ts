@@ -1,6 +1,12 @@
 import type { VocabularyPoolWithWords } from './vocabulary-pool';
-import type { PracticeCategoryPlacement, PracticeCategorySummary } from './practice-category';
+import type {
+  PracticeCategoryPlacement,
+  PracticeCategorySelection,
+  PracticeCategorySummary,
+} from './practice-category';
 import type { LessonUnit } from './learning-unit';
+import type { TestAttemptOriginSummary, TestUnitSummary } from './test';
+import type { StudentMockTestSummary } from './test';
 
 /**
  * Temporary compatibility shape for callers that still create legacy lesson
@@ -13,6 +19,8 @@ export type Lesson = Omit<LessonUnit, 'kind' | 'description' | 'vocabulary_pool'
 
   /** Mutation/local-only category IDs. Never persisted on lesson documents. */
   practiceCategoryIds?: string[];
+  /** Canonical mutation/local-only category and tag selections. Never persisted on lesson documents. */
+  practiceCategorySelections?: PracticeCategorySelection[];
   /** Response-only joined category records. Never persisted on lesson documents. */
   practiceCategories?: PracticeCategorySummary[];
   /** Response-only student ordering metadata. Never persisted on lesson documents. */
@@ -24,6 +32,37 @@ export type LessonSummary = Omit<Lesson, 'pages'> & {
   totalItems: number;
   totalExercises: number;
 };
+
+export type StudentLessonSummary = Omit<LessonSummary, 'kind'> & {
+  kind: 'lesson';
+  progress: number;
+  status: LessonStatus;
+  lockedReason?: string;
+  furthestPageIndex: number;
+  /** @deprecated Schema-v1 cursor mirrored during migration. Prefer furthestPageIndex. */
+  currentPageIndex: number;
+  exerciseProgress: ExerciseProgress[];
+  completedAt?: string;
+  score?: number;
+  lastAccessedAt?: string;
+  progressSchemaVersion?: number;
+};
+
+export type StudentTestSummary = TestUnitSummary & {
+  status: LessonStatus;
+  lockedReason?: string;
+  completedAt?: string;
+  attemptSummary: TestAttemptOriginSummary;
+  relatedLiveMocks?: Array<{ id: string; title: string; passingPercentage: number | null }>;
+};
+
+export type StudentLearningUnitSummary = StudentLessonSummary | StudentTestSummary;
+
+export interface StudentDashboard {
+  learningPath: StudentLearningUnitSummary[];
+  practiceLessons: StudentLessonSummary[];
+  mockTests?: StudentMockTestSummary[];
+}
 
 export type LessonWithVocabularyPool = Lesson & {
   vocabularyPoolData?: VocabularyPoolWithWords;

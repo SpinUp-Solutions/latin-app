@@ -20,8 +20,7 @@ import {
 } from '../core/roman-table';
 import { cn } from '@/src/lib/utils';
 import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
-import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
-import { resolveRuntimeMode } from '@/src/types/runtime-mode';
+import type { ExerciseAnswer, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
 interface Props {
@@ -29,14 +28,27 @@ interface Props {
   onComplete?: (score: number) => void;
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
-  testMode?: boolean;
+  initialAnswer?: ExerciseAnswer;
 }
 
-const TableFillExerciseComponent: React.FC<Props> = ({ exercise, onComplete, runtimeMode, onAnswer, testMode }) => {
-  const mode = resolveRuntimeMode(runtimeMode, testMode);
+const TableFillExerciseComponent: React.FC<Props> = ({
+  exercise,
+  onComplete,
+  runtimeMode,
+  onAnswer,
+  initialAnswer,
+}) => {
+  const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
-  const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
-  const [hasSubmitted, setHasSubmitted] = useState(false);
+  const testAnswerMode = mode === 'test';
+  const restoredAnswers = initialAnswer?.type === 'table-fill' ? initialAnswer.answers : {};
+  const requiredCellKeys = exercise.data.rows.flatMap(row =>
+    exercise.data.columns.flatMap(column => (row.cells[column.id]?.isBlank ? [`${row.id}-${column.id}`] : []))
+  );
+  const hasAllRequiredAnswers = (answers: Record<string, string>) =>
+    requiredCellKeys.length > 0 && requiredCellKeys.every(cellKey => Boolean(answers[cellKey]?.trim()));
+  const [userAnswers, setUserAnswers] = useState<Record<string, string>>(restoredAnswers);
+  const [hasSubmitted, setHasSubmitted] = useState(hasAllRequiredAnswers(restoredAnswers));
   const [isProcessing, setIsProcessing] = useState(false);
   const [cellResults, setCellResults] = useState<Record<string, boolean>>({});
   const { isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance } = useExerciseProgression({
@@ -78,11 +90,11 @@ const TableFillExerciseComponent: React.FC<Props> = ({ exercise, onComplete, run
   };
 
   const handleSubmit = () => {
-    if (isProcessing) return;
+    if (isProcessing || !hasAllRequiredAnswers(userAnswers)) return;
 
     setIsProcessing(true);
     setHasSubmitted(true);
-    if (mode === 'test') {
+    if (testAnswerMode) {
       onAnswer?.({ type: 'table-fill', answers: userAnswers });
       setIsProcessing(false);
       onComplete?.(0);
@@ -224,7 +236,10 @@ const TableFillExerciseComponent: React.FC<Props> = ({ exercise, onComplete, run
 
         <div className="mt-6 flex justify-center gap-4">
           {!hasSubmitted && (
-            <Button onClick={handleSubmit} disabled={isProcessing} className="px-8">
+            <Button
+              onClick={handleSubmit}
+              disabled={isProcessing || !hasAllRequiredAnswers(userAnswers)}
+              className="px-8">
               {isProcessing ? 'Checking...' : 'Submit Answers'}
             </Button>
           )}

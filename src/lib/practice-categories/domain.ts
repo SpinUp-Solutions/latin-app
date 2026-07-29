@@ -11,6 +11,8 @@ export function normalizeCategoryName(name: string): string {
   return name.trim().normalize('NFKC').toLocaleLowerCase('en');
 }
 
+export const normalizeTagName = normalizeCategoryName;
+
 export function isPracticeLessonType(type: unknown): type is PracticeLessonType {
   return typeof type === 'string' && (PRACTICE_LESSON_TYPES as readonly string[]).includes(type);
 }

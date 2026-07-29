@@ -1,14 +1,19 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
-import { BookOpen, Library } from 'lucide-react';
+import { BookOpen, Library, Search } from 'lucide-react';
 import { Lesson } from '@/src/types/lesson';
 import { Input } from '@/src/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
+import { Switch } from '@/src/components/ui/switch';
 import { SimpleRichEditor } from '../../core/simple-rich-editor';
 import { VocabularyPoolSelector } from '../vocabulary-pools/VocabularyPoolSelector';
 import { PracticeCategorySelector } from '../practice-categories/PracticeCategorySelector';
 import { ConfirmationDialog } from '../../core/ConfirmationDialog';
-import { getLessonPracticeCategoryIds, isPracticeLessonType } from '@/src/utils/practiceCategoryLessons';
+import {
+  getLessonPracticeCategoryIds,
+  getLessonPracticeCategorySelections,
+  isPracticeLessonType,
+} from '@/src/utils/practiceCategoryLessons';
 
 interface LessonInfoFormProps {
   lesson: Lesson;
@@ -16,7 +21,15 @@ interface LessonInfoFormProps {
     updates: Partial<
       Pick<
         Lesson,
-        'id' | 'title' | 'description' | 'type' | 'vocabulary_pool' | 'practiceCategoryIds' | 'practiceCategories'
+        | 'id'
+        | 'title'
+        | 'description'
+        | 'type'
+        | 'vocabulary_pool'
+        | 'showWordSearch'
+        | 'practiceCategorySelections'
+        | 'practiceCategoryIds'
+        | 'practiceCategories'
       >
     >
   ) => void;
@@ -32,10 +45,12 @@ export const LessonInfoForm: React.FC<LessonInfoFormProps> = ({
 }) => {
   const [pendingType, setPendingType] = useState<Lesson['type'] | null>(null);
   const selectedCategoryIds = getLessonPracticeCategoryIds(lesson);
+  const selectedCategorySelections = getLessonPracticeCategorySelections(lesson);
 
   const applyTypeChange = (nextType: Lesson['type']) => {
     onUpdateInfo({
       type: nextType,
+      practiceCategorySelections: [],
       practiceCategoryIds: [],
       practiceCategories: [],
     });
@@ -107,10 +122,15 @@ export const LessonInfoForm: React.FC<LessonInfoFormProps> = ({
               <PracticeCategorySelector
                 lessonType={lesson.type}
                 selectedIds={selectedCategoryIds}
+                selectedSelections={selectedCategorySelections}
                 assignedCategories={lesson.practiceCategories}
                 disabled={disabled}
-                onChange={(practiceCategoryIds, practiceCategories) =>
-                  onUpdateInfo({ practiceCategoryIds, practiceCategories })
+                onSelectionChange={(practiceCategorySelections, practiceCategories) =>
+                  onUpdateInfo({
+                    practiceCategorySelections,
+                    practiceCategoryIds: practiceCategorySelections.map(selection => selection.categoryId),
+                    practiceCategories,
+                  })
                 }
               />
             </div>
@@ -123,6 +143,26 @@ export const LessonInfoForm: React.FC<LessonInfoFormProps> = ({
               placeholder="Enter lesson description..."
               rows={2}
               className="w-full text-sm"
+            />
+          </div>
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-gray-200 bg-gray-50/70 p-3">
+            <div className="flex min-w-0 items-start gap-2">
+              <Search className="mt-0.5 h-4 w-4 flex-shrink-0 text-roman-red" />
+              <div>
+                <label htmlFor="show-word-search" className="block text-sm font-medium text-gray-800">
+                  Show word search
+                </label>
+                <p className="mt-0.5 text-xs text-gray-500">
+                  Allow students to search the full vocabulary database from this lesson.
+                </p>
+              </div>
+            </div>
+            <Switch
+              id="show-word-search"
+              checked={lesson.showWordSearch ?? true}
+              disabled={disabled}
+              onCheckedChange={showWordSearch => onUpdateInfo({ showWordSearch })}
+              aria-label="Show word search in this lesson"
             />
           </div>
         </CardContent>

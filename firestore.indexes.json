@@ -61,6 +61,16 @@
       ]
     },
     {
+      "collectionGroup": "mockTests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "parent.testId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "isLive", "order": "ASCENDING" },
+        { "fieldPath": "mockOrder", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "testAttempts",
       "queryScope": "COLLECTION",
       "fields": [

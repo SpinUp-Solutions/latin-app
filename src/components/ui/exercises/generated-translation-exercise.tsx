@@ -17,8 +17,7 @@ import {
   type GeneratedTranslationItem,
 } from '@/src/utils/exercises/generatedTranslationExercise';
 import { normalizeCollection, buildLegacyPosConfigs } from '@/src/utils/exercises/legacyExerciseCompat';
-import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
-import { resolveRuntimeMode } from '@/src/types/runtime-mode';
+import type { ExerciseAnswer, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
 import { getContentTypeLabel } from '@/src/lib/content/registry';
 import { createGeneratedTranslationItems } from '@/src/lib/tests/generated-exercises';
 import { RecordedAnswerControls } from './recorded-answer-controls';
@@ -29,8 +28,9 @@ interface Props {
   onComplete?: (score: number) => void;
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
+  initialAnswer?: ExerciseAnswer;
   resolvedItems?: GeneratedTranslationItem[];
-  testMode?: boolean;
+  allowGeneratedExerciseQueries?: boolean;
 }
 
 const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
@@ -38,15 +38,13 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
   onComplete,
   runtimeMode,
   onAnswer,
+  initialAnswer,
   resolvedItems,
-  testMode,
+  allowGeneratedExerciseQueries = false,
 }) => {
-  const mode = resolveRuntimeMode(runtimeMode, testMode);
+  const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
-  const [userAnswer, setUserAnswer] = useState('');
-  const [submittedAnswers, setSubmittedAnswers] = useState<string[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [testSubmitted, setTestSubmitted] = useState(false);
+  const testAnswerMode = mode === 'test';
 
   const config = exercise.data.generatorConfig ?? {
     collection: '',
@@ -75,7 +73,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
       count: config.count,
       posConfigs,
     },
-    { skip: mode === 'test' || resolvedItems !== undefined }
+    { skip: (mode === 'test' && !allowGeneratedExerciseQueries) || resolvedItems !== undefined }
   );
 
   const items: GeneratedTranslationItem[] = useMemo(() => {
@@ -83,6 +81,13 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
     if (!data?.words) return [];
     return createGeneratedTranslationItems(exercise, data.words as unknown as ExerciseWordResponse[]);
   }, [data, exercise, resolvedItems]);
+  const restoredAnswers = initialAnswer?.type === 'generated-translation' ? initialAnswer.answers : [];
+  const firstIncompleteIndex = items.findIndex((_, index) => !restoredAnswers[index]?.trim());
+  const restoredIndex = firstIncompleteIndex >= 0 ? firstIncompleteIndex : Math.max(items.length - 1, 0);
+  const [userAnswer, setUserAnswer] = useState(restoredAnswers[restoredIndex] ?? '');
+  const [submittedAnswers, setSubmittedAnswers] = useState<string[]>(restoredAnswers);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [testSubmitted, setTestSubmitted] = useState(Boolean(restoredAnswers[restoredIndex]?.trim()));
 
   const {
     currentIndex,
@@ -94,6 +99,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
     nextItem,
   } = useExerciseProgression({
     totalItems: items.length,
+    initialIndex: restoredIndex,
     itemProgressionDelay: exercise.itemProgressionDelay,
     progressionRules: exercise.feedbackConfig.progressionRules,
   });
@@ -124,7 +130,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
   });
 
   const handleSubmit = () => {
-    if (isProcessing || items.length === 0) return;
+    if (isProcessing || items.length === 0 || !userAnswer.trim()) return;
 
     const currentItem = items[currentIndex];
     const nextAnswers = [...submittedAnswers];
@@ -132,7 +138,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
     setSubmittedAnswers(nextAnswers);
     setIsProcessing(true);
 
-    if (mode === 'test') {
+    if (testAnswerMode) {
       onAnswer?.({ type: 'generated-translation', answers: nextAnswers });
       setTestSubmitted(true);
       return;
@@ -189,8 +195,9 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
       onComplete?.(0);
       return;
     }
-    setUserAnswer('');
-    setTestSubmitted(false);
+    const nextAnswer = submittedAnswers[currentIndex + 1] ?? '';
+    setUserAnswer(nextAnswer);
+    setTestSubmitted(Boolean(nextAnswer.trim()));
     setIsProcessing(false);
     reset();
     nextItem();
@@ -274,7 +281,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
             disabled={isProcessing}
           />
 
-          {mode === 'test' ? (
+          {testAnswerMode ? (
             testSubmitted && <RecordedAnswerControls isLastItem={isLastItem} onContinue={continueTest} />
           ) : (
             <FeedbackDisplay

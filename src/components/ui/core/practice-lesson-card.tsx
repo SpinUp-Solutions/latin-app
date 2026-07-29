@@ -1,6 +1,7 @@
 import { ArrowRight, CheckCircle2, Play } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
-import type { LessonWithProgress } from '@/src/types/lesson';
+import type { LessonWithProgress, StudentLessonSummary } from '@/src/types/lesson';
+import type { PracticeTagSummary } from '@/src/types/practice-category';
 import { stripHtmlTags } from '@/src/utils/exercises/helpers';
 
 export interface PracticeCardTheme {
@@ -11,13 +12,26 @@ export interface PracticeCardTheme {
 }
 
 interface PracticeLessonCardProps {
-  lesson: LessonWithProgress;
+  lesson: LessonWithProgress | StudentLessonSummary;
   theme: PracticeCardTheme;
   showCategoryChips: boolean;
+  categoryTags?: PracticeTagSummary[];
+  lessonTagIds?: string[];
+  selectedTagIds?: string[];
+  tagSelectedClass?: string;
   onLessonClick: (lessonId: string) => void;
 }
 
-export function PracticeLessonCard({ lesson, theme, showCategoryChips, onLessonClick }: PracticeLessonCardProps) {
+export function PracticeLessonCard({
+  lesson,
+  theme,
+  showCategoryChips,
+  categoryTags = [],
+  lessonTagIds = [],
+  selectedTagIds = [],
+  tagSelectedClass,
+  onLessonClick,
+}: PracticeLessonCardProps) {
   const title = stripHtmlTags(lesson.title);
   const description = stripHtmlTags(lesson.description ?? '');
   const status = lesson.status ?? 'available';
@@ -29,6 +43,18 @@ export function PracticeLessonCard({ lesson, theme, showCategoryChips, onLessonC
   const categories = (lesson.practiceCategories ?? []).filter(category => category.status === 'active');
   const visibleCategories = categories.slice(0, 2);
   const overflowCount = categories.length - visibleCategories.length;
+  const selectedTagSet = new Set(selectedTagIds);
+  const lessonTagSet = new Set(lessonTagIds);
+  const tags = categoryTags
+    .filter(tag => tag.status === 'active' && lessonTagSet.has(tag.id))
+    .sort(
+      (left, right) =>
+        Number(selectedTagSet.has(right.id)) - Number(selectedTagSet.has(left.id)) ||
+        left.tagOrder - right.tagOrder ||
+        left.id.localeCompare(right.id)
+    );
+  const visibleTags = tags.slice(0, 2);
+  const hiddenTags = tags.slice(2);
 
   return (
     <button
@@ -84,6 +110,33 @@ export function PracticeLessonCard({ lesson, theme, showCategoryChips, onLessonC
                 className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500"
                 aria-label={`${overflowCount} more ${overflowCount === 1 ? 'category' : 'categories'}`}>
                 +{overflowCount}
+              </span>
+            )}
+          </div>
+        )}
+        {!showCategoryChips && visibleTags.length > 0 && (
+          <div className="mb-3 flex flex-wrap gap-1.5" aria-label="Practice tags">
+            {visibleTags.map(tag => {
+              const matchesFilter = selectedTagSet.has(tag.id);
+              return (
+                <span
+                  key={tag.id}
+                  className={cn(
+                    'max-w-[10rem] truncate rounded-full border border-transparent px-2.5 py-1 text-xs font-medium',
+                    matchesFilter && tagSelectedClass
+                      ? tagSelectedClass
+                      : 'border-slate-100 bg-slate-100 text-slate-600'
+                  )}>
+                  {tag.name}
+                </span>
+              );
+            })}
+            {hiddenTags.length > 0 && (
+              <span
+                title={hiddenTags.map(tag => tag.name).join(', ')}
+                className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500"
+                aria-label={`${hiddenTags.length} more tags: ${hiddenTags.map(tag => tag.name).join(', ')}`}>
+                +{hiddenTags.length}
               </span>
             )}
           </div>

@@ -1,7 +1,37 @@
 # Practice Category Tags Plan
 
-Status: Proposed  
-Last updated: 2026-07-22
+Status: Core implementation complete; interactive acceptance coverage pending
+Last updated: 2026-07-29
+
+## Implementation status
+
+Implemented on 2026-07-29:
+
+- embedded category-owned tag definitions with active/archive lifecycle and explicit order;
+- membership-owned `tagIds` with legacy empty defaults;
+- canonical lesson mutation selections shaped as `{ categoryId, tagIds }`;
+- compatibility parsing that preserves retained tag assignments for legacy category-ID saves and recovery items;
+- transactional tag create, rename, archive, restore, reorder, guarded delete, and membership replacement services;
+- admin routes and RTK Query mutations with practice-category, assignment, and student-dashboard invalidation;
+- tag management, usage counts, lesson filtering, and membership assignment on category detail;
+- category-scoped tag assignment blocks in the lesson editor;
+- active-tag projection through `StudentDashboardService`;
+- student category tag shelves, match-any filtering, **All** behavior, result feedback, and lesson-card tag chips;
+- focused domain, route, recovery, cache invalidation, lesson editor, service projection, and student UI tests.
+
+Verification completed:
+
+- TypeScript passes with `npx tsc --noEmit`.
+- ESLint passes for the changed tagging source files.
+- All focused tagging suites pass.
+- The complete Jest run passes 67 of 69 suites; the two failing suites are unrelated working-tree failures in test-attempt serialization and a test-version editor RTK middleware fixture.
+- The production bundle compiles, then stops on an unrelated existing `StudentTestDelivery.vocabularyPool.items` type mismatch in `src/lib/tests/delivery.ts`.
+
+Still pending:
+
+- authenticated manual UI QA for the admin and student flows;
+- the planned Playwright tag lifecycle/filtering flow;
+- a clean full-suite and production-build run after the unrelated working-tree failures are resolved.
 
 ## Purpose
 
@@ -73,11 +103,11 @@ practiceCategoryMemberships/{membershipId}
 
 The membership is already the authoritative relationship between a lesson and a category. It also owns the lesson's independent `lessonOrder` within that category. Category IDs and joined category records used by the UI are response or mutation data and are never persisted on lesson documents.
 
-Before Learning Unit Refactor Phase 5A, the student lessons endpoint loads live lessons, joins their category memberships, and returns category summaries plus placement metadata. Phase 5A replaces that full-content list with `GET /api/student-dashboard`, whose shared dashboard service returns lightweight normal-flow and practice summaries. `PracticeSection` continues to perform type, category, text, and tag filtering in the browser, but consumes the practice summary projection rather than full lesson documents.
+Learning Unit Refactor Phase 5 is complete. `GET /api/student-dashboard` now returns the lightweight normal-flow, mock-test, and practice summaries consumed by the dashboard, and the obsolete full-content `GET /api/lessons` list returns `410 Gone`. Practice category enrichment runs in `StudentDashboardService.enrichPracticeLessons`, and `PracticeSection` receives `StudentDashboard.practiceLessons: StudentLessonSummary[]`. The tag feature extends that existing summary path rather than creating another student endpoint or DTO.
 
 The tag feature should extend these existing responsibilities rather than introduce a parallel taxonomy system.
 
-## Relationship to Learning Unit Refactor Phase 5
+## Relationship to the completed Learning Unit Refactor
 
 The tag feature does not change Phase 5's placement architecture:
 
@@ -91,9 +121,9 @@ The tag feature does not change Phase 5's placement architecture:
 - Category and tag mutations continue to require normalized `kind === 'lesson'` and an eligible non-normal lesson `type`.
 - The Learning Path migration, cutover, verification, and rollback do not read or write tags, categories, or category memberships.
 
-Phase 5A is the required student read-path seam for this feature. Its initial delivery must remain a zero-behavior-change refactor, so student-visible tag filtering must ship as a separate change after Phase 5A. The tag domain, service, routes, and admin UI may be developed independently, but the student integration must target the post-5A dashboard summary API rather than the legacy `/api/lessons` list.
+Phase 5A's student read-path seam is already available and is the required integration point for this feature. The implementation should extend the existing `StudentDashboardService`, `StudentDashboard`, `StudentLessonSummary`, and `useGetStudentDashboardQuery` path in place. It must not restore `useGetStudentLessonsQuery`, revive the retired full-content list, or add a parallel practice-dashboard API.
 
-Phases 5B and 5C do not block category tags. They affect the normal Learning Path aggregate and leave practice persistence and presentation inputs unchanged.
+The completed Learning Path cutover affects only normal-flow placement. Its migration and rollback machinery is retired and has no runtime or rollout dependency on category tags.
 
 ## Recommended architecture
 
@@ -264,23 +294,18 @@ type PracticeCategoryLesson = LessonSummary & {
 };
 ```
 
-The Phase 5A student dashboard's purpose-built practice lesson summary must include the same lightweight category data without including lesson pages:
+No new practice-dashboard DTO is required. `StudentDashboard.practiceLessons` already contains `StudentLessonSummary[]`, and `StudentLessonSummary` inherits the response-only category fields from `LessonSummary`. Extending `PracticeCategorySummary` with tag definitions and `PracticeCategoryPlacement` with `tagIds` therefore updates the existing dashboard contract transitively without adding category fields to persisted learning-unit schemas.
 
-```ts
-interface PracticeDashboardCategoryPlacement {
-  categoryId: string;
-  lessonOrder: number;
-  tagIds: string[];
-}
+`StudentDashboardService.enrichPracticeLessons` must:
 
-interface PracticeDashboardLessonSummary {
-  // Existing Phase 5A card and progress summary fields.
-  practiceCategories: PracticeCategorySummary[];
-  practiceCategoryPlacements: PracticeDashboardCategoryPlacement[];
-}
-```
+- retain its current active-category filtering;
+- include each active category's active tag definitions in the joined summary;
+- add normalized membership `tagIds` to each `PracticeCategoryPlacement`;
+- omit archived tag definitions from student responses;
+- keep the graceful category-enrichment failure boundary;
+- return no lesson pages.
 
-The final concrete summary type should extend the Phase 5A type already used by `PracticeSection`; do not create a parallel dashboard DTO or restore the full `LessonWithProgress` list response.
+`PracticeSection` should consume the resulting `StudentLessonSummary` category and placement fields. Its temporary `LessonWithProgress | StudentLessonSummary` compatibility union may remain if other verified callers still need it, but no new tag behavior should depend on the full lesson shape.
 
 Compatibility behavior:
 
@@ -295,7 +320,7 @@ Compatibility behavior:
 
 ## Service and API design
 
-All category and tag mutations continue through the existing server-side practice category service and Firebase Admin SDK. Direct client access to the category and membership collections remains denied.
+All category and tag mutations continue through the existing server-side practice category service and Firebase Admin SDK. Direct client access to the category and membership collections remains denied. New route handlers use the existing thin-route pattern and `practiceCategoryRouteErrorResponse`, which is already composed from the shared `createRouteErrorResponse` infrastructure.
 
 Add these admin routes:
 
@@ -333,7 +358,7 @@ Service behavior:
 - Category detail reads return tag usage counts derived from the already-loaded category memberships.
 - Existing category lesson addition creates empty tag sets; administrators can assign tags immediately afterward from the lesson row.
 - Existing category removal, lesson deletion, category archive, category delete, and recovery flows are extended to preserve the new invariants.
-- Tag definition and membership mutations invalidate the shared `StudentLearningPath` dashboard projection in addition to the relevant practice-category admin cache tags. They must not rely only on the legacy `StudentLesson` cache tag.
+- Tag definition and membership mutations reuse the existing `STUDENT_DASHBOARD_TAG` helper in addition to the relevant practice-category admin cache tags. Practice category CRUD, membership, and reorder mutations already establish this invalidation pattern; the new tag endpoints must follow it rather than introduce another dashboard tag.
 
 Add explicit domain errors for:
 
@@ -552,7 +577,7 @@ Lesson editor:
 
 ## Student data flow
 
-After Learning Unit Refactor Phase 5A, the authenticated dashboard summary endpoint remains the only initial data request for the dashboard. Tag filtering must not restore the legacy full-content lesson fetch.
+The authenticated dashboard summary endpoint is the only initial data request for the dashboard. Tag filtering must not restore the retired full-content lesson fetch.
 
 ```text
 Firestore category + membership documents
@@ -564,7 +589,7 @@ Firestore category + membership documents
 → browser filters and preserves membership lessonOrder
 ```
 
-`GET /api/student-dashboard` should return tag definitions through joined category summaries and tag IDs through each practice lesson's placement. The projection must contain the card, progress, category, and placement fields required by `PracticeSection`, but never lesson pages. The UI should derive:
+`GET /api/student-dashboard` returns `StudentDashboard`, whose `practiceLessons` array should carry tag definitions through joined category summaries and tag IDs through each practice lesson's placement. The projection must contain the card, progress, category, and placement fields required by `PracticeSection`, but never lesson pages. The UI should derive:
 
 - active tags for the selected category;
 - live lesson count per tag;
@@ -604,9 +629,9 @@ Recommended delivery sequence:
 3. Move lesson mutations to canonical category selections while retaining legacy fallback parsing.
 4. Extend category detail and lesson editor admin workflows.
 5. Implement the settled UI/UX design track for the admin surfaces.
-6. Complete and verify Learning Unit Refactor Phase 5A's zero-behavior-change dashboard summary cutover if it has not already shipped.
-7. Extend the Phase 5A practice summary projection and its `StudentLearningPath` cache contract with active category tags and membership `tagIds`.
-8. Add student dashboard filters and lesson-card tag presentation as a separate post-5A behavior change.
+6. Extend `StudentDashboardService.enrichPracticeLessons` and the existing shared category/placement types with active category tags and membership `tagIds`.
+7. Reuse `STUDENT_DASHBOARD_TAG` invalidation for every successful tag mutation.
+8. Add student dashboard filters and lesson-card tag presentation.
 9. Run focused category/dashboard tests, full Jest, lint, production build, and targeted Playwright coverage.
 
 ## Test plan
@@ -637,9 +662,9 @@ Recommended delivery sequence:
 - Confirm legacy category-ID updates preserve retained tag IDs.
 - Confirm old recovery retries preserve retained tag IDs.
 - Return tag usage counts and membership tag IDs in category detail.
-- Extend the Phase 5A student-dashboard practice summary without returning lesson pages or creating a second dashboard DTO.
+- Extend the existing `StudentDashboard.practiceLessons: StudentLessonSummary[]` projection without returning lesson pages or creating a second dashboard DTO.
 - Return only active tag definitions and membership `tagIds` in student practice summaries.
-- Invalidate the `StudentLearningPath` dashboard projection after tag definition or membership changes.
+- Invalidate the dashboard through `STUDENT_DASHBOARD_TAG` after tag definition or membership changes.
 
 ### Admin component tests
 
@@ -667,11 +692,11 @@ Recommended delivery sequence:
 - Render active category-owned tag chips with bounded overflow.
 - Keep top-level **All Practice** cards category-oriented rather than mixing tag scopes.
 - Render a useful empty state and reset control when filters produce no lessons.
-- Verify the tag UI consumes the Phase 5A practice summary hook and does not reintroduce `useGetStudentLessonsQuery` or a full-content list fetch.
+- Verify the tag UI consumes `useGetStudentDashboardQuery` and does not reintroduce `useGetStudentLessonsQuery` or a full-content list fetch.
 
 ### Verification
 
-- Run the focused practice category and PracticeSection Jest suites.
+- Run the focused practice category, `StudentDashboardService`, dashboard cache invalidation, and `PracticeSection` Jest suites.
 - Run the complete Jest suite.
 - Run ESLint.
 - Run the production Next.js build.

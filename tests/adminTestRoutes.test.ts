@@ -3,13 +3,9 @@ import { POST } from '@/src/app/api/admin/tests/route';
 const mockVerifyAdminAccess = jest.fn();
 const mockCreateTestWithVersion = jest.fn();
 
-jest.mock('next/server', () => ({
-  NextResponse: {
-    json: (body: unknown, init?: { status?: number }) => ({ body, status: init?.status ?? 200 }),
-  },
-}));
+jest.mock('next/server', () => jest.requireActual('./helpers/routeMocks'));
 
-jest.mock('@/src/services/firebase-admin', () => ({ adminDb: {} }));
+jest.mock('@/src/services/firebase-admin', () => jest.requireActual('./helpers/routeMocks'));
 
 jest.mock('@/src/lib/verifyAdminAccess', () => {
   class AdminAccessError extends Error {
@@ -27,9 +23,9 @@ jest.mock('@/src/lib/verifyAdminAccess', () => {
   };
 });
 
-jest.mock('@/src/lib/tests/service', () => ({
+jest.mock('@/src/lib/tests/authoring-service', () => ({
   TestServiceError: class TestServiceError extends Error {},
-  testService: {
+  testAuthoringService: {
     createTestWithVersion: (...args: unknown[]) => mockCreateTestWithVersion(...args),
   },
 }));
