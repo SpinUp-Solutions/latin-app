@@ -15,7 +15,7 @@ This document is the implementation record for the completed refactor. Settled c
 - Lesson documents are stored in the Firestore `lessons` collection and use the `Lesson` schema.
 - Lesson behavior is specialized with `type: vocab | normal | sentence-diagramming | listening`.
 - Lessons contain ordered pages with both instructional content and exercises.
-- Normal-test containers are stored as `kind: 'test'` documents in the shared `lessons` collection, while their independently editable page content is stored in `testVersions`. Creating a test saves its unplaced container and first valid rotation version atomically.
+- Normal-test containers are stored as `kind: 'test'` documents in the shared `lessons` collection. Active, rotation-eligible content is stored in `testVersions`, while incomplete inactive work is isolated in the server-only `testVersionDrafts` collection. Creating a test still saves its unplaced container and first valid rotation version atomically; adding or duplicating a later version creates an inactive draft.
 - The shared test-version editor persists lesson-style `pages` with inline exercise `maxPoints`; the server validates content and recomputes page, item, exercise, and point summaries on every version write.
 - The former POC `tests` collection has no remaining application reader, writer, type, utility, route, or UI compatibility layer. POC documents are not migrated.
 - Test attempts persist through a full lifecycle: start/resume with frozen delivery state, incremental answer saves, and a transactional submission that freezes score statistics and per-exercise results, removes temporary answers and delivery state, and clears the resumability pointer. Preview scores remain ephemeral and are never persisted.
@@ -72,10 +72,11 @@ A version has exactly one active delivery owner:
 
 - membership in a `TestUnit.rotationVersions` list means the version participates in that normal test's random rotation;
 - ownership by an active `MockTest` means the version is excluded from every normal-test rotation and is delivered only through that mock-test card.
+- membership in `testVersionDrafts` means the version is inactive, admin-only, and has no delivery owner.
 
 For example, if Test 3 initially contains Versions A, B, C, and D and Version D is assigned as a mock, the assignment transaction removes D from `TestUnit.rotationVersions` and creates or reactivates D's `MockTest`. Normal Test 3 attempts can then select only A, B, or C. The Test 3 admin overview still shows D under **Mock cards** by joining active mocks whose `parent.testId` is Test 3; the relationship is derived at read time rather than mirrored in the parent document.
 
-`TestVersion` remains a first-class document so large page content can be edited independently, but versions are not generally shared between simultaneous delivery contexts. If a teacher wants equivalent content in both normal rotation and Mock Tests, they explicitly duplicate the version and assign the duplicate as mock.
+`TestVersion` remains a first-class document so large page content can be edited independently, but versions are not generally shared between simultaneous delivery contexts. If a teacher wants equivalent content in both normal rotation and Mock Tests, they explicitly duplicate the version, activate the inactive copy, and assign that copy as mock.
 
 A manually created standalone mock has no parent normal test. It can later be moved into a normal test by archiving its mock container and attaching the same version for rotation, or duplicated when the teacher wants to keep both destinations.
 
@@ -97,9 +98,11 @@ A passing requirement describes how a student-facing test is used, not the conte
 
 The normal-test threshold applies only to its rotation-eligible versions. A mock-only version uses its `MockTest` threshold. Percentage thresholds allow alternative normal-test versions to have different total points while remaining comparable.
 
-### Versions and edit history are intentionally simple
+### Versions, inactive drafts, and edit history
 
 The model includes alternative test versions such as A, B, and C. It does not include immutable revision history. Editing a test version updates that version directly.
+
+Newly added and duplicated normal-test versions begin as inactive drafts. Drafts may be incomplete, are explicitly saved to Firestore for cross-device continuation, and never appear in `rotationVersions` or `testVersions`. Activation validates the complete test-version contract and atomically moves the document into `testVersions` while adding its ID to rotation. Deactivation performs the inverse move; it is blocked when it would remove the final active version from a test in the Learning Path.
 
 Submitted attempts preserve frozen score statistics and exercise-level results, which power the student results breakdown. They do not retain exact questions or student answers, and their statistics are never recalculated from the current editable test version. This intentionally means submitted attempts cannot later be reviewed question-by-question or regraded after a version changes.
 
@@ -235,9 +238,9 @@ interface TestVersion {
 }
 ```
 
-A test version is separately stored scored content, not an independently published student destination. Persisted versions must be structurally valid. The server recomputes all four summary fields from `pages` on every create or update, following the existing lesson-summary pattern; this permits list and picker APIs to project metadata without downloading page bodies. Versions are assigned to one active delivery context rather than shared simultaneously across tests and mocks. Domain mutation routes reject attaching an existing version to a second context; moving is an explicit atomic operation and copying creates a new version ID.
+A test version is separately stored scored content, not an independently published student destination. Documents in `testVersions` must be structurally valid. The server recomputes all four summary fields from `pages` on every create or update, following the existing lesson-summary pattern; this permits list and picker APIs to project metadata without downloading page bodies. Versions are assigned to one active delivery context rather than shared simultaneously across tests and mocks. Domain mutation routes reject attaching an existing version to a second context; moving is an explicit atomic operation and copying creates a new inactive draft ID.
 
-Incomplete editor work remains in the existing draft mechanism. If cross-device server drafts are required later, a narrower `draft | ready` lifecycle can be introduced without adding independent publication semantics.
+`testVersionDrafts` stores the same editor-facing content plus its owning `testId`, derived summaries, and audit fields. Draft persistence accepts empty pages and other incomplete scoring state that the editor can safely round-trip. Activation reuses the strict `TestVersion` validation boundary, so invalid or incomplete drafts fail with actionable validation issues and remain inactive.
 
 ### Mock tests
 
@@ -290,6 +293,8 @@ LessonUnit ───────────────────────
 
 TestUnit ───────> RotationVersionReference ──> TestVersion ──> Page[]
 
+TestUnit <──── owning testId ──── Inactive TestVersionDraft ──> Page[]
+
 LearningPath ───> ordered unitId ────────────> LessonUnit | TestUnit
 
 Practice LessonUnit ──> type-scoped isLive/liveOrder
@@ -301,7 +306,7 @@ Parent-linked MockTest ──> TestVersion
 Standalone MockTest ────────────────────> TestVersion
 ```
 
-The active container owns delivery. A version may appear in one normal test's `rotationVersions` or one active `MockTest`, never both and never in two active containers. A parent-linked mock records its source `testId` for admin joins, navigation, deletion guards, and related-mock nudges; the parent does not store a backlink. A standalone mock has no `TestUnit` parent. Archived mocks retain their IDs, parent association, and attempt history but are not active delivery owners, so their version may return to normal rotation.
+The active container owns delivery. A version may appear in one normal test's `rotationVersions` or one active `MockTest`, never both and never in two active containers. An inactive draft has an authoring owner but no delivery owner and is physically absent from `testVersions`. A parent-linked mock records its source `testId` for admin joins, navigation, deletion guards, and related-mock nudges; the parent does not store a backlink. A standalone mock has no `TestUnit` parent. Archived mocks retain their IDs, parent association, and attempt history but are not active delivery owners, so their version may return to normal rotation.
 
 ## Scoring invariants
 
@@ -425,7 +430,7 @@ If normal tests and mock tests later need different feedback policies, configura
 1. Build the first `TestVersion` using the lesson-like page builder.
 2. Choose **Score only** or set a container-level passing percentage.
 3. Save the valid version and its unplaced `TestUnit` together, with the version added to `rotationVersions`.
-4. Add more valid versions as needed.
+4. Add or duplicate later versions as inactive drafts, save incomplete work explicitly, and activate each version only when it is ready to join rotation.
 5. Add the test at a chosen insertion point in the shared learning-path organizer.
 6. When placed in the Learning Path, students see one test card and the server selects only among `rotationVersions`.
 
@@ -448,7 +453,7 @@ Creating a test in Test Management does not automatically place it in the learni
 5. Reject the operation if a parent test currently placed in a Learning Path would be left with no rotation versions.
 6. Assigning Version A and Version B creates two active `MockTest` documents and therefore two student dashboard cards; neither version remains eligible for the parent test's normal rotation.
 
-Assignment is idempotent for a given parent test/version pair. Use a deterministic mock ID or equivalent transactional uniqueness record; if the archived mock already exists, reuse its `mockTestId` and attempt history rather than creating a second card. A teacher who wants equivalent content in both contexts duplicates the version first and assigns only the duplicate as a mock.
+Assignment is idempotent for a given parent test/version pair. Use a deterministic mock ID or equivalent transactional uniqueness record; if the archived mock already exists, reuse its `mockTestId` and attempt history rather than creating a second card. A teacher who wants equivalent content in both contexts duplicates the version, activates the inactive copy, and assigns only that copy as a mock.
 
 Once assigned, the version row shows a **Mock** badge and a **Manage mock assignment** link. The mock overview links back to the parent test and version.
 
@@ -497,10 +502,10 @@ Admin screens should make the delivery model legible rather than assume it is un
 
 ### Test overview and versions
 
-- Clicking a normal test opens an overview showing its container settings and all currently associated versions: direct `rotationVersions` plus active parent-linked mocks joined by `parent.testId`.
-- Versions are grouped by delivery role rather than shown as one badged list: **In rotation**, introduced with a one-line explanation such as “students receive one of these at random, least-used first”, and **Mock cards**. The grouping itself teaches the delivery model, including the otherwise invisible selection behavior.
+- Clicking a normal test opens an overview showing its container settings and all currently associated versions: direct `rotationVersions`, inactive drafts owned by the test, and active parent-linked mocks joined by `parent.testId`.
+- Versions are grouped by delivery role rather than shown as one badged list: **In rotation**, introduced with a one-line explanation such as “students receive one of these at random, least-used first”; **Inactive drafts**, explicitly described as admin-only and safe for incomplete work; and **Mock cards**. The grouping itself teaches the delivery model, including the otherwise invisible selection behavior.
 - Each version row shows the authoritative `TestVersion.name`, exercise count, total points, and last-edited time.
-- Each version provides **Preview**, **Edit**, **Duplicate**, a confirmed mock assignment control, and guarded remove/delete actions.
+- Rotation versions provide **Preview**, **Edit**, **Duplicate as inactive draft**, a confirmed mock assignment control, and guarded **Deactivate**. Inactive drafts provide **Edit draft** and confirmed **Activate**, with complete validation at that boundary.
 - Active parent-linked mocks are joined by `parent.testId` and listed beneath the parent test. Each states its consequence directly, for example **Excluded from rotation · Live to students as “Chapter 4 Mock Test — Version D”**, and links to that mock card.
 - Mock lifecycle is always described in plain language, never as raw stored values: an active hidden mock reads **Hidden from students (still mock-only)** and an archived mock reads **Assignment ended — back in rotation**.
 - When a passing percentage is set, normal-test settings resolve the threshold against every rotation version, for example **Version A: 14 of 20 · Version B: 18 of 25**, so percentage normalization is tangible rather than trusted. Joined mock rows show their own container-level passing rule instead.
@@ -599,7 +604,7 @@ The section's identity is a practice arena: low-stakes, repeatable rehearsal und
 
 ## Placement and publication eligibility
 
-Test versions do not have an independent published status. Creating a `TestUnit` requires at least one existing, structurally valid rotation version. An unplaced container may later have an empty `rotationVersions` list if all of its versions are transferred to mocks; a `TestUnit` placed in a Learning Path must retain at least one structurally valid rotation version.
+Test versions use an admin-only inactive/active lifecycle, but student publication still belongs to the owning container and Learning Path. Creating a `TestUnit` requires at least one existing, structurally valid rotation version. Later additions and normal-version duplicates begin inactive. An unplaced container may have an empty `rotationVersions` list if all active versions are transferred to mocks or deactivated; a `TestUnit` placed in a Learning Path must retain at least one structurally valid rotation version.
 
 - Placing or retaining a normal test in a Learning Path validates every `rotationVersions` reference and requires at least one structurally valid rotation version.
 - A version may appear in at most one `TestUnit.rotationVersions` list.
@@ -607,6 +612,8 @@ Test versions do not have an independent published status. Creating a `TestUnit`
 - An active standalone mock must reference a structurally valid version that is not simultaneously assigned to another active delivery context.
 - A live mock must have `status: 'active'`; archived mocks must have `isLive: false` and do not own delivery.
 - Making the last rotation version of a placed normal test mock-only is rejected.
+- Deactivating the last rotation version of a placed normal test is rejected.
+- Activating a draft reruns the complete structural, exercise-eligibility, ID, and scoring validation before it can enter rotation.
 - Deleting a test version is blocked while a normal test, active or archived mock, or in-progress attempt still references it.
 - Deleting a normal lesson or test is blocked while its ID appears in the active Learning Path's `unitIds`; the rejection names the Learning Path and points the admin at removing it from the path first. This mirrors the existing test-version deletion guard.
 - The dashboard read path still defends against a dangling `unitIds` entry that slips past the guard: it skips the missing unit, logs an admin-visible configuration error, and preserves the ordering and gating of the remaining units rather than failing the whole projection.

@@ -2,13 +2,22 @@ import type { DocumentSnapshot, Firestore } from 'firebase-admin/firestore';
 import { TEST_VERSIONS_COLLECTION } from '@/shared/constants/firestore';
 import { normalizeLearningUnit } from '@/src/lib/learning-units/domain';
 import type { TestUnit } from '@/src/types/learning-unit';
-import type { MockTest, TestVersion, TestVersionSummary } from '@/src/types/test';
+import type {
+  MockTest,
+  TestVersion,
+  TestVersionDraft,
+  TestVersionDraftSummary,
+  TestVersionSummary,
+} from '@/src/types/test';
 import { TEST_VERSION_SUMMARY_FIELDS, getTestVersionSummaryFields } from './domain';
 import { TestServiceError } from './errors';
 import {
   mockTestDocumentSchema,
+  testVersionDraftDocumentSchema,
+  testVersionDraftSummaryDocumentSchema,
   testVersionDocumentSchema,
   testVersionSummaryDocumentSchema,
+  type TestVersionDraftInput,
   type TestVersionInput,
 } from './schemas';
 
@@ -44,6 +53,34 @@ export function parseVersionSummarySnapshot(snapshot: DocumentSnapshot): TestVer
     );
   }
   return parsed.data;
+}
+
+export function parseVersionDraftSnapshot(snapshot: DocumentSnapshot): TestVersionDraft {
+  if (!snapshot.exists) {
+    throw new TestServiceError('TEST_VERSION_NOT_FOUND', 'Inactive test version not found', 404);
+  }
+
+  const parsed = testVersionDraftDocumentSchema.safeParse({ ...snapshot.data(), id: snapshot.id });
+  if (!parsed.success) {
+    throw new TestServiceError(
+      'STALE_TEST_VERSION_DATA',
+      `Inactive test version ${snapshot.id} contains invalid persisted data`,
+      409
+    );
+  }
+  return parsed.data as TestVersionDraft;
+}
+
+export function parseVersionDraftSummarySnapshot(snapshot: DocumentSnapshot): TestVersionDraftSummary {
+  const parsed = testVersionDraftSummaryDocumentSchema.safeParse({ ...snapshot.data(), id: snapshot.id });
+  if (!parsed.success) {
+    throw new TestServiceError(
+      'STALE_TEST_VERSION_DATA',
+      `Inactive test version ${snapshot.id} contains invalid persisted summary data`,
+      409
+    );
+  }
+  return parsed.data as TestVersionDraftSummary;
 }
 
 export function parseTestSnapshot(snapshot: DocumentSnapshot): TestUnit {
@@ -122,4 +159,23 @@ export function buildVersion(
     updatedAt: timestamp,
     updatedBy: actorId,
   }) as TestVersion;
+}
+
+export function buildVersionDraft(
+  now: () => string,
+  testId: string,
+  input: TestVersionDraftInput,
+  actorId: string,
+  created?: Pick<TestVersionDraft, 'createdAt' | 'createdBy'>
+): TestVersionDraft {
+  const timestamp = now();
+  return testVersionDraftDocumentSchema.parse({
+    ...input,
+    testId,
+    ...getTestVersionSummaryFields(input.pages),
+    createdAt: created?.createdAt ?? timestamp,
+    createdBy: created?.createdBy ?? actorId,
+    updatedAt: timestamp,
+    updatedBy: actorId,
+  }) as TestVersionDraft;
 }

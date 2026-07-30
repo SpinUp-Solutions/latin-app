@@ -1,7 +1,8 @@
 import type {
   CreateTestWithVersionInput,
   StartTestAttemptInput,
-  TestVersionInput,
+  TestVersionDraftInput,
+  UpdateTestVersionDraftInput,
   UpdateTestWithVersionInput,
   UpdateTestUnitInput,
 } from '@/src/lib/tests/schemas';
@@ -13,6 +14,7 @@ import type {
   TestUnitDetail,
   TestUnitSummary,
   TestVersion,
+  TestVersionDraft,
 } from '@/src/types/test';
 import type { ExerciseAnswer } from '@/src/types/runtime-mode';
 import { appApi } from './appApi';
@@ -63,8 +65,8 @@ export const testApi = appApi.injectEndpoints({
         result ? [{ type: 'LearningUnit', id }, { type: 'LearningUnit', id: 'LIST' }, STUDENT_DASHBOARD_TAG] : [],
     }),
     createTestVersion: builder.mutation<
-      { test: TestUnit; version: TestVersion },
-      { testId: string; version: TestVersionInput }
+      { test: TestUnit; version: TestVersionDraft },
+      { testId: string; version: TestVersionDraftInput }
     >({
       query: ({ testId, version }) => ({
         url: `/admin/tests/${testId}/versions`,
@@ -87,7 +89,7 @@ export const testApi = appApi.injectEndpoints({
       providesTags: (result, error, versionId) => [{ type: 'TestVersion', id: versionId }],
     }),
     duplicateTestVersion: builder.mutation<
-      { test: TestUnit; version: TestVersion },
+      { test: TestUnit; version: TestVersionDraft },
       { testId: string; versionId: string; requestId: string; name?: string }
     >({
       query: ({ testId, versionId, ...body }) => ({
@@ -101,6 +103,63 @@ export const testApi = appApi.injectEndpoints({
               { type: 'LearningUnit', id: testId },
               { type: 'LearningUnit', id: 'LIST' },
               { type: 'TestVersion', id: result.version.id },
+              { type: 'TestVersion', id: testVersionsForTestTag(testId) },
+              STUDENT_DASHBOARD_TAG,
+            ]
+          : [],
+    }),
+    updateTestVersionDraft: builder.mutation<
+      { test: TestUnit; version: TestVersionDraft },
+      { testId: string; versionId: string; changes: UpdateTestVersionDraftInput }
+    >({
+      query: ({ testId, versionId, changes }) => ({
+        url: `/admin/tests/${testId}/versions/${versionId}`,
+        method: 'PATCH',
+        body: changes,
+      }),
+      invalidatesTags: (result, error, { testId, versionId }) =>
+        result
+          ? [
+              { type: 'LearningUnit', id: testId },
+              { type: 'LearningUnit', id: 'LIST' },
+              { type: 'TestVersion', id: versionId },
+              { type: 'TestVersion', id: testVersionsForTestTag(testId) },
+            ]
+          : [],
+    }),
+    activateTestVersion: builder.mutation<
+      { test: TestUnit; version: TestVersion },
+      { testId: string; versionId: string }
+    >({
+      query: ({ testId, versionId }) => ({
+        url: `/admin/tests/${testId}/versions/${versionId}/activate`,
+        method: 'POST',
+      }),
+      invalidatesTags: (result, error, { testId, versionId }) =>
+        result
+          ? [
+              { type: 'LearningUnit', id: testId },
+              { type: 'LearningUnit', id: 'LIST' },
+              { type: 'TestVersion', id: versionId },
+              { type: 'TestVersion', id: testVersionsForTestTag(testId) },
+              STUDENT_DASHBOARD_TAG,
+            ]
+          : [],
+    }),
+    deactivateTestVersion: builder.mutation<
+      { test: TestUnit; version: TestVersionDraft },
+      { testId: string; versionId: string }
+    >({
+      query: ({ testId, versionId }) => ({
+        url: `/admin/tests/${testId}/versions/${versionId}/deactivate`,
+        method: 'POST',
+      }),
+      invalidatesTags: (result, error, { testId, versionId }) =>
+        result
+          ? [
+              { type: 'LearningUnit', id: testId },
+              { type: 'LearningUnit', id: 'LIST' },
+              { type: 'TestVersion', id: versionId },
               { type: 'TestVersion', id: testVersionsForTestTag(testId) },
               STUDENT_DASHBOARD_TAG,
             ]
@@ -167,6 +226,9 @@ export const {
   useCreateTestVersionMutation,
   useGetTestVersionByIdQuery,
   useDuplicateTestVersionMutation,
+  useUpdateTestVersionDraftMutation,
+  useActivateTestVersionMutation,
+  useDeactivateTestVersionMutation,
   useStartTestAttemptMutation,
   useSaveTestAttemptAnswersMutation,
   useSubmitTestAttemptMutation,

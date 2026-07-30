@@ -12,6 +12,7 @@ import { getParadigmPOS } from '@/src/utils/paradigm';
 import type { GeneratedFormIdentificationExercise } from '@/src/types/exercises/generated-form-identification';
 import type { FormParadigm, ParadigmConfig, ParadigmConfigs } from '@/src/types/exercises/paradigm';
 import type { GeneratorFilters, FormSelection } from '@/src/types/exercises/base';
+import { normalizeVerbFormStepsForSelectedPaths } from '@/src/utils/exercises/verbFormStepCompatibility';
 
 export function useFormIdentificationEditor(editingContent: GeneratedFormIdentificationExercise) {
   const dispatch = useAppDispatch();
@@ -104,7 +105,17 @@ export function useFormIdentificationEditor(editingContent: GeneratedFormIdentif
           steps: [...defaultSteps],
         };
 
-        draft.data.paradigmConfigs[paradigm] = { ...currentConfig, ...updates };
+        const nextConfig = { ...currentConfig, ...updates };
+        draft.data.paradigmConfigs[paradigm] =
+          paradigm === 'verb-conjugation'
+            ? {
+                ...nextConfig,
+                steps: normalizeVerbFormStepsForSelectedPaths(
+                  nextConfig.formSelection?.selectedCellPaths ?? [],
+                  nextConfig.steps
+                ),
+              }
+            : nextConfig;
       });
       updateContent(nextContent);
     },
@@ -117,6 +128,22 @@ export function useFormIdentificationEditor(editingContent: GeneratedFormIdentif
     },
     [handleUpdateParadigmConfig]
   );
+
+  useEffect(() => {
+    const verbConfig = editingContent.data.paradigmConfigs?.['verb-conjugation'];
+    if (!verbConfig) return;
+
+    const normalizedSteps = normalizeVerbFormStepsForSelectedPaths(
+      verbConfig.formSelection?.selectedCellPaths ?? [],
+      verbConfig.steps
+    );
+    const unchanged =
+      normalizedSteps.length === verbConfig.steps.length &&
+      normalizedSteps.every((step, index) => step === verbConfig.steps[index]);
+    if (!unchanged) {
+      handleUpdateParadigmConfig('verb-conjugation', { steps: normalizedSteps });
+    }
+  }, [editingContent.data.paradigmConfigs, handleUpdateParadigmConfig]);
 
   const handleGlobalFiltersChange = useCallback(
     (updates: Partial<GeneratorFilters>) => {

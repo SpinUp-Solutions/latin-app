@@ -1,6 +1,6 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import LiveLessonsPage from '@/src/app/admin/lessons/live/page';
+import LiveLessonsPage from '@/src/app/admin/(shell)/lessons/live/page';
 import type { AdminLearningPathView } from '@/src/types/learning-unit';
 import type { LessonSummary } from '@/src/types/lesson';
 import type { TestUnitSummary } from '@/src/types/test';
@@ -247,7 +247,11 @@ describe('Learning delivery organizer', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Add Lesson two to Learning Path' }));
 
-    expect(fireEvent.click(screen.getByRole('link', { name: 'Back to Admin' }))).toBe(false);
+    const navigationLink = document.createElement('a');
+    navigationLink.href = '/admin';
+    document.body.append(navigationLink);
+    expect(fireEvent.click(navigationLink)).toBe(false);
+    navigationLink.remove();
     const beforeUnload = new Event('beforeunload', { cancelable: true });
     expect(fireEvent(window, beforeUnload)).toBe(false);
     expect(beforeUnload.defaultPrevented).toBe(true);

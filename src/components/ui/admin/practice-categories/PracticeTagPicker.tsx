@@ -100,7 +100,10 @@ export function PracticeTagPicker({
                   <Badge
                     key={tag.id}
                     variant={tag.status === 'archived' ? 'outline' : 'secondary'}
-                    className="max-w-28 px-1.5 py-0 text-[11px] font-normal">
+                    className={cn(
+                      'max-w-28 border-primary/15 bg-primary/[0.08] px-1.5 py-0.5 text-[11px] font-medium text-primary shadow-none',
+                      tag.status === 'archived' && 'border-border bg-roman-marble text-roman-stone'
+                    )}>
                     <span className="truncate">{tag.name}</span>
                   </Badge>
                 ))}
@@ -144,7 +147,9 @@ export function PracticeTagPicker({
                       className="gap-2 text-gray-500">
                       <Checkbox checked={selectedSet.has(tag.id)} tabIndex={-1} className="pointer-events-none" />
                       <span className="min-w-0 flex-1 truncate">{tag.name}</span>
-                      <Badge variant="outline" className="px-1 py-0 text-[10px]">
+                      <Badge
+                        variant="outline"
+                        className="border-border bg-roman-marble px-1.5 py-0.5 text-[10px] text-roman-stone">
                         Archived
                       </Badge>
                     </CommandItem>

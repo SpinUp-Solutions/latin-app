@@ -21,11 +21,20 @@ const optionalDescriptionSchema = z
 const testVersionContentShape = {
   id: firestoreDocumentIdSchema,
   name: z.string().trim().min(1),
-  pages: z.array(pageSchema).min(1),
+  pages: z.array(pageSchema).min(1, 'A test version must contain at least one page'),
   vocabularyPoolId: firestoreDocumentIdSchema.nullable().optional(),
 };
 
 const testVersionInputShapeSchema = z.object(testVersionContentShape).strict();
+
+export const testVersionDraftInputSchema = z
+  .object({
+    ...testVersionContentShape,
+    pages: z.array(pageSchema),
+  })
+  .strict();
+
+export const updateTestVersionDraftInputSchema = testVersionDraftInputSchema.omit({ id: true });
 
 function refineTestVersionContent(
   value: Pick<z.infer<typeof testVersionInputShapeSchema>, 'pages'>,
@@ -124,6 +133,38 @@ export const testVersionSummaryDocumentSchema = testVersionDocumentShapeSchema.o
 
 export const testVersionDocumentSchema = testVersionDocumentShapeSchema.superRefine((value, context) => {
   refineTestVersionContent(value, context);
+  const derived = getTestVersionSummaryFields(value.pages);
+
+  (Object.keys(derived) as (keyof typeof derived)[]).forEach(field => {
+    if (value[field] !== derived[field]) {
+      context.addIssue({
+        code: 'custom',
+        message: `${field} must be derived from pages`,
+        path: [field],
+      });
+    }
+  });
+});
+
+const testVersionDraftDocumentShapeSchema = z
+  .object({
+    ...testVersionContentShape,
+    testId: firestoreDocumentIdSchema,
+    pages: z.array(pageSchema),
+    totalPages: z.number().int().nonnegative(),
+    totalItems: z.number().int().nonnegative(),
+    totalExercises: z.number().int().nonnegative(),
+    totalPoints: z.number(),
+    createdAt: optionalAuditFieldSchema,
+    createdBy: optionalAuditFieldSchema,
+    updatedAt: optionalAuditFieldSchema,
+    updatedBy: optionalAuditFieldSchema,
+  })
+  .strict();
+
+export const testVersionDraftSummaryDocumentSchema = testVersionDraftDocumentShapeSchema.omit({ pages: true });
+
+export const testVersionDraftDocumentSchema = testVersionDraftDocumentShapeSchema.superRefine((value, context) => {
   const derived = getTestVersionSummaryFields(value.pages);
 
   (Object.keys(derived) as (keyof typeof derived)[]).forEach(field => {
@@ -394,6 +435,8 @@ export const updateTestWithVersionInputSchema = z
 
 export type TestVersionInput = z.infer<typeof testVersionInputSchema>;
 export type UpdateTestVersionInput = z.infer<typeof updateTestVersionInputSchema>;
+export type TestVersionDraftInput = z.infer<typeof testVersionDraftInputSchema>;
+export type UpdateTestVersionDraftInput = z.infer<typeof updateTestVersionDraftInputSchema>;
 export type DuplicateTestVersionInput = z.infer<typeof duplicateTestVersionInputSchema>;
 export type CreateTestUnitInput = z.infer<typeof createTestUnitInputSchema>;
 export type CreateTestWithVersionInput = z.infer<typeof createTestWithVersionSchema>;

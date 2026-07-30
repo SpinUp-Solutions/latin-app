@@ -31,6 +31,7 @@ import {
 } from '@/src/utils/contentTypeConstants';
 import { ContentEditor } from './ContentEditor';
 import { useClipboard, ClipboardPanel } from '../core/clipboard';
+import { normalizeGeneratedFormIdentificationPages } from '@/src/utils/exercises/formIdentificationCompatibility';
 
 interface LessonBuilderProps {
   initialLesson?: Lesson;
@@ -50,7 +51,10 @@ export const LessonBuilder: React.FC<LessonBuilderProps> = ({ initialLesson, onS
   }
 
   const handleSaveLesson = () => {
-    onSave(currentLesson);
+    onSave({
+      ...currentLesson,
+      pages: normalizeGeneratedFormIdentificationPages(currentLesson.pages),
+    });
   };
 
   const handleUpdateLessonInfo = (

@@ -5,6 +5,7 @@ export const FormIdentificationStepSchema = z.enum([
   'declension',
   'tense',
   'voice',
+  'verb_form',
   'mood',
   'person',
   'number',

@@ -12,7 +12,17 @@ export const PARADIGM_STEPS: Readonly<Record<FormParadigm, readonly FormIdentifi
 } as const;
 
 export const PARADIGM_AVAILABLE_STEPS: Readonly<Record<FormParadigm, readonly FormIdentificationStep[]>> = {
-  'verb-conjugation': ['conjugation', 'tense', 'voice', 'mood', 'person', 'number', 'case', 'gender'],
+  'verb-conjugation': [
+    'conjugation',
+    'verb_form',
+    'tense',
+    'voice',
+    'mood',
+    'person',
+    'number',
+    'case',
+    'gender',
+  ],
   'noun-declension': PARADIGM_STEPS['noun-declension'],
   'adjective-declension': PARADIGM_STEPS['adjective-declension'],
   'pronoun-personal': PARADIGM_STEPS['pronoun-personal'],

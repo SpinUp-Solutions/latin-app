@@ -46,8 +46,8 @@ function SelectorChip({ category }: { category: PracticeCategorySummary }) {
     <Badge
       variant={archived ? 'outline' : 'secondary'}
       className={cn(
-        'max-w-[9rem] gap-1 whitespace-nowrap px-2 py-0 text-xs font-normal',
-        archived && 'border-gray-300 bg-gray-100 text-gray-500'
+        'max-w-[9rem] whitespace-nowrap border-primary/15 bg-primary/[0.08] px-2 py-1 text-xs font-medium text-primary shadow-[0_1px_2px_rgb(15_23_42/0.04)]',
+        archived && 'border-border bg-roman-marble text-roman-stone shadow-none'
       )}>
       <span className="truncate">{category.name}</span>
       {archived && <span className="font-medium">Archived</span>}
@@ -148,7 +148,7 @@ export function PracticeCategorySelector({
         />
         <span className={cn('min-w-0 flex-1 truncate', archived && 'text-gray-500')}>{category.name}</span>
         {archived && (
-          <Badge variant="outline" className="border-gray-300 bg-gray-100 text-[10px] text-gray-500">
+          <Badge variant="outline" className="border-border bg-roman-marble px-1.5 py-0.5 text-[10px] text-roman-stone">
             Archived
           </Badge>
         )}
@@ -266,7 +266,9 @@ export function PracticeCategorySelector({
                   <div className="flex items-center gap-1.5">
                     <span className="truncate text-xs font-medium text-gray-800">{category.name}</span>
                     {category.status === 'archived' && (
-                      <Badge variant="outline" className="px-1 py-0 text-[10px] text-gray-500">
+                      <Badge
+                        variant="outline"
+                        className="border-border bg-roman-marble px-1.5 py-0.5 text-[10px] text-roman-stone">
                         Archived
                       </Badge>
                     )}

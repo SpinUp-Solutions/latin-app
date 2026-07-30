@@ -4,7 +4,7 @@ import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import lessonEditorReducer from '@/src/store/slices/lessonEditorSlice';
 import { TestVersionEditor } from '@/src/components/ui/admin/TestVersionEditor';
-import VersionEditorPage from '@/src/app/admin/tests/edit/[id]/versions/[versionId]/edit/page';
+import VersionEditorPage from '@/src/app/admin/(shell)/tests/edit/[id]/versions/[versionId]/edit/page';
 
 const routerPush = jest.fn();
 const editorProps = jest.fn();
@@ -74,17 +74,20 @@ const test = {
 const version = {
   id: 'version-1',
   name: 'Version A',
-  pages: [{ id: 'page-1', title: 'Page A', items: [] }],
+  pages: [
+    { id: 'page-1', title: 'Page A', items: [{ id: 'question-1', type: 'multiple-choice' as const, maxPoints: 1 }] },
+  ],
   totalPages: 1,
-  totalItems: 0,
-  totalExercises: 0,
-  totalPoints: 0,
+  totalItems: 1,
+  totalExercises: 1,
+  totalPoints: 1,
 };
 
 jest.mock('@/src/store/api/testApi', () => ({
-  useGetTestByIdQuery: () => ({ data: { test, versions: [], mocks: [] }, isLoading: false }),
+  useGetTestByIdQuery: () => ({ data: { test, versions: [version], drafts: [], mocks: [] }, isLoading: false }),
   useGetTestVersionByIdQuery: () => ({ data: version, isLoading: false, isError: false }),
   useUpdateTestMutation: () => [jest.fn(), { isLoading: false }],
+  useUpdateTestVersionDraftMutation: () => [jest.fn(), { isLoading: false }],
   useDuplicateTestVersionMutation: () => [jest.fn(), { isLoading: false }],
 }));
 
@@ -160,6 +163,64 @@ describe('normal version editor mock-assignment contract', () => {
 
     expect(screen.getByLabelText('Version name')).toHaveValue('Newer unsaved name');
     expect(screen.getByRole('button', { name: 'Discard changes' })).toBeEnabled();
+  });
+
+  it('explains invalid test content before sending a save request', async () => {
+    const onSave = jest.fn();
+    const store = configureStore({ reducer: { lessonEditor: lessonEditorReducer } });
+    const emptyVersion = {
+      ...version,
+      pages: [{ id: 'page-1', title: 'Page A', items: [] }],
+      totalItems: 0,
+      totalExercises: 0,
+      totalPoints: 0,
+    };
+
+    render(
+      <Provider store={store}>
+        <TestVersionEditor initialTest={test} initialVersion={emptyVersion} onSave={onSave} />
+      </Provider>
+    );
+
+    await screen.findByRole('heading', { name: 'Test Version Editor' });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Test' }));
+
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent('A test version must contain at least one scored exercise');
+  });
+
+  it('explicitly saves incomplete inactive work as a draft', async () => {
+    const onSave = jest.fn().mockResolvedValue(undefined);
+    const store = configureStore({ reducer: { lessonEditor: lessonEditorReducer } });
+    const emptyVersion = {
+      ...version,
+      pages: [],
+      totalPages: 0,
+      totalItems: 0,
+      totalExercises: 0,
+      totalPoints: 0,
+    };
+
+    render(
+      <Provider store={store}>
+        <TestVersionEditor
+          initialTest={test}
+          initialVersion={emptyVersion}
+          onSave={onSave}
+          draftMode
+          hideTestSettings
+        />
+      </Provider>
+    );
+
+    await screen.findByRole('heading', { name: 'Test Version Editor' });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
+
+    await waitFor(() =>
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({ version: expect.objectContaining({ id: 'version-1', pages: [] }) })
+      )
+    );
   });
 
   it('saves the selected vocabulary pool with the version', async () => {

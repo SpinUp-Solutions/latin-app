@@ -1,4 +1,7 @@
 import { POST as addVersion } from '@/src/app/api/admin/tests/[id]/versions/route';
+import { PATCH as updateDraft } from '@/src/app/api/admin/tests/[id]/versions/[versionId]/route';
+import { POST as activateVersion } from '@/src/app/api/admin/tests/[id]/versions/[versionId]/activate/route';
+import { POST as deactivateVersion } from '@/src/app/api/admin/tests/[id]/versions/[versionId]/deactivate/route';
 import { POST as duplicateVersion } from '@/src/app/api/admin/tests/[id]/versions/[versionId]/duplicate/route';
 import { PATCH as updateSettings } from '@/src/app/api/admin/tests/[id]/settings/route';
 
@@ -19,6 +22,9 @@ jest.mock('@/src/lib/verifyAdminAccess', () => ({
 jest.mock('@/src/lib/tests/authoring-service', () => ({
   testAuthoringService: {
     addTestVersion: jest.fn(),
+    updateTestVersionDraft: jest.fn(),
+    activateTestVersion: jest.fn(),
+    deactivateTestVersion: jest.fn(),
     duplicateTestVersion: jest.fn(),
     updateTest: jest.fn(),
   },
@@ -44,10 +50,23 @@ describe('admin normal-test version routes', () => {
 
   it('authenticates and delegates retry-stable add, duplicate, and zero-rotation settings writes', async () => {
     service().addTestVersion.mockResolvedValue({ test: {}, version: {} });
+    service().updateTestVersionDraft.mockResolvedValue({ test: {}, version: {} });
+    service().activateTestVersion.mockResolvedValue({ test: {}, version: {} });
+    service().deactivateTestVersion.mockResolvedValue({ test: {}, version: {} });
     service().duplicateTestVersion.mockResolvedValue({ test: {}, version: {} });
     service().updateTest.mockResolvedValue({});
     expect((await addVersion(request(version), testContext)).status).toBe(201);
     expect((await duplicateVersion(request({ requestId: 'retry-1', name: 'Copy' }), versionContext)).status).toBe(201);
+    expect(
+      (
+        await updateDraft(
+          request({ name: 'Draft', pages: [] }),
+          versionContext
+        )
+      ).status
+    ).toBe(200);
+    expect((await activateVersion(request(null), versionContext)).status).toBe(200);
+    expect((await deactivateVersion(request(null), versionContext)).status).toBe(200);
     expect(
       (await updateSettings(request({ title: 'Empty but editable', passingPercentage: null }), testContext)).status
     ).toBe(200);
@@ -58,6 +77,14 @@ describe('admin normal-test version routes', () => {
       { requestId: 'retry-1', name: 'Copy' },
       'admin-1'
     );
+    expect(service().updateTestVersionDraft).toHaveBeenCalledWith(
+      'test-1',
+      'version-1',
+      { name: 'Draft', pages: [] },
+      'admin-1'
+    );
+    expect(service().activateTestVersion).toHaveBeenCalledWith('test-1', 'version-1', 'admin-1');
+    expect(service().deactivateTestVersion).toHaveBeenCalledWith('test-1', 'version-1', 'admin-1');
     expect(service().updateTest).toHaveBeenCalledWith(
       'test-1',
       { title: 'Empty but editable', passingPercentage: null },

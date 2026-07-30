@@ -1,12 +1,24 @@
 import { act, render, screen } from '@testing-library/react';
-import CreateTestPage from '@/src/app/admin/tests/create/page';
-import CreateMockPage from '@/src/app/admin/mock-tests/create/page';
-import CreateVersionPage from '@/src/app/admin/tests/edit/[id]/versions/create/page';
+import CreateTestPage from '@/src/app/admin/(shell)/tests/create/page';
+import CreateMockPage from '@/src/app/admin/(shell)/mock-tests/create/page';
+import CreateVersionPage from '@/src/app/admin/(shell)/tests/edit/[id]/versions/create/page';
 
 jest.mock('@/src/components/auth/withAdminAuth', () => ({ withAdminAuth: (Component: unknown) => Component }));
 jest.mock('@/src/components/ui/admin', () => ({
-  TestVersionEditor: (props: { creationScope?: string; defaultVersionName?: string }) =>
-    <div data-testid="version-editor" data-scope={props.creationScope} data-name={props.defaultVersionName} />,
+  TestVersionEditor: (props: {
+    creationScope?: string;
+    defaultVersionName?: string;
+    draftMode?: boolean;
+    hideTestSettings?: boolean;
+  }) => (
+    <div
+      data-testid="version-editor"
+      data-scope={props.creationScope}
+      data-name={props.defaultVersionName}
+      data-draft={String(Boolean(props.draftMode))}
+      data-hide-settings={String(Boolean(props.hideTestSettings))}
+    />
+  ),
 }));
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 jest.mock('sonner', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
@@ -20,16 +32,14 @@ jest.mock('@/src/store/api/mockTestApi', () => ({
 }));
 
 describe('test create route editor identities', () => {
-  it('scopes normal-test creation and keeps its header navigation discoverable', () => {
+  it('scopes normal-test creation', () => {
     render(<CreateTestPage />);
     expect(screen.getByTestId('version-editor')).toHaveAttribute('data-scope', 'normal-test-create');
-    expect(screen.getByRole('link', { name: 'Back to Tests' })).toHaveAttribute('href', '/admin/tests/manage');
   });
 
   it('scopes standalone-mock creation separately', () => {
     render(<CreateMockPage />);
     expect(screen.getByTestId('version-editor')).toHaveAttribute('data-scope', 'standalone-mock-create');
-    expect(screen.getByRole('link', { name: 'Back to Mock Tests' })).toHaveAttribute('href', '/admin/mock-tests');
   });
 
   it('scopes an added version to its parent route and supplies a fresh-version name', async () => {
@@ -39,6 +49,7 @@ describe('test create route editor identities', () => {
     });
     expect(screen.getByTestId('version-editor')).toHaveAttribute('data-scope', 'normal-test-test-1-version-create');
     expect(screen.getByTestId('version-editor')).toHaveAttribute('data-name', 'New Version');
-    expect(screen.getByRole('link', { name: 'Back to test overview' })).toHaveAttribute('href', '/admin/tests/edit/test-1');
+    expect(screen.getByTestId('version-editor')).toHaveAttribute('data-draft', 'true');
+    expect(screen.getByTestId('version-editor')).toHaveAttribute('data-hide-settings', 'true');
   });
 });

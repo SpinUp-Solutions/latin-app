@@ -1,15 +1,29 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import { UnsavedNavigationDialog } from '@/src/components/ui/core/UnsavedNavigationDialog';
 import { useUnsavedNavigationGuard } from '@/src/hooks/useUnsavedNavigationGuard';
 import { clearStableTestEditorIdentity, getStableTestEditorIdentity } from '@/src/lib/tests/editor-session';
 
-function GuardHarness({ dirty = true }: { dirty?: boolean }) {
-  useUnsavedNavigationGuard(dirty, 'Unsaved test changes');
-  return <a href="/admin/tests/manage">Header back link</a>;
+function GuardHarness({ dirty = true, onNavigate = () => undefined }: { dirty?: boolean; onNavigate?: () => void }) {
+  const guard = useUnsavedNavigationGuard(dirty, 'Unsaved test changes');
+  return (
+    <>
+      <a
+        href="/admin/tests/manage"
+        onClick={event => {
+          event.preventDefault();
+          onNavigate();
+        }}>
+        Header back link
+      </a>
+      <UnsavedNavigationDialog guard={guard} />
+    </>
+  );
 }
 
 describe('test editor navigation and route identities', () => {
   beforeEach(() => {
     sessionStorage.clear();
+    window.history.replaceState({}, '', '/admin/tests/edit/test-1');
     jest.restoreAllMocks();
   });
 
@@ -27,41 +41,46 @@ describe('test editor navigation and route identities', () => {
     expect(sessionStorage.getItem(`test_editor_identity:${scope}:version`)).toBeNull();
   });
 
-  it('guards header links and lets a cancelled click remain on the editor', () => {
-    const confirm = jest.spyOn(window, 'confirm').mockReturnValue(false);
-    render(<GuardHarness />);
+  it('guards header links with an in-app dialog and lets Stay remain on the editor', () => {
+    const onNavigate = jest.fn();
+    render(<GuardHarness onNavigate={onNavigate} />);
     expect(fireEvent.click(screen.getByRole('link', { name: 'Header back link' }))).toBe(false);
-    expect(confirm).toHaveBeenCalledWith('Unsaved test changes');
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('Unsaved test changes');
+    fireEvent.click(screen.getByRole('button', { name: 'Stay on page' }));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(onNavigate).not.toHaveBeenCalled();
   });
 
-  it('allows a confirmed link with one prompt', () => {
-    const confirm = jest.spyOn(window, 'confirm').mockReturnValue(true);
+  it('replays a link after Leave is chosen in the app dialog', () => {
+    const onNavigate = jest.fn();
+    render(<GuardHarness onNavigate={onNavigate} />);
+    expect(fireEvent.click(screen.getByRole('link', { name: 'Header back link' }))).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Leave page' }));
+    expect(onNavigate).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses one history sentinel and permits Back after the app dialog is confirmed', () => {
+    const go = jest.spyOn(window.history, 'go').mockImplementation(() => undefined);
     render(<GuardHarness />);
-    expect(fireEvent.click(screen.getByRole('link', { name: 'Header back link' }))).toBe(true);
-    expect(confirm).toHaveBeenCalledTimes(1);
+    window.history.replaceState({}, '', window.location.href);
+    fireEvent(window, new PopStateEvent('popstate'));
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    expect(go).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Leave page' }));
+    expect(go).toHaveBeenCalledWith(-2);
+    fireEvent(window, new PopStateEvent('popstate'));
+    expect(go).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
 
-  it('uses one history sentinel and permits the second pop without double prompting', () => {
-    const confirm = jest.spyOn(window, 'confirm').mockReturnValue(true);
-    const back = jest.spyOn(window.history, 'back').mockImplementation(() => undefined);
-    render(<GuardHarness />);
-    fireEvent(window, new PopStateEvent('popstate'));
-    expect(confirm).toHaveBeenCalledTimes(1);
-    expect(back).toHaveBeenCalledTimes(1);
-    fireEvent(window, new PopStateEvent('popstate'));
-    expect(confirm).toHaveBeenCalledTimes(1);
-    expect(back).toHaveBeenCalledTimes(1);
-  });
-
-  it('restores the sentinel after a cancelled Back with one prompt', () => {
-    const confirm = jest.spyOn(window, 'confirm').mockReturnValue(false);
-    const back = jest.spyOn(window.history, 'back').mockImplementation(() => undefined);
+  it('restores the sentinel after Stay is chosen for Back navigation', () => {
     const pushState = jest.spyOn(window.history, 'pushState');
     render(<GuardHarness />);
     const pushesAfterMount = pushState.mock.calls.length;
+    window.history.replaceState({}, '', window.location.href);
     fireEvent(window, new PopStateEvent('popstate'));
-    expect(confirm).toHaveBeenCalledTimes(1);
-    expect(back).not.toHaveBeenCalled();
+    expect(pushState).toHaveBeenCalledTimes(pushesAfterMount + 1);
+    fireEvent.click(screen.getByRole('button', { name: 'Stay on page' }));
     expect(pushState).toHaveBeenCalledTimes(pushesAfterMount + 1);
   });
 

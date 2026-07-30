@@ -7,6 +7,7 @@ import {
   MOCK_TEST_ORDERING_COLLECTION,
   MOCK_TEST_ORDERING_DOCUMENT_ID,
   MOCK_TESTS_COLLECTION,
+  TEST_VERSION_DRAFTS_COLLECTION,
   TEST_VERSIONS_COLLECTION,
 } from '@/shared/constants/firestore';
 import { learningPathDocumentSchema, testUnitSchema } from '@/src/lib/learning-units/schemas';
@@ -69,6 +70,10 @@ export class MockTestService {
 
   private get versions() {
     return this.db.collection(TEST_VERSIONS_COLLECTION);
+  }
+
+  private get drafts() {
+    return this.db.collection(TEST_VERSION_DRAFTS_COLLECTION);
   }
 
   private get units() {
@@ -370,15 +375,17 @@ export class MockTestService {
     const parsed = createStandaloneMockInputSchema.parse(input);
     const mockRef = this.mocks.doc(parsed.mock.id);
     const versionRef = this.versions.doc(parsed.version.id);
+    const draftRef = this.drafts.doc(parsed.version.id);
     return this.db.runTransaction(async transaction => {
       const ordering = await transaction.get(this.mockOrdering);
-      const [existingMock, existingVersion] = await Promise.all([
+      const [existingMock, existingVersion, existingDraft] = await Promise.all([
         transaction.get(mockRef),
         transaction.get(versionRef),
+        transaction.get(draftRef),
       ]);
       if (existingMock.exists)
         throw new TestServiceError('MOCK_TEST_ALREADY_EXISTS', 'A mock with this ID already exists', 409);
-      if (existingVersion.exists)
+      if (existingVersion.exists || existingDraft.exists)
         throw new TestServiceError('TEST_VERSION_ALREADY_EXISTS', 'A test version with this ID already exists', 409);
       const version = this.buildVersion(parsed.version, actorId);
       const mock = this.buildMock(
@@ -576,12 +583,14 @@ export class MockTestService {
       .slice(0, 48)}`;
     const mockRef = this.mocks.doc(mockId);
     const targetVersionRef = this.versions.doc(versionId);
+    const targetDraftRef = this.drafts.doc(versionId);
     return this.db.runTransaction(async transaction => {
       await transaction.get(this.mockOrdering);
       const mockSnapshot = await transaction.get(mockRef);
       const mock = parseMockSnapshot(mockSnapshot);
-      const [targetSnapshot, sourceSnapshot] = await Promise.all([
+      const [targetSnapshot, targetDraftSnapshot, sourceSnapshot] = await Promise.all([
         transaction.get(targetVersionRef),
+        transaction.get(targetDraftRef),
         transaction.get(this.versions.doc(mock.versionId)),
       ]);
       const test = parseTestSnapshot(await transaction.get(this.units.doc(testId)));
@@ -599,6 +608,9 @@ export class MockTestService {
           );
         }
         return { version: existing, test, mock };
+      }
+      if (targetDraftSnapshot.exists) {
+        throw new TestServiceError('TEST_VERSION_ALREADY_EXISTS', 'The duplicate operation ID is already in use', 409);
       }
       const source = parseVersionSnapshot(sourceSnapshot);
       const pages = source.pages.map(page => {

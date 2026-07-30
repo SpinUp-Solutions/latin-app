@@ -1,9 +1,9 @@
 import React from 'react';
-import { Card, CardContent } from '@/src/components/ui/card';
 import { Loader2, Search } from 'lucide-react';
 import { AdvancedWordCard } from './AdvancedWordCard';
 import { useInfiniteScroll } from '@/src/hooks/useInfiniteScroll';
 import type { TableType } from '@/src/utils/schema-helpers';
+import { AdminEmptyState } from '@/src/components/admin/shell';
 
 interface Word {
   root_word?: string;
@@ -36,21 +36,12 @@ const LoadingSkeleton: React.FC = () => (
 );
 
 const EmptyState: React.FC = () => (
-  <Card className="shadow-sm">
-    <CardContent className="py-12">
-      <div className="text-center space-y-4">
-        <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
-          <Search className="h-8 w-8 text-gray-400" />
-        </div>
-        <div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No words found</h3>
-          <p className="text-sm text-gray-500 max-w-sm mx-auto">
-            Try adjusting your filters to find the vocabulary you&apos;re looking for.
-          </p>
-        </div>
-      </div>
-    </CardContent>
-  </Card>
+  <AdminEmptyState
+    icon={Search}
+    title="No words found"
+    description="Try adjusting your filters to find the vocabulary you are looking for."
+    className="rounded-lg border bg-white"
+  />
 );
 
 const InfiniteScrollSentinel: React.FC<{

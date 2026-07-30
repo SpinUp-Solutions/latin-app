@@ -39,7 +39,7 @@ export function SortableLessonItem({ lesson, id, onNavigate }: SortableLessonIte
         <GripVertical className="w-5 h-5" />
       </button>
 
-      <div className="flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
+      <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-primary/15 bg-primary/[0.08] text-sm font-semibold text-primary shadow-[0_1px_2px_rgb(15_23_42/0.06)]">
         {(lesson.liveOrder || 0) + 1}
       </div>
 

@@ -6,6 +6,7 @@ export const LEARNING_UNITS_COLLECTION = 'lessons';
 export const LEARNING_PATHS_COLLECTION = 'learningPaths';
 export const DEFAULT_LEARNING_PATH_ID = 'default';
 export const TEST_VERSIONS_COLLECTION = 'testVersions';
+export const TEST_VERSION_DRAFTS_COLLECTION = 'testVersionDrafts';
 export const MOCK_TESTS_COLLECTION = 'mockTests';
 export const MOCK_TEST_ORDERING_COLLECTION = 'mockTestOrdering';
 export const MOCK_TEST_ORDERING_DOCUMENT_ID = 'default';

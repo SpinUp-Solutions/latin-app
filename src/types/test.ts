@@ -24,6 +24,12 @@ export interface TestVersion {
 
 export type TestVersionSummary = Omit<TestVersion, 'pages'>;
 
+export interface TestVersionDraft extends TestVersion {
+  testId: string;
+}
+
+export type TestVersionDraftSummary = Omit<TestVersionDraft, 'pages'>;
+
 export type TestUnitSummary = Omit<TestUnit, 'rotationVersions'> & {
   rotationVersionCount: number;
   minTotalPoints: number;
@@ -34,6 +40,7 @@ export type TestUnitSummary = Omit<TestUnit, 'rotationVersions'> & {
 export interface TestUnitDetail {
   test: TestUnit;
   versions: TestVersionSummary[];
+  drafts: TestVersionDraftSummary[];
   mocks?: Array<MockTest & { version: TestVersionSummary }>;
 }
 

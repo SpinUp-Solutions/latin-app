@@ -39,10 +39,10 @@ export const VocabularyFiltersComponent: React.FC<VocabularyFiltersProps> = ({
   const hasActiveFilters = filters.wordType !== 'all' || filters.search !== '';
 
   return (
-    <Card className="mb-6 bg-white shadow-sm border-gray-200">
-      <CardHeader className="pb-4">
+    <Card className="mb-4 border-border bg-white shadow-sm">
+      <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-lg">
-          <Filter className="h-5 w-5 text-blue-600" />
+          <Filter className="h-5 w-5 text-primary" />
           Vocabulary Filters
         </CardTitle>
       </CardHeader>
@@ -53,7 +53,7 @@ export const VocabularyFiltersComponent: React.FC<VocabularyFiltersProps> = ({
               Word Type
             </Label>
             <Select value={filters.wordType} onValueChange={value => onFiltersChange({ wordType: value })}>
-              <SelectTrigger id="wordType" className="bg-white">
+              <SelectTrigger id="wordType" className="h-9 bg-white">
                 <SelectValue placeholder="Select word type" />
               </SelectTrigger>
               <SelectContent className="bg-white max-h-60">
@@ -83,7 +83,7 @@ export const VocabularyFiltersComponent: React.FC<VocabularyFiltersProps> = ({
                 placeholder="Search words..."
                 value={filters.search}
                 onChange={e => onFiltersChange({ search: e.target.value })}
-                className="flex-1 bg-white"
+                className="h-9 flex-1 bg-white"
               />
               <Button type="submit" size="sm" variant="outline" className="px-3" title="Search">
                 <Search className="h-4 w-4" />
@@ -94,13 +94,11 @@ export const VocabularyFiltersComponent: React.FC<VocabularyFiltersProps> = ({
           <div className="space-y-2">
             <Label className="text-sm font-medium text-gray-700 opacity-0">Actions</Label>
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
               onClick={onReset}
               className={`flex items-center gap-2 transition-all w-full ${
-                hasActiveFilters
-                  ? 'opacity-100 hover:bg-red-50 hover:border-red-200 hover:text-red-600'
-                  : 'opacity-50 cursor-not-allowed'
+                hasActiveFilters ? 'opacity-100 hover:bg-roman-parchment' : 'cursor-not-allowed opacity-50'
               }`}
               disabled={!hasActiveFilters}
               title={hasActiveFilters ? 'Reset all filters' : 'No active filters to reset'}>
@@ -116,22 +114,22 @@ export const VocabularyFiltersComponent: React.FC<VocabularyFiltersProps> = ({
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm text-gray-600">Active filters:</span>
               {filters.wordType !== 'all' && (
-                <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                <span className="inline-flex items-center gap-1 rounded-full bg-roman-parchment px-2 py-1 text-xs text-foreground">
                   Type: {WORD_TYPE_OPTIONS.find(opt => opt.value === filters.wordType)?.label}
                   <button
                     onClick={() => onFiltersChange({ wordType: 'all' })}
-                    className="ml-1 hover:bg-blue-200 rounded-full p-0.5"
+                    className="ml-1 rounded-full p-0.5 hover:bg-primary/10"
                     title="Remove filter">
                     <X className="h-3 w-3" />
                   </button>
                 </span>
               )}
               {filters.search && (
-                <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                <span className="inline-flex items-center gap-1 rounded-full bg-roman-parchment px-2 py-1 text-xs text-foreground">
                   Search: &ldquo;{filters.search}&rdquo;
                   <button
                     onClick={() => onFiltersChange({ search: '' })}
-                    className="ml-1 hover:bg-green-200 rounded-full p-0.5"
+                    className="ml-1 rounded-full p-0.5 hover:bg-primary/10"
                     title="Remove search">
                     <X className="h-3 w-3" />
                   </button>

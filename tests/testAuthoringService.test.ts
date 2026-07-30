@@ -169,16 +169,19 @@ describe('test persistence service', () => {
     expect(transaction.set).not.toHaveBeenCalled();
   });
 
-  it('treats an identical attached add-version retry as success without another write', async () => {
-    const secondVersion = { ...versionDocument, id: 'version-2', name: 'Version B' };
-    const testWithSecond = {
-      ...testDocument,
-      rotationVersions: [{ versionId: 'version-1' }, { versionId: 'version-2' }],
+  it('treats an identical inactive-draft retry as success without another write', async () => {
+    const secondVersion = {
+      ...versionDocument,
+      id: 'version-2',
+      testId: 'test-1',
+      name: 'Version B',
     };
     const transaction = {
-      get: jest.fn(async (ref: { id: string }) =>
-        ref.id === 'test-1' ? snapshot('test-1', testWithSecond) : snapshot('version-2', secondVersion)
-      ),
+      get: jest.fn(async (ref: { collection: string; id: string }) => {
+        if (ref.collection === 'lessons') return snapshot('test-1', testDocument);
+        if (ref.collection === 'testVersionDrafts') return snapshot('version-2', secondVersion);
+        return snapshot('version-2');
+      }),
       set: jest.fn(),
       create: jest.fn(),
     };
@@ -192,6 +195,7 @@ describe('test persistence service', () => {
       'admin-2'
     );
     expect(result.version.id).toBe('version-2');
+    expect(result.version).toMatchObject({ testId: 'test-1' });
     expect(transaction.create).not.toHaveBeenCalled();
     expect(transaction.set).not.toHaveBeenCalled();
   });

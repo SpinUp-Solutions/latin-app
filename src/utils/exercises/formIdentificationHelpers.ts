@@ -15,7 +15,11 @@ import {
   PronounTypeSchema,
   PronounPersonSchema,
 } from '@/shared/types/vocabulary/schemas';
-import { getSupportedVerbFormStepsForParsedPath } from './verbFormStepCompatibility';
+import {
+  getSupportedVerbFormStepsForParsedPath,
+  getVerbFormKindForParsedPath,
+  normalizeVerbFormStepsForParsedPaths,
+} from './verbFormStepCompatibility';
 
 type VerbWordResponse = Extract<ExerciseWordResponse, { part_of_speech: 'verb' }>;
 type NounWordResponse = Extract<ExerciseWordResponse, { part_of_speech: 'noun' }>;
@@ -52,6 +56,8 @@ export const extractStepValue = (word: ExerciseWordResponse, step: FormIdentific
         return word.form_path?.tense || '';
       case 'voice':
         return word.form_path?.voice || '';
+      case 'verb_form':
+        return getVerbFormKindForParsedPath(word.form_path);
       case 'mood':
         return word.form_path?.mood || '';
       case 'person':
@@ -153,16 +159,17 @@ export function getAnswerableStepsForWord(
     return steps;
   }
 
+  const normalizedSteps = normalizeVerbFormStepsForParsedPaths(formPaths, steps);
   const supportedStepSets = formPaths
     .map(path => getSupportedVerbFormStepsForParsedPath(path))
     .filter((support): support is NonNullable<typeof support> => support !== null)
     .map(support => new Set<FormIdentificationStep>(support.supportedSteps));
 
   if (supportedStepSets.length === 0) {
-    return steps;
+    return normalizedSteps;
   }
 
-  return steps.filter(step => supportedStepSets.every(supportedSteps => supportedSteps.has(step)));
+  return normalizedSteps.filter(step => supportedStepSets.every(supportedSteps => supportedSteps.has(step)));
 }
 
 /**
@@ -375,6 +382,7 @@ const createVariantMap = () => {
   });
 
   const moods: Record<string, string[]> = {
+    finite: ['finite', 'fin.', 'fin'],
     indicative: ['indicative', 'ind.', 'ind'],
     subjunctive: ['subjunctive', 'subj.', 'subj'],
     imperative: ['imperative', 'imp.', 'imp'],
@@ -495,6 +503,7 @@ export const getHintForStep = (word: ExerciseWordResponse, step: FormIdentificat
     declension: 'Determine the declension',
     tense: 'Identify the verb tense',
     voice: 'Determine if this is active or passive',
+    verb_form: 'Identify the verb form (finite, infinitive, participle, gerund, or supine)',
     mood: 'Identify the mood (indicative, subjunctive, or imperative)',
     person: 'Identify the person (1st, 2nd, or 3rd)',
     number: 'Determine if this is singular or plural',

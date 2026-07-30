@@ -30,6 +30,10 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /testVersionDrafts/{document=**} {
+      allow read, write: if false;
+    }
+
     match /testAttempts/{document=**} {
       allow read, write: if false;
     }
@@ -61,6 +65,7 @@ service cloud.firestore {
         && collection != 'practiceCategories'
         && collection != 'practiceCategoryMemberships'
         && collection != 'testVersions'
+        && collection != 'testVersionDrafts'
         && collection != 'testAttempts'
         && collection != 'testAttemptSessions'
         && collection != 'mockTests'

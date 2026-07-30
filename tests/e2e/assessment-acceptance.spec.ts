@@ -168,7 +168,7 @@ test.describe('Assessment acceptance', () => {
     await expect(mockCards.getByRole('heading', { name: 'Mock assignment B' })).toBeVisible();
     await expect(mockCards).toContainText('Ordered fixed-version mock');
     await expect(mockCards).toContainText('Pass ≥ 80%');
-    await expect(mockCards.getByRole('link', { name: 'Edit mock-owned version' })).toHaveAttribute(
+    await expect(mockCards.getByRole('link', { name: 'Manage mock' })).toHaveAttribute(
       'href',
       `/admin/mock-tests/${assignedMockId}`
     );

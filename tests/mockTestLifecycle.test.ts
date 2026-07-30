@@ -19,11 +19,14 @@ type LiveOrderedMockFixture = OrderedMockFixture & { mockOrder: number };
 type Ref = { collection: string; id: string; get: () => Promise<Snapshot> };
 type Snapshot = { id: string; exists: boolean; data: () => Fixture | undefined };
 type Query = { __collection: string; get: () => Promise<{ docs: Snapshot[] }> };
-type Write = { kind: 'set' | 'create'; ref: Ref; value: Fixture };
+type Write =
+  | { kind: 'set' | 'create'; ref: Ref; value: Fixture }
+  | { kind: 'delete'; ref: Ref };
 type Transaction = {
   get: (source: Ref | Query) => Promise<Snapshot | { docs: Snapshot[] }>;
   set: (ref: Ref, value: Fixture) => void;
   create: (ref: Ref, value: Fixture) => void;
+  delete: (ref: Ref) => void;
 };
 
 /** Optimistic Firestore model: reads record versions and conflicting commits retry. */
@@ -148,6 +151,10 @@ function mockDb(seed: Record<string, Record<string, Record<string, unknown>>>, e
             hasWrites = true;
             writes.push({ kind: 'create', ref, value });
           },
+          delete: ref => {
+            hasWrites = true;
+            writes.push({ kind: 'delete', ref });
+          },
         };
         const result = await callback(tx);
         if ([...reads].some(([key, version]) => (versions.get(key) ?? 0) !== version)) {
@@ -161,7 +168,8 @@ function mockDb(seed: Record<string, Record<string, Record<string, unknown>>>, e
           continue;
         }
         writes.forEach(write => {
-          docs(write.ref.collection).set(write.ref.id, write.value);
+          if (write.kind === 'delete') docs(write.ref.collection).delete(write.ref.id);
+          else docs(write.ref.collection).set(write.ref.id, write.value);
           versions.set(keyFor(write.ref), (versions.get(keyFor(write.ref)) ?? 0) + 1);
         });
         return result;
@@ -434,7 +442,91 @@ describe('mock transactional lifecycle', () => {
     expect(second.version.name).toBe('A Copy');
     expect(first.version.pages[0].id).not.toBe('p1');
     expect(first.version.pages[0].items[0].id).not.toBe('q1');
-    expect((memory.get('lessons', 't1') as { rotationVersions: unknown[] }).rotationVersions).toHaveLength(2);
+    expect((memory.get('lessons', 't1') as { rotationVersions: unknown[] }).rotationVersions).toHaveLength(1);
+    expect(memory.get('testVersions', first.version.id)).toBeUndefined();
+    expect(memory.get('testVersionDrafts', first.version.id)).toMatchObject({
+      id: first.version.id,
+      testId: 't1',
+      name: 'A Copy',
+    });
+  });
+
+  it('keeps incomplete versions inactive until an explicit successful activation', async () => {
+    const memory = mockDb({
+      lessons: { t1: test },
+      testVersions: {},
+      testVersionDrafts: {},
+      mockTests: {},
+      mockTestOrdering: {},
+      learningPaths: {},
+    });
+    const service = new TestAuthoringService(memory.db as never, () => at);
+
+    const created = await service.addTestVersion('t1', { id: 'draft-1', name: 'Work in progress', pages: [] }, 'admin');
+    expect(created.version).toMatchObject({ id: 'draft-1', testId: 't1', totalPages: 0, totalExercises: 0 });
+    expect((memory.get('lessons', 't1') as { rotationVersions: unknown[] }).rotationVersions).toEqual([]);
+    expect(memory.get('testVersions', 'draft-1')).toBeUndefined();
+
+    await expect(service.activateTestVersion('t1', 'draft-1', 'admin')).rejects.toBeDefined();
+    expect(memory.get('testVersionDrafts', 'draft-1')).toBeDefined();
+
+    await service.updateTestVersionDraft(
+      't1',
+      'draft-1',
+      { name: 'Ready', pages: version.pages },
+      'admin'
+    );
+    const activated = await service.activateTestVersion('t1', 'draft-1', 'admin');
+    expect(activated.version).toMatchObject({ id: 'draft-1', name: 'Ready', totalExercises: 1 });
+    expect(memory.get('testVersionDrafts', 'draft-1')).toBeUndefined();
+    expect(memory.get('testVersions', 'draft-1')).toBeDefined();
+    expect((memory.get('lessons', 't1') as { rotationVersions: unknown[] }).rotationVersions).toEqual([
+      { versionId: 'draft-1' },
+    ]);
+  });
+
+  it('blocks deactivating a placed test’s final version and allows it when another active version remains', async () => {
+    const path = {
+      revision: 1,
+      unitIds: ['t1'],
+      updatedAt: at,
+      updatedBy: 'admin',
+    };
+    const memory = mockDb({
+      lessons: { t1: { ...test, rotationVersions: [{ versionId: 'v1' }] } },
+      testVersions: { v1: version },
+      testVersionDrafts: {},
+      mockTests: {},
+      mockTestOrdering: {},
+      learningPaths: { default: path },
+    });
+    const service = new TestAuthoringService(memory.db as never, () => at);
+
+    await expect(service.deactivateTestVersion('t1', 'v1', 'admin')).rejects.toMatchObject({
+      code: 'PLACED_TEST_REQUIRES_ROTATION_VERSION',
+    });
+    expect(memory.get('testVersions', 'v1')).toBeDefined();
+
+    const second = { ...version, id: 'v2', name: 'B' };
+    const twoVersionMemory = mockDb({
+      lessons: { t1: { ...test, rotationVersions: [{ versionId: 'v1' }, { versionId: 'v2' }] } },
+      testVersions: { v1: version, v2: second },
+      testVersionDrafts: {},
+      mockTests: {},
+      mockTestOrdering: {},
+      learningPaths: { default: path },
+    });
+    const deactivated = await new TestAuthoringService(twoVersionMemory.db as never, () => at).deactivateTestVersion(
+      't1',
+      'v1',
+      'admin'
+    );
+    expect(deactivated.version).toMatchObject({ id: 'v1', testId: 't1' });
+    expect(twoVersionMemory.get('testVersions', 'v1')).toBeUndefined();
+    expect(twoVersionMemory.get('testVersionDrafts', 'v1')).toBeDefined();
+    expect((twoVersionMemory.get('lessons', 't1') as { rotationVersions: unknown[] }).rotationVersions).toEqual([
+      { versionId: 'v2' },
+    ]);
   });
 
   it('uses the same nested identity rewrite for normal and standalone mock duplicates without mutating their source', async () => {

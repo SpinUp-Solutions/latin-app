@@ -11,7 +11,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/src/components/ui/alert-dialog';
-import { Button } from '@/src/components/ui/button';
+import { Button, type ButtonProps } from '@/src/components/ui/button';
 
 interface ConfirmationDialogProps {
   isOpen: boolean;
@@ -21,6 +21,7 @@ interface ConfirmationDialogProps {
   description: string;
   confirmText?: string;
   cancelText?: string;
+  confirmVariant?: ButtonProps['variant'];
 }
 
 export const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
@@ -31,6 +32,7 @@ export const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
   description,
   confirmText = 'Confirm',
   cancelText = 'Cancel',
+  confirmVariant,
 }) => {
   if (!isOpen) {
     return null;
@@ -51,6 +53,7 @@ export const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
           </AlertDialogCancel>
           <AlertDialogAction asChild>
             <Button
+              variant={confirmVariant}
               onClick={() => {
                 onConfirm();
                 onClose();

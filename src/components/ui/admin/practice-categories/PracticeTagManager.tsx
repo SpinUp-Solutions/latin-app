@@ -363,18 +363,32 @@ export function PracticeTagManager({
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="inline-flex w-fit rounded-md border bg-white p-0.5" aria-label="Tag status">
+          <div
+            className="inline-flex w-fit gap-1 rounded-xl border border-border/80 bg-white/80 p-1.5 shadow-sm"
+            aria-label="Tag status">
             <Button
               type="button"
               size="sm"
-              variant={view === 'active' ? 'secondary' : 'ghost'}
+              variant={view === 'active' ? 'default' : 'ghost'}
+              aria-pressed={view === 'active'}
+              className={
+                view === 'active'
+                  ? 'h-9 rounded-lg px-3.5 text-xs font-semibold shadow-[0_2px_6px_hsl(var(--primary)/0.22)]'
+                  : 'h-9 rounded-lg px-3.5 text-xs font-medium text-roman-stone hover:bg-roman-parchment hover:text-foreground'
+              }
               onClick={() => setView('active')}>
               Active <span className="ml-1 tabular-nums">{activeTags.length}</span>
             </Button>
             <Button
               type="button"
               size="sm"
-              variant={view === 'archived' ? 'secondary' : 'ghost'}
+              variant={view === 'archived' ? 'default' : 'ghost'}
+              aria-pressed={view === 'archived'}
+              className={
+                view === 'archived'
+                  ? 'h-9 rounded-lg px-3.5 text-xs font-semibold shadow-[0_2px_6px_hsl(var(--primary)/0.22)]'
+                  : 'h-9 rounded-lg px-3.5 text-xs font-medium text-roman-stone hover:bg-roman-parchment hover:text-foreground'
+              }
               onClick={() => setView('archived')}>
               Archived <span className="ml-1 tabular-nums">{archivedTags.length}</span>
             </Button>

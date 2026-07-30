@@ -39,7 +39,7 @@ export function SortableLearningPathLesson({
         zIndex: isDragging ? 10 : 'auto',
       }}
       className={`flex items-center gap-4 rounded-lg border p-4 transition-shadow hover:shadow-sm ${
-        isTest ? 'border-indigo-200 bg-indigo-50/80' : 'bg-white'
+        isTest ? 'border-roman-gold/35 bg-roman-gold/[0.08]' : 'bg-white'
       }`}>
       <button
         type="button"
@@ -52,8 +52,10 @@ export function SortableLearningPathLesson({
       </button>
 
       <div
-        className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium ${
-          isTest ? 'bg-indigo-600 text-white' : 'bg-blue-100 text-blue-700'
+        className={`flex h-8 w-8 items-center justify-center rounded-lg border text-sm font-semibold shadow-[0_1px_2px_rgb(15_23_42/0.06)] ${
+          isTest
+            ? 'border-roman-gold/35 bg-roman-gold/20 text-foreground'
+            : 'border-primary/15 bg-primary/[0.08] text-primary'
         }`}>
         {index + 1}
       </div>
@@ -63,7 +65,13 @@ export function SortableLearningPathLesson({
           <div className="min-w-0 flex-1 truncate font-medium text-gray-900" role="heading" aria-level={3}>
             <SimpleRichDisplay content={unit.title} />
           </div>
-          <Badge variant="outline" className={isTest ? 'border-indigo-300 bg-indigo-100 text-indigo-900' : ''}>
+          <Badge
+            variant="outline"
+            className={
+              isTest
+                ? 'border-roman-gold/35 bg-roman-gold/15 text-foreground'
+                : 'border-primary/15 bg-primary/[0.08] text-primary'
+            }>
             {isTest ? (
               <span className="inline-flex items-center gap-1">
                 <FileCheck2 className="h-3 w-3" aria-hidden="true" />
@@ -120,7 +128,7 @@ export function SortableLearningPathLesson({
       </Button>
       {isTest && unit.passingPercentage !== null && (
         <div
-          className="ml-1 inline-flex items-center gap-1 text-xs font-medium text-indigo-800"
+          className="ml-1 inline-flex items-center gap-1 text-xs font-medium text-roman-gold"
           title="Students must pass this test before the next unit unlocks">
           <ShieldAlert className="h-3.5 w-3.5" aria-hidden="true" />
           Gate
