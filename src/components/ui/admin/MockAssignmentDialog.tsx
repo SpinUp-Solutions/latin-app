@@ -32,6 +32,21 @@ type Props = {
 
 const errorMessage = (error: unknown) => getApiErrorMessage(error, 'Could not assign this version as a mock test.');
 
+interface MockAssignmentForm {
+  title: string;
+  description: string;
+  passingPercentage: number | null;
+  isLive: boolean;
+}
+
+function getInitialMockAssignmentForm(
+  title: string,
+  description: string,
+  passingPercentage: number | null
+): MockAssignmentForm {
+  return { title, description, passingPercentage, isLive: false };
+}
+
 /** Confirmation boundary for the ownership transfer from normal rotation to a mock card. */
 export function MockAssignmentDialog({
   open,
@@ -43,19 +58,18 @@ export function MockAssignmentDialog({
   defaultPassingPercentage,
   onAssigned,
 }: Props) {
-  const [title, setTitle] = useState(defaultTitle);
-  const [description, setDescription] = useState(defaultDescription);
-  const [passingPercentage, setPassingPercentage] = useState<number | null>(defaultPassingPercentage);
-  const [isLive, setIsLive] = useState(false);
+  const [form, setForm] = useState<MockAssignmentForm>(() =>
+    getInitialMockAssignmentForm(defaultTitle, defaultDescription, defaultPassingPercentage)
+  );
+  const { title, description, passingPercentage, isLive } = form;
   const [error, setError] = useState<string | null>(null);
   const [assign, { isLoading }] = useAssignMockMutation();
+  const updateForm = <Key extends keyof MockAssignmentForm>(key: Key, value: MockAssignmentForm[Key]) =>
+    setForm(current => ({ ...current, [key]: value }));
 
   useEffect(() => {
     if (open) {
-      setTitle(defaultTitle);
-      setDescription(defaultDescription);
-      setPassingPercentage(defaultPassingPercentage);
-      setIsLive(false);
+      setForm(getInitialMockAssignmentForm(defaultTitle, defaultDescription, defaultPassingPercentage));
       setError(null);
     }
   }, [defaultDescription, defaultPassingPercentage, defaultTitle, open]);
@@ -96,23 +110,26 @@ export function MockAssignmentDialog({
         <div className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="mock-title">Student-facing mock title</Label>
-            <Input id="mock-title" value={title} onChange={event => setTitle(event.target.value)} />
+            <Input id="mock-title" value={title} onChange={event => updateForm('title', event.target.value)} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="mock-description">Description</Label>
             <Textarea
               id="mock-description"
               value={description}
-              onChange={event => setDescription(event.target.value)}
+              onChange={event => updateForm('description', event.target.value)}
             />
           </div>
-          <PassingRequirementControl value={passingPercentage} onChange={setPassingPercentage} />
+          <PassingRequirementControl
+            value={passingPercentage}
+            onChange={value => updateForm('passingPercentage', value)}
+          />
           <label className="flex items-start gap-2 text-sm">
             <input
               aria-label="Make mock live to students"
               type="checkbox"
               checked={isLive}
-              onChange={event => setIsLive(event.target.checked)}
+              onChange={event => updateForm('isLive', event.target.checked)}
             />{' '}
             <span>Make this mock live to students now</span>
           </label>

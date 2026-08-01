@@ -12,7 +12,8 @@ interface AdminTopbarProps {
 
 export function AdminTopbar({ onOpenMenu }: AdminTopbarProps) {
   const breadcrumbs = getAdminBreadcrumbItems(usePathname());
-  const backDestination = [...breadcrumbs].reverse().find(item => item.href);
+  const immediateParent = breadcrumbs.at(-2);
+  const backDestination = breadcrumbs.length > 2 && immediateParent?.href ? immediateParent : undefined;
 
   return (
     <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center border-b border-border/80 bg-white/90 px-4 backdrop-blur-md sm:px-6">

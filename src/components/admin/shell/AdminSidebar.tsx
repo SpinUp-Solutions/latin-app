@@ -9,7 +9,6 @@ import {
   ChevronRight,
   ClipboardCheck,
   ClipboardList,
-  FilePlus2,
   FileCheck2,
   Globe,
   Layers3,
@@ -35,8 +34,7 @@ const navigationGroups: NavigationGroup[] = [
   {
     label: 'Content',
     items: [
-      { href: '/admin/lessons/manage', label: 'Manage Lessons', icon: BookOpen },
-      { href: '/admin/lessons/create', label: 'Create Lesson', icon: FilePlus2 },
+      { href: '/admin/lessons/manage', label: 'Lessons', icon: BookOpen },
       { href: '/admin/lessons/live', label: 'Live Lessons', icon: Globe },
       { href: '/admin/practice-categories', label: 'Practice Categories', icon: Tags },
     ],

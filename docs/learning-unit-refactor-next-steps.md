@@ -47,8 +47,10 @@ Current local verification:
 
 - TypeScript passes.
 - ESLint passes with zero warnings.
-- All 65 Jest suites / 415 tests pass.
+- All 73 Jest suites / 470 tests pass.
 - All four emulator-backed Playwright assessment journeys pass.
+- The emulator-backed authenticated migration lifecycle passes through dry run,
+  apply, projection verification, rollback, reapply, and retirement.
 - `git diff --check` passes.
 - The Next.js production build passes.
 
@@ -61,16 +63,17 @@ Phases 6–8, and **Post-phase clarity cleanup**.
 Assign an owner and record the answer to each item before touching a deployed
 environment.
 
-| Decision                 | Required answer                                                                                                                                                                              |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Application release path | The actual hosting/release procedure. This repository does not define an application deployment command.                                                                                     |
-| Firebase target          | Rehearse against `latin-app-staging`; operate production only against `latin-app-prod`. Confirm with `firebase use` before every Firebase command.                                           |
-| Progression locking      | Production must omit `NEXT_PUBLIC_DISABLE_PROGRESSION_LOCK` or set it to `false`. The Playwright configuration already forces `false`; CI's general build jobs still set the flag to `true`. |
-| Cutover operator         | One authenticated Firebase user whose `users/{uid}.role` is `admin`.                                                                                                                         |
-| Manifest reviewers       | At least one curriculum owner and one technical operator who compare the same immutable manifest.                                                                                            |
-| Stabilization window     | A written start time, earliest retirement time, traffic/usage window, monitoring owner, and rollback approver. The code deliberately does not impose a duration.                             |
-| Production backup        | The location and timestamp of a Firestore export or equivalent recoverable backup taken before cutover.                                                                                      |
-| Manifest archive         | A durable release artifact location outside temporary shell files, including the exact JSON and its file hash.                                                                               |
+| Decision                 | Required answer                                                                                                                                                    |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Application release path | Netlify publishes the Next.js application and its route handlers. Confirm the linked Netlify site, production branch, and whether production deploys auto-publish. |
+| Firebase target          | Rehearse against `latin-app-staging`; operate production only against `latin-app-prod`. Pass the full project ID with `--project` on every deploy command.         |
+| Progression locking      | Production must omit `NEXT_PUBLIC_DISABLE_PROGRESSION_LOCK` or set it to `false`. CI now omits the override, and Playwright explicitly forces `false`.             |
+| Netlify contexts         | A staging branch deploy or Deploy Preview must use staging Firebase values; the production context must use production Firebase values.                            |
+| Cutover operator         | One authenticated Firebase user whose `users/{uid}.role` is `admin`.                                                                                               |
+| Manifest reviewers       | At least one curriculum owner and one technical operator who compare the same immutable manifest.                                                                  |
+| Stabilization window     | A written start time, earliest retirement time, traffic/usage window, monitoring owner, and rollback approver. The code deliberately does not impose a duration.   |
+| Production backup        | The location and timestamp of a Firestore export or equivalent recoverable backup taken before cutover.                                                            |
+| Manifest archive         | A durable release artifact location outside temporary shell files, including the exact JSON and its file hash.                                                     |
 
 Do not treat elapsed time alone as stabilization. Retirement requires the
 evidence in section 6.
@@ -81,13 +84,37 @@ evidence in section 6.
 
 1. Review the complete diff, including Firestore rules and indexes.
 2. Merge through the normal pull-request process.
-3. Require CI to pass, including `npm run test:e2e:assessment`.
-4. Build with the intended staging and production environment files.
-5. Remove the temporary `NEXT_PUBLIC_DISABLE_PROGRESSION_LOCK: "true"` setting
-   from the general CI jobs so their builds use production locking behavior.
-6. Confirm the production environment does not disable progression locking.
+3. Require CI to pass, including `npm run test:e2e:assessment` and
+   `npm run test:e2e:migration`.
+4. Confirm the Netlify build uses Node 22 (pinned in `.nvmrc`) and the current
+   automatic Next.js adapter. The expected Next.js build command is
+   `next build`; do not select a static export.
+5. Confirm the general CI jobs still omit
+   `NEXT_PUBLIC_DISABLE_PROGRESSION_LOCK: "true"` so their builds use production
+   locking behavior.
+6. Confirm the Netlify production environment does not disable progression
+   locking.
 7. Confirm no normal test is already present in the legacy live-order source or
    in a pre-existing `learningPaths/default` document.
+
+The Netlify environment-variable values belong in the Netlify UI, CLI, or API,
+not in `netlify.toml` or source control. For the migration route to work:
+
+- the public Firebase variables must be available to Builds so Next.js can
+  embed the browser configuration;
+- `NEXT_PUBLIC_FIREBASE_PROJECT_ID` and
+  `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` must also be available to Functions;
+- `FIREBASE_CLIENT_EMAIL` and `FIREBASE_PRIVATE_KEY` must be available to
+  Functions;
+- `NEXT_PUBLIC_APP_URL` must match the deployed Netlify URL for that context;
+- staging and preview contexts must never inherit production Firebase Admin
+  credentials; and
+- `NEXT_PUBLIC_DISABLE_PROGRESSION_LOCK` must be absent or `false` everywhere
+  except an explicitly isolated local test environment.
+
+Netlify automatically provisions a serverless function for the App Router API
+routes, including `/api/admin/learning-path/migration`. Record the immutable
+Netlify deploy ID and URL used for each rehearsal or cutover.
 
 The repository's `functions:*` scripts deploy Cloud Functions only. They do not
 deploy the Next.js application, Firestore rules, or Firestore indexes.
@@ -95,16 +122,18 @@ deploy the Next.js application, Firestore rules, or Firestore indexes.
 ### 3.2 Rehearse in staging
 
 Deploy the accompanying Firestore rules and indexes to the staging project
-first:
+first, using the repository-pinned Firebase CLI and an explicit project ID:
 
 ```sh
-firebase use staging
-firebase use
-firebase deploy --only firestore:rules,firestore:indexes
+npx firebase deploy \
+  --project latin-app-staging \
+  --only firestore:rules,firestore:indexes
 ```
 
-Wait for every required index to report ready, then use the real staging
-application release procedure and rehearse the complete lifecycle:
+Wait for every required index to report ready. Then publish an immutable
+Netlify staging branch deploy or Deploy Preview whose Build and Function
+variables point only to `latin-app-staging`, and rehearse the complete
+lifecycle against that deploy URL:
 
 1. legacy-source smoke check;
 2. dry run and manifest review;
@@ -277,16 +306,18 @@ Use this order for production:
 
 1. Announce the curriculum-edit freeze and rollback owner.
 2. Take and record the production Firestore backup/export.
-3. Deploy Firestore rules and indexes against `latin-app-prod`:
+3. Deploy Firestore rules and indexes against `latin-app-prod` with the
+   repository-pinned CLI and explicit project ID:
 
    ```sh
-   firebase use prod
-   firebase use
-   firebase deploy --only firestore:rules,firestore:indexes
+   npx firebase deploy \
+     --project latin-app-prod \
+     --only firestore:rules,firestore:indexes
    ```
 
 4. Wait for the required indexes to report ready.
-5. Release the application through the real hosting pipeline.
+5. Publish the approved immutable Netlify deploy from the confirmed production
+   branch, then record its deploy ID, commit SHA, and public URL.
 6. Before apply, smoke-test admin sign-in, one representative student
    dashboard, and one lesson-detail page while the legacy source remains active.
 7. Generate the production dry-run manifest.

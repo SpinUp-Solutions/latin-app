@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { shallowEqual } from 'react-redux';
 import { BookOpen, Eye, FileCheck2, Loader2, Save, ScrollText, SlidersHorizontal, Undo2 } from 'lucide-react';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/src/components/ui/card';
@@ -45,6 +46,7 @@ import { ClipboardProvider } from '@/src/components/ui/core/clipboard';
 import { PassingRequirementControl } from './test-version/PassingRequirementControl';
 import { TestVersionPreview } from './test-version/TestVersionPreview';
 import { useUnsavedNavigationGuard } from '@/src/hooks/useUnsavedNavigationGuard';
+import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
 import { UnsavedNavigationDialog } from '@/src/components/ui/core/UnsavedNavigationDialog';
 import { clearStableTestEditorIdentity, getStableTestEditorIdentity } from '@/src/lib/tests/editor-session';
 import { MockAssignmentDialog } from './MockAssignmentDialog';
@@ -79,6 +81,22 @@ interface TestVersionEditorProps {
 export interface TestVersionEditorValue {
   test: CreateTestUnitInput;
   version: TestVersionInput;
+}
+
+interface TestEditorSettings {
+  title: string;
+  description: string;
+  passingPercentage: number | null;
+  vocabularyPoolId: string | null;
+}
+
+function getInitialEditorSettings(test?: TestUnit, version?: TestVersion): TestEditorSettings {
+  return {
+    title: test?.title || 'New Test',
+    description: test?.description || '',
+    passingPercentage: test?.passingPercentage ?? null,
+    vocabularyPoolId: version?.vocabularyPoolId ?? null,
+  };
 }
 
 function toInitialVersion(version: TestVersion | undefined, id: string): TestVersion {
@@ -127,26 +145,28 @@ export function TestVersionEditor({
         ? getStableTestEditorIdentity(creationScope, 'version', 'version')
         : `version-${globalThis.crypto.randomUUID()}`)
   );
-  const [testTitle, setTestTitle] = useState(initialTest?.title || 'New Test');
-  const [description, setDescription] = useState(initialTest?.description || '');
-  const [passingPercentage, setPassingPercentage] = useState<number | null>(initialTest?.passingPercentage ?? null);
-  const [vocabularyPoolId, setVocabularyPoolId] = useState<string | null>(initialVersion?.vocabularyPoolId ?? null);
+  const [settings, setSettings] = useState<TestEditorSettings>(() =>
+    getInitialEditorSettings(initialTest, initialVersion)
+  );
+  const { title: testTitle, description, passingPercentage, vocabularyPoolId } = settings;
   const [assignmentOpen, setAssignmentOpen] = useState(false);
+  const [discardConfirmationOpen, setDiscardConfirmationOpen] = useState(false);
   const [saveErrors, setSaveErrors] = useState<string[]>([]);
-  const initialSettings = React.useRef({
-    title: initialTest?.title || 'New Test',
-    description: initialTest?.description || '',
-    passingPercentage: initialTest?.passingPercentage ?? null,
-    vocabularyPoolId: initialVersion?.vocabularyPoolId ?? null,
-  });
+  const initialSettings = React.useRef(settings);
   const latestDocument = React.useRef(document);
-  const latestSettings = React.useRef({ testTitle, description, passingPercentage, vocabularyPoolId });
+  const latestSettings = React.useRef(settings);
   latestDocument.current = document;
-  latestSettings.current = { testTitle, description, passingPercentage, vocabularyPoolId };
+  latestSettings.current = settings;
   const settingsKey = `test_editor_settings:${versionId}`;
+  const updateSetting = <Key extends keyof TestEditorSettings>(key: Key, value: TestEditorSettings[Key]) =>
+    setSettings(current => ({ ...current, [key]: value }));
   const clearCreationIdentity = () => {
     if (!creationScope) return;
     clearStableTestEditorIdentity(creationScope);
+  };
+  const getInitialDocument = () => {
+    const initialDocument = toInitialVersion(initialVersion, versionId);
+    return !initialVersion && defaultVersionName ? { ...initialDocument, name: defaultVersionName } : initialDocument;
   };
 
   useEffect(() => {
@@ -163,46 +183,18 @@ export function TestVersionEditor({
             )
           );
           dispatch(setDirty(true));
-        } else
-          dispatch(
-            setTestVersion(
-              toInitialVersion(
-                initialVersion
-                  ? initialVersion
-                  : defaultVersionName
-                    ? { ...toInitialVersion(undefined, versionId), name: defaultVersionName }
-                    : undefined,
-                versionId
-              )
-            )
-          );
+        } else dispatch(setTestVersion(getInitialDocument()));
         try {
           const settings = sessionStorage.getItem(settingsKey);
           if (settings) {
-            const parsed = JSON.parse(settings) as typeof initialSettings.current;
-            setTestTitle(parsed.title);
-            setDescription(parsed.description);
-            setPassingPercentage(parsed.passingPercentage);
-            setVocabularyPoolId(parsed.vocabularyPoolId ?? null);
+            const parsed = JSON.parse(settings) as TestEditorSettings;
+            setSettings({ ...parsed, vocabularyPoolId: parsed.vocabularyPoolId ?? null });
           }
         } catch {
           /* A bad local draft must never stop authoring. */
         }
       })
-      .catch(() =>
-        dispatch(
-          setTestVersion(
-            toInitialVersion(
-              initialVersion
-                ? initialVersion
-                : defaultVersionName
-                  ? { ...toInitialVersion(undefined, versionId), name: defaultVersionName }
-                  : undefined,
-              versionId
-            )
-          )
-        )
-      );
+      .catch(() => dispatch(setTestVersion(getInitialDocument())));
     return () => {
       alive = false;
       dispatch(resetLessonState());
@@ -212,11 +204,7 @@ export function TestVersionEditor({
   }, [dispatch]);
 
   const summary = useMemo(() => getTestVersionSummaryFields(document?.pages ?? []), [document?.pages]);
-  const settingsDirty =
-    testTitle !== initialSettings.current.title ||
-    description !== initialSettings.current.description ||
-    passingPercentage !== initialSettings.current.passingPercentage ||
-    vocabularyPoolId !== initialSettings.current.vocabularyPoolId;
+  const settingsDirty = !shallowEqual(settings, initialSettings.current);
   const dirty = editorDirty || settingsDirty;
 
   useEffect(() => {
@@ -227,16 +215,9 @@ export function TestVersionEditor({
 
   useEffect(() => {
     if (!dirty || !document) return;
-    const timer = setTimeout(
-      () =>
-        sessionStorage.setItem(
-          settingsKey,
-          JSON.stringify({ title: testTitle, description, passingPercentage, vocabularyPoolId })
-        ),
-      300
-    );
+    const timer = setTimeout(() => sessionStorage.setItem(settingsKey, JSON.stringify(settings)), 300);
     return () => clearTimeout(timer);
-  }, [description, dirty, document, passingPercentage, settingsKey, testTitle, vocabularyPoolId]);
+  }, [dirty, document, settings, settingsKey]);
 
   const navigationGuard = useUnsavedNavigationGuard(
     manageNavigationGuard && dirty,
@@ -254,7 +235,7 @@ export function TestVersionEditor({
       vocabularyPoolId,
     };
     const submittedDocument = document;
-    const submittedSettings = { testTitle, description, passingPercentage, vocabularyPoolId };
+    const submittedSettings = settings;
 
     const value: TestVersionEditorValue = {
       test: {
@@ -284,20 +265,10 @@ export function TestVersionEditor({
     setSaveErrors([]);
     void Promise.resolve(onSave(value))
       .then(() => {
-        initialSettings.current = {
-          title: submittedSettings.testTitle,
-          description: submittedSettings.description,
-          passingPercentage: submittedSettings.passingPercentage,
-          vocabularyPoolId: submittedSettings.vocabularyPoolId,
-        };
+        initialSettings.current = submittedSettings;
 
-        const currentSettings = latestSettings.current;
         const changedWhileSaving =
-          latestDocument.current !== submittedDocument ||
-          currentSettings.testTitle !== submittedSettings.testTitle ||
-          currentSettings.description !== submittedSettings.description ||
-          currentSettings.passingPercentage !== submittedSettings.passingPercentage ||
-          currentSettings.vocabularyPoolId !== submittedSettings.vocabularyPoolId;
+          latestDocument.current !== submittedDocument || !shallowEqual(latestSettings.current, submittedSettings);
         if (changedWhileSaving) return false;
 
         dispatch(setTestVersion(version));
@@ -315,16 +286,10 @@ export function TestVersionEditor({
   };
 
   const discard = () => {
-    if (!dirty || window.confirm('Discard all unsaved test changes?')) {
-      sessionStorage.removeItem(settingsKey);
-      clearCreationIdentity();
-      dispatch(clearPageDocumentDraft({ editorKind: 'test-version', ownerId: versionId }));
-      setTestTitle(initialSettings.current.title);
-      setDescription(initialSettings.current.description);
-      setPassingPercentage(initialSettings.current.passingPercentage);
-      setVocabularyPoolId(initialSettings.current.vocabularyPoolId);
-      dispatch(setTestVersion(toInitialVersion(initialVersion, versionId)));
-    }
+    sessionStorage.removeItem(settingsKey);
+    dispatch(clearPageDocumentDraft({ editorKind: 'test-version', ownerId: versionId }));
+    setSettings(initialSettings.current);
+    dispatch(setTestVersion(getInitialDocument()));
   };
 
   const updatePoints = (pageIndex: number, itemIndex: number, item: RenderableContentItem, value: string) => {
@@ -372,9 +337,7 @@ export function TestVersionEditor({
                     <span className="max-w-48 truncate text-gray-600">{document.title}</span>
                   </p>
                   <div className="mt-0.5 flex items-center gap-2.5">
-                    <h1 className="font-serif text-lg tracking-tight text-gray-900 sm:text-xl">
-                      Test Version Editor
-                    </h1>
+                    <h1 className="font-serif text-lg tracking-tight text-gray-900 sm:text-xl">Test Version Editor</h1>
                     <span aria-hidden="true" className="hidden items-center gap-1.5 md:flex">
                       <span className="h-1 w-1 rotate-45 bg-roman-gold" />
                       <span className="h-px w-12 bg-gradient-to-r from-roman-gold/80 to-transparent" />
@@ -419,7 +382,11 @@ export function TestVersionEditor({
                         Assign as mock
                       </Button>
                     )}
-                    <Button variant="outline" size="sm" onClick={discard} disabled={!dirty}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setDiscardConfirmationOpen(true)}
+                      disabled={!dirty}>
                       <Undo2 className="mr-1.5 h-4 w-4" aria-hidden="true" />
                       Discard changes
                     </Button>
@@ -472,7 +439,11 @@ export function TestVersionEditor({
                 {!hideTestSettings && (
                   <div className="space-y-2">
                     <Label htmlFor="test-title">Test title</Label>
-                    <Input id="test-title" value={testTitle} onChange={event => setTestTitle(event.target.value)} />
+                    <Input
+                      id="test-title"
+                      value={testTitle}
+                      onChange={event => updateSetting('title', event.target.value)}
+                    />
                   </div>
                 )}
                 <div className="space-y-2">
@@ -496,12 +467,15 @@ export function TestVersionEditor({
                   <Textarea
                     id="test-description"
                     value={description}
-                    onChange={event => setDescription(event.target.value)}
+                    onChange={event => updateSetting('description', event.target.value)}
                   />
                 </div>
               )}
               {!hideTestSettings && (
-                <PassingRequirementControl value={passingPercentage} onChange={setPassingPercentage} />
+                <PassingRequirementControl
+                  value={passingPercentage}
+                  onChange={value => updateSetting('passingPercentage', value)}
+                />
               )}
               {!hideTestSettings && passingPercentage !== null && summary.totalPoints > 0 && (
                 <p className="text-sm text-gray-500">
@@ -517,7 +491,7 @@ export function TestVersionEditor({
                 </p>
                 <VocabularyPoolSelector
                   selectedPoolId={vocabularyPoolId ?? undefined}
-                  onPoolSelect={poolId => setVocabularyPoolId(poolId ?? null)}
+                  onPoolSelect={poolId => updateSetting('vocabularyPoolId', poolId ?? null)}
                   disabled={saving}
                   assignmentLabel="test version"
                 />
@@ -592,6 +566,15 @@ export function TestVersionEditor({
         />
       )}
       <UnsavedNavigationDialog guard={navigationGuard} />
+      <ConfirmationDialog
+        isOpen={discardConfirmationOpen}
+        onClose={() => setDiscardConfirmationOpen(false)}
+        onConfirm={discard}
+        title="Discard unsaved changes?"
+        description="This resets the test and version to the last saved state. This action cannot be undone."
+        confirmText="Discard changes"
+        confirmVariant="destructive"
+      />
     </ClipboardProvider>
   );
 }

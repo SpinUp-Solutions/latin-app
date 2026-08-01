@@ -21,8 +21,8 @@ describe('admin shell routing and accessibility', () => {
     expect(getAdminBreadcrumbs('/admin/tests/edit/test-1/versions/version-1/edit')).toEqual([
       'Admin',
       'Tests',
-      'Edit Test',
-      'Edit Version',
+      'Test details',
+      'Version editor',
     ]);
     expect(getAdminBreadcrumbs('/admin/practice-categories/category-1')).toEqual([
       'Admin',
@@ -34,8 +34,8 @@ describe('admin shell routing and accessibility', () => {
     expect(getAdminBreadcrumbItems('/admin/tests/edit/test-1/versions/version-1/edit')).toEqual([
       { label: 'Admin', href: '/admin' },
       { label: 'Tests', href: '/admin/tests/manage' },
-      { label: 'Edit Test', href: '/admin/tests/edit/test-1' },
-      { label: 'Edit Version' },
+      { label: 'Test details', href: '/admin/tests/edit/test-1' },
+      { label: 'Version editor' },
     ]);
   });
 
@@ -45,7 +45,7 @@ describe('admin shell routing and accessibility', () => {
       { href: '/admin/vocabulary', label: 'All Words' },
       { href: '/admin/vocabulary/pending', label: 'Pending Review' },
       { href: '/admin/vocabulary-pools', label: 'Vocabulary Pools' },
-      { href: '/admin/lessons/manage', label: 'Manage Lessons' },
+      { href: '/admin/lessons/manage', label: 'Lessons' },
       { href: '/admin/tests/manage', label: 'Tests' },
     ];
 
@@ -77,6 +77,18 @@ describe('admin shell routing and accessibility', () => {
     expect(screen.getByRole('navigation', { name: 'Admin' })).toBeInTheDocument();
   });
 
+  it('does not add a redundant back button on section landing pages', () => {
+    pathname = '/admin/tests/manage';
+    render(
+      <AdminShell>
+        <div>Page content</div>
+      </AdminShell>
+    );
+
+    expect(screen.queryByRole('link', { name: 'Back to Admin' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Admin' })).toHaveAttribute('href', '/admin');
+  });
+
   it('renders the matching sidebar item as keyboard reachable', () => {
     pathname = '/admin/vocabulary';
     render(<AdminSidebar />);
@@ -97,7 +109,7 @@ describe('admin shell routing and accessibility', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Collapse admin sidebar' }));
 
     expect(screen.getByRole('button', { name: 'Expand admin sidebar' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Manage Lessons' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Lessons' })).toHaveAttribute('aria-current', 'page');
     expect(sessionStorage.getItem('admin-sidebar-collapse')).toBe('true');
   });
 

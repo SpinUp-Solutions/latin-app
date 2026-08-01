@@ -48,6 +48,15 @@ const mock = (title: string) => ({
   versionId: 'version-a',
   parent: { kind: 'standalone' as const },
 });
+const renderPage = async () => {
+  const params = Promise.resolve({ mockId: 'mock-1' });
+  let view!: ReturnType<typeof render>;
+  await act(async () => {
+    view = render(<MockOverviewPage params={params} />);
+    await params;
+  });
+  return { params, view };
+};
 
 describe('mock overview dirty reconciliation', () => {
   beforeEach(() => {
@@ -77,7 +86,6 @@ describe('mock overview dirty reconciliation', () => {
   });
 
   it('reconciles the latest refetched snapshot after explicit discard, including remote archive', async () => {
-    const confirm = jest.spyOn(window, 'confirm').mockReturnValue(true);
     const params = Promise.resolve({ mockId: 'mock-1' });
     let view!: ReturnType<typeof render>;
     await act(async () => {
@@ -92,8 +100,8 @@ describe('mock overview dirty reconciliation', () => {
     });
     view.rerender(<MockOverviewPage params={params} />);
     fireEvent.click(screen.getByRole('button', { name: 'Discard card changes' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Discard card changes' }));
     expect(await screen.findByDisplayValue('Remote archived')).toBeDisabled();
-    confirm.mockRestore();
   });
 
   it('defers the complete ownership snapshot while the version editor is dirty', async () => {
@@ -137,6 +145,28 @@ describe('mock overview dirty reconciliation', () => {
     expect(screen.getByLabelText('Student-facing title')).toHaveValue('Trimmed');
     expect(screen.getByLabelText('Description')).toHaveValue('Clean');
     expect(screen.getByRole('button', { name: 'Archive assignment' })).not.toBeDisabled();
+  });
+
+  it('preserves newer card edits when a settings save finishes', async () => {
+    let resolveSave!: (value: object | PromiseLike<object>) => void;
+    mutation.mockImplementation(() => ({
+      unwrap: () =>
+        new Promise<object>(resolve => {
+          resolveSave = resolve;
+        }),
+    }));
+    await renderPage();
+
+    fireEvent.change(screen.getByLabelText('Student-facing title'), { target: { value: 'Submitted title' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
+    fireEvent.change(screen.getByLabelText('Student-facing title'), { target: { value: 'Newer local title' } });
+    await act(async () => {
+      resolveSave({ mock: mock('Submitted title') });
+      await Promise.resolve();
+    });
+
+    expect(screen.getByLabelText('Student-facing title')).toHaveValue('Newer local title');
+    expect(screen.getByRole('button', { name: 'Discard card changes' })).toBeEnabled();
   });
 
   it.each([

@@ -20,9 +20,10 @@ import { Button } from '@/src/components/ui/button';
 import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { useAdminApi } from '@/src/hooks/useAdminApi';
+import type { LearningPathMigrationManifestInput } from '@/src/lib/learning-units/schemas';
 import { toast } from 'sonner';
 
-type MigrationKey = 'poolTokens' | 'lessonSummaries';
+type MigrationKey = 'poolTokens' | 'lessonSummaries' | 'learningPath';
 type MigrationMode = 'dryRun' | 'run';
 type MigrationResult = Record<string, unknown>;
 
@@ -85,15 +86,99 @@ function AdministrationPage() {
   const [runningMigration, setRunningMigration] = useState<string | null>(null);
   const [migrationResults, setMigrationResults] = useState<Partial<Record<MigrationKey, MigrationResult>>>({});
   const [pendingMigration, setPendingMigration] = useState<MigrationKey | null>(null);
+  const [learningPathManifest, setLearningPathManifest] = useState<LearningPathMigrationManifestInput | null>(null);
+
+  const createLearningPathMigrationId = () => {
+    const timestamp = new Date().toISOString().replace(/\D/g, '');
+    return `learning-path-${timestamp.slice(0, 8)}-${timestamp.slice(8, 14)}`;
+  };
+
+  const runLearningPathMigration = async (mode: MigrationMode) => {
+    const runId = `learningPath-${mode}`;
+    let appliedResult: unknown;
+    setRunningMigration(runId);
+
+    try {
+      if (mode === 'dryRun') {
+        const response = await makeAdminRequest('learning-path/migration', {
+          method: 'POST',
+          body: JSON.stringify({
+            action: 'dry-run',
+            migrationId: createLearningPathMigrationId(),
+          }),
+        });
+        if (!response?.manifest) {
+          throw new Error('The Learning Path dry run did not return a manifest');
+        }
+
+        const manifest = response.manifest as LearningPathMigrationManifestInput;
+        setLearningPathManifest(manifest);
+        setMigrationResults(previous => ({ ...previous, learningPath: { manifest } }));
+        toast.success('Dry run completed: Learning Path');
+        return;
+      }
+
+      if (!learningPathManifest) {
+        throw new Error('Run a Learning Path dry run before applying the migration');
+      }
+
+      appliedResult = await makeAdminRequest('learning-path/migration', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'apply', manifest: learningPathManifest }),
+      });
+      setMigrationResults(previous => ({
+        ...previous,
+        learningPath: {
+          manifest: learningPathManifest,
+          applied: appliedResult,
+          verification: { status: 'pending' },
+        },
+      }));
+
+      const verification = await makeAdminRequest('learning-path/migration', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'verify', manifest: learningPathManifest }),
+      });
+      setMigrationResults(previous => ({
+        ...previous,
+        learningPath: { manifest: learningPathManifest, applied: appliedResult, verification },
+      }));
+      toast.success('Learning Path migration applied and verified');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Learning Path migration failed';
+      if (mode === 'run' && appliedResult && learningPathManifest) {
+        setMigrationResults(previous => ({
+          ...previous,
+          learningPath: {
+            manifest: learningPathManifest,
+            applied: appliedResult,
+            verification: { status: 'failed', error: message },
+          },
+        }));
+        toast.error(`The migration was applied but verification failed: ${message}. Use rollback before retrying.`);
+      } else {
+        toast.error(message);
+      }
+    } finally {
+      setRunningMigration(null);
+    }
+  };
 
   const runMigration = async (key: MigrationKey, mode: MigrationMode) => {
+    if (key === 'learningPath') {
+      await runLearningPathMigration(mode);
+      return;
+    }
+
     const endpoints: Record<MigrationKey, string> = {
       poolTokens: 'vocabulary-pools/backfill-search-tokens',
       lessonSummaries: 'lessons/backfill-summaries',
+      learningPath: 'learning-path/migration',
     };
     const labels: Record<MigrationKey, string> = {
       poolTokens: 'vocabulary search tokens',
       lessonSummaries: 'lesson summaries',
+      learningPath: 'Learning Path',
     };
     const isDryRun = mode === 'dryRun';
     const runId = `${key}-${mode}`;
@@ -121,7 +206,13 @@ function AdministrationPage() {
     );
   };
 
-  const migrationLabel = pendingMigration === 'poolTokens' ? 'vocabulary search tokens' : 'lesson summaries';
+  const migrationLabels: Record<MigrationKey, string> = {
+    poolTokens: 'vocabulary search tokens',
+    lessonSummaries: 'lesson summaries',
+    learningPath: 'Learning Path',
+  };
+  const migrationLabel = pendingMigration ? migrationLabels[pendingMigration] : 'data';
+  const isLearningPathConfirmation = pendingMigration === 'learningPath';
 
   return (
     <AdminPage>
@@ -239,6 +330,38 @@ function AdministrationPage() {
                   </div>
                   {renderMigrationResult('lessonSummaries')}
                 </div>
+                <div className="rounded-lg border border-border/70 bg-roman-marble/60 p-3">
+                  <p className="text-sm font-medium">Learning Path</p>
+                  <p className="mb-2 mt-1 text-xs leading-relaxed text-roman-stone">
+                    Build and review the legacy lesson manifest before applying it. Run applies that exact manifest and
+                    immediately verifies the admin and student order.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      aria-label="Dry run Learning Path migration"
+                      disabled={runningMigration !== null}
+                      onClick={() => runMigration('learningPath', 'dryRun')}>
+                      {runningMigration === 'learningPath-dryRun' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Dry Run
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      className="border border-destructive/30 bg-transparent text-destructive hover:bg-destructive/10"
+                      aria-label="Run Learning Path migration"
+                      disabled={runningMigration !== null || !learningPathManifest}
+                      onClick={() => setPendingMigration('learningPath')}>
+                      {runningMigration === 'learningPath-run' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Run
+                    </Button>
+                  </div>
+                  {!learningPathManifest && (
+                    <p className="mt-2 text-xs text-roman-stone">Run is enabled after a successful dry run.</p>
+                  )}
+                  {renderMigrationResult('learningPath')}
+                </div>
               </div>
             </DashboardCard>
           </div>
@@ -252,8 +375,12 @@ function AdministrationPage() {
           if (pendingMigration) void runMigration(pendingMigration, 'run');
         }}
         title={`Run ${migrationLabel} migration?`}
-        description="This will mutate production data. Run a dry run first if you have not already."
-        confirmText="Run migration"
+        description={
+          isLearningPathConfirmation
+            ? 'This will create the canonical Learning Path from the exact manifest shown in the dry-run result, then verify the admin and student projections. The rollback window will remain open.'
+            : 'This will mutate production data. Run a dry run first if you have not already.'
+        }
+        confirmText={isLearningPathConfirmation ? 'Apply and verify' : 'Run migration'}
         confirmVariant="destructive"
       />
     </AdminPage>

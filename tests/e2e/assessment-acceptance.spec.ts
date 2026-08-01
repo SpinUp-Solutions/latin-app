@@ -140,8 +140,13 @@ test.describe('Assessment acceptance', () => {
     await expect(
       page.getByText('Save or discard your version changes before transferring it out of rotation.')
     ).toBeVisible();
-    page.once('dialog', dialog => dialog.accept());
     await page.getByRole('button', { name: 'Discard changes' }).click();
+    await page
+      .getByRole('alertdialog', { name: 'Discard unsaved changes?' })
+      .getByRole('button', {
+        name: 'Discard changes',
+      })
+      .click();
     await expect(page.getByLabel('Version name')).toHaveValue('Mock assignment B');
     await expect(page.getByRole('button', { name: 'Assign as mock' })).toBeEnabled();
     await page.getByRole('button', { name: 'Assign as mock' }).click();

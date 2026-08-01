@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { PracticeSection } from '@/src/components/ui/core/PracticeSection';
 import type { LessonWithProgress } from '@/src/types/lesson';
 import type { PracticeCategory } from '@/src/types/practice-category';
+import type { StudentMockTestSummary } from '@/src/types/test';
 
 const makeCategory = (
   id: string,
@@ -240,5 +241,41 @@ describe('PracticeSection', () => {
     await user.clear(search);
     await user.click(screen.getByRole('button', { name: 'Continue: Working words' }));
     expect(onLessonClick).toHaveBeenCalledWith('progress');
+  });
+
+  it('shows Mock Tests as a practice tab when live mock tests are available', async () => {
+    const user = userEvent.setup();
+    const onMockTestClick = jest.fn();
+    const mock: StudentMockTestSummary = {
+      id: 'mock-1',
+      title: 'Chapter rehearsal',
+      description: '',
+      passingPercentage: 70,
+      totalPoints: 10,
+      attemptSummary: {
+        origin: { kind: 'mock-test', mockTestId: 'mock-1' },
+        inProgressAttemptId: null,
+        attemptCount: 0,
+        best: null,
+        latest: null,
+      },
+      scoreTrend: [],
+    };
+
+    render(
+      <PracticeSection
+        lessons={[makeLesson('vocab-1', 'Starter words', 'vocab')]}
+        onLessonClick={jest.fn()}
+        mockTests={[mock]}
+        onMockTestClick={onMockTestClick}
+      />
+    );
+
+    const mockTestsTab = screen.getByRole('tab', { name: 'Mock Tests 1' });
+    await user.click(mockTestsTab);
+
+    expect(screen.getByRole('heading', { name: 'Mock Tests' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Start Mock Test' }));
+    expect(onMockTestClick).toHaveBeenCalledWith('mock-1');
   });
 });

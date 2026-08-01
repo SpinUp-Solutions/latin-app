@@ -17,8 +17,6 @@ import {
   Clock,
   AlertTriangle,
   RotateCcw,
-  Search,
-  X,
   ClipboardList,
   Headphones,
   Pencil,
@@ -38,7 +36,6 @@ import { clearDraft, loadDrafts } from '@/src/store/slices/lessonEditorSlice';
 import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { isExerciseType } from '@/src/utils/lessonUtils';
-import { Input } from '@/src/components/ui/input';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { useDebounce } from '@/src/hooks/useDebounce';
 import { PracticeCategoryChips } from './practice-categories/PracticeCategoryChips';
@@ -51,7 +48,13 @@ import {
   type PracticeCategoryFilter,
 } from '@/src/utils/practiceCategoryLessons';
 import { LessonTypeTabs } from './LessonTypeTabs';
-import { AdminIconChip, AdminStatusBadge } from '@/src/components/admin/shell';
+import {
+  AdminIconChip,
+  AdminLoadingState,
+  AdminMetric,
+  AdminSearchInput,
+  AdminStatusBadge,
+} from '@/src/components/admin/shell';
 import { cn } from '@/src/lib/utils';
 
 type LessonTab = LessonSummary['type'];
@@ -92,13 +95,12 @@ interface LessonManagerProps {
 
 function LessonMetric({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: React.ReactNode }) {
   return (
-    <div className="flex min-w-0 items-center gap-2.5 border-r border-border/70 px-4 py-3.5 last:border-r-0 sm:px-5">
-      <Icon className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-      <div className="min-w-0">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-roman-stone">{label}</p>
-        <p className="mt-0.5 truncate text-sm font-semibold text-foreground">{value}</p>
-      </div>
-    </div>
+    <AdminMetric
+      icon={Icon}
+      label={label}
+      value={value}
+      className="gap-2.5 border-r border-border/70 px-4 py-3.5 last:border-r-0 sm:px-5"
+    />
   );
 }
 
@@ -471,38 +473,23 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>
-      </div>
-    );
+    return <AdminLoadingState label="Loading lessons" className="min-h-64 p-0" />;
   }
 
   return (
     <div className="space-y-8">
       {/* Search Bar */}
-      {(lessons.length > 0 || Object.keys(drafts).length > 0) && (
+      {(lessons.length > 0 || Object.keys(drafts).length > 0 || recoveryItems.length > 0) && (
         <RomanCard className="mb-6">
           <RomanCardContent className="p-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Search lessons by title or description..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                className="pl-10 pr-10 bg-white transition-colors duration-300 border-gray-200 focus:border-roman-red focus-visible:ring-0 focus-visible:ring-offset-0"
-              />
-              {searchQuery && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-1 top-1 h-8 w-8 p-0 text-gray-500 hover:text-gray-900"
-                  title="Clear search">
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
+            <AdminSearchInput
+              value={searchQuery}
+              onValueChange={setSearchQuery}
+              label="Search lessons"
+              clearLabel="Clear lesson search"
+              placeholder="Search lessons by title or description..."
+              inputClassName="border-gray-200 bg-white transition-colors duration-300 focus:border-roman-red focus-visible:ring-0 focus-visible:ring-offset-0"
+            />
           </RomanCardContent>
         </RomanCard>
       )}
@@ -689,7 +676,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
           <div className="h-8 w-1 rounded-full bg-primary" aria-hidden="true" />
           <h2 className="font-serif text-xl text-foreground">Saved lessons ({filteredLessons.length})</h2>
         </div>
-        {lessons.length === 0 && Object.keys(drafts).length === 0 ? (
+        {lessons.length === 0 && Object.keys(drafts).length === 0 && recoveryItems.length === 0 ? (
           <Card>
             <CardContent className="p-12 text-center">
               <BookOpen className="h-16 w-16 text-gray-300 mx-auto mb-4" />
@@ -697,7 +684,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
               <p className="text-gray-600 mb-4">Create your first lesson to get started.</p>
             </CardContent>
           </Card>
-        ) : filteredLessons.length === 0 && filteredDrafts.length === 0 ? (
+        ) : filteredLessons.length === 0 && filteredDrafts.length === 0 && filteredRecoveryItems.length === 0 ? (
           <Card>
             <CardContent className="p-12 text-center">
               <BookOpen className="h-16 w-16 text-gray-300 mx-auto mb-4" />
@@ -708,12 +695,12 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
               </Button>
             </CardContent>
           </Card>
-        ) : filteredLessons.length === 0 && filteredDrafts.length > 0 ? (
+        ) : filteredLessons.length === 0 ? (
           <div className="text-center text-gray-500 py-8">
             {searchQuery ? (
-              <>No saved lessons match &ldquo;{searchQuery}&rdquo;. Continue with matching drafts above.</>
+              <>No saved lessons match &ldquo;{searchQuery}&rdquo;. Matching drafts or recovery items appear above.</>
             ) : (
-              <>No saved lessons yet. Continue with your drafts or create a new lesson.</>
+              <>No saved lessons yet. Continue with the work above or create a new lesson.</>
             )}
           </div>
         ) : (

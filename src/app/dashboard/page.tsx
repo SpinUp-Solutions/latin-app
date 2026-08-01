@@ -14,7 +14,7 @@ import {
 } from '@/src/types/lesson';
 import { Button } from '@/src/components/ui/button';
 import { toast } from 'sonner';
-import { BookOpen, ClipboardCheck, FileCheck2, Lock, Trophy, User } from 'lucide-react';
+import { BookOpen, FileCheck2, Lock, Trophy, User } from 'lucide-react';
 import Image from 'next/image';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { CircularProgressButton } from '@/src/components/ui/CircularProgressButton';
@@ -24,7 +24,7 @@ import { SwiperNavigation } from '@/src/components/ui/core/swiper-nav';
 import { PracticeSection } from '@/src/components/ui/core/PracticeSection';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { FeedbackBanner } from '@/src/components/ui/core/feedback-banner';
-import type { StudentMockTestSummary } from '@/src/types/test';
+export { MockTestCard } from '@/src/components/ui/core/mock-test-card';
 
 const statusConfig: Record<LessonStatus, { card: string }> = {
   completed: {
@@ -230,58 +230,6 @@ export const TestCard = memo(
 );
 
 TestCard.displayName = 'TestCard';
-
-export const MockTestCard = memo(({ mock, onMockClick }: { mock: StudentMockTestSummary; onMockClick: (id: string) => void }) => {
-  const summary = mock.attemptSummary;
-  const action = summary.inProgressAttemptId ? 'Continue Mock Test' : summary.attemptCount ? 'Retake Mock Test' : 'Start Mock Test';
-  const latest = summary.latest;
-  // Outcomes are frozen on submission. The mock's current setting only
-  // describes a future attempt, so it must never reinterpret history.
-  const latestOutcome = latest
-    ? latest.outcome === 'passed'
-      ? 'Passed — informational only'
-      : latest.outcome === 'not-passed'
-        ? 'Not passed — informational only'
-        : 'Completed — score-only attempt'
-    : null;
-
-  return (
-    <RomanCard className="group h-full rounded-3xl border border-teal-300 bg-gradient-to-br from-teal-50 via-cyan-50 to-white shadow-lg transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
-      <RomanCardContent className="flex h-full flex-col space-y-4 p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-teal-700 px-2.5 py-1 text-xs font-semibold tracking-wide text-white">
-              <ClipboardCheck className="h-3.5 w-3.5" aria-hidden="true" />
-              Mock test
-            </div>
-            <h3 className="truncate font-serif text-xl text-gray-950">{mock.title}</h3>
-            <div className="mt-1 line-clamp-2 text-sm text-gray-600"><SimpleRichDisplay content={mock.description || ''} /></div>
-          </div>
-          <ClipboardCheck className="h-10 w-10 shrink-0 rounded-full bg-teal-700 p-2 text-white" aria-hidden="true" />
-        </div>
-        <div className="flex flex-wrap gap-2 text-xs font-medium">
-          <span className="rounded-full bg-white px-2.5 py-1 text-teal-900 ring-1 ring-teal-200">
-            {mock.passingPercentage === null ? 'Score only · practice never gates your path' : `Pass ≥ ${mock.passingPercentage}% · informational`}
-          </span>
-          {summary.inProgressAttemptId && <span className="rounded-full bg-amber-100 px-2.5 py-1 text-amber-900">In progress</span>}
-        </div>
-        {summary.best ? (
-          <div className="grid grid-cols-2 gap-3 rounded-xl border border-teal-100 bg-white/80 p-3">
-            <div><div className="flex items-center gap-1 text-xs text-gray-500"><Trophy className="h-3.5 w-3.5" aria-hidden="true" />Best</div><div className="text-2xl font-semibold text-teal-800">{Math.round(summary.best.percentage)}%</div></div>
-            <div><div className="text-xs text-gray-500">Latest</div><div className="font-medium text-gray-900">{formatPoints(latest?.score ?? 0)} / {formatPoints(latest?.maxScore ?? 0)}</div><div className="text-xs text-gray-600">{Math.round(latest?.percentage ?? 0)}%</div></div>
-          </div>
-        ) : <p className="text-sm text-gray-600">Not attempted · {formatPoints(mock.totalPoints)} total points</p>}
-        <p className="text-sm text-gray-700" aria-label={`Recent scores: ${mock.scoreTrend.length ? mock.scoreTrend.map(score => `${Math.round(score.percentage)} percent`).join(', ') : 'no submitted attempts'}`}>
-          {mock.scoreTrend.length ? `Recent scores: ${mock.scoreTrend.map(score => `${Math.round(score.percentage)}%`).join(' → ')}` : 'Your practice attempts will appear here.'}
-        </p>
-        <div className="mt-auto flex items-center justify-between gap-3 text-sm"><span>{summary.attemptCount === 1 ? '1 practice attempt' : `${summary.attemptCount} practice attempts`}</span>{latestOutcome && <span className={latest?.outcome === 'passed' || latest?.outcome === 'score-only' ? 'font-semibold text-emerald-700' : 'font-semibold text-amber-700'}>{latestOutcome}</span>}</div>
-        <Button type="button" className="w-full bg-teal-700 text-white hover:bg-teal-800" onClick={() => onMockClick(mock.id)}>{action}</Button>
-      </RomanCardContent>
-    </RomanCard>
-  );
-});
-
-MockTestCard.displayName = 'MockTestCard';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -524,20 +472,13 @@ export default function DashboardPage() {
               )}
             </section>
 
-            {mockTests.length > 0 && (
-              <section className="mb-16" aria-labelledby="mock-tests-heading">
-                <div className="mb-8">
-                  <h2 id="mock-tests-heading" className="text-4xl font-serif text-gray-900">Mock Tests</h2>
-                  <p className="mt-2 text-lg text-roman-stone">Practice under test conditions. Your scores here never unlock or block your Learning Path.</p>
-                </div>
-                <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
-                  {mockTests.map(mock => <MockTestCard key={mock.id} mock={mock} onMockClick={handleMockClick} />)}
-                </div>
-              </section>
-            )}
-
             <section className="mb-16">
-              <PracticeSection lessons={practiceLessons} onLessonClick={handleLessonClick} />
+              <PracticeSection
+                lessons={practiceLessons}
+                onLessonClick={handleLessonClick}
+                mockTests={mockTests}
+                onMockTestClick={handleMockClick}
+              />
             </section>
           </div>
         </main>

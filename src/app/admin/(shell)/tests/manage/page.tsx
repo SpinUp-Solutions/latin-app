@@ -12,19 +12,14 @@ function ManageTestsPage() {
     <AdminPage>
       <AdminPageHeader
         title="Manage Tests"
-        description="Edit and organize scored tests and their versions."
+        description="Edit scored tests, manage active versions, and review Learning Path placement."
         actions={
-          <>
-            <Button asChild variant="outline">
-              <Link href="/admin/mock-tests">Mock Tests</Link>
-            </Button>
-            <Button asChild>
-              <Link href="/admin/tests/create">
-                <Plus className="mr-2 h-4 w-4" />
-                Create Test
-              </Link>
-            </Button>
-          </>
+          <Button asChild>
+            <Link href="/admin/tests/create">
+              <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+              Create Test
+            </Link>
+          </Button>
         }
       />
       <TestManager />

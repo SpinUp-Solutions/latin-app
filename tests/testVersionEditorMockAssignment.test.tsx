@@ -82,6 +82,8 @@ const version = {
   totalExercises: 1,
   totalPoints: 1,
 };
+const renderEditor = (editor: React.ReactElement) =>
+  render(<Provider store={configureStore({ reducer: { lessonEditor: lessonEditorReducer } })}>{editor}</Provider>);
 
 jest.mock('@/src/store/api/testApi', () => ({
   useGetTestByIdQuery: () => ({ data: { test, versions: [version], drafts: [], mocks: [] }, isLoading: false }),
@@ -102,22 +104,19 @@ describe('normal version editor mock-assignment contract', () => {
   });
 
   it('blocks assignment while dirty and opens the configured confirmation only after discard', async () => {
-    const store = configureStore({ reducer: { lessonEditor: lessonEditorReducer } });
-    render(
-      <Provider store={store}>
-        <TestVersionEditor
-          initialTest={test}
-          initialVersion={version}
-          onSave={jest.fn()}
-          mockAssignment={{
-            testId: test.id,
-            defaultTitle: 'Chapter test — Version A',
-            defaultDescription: test.description,
-            defaultPassingPercentage: test.passingPercentage,
-            onAssigned: jest.fn(),
-          }}
-        />
-      </Provider>
+    renderEditor(
+      <TestVersionEditor
+        initialTest={test}
+        initialVersion={version}
+        onSave={jest.fn()}
+        mockAssignment={{
+          testId: test.id,
+          defaultTitle: 'Chapter test — Version A',
+          defaultDescription: test.description,
+          defaultPassingPercentage: test.passingPercentage,
+          onAssigned: jest.fn(),
+        }}
+      />
     );
 
     await screen.findByRole('heading', { name: 'Test Version Editor' });
@@ -128,11 +127,34 @@ describe('normal version editor mock-assignment contract', () => {
       screen.getByText('Save or discard your version changes before transferring it out of rotation.')
     ).toBeInTheDocument();
 
-    jest.spyOn(window, 'confirm').mockReturnValue(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('Discard unsaved changes?');
     fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Assign as mock' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Assign as mock' }));
     expect(screen.getByRole('dialog')).toHaveTextContent('Chapter test — Version A|Chapter description|75');
+  });
+
+  it('resets a new version to its route-provided name after discard', async () => {
+    renderEditor(
+      <TestVersionEditor
+        initialTest={test}
+        creationScope="normal-test-test-1-version-create"
+        defaultVersionName="New Version"
+        onSave={jest.fn()}
+        draftMode
+        hideTestSettings
+      />
+    );
+
+    await waitFor(() => expect(screen.getByLabelText('Version name')).toHaveValue('New Version'));
+    fireEvent.change(screen.getByLabelText('Version name'), { target: { value: 'Temporary name' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+    await waitFor(() => expect(screen.getByLabelText('Version name')).toHaveValue('New Version'));
+    expect(sessionStorage.getItem('test_editor_identity:normal-test-test-1-version-create:version')).toBe(
+      'version-request-id'
+    );
   });
 
   it('preserves edits made while a save request is pending', async () => {
@@ -143,12 +165,7 @@ describe('normal version editor mock-assignment contract', () => {
           resolveSave = resolve;
         })
     );
-    const store = configureStore({ reducer: { lessonEditor: lessonEditorReducer } });
-    render(
-      <Provider store={store}>
-        <TestVersionEditor initialTest={test} initialVersion={version} onSave={onSave} />
-      </Provider>
-    );
+    renderEditor(<TestVersionEditor initialTest={test} initialVersion={version} onSave={onSave} />);
 
     await screen.findByRole('heading', { name: 'Test Version Editor' });
     fireEvent.change(screen.getByLabelText('Version name'), { target: { value: 'Submitted name' } });

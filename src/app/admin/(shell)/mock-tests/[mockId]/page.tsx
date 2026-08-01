@@ -1,6 +1,7 @@
 'use client';
 
-import { use, useEffect, useRef, useState } from 'react';
+import { use, useCallback, useEffect, useRef, useState } from 'react';
+import { shallowEqual } from 'react-redux';
 import { useRouter } from 'next/navigation';
 import { Archive, Copy, Loader2, MoveRight, Save } from 'lucide-react';
 import { toast } from 'sonner';
@@ -27,10 +28,34 @@ import {
 import type { MockTest } from '@/src/types/test';
 import { useUnsavedNavigationGuard } from '@/src/hooks/useUnsavedNavigationGuard';
 import { AdminPage, AdminPageHeader, AdminStatusBadge } from '@/src/components/admin/shell';
+import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
 import { UnsavedNavigationDialog } from '@/src/components/ui/core/UnsavedNavigationDialog';
 import { getApiErrorMessage } from '@/src/store/api/baseQuery';
 
 const errorMessage = (error: unknown) => getApiErrorMessage(error, 'The change could not be saved.');
+
+interface MockCardSettings {
+  title: string;
+  description: string;
+  passingPercentage: number | null;
+  isLive: boolean;
+}
+
+const EMPTY_MOCK_SETTINGS: MockCardSettings = {
+  title: '',
+  description: '',
+  passingPercentage: null,
+  isLive: false,
+};
+
+function getMockCardSettings(mock: MockTest): MockCardSettings {
+  return {
+    title: mock.title,
+    description: mock.description,
+    passingPercentage: mock.passingPercentage,
+    isLive: mock.isLive,
+  };
+}
 
 function MockOverviewPage({ params }: { params: Promise<{ mockId: string }> }) {
   const { mockId } = use(params);
@@ -51,32 +76,35 @@ function MockOverviewPage({ params }: { params: Promise<{ mockId: string }> }) {
   const [reactivate, { isLoading: reactivating }] = useReactivateStandaloneMockMutation();
   const [move, { isLoading: moving }] = useMoveMockToTestMutation();
   const [duplicate, { isLoading: duplicating }] = useDuplicateMockIntoTestMutation();
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [passingPercentage, setPassingPercentage] = useState<number | null>(null);
-  const [isLive, setIsLive] = useState(false);
+  const [settings, setSettings] = useState<MockCardSettings>(EMPTY_MOCK_SETTINGS);
+  const { title, description, passingPercentage, isLive } = settings;
   const [testId, setTestId] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [discardConfirmationOpen, setDiscardConfirmationOpen] = useState(false);
   const versionDirty = useAppSelector(state => state.lessonEditor.dirty);
-  const settingsBaseline = useRef({
-    title: '',
-    description: '',
-    passingPercentage: null as number | null,
-    isLive: false,
-  });
+  const settingsBaseline = useRef(EMPTY_MOCK_SETTINGS);
+  const latestSettings = useRef(settings);
   const duplicateRequestId = useRef<string | null>(null);
   const initializedMockId = useRef<string | null>(null);
   const lastIncomingMock = useRef<MockTest | null>(null);
   const pendingMockSnapshot = useRef<MockTest | null>(null);
   const versionDirtyRef = useRef(false);
   const [hasDeferredSnapshot, setHasDeferredSnapshot] = useState(false);
-  const settingsDirty =
-    title !== settingsBaseline.current.title ||
-    description !== settingsBaseline.current.description ||
-    passingPercentage !== settingsBaseline.current.passingPercentage ||
-    isLive !== settingsBaseline.current.isLive;
+  const settingsDirty = !shallowEqual(settings, settingsBaseline.current);
   const dirty = versionDirty || settingsDirty;
+  latestSettings.current = settings;
   versionDirtyRef.current = versionDirty;
+  const updateSetting = <Key extends keyof MockCardSettings>(key: Key, value: MockCardSettings[Key]) =>
+    setSettings(current => ({ ...current, [key]: value }));
+  const applyMockSnapshot = useCallback((snapshot: MockTest) => {
+    const nextSettings = getMockCardSettings(snapshot);
+    setDisplayedMock(snapshot);
+    setSettings(nextSettings);
+    settingsBaseline.current = nextSettings;
+    initializedMockId.current = snapshot.id;
+    pendingMockSnapshot.current = null;
+    setHasDeferredSnapshot(false);
+  }, []);
 
   useEffect(() => {
     if (!incomingMock) return;
@@ -87,40 +115,15 @@ function MockOverviewPage({ params }: { params: Promise<{ mockId: string }> }) {
       setHasDeferredSnapshot(true);
       return;
     }
-    setDisplayedMock(incomingMock);
-    setTitle(incomingMock.title);
-    setDescription(incomingMock.description);
-    setPassingPercentage(incomingMock.passingPercentage);
-    setIsLive(incomingMock.isLive);
-    settingsBaseline.current = {
-      title: incomingMock.title,
-      description: incomingMock.description,
-      passingPercentage: incomingMock.passingPercentage,
-      isLive: incomingMock.isLive,
-    };
-    initializedMockId.current = incomingMock.id;
-    pendingMockSnapshot.current = null;
-    setHasDeferredSnapshot(false);
-  }, [dirty, incomingMock]);
+    applyMockSnapshot(incomingMock);
+  }, [applyMockSnapshot, dirty, incomingMock]);
 
   useEffect(() => {
     if (dirty || !pendingMockSnapshot.current) return;
     const latest = pendingMockSnapshot.current;
-    setDisplayedMock(latest);
-    setTitle(latest.title);
-    setDescription(latest.description);
-    setPassingPercentage(latest.passingPercentage);
-    setIsLive(latest.isLive);
-    settingsBaseline.current = {
-      title: latest.title,
-      description: latest.description,
-      passingPercentage: latest.passingPercentage,
-      isLive: latest.isLive,
-    };
-    pendingMockSnapshot.current = null;
-    setHasDeferredSnapshot(false);
+    applyMockSnapshot(latest);
     setError('The latest server state has been applied.');
-  }, [dirty]);
+  }, [applyMockSnapshot, dirty]);
 
   useEffect(() => {
     duplicateRequestId.current = null;
@@ -138,21 +141,15 @@ function MockOverviewPage({ params }: { params: Promise<{ mockId: string }> }) {
   const submit = async () => {
     setError(null);
     try {
+      const submittedSettings = settings;
       const result = await update({
         id: mockId,
         body: { title: title.trim(), description: description.trim(), passingPercentage, isLive },
       }).unwrap();
       const saved = result.mock;
-      setTitle(saved.title);
-      setDescription(saved.description);
-      setPassingPercentage(saved.passingPercentage);
-      setIsLive(saved.isLive);
-      settingsBaseline.current = {
-        title: saved.title,
-        description: saved.description,
-        passingPercentage: saved.passingPercentage,
-        isLive: saved.isLive,
-      };
+      const savedSettings = getMockCardSettings(saved);
+      settingsBaseline.current = savedSettings;
+      if (shallowEqual(latestSettings.current, submittedSettings)) setSettings(savedSettings);
       if (versionDirtyRef.current) {
         pendingMockSnapshot.current = saved;
         setHasDeferredSnapshot(true);
@@ -167,12 +164,7 @@ function MockOverviewPage({ params }: { params: Promise<{ mockId: string }> }) {
     }
   };
   const discardSettings = () => {
-    if (!settingsDirty || window.confirm('Discard unsaved mock card settings?')) {
-      setTitle(settingsBaseline.current.title);
-      setDescription(settingsBaseline.current.description);
-      setPassingPercentage(settingsBaseline.current.passingPercentage);
-      setIsLive(settingsBaseline.current.isLive);
-    }
+    setSettings(settingsBaseline.current);
   };
 
   const saveVersion = async (value: TestVersionEditorValue) => {
@@ -287,7 +279,7 @@ function MockOverviewPage({ params }: { params: Promise<{ mockId: string }> }) {
             <Input
               id="title"
               value={title}
-              onChange={event => setTitle(event.target.value)}
+              onChange={event => updateSetting('title', event.target.value)}
               disabled={mock.status === 'archived'}
             />
           </div>
@@ -296,19 +288,22 @@ function MockOverviewPage({ params }: { params: Promise<{ mockId: string }> }) {
             <Textarea
               id="description"
               value={description}
-              onChange={event => setDescription(event.target.value)}
+              onChange={event => updateSetting('description', event.target.value)}
               disabled={mock.status === 'archived'}
             />
           </div>
           <fieldset disabled={mock.status === 'archived'}>
-            <PassingRequirementControl value={passingPercentage} onChange={setPassingPercentage} />
+            <PassingRequirementControl
+              value={passingPercentage}
+              onChange={value => updateSetting('passingPercentage', value)}
+            />
           </fieldset>
           <label className="flex gap-2 text-sm">
             <input
               type="checkbox"
               aria-label="Live to students"
               checked={isLive}
-              onChange={event => setIsLive(event.target.checked)}
+              onChange={event => updateSetting('isLive', event.target.checked)}
               disabled={mock.status === 'archived'}
             />
             Live to students
@@ -323,7 +318,7 @@ function MockOverviewPage({ params }: { params: Promise<{ mockId: string }> }) {
               <Save className="mr-2 h-4 w-4" />
               {saving ? 'Saving…' : 'Save settings'}
             </Button>
-            <Button variant="outline" onClick={discardSettings} disabled={!settingsDirty}>
+            <Button variant="outline" onClick={() => setDiscardConfirmationOpen(true)} disabled={!settingsDirty}>
               Discard card changes
             </Button>
           </div>
@@ -481,6 +476,15 @@ function MockOverviewPage({ params }: { params: Promise<{ mockId: string }> }) {
         </section>
       </div>
       <UnsavedNavigationDialog guard={navigationGuard} />
+      <ConfirmationDialog
+        isOpen={discardConfirmationOpen}
+        onClose={() => setDiscardConfirmationOpen(false)}
+        onConfirm={discardSettings}
+        title="Discard card changes?"
+        description="This resets the card settings to the last saved state. Version changes are not affected."
+        confirmText="Discard card changes"
+        confirmVariant="destructive"
+      />
     </AdminPage>
   );
 }

@@ -2,7 +2,8 @@
 
 import { useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowDown, ArrowUp, Eye, EyeOff, Loader2, PackageOpen } from 'lucide-react';
+import { ArrowDown, ArrowUp, Eye, EyeOff, PackageOpen } from 'lucide-react';
+import { AdminErrorState, AdminLoadingState } from '@/src/components/admin/shell';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent } from '@/src/components/ui/card';
 import { useGetMocksQuery, useReorderMocksMutation } from '@/src/store/api/mockTestApi';
@@ -117,18 +118,14 @@ export function MockTestManager() {
       setReorderPending(false);
     }
   };
-  if (isLoading)
-    return (
-      <div className="flex justify-center p-12" role="status">
-        <Loader2 className="h-7 w-7 animate-spin" />
-        <span className="sr-only">Loading mock tests</span>
-      </div>
-    );
+  if (isLoading) return <AdminLoadingState label="Loading mock tests" />;
   if (isError)
     return (
-      <div role="alert" className="rounded-md border border-red-200 bg-red-50 p-6 text-red-700">
-        Unable to load mock tests. Refresh and try again.
-      </div>
+      <AdminErrorState
+        message="Unable to load mock tests."
+        retryLabel="Retry loading mock tests"
+        onRetry={() => void refetch()}
+      />
     );
   if (!mocks.length)
     return (

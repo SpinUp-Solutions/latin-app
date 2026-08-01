@@ -29,46 +29,71 @@ export const routeMatchesTemplate = (pathname: string, template: string) => {
 export const BREADCRUMB_ROUTES: BreadcrumbRoute[] = [
   {
     template: 'lessons/edit/$id/versions/$versionId/edit',
-    crumbs: ['Lessons', 'Edit Lesson', 'Edit Version'],
+    crumbs: ['Lessons', 'Lesson details', 'Version editor'],
     parentHrefs: pathname => ['/admin/lessons/manage', `/admin/lessons/edit/${getPathSegment(pathname, 2)}`],
   },
   {
     template: 'lessons/edit/$id/versions/create',
-    crumbs: ['Lessons', 'Edit Lesson', 'New Version'],
+    crumbs: ['Lessons', 'Lesson details', 'New version'],
     parentHrefs: pathname => ['/admin/lessons/manage', `/admin/lessons/edit/${getPathSegment(pathname, 2)}`],
   },
-  { template: 'lessons/manage', crumbs: ['Lessons', 'Manage'] },
-  { template: 'lessons/create', crumbs: ['Lessons', 'Create Lesson'], parentHrefs: () => ['/admin/lessons/manage'] },
-  { template: 'lessons/edit/$id', crumbs: ['Lessons', 'Edit Lesson'], parentHrefs: () => ['/admin/lessons/manage'] },
+  { template: 'lessons/manage', crumbs: ['Lessons'] },
+  { template: 'lessons/create', crumbs: ['Lessons', 'New lesson'], parentHrefs: () => ['/admin/lessons/manage'] },
+  { template: 'lessons/edit/$id', crumbs: ['Lessons', 'Lesson details'], parentHrefs: () => ['/admin/lessons/manage'] },
   { template: 'lessons/live', crumbs: ['Lessons', 'Live Lessons'], parentHrefs: () => ['/admin/lessons/manage'] },
   {
     template: 'tests/edit/$id/versions/$versionId/edit',
-    crumbs: ['Tests', 'Edit Test', 'Edit Version'],
+    crumbs: ['Tests', 'Test details', 'Version editor'],
     parentHrefs: pathname => ['/admin/tests/manage', `/admin/tests/edit/${getPathSegment(pathname, 2)}`],
   },
   {
     template: 'tests/edit/$id/versions/create',
-    crumbs: ['Tests', 'Edit Test', 'New Version'],
+    crumbs: ['Tests', 'Test details', 'New version'],
     parentHrefs: pathname => ['/admin/tests/manage', `/admin/tests/edit/${getPathSegment(pathname, 2)}`],
   },
-  { template: 'tests/manage', crumbs: ['Tests', 'Manage'] },
-  { template: 'tests/create', crumbs: ['Tests', 'Create Test'], parentHrefs: () => ['/admin/tests/manage'] },
-  { template: 'tests/edit/$id', crumbs: ['Tests', 'Edit Test'], parentHrefs: () => ['/admin/tests/manage'] },
-  { template: 'mock-tests/create', crumbs: ['Mock Tests', 'Create Mock Test'], parentHrefs: () => ['/admin/mock-tests'] },
-  { template: 'mock-tests/$mockId', crumbs: ['Mock Tests', 'Edit Mock Test'], parentHrefs: () => ['/admin/mock-tests'] },
+  { template: 'tests/manage', crumbs: ['Tests'] },
+  { template: 'tests/create', crumbs: ['Tests', 'New test'], parentHrefs: () => ['/admin/tests/manage'] },
+  { template: 'tests/edit/$id', crumbs: ['Tests', 'Test details'], parentHrefs: () => ['/admin/tests/manage'] },
+  { template: 'mock-tests/create', crumbs: ['Mock Tests', 'New mock test'], parentHrefs: () => ['/admin/mock-tests'] },
+  {
+    template: 'mock-tests/$mockId',
+    crumbs: ['Mock Tests', 'Mock test details'],
+    parentHrefs: () => ['/admin/mock-tests'],
+  },
   { template: 'mock-tests', crumbs: ['Mock Tests'] },
-  { template: 'vocabulary/advanced', crumbs: ['Vocabulary', 'Advanced Filters'], parentHrefs: () => ['/admin/vocabulary'] },
-  { template: 'vocabulary/pending', crumbs: ['Vocabulary', 'Pending Review'], parentHrefs: () => ['/admin/vocabulary'] },
-  { template: 'vocabulary', crumbs: ['Vocabulary', 'All Words'] },
-  { template: 'vocabulary-pools/create', crumbs: ['Vocabulary Pools', 'Create Pool'], parentHrefs: () => ['/admin/vocabulary-pools'] },
-  { template: 'vocabulary-pools/$poolId/edit', crumbs: ['Vocabulary Pools', 'Edit Pool'], parentHrefs: () => ['/admin/vocabulary-pools'] },
+  {
+    template: 'vocabulary/advanced',
+    crumbs: ['Vocabulary', 'Advanced Filters'],
+    parentHrefs: () => ['/admin/vocabulary'],
+  },
+  {
+    template: 'vocabulary/pending',
+    crumbs: ['Vocabulary', 'Pending Review'],
+    parentHrefs: () => ['/admin/vocabulary'],
+  },
+  { template: 'vocabulary', crumbs: ['Vocabulary'] },
+  {
+    template: 'vocabulary-pools/create',
+    crumbs: ['Vocabulary Pools', 'Create Pool'],
+    parentHrefs: () => ['/admin/vocabulary-pools'],
+  },
+  {
+    template: 'vocabulary-pools/$poolId/edit',
+    crumbs: ['Vocabulary Pools', 'Edit Pool'],
+    parentHrefs: () => ['/admin/vocabulary-pools'],
+  },
   { template: 'vocabulary-pools', crumbs: ['Vocabulary Pools'] },
-  { template: 'practice-categories/$categoryId', crumbs: ['Practice Categories', 'Category Details'], parentHrefs: () => ['/admin/practice-categories'] },
+  {
+    template: 'practice-categories/$categoryId',
+    crumbs: ['Practice Categories', 'Category Details'],
+    parentHrefs: () => ['/admin/practice-categories'],
+  },
   { template: 'practice-categories', crumbs: ['Practice Categories'] },
   { template: 'diagramming-attempts', crumbs: ['Diagramming Attempts'] },
 ];
 
-const getPathSegment = (pathname: string, index: number) => normalizePathname(pathname).split('/').filter(Boolean)[index];
+const getPathSegment = (pathname: string, index: number) =>
+  normalizePathname(pathname).split('/').filter(Boolean)[index];
 
 const SEGMENT_LABELS: Record<string, string> = {
   lessons: 'Lessons',

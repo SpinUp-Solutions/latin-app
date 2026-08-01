@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { shallowEqual } from 'react-redux';
 import Link from 'next/link';
 import {
   ArrowUpRight,
@@ -16,7 +17,7 @@ import {
   Shuffle,
 } from 'lucide-react';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
-import { AdminEmptyState, AdminPage, AdminPageHeader } from '@/src/components/admin/shell';
+import { AdminEmptyState, AdminMetric, AdminPage, AdminPageHeader } from '@/src/components/admin/shell';
 import { MockAssignmentDialog } from '@/src/components/ui/admin/MockAssignmentDialog';
 import { PassingRequirementControl } from '@/src/components/ui/admin/test-version/PassingRequirementControl';
 import { Badge } from '@/src/components/ui/badge';
@@ -32,32 +33,48 @@ import { getApiErrorMessage } from '@/src/store/api/baseQuery';
 import {
   useActivateTestVersionMutation,
   useDeactivateTestVersionMutation,
+  useDuplicateTestVersionMutation,
   useGetTestByIdQuery,
   useUpdateTestSettingsMutation,
 } from '@/src/store/api/testApi';
 import type { TestUnit } from '@/src/types/learning-unit';
 import type { MockTest, TestVersionSummary } from '@/src/types/test';
-import type { LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
 
-interface StatProps {
-  icon: LucideIcon;
-  label: string;
-  value: React.ReactNode;
-  className?: string;
-}
+type VersionAction = 'activate' | 'deactivate' | 'duplicate';
 
-function Stat({ icon: Icon, label, value, className }: StatProps) {
-  return (
-    <div className={`flex items-center gap-3 border-b px-5 py-4 last:border-b-0 sm:border-r sm:last:border-r-0 ${className ?? ''}`.trim()}>
-      <Icon className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-      <div>
-        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-roman-stone">{label}</p>
-        <p className="mt-0.5 text-sm font-semibold text-foreground">{value}</p>
-      </div>
-    </div>
-  );
-}
+const VERSION_ACTIONS: Record<
+  VersionAction,
+  {
+    title: (versionName: string) => string;
+    description: string;
+    confirmText: string;
+    errorMessage: string;
+  }
+> = {
+  activate: {
+    title: versionName => `Activate ${versionName}?`,
+    description:
+      'Activation adds this version to rotation. It can be selected for new student attempts as soon as this test is available in the Learning Path.',
+    confirmText: 'Activate version',
+    errorMessage: 'Could not activate this version.',
+  },
+  deactivate: {
+    title: versionName => `Deactivate ${versionName}?`,
+    description:
+      'Deactivation removes this version from new-attempt rotation. Existing in-progress attempts keep their frozen copy. A Learning Path test cannot lose its final active version.',
+    confirmText: 'Deactivate version',
+    errorMessage: 'Could not deactivate this version.',
+  },
+  duplicate: {
+    title: versionName => `Duplicate ${versionName}?`,
+    description:
+      'This creates an inactive copy that you can edit and preview. It will not enter student rotation until you activate it.',
+    confirmText: 'Duplicate version',
+    errorMessage: 'Could not duplicate this version.',
+  },
+};
+const VERSION_METRIC_CLASS = 'border-b last:border-b-0 sm:border-b-0 sm:border-r sm:last:border-r-0';
 
 interface VersionRowProps {
   testId: string;
@@ -70,14 +87,17 @@ interface VersionRowProps {
 
 function VersionRow({ testId, version, role, mock, testTitle, passingPercentage }: VersionRowProps) {
   const [assigning, setAssigning] = React.useState(false);
-  const [confirming, setConfirming] = React.useState<'activate' | 'deactivate' | null>(null);
+  const [confirming, setConfirming] = React.useState<VersionAction | null>(null);
+  const duplicateRequestId = `duplicate-${version.id}-${React.useId()}`;
   const [activate, activateState] = useActivateTestVersionMutation();
   const [deactivate, deactivateState] = useDeactivateTestVersionMutation();
+  const [duplicate, duplicateState] = useDuplicateTestVersionMutation();
   const effectivePassing = role === 'mock' ? mock!.passingPercentage : passingPercentage;
   const stakes =
     effectivePassing === null
       ? 'Score only'
       : `Pass ≥ ${effectivePassing}% (${((version.totalPoints * effectivePassing) / 100).toFixed(1)} of ${version.totalPoints} points)`;
+  const confirmation = confirming ? VERSION_ACTIONS[confirming] : null;
   const changeLifecycle = async () => {
     const action = confirming;
     if (!action) return;
@@ -85,17 +105,20 @@ function VersionRow({ testId, version, role, mock, testTitle, passingPercentage 
       if (action === 'activate') {
         await activate({ testId, versionId: version.id }).unwrap();
         toast.success(`${version.name} is now active in rotation`);
-      } else {
+      } else if (action === 'deactivate') {
         await deactivate({ testId, versionId: version.id }).unwrap();
         toast.success(`${version.name} is now inactive`);
+      } else {
+        await duplicate({
+          testId,
+          versionId: version.id,
+          requestId: duplicateRequestId,
+          name: `${version.name} (Copy)`,
+        }).unwrap();
+        toast.success(`${version.name} duplicated as an inactive draft`);
       }
     } catch (error) {
-      toast.error(
-        getApiErrorMessage(
-          error,
-          action === 'activate' ? 'Could not activate this version.' : 'Could not deactivate this version.'
-        )
-      );
+      toast.error(getApiErrorMessage(error, VERSION_ACTIONS[action].errorMessage));
     }
   };
 
@@ -160,11 +183,17 @@ function VersionRow({ testId, version, role, mock, testTitle, passingPercentage 
                     <ArrowUpRight className="ml-1.5 h-3.5 w-3.5" aria-hidden="true" />
                   </Link>
                 </Button>
-                <Button asChild size="sm" variant="outline">
-                  <Link href={`/admin/tests/edit/${testId}/versions/${version.id}/edit?duplicate=1`}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={duplicateState.isLoading}
+                  onClick={() => setConfirming('duplicate')}>
+                  {duplicateState.isLoading ? (
+                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden="true" />
+                  ) : (
                     <Copy className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                    Duplicate
-                  </Link>
+                  )}
+                  {duplicateState.isLoading ? 'Duplicating…' : 'Duplicate'}
                 </Button>
                 <Button size="sm" variant="ghost" onClick={() => setAssigning(true)}>
                   Assign as mock
@@ -207,12 +236,18 @@ function VersionRow({ testId, version, role, mock, testTitle, passingPercentage 
         </div>
 
         <div className="grid border-t bg-muted/30 sm:grid-cols-3">
-          <Stat icon={FileCheck2} label="Exercises" value={version.totalExercises} />
-          <Stat icon={Layers3} label="Points" value={version.totalPoints} />
-          <Stat
+          <AdminMetric
+            icon={FileCheck2}
+            label="Exercises"
+            value={version.totalExercises}
+            className={VERSION_METRIC_CLASS}
+          />
+          <AdminMetric icon={Layers3} label="Points" value={version.totalPoints} className={VERSION_METRIC_CLASS} />
+          <AdminMetric
             icon={CalendarDays}
             label="Last edited"
             value={version.updatedAt ? new Date(version.updatedAt).toLocaleDateString() : 'unknown'}
+            className={VERSION_METRIC_CLASS}
           />
         </div>
       </CardContent>
@@ -230,50 +265,55 @@ function VersionRow({ testId, version, role, mock, testTitle, passingPercentage 
         isOpen={confirming !== null}
         onClose={() => setConfirming(null)}
         onConfirm={() => void changeLifecycle()}
-        title={confirming === 'activate' ? `Activate ${version.name}?` : `Deactivate ${version.name}?`}
-        description={
-          confirming === 'activate'
-            ? 'Activation adds this version to rotation. It can be selected for new student attempts as soon as this test is available in the Learning Path.'
-            : 'Deactivation removes this version from new-attempt rotation. Existing in-progress attempts keep their frozen copy. A Learning Path test cannot lose its final active version.'
-        }
-        confirmText={confirming === 'activate' ? 'Activate version' : 'Deactivate version'}
+        title={confirmation?.title(version.name) ?? ''}
+        description={confirmation?.description ?? ''}
+        confirmText={confirmation?.confirmText}
         confirmVariant={confirming === 'deactivate' ? 'destructive' : undefined}
       />
     </Card>
   );
 }
 
+interface TestDetailsState {
+  title: string;
+  description: string;
+  passingPercentage: number | null;
+}
+
 function TestSettings({ test }: { test: TestUnit }) {
-  const [title, setTitle] = React.useState(test.title);
-  const [description, setDescription] = React.useState(test.description);
-  const [passingPercentage, setPassingPercentage] = React.useState<number | null>(test.passingPercentage);
-  const baseline = React.useRef({
+  const [details, setDetails] = React.useState<TestDetailsState>(() => ({
     title: test.title,
     description: test.description,
     passingPercentage: test.passingPercentage,
-  });
+  }));
+  const { title, description, passingPercentage } = details;
+  const baseline = React.useRef(details);
+  const latestDetails = React.useRef(details);
+  latestDetails.current = details;
   const [update, { isLoading }] = useUpdateTestSettingsMutation();
   const [status, setStatus] = React.useState<{ kind: 'success' | 'error'; message: string } | null>(null);
-  const dirty =
-    title !== baseline.current.title ||
-    description !== baseline.current.description ||
-    passingPercentage !== baseline.current.passingPercentage;
+  const dirty = !shallowEqual(details, baseline.current);
   const navigationGuard = useUnsavedNavigationGuard(
     dirty,
     'Your test settings have not been saved. Leave this page anyway?'
   );
+  const updateDetail = <Key extends keyof TestDetailsState>(key: Key, value: TestDetailsState[Key]) => {
+    setDetails(current => ({ ...current, [key]: value }));
+    setStatus(null);
+  };
 
   const save = async () => {
     setStatus(null);
     try {
+      const submittedDetails = details;
+      const normalizedDetails = { ...details, title: title.trim(), description: description.trim() };
       await update({
         id: test.id,
-        changes: { title: title.trim(), description: description.trim(), passingPercentage },
+        changes: normalizedDetails,
       }).unwrap();
-      baseline.current = { title: title.trim(), description: description.trim(), passingPercentage };
-      setTitle(title.trim());
-      setDescription(description.trim());
-      setStatus({ kind: 'success', message: 'Container settings saved.' });
+      baseline.current = normalizedDetails;
+      if (shallowEqual(latestDetails.current, submittedDetails)) setDetails(normalizedDetails);
+      setStatus({ kind: 'success', message: 'Test details saved.' });
     } catch (error) {
       setStatus({
         kind: 'error',
@@ -283,46 +323,31 @@ function TestSettings({ test }: { test: TestUnit }) {
   };
 
   const discard = () => {
-    setTitle(baseline.current.title);
-    setDescription(baseline.current.description);
-    setPassingPercentage(baseline.current.passingPercentage);
+    setDetails(baseline.current);
     setStatus(null);
   };
 
   return (
-    <Card aria-labelledby="test-settings">
+    <Card aria-labelledby="test-details">
       <CardContent className="space-y-4 p-5">
-        <h2 id="test-settings" className="font-serif text-xl">
-          Container settings
+        <h2 id="test-details" className="font-serif text-xl">
+          Test details
         </h2>
         <div className="space-y-2">
           <Label htmlFor="overview-test-title">Title</Label>
-          <Input
-            id="overview-test-title"
-            value={title}
-            onChange={event => {
-              setTitle(event.target.value);
-              setStatus(null);
-            }}
-          />
+          <Input id="overview-test-title" value={title} onChange={event => updateDetail('title', event.target.value)} />
         </div>
         <div className="space-y-2">
           <Label htmlFor="overview-test-description">Description</Label>
           <Textarea
             id="overview-test-description"
             value={description}
-            onChange={event => {
-              setDescription(event.target.value);
-              setStatus(null);
-            }}
+            onChange={event => updateDetail('description', event.target.value)}
           />
         </div>
         <PassingRequirementControl
           value={passingPercentage}
-          onChange={value => {
-            setPassingPercentage(value);
-            setStatus(null);
-          }}
+          onChange={value => updateDetail('passingPercentage', value)}
         />
         {status && (
           <p
@@ -333,10 +358,10 @@ function TestSettings({ test }: { test: TestUnit }) {
         )}
         <div className="flex gap-2">
           <Button disabled={isLoading || !dirty || !title.trim()} onClick={() => void save()}>
-            {isLoading ? 'Saving…' : 'Save container settings'}
+            {isLoading ? 'Saving…' : 'Save details'}
           </Button>
           <Button variant="outline" disabled={!dirty || isLoading} onClick={discard}>
-            Discard settings
+            Discard changes
           </Button>
         </div>
         <UnsavedNavigationDialog guard={navigationGuard} />
@@ -355,20 +380,6 @@ function SectionHeading({ id, title, count }: { id: string; title: string; count
         <span className="text-sm text-roman-stone">{count === 1 ? `${count} item` : `${count} items`}</span>
       )}
     </div>
-  );
-}
-
-function AddVersionButton({ testId, className }: { testId: string; className?: string }) {
-  return (
-    <Button
-      asChild
-      variant="ghost"
-      className={`h-9 rounded-full border border-dashed border-roman-gold/50 bg-white/70 px-3 text-sm font-medium text-foreground hover:border-roman-gold hover:bg-roman-gold/10 ${className ?? ''}`.trim()}>
-      <Link href={`/admin/tests/edit/${testId}/versions/create`}>
-        <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
-        Add inactive version
-      </Link>
-    </Button>
   );
 }
 
@@ -396,7 +407,18 @@ function TestOverviewPage({ params }: { params: Promise<{ id: string }> }) {
   return (
     <AdminPage>
       <div className="mx-auto max-w-5xl space-y-7">
-        <AdminPageHeader title={detail.test.title} description={detail.test.description || 'No description'} />
+        <AdminPageHeader
+          title={detail.test.title}
+          description={detail.test.description || 'No description'}
+          actions={
+            <Button asChild>
+              <Link href={`/admin/tests/edit/${id}/versions/create`}>
+                <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+                New version
+              </Link>
+            </Button>
+          }
+        />
 
         <TestSettings test={detail.test} />
 
@@ -417,7 +439,6 @@ function TestOverviewPage({ params }: { params: Promise<{ id: string }> }) {
                   passingPercentage={detail.test.passingPercentage}
                 />
               ))}
-              <AddVersionButton testId={id} className="w-full" />
             </div>
           ) : (
             <Card>
@@ -425,8 +446,7 @@ function TestOverviewPage({ params }: { params: Promise<{ id: string }> }) {
                 <AdminEmptyState
                   icon={Layers3}
                   title="No versions in rotation"
-                  description="This unplaced normal-test container is valid. Create and activate a version before placing it in the Learning Path."
-                  action={<AddVersionButton testId={id} />}
+                  description="Create a version from the button above, then activate it when it is ready for students."
                 />
               </CardContent>
             </Card>
@@ -436,8 +456,8 @@ function TestOverviewPage({ params }: { params: Promise<{ id: string }> }) {
         <section aria-labelledby="inactive-versions">
           <SectionHeading id="inactive-versions" title="Inactive drafts" count={drafts.length} />
           <p className="mb-3 text-sm text-roman-stone">
-            Drafts are admin-only. Save and preview incomplete work here, then activate it when it is ready for
-            student rotation.
+            Drafts are admin-only. Save and preview incomplete work here, then activate it when it is ready for student
+            rotation.
           </p>
           {drafts.length ? (
             <div className="space-y-3">
@@ -451,7 +471,6 @@ function TestOverviewPage({ params }: { params: Promise<{ id: string }> }) {
                   passingPercentage={detail.test.passingPercentage}
                 />
               ))}
-              <AddVersionButton testId={id} className="w-full" />
             </div>
           ) : (
             <Card>
@@ -459,8 +478,7 @@ function TestOverviewPage({ params }: { params: Promise<{ id: string }> }) {
                 <AdminEmptyState
                   icon={EyeOff}
                   title="No inactive drafts"
-                  description="New and duplicated versions appear here until an admin activates them."
-                  action={<AddVersionButton testId={id} />}
+                  description="New and duplicated versions appear here until you activate them."
                 />
               </CardContent>
             </Card>
