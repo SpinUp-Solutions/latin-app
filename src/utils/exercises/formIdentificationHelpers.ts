@@ -15,7 +15,11 @@ import {
   PronounTypeSchema,
   PronounPersonSchema,
 } from '@/shared/types/vocabulary/schemas';
-import { getSupportedVerbFormStepsForParsedPath } from './verbFormStepCompatibility';
+import {
+  getSupportedVerbFormStepsForParsedPath,
+  getVerbFormKindForParsedPath,
+  normalizeVerbFormStepsForParsedPaths,
+} from './verbFormStepCompatibility';
 
 type VerbWordResponse = Extract<ExerciseWordResponse, { part_of_speech: 'verb' }>;
 type NounWordResponse = Extract<ExerciseWordResponse, { part_of_speech: 'noun' }>;
@@ -52,6 +56,8 @@ export const extractStepValue = (word: ExerciseWordResponse, step: FormIdentific
         return word.form_path?.tense || '';
       case 'voice':
         return word.form_path?.voice || '';
+      case 'verb_form':
+        return getVerbFormKindForParsedPath(word.form_path);
       case 'mood':
         return word.form_path?.mood || '';
       case 'person':
@@ -135,7 +141,11 @@ export function enrichPathsWithSteps(
 ): Array<Record<string, string | undefined>> {
   return paths.map(path => {
     const enrichedPath: Record<string, string | undefined> = { ...path };
+    const verbSupport = isVerb(word) ? getSupportedVerbFormStepsForParsedPath(path) : null;
     steps.forEach(step => {
+      if (isVerb(word) && (!verbSupport || !verbSupport.supportedSteps.includes(step))) {
+        return;
+      }
       if (!enrichedPath[step]) {
         enrichedPath[step] = extractStepValue(word, step);
       }
@@ -149,20 +159,20 @@ export function getAnswerableStepsForWord(
   steps: FormIdentificationStep[],
   formPaths: Array<Record<string, string | undefined>>
 ): FormIdentificationStep[] {
-  if (!isVerb(word) || formPaths.length === 0) {
+  if (!isVerb(word)) {
     return steps;
   }
 
-  const supportedStepSets = formPaths
-    .map(path => getSupportedVerbFormStepsForParsedPath(path))
-    .filter((support): support is NonNullable<typeof support> => support !== null)
-    .map(support => new Set<FormIdentificationStep>(support.supportedSteps));
+  if (formPaths.length === 0) return [];
 
-  if (supportedStepSets.length === 0) {
-    return steps;
-  }
+  const normalizedSteps = normalizeVerbFormStepsForParsedPaths(formPaths, steps);
+  const supports = formPaths.map(path => getSupportedVerbFormStepsForParsedPath(path));
 
-  return steps.filter(step => supportedStepSets.every(supportedSteps => supportedSteps.has(step)));
+  if (supports.some(support => support === null)) return [];
+
+  const supportedStepSets = supports.map(support => new Set<FormIdentificationStep>(support!.supportedSteps));
+
+  return normalizedSteps.filter(step => supportedStepSets.every(supportedSteps => supportedSteps.has(step)));
 }
 
 /**
@@ -375,6 +385,7 @@ const createVariantMap = () => {
   });
 
   const moods: Record<string, string[]> = {
+    finite: ['finite', 'fin.', 'fin'],
     indicative: ['indicative', 'ind.', 'ind'],
     subjunctive: ['subjunctive', 'subj.', 'subj'],
     imperative: ['imperative', 'imp.', 'imp'],
@@ -495,6 +506,7 @@ export const getHintForStep = (word: ExerciseWordResponse, step: FormIdentificat
     declension: 'Determine the declension',
     tense: 'Identify the verb tense',
     voice: 'Determine if this is active or passive',
+    verb_form: 'Identify the verb form (finite, infinitive, participle, gerund, or supine)',
     mood: 'Identify the mood (indicative, subjunctive, or imperative)',
     person: 'Identify the person (1st, 2nd, or 3rd)',
     number: 'Determine if this is singular or plural',
@@ -533,6 +545,8 @@ export function hasValidFormData(word: ExerciseWordResponse, steps: FormIdentifi
     steps,
     formPaths as Array<Record<string, string | undefined>>
   );
+
+  if (answerableSteps.length === 0) return false;
 
   return formPaths.some(path => {
     return answerableSteps.every(step => {

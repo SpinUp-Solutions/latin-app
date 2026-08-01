@@ -1,0 +1,213 @@
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import TestOverviewPage from '@/src/app/admin/(shell)/tests/edit/[id]/page';
+
+const getTest = jest.fn();
+const updateSettings = jest.fn();
+const activateVersion = jest.fn();
+const deactivateVersion = jest.fn();
+const duplicateVersion = jest.fn();
+
+jest.mock('@/src/components/auth/withAdminAuth', () => ({ withAdminAuth: (Component: unknown) => Component }));
+jest.mock('@/src/components/ui/admin/MockAssignmentDialog', () => ({ MockAssignmentDialog: () => null }));
+jest.mock('@/src/store/api/testApi', () => ({
+  useGetTestByIdQuery: () => getTest(),
+  useUpdateTestSettingsMutation: () => [updateSettings, { isLoading: false }],
+  useActivateTestVersionMutation: () => [activateVersion, { isLoading: false }],
+  useDeactivateTestVersionMutation: () => [deactivateVersion, { isLoading: false }],
+  useDuplicateTestVersionMutation: () => [duplicateVersion, { isLoading: false }],
+}));
+
+const version = { id: 'version-1', name: 'Rotation A', totalExercises: 4, totalPoints: 20, updatedAt: '2026-01-01' };
+const draftVersion = {
+  id: 'version-draft',
+  testId: 'test-1',
+  name: 'Draft B',
+  totalExercises: 0,
+  totalPoints: 0,
+  updatedAt: '2026-01-03',
+};
+const mockVersion = { id: 'version-2', name: 'Mock A', totalExercises: 5, totalPoints: 25, updatedAt: '2026-01-02' };
+
+const test = (passingPercentage: number | null = null) => ({
+  id: 'test-1',
+  kind: 'test',
+  title: 'Chapter Test',
+  description: '',
+  passingPercentage,
+  rotationVersions: [],
+});
+const renderPage = async (data: object) => {
+  getTest.mockReturnValue({ data, isLoading: false, isError: false });
+  await act(async () => {
+    render(<TestOverviewPage params={Promise.resolve({ id: 'test-1' })} />);
+    await Promise.resolve();
+  });
+};
+
+describe('normal test overview workflow', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    updateSettings.mockReturnValue({ unwrap: () => Promise.resolve({ test: test() }) });
+    activateVersion.mockReturnValue({ unwrap: () => Promise.resolve({}) });
+    deactivateVersion.mockReturnValue({ unwrap: () => Promise.resolve({}) });
+    duplicateVersion.mockReturnValue({ unwrap: () => Promise.resolve({}) });
+  });
+
+  it('keeps rotation and parent-linked mock cards in their separate workflow groups', async () => {
+    getTest.mockReturnValue({
+      data: {
+        test: test(),
+        versions: [version],
+        drafts: [],
+        mocks: [
+          { id: 'mock-1', title: 'Chapter rehearsal', isLive: true, passingPercentage: 80, version: mockVersion },
+        ],
+      },
+      isLoading: false,
+      isError: false,
+    });
+    await act(async () => {
+      render(<TestOverviewPage params={Promise.resolve({ id: 'test-1' })} />);
+      await Promise.resolve();
+    });
+    expect(screen.getByRole('heading', { name: 'In rotation' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Mock cards' })).toBeInTheDocument();
+    expect(screen.getByText('Rotation A')).toBeInTheDocument();
+    expect(screen.getByText('Mock A')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Manage mock' })).toHaveAttribute('href', '/admin/mock-tests/mock-1');
+    expect(screen.getByText(/Pass ≥ 80%.*20\.0 of 25 points/)).toBeInTheDocument();
+  });
+
+  it('explains the valid empty-rotation state without hiding the mock workflow', async () => {
+    getTest.mockReturnValue({
+      data: {
+        test: test(70),
+        versions: [],
+        drafts: [],
+        mocks: [
+          { id: 'mock-1', title: 'Chapter rehearsal', isLive: false, passingPercentage: null, version: mockVersion },
+        ],
+      },
+      isLoading: false,
+      isError: false,
+    });
+    await act(async () => {
+      render(<TestOverviewPage params={Promise.resolve({ id: 'test-1' })} />);
+      await Promise.resolve();
+    });
+    expect(screen.getByText(/No versions in rotation/)).toBeInTheDocument();
+    expect(screen.getByText('Mock A')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Manage mock' })).toHaveAttribute('href', '/admin/mock-tests/mock-1');
+
+    const mockCards = screen.getByRole('region', { name: 'Mock cards' });
+    expect(mockCards).toHaveTextContent('Hidden from students');
+    expect(mockCards).toHaveTextContent('Score only');
+  });
+
+  it('keeps inactive drafts separate and activates them only after confirmation', async () => {
+    getTest.mockReturnValue({
+      data: { test: test(), versions: [version], drafts: [draftVersion], mocks: [] },
+      isLoading: false,
+      isError: false,
+    });
+    await act(async () => {
+      render(<TestOverviewPage params={Promise.resolve({ id: 'test-1' })} />);
+      await Promise.resolve();
+    });
+
+    const drafts = screen.getByRole('region', { name: 'Inactive drafts' });
+    expect(drafts).toHaveTextContent('Draft B');
+    expect(drafts).toHaveTextContent('Inactive draft');
+    expect(screen.getByRole('region', { name: 'In rotation' })).not.toHaveTextContent('Draft B');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Activate' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Activate version' }));
+    expect(activateVersion).toHaveBeenCalledWith({ testId: 'test-1', versionId: 'version-draft' });
+  });
+
+  it('duplicates a rotation version in place after one confirmation', async () => {
+    await renderPage({ test: test(), versions: [version], drafts: [], mocks: [] });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate' }));
+    expect(screen.getByRole('alertdialog')).toHaveTextContent(
+      'It will not enter student rotation until you activate it'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate version' }));
+
+    expect(duplicateVersion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        testId: 'test-1',
+        versionId: 'version-1',
+        name: 'Rotation A (Copy)',
+        requestId: expect.stringContaining('duplicate-version-1-'),
+      })
+    );
+  });
+
+  it('persists zero-rotation container settings and resets its dirty baseline after success', async () => {
+    getTest.mockReturnValue({
+      data: { test: test(), versions: [], drafts: [], mocks: [] },
+      isLoading: false,
+      isError: false,
+    });
+    await act(async () => {
+      render(<TestOverviewPage params={Promise.resolve({ id: 'test-1' })} />);
+      await Promise.resolve();
+    });
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Revised Chapter Test' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save details' }));
+      await Promise.resolve();
+    });
+    expect(updateSettings).toHaveBeenCalledWith({
+      id: 'test-1',
+      changes: { title: 'Revised Chapter Test', description: '', passingPercentage: null },
+    });
+    expect(screen.getByRole('status')).toHaveTextContent('Test details saved');
+    expect(screen.getByRole('button', { name: 'Save details' })).toBeDisabled();
+  });
+
+  it('preserves newer detail edits when a save finishes', async () => {
+    let resolveSave!: (value: object | PromiseLike<object>) => void;
+    updateSettings.mockReturnValue({
+      unwrap: () =>
+        new Promise<object>(resolve => {
+          resolveSave = resolve;
+        }),
+    });
+    await renderPage({ test: test(), versions: [], drafts: [], mocks: [] });
+
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Submitted title' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save details' }));
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Newer local title' } });
+    await act(async () => {
+      resolveSave({ test: test() });
+      await Promise.resolve();
+    });
+
+    expect(screen.getByLabelText('Title')).toHaveValue('Newer local title');
+    expect(screen.getByRole('button', { name: 'Discard changes' })).toBeEnabled();
+  });
+
+  it('surfaces mutation errors and can discard back to the last saved baseline', async () => {
+    updateSettings.mockReturnValueOnce({ unwrap: () => Promise.reject({ data: { error: 'Revision conflict' } }) });
+    getTest.mockReturnValue({
+      data: { test: test(), versions: [], drafts: [], mocks: [] },
+      isLoading: false,
+      isError: false,
+    });
+    await act(async () => {
+      render(<TestOverviewPage params={Promise.resolve({ id: 'test-1' })} />);
+      await Promise.resolve();
+    });
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Unsaved' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save details' }));
+      await Promise.resolve();
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent('Revision conflict');
+    fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+    expect(screen.getByLabelText('Title')).toHaveValue('Chapter Test');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});

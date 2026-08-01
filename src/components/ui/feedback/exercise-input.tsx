@@ -33,7 +33,7 @@ const ExerciseInput: React.FC<ExerciseInputProps> = ({
   }, [disabled]);
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && !disabled && value.trim().length > 0) {
       onSubmit();
     }
   };
@@ -61,7 +61,10 @@ const ExerciseInput: React.FC<ExerciseInputProps> = ({
             disabled={disabled}
           />
         </div>
-        <Button onClick={handleButtonClick} disabled={disabled} className="bg-roman-red text-white hover:bg-red-700">
+        <Button
+          onClick={handleButtonClick}
+          disabled={disabled || value.trim().length === 0}
+          className="bg-roman-red text-white hover:bg-red-700">
           {buttonText}
         </Button>
       </div>

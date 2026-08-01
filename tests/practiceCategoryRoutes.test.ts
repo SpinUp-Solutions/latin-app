@@ -6,11 +6,7 @@ const mockListCategories = jest.fn();
 const mockCreateCategory = jest.fn();
 const mockGetAvailableCategoryLessons = jest.fn();
 
-jest.mock('next/server', () => ({
-  NextResponse: {
-    json: (body: unknown, init?: { status?: number }) => ({ body, status: init?.status ?? 200 }),
-  },
-}));
+jest.mock('next/server', () => jest.requireActual('./helpers/routeMocks'));
 
 jest.mock('@/src/lib/verifyAdminAccess', () => {
   class AdminAccessError extends Error {

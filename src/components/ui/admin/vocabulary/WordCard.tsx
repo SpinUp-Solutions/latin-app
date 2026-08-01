@@ -3,7 +3,7 @@ import { Button } from '@/src/components/ui/button';
 import { Badge } from '@/src/components/ui/badge';
 import { ChevronDown, ChevronRight, Volume2, List, ChevronUp, Trash2 } from 'lucide-react';
 import { VocabularyWordWithId } from '@/src/types/vocabulary/index';
-import { getWordTypeColor, isVerb } from '@/src/utils/vocabUtils';
+import { isVerb } from '@/src/utils/vocabUtils';
 import { formatEnumLabel } from '@/src/utils/schema-helpers';
 import {
   AlertDialog,
@@ -110,10 +110,19 @@ export const WordCard: React.FC<WordCardProps> = ({
       </AlertDialog>
 
       <div
-        className={`bg-white transition-all cursor-pointer ${
-          isSelected ? 'bg-blue-50 border-l-4 border-l-blue-500' : 'hover:bg-gray-50 border-l-4 border-l-transparent'
+        role="button"
+        tabIndex={0}
+        className={`cursor-pointer bg-white transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+          isSelected
+            ? 'border-l-2 border-l-primary bg-primary/5'
+            : 'border-l-2 border-l-transparent hover:bg-roman-parchment/60'
         } ${!isLast ? 'border-b border-gray-200' : ''} ${isDeleting ? 'opacity-50 pointer-events-none' : ''}`}
-        onClick={() => onSelect(word)}>
+        onClick={() => onSelect(word)}
+        onKeyDown={event => {
+          if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return;
+          event.preventDefault();
+          onSelect(word);
+        }}>
         {/* Main header row */}
         <div className="flex items-center justify-between px-4 py-3 gap-3">
           <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -131,7 +140,9 @@ export const WordCard: React.FC<WordCardProps> = ({
             </button>
 
             <div className="flex items-center gap-2">
-              <Badge className={`${getWordTypeColor(word.part_of_speech)} shrink-0`}>{word.part_of_speech}</Badge>
+              <Badge variant="outline" className="shrink-0 border-border bg-roman-parchment text-foreground">
+                {word.part_of_speech}
+              </Badge>
 
               {word.part_of_speech === 'noun' && word.declension && (
                 <Badge variant="outline" className="text-xs">

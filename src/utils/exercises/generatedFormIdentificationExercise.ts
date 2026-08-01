@@ -202,54 +202,34 @@ export const validateMultiAnswerStep = (
 
   const step = validatedItem.step;
   const primaryPaths = validatedItem.primaryFormPaths;
-
-  const validAnswersForStep = new Set<string>();
-  primaryPaths.forEach(path => {
-    const value = path[step];
-    if (value) {
-      getAcceptedAnswersForStep(value).forEach(variant => {
-        validAnswersForStep.add(normalize(variant));
-      });
-    }
-  });
-
   const normalizedUserParts = userParts.map(normalize);
-  const allAnswersValid = normalizedUserParts.every(part => validAnswersForStep.has(part));
+  const acceptedByPath = primaryPaths.map(path => {
+    const value = path[step];
+    return value ? getAcceptedAnswersForStep(value).map(normalize) : [];
+  });
+  const userAssignedToPath = Array<number>(acceptedByPath.length).fill(-1);
+  const assignUserToPath = (userIndex: number, visitedPaths: Set<number>): boolean => {
+    for (let pathIndex = 0; pathIndex < acceptedByPath.length; pathIndex++) {
+      if (visitedPaths.has(pathIndex) || !acceptedByPath[pathIndex].includes(normalizedUserParts[userIndex])) continue;
 
-  if (!allAnswersValid) {
+      visitedPaths.add(pathIndex);
+      const assignedUser = userAssignedToPath[pathIndex];
+      if (assignedUser === -1 || assignUserToPath(assignedUser, visitedPaths)) {
+        userAssignedToPath[pathIndex] = userIndex;
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  if (!normalizedUserParts.every((_, userIndex) => assignUserToPath(userIndex, new Set()))) {
     return {
       isCorrect: false,
       correctAnswer: validatedItem.correctAnswerDisplay,
       hint: validatedItem.hint,
       answerSlots: [],
     };
-  }
-
-  const variantToCanonical = new Map<string, string>();
-  primaryPaths.forEach(path => {
-    const value = path[step];
-    if (!value) return;
-    const canonical = normalize(value);
-    getAcceptedAnswersForStep(value).forEach(variant => {
-      const normalizedVariant = normalize(variant);
-      if (!variantToCanonical.has(normalizedVariant)) {
-        variantToCanonical.set(normalizedVariant, canonical);
-      }
-    });
-  });
-
-  const seenCanonicalValues = new Set<string>();
-  for (const normalizedPart of normalizedUserParts) {
-    const canonical = variantToCanonical.get(normalizedPart) || normalizedPart;
-    if (seenCanonicalValues.has(canonical)) {
-      return {
-        isCorrect: false,
-        correctAnswer: validatedItem.correctAnswerDisplay,
-        hint: 'Duplicate answers are not allowed.',
-        answerSlots: [],
-      };
-    }
-    seenCanonicalValues.add(canonical);
   }
 
   return {
@@ -278,40 +258,44 @@ export const validatePartialMultiAnswerPaths = (
     };
   }
 
-  const failedSlots: number[] = [];
-  const matchedPathIndices = new Set<number>();
-
-  for (let slotIndex = 0; slotIndex < slotCount; slotIndex++) {
+  const partialPaths = Array.from({ length: slotCount }, (_, slotIndex) => {
     const partialPath: Record<string, string> = {};
-    for (let stepIdx = 0; stepIdx < stepsCompleted.length; stepIdx++) {
-      const step = stepsCompleted[stepIdx];
-      partialPath[step] = answerSlotsSoFar[stepIdx][slotIndex];
+    for (let stepIndex = 0; stepIndex < stepsCompleted.length; stepIndex++) {
+      const step = stepsCompleted[stepIndex];
+      partialPath[step] = answerSlotsSoFar[stepIndex][slotIndex];
     }
+    return partialPath;
+  });
+  const pathAssignedToSlot = Array<number>(primaryFormPaths.length).fill(-1);
+  const assignSlotToPath = (slotIndex: number, visitedPaths: Set<number>): boolean => {
+    const partialPath = partialPaths[slotIndex];
 
-    let foundPathIndex = -1;
-    for (let pathIdx = 0; pathIdx < primaryFormPaths.length; pathIdx++) {
-      if (matchedPathIndices.has(pathIdx)) continue;
+    for (let pathIndex = 0; pathIndex < primaryFormPaths.length; pathIndex++) {
+      if (visitedPaths.has(pathIndex)) continue;
 
-      const primaryPath = primaryFormPaths[pathIdx];
+      const primaryPath = primaryFormPaths[pathIndex];
       const matches = stepsCompleted.every(step => {
         const userValue = normalize(partialPath[step] || '');
         const primaryValue = primaryPath[step];
         if (!primaryValue) return false;
-        const acceptedVariants = getAcceptedAnswersForStep(primaryValue).map(normalize);
-        return acceptedVariants.includes(userValue);
+        return getAcceptedAnswersForStep(primaryValue).map(normalize).includes(userValue);
       });
 
-      if (matches) {
-        foundPathIndex = pathIdx;
-        break;
+      if (!matches) continue;
+
+      visitedPaths.add(pathIndex);
+      const assignedSlot = pathAssignedToSlot[pathIndex];
+      if (assignedSlot === -1 || assignSlotToPath(assignedSlot, visitedPaths)) {
+        pathAssignedToSlot[pathIndex] = slotIndex;
+        return true;
       }
     }
 
-    if (foundPathIndex >= 0) {
-      matchedPathIndices.add(foundPathIndex);
-    } else {
-      failedSlots.push(slotIndex);
-    }
+    return false;
+  };
+  const failedSlots: number[] = [];
+  for (let slotIndex = 0; slotIndex < slotCount; slotIndex++) {
+    if (!assignSlotToPath(slotIndex, new Set())) failedSlots.push(slotIndex);
   }
 
   const correctDisplay = primaryFormPaths.map(path => stepsCompleted.map(step => path[step]).join(';')).join(' OR ');

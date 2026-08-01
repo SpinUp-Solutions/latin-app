@@ -15,6 +15,7 @@ const makeCategory = (id: string, name: string, status: PracticeCategory['status
   normalizedName: name.toLocaleLowerCase(),
   status,
   categoryOrder: status === 'active' ? 0 : 1,
+  tags: [],
   createdAt: '2026-07-14T00:00:00.000Z',
   createdBy: 'admin',
   updatedAt: '2026-07-14T00:00:00.000Z',
@@ -56,40 +57,72 @@ describe('practice-category lesson integration', () => {
 
     store.dispatch(setLesson(lesson));
 
-    expect(store.getState().lessonEditor.currentLesson?.practiceCategoryIds).toEqual([
-      activeCategory.id,
-      archivedCategory.id,
+    expect(store.getState().lessonEditor.currentLesson?.practiceCategorySelections).toEqual([
+      { categoryId: activeCategory.id, tagIds: [] },
+      { categoryId: archivedCategory.id, tagIds: [] },
     ]);
 
-    store.dispatch(updateLessonInfo({ practiceCategoryIds: [archivedCategory.id] }));
+    store.dispatch(
+      updateLessonInfo({
+        practiceCategorySelections: [{ categoryId: archivedCategory.id, tagIds: [] }],
+        practiceCategoryIds: [archivedCategory.id],
+      })
+    );
     const currentLesson = store.getState().lessonEditor.currentLesson;
     expect(currentLesson).not.toBeNull();
 
     await store.dispatch(saveDraft(currentLesson!));
 
     const persistedDrafts = JSON.parse(sessionStorage.getItem('page_document_drafts') ?? '{}');
-    expect(persistedDrafts[`lesson:${lesson.id}`].document.sourceLesson.practiceCategoryIds).toEqual([
-      archivedCategory.id,
+    expect(persistedDrafts[`lesson:${lesson.id}`].document.sourceLesson.practiceCategorySelections).toEqual([
+      { categoryId: archivedCategory.id, tagIds: [] },
     ]);
     expect(store.getState().lessonEditor.dirty).toBe(true);
   });
 
-  it('strips joined category objects from lesson writes while retaining the complete desired ID set', () => {
+  it('defaults new lessons off, keeps legacy lessons on, and preserves word-search visibility in drafts', async () => {
+    const store = configureStore({ reducer: { lessonEditor: lessonEditorReducer } });
+
+    store.dispatch(setLesson(undefined));
+    expect(store.getState().lessonEditor.currentLesson?.showWordSearch).toBe(false);
+
+    store.dispatch(setLesson(makeLesson()));
+    expect(store.getState().lessonEditor.currentLesson?.showWordSearch).toBe(true);
+
+    store.dispatch(updateLessonInfo({ showWordSearch: false }));
+    const currentLesson = store.getState().lessonEditor.currentLesson;
+    expect(currentLesson).not.toBeNull();
+
+    await store.dispatch(saveDraft(currentLesson!));
+
+    const persistedDrafts = JSON.parse(sessionStorage.getItem('page_document_drafts') ?? '{}');
+    expect(persistedDrafts[`lesson:${currentLesson!.id}`].document.sourceLesson.showWordSearch).toBe(false);
+  });
+
+  it('strips joined category objects from lesson writes while retaining complete category-owned tag selections', () => {
     const payload = buildLessonMutationPayload(
       makeLesson({
         practiceCategories: [activeCategory, archivedCategory],
-        practiceCategoryPlacements: [{ categoryId: activeCategory.id, lessonOrder: 2 }],
+        practiceCategoryPlacements: [{ categoryId: activeCategory.id, lessonOrder: 2, tagIds: ['cicero'] }],
       })
     );
 
     expect(payload).not.toHaveProperty('practiceCategories');
     expect(payload).not.toHaveProperty('practiceCategoryPlacements');
-    expect(payload.practiceCategoryIds).toEqual([activeCategory.id, archivedCategory.id]);
+    expect(payload).not.toHaveProperty('practiceCategoryIds');
+    expect(payload.practiceCategorySelections).toEqual([
+      { categoryId: activeCategory.id, tagIds: ['cicero'] },
+      { categoryId: archivedCategory.id, tagIds: [] },
+    ]);
 
     const clearedPayload = buildLessonMutationPayload(
-      makeLesson({ practiceCategoryIds: [], practiceCategories: [archivedCategory] })
+      makeLesson({
+        practiceCategorySelections: [],
+        practiceCategoryIds: [],
+        practiceCategories: [archivedCategory],
+      })
     );
-    expect(clearedPayload.practiceCategoryIds).toEqual([]);
+    expect(clearedPayload.practiceCategorySelections).toEqual([]);
   });
 
   it('treats archived-only assignments as categorized and combines category filtering with search using AND semantics', () => {

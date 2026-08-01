@@ -1,5 +1,6 @@
 import type { ExerciseWordResponse, VerbFormPath } from '@/src/types/api/exercise-word-responses';
 import type { FormIdentificationStep } from '@/src/types/exercises/schemas/form-identification';
+import type { GeneratedFormIdentificationExercise } from '@/src/types/exercises';
 import {
   enrichPathsWithSteps,
   extractStepValue,
@@ -7,9 +8,16 @@ import {
   getAcceptedAnswersForStep,
   getDisplayForm,
 } from '@/src/utils/exercises/formIdentificationHelpers';
-import { validateSingleFieldFormIdentificationExercise } from '@/src/utils/exercises/generatedFormIdentificationExercise';
+import {
+  validateGeneratedFormIdentificationExercise,
+  validateSingleFieldFormIdentificationExercise,
+} from '@/src/utils/exercises/generatedFormIdentificationExercise';
 import { hasSelectedForm } from '@/src/utils/exercises/formSelection';
-import { getUnsupportedVerbFormStepWarnings } from '@/src/utils/exercises/verbFormStepCompatibility';
+import {
+  getUnsupportedVerbFormStepWarnings,
+  normalizeVerbFormStepsForSelectedPaths,
+} from '@/src/utils/exercises/verbFormStepCompatibility';
+import { createGeneratedFormIdentificationItems } from '@/src/lib/tests/generated-exercises';
 
 const makeVerbWord = (formPath: VerbFormPath): ExerciseWordResponse =>
   ({
@@ -23,48 +31,78 @@ const makeVerbWord = (formPath: VerbFormPath): ExerciseWordResponse =>
     conjugation: '4',
   }) as ExerciseWordResponse;
 
+const makeStepExercise = (selectedCellPaths: string[]): GeneratedFormIdentificationExercise => ({
+  id: 'morphology',
+  type: 'generated-form-identification',
+  title: 'Morphology',
+  instructions: '',
+  feedbackConfig: { escalationLevels: [] },
+  data: {
+    mode: 'step-by-step',
+    generatorConfig: {
+      collection: 'vocabulary_words_v5',
+      wordSource: 'filters',
+      count: 1,
+    },
+    paradigmConfigs: {
+      'verb-conjugation': {
+        enabled: true,
+        filters: {},
+        formSelection: { tableType: 'conjugation', selectedCellPaths },
+        steps: ['mood'],
+      },
+    },
+  },
+});
+
 describe('non-finite verb form identification', () => {
   it('extracts gerund step values', () => {
     const word = makeVerbWord({
+      verb_form: 'gerund',
       tense: '',
       voice: '',
-      mood: 'gerund',
+      mood: '',
       person: '',
       number: '',
       case: 'genitive',
     });
 
-    expect(extractStepValue(word, 'mood')).toBe('gerund');
+    expect(extractStepValue(word, 'verb_form')).toBe('gerund');
+    expect(extractStepValue(word, 'mood')).toBe('');
     expect(extractStepValue(word, 'case')).toBe('genitive');
     expect(extractStepValue(word, 'conjugation')).toBe('4');
   });
 
   it('extracts supine step values', () => {
     const word = makeVerbWord({
+      verb_form: 'supine',
       tense: '',
       voice: '',
-      mood: 'supine',
+      mood: '',
       person: '',
       number: '',
       case: 'accusative',
     });
 
-    expect(extractStepValue(word, 'mood')).toBe('supine');
+    expect(extractStepValue(word, 'verb_form')).toBe('supine');
+    expect(extractStepValue(word, 'mood')).toBe('');
     expect(extractStepValue(word, 'case')).toBe('accusative');
   });
 
   it('extracts participle step values', () => {
     const word = makeVerbWord({
+      verb_form: 'participle',
       tense: 'present',
       voice: 'active',
-      mood: 'participle',
+      mood: '',
       person: '',
       number: 'singular',
       case: 'nominative',
       gender: 'masculine',
     });
 
-    expect(extractStepValue(word, 'mood')).toBe('participle');
+    expect(extractStepValue(word, 'verb_form')).toBe('participle');
+    expect(extractStepValue(word, 'mood')).toBe('');
     expect(extractStepValue(word, 'tense')).toBe('present');
     expect(extractStepValue(word, 'voice')).toBe('active');
     expect(extractStepValue(word, 'case')).toBe('nominative');
@@ -74,14 +112,15 @@ describe('non-finite verb form identification', () => {
 
   it('populates single-field answer displays for gerunds', () => {
     const word = makeVerbWord({
+      verb_form: 'gerund',
       tense: '',
       voice: '',
-      mood: 'gerund',
+      mood: '',
       person: '',
       number: '',
       case: 'genitive',
     });
-    const steps: FormIdentificationStep[] = ['conjugation', 'mood', 'case'];
+    const steps: FormIdentificationStep[] = ['conjugation', 'verb_form', 'case'];
     const paths = enrichPathsWithSteps(word.primary_form_paths || [], word, steps);
 
     const display = paths
@@ -98,11 +137,56 @@ describe('non-finite verb form identification', () => {
     expect(hasSelectedForm(word)).toBe(true);
   });
 
+  it('generates a Verb Form question instead of a Mood question for participles', () => {
+    const word = makeVerbWord({
+      verb_form: 'participle',
+      tense: 'present',
+      voice: 'active',
+      mood: '',
+      person: '',
+      number: 'singular',
+      case: 'nominative',
+      gender: 'masculine',
+    });
+    const exercise = makeStepExercise([
+      'nonFinite.participle.present.active.nominative.masculine.singular',
+    ]);
+
+    expect(createGeneratedFormIdentificationItems(exercise, [word])).toEqual([
+      expect.objectContaining({
+        step: 'verb_form',
+        correctAnswer: 'participle',
+        acceptedAnswers: expect.arrayContaining(['participle', 'part.', 'part']),
+      }),
+    ]);
+  });
+
+  it('continues generating a true Mood question for finite verbs', () => {
+    const word = makeVerbWord({
+      verb_form: 'finite',
+      tense: 'present',
+      voice: 'active',
+      mood: 'indicative',
+      person: 'first',
+      number: 'singular',
+    });
+    const exercise = makeStepExercise(['indicative.active.present.singular.first']);
+
+    expect(createGeneratedFormIdentificationItems(exercise, [word])).toEqual([
+      expect.objectContaining({
+        step: 'mood',
+        correctAnswer: 'indicative',
+        acceptedAnswers: expect.arrayContaining(['indicative', 'ind.', 'ind']),
+      }),
+    ]);
+  });
+
   it('drops impossible configured steps for infinitive single-field answers', () => {
     const word = makeVerbWord({
+      verb_form: 'infinitive',
       tense: 'present',
       voice: 'passive',
-      mood: 'infinitive',
+      mood: '',
       person: '',
       number: '',
     });
@@ -123,7 +207,7 @@ describe('non-finite verb form identification', () => {
       )
       .join(';');
 
-    expect(steps).toEqual(['voice', 'tense', 'mood']);
+    expect(steps).toEqual(['voice', 'tense', 'verb_form']);
     expect(correctAnswerDisplay).toBe('pass,pres,inf');
     expect(
       validateSingleFieldFormIdentificationExercise('pass, pres, infinitive', {
@@ -143,14 +227,62 @@ describe('non-finite verb form identification', () => {
   });
 
   it('accepts gerund and supine answer variants', () => {
+    expect(getAcceptedAnswersForStep('finite')).toEqual(expect.arrayContaining(['finite', 'fin.', 'fin']));
     expect(getAcceptedAnswersForStep('gerund')).toEqual(expect.arrayContaining(['gerund', 'ger.', 'ger']));
     expect(getAcceptedAnswersForStep('supine')).toEqual(expect.arrayContaining(['supine', 'sup.', 'sup']));
   });
 
-  it('warns when selected non-finite forms cannot answer selected steps', () => {
+  it('normalizes legacy configured mood steps based on selected verb forms', () => {
+    const configured: FormIdentificationStep[] = ['conjugation', 'tense', 'voice', 'mood'];
+    const finitePath = 'indicative.active.present.singular.first';
+    const participlePath = 'nonFinite.participle.present.active.nominative.masculine.singular';
+
+    expect(normalizeVerbFormStepsForSelectedPaths([finitePath], configured)).toEqual(configured);
+    expect(normalizeVerbFormStepsForSelectedPaths([participlePath], configured)).toEqual([
+      'conjugation',
+      'tense',
+      'voice',
+      'verb_form',
+    ]);
+    expect(normalizeVerbFormStepsForSelectedPaths([finitePath, participlePath], configured)).toEqual([
+      'conjugation',
+      'tense',
+      'voice',
+      'verb_form',
+      'mood',
+    ]);
     expect(
-      getUnsupportedVerbFormStepWarnings(['gerund.genitive'], ['conjugation', 'mood', 'case'])
-    ).toEqual([]);
+      normalizeVerbFormStepsForSelectedPaths(
+        [finitePath, participlePath],
+        ['conjugation', 'tense', 'voice', 'verb_form', 'mood']
+      )
+    ).toEqual(['conjugation', 'tense', 'voice', 'verb_form', 'mood']);
+  });
+
+  it('continues grading frozen legacy mood items for existing test attempts', () => {
+    expect(
+      validateGeneratedFormIdentificationExercise('participle', {
+        id: 'legacy-participle-mood',
+        wordId: 'verb-1',
+        word: 'ferens',
+        root_word: 'fero',
+        dictionary_entry: 'fero, ferre, tuli, latum',
+        selected_form: 'ferens',
+        hasSelectedForm: true,
+        step: 'mood',
+        correctAnswer: 'participle',
+        acceptedAnswers: ['participle', 'part.', 'part'],
+        primaryFormPaths: [{ mood: 'participle' }],
+        optionalFormPaths: [],
+      }).isCorrect
+    ).toBe(true);
+  });
+
+  it('warns when selected non-finite forms cannot answer selected steps', () => {
+    expect(getUnsupportedVerbFormStepWarnings(['gerund.genitive'], ['conjugation', 'verb_form', 'case'])).toEqual([]);
+    expect(getUnsupportedVerbFormStepWarnings(['gerund.genitive'], ['mood'])).toEqual([
+      'Gerund forms cannot answer: mood.',
+    ]);
     expect(
       getUnsupportedVerbFormStepWarnings(['gerund.genitive'], ['tense', 'voice', 'person', 'number', 'gender'])
     ).toEqual(['Gerund forms cannot answer: tense, voice, person, number, gender.']);

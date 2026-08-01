@@ -1,10 +1,6 @@
 import { isExerciseType, isTestEligibleExerciseType } from '@/src/lib/content/registry';
 import { normalizeLearningUnit } from '@/src/lib/learning-units/domain';
-import {
-  learningUnitDocumentSchema,
-  testUnitCreateSchema,
-  testUnitPublicationSchema,
-} from '@/src/lib/learning-units/schemas';
+import { learningUnitDocumentSchema, testUnitCreateSchema } from '@/src/lib/learning-units/schemas';
 import { validateTestAssignmentGraph } from '@/src/lib/tests/domain';
 import { mockTestDocumentSchema, testVersionDocumentSchema, testVersionInputSchema } from '@/src/lib/tests/schemas';
 import type { TestUnit } from '@/src/types/learning-unit';
@@ -25,10 +21,6 @@ const testUnit: TestUnit = {
   kind: 'test',
   title: 'Chapter test',
   description: '',
-  isLive: false,
-  liveOrder: null,
-  publishedAt: null,
-  publishedBy: null,
   passingPercentage: 70,
   rotationVersions: [{ versionId: 'version-1' }],
 };
@@ -64,6 +56,7 @@ describe('learning-unit domain compatibility', () => {
       type: 'vocab',
       description: '',
       vocabulary_pool: 'pool-1',
+      showWordSearch: true,
       liveOrder: null,
       publishedAt: null,
       publishedBy: null,
@@ -86,27 +79,27 @@ describe('learning-unit domain compatibility', () => {
     expect(
       learningUnitDocumentSchema.safeParse({
         ...unit,
+        showWordSearch: false,
+      }).success
+    ).toBe(true);
+
+    expect(
+      learningUnitDocumentSchema.safeParse({
+        ...unit,
         isLive: true,
         liveOrder: 0,
       }).success
     ).toBe(false);
   });
 
-  it('allows empty rotation lists only for non-live test containers', () => {
-    expect(
-      learningUnitDocumentSchema.safeParse({ ...testUnit, rotationVersions: [], isLive: false }).success
-    ).toBe(true);
+  it('allows empty persisted rotation lists but requires one for creation and placement', () => {
+    expect(learningUnitDocumentSchema.safeParse({ ...testUnit, rotationVersions: [] }).success).toBe(true);
 
     expect(learningUnitDocumentSchema.safeParse(testUnit).success).toBe(true);
 
-    const result = learningUnitDocumentSchema.safeParse({ ...testUnit, rotationVersions: [], isLive: true, liveOrder: 2 });
-    expect(result.success).toBe(false);
-    expect(result.error?.issues.map(issue => issue.message)).toContain(
-      'A live test must have at least one version in normal rotation'
-    );
+    expect(learningUnitDocumentSchema.safeParse({ ...testUnit, isLive: true, liveOrder: 2 }).success).toBe(false);
 
     expect(testUnitCreateSchema.safeParse({ ...testUnit, rotationVersions: [] }).success).toBe(false);
-    expect(testUnitPublicationSchema.safeParse({ ...testUnit, rotationVersions: [] }).success).toBe(false);
     expect(testUnitCreateSchema.safeParse({ ...testUnit, type: 'normal' }).success).toBe(false);
   });
 });
@@ -197,19 +190,13 @@ describe('mock assignment boundaries', () => {
 
     const standaloneOverlap = validateTestAssignmentGraph({
       tests: [{ ...testUnit, rotationVersions: [] }],
-      mocks: [
-        mockTest,
-        { ...mockTest, id: 'mock-2', parent: { kind: 'standalone' } },
-      ],
+      mocks: [mockTest, { ...mockTest, id: 'mock-2', parent: { kind: 'standalone' } }],
       versionIds: ['version-1'],
     });
     expect(standaloneOverlap.join(' ')).toContain('more than one active mock');
 
     const duplicateRotation = validateTestAssignmentGraph({
-      tests: [
-        testUnit,
-        { ...testUnit, id: 'test-2', rotationVersions: [{ versionId: 'version-1' }] },
-      ],
+      tests: [testUnit, { ...testUnit, id: 'test-2', rotationVersions: [{ versionId: 'version-1' }] }],
       mocks: [],
       versionIds: ['version-1'],
     });
@@ -220,9 +207,7 @@ describe('mock assignment boundaries', () => {
       mocks: [mockTest],
       versionIds: [],
     });
-    expect(missingVersion.join(' ')).toEqual(
-      expect.stringContaining('missing rotation version version-1')
-    );
+    expect(missingVersion.join(' ')).toEqual(expect.stringContaining('missing rotation version version-1'));
 
     expect(mockTestDocumentSchema.safeParse({ ...mockTest, status: 'archived', isLive: true }).success).toBe(false);
   });

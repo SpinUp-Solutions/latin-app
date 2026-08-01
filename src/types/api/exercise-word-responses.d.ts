@@ -1,7 +1,11 @@
+export type VerbFormKind = 'finite' | 'infinitive' | 'participle' | 'gerund' | 'supine';
+export type FiniteVerbMood = 'indicative' | 'subjunctive' | 'imperative';
+
 export type VerbFormPath = {
+  verb_form: VerbFormKind;
   tense: string;
   voice: string;
-  mood: string;
+  mood: FiniteVerbMood | '';
   person: string;
   number: string;
   case?: string;

@@ -1,8 +1,11 @@
-import { isCategorisableLesson, normalizeCategoryName } from '@/src/lib/practice-categories/domain';
+import { isCategorisableLesson, normalizeCategoryName, normalizeTagName } from '@/src/lib/practice-categories/domain';
 import {
+  createPracticeTagSchema,
   createPracticeCategorySchema,
   optionalPracticeCategoryIdsSchema,
+  practiceCategorySelectionsSchema,
   reorderPracticeCategoriesSchema,
+  replacePracticeMembershipTagsSchema,
   updatePracticeCategorySchema,
 } from '@/src/lib/practice-categories/schemas';
 import {
@@ -11,7 +14,7 @@ import {
   PracticeCategoryService,
 } from '@/src/lib/practice-categories/service';
 
-jest.mock('@/src/services/firebase-admin', () => ({ adminDb: {} }));
+jest.mock('@/src/services/firebase-admin', () => jest.requireActual('./helpers/routeMocks'));
 
 const now = '2026-07-14T00:00:00.000Z';
 
@@ -22,6 +25,7 @@ const category = (overrides: Record<string, unknown> = {}) => ({
   normalizedName: 'authors',
   status: 'active',
   categoryOrder: 0,
+  tags: [],
   createdAt: now,
   createdBy: 'admin-1',
   updatedAt: now,
@@ -34,6 +38,20 @@ const membership = (overrides: Record<string, unknown> = {}) => ({
   categoryId: 'category-1',
   lessonId: 'lesson-1',
   lessonOrder: 0,
+  tagIds: [],
+  createdAt: now,
+  createdBy: 'admin-1',
+  updatedAt: now,
+  updatedBy: 'admin-1',
+  ...overrides,
+});
+
+const tag = (overrides: Record<string, unknown> = {}) => ({
+  id: 'tag-cicero',
+  name: 'Cicero',
+  normalizedName: 'cicero',
+  status: 'active',
+  tagOrder: 0,
   createdAt: now,
   createdBy: 'admin-1',
   updatedAt: now,
@@ -90,7 +108,9 @@ describe('practice category domain contracts', () => {
 
   it('normalizes names and enforces strict, unique mutation payloads', () => {
     expect(normalizeCategoryName('  CÆSAR  ')).toBe('cæsar');
+    expect(normalizeTagName('  CĬCERO  ')).toBe('cĭcero');
     expect(createPracticeCategorySchema.parse({ lessonType: 'vocab', name: ' Authors ' }).name).toBe('Authors');
+    expect(createPracticeTagSchema.parse({ name: ' Cicero ' }).name).toBe('Cicero');
     expect(updatePracticeCategorySchema.safeParse({ lessonType: 'listening' }).success).toBe(false);
     expect(
       reorderPracticeCategoriesSchema.safeParse({
@@ -99,6 +119,13 @@ describe('practice category domain contracts', () => {
       }).success
     ).toBe(false);
     expect(optionalPracticeCategoryIdsSchema.parse([])).toEqual([]);
+    expect(
+      practiceCategorySelectionsSchema.safeParse([
+        { categoryId: 'authors', tagIds: ['cicero'] },
+        { categoryId: 'authors', tagIds: [] },
+      ]).success
+    ).toBe(false);
+    expect(replacePracticeMembershipTagsSchema.safeParse({ tagIds: ['cicero', 'cicero'] }).success).toBe(false);
   });
 
   it('uses deterministic, pair-sensitive membership IDs', () => {
@@ -169,6 +196,61 @@ describe('practice category reconciliation guards', () => {
     expect(result.memberships).toEqual([existing]);
     expect(transaction.create).not.toHaveBeenCalled();
     expect(transaction.delete).not.toHaveBeenCalled();
+  });
+
+  it('validates tags against their owning category and permits retained archived tags', async () => {
+    const archivedTag = tag({
+      id: 'tag-old',
+      name: 'Old author',
+      normalizedName: 'old author',
+      status: 'archived',
+      tagOrder: 1,
+    });
+    const existing = membership({ tagIds: [archivedTag.id] });
+    const categoryWithTags = category({ tags: [tag(), archivedTag] });
+
+    const foreignTransaction = makeTransaction([existing], {
+      'category-1': categoryWithTags,
+    });
+    await expect(
+      service.reconcileLessonCategoriesInTransaction(foreignTransaction as never, {
+        lessonId: 'lesson-1',
+        lesson: { type: 'vocab' },
+        desiredCategorySelections: [{ categoryId: 'category-1', tagIds: ['foreign-tag'] }],
+        actorId: 'admin-1',
+      })
+    ).rejects.toMatchObject<Partial<PracticeCategoryError>>({ code: 'TAG_CATEGORY_MISMATCH' });
+    expect(foreignTransaction.update).not.toHaveBeenCalled();
+
+    const retainedTransaction = makeTransaction([existing], {
+      'category-1': categoryWithTags,
+    });
+    const result = await service.reconcileLessonCategoriesInTransaction(retainedTransaction as never, {
+      lessonId: 'lesson-1',
+      lesson: { type: 'vocab' },
+      desiredCategorySelections: [{ categoryId: 'category-1', tagIds: ['tag-cicero', archivedTag.id] }],
+      actorId: 'admin-1',
+    });
+
+    expect(result.practiceCategorySelections).toEqual([
+      { categoryId: 'category-1', tagIds: ['tag-cicero', archivedTag.id] },
+    ]);
+    expect(retainedTransaction.update).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'membership-1' }),
+      expect.objectContaining({ tagIds: ['tag-cicero', archivedTag.id] })
+    );
+
+    const archivedAdditionTransaction = makeTransaction([membership()], {
+      'category-1': categoryWithTags,
+    });
+    await expect(
+      service.reconcileLessonCategoriesInTransaction(archivedAdditionTransaction as never, {
+        lessonId: 'lesson-1',
+        lesson: { type: 'vocab' },
+        desiredCategorySelections: [{ categoryId: 'category-1', tagIds: [archivedTag.id] }],
+        actorId: 'admin-1',
+      })
+    ).rejects.toMatchObject<Partial<PracticeCategoryError>>({ code: 'TAG_ARCHIVED' });
   });
 });
 
@@ -304,7 +386,7 @@ describe('practice category scoped mutations', () => {
   it('rejects stale lesson reorder scopes before writing', async () => {
     const update = jest.fn();
     const transaction = {
-      get: jest.fn(async (target: { collection?: string }) =>
+      get: jest.fn(async (target: { collection?: string; id?: string }) =>
         target.collection === 'practiceCategories'
           ? snapshot('category-1', category())
           : querySnapshot([
@@ -355,6 +437,149 @@ describe('practice category scoped mutations', () => {
     expect(update).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'membership-2' }),
       expect.objectContaining({ lessonOrder: 0, updatedBy: 'admin-1' })
+    );
+  });
+
+  it('rejects stale tag reorder scopes and persists complete active tag order', async () => {
+    const categoryWithTags = category({
+      tags: [tag(), tag({ id: 'tag-virgil', name: 'Virgil', normalizedName: 'virgil', tagOrder: 1 })],
+    });
+    const update = jest.fn();
+    const transaction = {
+      get: jest.fn(async () => snapshot('category-1', categoryWithTags)),
+      update,
+    };
+    const service = new PracticeCategoryService({
+      collection,
+      runTransaction: async (callback: (value: typeof transaction) => unknown) => callback(transaction),
+    } as never);
+
+    await expect(service.reorderTags('category-1', ['tag-cicero'], 'admin-1')).rejects.toMatchObject<
+      Partial<PracticeCategoryError>
+    >({ code: 'STALE_TAG_ORDER' });
+    expect(update).not.toHaveBeenCalled();
+
+    const reordered = await service.reorderTags('category-1', ['tag-virgil', 'tag-cicero'], 'admin-1');
+    expect(reordered.map(item => [item.id, item.tagOrder])).toEqual([
+      ['tag-virgil', 0],
+      ['tag-cicero', 1],
+    ]);
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'category-1' }),
+      expect.objectContaining({
+        tags: expect.arrayContaining([
+          expect.objectContaining({ id: 'tag-virgil', tagOrder: 0 }),
+          expect.objectContaining({ id: 'tag-cicero', tagOrder: 1 }),
+        ]),
+      })
+    );
+  });
+
+  it('compacts active tag order on archive and appends a restored tag', async () => {
+    const firstTag = tag();
+    const secondTag = tag({
+      id: 'tag-virgil',
+      name: 'Virgil',
+      normalizedName: 'virgil',
+      tagOrder: 1,
+    });
+    const archiveUpdate = jest.fn();
+    const archiveTransaction = {
+      get: jest.fn(async () => snapshot('category-1', category({ tags: [firstTag, secondTag] }))),
+      update: archiveUpdate,
+    };
+    const archiveService = new PracticeCategoryService({
+      collection,
+      runTransaction: async (callback: (value: typeof archiveTransaction) => unknown) => callback(archiveTransaction),
+    } as never);
+
+    await expect(
+      archiveService.updateTag('category-1', firstTag.id, { status: 'archived' }, 'admin-1')
+    ).resolves.toMatchObject({ id: firstTag.id, status: 'archived' });
+    expect(archiveUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'category-1' }),
+      expect.objectContaining({
+        tags: expect.arrayContaining([
+          expect.objectContaining({ id: firstTag.id, status: 'archived' }),
+          expect.objectContaining({ id: secondTag.id, status: 'active', tagOrder: 0 }),
+        ]),
+      })
+    );
+
+    const restoreUpdate = jest.fn();
+    const restoreTransaction = {
+      get: jest.fn(async () =>
+        snapshot(
+          'category-1',
+          category({
+            tags: [
+              { ...firstTag, status: 'archived' },
+              { ...secondTag, tagOrder: 0 },
+            ],
+          })
+        )
+      ),
+      update: restoreUpdate,
+    };
+    const restoreService = new PracticeCategoryService({
+      collection,
+      runTransaction: async (callback: (value: typeof restoreTransaction) => unknown) => callback(restoreTransaction),
+    } as never);
+
+    await expect(
+      restoreService.updateTag('category-1', firstTag.id, { status: 'active' }, 'admin-1')
+    ).resolves.toMatchObject({ id: firstTag.id, status: 'active', tagOrder: 1 });
+  });
+
+  it('prevents deleting an archived tag while a category membership still references it', async () => {
+    const archivedTag = tag({ status: 'archived' });
+    const update = jest.fn();
+    const transaction = {
+      get: jest.fn(async (target: { collection?: string; id?: string }) =>
+        target.collection === 'practiceCategories'
+          ? snapshot('category-1', category({ tags: [archivedTag] }))
+          : querySnapshot([snapshot('membership-1', membership({ tagIds: [archivedTag.id] }))])
+      ),
+      update,
+    };
+    const service = new PracticeCategoryService({
+      collection,
+      runTransaction: async (callback: (value: typeof transaction) => unknown) => callback(transaction),
+    } as never);
+
+    await expect(service.deleteTag('category-1', archivedTag.id, 'admin-1')).rejects.toMatchObject<
+      Partial<PracticeCategoryError>
+    >({ code: 'TAG_IN_USE' });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('replaces membership tags only with tags owned by that category', async () => {
+    const categoryWithTags = category({ tags: [tag()] });
+    const update = jest.fn();
+    const transaction = {
+      get: jest.fn(async (target: { collection?: string; id?: string }) =>
+        target.collection === 'practiceCategories'
+          ? snapshot('category-1', categoryWithTags)
+          : snapshot(target.id ?? 'membership-1', membership())
+      ),
+      update,
+    };
+    const service = new PracticeCategoryService({
+      collection,
+      runTransaction: async (callback: (value: typeof transaction) => unknown) => callback(transaction),
+    } as never);
+
+    await expect(
+      service.replaceMembershipTags('category-1', 'lesson-1', ['foreign-tag'], 'admin-1')
+    ).rejects.toMatchObject<Partial<PracticeCategoryError>>({ code: 'TAG_CATEGORY_MISMATCH' });
+    expect(update).not.toHaveBeenCalled();
+
+    await expect(
+      service.replaceMembershipTags('category-1', 'lesson-1', ['tag-cicero'], 'admin-1')
+    ).resolves.toMatchObject({ tagIds: ['tag-cicero'] });
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({ collection: 'practiceCategoryMemberships' }),
+      expect.objectContaining({ tagIds: ['tag-cicero'] })
     );
   });
 });

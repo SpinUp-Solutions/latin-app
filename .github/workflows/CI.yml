@@ -25,7 +25,6 @@ jobs:
       NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
       NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: ${{ secrets.FIREBASE_MEASUREMENT_ID }}
       NEXT_PUBLIC_APP_URL: ${{ secrets.APP_URL }}
-      NEXT_PUBLIC_DISABLE_PROGRESSION_LOCK: 'true' # Temporary: remove when re-enabling lesson locking
 
     steps:
       - uses: actions/checkout@v4
@@ -54,7 +53,6 @@ jobs:
       NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
       NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: ${{ secrets.FIREBASE_MEASUREMENT_ID }}
       NEXT_PUBLIC_APP_URL: ${{ secrets.APP_URL }}
-      NEXT_PUBLIC_DISABLE_PROGRESSION_LOCK: 'true' # Temporary: remove when re-enabling lesson locking
 
     steps:
       - uses: actions/checkout@v4
@@ -77,6 +75,20 @@ jobs:
       - name: Linter
         run: npm run lint
 
-      # TODO: Uncomment this when we have tests
-      # - name: Run Tests
-      #   run: npm run test
+      - name: Run Jest unit, component, service, and route tests
+        run: npm test -- --runInBand
+
+      - name: Install Java for Firebase emulators
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run assessment browser acceptance
+        run: npm run test:e2e:assessment
+
+      - name: Run Learning Path migration acceptance
+        run: npm run test:e2e:migration

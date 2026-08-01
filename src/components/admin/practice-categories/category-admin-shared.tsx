@@ -85,11 +85,32 @@ export const useBrowserNavigationProtection = (dirty: boolean, itemName = 'order
       }
     };
 
+    const handleDocumentNavigation = (event: MouseEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      )
+        return;
+      const anchor = (event.target as HTMLElement | null)?.closest<HTMLAnchorElement>('a[href]');
+      if (!anchor || anchor.target === '_blank' || anchor.hasAttribute('download')) return;
+      const destination = new URL(anchor.href, window.location.href);
+      if (destination.origin !== window.location.origin || destination.href === currentUrl) return;
+      if (window.confirm(`Discard your unsaved ${itemName}?`)) return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
     window.addEventListener('beforeunload', handleBeforeUnload);
     window.addEventListener('popstate', handlePopState);
+    document.addEventListener('click', handleDocumentNavigation, true);
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       window.removeEventListener('popstate', handlePopState);
+      document.removeEventListener('click', handleDocumentNavigation, true);
     };
   }, [dirty, itemName]);
 };

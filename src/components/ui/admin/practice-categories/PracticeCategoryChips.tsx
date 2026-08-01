@@ -25,8 +25,8 @@ function CategoryBadge({ category }: { category: PracticeCategorySummary }) {
     <Badge
       variant={archived ? 'outline' : 'secondary'}
       className={cn(
-        'max-w-full gap-1 whitespace-nowrap font-normal',
-        archived && 'border-gray-300 bg-gray-100 text-gray-500'
+        'max-w-full whitespace-nowrap border-primary/15 bg-primary/[0.08] font-medium text-primary shadow-[0_1px_2px_rgb(15_23_42/0.04)]',
+        archived && 'border-border bg-roman-marble text-roman-stone shadow-none'
       )}
       title={archived ? `${category.name} (Archived)` : category.name}>
       <span className="truncate">{category.name}</span>
@@ -63,7 +63,7 @@ export function PracticeCategoryChips({
           <PopoverTrigger asChild>
             <button
               type="button"
-              className="inline-flex rounded-full border border-gray-300 bg-white px-2.5 py-0.5 text-xs font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="inline-flex rounded-full border border-primary/15 bg-primary/[0.06] px-2.5 py-1 text-xs font-medium leading-none text-primary shadow-[0_1px_2px_rgb(15_23_42/0.04)] transition-[background-color,border-color] hover:border-primary/25 hover:bg-primary/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               aria-label={`${hiddenCategories.length} more categories: ${hiddenNames}`}>
               +{hiddenCategories.length} more
             </button>

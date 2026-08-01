@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { connectAuthEmulator, getAuth } from 'firebase/auth';
+import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
 import { getMessaging } from 'firebase/messaging';
@@ -21,13 +21,19 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
 const functions = getFunctions(app);
+const usingFirebaseEmulators = process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === 'true';
+
+if (usingFirebaseEmulators && typeof window !== 'undefined') {
+  connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+  connectFirestoreEmulator(db, '127.0.0.1', 8080);
+}
 
 if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
   connectFunctionsEmulator(functions, '127.0.0.1', 5001);
   console.log('[Firebase] Connected to Functions emulator');
 }
 
-const messaging = typeof window !== 'undefined' ? getMessaging(app) : null;
-const analytics = typeof window !== 'undefined' ? getAnalytics(app) : null;
+const messaging = typeof window !== 'undefined' && !usingFirebaseEmulators ? getMessaging(app) : null;
+const analytics = typeof window !== 'undefined' && !usingFirebaseEmulators ? getAnalytics(app) : null;
 
 export { app, auth, db, storage, functions, messaging, analytics };

@@ -1,5 +1,7 @@
 import type {
   VerbFormPath,
+  VerbFormKind,
+  FiniteVerbMood,
   NounFormPath,
   AdjectiveFormPath,
   PronounFormPath,
@@ -8,14 +10,16 @@ import type {
 import type { TableType } from '@/src/utils/schema-helpers';
 
 export const createVerbFormPath = (
+  verbForm: VerbFormKind,
   tense: string,
   voice: string,
-  mood: string,
+  mood: FiniteVerbMood | '',
   person: string,
   number: string,
   caseValue?: string,
   gender?: string
 ): VerbFormPath => ({
+  verb_form: verbForm,
   tense,
   voice,
   mood,
@@ -66,23 +70,30 @@ export const parseFormPathFromString = (
     const finiteMoods = new Set(['indicative', 'subjunctive', 'imperative']);
 
     if (parts.length === 5 && finiteMoods.has(parts[0])) {
-      return createVerbFormPath(parts[2], parts[1], parts[0], parts[4], parts[3]);
+      return createVerbFormPath(
+        'finite',
+        parts[2],
+        parts[1],
+        parts[0] as FiniteVerbMood,
+        parts[4],
+        parts[3]
+      );
     }
 
     if (parts.length === 4 && parts[0] === 'nonFinite' && parts[1] === 'infinitive') {
-      return createVerbFormPath(parts[2], parts[3], 'infinitive', '', '');
+      return createVerbFormPath('infinitive', parts[2], parts[3], '', '', '');
     }
 
     if (parts.length === 7 && parts[0] === 'nonFinite' && parts[1] === 'participle') {
-      return createVerbFormPath(parts[2], parts[3], 'participle', '', parts[6], parts[4], parts[5]);
+      return createVerbFormPath('participle', parts[2], parts[3], '', '', parts[6], parts[4], parts[5]);
     }
 
     if (parts.length === 2 && parts[0] === 'gerund') {
-      return createVerbFormPath('', '', 'gerund', '', '', parts[1]);
+      return createVerbFormPath('gerund', '', '', '', '', '', parts[1]);
     }
 
     if (parts.length === 2 && parts[0] === 'supine') {
-      return createVerbFormPath('', '', 'supine', '', '', parts[1]);
+      return createVerbFormPath('supine', '', '', '', '', '', parts[1]);
     }
   }
 

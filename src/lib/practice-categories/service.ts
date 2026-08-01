@@ -14,18 +14,23 @@ import type {
   PracticeCategory,
   PracticeCategoryLesson,
   PracticeCategoryMembership,
+  PracticeCategorySelection,
   PracticeCategoryStatus,
   PracticeCategoryWithCounts,
   PracticeLessonType,
+  PracticeTag,
 } from '@/src/types/practice-category';
 import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
+import { assertUnitDeletionAllowedInTransaction } from '@/src/lib/learning-units/learning-path-service';
 import { toLessonSummary } from '@/src/utils/lessonSummary';
-import { isCategorisableLesson, normalizeCategoryName } from './domain';
+import { isCategorisableLesson, normalizeCategoryName, normalizeTagName } from './domain';
 import {
   practiceCategoryDocumentSchema,
   practiceCategoryMembershipDocumentSchema,
   type CreatePracticeCategoryInput,
+  type CreatePracticeTagInput,
   type UpdatePracticeCategoryInput,
+  type UpdatePracticeTagInput,
 } from './schemas';
 
 export type PracticeCategoryErrorCode =
@@ -40,6 +45,13 @@ export type PracticeCategoryErrorCode =
   | 'CATEGORY_NOT_EMPTY'
   | 'STALE_CATEGORY_ORDER'
   | 'STALE_LESSON_ORDER'
+  | 'TAG_NAME_CONFLICT'
+  | 'TAG_NOT_FOUND'
+  | 'TAG_ARCHIVED'
+  | 'TAG_NOT_ARCHIVED'
+  | 'TAG_IN_USE'
+  | 'TAG_CATEGORY_MISMATCH'
+  | 'STALE_TAG_ORDER'
   | 'STALE_CATEGORY_DATA';
 
 export class PracticeCategoryError extends Error {
@@ -54,6 +66,7 @@ export class PracticeCategoryError extends Error {
 }
 
 export type LessonCategoryAssignments = {
+  practiceCategorySelections: PracticeCategorySelection[];
   practiceCategoryIds: string[];
   practiceCategories: PracticeCategory[];
   memberships: PracticeCategoryMembership[];
@@ -62,11 +75,13 @@ export type LessonCategoryAssignments = {
 export type PracticeCategoryLessonDetail = {
   category: PracticeCategoryWithCounts;
   lessons: PracticeCategoryLesson[];
+  tagUsageCounts: Record<string, number>;
 };
 
 type ReconcileInTransactionInput = {
   lessonId: string;
   lesson: DocumentData;
+  desiredCategorySelections?: PracticeCategorySelection[];
   desiredCategoryIds?: string[];
   actorId: string;
   requireCategorisable?: boolean;
@@ -83,6 +98,8 @@ const byCategoryOrder = (a: PracticeCategory, b: PracticeCategory) =>
 
 const byLessonOrder = (a: PracticeCategoryMembership, b: PracticeCategoryMembership) =>
   a.lessonOrder - b.lessonOrder || a.id.localeCompare(b.id);
+
+const byTagOrder = (a: PracticeTag, b: PracticeTag) => a.tagOrder - b.tagOrder || a.id.localeCompare(b.id);
 
 const unique = <T>(values: T[]) => [...new Set(values)];
 
@@ -129,13 +146,17 @@ function membershipFromSnapshot(snapshot: DocumentSnapshot): PracticeCategoryMem
 function assertExactScope(
   actualIds: string[],
   orderedIds: string[],
-  code: 'STALE_CATEGORY_ORDER' | 'STALE_LESSON_ORDER'
+  code: 'STALE_CATEGORY_ORDER' | 'STALE_LESSON_ORDER' | 'STALE_TAG_ORDER'
 ) {
   const actual = new Set(actualIds);
   const supplied = new Set(orderedIds);
   if (supplied.size !== orderedIds.length || actual.size !== supplied.size || orderedIds.some(id => !actual.has(id))) {
     throw new PracticeCategoryError(code, 'The ordered list changed elsewhere. Refresh it and try again.', 409);
   }
+}
+
+function sameIds(left: readonly string[], right: readonly string[]) {
+  return left.length === right.length && left.every((id, index) => id === right[index]);
 }
 
 export class PracticeCategoryService {
@@ -270,6 +291,7 @@ export class PracticeCategoryService {
         ...(input.description ? { description: input.description } : {}),
         status: 'active',
         categoryOrder: activeCategories.length,
+        tags: [],
         createdAt: now,
         createdBy: actorId,
         updatedAt: now,
@@ -277,6 +299,182 @@ export class PracticeCategoryService {
       };
       transaction.create(ref, category);
       return category;
+    });
+  }
+
+  async createTag(categoryId: string, input: CreatePracticeTagInput, actorId: string): Promise<PracticeTag> {
+    const categoryRef = this.categories.doc(categoryId);
+    const tagId = this.categories.doc().id;
+    return this.db.runTransaction(async transaction => {
+      const snapshot = await transaction.get(categoryRef);
+      if (!snapshot.exists) {
+        throw new PracticeCategoryError('CATEGORY_NOT_FOUND', 'Practice category not found', 404);
+      }
+      const category = categoryFromSnapshot(snapshot);
+      if (category.status !== 'active') {
+        throw new PracticeCategoryError('CATEGORY_ARCHIVED', 'Restore the category before creating tags', 409);
+      }
+
+      const normalizedName = normalizeTagName(input.name);
+      if (category.tags.some(tag => tag.normalizedName === normalizedName)) {
+        throw new PracticeCategoryError(
+          'TAG_NAME_CONFLICT',
+          `A tag named ${input.name.trim()} already exists in ${category.name}`,
+          409
+        );
+      }
+
+      const now = new Date().toISOString();
+      const activeTags = category.tags.filter(tag => tag.status === 'active').sort(byTagOrder);
+      const compacted = category.tags.map(tag => {
+        if (tag.status !== 'active') return tag;
+        const tagOrder = activeTags.findIndex(active => active.id === tag.id);
+        return tag.tagOrder === tagOrder ? tag : { ...tag, tagOrder, updatedAt: now, updatedBy: actorId };
+      });
+      const tag: PracticeTag = {
+        id: tagId,
+        name: input.name.trim(),
+        normalizedName,
+        status: 'active',
+        tagOrder: activeTags.length,
+        createdAt: now,
+        createdBy: actorId,
+        updatedAt: now,
+        updatedBy: actorId,
+      };
+      transaction.update(categoryRef, {
+        tags: [...compacted, tag],
+        updatedAt: now,
+        updatedBy: actorId,
+      });
+      return tag;
+    });
+  }
+
+  async updateTag(
+    categoryId: string,
+    tagId: string,
+    input: UpdatePracticeTagInput,
+    actorId: string
+  ): Promise<PracticeTag> {
+    const categoryRef = this.categories.doc(categoryId);
+    return this.db.runTransaction(async transaction => {
+      const snapshot = await transaction.get(categoryRef);
+      if (!snapshot.exists) {
+        throw new PracticeCategoryError('CATEGORY_NOT_FOUND', 'Practice category not found', 404);
+      }
+      const category = categoryFromSnapshot(snapshot);
+      const current = category.tags.find(tag => tag.id === tagId);
+      if (!current) {
+        throw new PracticeCategoryError('TAG_NOT_FOUND', 'Practice tag not found', 404);
+      }
+
+      const normalizedName = input.name === undefined ? current.normalizedName : normalizeTagName(input.name);
+      if (category.tags.some(tag => tag.id !== tagId && tag.normalizedName === normalizedName)) {
+        throw new PracticeCategoryError(
+          'TAG_NAME_CONFLICT',
+          `A tag named ${input.name?.trim() ?? current.name} already exists in ${category.name}`,
+          409
+        );
+      }
+
+      const now = new Date().toISOString();
+      const nextStatus = input.status ?? current.status;
+      const changesStatus = nextStatus !== current.status;
+      const activeWithoutCurrent = category.tags
+        .filter(tag => tag.status === 'active' && tag.id !== tagId)
+        .sort(byTagOrder);
+      const nextOrder = changesStatus && nextStatus === 'active' ? activeWithoutCurrent.length : current.tagOrder;
+      const updated: PracticeTag = {
+        ...current,
+        name: input.name === undefined ? current.name : input.name.trim(),
+        normalizedName,
+        status: nextStatus,
+        tagOrder: nextOrder,
+        updatedAt: now,
+        updatedBy: actorId,
+      };
+
+      const tags = category.tags.map(tag => (tag.id === tagId ? updated : tag));
+      if (changesStatus && nextStatus === 'archived') {
+        const remainingActive = tags.filter(tag => tag.status === 'active').sort(byTagOrder);
+        remainingActive.forEach((tag, index) => {
+          const target = tags.find(item => item.id === tag.id)!;
+          const previousOrder = target.tagOrder;
+          target.tagOrder = index;
+          if (previousOrder !== index) {
+            target.updatedAt = now;
+            target.updatedBy = actorId;
+          }
+        });
+      }
+
+      transaction.update(categoryRef, { tags, updatedAt: now, updatedBy: actorId });
+      return updated;
+    });
+  }
+
+  async deleteTag(categoryId: string, tagId: string, actorId: string): Promise<void> {
+    const categoryRef = this.categories.doc(categoryId);
+    await this.db.runTransaction(async transaction => {
+      const [categorySnapshot, membershipSnapshot] = await Promise.all([
+        transaction.get(categoryRef),
+        transaction.get(this.categoryMembershipsQuery(categoryId)),
+      ]);
+      if (!categorySnapshot.exists) {
+        throw new PracticeCategoryError('CATEGORY_NOT_FOUND', 'Practice category not found', 404);
+      }
+      const category = categoryFromSnapshot(categorySnapshot);
+      const tag = category.tags.find(item => item.id === tagId);
+      if (!tag) {
+        throw new PracticeCategoryError('TAG_NOT_FOUND', 'Practice tag not found', 404);
+      }
+      if (tag.status !== 'archived') {
+        throw new PracticeCategoryError('TAG_NOT_ARCHIVED', 'Archive the tag before deleting it permanently', 409);
+      }
+      const inUse = membershipSnapshot.docs
+        .map(membershipFromSnapshot)
+        .some(membership => membership.tagIds.includes(tagId));
+      if (inUse) {
+        throw new PracticeCategoryError(
+          'TAG_IN_USE',
+          'Remove this tag from every lesson before deleting it permanently',
+          409
+        );
+      }
+      transaction.update(categoryRef, {
+        tags: category.tags.filter(item => item.id !== tagId),
+        updatedAt: new Date().toISOString(),
+        updatedBy: actorId,
+      });
+    });
+  }
+
+  async reorderTags(categoryId: string, orderedTagIds: string[], actorId: string): Promise<PracticeTag[]> {
+    const categoryRef = this.categories.doc(categoryId);
+    return this.db.runTransaction(async transaction => {
+      const snapshot = await transaction.get(categoryRef);
+      if (!snapshot.exists) {
+        throw new PracticeCategoryError('CATEGORY_NOT_FOUND', 'Practice category not found', 404);
+      }
+      const category = categoryFromSnapshot(snapshot);
+      if (category.status !== 'active') {
+        throw new PracticeCategoryError('CATEGORY_ARCHIVED', 'Restore the category before reordering tags', 409);
+      }
+      const activeTags = category.tags.filter(tag => tag.status === 'active');
+      assertExactScope(
+        activeTags.map(tag => tag.id),
+        orderedTagIds,
+        'STALE_TAG_ORDER'
+      );
+
+      const now = new Date().toISOString();
+      const orderById = new Map(orderedTagIds.map((id, index) => [id, index]));
+      const tags = category.tags.map(tag =>
+        tag.status === 'active' ? { ...tag, tagOrder: orderById.get(tag.id)!, updatedAt: now, updatedBy: actorId } : tag
+      );
+      transaction.update(categoryRef, { tags, updatedAt: now, updatedBy: actorId });
+      return tags.filter(tag => tag.status === 'active').sort(byTagOrder);
     });
   }
 
@@ -459,11 +657,13 @@ export class PracticeCategoryService {
         ...toLessonSummary(lessonSnapshot.id, lesson),
         membershipId: membership.id,
         lessonOrder: membership.lessonOrder,
+        tagIds: membership.tagIds,
       };
     });
 
     const validLessonSnapshots = assignedSnapshots.filter(
-      snapshot => snapshot.exists && isCategorisableLesson(snapshot.data()) && snapshot.data()?.type === category.lessonType
+      snapshot =>
+        snapshot.exists && isCategorisableLesson(snapshot.data()) && snapshot.data()?.type === category.lessonType
     );
     const liveLessonCount = validLessonSnapshots.filter(snapshot => snapshot.data()?.isLive).length;
     const categoryWithCounts: PracticeCategoryWithCounts = {
@@ -472,8 +672,16 @@ export class PracticeCategoryService {
       liveLessonCount,
       draftLessonCount: validLessonSnapshots.length - liveLessonCount,
     };
+    const tagUsageCounts = Object.fromEntries(category.tags.map(tag => [tag.id, 0]));
+    memberships.forEach(membership => {
+      membership.tagIds.forEach(tagId => {
+        if (Object.prototype.hasOwnProperty.call(tagUsageCounts, tagId)) {
+          tagUsageCounts[tagId] += 1;
+        }
+      });
+    });
 
-    return { category: categoryWithCounts, lessons };
+    return { category: categoryWithCounts, lessons, tagUsageCounts };
   }
 
   async getAvailableCategoryLessons(categoryId: string): Promise<LessonSummary[]> {
@@ -574,6 +782,7 @@ export class PracticeCategoryService {
           categoryId,
           lessonId,
           lessonOrder: nextOrder++,
+          tagIds: [],
           createdAt: now,
           createdBy: actorId,
           updatedAt: now,
@@ -664,10 +873,87 @@ export class PracticeCategoryService {
     });
   }
 
+  async replaceMembershipTags(
+    categoryId: string,
+    lessonId: string,
+    tagIds: string[],
+    actorId: string
+  ): Promise<PracticeCategoryMembership> {
+    const categoryRef = this.categories.doc(categoryId);
+    const membershipRef = this.memberships.doc(getPracticeCategoryMembershipId(categoryId, lessonId));
+    return this.db.runTransaction(async transaction => {
+      const [categorySnapshot, membershipSnapshot] = await Promise.all([
+        transaction.get(categoryRef),
+        transaction.get(membershipRef),
+      ]);
+      if (!categorySnapshot.exists) {
+        throw new PracticeCategoryError('CATEGORY_NOT_FOUND', 'Practice category not found', 404);
+      }
+      if (!membershipSnapshot.exists) {
+        throw new PracticeCategoryError('LESSON_NOT_FOUND', 'Lesson is not assigned to this category', 404);
+      }
+
+      const category = categoryFromSnapshot(categorySnapshot);
+      const membership = membershipFromSnapshot(membershipSnapshot);
+      if (new Set(tagIds).size !== tagIds.length) {
+        throw new PracticeCategoryError('TAG_CATEGORY_MISMATCH', 'tagIds must not contain duplicates', 400);
+      }
+      const tagsById = new Map(category.tags.map(tag => [tag.id, tag]));
+      const existingTagIds = new Set(membership.tagIds);
+      for (const tagId of tagIds) {
+        const tag = tagsById.get(tagId);
+        if (!tag) {
+          throw new PracticeCategoryError(
+            'TAG_CATEGORY_MISMATCH',
+            'A selected tag does not belong to this category',
+            400
+          );
+        }
+        if (tag.status === 'archived' && !existingTagIds.has(tagId)) {
+          throw new PracticeCategoryError('TAG_ARCHIVED', `Archived tag ${tag.name} cannot be newly assigned`, 409);
+        }
+      }
+      if (category.status === 'archived' && tagIds.some(tagId => !existingTagIds.has(tagId))) {
+        throw new PracticeCategoryError(
+          'CATEGORY_ARCHIVED',
+          'Archived categories cannot receive new tag assignments',
+          409
+        );
+      }
+
+      const normalizedTagIds = category.tags
+        .filter(tag => tagIds.includes(tag.id))
+        .sort(byTagOrder)
+        .map(tag => tag.id);
+      if (sameIds(membership.tagIds, normalizedTagIds)) return membership;
+
+      const updated = {
+        ...membership,
+        tagIds: normalizedTagIds,
+        updatedAt: new Date().toISOString(),
+        updatedBy: actorId,
+      };
+      transaction.update(membershipRef, {
+        tagIds: updated.tagIds,
+        updatedAt: updated.updatedAt,
+        updatedBy: updated.updatedBy,
+      });
+      return updated;
+    });
+  }
+
   async getAssignmentsForLessonIds(lessonIds: string[]): Promise<Map<string, LessonCategoryAssignments>> {
     const ids = unique(lessonIds);
     const result = new Map<string, LessonCategoryAssignments>(
-      ids.map(id => [id, { practiceCategoryIds: [], practiceCategories: [], memberships: [] }])
+      ids.map(id => [
+        id,
+        {
+          practiceCategorySelections: [],
+          practiceCategoryIds: [],
+          practiceCategories: [],
+          memberships: [],
+        },
+      ])
     );
     if (ids.length === 0) return result;
 
@@ -704,6 +990,10 @@ export class PracticeCategoryService {
         .sort(byCategoryOrder);
       const membershipByCategory = new Map(lessonMemberships.map(item => [item.categoryId, item]));
       result.set(lessonId, {
+        practiceCategorySelections: categories.map(category => ({
+          categoryId: category.id,
+          tagIds: [...membershipByCategory.get(category.id)!.tagIds],
+        })),
         practiceCategoryIds: categories.map(category => category.id),
         practiceCategories: categories,
         memberships: categories.map(category => membershipByCategory.get(category.id)!),
@@ -725,7 +1015,7 @@ export class PracticeCategoryService {
 
   async reconcileLessonCategories(
     lessonId: string,
-    desiredCategoryIds: string[],
+    desiredCategories: PracticeCategorySelection[] | string[],
     actorId: string
   ): Promise<LessonCategoryAssignments> {
     return this.db.runTransaction(async transaction => {
@@ -739,7 +1029,9 @@ export class PracticeCategoryService {
       return this.reconcileLessonCategoriesInTransaction(transaction, {
         lessonId,
         lesson: lessonSnapshot.data()!,
-        desiredCategoryIds,
+        ...(desiredCategories.length > 0 && typeof desiredCategories[0] !== 'string'
+          ? { desiredCategorySelections: desiredCategories as PracticeCategorySelection[] }
+          : { desiredCategoryIds: desiredCategories as string[] }),
         actorId,
         requireCategorisable: true,
       });
@@ -756,10 +1048,25 @@ export class PracticeCategoryService {
       membership: membershipFromSnapshot(snapshot),
     }));
     const existingByCategory = new Map(existingDocs.map(item => [item.membership.categoryId, item]));
-    const desiredIds = input.desiredCategoryIds ?? existingDocs.map(item => item.membership.categoryId);
+    const desiredSelections =
+      input.desiredCategorySelections ??
+      (input.desiredCategoryIds
+        ? input.desiredCategoryIds.map(categoryId => ({
+            categoryId,
+            tagIds: [...(existingByCategory.get(categoryId)?.membership.tagIds ?? [])],
+          }))
+        : existingDocs.map(item => ({
+            categoryId: item.membership.categoryId,
+            tagIds: [...item.membership.tagIds],
+          })));
+    const desiredIds = desiredSelections.map(selection => selection.categoryId);
 
     if (new Set(desiredIds).size !== desiredIds.length) {
-      throw new PracticeCategoryError('STALE_CATEGORY_DATA', 'practiceCategoryIds must not contain duplicates', 400);
+      throw new PracticeCategoryError(
+        'STALE_CATEGORY_DATA',
+        'practiceCategorySelections must not contain duplicate categories',
+        400
+      );
     }
     if (
       (input.requireCategorisable || desiredIds.length > 0 || existingDocs.length > 0) &&
@@ -797,6 +1104,35 @@ export class PracticeCategoryService {
       }
       categoriesById.set(category.id, category);
     });
+    const desiredTagsByCategory = new Map<string, string[]>();
+    desiredSelections.forEach(selection => {
+      if (new Set(selection.tagIds).size !== selection.tagIds.length) {
+        throw new PracticeCategoryError('TAG_CATEGORY_MISMATCH', 'tagIds must not contain duplicates', 400);
+      }
+      const category = categoriesById.get(selection.categoryId)!;
+      const tagsById = new Map(category.tags.map(tag => [tag.id, tag]));
+      const existingTagIds = new Set(existingByCategory.get(selection.categoryId)?.membership.tagIds ?? []);
+      selection.tagIds.forEach(tagId => {
+        const tag = tagsById.get(tagId);
+        if (!tag) {
+          throw new PracticeCategoryError(
+            'TAG_CATEGORY_MISMATCH',
+            `A selected tag does not belong to category ${category.name}`,
+            400
+          );
+        }
+        if (tag.status === 'archived' && !existingTagIds.has(tagId)) {
+          throw new PracticeCategoryError('TAG_ARCHIVED', `Archived tag ${tag.name} cannot be newly assigned`, 409);
+        }
+      });
+      desiredTagsByCategory.set(
+        selection.categoryId,
+        category.tags
+          .filter(tag => selection.tagIds.includes(tag.id))
+          .sort(byTagOrder)
+          .map(tag => tag.id)
+      );
+    });
 
     const desiredSet = new Set(desiredIds);
     const toRemove = existingDocs.filter(item => !desiredSet.has(item.membership.categoryId));
@@ -817,6 +1153,25 @@ export class PracticeCategoryService {
     const now = new Date().toISOString();
     toRemove.forEach(item => transaction.delete(item.snapshot.ref));
     const addedByCategory = new Map<string, PracticeCategoryMembership>();
+    const updatedByCategory = new Map<string, PracticeCategoryMembership>();
+    existingDocs
+      .filter(item => desiredSet.has(item.membership.categoryId))
+      .forEach(item => {
+        const tagIds = desiredTagsByCategory.get(item.membership.categoryId) ?? [];
+        if (sameIds(item.membership.tagIds, tagIds)) return;
+        const updated = {
+          ...item.membership,
+          tagIds,
+          updatedAt: now,
+          updatedBy: input.actorId,
+        };
+        transaction.update(item.snapshot.ref, {
+          tagIds,
+          updatedAt: now,
+          updatedBy: input.actorId,
+        });
+        updatedByCategory.set(item.membership.categoryId, updated);
+      });
     changedCategoryIds.forEach(categoryId => {
       const remaining = (scopes.get(categoryId) ?? []).filter(item => item.membership.lessonId !== input.lessonId);
       remaining.forEach((item, index) => {
@@ -836,6 +1191,7 @@ export class PracticeCategoryService {
           categoryId,
           lessonId: input.lessonId,
           lessonOrder: remaining.length,
+          tagIds: desiredTagsByCategory.get(categoryId) ?? [],
           createdAt: now,
           createdBy: input.actorId,
           updatedAt: now,
@@ -848,10 +1204,19 @@ export class PracticeCategoryService {
 
     const categories = desiredIds.map(id => categoriesById.get(id)!).sort(byCategoryOrder);
     return {
+      practiceCategorySelections: categories.map(category => ({
+        categoryId: category.id,
+        tagIds: [
+          ...(updatedByCategory.get(category.id)?.tagIds ??
+            existingByCategory.get(category.id)?.membership.tagIds ??
+            addedByCategory.get(category.id)?.tagIds ??
+            []),
+        ],
+      })),
       practiceCategoryIds: categories.map(category => category.id),
       practiceCategories: categories,
       memberships: categories.map(category => {
-        const existing = existingByCategory.get(category.id)?.membership;
+        const existing = updatedByCategory.get(category.id) ?? existingByCategory.get(category.id)?.membership;
         return existing ?? addedByCategory.get(category.id)!;
       }),
     };
@@ -867,6 +1232,7 @@ export class PracticeCategoryService {
       if (!isLessonDocumentData(lessonSnapshot.data())) {
         throw new PracticeCategoryError('LESSON_NOT_FOUND', 'Lesson not found', 404);
       }
+      await assertUnitDeletionAllowedInTransaction(transaction, this.db, lessonId);
       const lessonMembershipSnapshot = await transaction.get(this.memberships.where('lessonId', '==', lessonId));
       const lessonMembershipDocs = lessonMembershipSnapshot.docs.map(snapshot => ({
         snapshot,

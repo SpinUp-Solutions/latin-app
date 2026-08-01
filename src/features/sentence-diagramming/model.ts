@@ -61,10 +61,14 @@ export interface DiagramComparisonResult {
   canonicalSolutionAnnotations: DiagramAnnotation[];
 }
 
-/** The complete client-side snapshot captured when a student submits an answer. */
-export interface DiagramAttempt {
-  comparison: DiagramComparisonResult;
+/** Test-safe client payload; expected answers and comparisons are resolved server-side. */
+export interface DiagramAuditSubmission {
   studentAnnotations: DiagramAnnotation[];
+}
+
+/** The complete client-side snapshot available to local practice feedback. */
+export interface DiagramAttempt extends DiagramAuditSubmission {
+  comparison: DiagramComparisonResult;
   solutionAnnotations: DiagramAnnotation[];
   tokens: DiagramToken[];
 }
@@ -126,7 +130,7 @@ export const createEmptySentenceDiagramDocument = (
   latin: string,
   translation: string,
   options?: Partial<Pick<SentenceDiagramDocument, 'difficulty' | 'availableStudentTools' | 'hint' | 'explanation'>>
-) => {
+): SentenceDiagramDocument => {
   const availableStudentTools = normalizeAnnotationTools(options?.availableStudentTools);
   const hint = normalizeSentenceDiagramFeedbackContent(options?.hint);
   const explanation = normalizeSentenceDiagramFeedbackContent(options?.explanation);
@@ -643,7 +647,7 @@ export const compareDiagramAnnotationSets = (
     matched,
     expected,
     extra,
-    accuracy: expected === 0 ? (extra === 0 ? 100 : 0) : (matched / expected) * 100,
+    accuracy: expected === 0 ? (extra === 0 ? 100 : 0) : (matched / (expected + extra)) * 100,
     isComplete: matched === expected && extra === 0,
     matchedIds,
     missingIds,

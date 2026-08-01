@@ -1,29 +1,31 @@
 # Learning Unit and Test Schema Refactor
 
-- Status: Working draft
-- Last updated: 2026-07-16
-- Implementation status: Phase 3 complete — 2026-07-16
+- Status: Complete
+- Last updated: 2026-07-29
+- Implementation status: Phase 8 and post-phase cleanup complete — 2026-07-29
 
 ## Purpose
 
-Integrate tests into the existing lesson flow while preserving the lesson creator experience, supporting alternative test versions, and adding a separate Mock Tests dashboard category.
+Integrate tests into the existing lesson flow while preserving the lesson creator experience, supporting alternative test versions, separating authored content from normal-flow placement, and adding a separate Mock Tests dashboard category.
 
-This document is the shared planning space for the refactor. Settled choices are recorded in the decision log. Questions that still need a product decision remain under **Open decisions**.
+This document is the implementation record for the completed refactor. Settled choices are recorded in the decision log. Questions that still need a product decision remain under **Open decisions**.
 
 ## Current state
 
 - Lesson documents are stored in the Firestore `lessons` collection and use the `Lesson` schema.
 - Lesson behavior is specialized with `type: vocab | normal | sentence-diagramming | listening`.
 - Lessons contain ordered pages with both instructional content and exercises.
-- Normal-test containers are stored as `kind: 'test'` documents in the shared `lessons` collection, while their independently editable page content is stored in `testVersions`. Creating a test saves its non-live container and first valid rotation version atomically.
+- Normal-test containers are stored as `kind: 'test'` documents in the shared `lessons` collection. Active, rotation-eligible content is stored in `testVersions`, while incomplete inactive work is isolated in the server-only `testVersionDrafts` collection. Creating a test still saves its unplaced container and first valid rotation version atomically; adding or duplicating a later version creates an inactive draft.
 - The shared test-version editor persists lesson-style `pages` with inline exercise `maxPoints`; the server validates content and recomputes page, item, exercise, and point summaries on every version write.
-- The former POC `tests` collection is no longer read or written by the admin test APIs. Its compatibility types and utilities remain isolated until Phase 7 cleanup; POC documents are not migrated.
-- Test attempts and preview scores are held in browser memory and are not persisted.
+- The former POC `tests` collection has no remaining application reader, writer, type, utility, route, or UI compatibility layer. POC documents are not migrated.
+- Test attempts persist through a full lifecycle: start/resume with frozen delivery state, incremental answer saves, and a transactional submission that freezes score statistics and per-exercise results, removes temporary answers and delivery state, and clears the resumability pointer. Preview scores remain ephemeral and are never persisted.
 - Admin lesson, test, and practice-category data flow through one authenticated RTK Query `appApi` using `createAuthenticatedBaseQuery`. The store registers that shared reducer and middleware once; the unrelated vocabulary APIs remain separate until they are touched.
 - Lesson exercise progress now uses persisted content-item IDs. Schema-v1 positional exercise IDs are normalized to stable IDs on server writes and can be migrated through the admin progress migration route.
 - Lesson completion now uses progress schema v2: `status: 'completed'` is authoritative, `furthestPageIndex` is the non-regressing lesson cursor, and `currentPageIndex >= pages.length` remains only a legacy compatibility fallback.
 - Finishing a lesson is an explicit authenticated server transaction that verifies the authored final page and required exercise completion. Lesson preview already disables page, exercise, and completion progress writes.
 - Practice lesson categories are stored independently in `practiceCategories` and `practiceCategoryMemberships`; response-only category joins are not persisted on lesson documents.
+- The current live-lesson manager uses `isLive` and `liveOrder` for four type-scoped lists. Publishing chooses a global maximum order, reordering writes dense positions only inside the selected lesson type, and the client mirrors RTK Query data into `lessonSlice` while an imperative ref suppresses synchronization during local reorder edits.
+- The student `/api/lessons` route queries every live lesson with full pages, then separates the normal lock chain from three non-gating practice libraries. Phase 5 replaces only the normal chain's placement source; practice visibility keeps its existing type-scoped `isLive`/`liveOrder` behavior and category-selected views keep their independent membership `lessonOrder`.
 - Direct client writes to `lessons` and direct client reads or writes to the two practice-category collections are denied by Firestore rules. The legacy wildcard still exposes other collections unless they receive an explicit rule.
 
 The POC proves the authoring and scoring behavior. The refactor should now make tests part of the wider learning flow without creating parallel content, rendering, or editor systems.
@@ -36,9 +38,27 @@ Existing POC test documents will not be migrated. Real tests are authored fresh 
 
 ### Lessons and tests need a shared flow identity
 
-Normal lessons and normal tests both appear in the student lesson flow. They should therefore share a top-level `LearningUnit` union and the existing `isLive` and `liveOrder` behavior. Vocabulary, sentence-diagramming, and listening lessons retain their existing separate dashboard categories and behavior.
+Normal lessons and normal tests both appear in the student lesson flow. They should therefore share a top-level `LearningUnit` union. Vocabulary, sentence-diagramming, and listening lessons retain their existing separate dashboard categories and behavior.
 
 Use `kind` to distinguish instructional units from assessed units. Preserve the current `type` field only on lessons because it describes specialized lesson/player behavior. `TestUnit` needs no second discriminator: `kind: 'test'` is sufficient, and omitting a test `type` avoids colliding with legacy lesson filters that use `type === 'normal'`.
+
+### Normal-flow placement belongs to the Learning Path
+
+Authored content and normal-flow delivery are separate concerns. A complete normal lesson or test can exist without being placed in the Learning Path. The target model therefore makes `learningPaths/default` authoritative for the one ordered, gated sequence of normal lessons and normal tests.
+
+The current product has one curriculum and no student-to-path assignment model, so Phase 5 deliberately uses one singleton path rather than exposing a premature `pathId` abstraction. Presence in its `unitIds` array means student-visible normal-flow placement. Absence means unplaced, not necessarily unfinished.
+
+The document contains a plain ordered array of unit IDs rather than per-item placement objects. Reorder, insert, publish, and unpublish become one command that replaces the complete desired sequence after validating an expected revision. Array position is the order, so gaps and duplicate numeric ranks cannot exist. Document-level `updatedAt` and `updatedBy` provide the audit data required by the current product; per-item placement timestamps and a generic `placementId` add no current value.
+
+At the expected curriculum size, one aggregate document gives atomic writes, simple reads, and reliable optimistic concurrency. The service enforces a conservative item-count/serialized-size limit well below Firestore's 1 MiB document limit. If monitored growth approaches that limit or multiple curricula become a real requirement, the API and assignment model can be redesigned together rather than partially anticipating them now.
+
+Practice placement is intentionally unchanged in this refactor:
+
+- vocabulary, sentence-diagramming, and listening lessons continue to use type-scoped `isLive` and `liveOrder` for their default **All practice** lists;
+- `practiceCategoryMemberships.lessonOrder` continues to own the independent order inside one selected practice category;
+- category membership remains independent from practice publication;
+- a later Practice Catalog refactor may separate practice placement from authored lesson documents, but it is not a prerequisite for tests and is outside this plan;
+- `MockTest` remains a delivery container in its own right, so its lifecycle, visibility, and `mockOrder` stay on the mock container.
 
 ### A normal test is not the same thing as its version
 
@@ -52,10 +72,11 @@ A version has exactly one active delivery owner:
 
 - membership in a `TestUnit.rotationVersions` list means the version participates in that normal test's random rotation;
 - ownership by an active `MockTest` means the version is excluded from every normal-test rotation and is delivered only through that mock-test card.
+- membership in `testVersionDrafts` means the version is inactive, admin-only, and has no delivery owner.
 
 For example, if Test 3 initially contains Versions A, B, C, and D and Version D is assigned as a mock, the assignment transaction removes D from `TestUnit.rotationVersions` and creates or reactivates D's `MockTest`. Normal Test 3 attempts can then select only A, B, or C. The Test 3 admin overview still shows D under **Mock cards** by joining active mocks whose `parent.testId` is Test 3; the relationship is derived at read time rather than mirrored in the parent document.
 
-`TestVersion` remains a first-class document so large page content can be edited independently, but versions are not generally shared between simultaneous delivery contexts. If a teacher wants equivalent content in both normal rotation and Mock Tests, they explicitly duplicate the version and assign the duplicate as mock.
+`TestVersion` remains a first-class document so large page content can be edited independently, but versions are not generally shared between simultaneous delivery contexts. If a teacher wants equivalent content in both normal rotation and Mock Tests, they explicitly duplicate the version, activate the inactive copy, and assign that copy as mock.
 
 A manually created standalone mock has no parent normal test. It can later be moved into a normal test by archiving its mock container and attaching the same version for rotation, or duplicated when the teacher wants to keep both destinations.
 
@@ -65,9 +86,9 @@ Mock tests can only be encountered in the Mock Tests dashboard category. A mock 
 
 A parent-linked mock records the normal test from which the version was assigned. The active `MockTest`, not the parent test, owns that version's current delivery. A standalone mock explicitly records that it has no parent. Assigning Version A and Version B of a normal test as mocks creates two independently ordered student-facing mock-test cards. The student deliberately chooses a card; mock retakes do not rotate between those versions.
 
-This makes a generic `placementId` unnecessary for the current requirements:
+This makes a generic attempt or delivery `placementId` unnecessary for the current requirements:
 
-- normal tests use their `testId` and participate in `liveOrder`;
+- normal tests use their `testId` and participate in the active Learning Path aggregate;
 - mock tests use their `mockTestId` and participate in `mockOrder`;
 - attempts record whether they originated from a normal test or a mock test.
 
@@ -77,9 +98,11 @@ A passing requirement describes how a student-facing test is used, not the conte
 
 The normal-test threshold applies only to its rotation-eligible versions. A mock-only version uses its `MockTest` threshold. Percentage thresholds allow alternative normal-test versions to have different total points while remaining comparable.
 
-### Versions and edit history are intentionally simple
+### Versions, inactive drafts, and edit history
 
 The model includes alternative test versions such as A, B, and C. It does not include immutable revision history. Editing a test version updates that version directly.
+
+Newly added and duplicated normal-test versions begin as inactive drafts. Drafts may be incomplete, are explicitly saved to Firestore for cross-device continuation, and never appear in `rotationVersions` or `testVersions`. Activation validates the complete test-version contract and atomically moves the document into `testVersions` while adding its ID to rotation. Deactivation performs the inverse move; it is blocked when it would remove the final active version from a test in the Learning Path.
 
 Submitted attempts preserve frozen score statistics and exercise-level results, which power the student results breakdown. They do not retain exact questions or student answers, and their statistics are never recalculated from the current editable test version. This intentionally means submitted attempts cannot later be reviewed question-by-question or regraded after a version changes.
 
@@ -97,17 +120,14 @@ interface LearningUnitBase {
   title: string;
   description: string;
 
-  isLive: boolean;
-  liveOrder: number | null;
-  publishedAt: string | null;
-  publishedBy: string | null;
-
   createdAt?: string;
   createdBy?: string;
   updatedAt?: string;
   updatedBy?: string;
 }
 ```
+
+Persisted normal lessons may retain legacy `isLive`, `liveOrder`, `publishedAt`, and `publishedBy` fields during migration and rollback, but the active Learning Path becomes authoritative for normal-flow placement after cutover. Practice lessons continue to use those fields canonically in this refactor. Test containers no longer accept or persist those placement fields.
 
 ### Lesson units
 
@@ -120,12 +140,19 @@ interface LessonUnit extends LearningUnitBase {
 
   pages: Page[];
   vocabulary_pool?: string | null;
+
+  // Canonical for practice lesson types. Legacy-only for normal lessons after
+  // the Learning Path cutover.
+  isLive: boolean;
+  liveOrder: number | null;
+  publishedAt: string | null;
+  publishedBy: string | null;
 }
 ```
 
 ### Rotation-version references
 
-Normal tests use an ordered list containing only versions currently eligible for normal rotation. A non-live container may temporarily have no rotation versions; creating a test requires a first valid version, and publishing requires at least one. Mock-owned versions are joined into the parent overview from `mockTests` rather than retained in this list.
+Normal tests use an ordered list containing only versions currently eligible for normal rotation. An unplaced container may temporarily have no rotation versions; creating a test requires a first valid version, and Learning Path placement requires at least one. Mock-owned versions are joined into the parent overview from `mockTests` rather than retained in this list.
 
 ```ts
 interface RotationVersionReference {
@@ -150,6 +177,36 @@ interface TestUnit extends LearningUnitBase {
 
 type LearningUnit = LessonUnit | TestUnit;
 ```
+
+### Learning Path
+
+```ts
+interface LearningPathDocument {
+  id: 'default';
+  revision: number;
+  unitIds: string[];
+  updatedAt: string;
+  updatedBy: string;
+
+  // Temporary cutover state. Its presence means the Phase 5 rollback window is
+  // still open; the explicit retire command removes it after stabilization.
+  cutover?: {
+    state: 'active' | 'inactive';
+    migrationId: string;
+    sourceHash: string;
+    appliedAt: string;
+    appliedBy: string;
+    rolledBackAt?: string;
+    rolledBackBy?: string;
+  };
+}
+```
+
+`LearningPathDocument.unitIds` accepts only normal `LessonUnit` documents and structurally eligible `TestUnit` documents. Each unit can appear at most once. While `cutover.state === 'inactive'` or the document does not yet exist, compatibility readers use the legacy live normal-lesson sequence. Once active, normal placement decisions never derive from legacy lesson fields.
+
+The admin Learning Path save input contains only `expectedRevision` and `unitIds`. It cannot set or alter `cutover`; only the operator migration commands own that temporary state. An ordinary successful save increments `revision` and stamps the document-level update audit fields.
+
+While the `cutover` field is present (the rollback window is open), ordinary Learning Path saves are rejected with an actionable error telling the admin the path is in its post-migration stabilization window. This edit freeze is what keeps rollback trivial: legacy placement fields are never mutated after cutover, so they remain an accurate fallback for the whole window. The explicit operator retire command removes `cutover`, closes the rollback window, and enables ordinary saves.
 
 Example for Test 3 after Version D is assigned as a mock:
 
@@ -181,9 +238,9 @@ interface TestVersion {
 }
 ```
 
-A test version is separately stored scored content, not an independently published student destination. Persisted versions must be structurally valid. The server recomputes all four summary fields from `pages` on every create or update, following the existing lesson-summary pattern; this permits list and picker APIs to project metadata without downloading page bodies. Versions are assigned to one active delivery context rather than shared simultaneously across tests and mocks. Domain mutation routes reject attaching an existing version to a second context; moving is an explicit atomic operation and copying creates a new version ID.
+A test version is separately stored scored content, not an independently published student destination. Documents in `testVersions` must be structurally valid. The server recomputes all four summary fields from `pages` on every create or update, following the existing lesson-summary pattern; this permits list and picker APIs to project metadata without downloading page bodies. Versions are assigned to one active delivery context rather than shared simultaneously across tests and mocks. Domain mutation routes reject attaching an existing version to a second context; moving is an explicit atomic operation and copying creates a new inactive draft ID.
 
-Incomplete editor work remains in the existing draft mechanism. If cross-device server drafts are required later, a narrower `draft | ready` lifecycle can be introduced without adding independent publication semantics.
+`testVersionDrafts` stores the same editor-facing content plus its owning `testId`, derived summaries, and audit fields. Draft persistence accepts empty pages and other incomplete scoring state that the editor can safely round-trip. Activation reuses the strict `TestVersion` validation boundary, so invalid or incomplete drafts fail with actionable validation issues and remain inactive.
 
 ### Mock tests
 
@@ -236,13 +293,20 @@ LessonUnit ───────────────────────
 
 TestUnit ───────> RotationVersionReference ──> TestVersion ──> Page[]
 
+TestUnit <──── owning testId ──── Inactive TestVersionDraft ──> Page[]
+
+LearningPath ───> ordered unitId ────────────> LessonUnit | TestUnit
+
+Practice LessonUnit ──> type-scoped isLive/liveOrder
+                   └──> PracticeCategoryMembership (independent category order)
+
 Parent-linked MockTest ──> TestVersion
           └── parent.testId ──> TestUnit (admin/history association)
 
 Standalone MockTest ────────────────────> TestVersion
 ```
 
-The active container owns delivery. A version may appear in one normal test's `rotationVersions` or one active `MockTest`, never both and never in two active containers. A parent-linked mock records its source `testId` for admin joins, navigation, deletion guards, and related-mock nudges; the parent does not store a backlink. A standalone mock has no `TestUnit` parent. Archived mocks retain their IDs, parent association, and attempt history but are not active delivery owners, so their version may return to normal rotation.
+The active container owns delivery. A version may appear in one normal test's `rotationVersions` or one active `MockTest`, never both and never in two active containers. An inactive draft has an authoring owner but no delivery owner and is physically absent from `testVersions`. A parent-linked mock records its source `testId` for admin joins, navigation, deletion guards, and related-mock nudges; the parent does not store a backlink. A standalone mock has no `TestUnit` parent. Archived mocks retain their IDs, parent association, and attempt history but are not active delivery owners, so their version may return to normal rotation.
 
 ## Scoring invariants
 
@@ -340,7 +404,8 @@ The test-version builder should feel like the normal lesson creator and use the 
 - Moving an item within or between pages naturally preserves its `maxPoints` value.
 - If changing an item's type crosses the exercise/non-exercise boundary, the builder adds the default `maxPoints` value or removes the field automatically.
 - Loading an existing version reports missing, duplicate, or unstable item IDs and any exercise with a missing or invalid `maxPoints` value rather than silently repairing persisted data.
-- Preview uses the normal page renderer in test-preview mode and writes no lesson progress or test attempts.
+- Preview uses normal test mode with local-only answers; only generated exercise authoring queries are explicitly
+  enabled, and no lesson progress or test attempts are written.
 - The editor header shows the derived total points and provides save and preview actions.
 - The surrounding container settings expose **Score only** or **Require a passing score**, with a whole-number percentage input when passing is enabled. These controls update the current `TestUnit` or `MockTest`, not the version content.
 - For the version currently being edited, show the equivalent threshold for context, for example **70% = 14 of 20 points**.
@@ -364,10 +429,10 @@ If normal tests and mock tests later need different feedback policies, configura
 
 1. Build the first `TestVersion` using the lesson-like page builder.
 2. Choose **Score only** or set a container-level passing percentage.
-3. Save the valid version and its non-live `TestUnit` together, with the version added to `rotationVersions`.
-4. Add more valid versions as needed.
+3. Save the valid version and its unplaced `TestUnit` together, with the version added to `rotationVersions`.
+4. Add or duplicate later versions as inactive drafts, save incomplete work explicitly, and activate each version only when it is ready to join rotation.
 5. Add the test at a chosen insertion point in the shared learning-path organizer.
-6. When live, students see one test card and the server selects only among `rotationVersions`.
+6. When placed in the Learning Path, students see one test card and the server selects only among `rotationVersions`.
 
 Creating a test in Test Management does not automatically place it in the learning path. Placement is an explicit later action so authoring and curriculum ordering cannot accidentally publish one another.
 
@@ -385,10 +450,10 @@ Creating a test in Test Management does not automatically place it in the learni
 2. Show a confirmation explaining that this version will be removed from all future normal-test rotation and will become available only through its mock card.
 3. Prefill an editable student-facing title such as **Chapter 4 Mock Test — Version A** and inherit the parent passing rule while allowing the teacher to change it or select **Score only**.
 4. In one transaction, remove the version from the parent's `rotationVersions`, then create or reactivate its `MockTest` with `parent: { kind: 'test', testId }`. The active mock becomes the version's sole delivery owner.
-5. Reject the operation if a live parent test would be left with no rotation versions.
+5. Reject the operation if a parent test currently placed in a Learning Path would be left with no rotation versions.
 6. Assigning Version A and Version B creates two active `MockTest` documents and therefore two student dashboard cards; neither version remains eligible for the parent test's normal rotation.
 
-Assignment is idempotent for a given parent test/version pair. Use a deterministic mock ID or equivalent transactional uniqueness record; if the archived mock already exists, reuse its `mockTestId` and attempt history rather than creating a second card. A teacher who wants equivalent content in both contexts duplicates the version first and assigns only the duplicate as a mock.
+Assignment is idempotent for a given parent test/version pair. Use a deterministic mock ID or equivalent transactional uniqueness record; if the archived mock already exists, reuse its `mockTestId` and attempt history rather than creating a second card. A teacher who wants equivalent content in both contexts duplicates the version, activates the inactive copy, and assigns only that copy as a mock.
 
 Once assigned, the version row shows a **Mock** badge and a **Manage mock assignment** link. The mock overview links back to the parent test and version.
 
@@ -417,43 +482,61 @@ Versions are never silently shared between simultaneous delivery contexts.
 
 Admin screens should make the delivery model legible rather than assume it is understood: describe states by their consequences, group by delivery role instead of badging flat lists, and make every guardrail rejection point to a next action.
 
+### Authored-content inventory
+
+- Lesson and Test Management remain authoring inventories. A normal lesson or test outside the Learning Path is **Unplaced**, not automatically **Draft**.
+- Normal-unit inventory summaries join response-only placement data from `learningPaths/default`; placement fields are never copied from the path back into canonical normal-unit metadata during ordinary saves.
+- Practice lesson cards continue to describe their existing **Live** or **Draft** state from `isLive`.
+- Cards use explicit consequence labels such as **In Learning Path**, **Unplaced**, **Live in Vocabulary Practice**, or **Needs attention**. Readiness is derived from server validation and summary data rather than inferred from placement.
+- Editing content does not automatically place, remove, or reorder a normal unit. When an edit would make an already placed unit ineligible, the write is rejected with an actionable Learning Path consequence.
+
 ### Test Management section
 
 - Keep Test Management as a distinct top-level admin section from Lesson Management, backed by the shared learning-unit APIs.
 - Provide **Create Test** and **Manage Tests** entry points. Manual standalone mock creation remains available from the same section.
-- The management screen supports search and filters for **All**, **Normal tests**, **Mock tests**, **Live**, **Draft**, and **Archived mocks**.
-- Every container card shows title, description, a visible **Normal Test** or **Mock Test** badge, live/draft state, passing rule, last-edited time, and relevant point/version counts.
+- The management screen supports search and filters for **All**, **Normal tests**, **Mock tests**, **In Learning Path**, **Unplaced**, **Live mocks**, and **Archived mocks**.
+- Every container card shows title, description, a visible **Normal Test** or **Mock Test** badge, placement or mock-visibility state, passing rule, last-edited time, and relevant point/version counts.
 - A normal-test card shows its rotation-version count, active parent-linked mock count, and whether it is currently placed in the learning path.
 - A mock-test card represents exactly one version and shows that version's total points.
 - Use icons, labels, border treatments, and color together; do not rely on color alone to distinguish tests, mocks, and lessons.
 
 ### Test overview and versions
 
-- Clicking a normal test opens an overview showing its container settings and all currently associated versions: direct `rotationVersions` plus active parent-linked mocks joined by `parent.testId`.
-- Versions are grouped by delivery role rather than shown as one badged list: **In rotation**, introduced with a one-line explanation such as “students receive one of these at random, least-used first”, and **Mock cards**. The grouping itself teaches the delivery model, including the otherwise invisible selection behavior.
+- Clicking a normal test opens an overview showing its container settings and all currently associated versions: direct `rotationVersions`, inactive drafts owned by the test, and active parent-linked mocks joined by `parent.testId`.
+- Versions are grouped by delivery role rather than shown as one badged list: **In rotation**, introduced with a one-line explanation such as “students receive one of these at random, least-used first”; **Inactive drafts**, explicitly described as admin-only and safe for incomplete work; and **Mock cards**. The grouping itself teaches the delivery model, including the otherwise invisible selection behavior.
 - Each version row shows the authoritative `TestVersion.name`, exercise count, total points, and last-edited time.
-- Each version provides **Preview**, **Edit**, **Duplicate**, a confirmed mock assignment control, and guarded remove/delete actions.
+- Rotation versions provide **Preview**, **Edit**, **Duplicate as inactive draft**, a confirmed mock assignment control, and guarded **Deactivate**. Inactive drafts provide **Edit draft** and confirmed **Activate**, with complete validation at that boundary.
 - Active parent-linked mocks are joined by `parent.testId` and listed beneath the parent test. Each states its consequence directly, for example **Excluded from rotation · Live to students as “Chapter 4 Mock Test — Version D”**, and links to that mock card.
 - Mock lifecycle is always described in plain language, never as raw stored values: an active hidden mock reads **Hidden from students (still mock-only)** and an archived mock reads **Assignment ended — back in rotation**.
 - When a passing percentage is set, normal-test settings resolve the threshold against every rotation version, for example **Version A: 14 of 20 · Version B: 18 of 25**, so percentage normalization is tangible rather than trusted. Joined mock rows show their own container-level passing rule instead.
-- Guardrail rejections offer the exits: refusing to make the last rotation version mock-only suggests **Add another version first** or **Unpublish this test**.
+- Guardrail rejections offer the exits: refusing to make the last rotation version mock-only suggests **Add another version first** or **Remove this test from the Learning Path**.
 - Clicking a parent-linked mock-test card opens its overview with a breadcrumb back to the parent test and version. The overview clearly labels it **Mock Test** and shows its own student-facing title, passing rule, visibility, lifecycle, and ordering settings.
 - A manually created orphan mock follows the same one-card/one-version structure and is labelled as a mock; it does not need a parent normal test.
 
 ### Learning-path organizer
 
-- Extend the existing live-lesson/order experience into a shared **Learning Path** organizer rather than creating an unrelated ordering system.
-- Show normal lessons and normal tests together in `liveOrder`.
+- Replace the current normal-type live-lesson mode with a shared **Learning Path** organizer backed by `learningPaths/default`.
+- Show normal lessons and normal tests together in `LearningPathDocument.unitIds`; array position is the only canonical path order.
 - Render an insertion button between every pair of units, plus one before the first unit and after the last unit.
 - Clicking an insertion button opens a test-selection dialog listing structurally valid normal tests that are not already in the learning path.
 - The dialog selects a `TestUnit`, never an individual version, because version selection happens when the student starts an attempt.
 - Each dialog result shows the test title, rotation-version count, passing rule, and rotation-version total-point range. Ineligible tests remain disabled with an actionable reason.
-- Selecting a test inserts it at that exact position, marks it live through the normal publication workflow, and transactionally shifts subsequent `liveOrder` values.
+- Selecting a test updates the local complete path draft at that exact position. One explicit **Save path** command submits the full ordered ID list with `expectedRevision`; the server validates and replaces the aggregate atomically.
 - A test can appear only once in the learning path under the current no-`placementId` model.
 - Test rows use a distinct persistent treatment such as an indigo/purple background and border, a test icon, and a **TEST** badge. Lesson rows retain their lesson treatment.
 - Test rows carry a passing-rule chip, **Pass ≥ 70%** or **Score only**, because the rule changes the flow's semantics.
 - A required-pass test is the only unit that can block progression. Render a subtle gate marker after it so the teacher sees exactly where students can get stuck; the organizer is where that consequence is designed.
-- Existing drag-and-drop reordering continues to work across the mixed lesson/test sequence.
+- Existing drag-and-drop interaction continues to work across the mixed lesson/test sequence, but server state remains in RTK Query and the component stores only a local ordered-ID draft plus its base revision.
+- Reordering, insertion, and removal share one dirty state and one **Save path / Discard changes** bar. Leaving, refreshing, or switching context while dirty requires confirmation.
+- Search lives in the add-unit picker. The ordered sequence is never filtered while reordering because a partial visible subset is not a safe complete ordering scope.
+
+### Existing practice visibility manager
+
+- Vocabulary, sentence-diagramming, and listening modes retain their existing `isLive` and type-scoped `liveOrder` behavior.
+- Their current publish/unpublish and reorder APIs remain separate from the Learning Path API.
+- Category chips remain informational in this screen. Category lifecycle and category-specific `lessonOrder` stay in Manage Practice Categories and never rewrite default practice order.
+- The current “at least one lesson of this type must remain live” rule remains unchanged in this refactor.
+- The organizer may still replace its fetched-entity Redux mirror with component-local drafts, but that client-state cleanup does not change practice persistence.
 
 ## Student UI/UX direction
 
@@ -509,24 +592,31 @@ The section's identity is a practice arena: low-stakes, repeatable rehearsal und
 - Extract a reusable `PassingRequirementControl` for the **Score only** versus percentage choice and use it in normal-test settings, mock settings, and the mock-assignment confirmation.
 - Add a `MockAssignmentDialog` that explains removal from normal rotation and owns confirmation, editable title, inherited/editable passing rule, last-rotation-version validation, and idempotent submission.
 - Generalize `SortableLessonItem` into a discriminated learning-unit row so the current `/admin/lessons/live` route can become the Learning Path organizer without rewriting its drag-and-drop behavior.
-- Add a reusable insertion control and test-picker dialog around the mixed ordered list. The server mutation accepts the selected `testId` and target index and updates publication/order atomically.
+- Add a reusable Learning Path draft boundary. It owns `baseRevision`, the complete local ordered ID list, dirty-state navigation protection, save/discard behavior, and stale-revision recovery without mirroring fetched entities into Redux.
+- Add a reusable insertion control and test-picker dialog around the mixed ordered list. Insertion edits the local path draft; the save mutation sends the complete desired sequence rather than issuing a separate publish request followed by a reorder.
+- Keep the three existing practice visibility/order workflows on their current APIs. Shared row and draft interaction primitives may be reused, but practice persistence does not move to a new aggregate in this plan.
 - Generalize the dashboard's learning-path card boundary so it renders a lesson or test variant from the `kind` discriminator while preserving shared locked/available/in-progress/completed behavior.
+- Replace `useGetStudentLessonsQuery` consumers in the dashboard, lesson page, both lesson sidebars, and vocabulary-pool resolution with purpose-built dashboard-summary and lesson-detail hooks. Do not leave a hidden full-content list fetch behind after the dashboard migration.
 - Add a dedicated `MockTestsSection` below the learning path; do not merge mock cards into the existing practice lesson data.
 - Return admin container summaries with version count, rotation/mock counts, point range, passing rule, placement state, and direct mock links so management screens do not fetch every page body.
 - Return student test summaries with in-progress state, best submitted attempt, latest submitted attempt, attempt count, the recent score trend, sticky completion state, and any related live mock used by the failed-test nudge. Calculate those summaries server-side rather than downloading full attempt histories to the dashboard.
 - Include loading, empty, unavailable, validation-error, and destructive-confirmation states in the initial implementation; these are required behavior, not later visual polish.
 
-## Publication eligibility
+## Placement and publication eligibility
 
-Test versions do not have an independent published status. Creating a `TestUnit` requires at least one existing, structurally valid rotation version. A non-live container may later have an empty `rotationVersions` list if all of its versions are transferred to mocks; a live `TestUnit` must retain at least one structurally valid rotation version.
+Test versions use an admin-only inactive/active lifecycle, but student publication still belongs to the owning container and Learning Path. Creating a `TestUnit` requires at least one existing, structurally valid rotation version. Later additions and normal-version duplicates begin inactive. An unplaced container may have an empty `rotationVersions` list if all active versions are transferred to mocks or deactivated; a `TestUnit` placed in a Learning Path must retain at least one structurally valid rotation version.
 
-- Publishing a normal test validates every `rotationVersions` reference and requires at least one structurally valid rotation version.
+- Placing or retaining a normal test in a Learning Path validates every `rotationVersions` reference and requires at least one structurally valid rotation version.
 - A version may appear in at most one `TestUnit.rotationVersions` list.
 - An active parent-linked mock must reference an existing parent test and a structurally valid version; that version must not appear in any normal rotation or another active mock.
 - An active standalone mock must reference a structurally valid version that is not simultaneously assigned to another active delivery context.
 - A live mock must have `status: 'active'`; archived mocks must have `isLive: false` and do not own delivery.
-- Making the last rotation version of a live normal test mock-only is rejected.
+- Making the last rotation version of a placed normal test mock-only is rejected.
+- Deactivating the last rotation version of a placed normal test is rejected.
+- Activating a draft reruns the complete structural, exercise-eligibility, ID, and scoring validation before it can enter rotation.
 - Deleting a test version is blocked while a normal test, active or archived mock, or in-progress attempt still references it.
+- Deleting a normal lesson or test is blocked while its ID appears in the active Learning Path's `unitIds`; the rejection names the Learning Path and points the admin at removing it from the path first. This mirrors the existing test-version deletion guard.
+- The dashboard read path still defends against a dangling `unitIds` entry that slips past the guard: it skips the missing unit, logs an admin-visible configuration error, and preserves the ordering and gating of the remaining units rather than failing the whole projection.
 - Hard-deleting a parent test is blocked while a retained parent-linked mock still records that parent; cleanup must be explicit and must respect attempt retention.
 - Mock assignment, unassignment, reactivation, and standalone-to-normal moves use a Firestore batch or transaction so ownership moves atomically between active containers.
 - Attempt start defensively handles inconsistent data by returning a student-safe unavailable response, logging the configuration error, and exposing the actionable error to admins.
@@ -626,7 +716,7 @@ For a normal test, a `passed` or `score-only` submission grants sticky learning-
 
 Dashboard summaries derive the best result by highest stored percentage and the latest result by `submittedAt`; raw awarded/max points always come from the specific attempt being displayed.
 
-There is no `placementId` or revision number. The attempt's origin distinguishes normal-flow and mock usage. Preview attempts remain ephemeral and must never persist progress or attempt records.
+There is no `placementId` on an attempt. The attempt's origin distinguishes normal-flow and mock usage, and the Learning Path revision is delivery configuration rather than frozen attempt identity. Preview attempts remain ephemeral and must never persist progress or attempt records.
 
 ## Learning-path gating integration
 
@@ -652,7 +742,7 @@ interface TestUnitCompletionProgress {
 
 - The chain's completion check is kind-aware: lessons use the schema-v2 lesson completion helper with its schema-v1 fallback; tests require a materialized `status: 'completed'` record. A `TestUnit` has no `pages` array, so any code path applying page math to it is a bug.
 - Progression is monotonic when the learning path changes. Inserting a new required-pass test does not re-lock a student who has already started or completed a unit after that insertion point. The dashboard derives the student's reached frontier from existing lesson progress, test attempts, and completion records; an inserted test behind that frontier remains available to take but is treated as non-gating for that student. Students whose recorded frontier has not passed the insertion point must satisfy the new test normally.
-- `TestUnit` has no `type`; `kind: 'test'` is its sole discriminator. This removes the direct collision with lesson filters, but omission alone is not a compatibility boundary because the current lesson mapper defaults `data.type || 'normal'`. Before Phase 3 persists any test container, every legacy lesson endpoint that can read the shared collection must select/read `kind`, exclude `kind: 'test'`, and only then apply lesson defaults. Phase 5 later replaces those exclusions with mixed kind-aware projections where tests belong. This narrows the rollout constraint: an early test document is safely excluded from legacy lesson pipelines instead of becoming a broken zero-page lesson.
+- `TestUnit` has no `type`; `kind: 'test'` is its sole discriminator. This removes the direct collision with lesson filters, but omission alone is not a compatibility boundary because the current lesson mapper defaults `data.type || 'normal'`. Before Phase 3 persists any test container, every legacy lesson endpoint that can read the shared collection must select/read `kind`, exclude `kind: 'test'`, and only then apply lesson defaults. Phase 6 later replaces those exclusions with mixed kind-aware projections where tests belong. This narrows the rollout constraint: an early test document is safely excluded from legacy lesson pipelines instead of becoming a broken zero-page lesson.
 - The `NEXT_PUBLIC_DISABLE_PROGRESSION_LOCK` flag bypasses required-pass test gates the same way it bypasses lesson locks. It is a development convenience, and a half-disabled chain would be harder to reason about than a fully disabled one.
 - Test cards do not show page-based progress percentages. Their card state derives from attempt summaries: not attempted, in progress, or the best/latest submitted results.
 
@@ -662,7 +752,8 @@ Keep the existing Firestore `lessons` collection for learning units during the i
 
 ```text
 lessons/{learningUnitId}       LessonUnit or TestUnit during migration
-testVersions/{versionId}      Separately stored version pages and scoring
+learningPaths/default          Revisioned ordered normal-flow aggregate and cutover state
+testVersions/{versionId}       Separately stored version pages and scoring
 mockTests/{mockTestId}         Mock Tests category containers
 testAttempts/{attemptId}       Attempt lifecycle and frozen statistics
 testAttemptSessions/{scopeId}  Deterministic active-attempt uniqueness pointer
@@ -671,11 +762,13 @@ testAttemptSessions/{scopeId}  Deterministic active-attempt uniqueness pointer
 All server behavior uses Next.js API routes and shared server modules. The preferred API surface is:
 
 ```text
-/api/admin/learning-units        Mixed inventory, publication and ordering
+/api/admin/learning-units        Mixed authored-content inventory
+/api/admin/learning-path         Singleton revisioned Learning Path reads and saves
 /api/admin/tests                 TestUnit management backed by `lessons`
 /api/admin/test-versions         Version content and summaries
 /api/admin/mock-tests            Mock containers and assignment operations
-/api/learning-path               Student mixed path projection
+/api/student-dashboard           Student path and practice card/progress summaries
+/api/lessons/[lessonId]          Authorized full lesson content loaded on open
 /api/mock-tests                  Student live mock summaries
 /api/test-attempts               Start, resume, answer, submit and history
 ```
@@ -686,7 +779,7 @@ The existing `/api/admin/tests` path changes from POC `TestDefinition` CRUD to n
 
 The current rules already deny direct client writes to `lessons`, deny direct client reads and writes to `practiceCategories` and `practiceCategoryMemberships`, and keep `diagramming_attempts` server-only. A permissive legacy wildcard still allows direct access to collections without an explicit rule. Left unchanged, that wildcard would let a student read `testVersions` answer keys, forge a passing `testAttempts` document, or read and alter progress data, making the server-authoritative design a fiction.
 
-- `testVersions`, `testAttempts`, `testAttemptSessions`, and `mockTests` are server-only: client read and write are denied, and all access flows through the API routes using the Admin SDK, which bypasses rules.
+- `learningPaths`, `testVersions`, `testAttempts`, `testAttemptSessions`, and `mockTests` are server-only: client read and write are denied, and all access flows through API routes or the operator-only migration command using the Admin SDK, which bypasses rules.
 - `userProgress` also becomes server-only in this refactor because it now materializes gate-controlling test completion; its API routes already exist.
 - `userProgressMigrationV2Backups` must be server-only immediately. It contains full copies of pre-migration progress records and must not remain exposed through the wildcard rule.
 - Broader tightening of the legacy wildcard rule is desirable but out of scope; the explicit rules above must ship before any test attempt data exists.
@@ -706,9 +799,10 @@ This refactor establishes a domain-validation layer rather than extending an exi
 
 - Normalize legacy data before validation, including interpreting a missing learning-unit `kind` as `lesson`.
 - Use a discriminated Zod union for `LessonUnit | TestUnit` and dedicated schemas for `TestVersion`, `RotationVersionReference`, and `MockTest`.
+- Add strict schemas for the singleton `LearningPathDocument`, its complete ordered-ID save input, and the immutable Learning Path migration manifest. Validate non-empty IDs, unique membership, nonnegative safe-integer revisions, bounded item counts, conservative serialized-size limits, and valid cutover-state combinations.
 - Use structural schemas for shared metadata, pages, item IDs, references, and lifecycle fields.
-- Use semantic refinements for version-wide unique item IDs, contextual `maxPoints` requirements, non-exercise scoring rejection, the `passingPercentage` range, rotation eligibility, active/archived lifecycle combinations, and live-container eligibility.
-- Keep pure document-shape checks in Zod. Enforce the smaller cross-document ownership graph in the server transaction service: no version in two normal rotations, no active mock version in a normal rotation, no version in two active mocks, active parent-linked mocks require an existing parent and version, active standalone mocks require an existing version, and live normal tests require a valid rotation version.
+- Use semantic refinements for version-wide unique item IDs, contextual `maxPoints` requirements, non-exercise scoring rejection, the `passingPercentage` range, rotation eligibility, active/archived lifecycle combinations, and placement eligibility.
+- Keep pure document-shape checks in Zod. Enforce the smaller cross-document ownership graph in the server transaction service: no version in two normal rotations, no active mock version in a normal rotation, no version in two active mocks, active parent-linked mocks require an existing parent and version, active standalone mocks require an existing version, and every placed normal test requires a valid rotation version.
 - Reuse existing exercise-specific validators where available rather than rewriting every exercise schema in Phase 1.
 - Consolidate deeper exercise validation incrementally behind the same shared server modules.
 - Apply the same schemas in all Next.js mutation routes and server-side attempt creation.
@@ -719,17 +813,60 @@ There is no POC data migration. The `tests` collection is deleted during cleanup
 
 - Existing lesson documents without `kind` are read as `kind: 'lesson'`.
 - New and updated learning-unit documents persist an explicit `kind`.
-- Existing lesson pages, `type`, progress behavior, URLs, `isLive`, and `liveOrder` remain unchanged.
+- Existing lesson pages, `type`, progress records, and lesson URLs remain unchanged. For normal lessons, `isLive`, `liveOrder`, `publishedAt`, and `publishedBy` remain readable only for migration compatibility and rollback after the Learning Path cutover. Practice lessons continue to use those fields canonically.
 - `TestUnit` documents omit `type`. Legacy lesson mappers must exclude `kind: 'test'` before applying missing-lesson-type defaults such as `data.type || 'normal'`.
 - Existing lesson documents may omit `description`; the compatibility normalizer accepts that shape and new learning-unit writes canonicalize an absent description to an empty string.
 - Existing lesson exercises do not need `maxPoints`; the field is optional in the shared exercise type and required only during test-version validation.
 - Existing vocabulary lessons retain `type: 'vocab'` and their current dashboard, player, and progress behavior.
-- Normal tests use the same `isLive` and `liveOrder` fields and can therefore be sorted together with lessons.
+- Normal tests are placed by ID in `LearningPathDocument.unitIds` and are sorted together with normal lessons by array position. Test documents do not need canonical placement fields.
 - Practice lesson categories remain in the independent `practiceCategories` and `practiceCategoryMemberships` collections. Memberships continue to reference `lessonId`, category fields are not added to `LearningUnitBase` or `TestUnit`, and every category mutation must require normalized `kind === 'lesson'` plus an eligible non-normal lesson `type`.
 - `practiceCategoryIds`, `practiceCategories`, and `practiceCategoryPlacements` remain mutation-local or response-only joins and are never persisted on a `LessonUnit` or added to the learning-unit union.
 - Firestore projections and summary queries must explicitly select `kind` before normalizing or filtering. In particular, a legacy lesson projection cannot omit `kind`, because an omitted test discriminator plus the legacy missing-type default would make a projected test indistinguishable from a normal legacy lesson.
 - Existing schema-v2 lesson progress keeps the compatibility field name `lessonId`. Test-unit completion uses that same field for the ID of the shared `lessons` document, but never adds page cursors to a test progress record.
 - A `kind: 'lesson'` backfill for existing lesson documents is optional; the read-time normalizer makes it safe to run at any point or not at all.
+
+## Learning Path migration
+
+The migration initializes one new aggregate from the exact current live normal-lesson order. It does not migrate practice visibility/order, page content, progress, attempts, categories, or test data.
+
+### Immutable migration manifest
+
+An admin-only, idempotent command first runs in dry-run mode and writes no application data. It reads the complete `isLive === true` set without `orderBy`, normalizes legacy `kind` and missing lesson `type`, selects the normal lesson scope in memory, and validates that scope without allowing a malformed or missing `liveOrder` to disappear from the query. It produces:
+
+```ts
+interface LearningPathMigrationManifest {
+  migrationId: string;
+  createdAt: string;
+  sourceHash: string;
+  unitIds: string[];
+  source: Array<{
+    unitId: string;
+    liveOrder: number;
+  }>;
+}
+```
+
+`unitIds` contains current live normal lessons sorted by their numeric `liveOrder`. The dry run fails closed on a missing, null, non-integer, negative, or duplicate order; a duplicated or missing ID; a non-normal lesson in the source; or an unexpected live `kind: 'test'` before mixed-flow rollout. It reports the exact documents and never invents a tie-breaker. The reviewed JSON manifest is the input to apply.
+
+`sourceHash` is SHA-256 over a documented canonical JSON encoding of the validated `{ unitId, liveOrder }` records sorted by `unitId`; it does not depend on Firestore query iteration order or manifest `createdAt`. The ordered `unitIds` array remains the separately reviewed curriculum sequence.
+
+### Transactional cutover and parity
+
+1. Deploy the dashboard-summary and lesson-detail routes and migrate their consumers first (Phase 5A) while the legacy fields remain the active source, so the read-path refactor and the placement cutover are never verified in the same release.
+2. Deploy the Learning Path schema/service, protected collection rule, migration dry-run/apply/verify/rollback/retire commands, compatibility reads, and transaction guards without changing the active source (Phase 5B).
+3. Legacy normal publish/unpublish/reorder transactions and the migration transaction all read `learningPaths/default`. They may mutate legacy normal placement only while the path is absent or has `cutover.state === 'inactive'`.
+4. Run the dry run, archive the human-readable manifest, and compare its single `unitIds` sequence with the current admin and student normal order.
+5. Apply in one Firestore transaction: re-read the complete legacy live normal source, require its hash to match the reviewed manifest, revalidate exact ID order, and create `learningPaths/default` at revision 1 or reactivate an inactive document with an incremented revision and `cutover.state === 'active'`. A concurrent legacy placement mutation conflicts on the same path document/source reads and cannot commit across the cutover boundary.
+6. Run parity verification against the active admin and student projections by count, membership, and exact position. A verification failure does not mutate lesson content, progress, categories, memberships, attempts, or test data; it triggers the explicit rollback command and may leave the inactive path document for diagnosis.
+7. During the bounded stabilization window the path is read-only: ordinary Learning Path saves are rejected while `cutover` is present, so the untouched legacy fields remain an exact fallback. After the window, run the explicit retire command, which removes `cutover`, permanently disables rollback and the legacy normal placement mutations, and enables ordinary Learning Path saves — all before Phase 6 can place tests. Ordinary Learning Path saves never mirror back to lesson documents.
+
+Initial apply creates the path at revision 1. Repeating the same matching `migrationId` while it is active returns the existing path without a write. Applying to an inactive path requires a reviewed manifest whose source hash matches the current legacy normal state; it replaces `unitIds`, increments rather than resets the revision, and reactivates the path. A conflicting active manifest or source hash is rejected. The temporary `cutover` metadata records the applied and optional rollback actor/timestamps; each reviewed JSON manifest remains an immutable operator artifact.
+
+### Rollback
+
+Rollback is an explicit operator command, and the stabilization-window edit freeze is what keeps it small. Because ordinary path saves are rejected while `cutover` is present, legacy `isLive`/`liveOrder` values are never touched after cutover and remain an exact snapshot of the pre-migration order. Rollback therefore only sets `cutover.state` to `inactive` and records the rollback actor/timestamp; it rewrites no lesson documents. Compatibility readers and legacy normal mutations then become active again. The path document remains for diagnosis and a later reviewed apply. The command rejects a path containing any test and is removed together with the freeze when the retire command closes the Phase 5 rollback window.
+
+This deliberately trades stabilization-window curriculum edits for a rollback that cannot partially fail: an admin who needs to reorder the normal sequence during the window either waits, asks the operator to retire the fallback early, or performs the edit through the legacy screen after an explicit rollback. Practice placement and category membership are never part of either apply or rollback.
 
 ## Project implementation blueprint
 
@@ -742,7 +879,7 @@ This section is normative for implementation in this repository. The schema sect
 | Authenticated client API            | `src/store/api/baseQuery.ts`                                                                                                     | Reuse `createAuthenticatedBaseQuery` and `getApiErrorMessage`; do not add component-level token handling or a second base-query implementation.                                                                       |
 | Admin and student authorization     | `src/lib/verifyAdminAccess.ts`, `src/lib/verifyRequestAuth.ts`                                                                   | Admin routes call `verifyAdminAccess`; attempt routes decode the token and derive the student from it. A client-supplied student ID is never authoritative.                                                           |
 | Domain/service/route structure      | `src/lib/practice-categories/{domain,schemas,service,api}.ts` and its thin route handlers                                        | Follow this separation for learning units and assessments: pure normalization, Zod boundaries, injectable Firestore service, shared domain errors, and thin routes.                                                   |
-| Learning-unit queries and progress  | `src/store/api/lessonApi.ts`, `src/app/api/lessons/route.ts`, `src/utils/lessonProgress.ts`                                      | Evolve these into kind-aware learning-unit paths. Do not create a second student learning-path fetch or another completion algorithm.                                                                                 |
+| Learning-unit queries and progress  | `src/store/api/lessonApi.ts`, `src/app/api/lessons/route.ts`, `src/utils/lessonProgress.ts`                                      | Evolve these into a kind-aware dashboard summary plus an authorized lesson-detail load. Do not create a second completion algorithm or continue downloading every page body for dashboard cards.                      |
 | Test client API and POC routes      | `src/store/api/testApi.ts`, `src/app/api/admin/tests/**`                                                                         | Replace the POC endpoint definitions in place with container/version/mock/attempt endpoints. Do not add parallel assessment API slices alongside `testApi`.                                                           |
 | Page/content authoring              | `lessonEditorSlice`, `LessonBuilder`, `PageSection`, `DraggableContentList`, `ContentEditor`, and `content-editor/**`            | Reuse the existing editor actions and every leaf content editor through a typed page-document adapter. Do not fork test-specific copies of content editors or drag-and-drop components.                               |
 | Content creation and classification | `src/utils/contentFactory.ts`, `src/utils/contentTypeConstants.ts`, `src/utils/lessonUtils.ts`, `src/utils/editorRegistry.ts`    | Consolidate pure content metadata and the exercise predicate before adding test eligibility. Derive lesson palettes and the test allowlist from that source instead of adding another hard-coded list.                |
@@ -750,7 +887,7 @@ This section is normative for implementation in this repository. The schema sect
 | Rendering                           | `ContentRenderer`, `PageTemplate`, `LessonPlayer`                                                                                | Extend the shared renderer with an explicit runtime mode and answer events. Do not implement a separate switch over content types in the test player.                                                                 |
 | Existing pure scoring helpers       | `src/utils/exercises/**`, especially generated translation/form-identification, and `src/features/sentence-diagramming/model.ts` | Extract or extend pure graders here and call the same functions from practice UI and server submission. `scoreSingleFieldFormIdentificationAnswer` and `compareDiagramAnnotationSets` are existing examples to reuse. |
 | Generated exercise queries          | `advancedVocabularyApi`, `src/app/api/admin/words/route.ts`, `composeSelectFields`, `deriveTableTypeFromPOS`                     | Extract reusable server query/resolution logic; attempt services must not call an internal HTTP route or instantiate RTK Query on the server. Reuse the existing select-field and form-mapping utilities.             |
-| Admin ordering UI                   | `src/app/admin/lessons/live/page.tsx`, `lessonSlice`, `SortableLessonItem`                                                       | Generalize the row and server mutation for mixed units. RTK Query becomes the server-state owner; do not add test entities to the existing duplicated `lessonSlice` mirror.                                           |
+| Admin ordering UI                   | `src/app/admin/lessons/live/page.tsx`, `lessonSlice`, `SortableLessonItem`                                                       | Move the normal mode to the Learning Path service, keep practice modes on their existing persistence, generalize reusable interaction primitives, and delete the fetched-entity `lessonSlice` mirror.                 |
 | Student dashboard                   | `src/app/dashboard/page.tsx`, `PracticeSection`, existing lesson cards                                                           | Change the main sequence to `LearningUnit[]`, add a test-card variant, and insert `MockTestsSection` before `PracticeSection`. Practice categories remain untouched.                                                  |
 | Route and service tests             | Existing direct route tests and injected-service tests under `tests/`                                                            | Continue Jest route/service tests with mocked Admin SDK boundaries, plus focused React tests. Add Playwright coverage only for the final cross-page happy paths.                                                      |
 
@@ -762,14 +899,19 @@ Evolve existing files where they already own the concept, and add only the missi
 src/types/learning-unit.ts                 Shared discriminated unit and summary types
 src/types/test.ts                          TestVersion, MockTest, attempt and answer types
 src/lib/learning-units/domain.ts           Legacy lesson normalization and kind guards
-src/lib/learning-units/schemas.ts          Learning-unit Zod document/input schemas
-src/lib/learning-units/service.ts          Shared collection queries, publication and ordering
+src/lib/learning-units/schemas.ts          Learning-unit and Learning Path Zod schemas
+src/lib/learning-units/learning-path-service.ts
+                                            Revisioned Learning Path validation, persistence, migration and projection
+src/lib/learning-units/progression.ts       Shared pure sticky-frontier progression evaluator
 src/lib/tests/domain.ts                    Pure scoring totals, summaries and assignment rules
 src/lib/tests/schemas.ts                   Version, mock, attempt and route-input schemas
-src/lib/tests/service.ts                   Firestore transactions and attempt lifecycle
+src/lib/tests/persistence.ts               Shared snapshot parsing and version persistence helpers
+src/lib/tests/authoring-service.ts          Test-container and version authoring
+src/lib/tests/mock-service.ts               Mock ownership, ordering and student mock projections
+src/lib/tests/attempt-service.ts            Frozen delivery, answer persistence, submission and summaries
 src/lib/tests/api.ts                       Shared typed domain/auth error responses
-src/lib/tests/grading/                     Pure answer schemas, sanitizers and graders by type
-src/lib/tests/generated.ts                 Server-side generated-exercise resolver
+src/lib/tests/grading.ts                    Pure answer sanitizers and graders
+src/lib/tests/generated-exercises.ts        Shared generated-exercise types and resolution
 src/store/api/appApi.ts                    One authenticated RTK Query base for touched domains
 src/store/api/lessonApi.ts                 Injected learning-unit/progress endpoints
 src/store/api/testApi.ts                   Injected test/version/mock/attempt endpoints
@@ -777,7 +919,7 @@ src/store/api/practiceCategoryApi.ts       Injected existing category endpoints
 src/store/api/tags.ts                      Shared tag names/constants without circular imports
 ```
 
-`src/lib/**/service.ts` and Admin SDK helpers are server-only modules and must never be imported by client components or RTK endpoint files. Pure schemas, domain functions, and types may be shared when they do not import Firebase Admin, Node-only APIs, or secrets. Collection names belong in `shared/constants/firestore.ts`, including the new test collections.
+`src/lib/**/service.ts` and Admin SDK helpers are server-only modules and must never be imported by client components or RTK endpoint files. Pure schemas, domain functions, and types may be shared when they do not import Firebase Admin, Node-only APIs, or secrets. Collection names belong in `shared/constants/firestore.ts`, including the Learning Path and test collections.
 
 Zod schemas are the runtime boundary source of truth. Infer document and input types from them where practical rather than maintaining matching handwritten request types. UI view models and response summaries may remain explicit types because they intentionally differ from persisted documents.
 
@@ -793,16 +935,17 @@ The repository still has multiple `createApi` calls that target `/api`, primaril
 
 Use entity tags plus explicit list/summary tags:
 
-- `LearningUnit:{id}` and `LearningUnit:LIST` for admin inventory and the mixed path;
+- `LearningUnit:{id}` and `LearningUnit:LIST` for admin authored-content inventory;
+- `LearningPath:default` for the singleton normal-flow organizer;
 - `StudentLearningPath:{uid}` for the authenticated dashboard projection;
 - `TestVersion:{id}` and `TestVersion:FOR_TEST:{testId}`;
 - `MockTest:{id}` and `MockTest:LIST`;
 - `TestAttempt:{id}` and `AttemptSummary:{originKind}:{originId}:{uid}`;
 - the existing practice-category assignment tag, moved to the shared tag module.
 
-Mutation invalidation is domain-based, not page-based. Saving a version invalidates that version and its parent container summary. Publishing, inserting, or reordering a test invalidates admin learning-unit lists and affected student learning paths. Submitting an attempt invalidates the attempt, its origin summary, and—only when normal-flow completion is newly granted—the student learning path. Failed mutations return no invalidation tags. Use optimistic `updateQueryData` only for deterministic reorders and undo the patch on rejection, following `practiceCategoryApi`.
+Mutation invalidation is domain-based, not page-based. Saving a version invalidates that version and its parent container summary. Saving the Learning Path invalidates `LearningPath:default`, placement joins in the admin inventory, and affected student dashboard projections. Existing practice publication/category mutations continue to invalidate their existing student lesson/category tags. Submitting an attempt invalidates the attempt, its origin summary, and—only when normal-flow completion is newly granted—the student learning path. Failed mutations return no invalidation tags.
 
-RTK Query owns fetched server state. Ordinary Redux slices remain appropriate for editor drafts, modal state, clipboard state, and temporary ordering UI, but must not hold duplicate authoritative copies of learning units, versions, mocks, or attempts. When the Learning Path organizer replaces the current live-lesson screen, remove its `syncLessonsFromRTQ` mirror; use query data plus a local ordered-ID draft or an optimistic cache patch.
+RTK Query owns fetched server state. Ordinary Redux slices remain appropriate for editor drafts, modal state, and clipboard state, but must not hold duplicate authoritative copies of learning units, the Learning Path, versions, mocks, or attempts. The Learning Path page uses query data plus a component-scoped `{ baseRevision, unitIds }` draft. On stale-save rejection it retains the local proposal, fetches the new canonical sequence, and asks the admin to review/reapply rather than silently overwriting or discarding either version. Practice modes may also use local UI drafts while continuing to save through their existing APIs.
 
 Use generated hooks, `.unwrap()`, `skipToken` for missing IDs, and `getApiErrorMessage`. Do not use raw `fetch` for the new assessment CRUD or attempt lifecycle and do not add Server Actions for the same mutations. Keep the authenticated user's UID in student query arguments as a cache partition even when the server derives identity from the token. Reset the authenticated `appApi` cache when `AuthProvider` changes users or signs out so admin and student projections cannot survive an identity transition.
 
@@ -862,10 +1005,10 @@ GET/PATCH     /api/admin/test-versions/[versionId]
 PUT/DELETE    /api/admin/tests/[testId]/versions/[versionId]/mock-assignment
 GET/POST      /api/admin/mock-tests
 GET/PATCH     /api/admin/mock-tests/[mockTestId]
-POST          /api/admin/learning-units/reorder
-POST          /api/admin/learning-units/[unitId]/publication
+GET/PUT       /api/admin/learning-path
 
-GET           /api/learning-path
+GET           /api/student-dashboard
+GET           /api/lessons/[lessonId]
 GET           /api/mock-tests
 POST          /api/test-attempts/start
 GET           /api/test-attempts/[attemptId]
@@ -878,22 +1021,27 @@ Moving or duplicating a standalone mock into a normal test may use a dedicated a
 
 Use deterministic, collision-safe IDs where uniqueness is part of an invariant: the project already uses SHA-256 membership IDs in `PracticeCategoryService`, which is the pattern for parent/version mock IDs and attempt-session scope IDs. Do not build ambiguous IDs with raw delimiter concatenation.
 
-List routes return purpose-built summaries. `TestVersion` writes recompute `totalPages`, `totalItems`, `totalExercises`, and `totalPoints`; admin list and picker routes select those fields instead of `pages`. Student dashboard routes return only card/attempt summaries. Full version pages are returned only for admin editing or as sanitized frozen attempt content.
+The Learning Path `PUT` accepts `{ expectedRevision, unitIds }`; it does not expose separate publish, unpublish, insert, or reorder mutations. The service compares the revision, validates the complete desired sequence, replaces the plain ID array atomically, stamps document-level audit fields, and returns the new canonical document. A stale revision returns `409` without writes.
+
+List routes return purpose-built summaries. `TestVersion` writes recompute `totalPages`, `totalItems`, `totalExercises`, and `totalPoints`; admin list and picker routes select those fields instead of `pages`. `GET /api/student-dashboard` returns only ordered card/progress/attempt summaries for the Learning Path and current practice lists. `GET /api/lessons/[lessonId]` returns full lesson content only after the shared student-access service confirms that the lesson is visible and unlocked. Full version pages are returned only for admin editing or as sanitized frozen attempt content.
 
 ### Learning path and progress implementation
 
 Introduce `normalizeLearningUnit` and `isLessonUnit`/`isTestUnit` in the pure learning-unit domain module. Every relevant Firestore projection includes `kind`. Legacy lesson-only endpoints exclude `kind: 'test'` before applying lesson defaults; mixed endpoints normalize and discriminate on `kind`, and only `LessonUnit` branches inspect `type`. Update `toLessonSummary` or replace it with a kind-aware summary function; the admin `.select(...)` field list must include `kind`.
 
-Refactor the student lessons route into a learning-path service rather than adding a second route that repeats its lock algorithm. It loads live shared-path units once, loads the authenticated user's progress and server-computed attempt summaries, then applies one kind-aware lock pass. Practice lesson enrichment continues through `practiceCategoryService` after filtering to actual lesson units.
+Replace the all-pages student lessons list with one shared student-dashboard service. When `learningPaths/default` is active, it loads only the unit summaries referenced by `unitIds`, joins the authenticated user's progress and server-computed attempt summaries, and applies one kind-aware lock pass in aggregate order. During rollback compatibility it derives only the normal sequence from legacy live fields. The lock algorithm lives in this service, not independently in route handlers.
 
-The dashboard consumes that projection through the injected learning-unit endpoint. Lesson cards continue to route to `/lesson/[lessonId]`; test cards route to the assessment start/resume screen. `MockTestsSection` uses its own lightweight query and remains outside the normal lock chain. The current `normalLessons.filter(lesson.type === 'normal')` pattern must disappear because it conflates normal lessons with normal tests.
+The same dashboard service queries live practice lessons through their existing type-scoped `isLive`/`liveOrder` fields using summary projections, joins progress, and enriches active categories through `practiceCategoryService`. Category views continue to sort by membership `lessonOrder`; the **All practice** view preserves legacy type-scoped `liveOrder`.
+
+The dashboard consumes that projection through the injected learning-unit endpoint. Lesson cards continue to route to `/lesson/[lessonId]`; the lesson page then loads that one lesson through the detail endpoint instead of finding it in a full-content list. Test cards route to the assessment start/resume screen. `MockTestsSection` uses its own lightweight query and remains outside the normal lock chain. The current `normalLessons.filter(lesson.type === 'normal')` pattern must disappear because it conflates normal lessons with normal tests.
 
 ### Verification strategy
 
 - Pure domain tests cover normalization, registries, scoring, sanitization, totals, stable IDs, version selection, and progression without React or Firestore mocks.
-- Service tests inject a fake/mocked Firestore boundary and cover transaction atomicity, deterministic uniqueness, stale references, assignment moves, attempt resume, idempotent submit, and sticky completion. Follow the `PracticeCategoryService` and progress-route test style.
+- Service tests inject a fake/mocked Firestore boundary and cover Learning Path transaction atomicity, stale revisions, complete-sequence validation, deterministic uniqueness, stale references, assignment moves, attempt resume, idempotent submit, and sticky completion. Follow the `PracticeCategoryService` and progress-route test style.
 - Route tests cover auth status preservation, malformed JSON, strict Zod errors, ownership checks, and domain-error mapping; they do not retest service algorithms.
-- Component tests cover the shared editor's inline points behavior, runtime-mode answer emission/restoration, no feedback leakage, preview non-persistence, mixed organizer rows, and dashboard cards.
+- Component tests cover the shared editor's inline points behavior, runtime-mode answer emission/restoration, no feedback leakage, preview non-persistence, Learning Path save/discard and stale-conflict behavior, mixed organizer rows, and dashboard cards.
+- Migration tests build manifests from representative legacy normal states, fail on missing/invalid/duplicate order, prove idempotent apply, serialize concurrent legacy mutations against cutover, verify save rejection during the frozen stabilization window, verify explicit rollback restores the untouched legacy order without lesson writes, and assert exact ID-and-position parity.
 - Add end-to-end coverage after the APIs stabilize for one score-only normal test, one required-pass failure/pass/retake, refresh/resume, and one mock assignment/card flow.
 - Run focused Jest tests while implementing each layer, then `npm test`, `npm run lint`, and `npm run build` before cleanup. Security rules and index changes are reviewed and deployed with the phase that first writes protected data.
 
@@ -926,7 +1074,7 @@ Implementation notes:
 - Moved the practice-category assignment tag out of `lessonApi`, removing the previous endpoint-module dependency. Practice-category mutations invalidate the shared cache through `appApi.util.invalidateTags`.
 - `AuthProvider` now resets the shared RTK Query cache when the authenticated UID changes or signs out, preventing cached student/admin data from crossing identities.
 - Added `src/types/learning-unit.ts` for the discriminated learning-unit types, canonical schema-v2 lesson progress, page-less test completion progress, and kind-aware progress mapping. The existing `Lesson` type remains a compatibility alias that permits legacy missing `kind`, optional `description`, and response-only practice-category joins.
-- Extended `src/types/test.ts` with the initial `TestVersionReference`, `TestVersion`, `MockTestParent`, and `MockTest`, while retaining the POC types until Phase 7 cleanup. The initial reference shape is superseded by `RotationVersionReference` below. Added optional `maxPoints` to `BaseExercise`; lesson behavior remains unchanged because points are required only by test-version validation.
+- Extended `src/types/test.ts` with the initial `TestVersionReference`, `TestVersion`, `MockTestParent`, and `MockTest`, while retaining the POC types until Phase 8 cleanup. The initial reference shape is superseded by `RotationVersionReference` below. Added optional `maxPoints` to `BaseExercise`; lesson behavior remains unchanged because points are required only by test-version validation.
 - Added pure learning-unit normalization and Zod document schemas under `src/lib/learning-units`. Missing `kind`, `description`, and legacy publication defaults are canonicalized before validation, and all existing lesson types—including `vocab`—remain valid.
 - Added test-version and mock-test schemas plus pure assignment-graph validation under `src/lib/tests`. They enforce non-empty version-wide stable IDs, positive whole-number exercise points, no points on content, the test exercise allowlist, server-derived summary consistency, passing-percentage bounds, mock lifecycle rules, exclusive version assignment, and the initial active parent/mock bidirectional links. The link-specific validator branches are superseded below.
 - Extracted server-safe content metadata into `src/lib/content/registry.ts`. Existing authoring palettes, lesson exercise detection/counting, progress behavior, and the POC test allowlist now derive from that registry; React icons remain in the client-facing `contentTypeConstants` module.
@@ -1029,13 +1177,32 @@ Phase 4 ships as three independently reviewable changes behind non-live test con
 
 #### Phase 4A: Grading and frozen-delivery foundation
 
+Status: **Complete — 2026-07-20**
+
 - Extract one pure grader and canonical answer schema per allowlisted exercise type, then use it from both practice UI and server submission.
 - Extract the existing vocabulary query/generator logic into reusable server helpers, resolve generated exercises at attempt start, and freeze the resolved items into `deliveryState`.
 - Return only sanitized attempt content to the client; grading inputs never leave the server.
 - Grade against frozen delivery state rather than the current editable test version.
 - Add focused contract tests proving both runtimes call the shared graders, component-level partial credit in both generated-exercise modes, normalization to different `maxPoints` values, and no grading-input leakage.
 
+Implementation notes:
+
+- Added strict canonical answer parsing and one server-safe grading entry point covering every allowlisted exercise type. The registry delegates to the same pure validation helpers used by practice components, then normalizes full-precision component credit to the exercise's authored `maxPoints`. Every allowlisted practice/preview component now obtains its completion score through that same grading entry point; component-local validators remain only for interactive feedback.
+- Extracted generated translation and morphology item construction from the React components into shared pure helpers. Added an injectable Firestore word loader that applies the existing pool/filter, paradigm, form-selection, and random-start behavior without calling an internal HTTP route or importing client state.
+- Added a frozen delivery snapshot that copies the selected version pages, resolves generated items once, and grades only from that snapshot. Later edits to the source `TestVersion` cannot affect the result.
+- Added a separate student projection that strips static answer keys, correct-option flags, diagram solutions, generator configuration, resolved accepted answers, form paths, hints, and feedback configuration before delivery.
+- Test-mode renderers now inject a safe assessment-only feedback policy, collect raw answers without invoking client graders, and render sanitized static and generated payloads without reconstructing private answer keys.
+- Matching answers retain one committed selection per pair and authored repetition. The sanitized matching payload carries only `expectedMatchCount`, allowing the renderer to finish exercises with unmapped left-side distractors without revealing which pairs are authored answers.
+- Sparse multi-answer morphology submissions return partial credit instead of throwing, and duplicate generated vocabulary documents receive unique frozen answer identities.
+- Review hardening now penalizes extra sentence-diagram annotations, preserves multi-select interaction after correct-option flags are sanitized, and keeps standard step-by-step morphology credit on one compatible form path instead of combining individually valid fields from incompatible paths.
+- Kept the current admin `TestRunner` explicitly in `preview` mode. It continues to fetch generated items and calculate local preview scores until Phase 4B provides frozen resolved items, persisted answers, and server-side attempt grading; it must not use the new `test` runtime contract without that attempt infrastructure.
+- Preserved full-precision click-selection scores in the shared grader while rounding only the legacy UI completion callback. The Firestore generated-word loader now ignores empty comma-separated filters instead of issuing an invalid `in []` query, applies the same broad gendered/personal-pronoun overlap filter as the existing browser loader, and passes skipped exercises through the same positive-integer `maxPoints` validation as answered exercises.
+- Simplified the generated-item sanitizer after its type branches were made exhaustive.
+- Added focused contracts for allowlist/schema coverage, frozen-state grading, generated morphology partial credit, point normalization, grading-input sanitization, sanitized delivery rendering, matching rounds and public completion counts, sparse steps, duplicate generated IDs, admin preview scoring, UI rounding, empty Firestore filters, and unanswered-point validation. Final verification passed: TypeScript, all 38 Jest suites/164 tests, `git diff --check`, ESLint with zero errors (five pre-existing warnings), and the Next.js 16.2.9 production build. Attempt documents, routes, version selection, and persistence remain scoped to Phase 4B.
+
 #### Phase 4B: Attempt lifecycle and version selection
+
+Status: **Complete — 2026-07-20**
 
 - Persist attempts separately from lesson progress before tests enter the normal flow.
 - Enforce one in-progress attempt per student and origin through the deterministic `testAttemptSessions` pointer; attempt start resumes an existing attempt, and duplicate submissions return the stored result idempotently.
@@ -1046,31 +1213,121 @@ Phase 4 ships as three independently reviewable changes behind non-live test con
 - Add the attempt start/resume and committed-answer-save endpoints to the existing injected `testApi`; do not use raw `fetch` in the player.
 - Add focused tests for concurrent starts, refresh/resume, stable version/generated-data selection, projected-history least-used behavior, and assignment changes that occur after an attempt starts.
 
+Implementation notes:
+
+- Added strict attempt, origin, active-session, frozen-delivery, submitted-result, start-command, and committed-answer schemas plus shared persisted/student response types. Student projections omit `studentId` and private `deliveryState`, return only the sanitizer output, and may restore the student's own canonical answers.
+- Added a SHA-256 session scope derived from `[studentId, origin.kind, originId]`. Attempt start reads that deterministic pointer and its attempt in one Firestore transaction, resumes a matching in-progress attempt, or atomically creates one attempt and replaces a stale pointer. A stored pointer is also checked against its student and origin before it is trusted.
+- Normal starts query the complete submitted history for that student and normal-test origin with a `versionId`/`submittedAt` projection and no `limit()`. The pure selector counts only currently eligible versions, chooses among the least-used set, and avoids the immediately previous version when another tied candidate exists. Added the matching `testAttempts` composite index definition; no index was deployed.
+- Mock starts use the active, live mock container's single `versionId`. Normal starts validate every referenced rotation version before selection rather than only the selected document. Both origin paths copy the container's current `passingPercentage`, resolve generated content once, and persist a serializable frozen delivery snapshot before returning sanitized content.
+- Guarded the complete in-progress document at a conservative 900 KiB threshold before its initial write and after answer changes using a Firestore-aware upper-bound estimator rather than JSON byte length, leaving headroom below Firestore's 1 MiB document limit. Single-field indexing is explicitly disabled for the large `deliveryState` and `answers` maps. Oversized/configuration failures return stable codes and student-safe messages while logging actionable server details; the index configuration was updated locally but not deployed.
+- Added authenticated `POST /api/test-attempts/start`, `GET /api/test-attempts/[attemptId]`, and `PATCH /api/test-attempts/[attemptId]/answers` handlers. They derive the student ID only from the verified token, validate strict inputs, and delegate relationship logic to the injected service.
+- Added `startTestAttempt`, `getTestAttempt`, and `saveTestAttemptAnswer` to the existing injected `testApi`; the UID remains a client cache partition but is never sent as authoritative request data. Committed answers use the canonical per-exercise schema and exercise-type check, replace the validated answer map in a transaction instead of using dynamic field paths, and use explicit `null` to clear an answer.
+- Concurrent-start, full-history projection, normal/mock selection, full-rotation validation, assignment-change resume, generated-question stability, answer save/clear, ownership, sanitization, session hashing, Firestore-aware size-limit, authentication, and route-validation contracts were added. The concurrency fake now executes starts concurrently, detects the session-document version conflict, and proves the losing transaction callback retries before both calls converge.
+- Independent review identified grading parity, delivery sanitization, morphology-path, Firestore sizing/indexing, generated-word parity, full-rotation validation, concurrency-test, generated-morphology completion, and sentence-diagram audit gaps. All findings were addressed with focused regressions. Sentence-diagram test submissions now emit raw annotations only, preview performs no audit write, and the authenticated audit route resolves the private solution and source positions from the attempt's frozen delivery state before comparing server-side. Final verification passed: TypeScript, all 42 Jest suites/190 tests, `git diff --check`, valid Firestore index JSON, ESLint with zero errors (five pre-existing warnings), and the Next.js 16.2.9 production build. The latest review reported no remaining code, security, or privacy findings; its sole progress-note request is reflected here.
+- Phase 4B defines the submitted-attempt branch needed to recognize stale session pointers, but does not add the submit command. Transactional grading, duplicate-submit idempotency, session-pointer clearing, frozen result statistics, sticky completion, and summaries remain together in Phase 4C so submission and completion are not split across phases.
+
 #### Phase 4C: Submission, completion, and summaries
+
+Status: **Complete — 2026-07-20**
 
 - Freeze score statistics, passing outcome, and exercise-level results on submission, then remove exact questions, answers, and temporary delivery state.
 - Retain submitted statistics for student history and retake decisions.
 - Add submit and summary endpoints to the existing injected `testApi`; duplicate submissions return the stored result idempotently.
+- Replace the start-specific `ATTEMPT_TOO_LARGE` copy with a neutral attempt-size message that is accurate both before start and during an answer save; keep the same stable error code and student-safe response boundary.
+- Keep cold-start rotation validation inexpensive: load full pages only for the selected version, validate non-selected rotation entries through the existing summary projection and write/publication invariants, and preserve the guarantee that every referenced version exists and is eligible before starting an attempt.
+- Add an explicit recovery path for an invalid in-progress attempt behind a deterministic session pointer. Preserve and log the corrupt document for diagnosis, but provide an authorized repair/abandon operation that can clear or replace the stale pointer so the student is not trapped in permanent `STALE_TEST_ATTEMPT_DATA` responses.
+- Replace strip-known-private delivery sanitizers with copy-known-safe projections for every test-eligible exercise and non-exercise content type plus every resolved generated-item shape. Newly authored fields must be omitted by default until explicitly classified as student-safe; remove inconsistent grading-policy remnants such as `allowOverSelection` when the test client does not need them.
 - Grant sticky normal-flow completion after a passing or score-only submission by writing the canonical page-less `TestUnitCompletionProgress` record in the same transaction; never revoke it because of a later lower retake.
 - Query best percentage and latest attempt separately for dashboard presentation.
 - Calculate with full precision and apply rounding only when displaying points and percentages.
-- Add focused tests for threshold equality, score-only completion, failed gating, permanent completion after a pass, duplicate submission idempotency, temporary-state deletion only after successful scoring, and best/latest summary selection.
+- Add focused tests for threshold equality, score-only completion, failed gating, permanent completion after a pass, duplicate submission idempotency, temporary-state deletion only after successful scoring, best/latest summary selection, neutral size-limit errors, summary-only non-selected rotation checks, corrupt-session recovery, and fail-closed delivery projections.
 
-### Phase 5: Normal-flow integration
+Implementation notes:
 
-- Include normal tests in the same `isLive` and `liveOrder` sequence as normal lessons.
+- `POST /api/test-attempts/[attemptId]/submit` grades against the attempt's frozen delivery state, then in one Firestore transaction writes the strict `SubmittedTestAttempt` document (a full-document `set`, which removes `answers` and `deliveryState` because the submitted schema omits them), deletes the deterministic session pointer only when it still targets that attempt, and—only for a passing or score-only normal-test origin—writes the canonical page-less `TestUnitCompletionProgress` record. The session read participates in Firestore conflict detection, so submitting a preserved orphan cannot erase a newer active attempt's pointer. All reads precede all writes; a grading or freeze failure throws before any write, leaving the in-progress attempt and pointer untouched. Duplicate submissions return the stored result with zero writes, proven by a write-log assertion.
+- Sticky completion preserves the earliest `completedAt` and is skipped entirely when a completed record already exists; a later failing or passing retake never moves or removes it. Mock-origin submissions never write `userProgress`. The response carries `completionGranted: true` only when that transaction newly wrote the record.
+- The pass/fail comparison tolerates IEEE 754 representation error with `PASSING_THRESHOLD_TOLERANCE` (1e-9): exactly-earned thresholds such as 9 of 10 on a 9-point exercise compute `(8.1/9)*100 = 89.99999999999999`, which must still pass a 90% requirement. Stored percentages remain full precision; the tolerance is orders of magnitude below any meaningful score gap. Regression coverage pins a just-below-90 stored percentage with a `passed` outcome.
+- `GET /api/test-attempts/summaries?originKind&originId` returns `{ origin, inProgressAttemptId, attemptCount, best, latest }`: `count()` aggregation, separate limit-1 projection queries for best (`percentage DESC, submittedAt DESC` tie-break) and latest (`submittedAt DESC`), and the in-progress ID derived from the session pointer only after the target passes the strict attempt schema plus status, ownership, and origin checks. Four composite indexes (normal/mock × best/latest) were added to `firestore.indexes.json` and not deployed. Score trends, sticky-completion summary fields, and mock nudges remain Phase 6/7 dashboard work.
+- Delivery sanitization is now copy-known-safe: every test-eligible exercise and non-exercise content type, every resolved generated-item shape, and the page envelope are projected by explicitly enumerated student-safe fields, so newly authored fields (including future grading policy) are omitted by default. `allowOverSelection` no longer reaches the test client; grading still consumes it from the private frozen state. Contract tests pin exact projected key sets per type plus `secret-`/`futurePrivate` marker scans over the serialized payload.
+- Cold-start rotation validation reads every referenced version through a `transaction.getAll` summary field mask and loads full pages only for the selected version; a missing or invalid non-selected summary fails safely with `TEST_CONFIGURATION_ERROR` before any document is written.
+- `POST /api/test-attempts/recover` lets the owning student clear their own deterministic session pointer when it is corrupt, out of scope, or aimed at a missing, submitted, schema-invalid, or parseable-but-ungradable attempt (the last detected by a dry-run grade of the frozen state). A valid resumable attempt is never abandoned—the exit from an unwanted attempt remains submitting it—and every pointed-at attempt document is preserved in place and logged for diagnosis.
+- The `ATTEMPT_TOO_LARGE` message is now neutral ("too large to save safely") and accurate both at start and during answer saves; the code and 422 boundary are unchanged.
+- Added `submitTestAttempt`, `getTestAttemptSummary`, and `recoverTestAttemptSession` to the injected `testApi`. Submit invalidates the attempt, its origin summary, and—based on a passing/score-only normal-test outcome rather than `completionGranted`, so a lost first response followed by an idempotent retry still refreshes the path—the `StudentLearningPath` tag (no provider until Phase 5).
+- Independent review found one major issue (the floating-point threshold comparison), two minor robustness gaps (lost-response retry invalidation, ungradable-attempt recovery), and small nits (summary pointer ownership check, redundant guards, test gaps). A follow-up review also caught raw non-exercise delivery fields, unconditional session deletion when submitting a preserved orphan, and insufficient summary target validation. All were fixed: the transaction test fake enforces Firestore's reads-before-writes rule, submission reads and conditionally clears its session pointer, summaries strictly parse and scope the pointed-at attempt, and delivery contract tests now cover non-exercise content. Final verification passed: TypeScript, all 43 Jest suites/233 tests, `git diff --check`, valid Firestore index JSON, and ESLint with zero errors (five pre-existing warnings). No rules, indexes, or data were deployed.
+
+### Phase 5: Singleton Learning Path and legacy normal-order migration
+
+Status: **Complete — 2026-07-23**
+
+Phase 5 changes the source of truth only for the existing normal lesson sequence before tests become student-visible. Its parity baseline is the current live normal order; it does not insert a test or migrate any practice list.
+
+Phase 5 ships as three independently reviewable and independently rollbackable slices. 5A is a pure read-path refactor with zero behavior change, 5B introduces the new placement source and organizer without activating it, and 5C performs the cutover. A regression in any slice is then attributable to exactly one change: a bad projection cannot be confused with a bad placement source, and either can be reverted without the other.
+
+#### Phase 5A: Student read-path refactor (legacy source, zero behavior change)
+
+- Add `GET /api/student-dashboard` and `GET /api/lessons/[lessonId]` as thin authenticated routes injected into the existing `appApi`. The dashboard endpoint returns summaries only; the detail endpoint loads one authorized lesson's pages.
+- In this slice the dashboard service derives the normal sequence and all practice lists from the existing legacy `isLive`/`liveOrder` fields. The Learning Path is not read here; only the projection shape changes.
+- Migrate every `useGetStudentLessonsQuery` consumer — the dashboard, the lesson page, both lesson sidebars, and vocabulary-pool resolution — to the summary and detail hooks, and remove the hidden full-content list fetch.
+- Preserve the exact current normal gating order, practice visibility/order, category behavior, and progress records; verify parity against the legacy route's output before shipping.
+- Keep category membership and per-category `lessonOrder` untouched. Category views use membership order; **All practice** continues to use type-scoped `liveOrder`.
+
+#### Phase 5B: Learning Path aggregate, service, and organizer (inactive source)
+
+- Add the singleton `LearningPathDocument`, `{ expectedRevision, unitIds }` save input, and `LearningPathMigrationManifest` schemas plus the collection constant and explicit server-only Firestore rule.
+- Build an injectable `LearningPathService`. Its complete-sequence save transaction requires `expectedRevision`, rejects stale edits and invalid/duplicate/wrong-kind/unknown IDs, validates placed-test eligibility when tests are enabled, enforces conservative document limits, and rejects ordinary saves while the `cutover` rollback window is open.
+- Add `GET/PUT /api/admin/learning-path` as thin authenticated routes injected into the existing `appApi`.
+- Add the placed-unit deletion guard: deleting a normal lesson or test whose ID appears in the active Learning Path is rejected with an actionable error. The dashboard read path additionally skips and logs a dangling `unitIds` entry instead of failing the whole projection.
+- Replace only the normal portion of Manage Live Lessons with the Learning Path organizer. Keep the three practice portions on their existing `isLive`/`liveOrder` APIs and semantics.
+- Use RTK Query as the server-state owner and component-local drafts for unsaved order. Remove `lessonSlice`'s fetched lesson mirror and global dirty flag after every mode on the page uses query data or local UI drafts.
+
+#### Phase 5C: Migration, cutover, and fallback retirement
+
+- Add an admin-only dry-run/apply/verify/rollback/retire workflow around one reviewed immutable normal-order manifest. Fail closed on source ambiguity, a source-hash change, or an unexpected live test; never invent a tie-breaker.
+- Make cutover transactional rather than introducing a maintenance lock or continuous legacy mirror. The migration and every legacy normal placement mutation read the singleton path/cutover state, so activation serializes with in-flight placement edits.
+- Keep the stabilization window read-only: ordinary Learning Path saves are rejected while `cutover` is present, legacy placement fields are never mutated after cutover, and rollback therefore only flips `cutover.state` to `inactive` without rewriting any lesson documents.
+- Switch the Phase 5A dashboard service's normal-sequence source to the active Learning Path, retaining the legacy derivation only as the inactive-fallback compatibility read.
+- Retire the fallback with the explicit operator command, which removes `cutover`, disables rollback and the legacy normal placement mutations, and enables ordinary Learning Path saves.
+- Verify dry-run failure without writes, idempotent apply, expected-revision conflicts, save rejection during the frozen window, rollback restoring the exact legacy order without lesson writes, exact before/after normal order, unchanged practice lists/progress, dangling-ID skip-and-log behavior, and inactive fallback behavior.
+
+Exit criterion: `learningPaths/default` is the sole canonical production source for the normal sequence, it matches the reviewed manifest exactly, rollback and reapply have been exercised, the inactive fallback has been retired, practice placement remains unchanged, and no normal test is yet student-visible.
+
+Implementation notes:
+
+- Phase 5A added the authenticated summary-only student dashboard and authorized single-lesson detail projections, migrated every former full-list consumer, preserved normal gating and practice/category order, and retained full-page reads only as a compatibility fallback for legacy documents missing summary counts.
+- Phase 5B added the strict singleton aggregate, revisioned complete-sequence service and API, server-only Firestore rule, placed-unit mutation guards, RTK Query ownership, and the normal Learning Path organizer with explicit stale-edit reconciliation. The three practice modes remain on their existing placement APIs, and the fetched lesson Redux mirror was removed.
+- Phase 5C added deterministic dry-run manifests, source-bound SHA-256 validation, transactional apply/verify/rollback/reapply/retire commands, frozen-window and retired-state mutation guards, production admin/student projection parity verification, and active/inactive/retired reader switching. The obsolete full-content `/api/lessons` list is retired with `410 Gone`.
+- Independent review was run after 5A, 5B, and 5C. Findings covering summary fallback parity, wrong-kind placement, stale-draft membership reconciliation, alternate mutation routes, manifest integrity, fallback corruption, projection parity, active-read isolation, transaction interleaving, practice independence, inactive rollback invariants, dashboard cache invalidation, dirty-draft navigation protection, and dangling-reference repair were fixed and re-reviewed until clean.
+- Final local verification passed TypeScript, all 49 Jest suites/290 tests, quiet ESLint, `git diff --check`, and the Next.js production build. Firestore rules and all code changes remain local; nothing was deployed.
+
+### Phase 6: Normal-flow test integration
+
+Status: **Complete — 2026-07-23**
+
+- Allow eligible normal tests in `LearningPathDocument.unitIds` alongside normal lessons; do not restore canonical `isLive` or `liveOrder` fields for normal-flow units.
 - Replace the pre-Phase 3 legacy exclusions with mixed kind-aware projections wherever tests now belong; the dashboard lock chain uses page math for lessons and the materialized completion record for tests.
 - Make progression monotonic across path edits: derive each student's reached frontier from existing progress and attempts so a newly inserted required-pass test cannot re-lock students who already progressed beyond its insertion point.
-- Extend the current live-lesson screen into a shared Learning Path organizer for normal lessons and normal tests. Read server state from RTK Query and retire the organizer's duplicated `lessonSlice` mirror.
-- Add insertion buttons before, between, and after units; open a test picker and transactionally insert the selected `TestUnit` at that exact `liveOrder`.
+- Generalize the Phase 5 Learning Path organizer rows from normal lessons to `LearningUnit` and add insertion controls plus an eligible-test picker before, between, and after units. The test is added to the local complete path draft and becomes visible only when that revisioned aggregate save succeeds.
 - Give admin rows and student cards distinct accessible test styling through color, iconography, and labels.
-- Enforce at publish time that every live test has at least one valid `rotationVersions` reference.
+- Enforce during every path save that each placed test has at least one valid `rotationVersions` reference. A test-version ownership mutation that would invalidate a placed test is rejected in the same domain layer.
+- Replace the temporary normal-attempt `test.isLive` availability check with membership in the active singleton Learning Path. Practice lesson publication and mock-test `isLive` checks remain unchanged.
 - Route normal lessons to practice behavior and tests to persisted attempt creation, randomized version selection, and assessment behavior.
+- Coalesce answer persistence at the player boundary instead of issuing one whole-document transaction for every intermediate component event. Matching pairs and fill-style items update local attempt state immediately, then flush committed answers on a bounded debounce and before page navigation, review, or submission.
 - Include the pre-start expectations moment, in-test answered-count progress, review-before-submit step, and results breakdown with distance-to-pass messaging.
 - Return a safe unavailable state and log an admin-visible configuration error if an attempt cannot resolve a valid version.
 - Ensure preview never writes lesson progress or attempts.
 
-### Phase 6: Mock Tests
+Implementation notes:
+
+- The canonical Learning Path now validates and projects eligible lessons and tests as one ordered sequence. Server-side progression uses persisted lesson progress and test attempts to preserve each student's reached frontier across path edits, skips dangling or ineligible lesson references safely, and keeps required-pass test gates monotonic after completion.
+- Normal test lifecycle operations authorize against active singleton-path membership and the student's current gate state. Placed tests must retain a valid rotation version, invalid delivery configuration fails closed, progress writes cannot bypass the mixed-flow gate, and test/version mutations invalidate the student dashboard cache.
+- The Learning Path organizer supports exact-position test insertion before, between, and after units, mixed accessible rows, stale-revision reconciliation, dirty-navigation protection, and a fail-closed eligible-test picker. Student dashboard cards and the lesson sidebar render tests with distinct labels, icons, routes, lock reasons, retry states, and keyboard-accessible controls.
+- `/test/[testId]` now provides expectations, frozen/resumable delivery, answered-count progress based on semantically complete answers, bounded batched persistence, pre-navigation/review/submission flushes, a review step, unavailable states, and results with per-exercise scores and distance-to-pass messaging. Restored multi-part answers remain editable until complete, and a Next-safe same-route history sentinel preserves pending answers across Back navigation, repeated Back presses, save failures, and unmounts.
+- Independent backend/domain, frontend, and requirements/coverage review agents were run after implementation. Findings covering frontier projection, lifecycle authorization, cache invalidation, attempt-summary fail-closed behavior, unavailable labels, dirty organizer navigation, answer restoration/completeness, sidebar errors/accessibility, and Next history races were fixed and re-reviewed until every reviewer returned an explicit clean/no-notes verdict.
+- Final local verification passed TypeScript, all 54 Jest suites/324 tests, quiet ESLint, `git diff --check`, and the Next.js production build. Firestore rules and all code changes remain local; nothing was deployed.
+
+### Phase 7: Mock Tests
+
+Status: **Complete — 2026-07-28**
 
 - Add Mock Tests admin management and a student dashboard section directly below the normal learning path.
 - Support manual standalone one-version mock creation.
@@ -1081,33 +1338,80 @@ Phase 4 ships as three independently reviewable changes behind non-live test con
 - Use a stable server-side idempotency key for the parent test/version pair, implemented through a deterministic mock ID or an equivalent transactional uniqueness record.
 - Archive rather than delete when returning a version to rotation; distinguish archived mocks from active but non-live mocks.
 - Support atomically moving a standalone mock version into normal rotation, or explicitly duplicating it when both destinations are required.
-- Enforce the slim active-ownership graph and require at least one normal-rotation version in every live parent test.
-- Keep `mockOrder` independent from normal `liveOrder`, and give admins an explicit control for ordering mock cards.
+- Enforce the slim active-ownership graph and require at least one normal-rotation version in every parent test placed in a Learning Path.
+- Keep `mockOrder` independent from Learning Path and practice-lesson `liveOrder`, and give admins an explicit control for ordering mock cards.
 - Display best percentage, latest raw/percentage score, attempt count, score trend, and informational passing status directly on each mock card.
 - Nudge a failed required-pass normal test toward its related live mock when one exists.
 - Hide the student Mock Tests section when no mock is live.
 
-### Phase 7: Cleanup
+Implementation notes:
+
+- Added server-owned mock creation, assignment, archive/reactivate, move, duplicate, update, and ordered-list operations with strict schemas, authenticated routes, deterministic parent/version identities, and atomic active-ownership transfer. Parent-linked versions leave normal rotation while mock-owned, archived versions retain history and can return to rotation, placed parents cannot lose their final eligible rotation version, and `mockOrder` remains independent from the Learning Path and practice ordering.
+- Added the complete admin workflow: combined normal/mock inventory filters and consequence labels, standalone mock creation, mock overview and lifecycle controls, parent/version navigation, and confirmed assignment from the actual version editor. Unsaved edits disable assignment until save or explicit discard; the confirmation owns the student-facing title, visibility, and score-only or passing-percentage rule.
+- Added the student Mock Tests section in deterministic mock order, hidden when empty, with fixed-version start/continue/retake delivery. Cards expose best and latest scores, raw points, attempt count, score trend, and informational pass state; frozen delivery and committed answers resume after refresh, mock outcomes never gate the Learning Path, and failed required-pass normal tests link to a related live mock when available.
+- Independent backend/domain, admin/frontend, student-flow, and final product-review iterations were run. Findings covering lifecycle ownership, ordering, editor navigation and dirty-state safety, assignment confirmation, retry-safe end-to-end state, CI coverage, and emulator-log isolation were fixed and re-reviewed until the reviewers returned explicit clean/no-notes verdicts.
+- Final local verification passed TypeScript, all 66 Jest suites/431 tests, full Playwright coverage (11 tests) plus the repeated score-only journey, ESLint with zero warnings, `git diff --check`, and the Next.js production build. Emulator runtime data and logs were isolated outside the repository, emulator ports were closed after verification, and the tracked `firestore-debug.log` remained unchanged. No code, rules, indexes, or data were deployed.
+
+### Phase 8: Cleanup
+
+Status: **Complete — 2026-07-29**
 
 - Delete the POC `tests` collection outright; no conversion or retention period is needed because real tests are authored fresh in the new system.
 - Remove `TestDefinition`, the old POC handlers behind `/api/admin/tests`, the POC-only `/admin/tests/try/*` page, `TestBuilder`/`TestRunner`, and test-specific adapter state. Keep the `/api/admin/tests` path and applicable admin page paths with their new container/version semantics.
 - Remove temporary aliases and compatibility adapters after all callers use the new model, including the `testMode` prop and `resolveRuntimeMode` compatibility argument from every renderer and exercise component.
+- Remove any remaining compatibility schemas and stored test-container assumptions that treat `isLive`, `liveOrder`, `publishedAt`, or `publishedBy` as normal-flow authority. Practice lessons retain those fields and their existing routes. Retain the reviewed migration manifest according to the chosen operational retention policy.
 - Verify cleanup with a repository-wide source-and-test search that returns zero `testMode` declarations, props, arguments, or compatibility callers.
+
+Implementation notes:
+
+- Removed the POC `TestDefinition`, scored-wrapper/content-item compatibility types, summary/result types, validation/conversion utility, and their obsolete focused test suite. The application contains no remaining reader or writer for the discarded `tests` collection, and no POC data migration was added.
+- Removed the POC-only `/admin/tests/try/[id]` route and `TestRunner`. Normal-version rows now enter the shared version editor, whose existing split-screen `TestVersionPreview` provides the supported interactive preview without a second runner.
+- Renamed the remaining production authoring component and file from the temporary `TestBuilder` seam to `TestVersionEditor`, updated every route and test import, and removed the old admin barrel aliases.
+- Removed `testMode` and `resolveRuntimeMode` from `ContentRenderer`, sentence diagramming, and every test-eligible exercise. Callers now use only `runtimeMode: 'practice' | 'test' | 'preview'`; an omitted mode defaults locally to `practice`.
+- Split lesson placement metadata out of `LearningUnitBase`. `isLive`, `liveOrder`, `publishedAt`, and `publishedBy` remain required only on `LessonUnit`; `TestUnit`, its strict schemas, creation writes, dashboard fallback projections, fixtures, and service tests no longer accept or emit them. Normal-test availability continues to derive only from the active Learning Path, while mock and practice visibility behavior is unchanged.
+- Retained the Phase 5 reviewed migration-manifest and legacy normal-lesson migration checks as operational history. No code, rules, indexes, data, or POC collection deletion was deployed or executed.
+- Repository-wide source-and-test searches return zero `TestDefinition`, `TestBuilder`, `TestRunner`, `testMode`, `resolveRuntimeMode`, old test-definition utility, or `/admin/tests/try` references. Final local verification passed TypeScript, all 65 Jest suites/425 tests, ESLint with zero warnings, `git diff --check`, and the Next.js 16.2.9 production build.
+
+### Post-phase clarity cleanup
+
+Status: **Complete — 2026-07-29**
+
+Progress checkpoint:
+
+- Step 1 complete: removed unused learning-unit progress aliases, schema aliases, type guards, editor exports, the placed-lesson summary adapter, dead RTK Query hooks, and their unused route/service seams. Folded the single-consumer `LearningUnitService` repository into the test persistence boundary and formatted the compressed mock/test handlers and pages.
+- Step 2 complete: centralized test/version summary projection and Firestore field masks in the test domain, and replaced the repeated API error mappers with the shared `createRouteErrorResponse` factory.
+- Step 3 complete: added one pure sticky-frontier progression evaluator used by both dashboard projection and transactional access checks. Lesson detail now loads only its document, progress, required normal-sequence summaries or practice-category assignment, and lazy test-attempt activity instead of constructing the complete dashboard.
+- Step 4 complete: replaced the 1,704-line `TestService` with focused `TestAuthoringService`, `MockTestService`, and `TestAttemptService` modules. Shared persistence contains only snapshot parsing and version helpers; routes and dashboard dependencies call the focused singleton directly, with no compatibility façade retaining the old all-purpose API.
+- Step 5 complete: extracted answer state, debouncing, batch coalescing, serialized saves, stale-attempt isolation, save feedback, and unload protection from the student test page into `useBufferedAttemptAnswers`. The page retains attempt, screen, navigation, history-sentinel, and mock-retake behavior rather than introducing a state-machine layer.
+- Step 6 complete: renamed the phase-numbered Playwright spec, npm commands, CI step, suite title, and browser-test documentation around their durable assessment-acceptance purpose. Historical Phase 7 implementation notes remain unchanged.
+- Deferred intentionally: migration retirement still requires confirmation that the live cutover and stabilization window are complete. Changing the fail-closed ownership scan remains a separate behavior and performance decision.
+- Verification passed TypeScript, ESLint, `git diff --check`, all 65 Jest suites/415 tests, all four emulator-backed Playwright assessment journeys, and the Next.js production build. No code, rules, indexes, data, or collection deletion was deployed or executed.
+- Release, production cutover, stabilization, rollback, operational retirement, and the later migration-code cleanup are documented in [`learning-unit-refactor-next-steps.md`](./learning-unit-refactor-next-steps.md).
 
 ## Acceptance criteria
 
 - Existing lessons load and behave the same before and after backfill.
+- Migration produces one reviewed immutable manifest containing the current live normal sequence, and `learningPaths/default.unitIds` matches it by count, membership, and exact position.
+- Dry run and apply fail before activation when the legacy normal scope has a missing, invalid, negative, or duplicate `liveOrder`, an unexpected live test, or a source-hash change. A failed post-activation projection check triggers explicit rollback; it is not described as a zero-write event.
+- `learningPaths/default` starts at revision 1 from the reviewed manifest; repeating the same active migration is idempotent, reapplying after rollback requires a manifest matching the current legacy source and increments the revision, and a conflicting active manifest is rejected.
+- During the bounded Phase 5 stabilization window, ordinary Learning Path saves are rejected while `cutover` is present, so legacy placement fields remain an exact untouched fallback; explicit rollback flips only `cutover.state` and rewrites no lesson documents. The fallback is retired before tests enter the path.
+- Rollback rejects a Learning Path containing a test, cannot be invoked after its Phase 5 window is retired, and is never a substitute for mixed-flow recovery after Phase 6.
+- No migration step rewrites lesson content, IDs, practice visibility/order, category memberships, progress, attempts, or test data.
 - Legacy documents without `kind` continue to load during rollout.
 - Normal, vocabulary, sentence-diagramming, and listening lessons retain their specialized behavior.
 - `TestUnit` has no `type`; legacy lesson endpoints exclude `kind: 'test'` before applying missing-type defaults.
 - Existing lesson exercises without `maxPoints` remain valid and behave exactly as before.
 - `lessonApi`, `testApi`, and `practiceCategoryApi` inject endpoints into one authenticated `appApi`; the store registers its reducer and middleware once, and no new assessment `createApi` slice is introduced.
-- RTK Query is the only authoritative client cache for learning units, versions, mocks, and attempts; no ordinary Redux slice mirrors those fetched entities.
+- RTK Query is the only authoritative client cache for learning units, the Learning Path, versions, mocks, and attempts; no ordinary Redux slice mirrors those fetched entities.
+- Learning Path saves submit the complete desired `unitIds` plus `expectedRevision`; stale, partial, duplicate, wrong-kind, ineligible, oversized, or unknown lists are rejected atomically without changing the canonical path.
+- Deleting a normal lesson or test placed in the active Learning Path is rejected with an actionable error, and a dangling `unitIds` entry that nevertheless exists is skipped and logged by the dashboard projection rather than failing it.
+- The Learning Path accepts only normal lessons and eligible normal tests. Practice visibility/order remains on the existing type-scoped lesson fields and stays independent from category membership order.
+- The student dashboard API returns ordered path and practice summaries plus progress without downloading every lesson page body; the lesson detail API loads full pages only for one authorized opened lesson.
 - New route handlers contain auth, parsing, service invocation, and response mapping only; Firestore invariants, scoring, selection, and sanitization are covered in shared domain/services.
 - Test Management remains a separate top-level admin section from Lesson Management.
 - Opening a normal test shows rotation versions plus active parent-linked mocks joined by `parent.testId`, with each version's scoring and delivery owner.
 - The test-version editor retains the lesson creator's page/content workflow and interactive preview while adding exercise points and container passing settings.
-- Normal lessons and normal tests can be ordered together through `liveOrder`.
+- Normal lessons and normal tests can be ordered together through `LearningPathDocument.unitIds`; array position is canonical and normal-lesson `liveOrder` is legacy-only.
 - The Learning Path organizer provides an insertion button before, between, and after units; selecting a test inserts it at that exact position.
 - Admin rows and student cards distinguish tests from lessons using visible labels and icons as well as color.
 - Mock tests appear only in the Mock Tests category and use `mockOrder`.
@@ -1138,14 +1442,14 @@ Phase 4 ships as three independently reviewable changes behind non-live test con
 - Moving a standalone mock to a normal test archives the mock; keeping both destinations requires an explicit version duplication.
 - Versions are never shared simultaneously between normal rotation and Mock Tests.
 - Cross-document validation rejects a version in two normal rotations, a version in both rotation and an active mock, a version in two active mocks, an active parent-linked mock with a missing parent or version, and an active standalone mock with a missing version.
-- Publishing or mutating a live normal test cannot leave it with zero valid rotation references, and every active mock retains one valid version.
+- Placing or mutating a normal test currently in a Learning Path cannot leave it with zero valid rotation references, and every active mock retains one valid version.
 - Normal-test random selection uses every eligible version before repeatedly favoring an already-used version; a mock retake uses that card's single version.
 - Least-used selection reads the complete projected submitted history for one student/origin without `limit()`; no usage aggregate is introduced until monitored volume justifies it.
 - Refreshing an in-progress attempt does not change the selected version or resolved generated questions.
 - Changing a version's mock assignment does not invalidate an attempt that already selected that version.
 - A student can never hold two in-progress attempts for the same origin, and repeating a start or submit request returns the existing result instead of duplicating it.
 - The attempt payload delivered to the client contains no accepted answers, correct options, or other grading inputs.
-- Direct client reads and writes of `testVersions`, `testAttempts`, `testAttemptSessions`, `mockTests`, `userProgress`, and `userProgressMigrationV2Backups` are denied by security rules.
+- Direct client reads and writes of `learningPaths`, `testVersions`, `testAttempts`, `testAttemptSessions`, `mockTests`, `userProgress`, and `userProgressMigrationV2Backups` are denied by security rules.
 - Final scoring uses the attempt's temporary grading inputs and `maxPoints`, not the current editable version.
 - Server submission and practice-mode scoring call the same pure grader for every allowlisted exercise type; there is no duplicate score formula.
 - Submitting an attempt removes its exact questions, answers, and temporary delivery state.
@@ -1164,17 +1468,26 @@ Phase 4 ships as three independently reviewable changes behind non-live test con
 - Every test states its stakes before the attempt starts, and a failing result shows the percentage distance to the threshold with a retake path and, when one exists, a nudge to the related live mock.
 - Fractional scores are calculated at full precision and rounded only for display.
 - Admin preview writes neither lesson progress nor test attempts.
-- Phase 7 leaves zero `testMode` declarations, props, arguments, compatibility resolvers, or callers in source and tests.
+- Phase 8 leaves zero `testMode` declarations, props, arguments, compatibility resolvers, or callers in source and tests, and zero canonical normal-flow reads or writes of legacy placement fields. Practice placement fields remain intentionally active.
 
 ## Risks and safeguards
 
+- A migration query can silently change normal order when it has ties, invalid positions, or uses `orderBy` in a way that excludes malformed documents. The dry run reads the complete live source, validates and sorts in memory, requires a reviewed immutable manifest and source hash, and never invents a tie-breaker.
+- An administrator can change legacy normal placement between manifest review and apply. Apply rechecks the source hash inside the same transaction that activates the path, and every legacy normal placement mutation participates in the same cutover-state conflict boundary.
+- A bad new projection could strand the application after cutover. Phase 5A ships and verifies the projection separately against the legacy source before cutover, the active/inactive path state retains a compatibility read path, and the stabilization-window edit freeze keeps the untouched legacy fields an exact fallback for the explicit rollback command.
+- Two administrators can edit the Learning Path concurrently. Every complete-sequence save compares `expectedRevision` transactionally; stale requests write nothing and the UI preserves both the local proposal and newly fetched canonical sequence for review.
+- One aggregate document is bounded by Firestore's 1 MiB document limit and can become a write hotspot at much larger scale. The service rejects conservative size/item thresholds, admin writes are expected to be rare, and a real multi-curriculum or high-throughput requirement triggers a coordinated persistence and assignment-model redesign.
+- A rollback that rewrites many lesson documents could partially fail or exceed Firestore's transaction write limit. The edit-freeze design removes that class of failure entirely: rollback touches only the singleton path document, at the accepted cost of a read-only curriculum during the stabilization window.
+- A dangling `unitIds` entry could break the student dashboard if a placed unit disappears. Unit deletion is guarded against active path membership, and the dashboard read path skips and logs a missing unit rather than failing the projection.
+- A filtered reorder view can accidentally submit only a visible subset. Search is confined to add-item pickers, and every save validates the complete current scope rather than accepting partial position patches.
+- Returning full pages for every visible lesson couples dashboard latency and payload size to authored content growth. The dashboard endpoint returns summaries only, and the lesson-detail endpoint loads full content for one authorized lesson after selection.
 - Test-version IDs and content-item IDs must be stable and unique; renderer code must never derive test identity from page or item position.
 - Copying an exercise must create a new item ID and retain its inline `maxPoints` value.
 - Hard deletion of a test version must be blocked while a normal test or mock test references it.
 - Mutation routes must reject accidental cross-context attachment; ownership transfers and copies must update all affected containers atomically.
 - Active delivery ownership is cross-document state even without a backlink. The transaction service must retain the slim exclusivity validator and must not rely on Firestore document shape alone to prevent duplicate ownership.
 - Archival and visibility are distinct: `isLive: false` cannot by itself mean that a mock assignment has ended.
-- Mock assignment mutations must prevent a live normal test from having zero rotation-eligible versions, while attempt start still fails safely if inconsistent data exists.
+- Mock assignment mutations must prevent a placed normal test from having zero rotation-eligible versions, while attempt start still fails safely if inconsistent data exists.
 - Assignment changes affect only future selection and must never invalidate an already persisted in-progress attempt.
 - Passing settings are mutable container configuration, so every attempt must freeze the threshold used to determine its outcome.
 - Submitted attempts cannot be reviewed question-by-question or regraded after their exact questions and answers are removed; this is an intentional product limitation.
@@ -1184,7 +1497,7 @@ Phase 4 ships as three independently reviewable changes behind non-live test con
 - The current multi-API RTK setup incurs separate middleware and blocks cross-domain automatic invalidation. The touched lesson/test/category APIs must converge on `appApi`; adding another API slice would worsen the problem.
 - Editor reuse must not turn the lesson-shaped POC adapter into a second persistence model. The shared authoring draft maps explicitly to a `Lesson` or `TestVersion`, and only the domain document is written.
 - Security rules for the new test collections and `userProgress` must ship before any attempt data exists; server-authoritative grading is meaningless while clients can write attempts or gate-controlling completion directly. `userProgressMigrationV2Backups` must be protected immediately because it already contains server-generated copies of progress records.
-- Before any test container is persisted, legacy lesson endpoints must exclude `kind: 'test'` before applying lesson defaults. Before tests become student-visible in Phase 5, mixed-flow consumers must render and calculate progress by `kind`; the compatibility boundary turns premature test documents into safely excluded data rather than broken zero-page lessons.
+- Before any test container is persisted, legacy lesson endpoints must exclude `kind: 'test'` before applying lesson defaults. Before tests become student-visible in Phase 6, mixed-flow consumers must render and calculate progress by `kind`; the compatibility boundary turns premature test documents into safely excluded data rather than broken zero-page lessons.
 - A flag-day `Lesson` to `LearningUnit` rename creates unnecessary regression risk; migrate callers incrementally.
 - Moving the existing lesson collection immediately would complicate rollback and existing references.
 
@@ -1196,37 +1509,46 @@ Phase 4 ships as three independently reviewable changes behind non-live test con
 
 The current schema, invariants, workflows, and implementation phases are authoritative. This register records the rationale for settled choices; if it conflicts with the current document body, the body wins.
 
-| Date       | Settled decision                                                                                                                                                                     | Why it matters                                                                                                                                                                                |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-07-13 | Use `LearningUnit = LessonUnit \| TestUnit`, distinguish with `kind`, and preserve every lesson `type`.                                                                              | Lessons and normal tests share one flow without breaking vocab, diagramming, or listening behavior.                                                                                           |
-| 2026-07-13 | Keep learning units in the existing Firestore `lessons` collection during migration.                                                                                                 | Incremental normalization and compatibility adapters are safer than a collection flag day.                                                                                                    |
-| 2026-07-13 | Store each `TestVersion` as a separate first-class document without immutable revision history.                                                                                      | Large page content remains independently editable; alternative versions matter now, edit history does not.                                                                                    |
-| 2026-07-14 | Use Next.js server routes plus scoped Zod validation for all new domain mutations.                                                                                                   | Next.js API routes are the primary server boundary; the `gradeTranslationFn` Firebase Function stays a practice-only exception.                                                               |
-| 2026-07-14 | Store positive `maxPoints` directly on every test exercise and infer exercises from the type registry.                                                                               | Scoring stays synchronized while existing lesson exercises remain valid without points.                                                                                                       |
-| 2026-07-14 | Use stable persisted content-item IDs and calculate item- and component-level fractional scores at full precision.                                                                   | Reordering cannot re-key answers, and generated-form fields such as `1,s,m` can earn independent credit normalized to the exercise points.                                                    |
-| 2026-07-14 | Store container-level percentage thresholds; `null` means score-only, and version totals may differ.                                                                                 | Passing is delivery policy, while percentages normalize alternatives with different point totals.                                                                                             |
-| 2026-07-14 | Persist attempts before flow integration, freeze delivery and passing state at start, then retain only submitted statistics.                                                         | Refreshes remain stable without permanently retaining questions or answers.                                                                                                                   |
-| 2026-07-13 | Select normal versions server-side through a least-used random cycle and scope histories by origin.                                                                                  | Students cycle through eligible alternatives while normal and mock attempts remain independent.                                                                                               |
-| 2026-07-14 | Apply assignment/configuration changes only to future attempts and make earned normal completion sticky.                                                                             | Existing attempts remain valid, and a later lower retake cannot relock the learning path.                                                                                                     |
-| 2026-07-14 | Do not let a newly inserted required-pass test re-lock students who already progressed beyond its insertion point.                                                                   | Learning-path edits must not revoke access a student has already reached; the new gate applies only before the student's recorded frontier.                                                   |
-| 2026-07-14 | **Superseded 2026-07-16.** Make normal rotation and mock delivery mutually exclusive through nullable `mockTestId`.                                                                  | Replaced by exclusive active-container ownership so the parent and mock do not both encode current delivery.                                                                                  |
-| 2026-07-14 | Keep one separate `MockTest` document per mock version with its own ID, order, passing rule, and visibility.                                                                         | Dashboard queries, attempt origins, standalone mocks, and two-version/two-card behavior use one shape.                                                                                        |
-| 2026-07-14 | **Superseded 2026-07-16.** Maintain a bidirectional parent/mock link, archive instead of delete, and separate lifecycle from visibility.                                             | Archival and visibility remain, but the parent backlink is removed; parent overviews join mocks by `parent.testId`.                                                                           |
-| 2026-07-14 | Require explicit duplication when equivalent content must exist in both normal and mock delivery.                                                                                    | Versions are never silently shared across simultaneous delivery contexts.                                                                                                                     |
-| 2026-07-13 | Do not introduce a generic `placementId`.                                                                                                                                            | `testId`, `mockTestId`, explicit origins, `liveOrder`, and `mockOrder` cover current delivery needs.                                                                                          |
-| 2026-07-14 | Keep Test Management separate and make the version editor match the lesson creator with points, passing controls, and preview.                                                       | Teachers get a familiar authoring experience without a second content-editor system.                                                                                                          |
-| 2026-07-14 | Extend the existing live-order screen into the mixed Learning Path organizer with plus-button insertion and explicit placement.                                                      | Teachers can distinguish, insert, and reorder tests among lessons without accidental publishing.                                                                                              |
-| 2026-07-14 | Give lesson, test, and mock cards distinct accessible treatments; place Mock Tests below the learning path and hide it when empty.                                                   | Students can identify assessment types immediately without an empty or color-only interface.                                                                                                  |
-| 2026-07-14 | Hide normal-flow version labels, while keeping mock titles teacher-controlled.                                                                                                       | Students should not compare hidden alternatives as easy/hard, but separate mock cards need names.                                                                                             |
-| 2026-07-14 | Show best score primarily, latest score and trend secondarily, and retained exercise statistics on results.                                                                          | Students can judge progress and retake value without reopening historical questions.                                                                                                          |
-| 2026-07-14 | Required-pass failures show threshold distance, a retake path, and a related live-mock nudge when available.                                                                         | Failure feedback remains actionable without leaking answers or consuming rotation versions.                                                                                                   |
-| 2026-07-15 | Reuse schema-v2 lesson progress and stable content IDs; materialize page-less test completion in `userProgress` using `lessonId` as the shared learning-unit ID compatibility field. | The progress refactor has already removed positional runtime identity and page-index-derived completion, so tests can join the lock chain without fake page state or a second progress model. |
-| 2026-07-15 | Consolidate the touched lesson, test, and practice-category RTK endpoints onto one injected authenticated `appApi`.                                                                  | One reducer/middleware and shared tags avoid new cache islands while keeping the unrelated vocabulary migration out of this feature.                                                          |
-| 2026-07-15 | Use a typed shared page-document draft over `lessonEditorSlice` and persist inline exercise `maxPoints`.                                                                             | The existing page, drag/drop, clipboard, tooltip, and content-editor stack stays singular without preserving the POC's redundant test shape.                                                  |
-| 2026-07-15 | Extract one environment-agnostic grader per exercise and call it from practice UI and server submission.                                                                             | Server authority no longer requires a second scoring implementation that can drift from the student exercise behavior.                                                                        |
-| 2026-07-15 | Use a deterministic `testAttemptSessions` pointer for one active attempt per student/origin.                                                                                         | Concurrent starts converge transactionally without relying on an empty query race, while submitted attempts retain independent history IDs.                                                   |
-| 2026-07-16 | Omit `type` from `TestUnit` and harden legacy lesson endpoints by `kind` before applying lesson defaults.                                                                            | `kind: 'test'` already discriminates the union; removing the redundant collision prevents tests from becoming zero-page normal lessons while preserving legacy lesson compatibility.          |
-| 2026-07-16 | Represent delivery through exclusive active-container ownership: `TestUnit.rotationVersions` for normal delivery or one active `MockTest` for mock delivery.                         | Assignment is an atomic ownership transfer, not a mirrored pointer/back-pointer state; a slim exclusivity validator remains necessary because Firestore has no cross-document constraints.    |
-| 2026-07-16 | Use `TestVersion.name` as the only version display name and join parent-linked mocks into test overviews by `parent.testId`.                                                         | Removing the reference label prevents name drift, while the existing mock-parent index preserves the complete admin overview without a parent backlink.                                       |
-| 2026-07-16 | Select least-used versions from the complete projected submitted history for one student/origin; introduce no usage aggregate initially.                                             | A fixed `limit()` would change the all-history guarantee; slim projected histories are expected to stay small, and a rebuildable aggregate remains a monitored scaling escape hatch.          |
-| 2026-07-16 | Split Phase 4 into grading/frozen delivery, attempt lifecycle/selection, and submission/completion/summaries; require explicit removal of `testMode` in cleanup.                     | Independently reviewable changes reduce rollout risk, and a searchable zero-use criterion prevents the temporary compatibility adapter from becoming permanent.                               |
+| Date       | Settled decision                                                                                                                                                                              | Why it matters                                                                                                                                                                                |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-07-13 | Use `LearningUnit = LessonUnit \| TestUnit`, distinguish with `kind`, and preserve every lesson `type`.                                                                                       | Lessons and normal tests share one flow without breaking vocab, diagramming, or listening behavior.                                                                                           |
+| 2026-07-13 | Keep learning units in the existing Firestore `lessons` collection during migration.                                                                                                          | Incremental normalization and compatibility adapters are safer than a collection flag day.                                                                                                    |
+| 2026-07-13 | Store each `TestVersion` as a separate first-class document without immutable revision history.                                                                                               | Large page content remains independently editable; alternative versions matter now, edit history does not.                                                                                    |
+| 2026-07-14 | Use Next.js server routes plus scoped Zod validation for all new domain mutations.                                                                                                            | Next.js API routes are the primary server boundary; the `gradeTranslationFn` Firebase Function stays a practice-only exception.                                                               |
+| 2026-07-14 | Store positive `maxPoints` directly on every test exercise and infer exercises from the type registry.                                                                                        | Scoring stays synchronized while existing lesson exercises remain valid without points.                                                                                                       |
+| 2026-07-14 | Use stable persisted content-item IDs and calculate item- and component-level fractional scores at full precision.                                                                            | Reordering cannot re-key answers, and generated-form fields such as `1,s,m` can earn independent credit normalized to the exercise points.                                                    |
+| 2026-07-14 | Store container-level percentage thresholds; `null` means score-only, and version totals may differ.                                                                                          | Passing is delivery policy, while percentages normalize alternatives with different point totals.                                                                                             |
+| 2026-07-14 | Persist attempts before flow integration, freeze delivery and passing state at start, then retain only submitted statistics.                                                                  | Refreshes remain stable without permanently retaining questions or answers.                                                                                                                   |
+| 2026-07-13 | Select normal versions server-side through a least-used random cycle and scope histories by origin.                                                                                           | Students cycle through eligible alternatives while normal and mock attempts remain independent.                                                                                               |
+| 2026-07-14 | Apply assignment/configuration changes only to future attempts and make earned normal completion sticky.                                                                                      | Existing attempts remain valid, and a later lower retake cannot relock the learning path.                                                                                                     |
+| 2026-07-14 | Do not let a newly inserted required-pass test re-lock students who already progressed beyond its insertion point.                                                                            | Learning-path edits must not revoke access a student has already reached; the new gate applies only before the student's recorded frontier.                                                   |
+| 2026-07-14 | **Superseded 2026-07-16.** Make normal rotation and mock delivery mutually exclusive through nullable `mockTestId`.                                                                           | Replaced by exclusive active-container ownership so the parent and mock do not both encode current delivery.                                                                                  |
+| 2026-07-14 | Keep one separate `MockTest` document per mock version with its own ID, order, passing rule, and visibility.                                                                                  | Dashboard queries, attempt origins, standalone mocks, and two-version/two-card behavior use one shape.                                                                                        |
+| 2026-07-14 | **Superseded 2026-07-16.** Maintain a bidirectional parent/mock link, archive instead of delete, and separate lifecycle from visibility.                                                      | Archival and visibility remain, but the parent backlink is removed; parent overviews join mocks by `parent.testId`.                                                                           |
+| 2026-07-14 | Require explicit duplication when equivalent content must exist in both normal and mock delivery.                                                                                             | Versions are never silently shared across simultaneous delivery contexts.                                                                                                                     |
+| 2026-07-13 | **Revised 2026-07-23.** Do not introduce a generic per-item `placementId`.                                                                                                                    | The singleton Learning Path owns a plain ordered ID array, mocks own their container IDs, and attempts record explicit origins; another placement identity adds no current value.             |
+| 2026-07-14 | Keep Test Management separate and make the version editor match the lesson creator with points, passing controls, and preview.                                                                | Teachers get a familiar authoring experience without a second content-editor system.                                                                                                          |
+| 2026-07-14 | **Revised 2026-07-23.** Evolve the normal portion of the existing live-order screen into the mixed Learning Path organizer after normal-order migration.                                      | Teachers can distinguish, insert, and reorder tests among lessons without accidental publication, while the three practice modes keep their existing persistence.                             |
+| 2026-07-14 | Give lesson, test, and mock cards distinct accessible treatments; place Mock Tests below the learning path and hide it when empty.                                                            | Students can identify assessment types immediately without an empty or color-only interface.                                                                                                  |
+| 2026-07-14 | Hide normal-flow version labels, while keeping mock titles teacher-controlled.                                                                                                                | Students should not compare hidden alternatives as easy/hard, but separate mock cards need names.                                                                                             |
+| 2026-07-14 | Show best score primarily, latest score and trend secondarily, and retained exercise statistics on results.                                                                                   | Students can judge progress and retake value without reopening historical questions.                                                                                                          |
+| 2026-07-14 | Required-pass failures show threshold distance, a retake path, and a related live-mock nudge when available.                                                                                  | Failure feedback remains actionable without leaking answers or consuming rotation versions.                                                                                                   |
+| 2026-07-15 | Reuse schema-v2 lesson progress and stable content IDs; materialize page-less test completion in `userProgress` using `lessonId` as the shared learning-unit ID compatibility field.          | The progress refactor has already removed positional runtime identity and page-index-derived completion, so tests can join the lock chain without fake page state or a second progress model. |
+| 2026-07-15 | Consolidate the touched lesson, test, and practice-category RTK endpoints onto one injected authenticated `appApi`.                                                                           | One reducer/middleware and shared tags avoid new cache islands while keeping the unrelated vocabulary migration out of this feature.                                                          |
+| 2026-07-15 | Use a typed shared page-document draft over `lessonEditorSlice` and persist inline exercise `maxPoints`.                                                                                      | The existing page, drag/drop, clipboard, tooltip, and content-editor stack stays singular without preserving the POC's redundant test shape.                                                  |
+| 2026-07-15 | Extract one environment-agnostic grader per exercise and call it from practice UI and server submission.                                                                                      | Server authority no longer requires a second scoring implementation that can drift from the student exercise behavior.                                                                        |
+| 2026-07-15 | Use a deterministic `testAttemptSessions` pointer for one active attempt per student/origin.                                                                                                  | Concurrent starts converge transactionally without relying on an empty query race, while submitted attempts retain independent history IDs.                                                   |
+| 2026-07-16 | Omit `type` from `TestUnit` and harden legacy lesson endpoints by `kind` before applying lesson defaults.                                                                                     | `kind: 'test'` already discriminates the union; removing the redundant collision prevents tests from becoming zero-page normal lessons while preserving legacy lesson compatibility.          |
+| 2026-07-16 | Represent delivery through exclusive active-container ownership: `TestUnit.rotationVersions` for normal delivery or one active `MockTest` for mock delivery.                                  | Assignment is an atomic ownership transfer, not a mirrored pointer/back-pointer state; a slim exclusivity validator remains necessary because Firestore has no cross-document constraints.    |
+| 2026-07-16 | Use `TestVersion.name` as the only version display name and join parent-linked mocks into test overviews by `parent.testId`.                                                                  | Removing the reference label prevents name drift, while the existing mock-parent index preserves the complete admin overview without a parent backlink.                                       |
+| 2026-07-16 | Select least-used versions from the complete projected submitted history for one student/origin; introduce no usage aggregate initially.                                                      | A fixed `limit()` would change the all-history guarantee; slim projected histories are expected to stay small, and a rebuildable aggregate remains a monitored scaling escape hatch.          |
+| 2026-07-16 | Split Phase 4 into grading/frozen delivery, attempt lifecycle/selection, and submission/completion/summaries; require explicit removal of `testMode` in cleanup.                              | Independently reviewable changes reduce rollout risk, and a searchable zero-use criterion prevents the temporary compatibility adapter from becoming permanent.                               |
+| 2026-07-23 | Split Phase 5 into 5A (student read-path refactor on the legacy source), 5B (inactive Learning Path aggregate and organizer), and 5C (migration and cutover).                                 | The projection rewrite and the placement source-of-truth change have independent failure modes; shipping and verifying them separately makes each regression attributable and revertible.     |
+| 2026-07-23 | Freeze ordinary Learning Path saves while the `cutover` rollback window is open; rollback flips only `cutover.state` and rewrites no lesson documents.                                        | Untouched legacy fields remain an exact fallback, deleting the full-inventory rollback transaction, its write-limit preflight, and its partial-failure class for a briefly read-only path.    |
+| 2026-07-23 | Guard deletion of any unit placed in the active Learning Path and make the dashboard skip-and-log a dangling `unitIds` entry.                                                                 | Firestore enforces no referential integrity, so the aggregate's ID references need an explicit write-time guard plus a defensive read so one stale ID cannot break the student dashboard.     |
+| 2026-07-20 | Compare outcomes against the passing threshold with a 1e-9 representation-error tolerance while storing full-precision percentages.                                                           | Exactly-earned thresholds can land an ulp below the integer threshold in IEEE 754 (e.g. `(8.1/9)*100 < 90`); a raw `>=` silently denies earned passes and their sticky completion.            |
+| 2026-07-22 | **Revised 2026-07-23.** Make `learningPaths/default` authoritative only for the ordered normal flow; defer Practice Catalog aggregates.                                                       | The mixed lesson/test chain gets atomic gap-free ordering without making test delivery depend on an unrelated three-list practice migration.                                                  |
+| 2026-07-22 | **Superseded 2026-07-23.** Keep `pathId` in schemas, routes, tags, and services while initially using `default`.                                                                              | The product has neither multiple curricula nor student-to-path assignment; the singleton is explicit until that complete feature exists.                                                      |
+| 2026-07-22 | **Revised 2026-07-23.** Migrate normal order through one reviewed manifest and a transactional cutover state. The copy-back rollback clause is superseded by the freeze-based rollback above. | Source-hash verification and transaction conflicts protect cutover without a maintenance lock, feature-flag framework, or continuous dual writes.                                             |
+| 2026-07-22 | **Revised 2026-07-23.** Insert the singleton Learning Path migration as Phase 5 before normal tests become student-visible in Phase 6.                                                        | Existing normal lesson behavior establishes a verified parity baseline before mixed-kind progression adds new product behavior; practice placement remains unchanged.                         |
+| 2026-07-23 | Split student delivery reads into one summary-only dashboard projection and one authorized lesson-detail endpoint.                                                                            | Dashboard payload no longer grows with every lesson page, while the lesson player still loads full content only when the student opens an accessible lesson.                                  |

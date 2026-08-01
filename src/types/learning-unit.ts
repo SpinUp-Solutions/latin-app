@@ -1,5 +1,4 @@
 import type { Page } from './page';
-import type { UserProgress } from './lesson';
 import type { RotationVersionReference } from './test';
 
 export const LESSON_UNIT_TYPES = ['vocab', 'normal', 'sentence-diagramming', 'listening'] as const;
@@ -10,10 +9,6 @@ export interface LearningUnitBase {
   kind: 'lesson' | 'test';
   title: string;
   description: string;
-  isLive: boolean;
-  liveOrder: number | null;
-  publishedAt: string | null;
-  publishedBy: string | null;
   createdAt?: string;
   createdBy?: string;
   updatedAt?: string;
@@ -25,6 +20,16 @@ export interface LessonUnit extends LearningUnitBase {
   type: LessonUnitType;
   pages: Page[];
   vocabulary_pool?: string | null;
+  /**
+   * Controls whether the full-database word search is shown in the lesson's
+   * Practice sidebar. Legacy lesson documents may omit this field and are
+   * treated as enabled.
+   */
+  showWordSearch?: boolean;
+  isLive: boolean;
+  liveOrder: number | null;
+  publishedAt: string | null;
+  publishedBy: string | null;
 
   // Existing lesson documents may carry these cached summary fields.
   version?: number;
@@ -41,6 +46,33 @@ export interface TestUnit extends LearningUnitBase {
 
 export type LearningUnit = LessonUnit | TestUnit;
 
+export interface LearningPathCutover {
+  state: 'active' | 'inactive';
+  migrationId: string;
+  sourceHash: string;
+  appliedAt: string;
+  appliedBy: string;
+  rolledBackAt?: string;
+  rolledBackBy?: string;
+}
+
+export interface LearningPathDocument {
+  id: 'default';
+  revision: number;
+  unitIds: string[];
+  updatedAt: string;
+  updatedBy: string;
+  cutover?: LearningPathCutover;
+}
+
+export interface AdminLearningPathView {
+  path: LearningPathDocument | null;
+  effectiveUnitIds: string[];
+  source: 'learning-path' | 'legacy';
+  canEdit: boolean;
+  editBlockedReason?: string;
+}
+
 export interface TestUnitCompletionProgress {
   userId: string;
   /** Compatibility field for the ID of a document in the shared lessons collection. */
@@ -56,9 +88,3 @@ export interface TestUnitCompletionProgress {
   score?: never;
   progress?: never;
 }
-
-export type LessonUnitProgress = UserProgress & { progressSchemaVersion: 2 };
-export type LearningUnitProgress = LessonUnitProgress | TestUnitCompletionProgress;
-export type LearningUnitProgressFor<Unit extends LearningUnit> = Unit extends TestUnit
-  ? TestUnitCompletionProgress
-  : LessonUnitProgress;

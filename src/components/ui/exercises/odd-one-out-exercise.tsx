@@ -13,24 +13,36 @@ import { SimpleRichEditor } from '../core/simple-rich-editor';
 import { Button } from '../button';
 import { CheckCircle2 } from 'lucide-react';
 import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
-import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
-import { resolveRuntimeMode } from '@/src/types/runtime-mode';
+import type { ExerciseAnswer, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
+import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
 interface Props {
   exercise: OddOneOutExercise;
   onComplete?: (score: number) => void;
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
-  testMode?: boolean;
+  initialAnswer?: ExerciseAnswer;
 }
 
-const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete, runtimeMode, onAnswer, testMode }) => {
-  const mode = resolveRuntimeMode(runtimeMode, testMode);
+const OddOneOutExerciseComponent: React.FC<Props> = ({
+  exercise,
+  onComplete,
+  runtimeMode,
+  onAnswer,
+  initialAnswer,
+}) => {
+  const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
-  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [userExplanation, setUserExplanation] = useState('');
+  const testAnswerMode = mode === 'test';
+  const restoredAnswer = initialAnswer?.type === 'odd-one-out' ? initialAnswer : null;
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(restoredAnswer?.selectedItemId ?? null);
+  const [userExplanation, setUserExplanation] = useState(restoredAnswer?.explanation ?? '');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [hasSubmitted, setHasSubmitted] = useState(false);
+  const hasRequiredExplanation = (value: string) =>
+    !exercise.data.requireExplanation || value.replace(/<[^>]*>/g, '').trim().length > 0;
+  const [hasSubmitted, setHasSubmitted] = useState(
+    Boolean(restoredAnswer?.selectedItemId && hasRequiredExplanation(restoredAnswer.explanation))
+  );
   const { isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance } = useExerciseProgression({
     totalItems: 1,
     itemProgressionDelay: exercise.itemProgressionDelay,
@@ -67,12 +79,19 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete, run
   };
 
   const handleSubmit = () => {
-    if (isProcessing || !selectedItemId) return;
+    if (isProcessing || !selectedItemId || !hasRequiredExplanation(userExplanation)) return;
 
     setIsProcessing(true);
     setHasSubmitted(true);
-    if (mode === 'test') onAnswer?.({ type: 'odd-one-out', selectedItemId, explanation: userExplanation });
+    if (testAnswerMode) {
+      onAnswer?.({ type: 'odd-one-out', selectedItemId, explanation: userExplanation });
+      setIsProcessing(false);
+      onComplete?.(0);
+      return;
+    }
 
+    const answer = { type: 'odd-one-out' as const, selectedItemId, explanation: userExplanation };
+    const score = Math.round(gradeExercisePercentage({ exercise }, answer));
     const validation = validateOddOneOutExercise(selectedItemId, userExplanation, exercise);
 
     if (validation.isCorrect) {
@@ -83,12 +102,12 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete, run
 
       autoAdvanceIfEnabled(() => {
         setIsProcessing(false);
-        onComplete?.(100);
+        onComplete?.(score);
       }, hasVisibleExplanation);
     } else {
       handleIncorrect();
       setIsProcessing(false);
-      if (assessmentMode) onComplete?.(0);
+      if (assessmentMode) onComplete?.(score);
     }
   };
 
@@ -141,8 +160,10 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete, run
             const isSelected = selectedItemId === item.id;
             const isCorrectItem = item.isOddOneOut;
             // Only show correct answer when user got it right OR feedback system says to show answer
-            const showCorrectHighlight = !assessmentMode && hasSubmitted && isCorrectItem && (isCorrect === true || level?.showAnswer);
-            const showIncorrectHighlight = !assessmentMode && hasSubmitted && isSelected && !isCorrectItem && level?.showAnswer;
+            const showCorrectHighlight =
+              !assessmentMode && hasSubmitted && isCorrectItem && (isCorrect === true || level?.showAnswer);
+            const showIncorrectHighlight =
+              !assessmentMode && hasSubmitted && isSelected && !isCorrectItem && level?.showAnswer;
 
             return (
               <button
@@ -207,7 +228,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete, run
           {!hasSubmitted ? (
             <Button
               onClick={handleSubmit}
-              disabled={!selectedItemId || isProcessing}
+              disabled={!selectedItemId || isProcessing || !hasRequiredExplanation(userExplanation)}
               className="bg-roman-terracotta hover:bg-roman-terracotta/90 text-white">
               {isProcessing ? 'Checking...' : 'Submit Answer'}
             </Button>
@@ -222,16 +243,18 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({ exercise, onComplete, run
         </div>
 
         {/* Feedback Display */}
-        {!assessmentMode && <FeedbackDisplay
-          isCorrect={isCorrect}
-          message={message}
-          level={level}
-          hint={exercise.data.hint}
-          correctAnswer={exercise.data.items.find(item => item.isOddOneOut)?.text}
-          explanation={exercise.data.explanation}
-          showExplanation={showExplanation}
-          onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
-        />}
+        {!assessmentMode && (
+          <FeedbackDisplay
+            isCorrect={isCorrect}
+            message={message}
+            level={level}
+            hint={exercise.data.hint}
+            correctAnswer={exercise.data.items.find(item => item.isOddOneOut)?.text}
+            explanation={exercise.data.explanation}
+            showExplanation={showExplanation}
+            onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
+          />
+        )}
       </div>
     </div>
   );

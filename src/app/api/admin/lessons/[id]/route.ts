@@ -31,6 +31,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const lesson = {
       id: lessonDoc.id,
       ...lessonDoc.data(),
+      practiceCategorySelections: assignments.practiceCategorySelections,
       practiceCategoryIds: assignments.practiceCategoryIds,
       practiceCategories: assignments.practiceCategories,
     };

@@ -5,9 +5,16 @@ import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 import { verifyAdminAccess } from '../../../../lib/verifyAdminAccess';
 import { getLessonContentCounts, toLessonSummary } from '@/src/utils/lessonSummary';
 import { validateLessonProgression } from '@/src/utils/lessonProgress';
-import { optionalPracticeCategoryIdsSchema } from '@/src/lib/practice-categories/schemas';
+import {
+  optionalPracticeCategoryIdsSchema,
+  optionalPracticeCategorySelectionsSchema,
+} from '@/src/lib/practice-categories/schemas';
 import { PracticeCategoryError, practiceCategoryService } from '@/src/lib/practice-categories/service';
 import { practiceCategoryRouteErrorResponse } from '@/src/lib/practice-categories/api';
+import {
+  assertLegacyNormalPlacementChangeAllowedInTransaction,
+  assertPlacedLessonReplacementAllowedInTransaction,
+} from '@/src/lib/learning-units/learning-path-service';
 
 const LESSON_SUMMARY_FIELDS = [
   'title',
@@ -15,6 +22,7 @@ const LESSON_SUMMARY_FIELDS = [
   'description',
   'type',
   'vocabulary_pool',
+  'showWordSearch',
   'isLive',
   'liveOrder',
   'publishedAt',
@@ -58,11 +66,14 @@ export async function GET(request: NextRequest) {
     );
     const lessonSummaries = lessons.filter((lesson): lesson is NonNullable<typeof lesson> => lesson !== null);
 
-    const assignments = await practiceCategoryService.getAssignmentsForLessonIds(lessonSummaries.map(lesson => lesson.id));
+    const assignments = await practiceCategoryService.getAssignmentsForLessonIds(
+      lessonSummaries.map(lesson => lesson.id)
+    );
     const lessonsWithCategories = lessonSummaries.map(lesson => {
       const assignment = assignments.get(lesson.id)!;
       return {
         ...lesson,
+        practiceCategorySelections: assignment.practiceCategorySelections,
         practiceCategoryIds: assignment.practiceCategoryIds,
         practiceCategories: assignment.practiceCategories,
       };
@@ -91,8 +102,20 @@ export async function POST(request: NextRequest) {
     if (!isLessonDocumentData(rawLesson)) {
       return NextResponse.json({ error: 'Only lesson documents can use the lesson endpoint' }, { status: 400 });
     }
+    if (rawLesson.showWordSearch !== undefined && typeof rawLesson.showWordSearch !== 'boolean') {
+      return NextResponse.json({ error: 'showWordSearch must be a boolean' }, { status: 400 });
+    }
+    const practiceCategorySelections = optionalPracticeCategorySelectionsSchema.parse(
+      rawLesson.practiceCategorySelections
+    );
     const practiceCategoryIds = optionalPracticeCategoryIdsSchema.parse(rawLesson.practiceCategoryIds);
-    const { practiceCategoryIds: _practiceCategoryIds, practiceCategories: _practiceCategories, ...lesson } = rawLesson;
+    const {
+      practiceCategorySelections: _practiceCategorySelections,
+      practiceCategoryIds: _practiceCategoryIds,
+      practiceCategories: _practiceCategories,
+      practiceCategoryPlacements: _practiceCategoryPlacements,
+      ...lesson
+    } = rawLesson;
 
     if (!lesson.id || !lesson.title || !lesson.type) {
       return NextResponse.json({ error: 'Lesson ID, title, and type are required' }, { status: 400 });
@@ -111,6 +134,7 @@ export async function POST(request: NextRequest) {
       updatedAt: now,
       updatedBy: user.uid,
       version: 1,
+      showWordSearch: rawLesson.showWordSearch ?? false,
       isLive: false,
       liveOrder: null,
       publishedAt: null,
@@ -126,7 +150,9 @@ export async function POST(request: NextRequest) {
       const reconciled = await practiceCategoryService.reconcileLessonCategoriesInTransaction(transaction, {
         lessonId: lesson.id,
         lesson: lessonData,
-        desiredCategoryIds: practiceCategoryIds ?? [],
+        ...(practiceCategorySelections !== undefined
+          ? { desiredCategorySelections: practiceCategorySelections }
+          : { desiredCategoryIds: practiceCategoryIds ?? [] }),
         actorId: user.uid,
       });
       transaction.create(lessonRef, lessonData);
@@ -139,6 +165,7 @@ export async function POST(request: NextRequest) {
       success: true,
       lesson: {
         ...lessonData,
+        practiceCategorySelections: assignments.practiceCategorySelections,
         practiceCategoryIds: assignments.practiceCategoryIds,
         practiceCategories: assignments.practiceCategories,
       },
@@ -161,8 +188,20 @@ export async function PUT(request: NextRequest) {
     if (!isLessonDocumentData(rawLesson)) {
       return NextResponse.json({ error: 'Only lesson documents can use the lesson endpoint' }, { status: 400 });
     }
+    if (rawLesson.showWordSearch !== undefined && typeof rawLesson.showWordSearch !== 'boolean') {
+      return NextResponse.json({ error: 'showWordSearch must be a boolean' }, { status: 400 });
+    }
+    const practiceCategorySelections = optionalPracticeCategorySelectionsSchema.parse(
+      rawLesson.practiceCategorySelections
+    );
     const practiceCategoryIds = optionalPracticeCategoryIdsSchema.parse(rawLesson.practiceCategoryIds);
-    const { practiceCategoryIds: _practiceCategoryIds, practiceCategories: _practiceCategories, ...lesson } = rawLesson;
+    const {
+      practiceCategorySelections: _practiceCategorySelections,
+      practiceCategoryIds: _practiceCategoryIds,
+      practiceCategories: _practiceCategories,
+      practiceCategoryPlacements: _practiceCategoryPlacements,
+      ...lesson
+    } = rawLesson;
 
     if (!lesson.id || !lesson.title || !lesson.type) {
       return NextResponse.json({ error: 'Lesson ID, title, and type are required' }, { status: 400 });
@@ -180,6 +219,17 @@ export async function PUT(request: NextRequest) {
         throw new PracticeCategoryError('LESSON_NOT_FOUND', 'Lesson not found', 404);
       }
       const existingLesson = existingLessonData as Partial<Lesson>;
+      await assertLegacyNormalPlacementChangeAllowedInTransaction(transaction, adminDb, existingLesson, {
+        ...lesson,
+        isLive: existingLesson.isLive ?? false,
+        liveOrder: existingLesson.liveOrder ?? null,
+        publishedAt: existingLesson.publishedAt ?? null,
+        publishedBy: existingLesson.publishedBy ?? null,
+      });
+      await assertPlacedLessonReplacementAllowedInTransaction(transaction, adminDb, lesson.id, {
+        type: lesson.type,
+        pages: lesson.pages || [],
+      });
       if (existingLesson?.isLive) {
         const progressionErrors = validateLessonProgression({ pages: lesson.pages || [] });
         if (progressionErrors.length > 0) {
@@ -198,6 +248,9 @@ export async function PUT(request: NextRequest) {
         updatedAt: new Date().toISOString(),
         updatedBy: user.uid,
         version: (existingLesson?.version || 0) + 1,
+        showWordSearch:
+          rawLesson.showWordSearch ??
+          (typeof existingLesson?.showWordSearch === 'boolean' ? existingLesson.showWordSearch : true),
         isLive: existingLesson?.isLive ?? false,
         liveOrder: existingLesson?.liveOrder ?? null,
         publishedAt: existingLesson?.publishedAt || null,
@@ -206,7 +259,9 @@ export async function PUT(request: NextRequest) {
       const assignments = await practiceCategoryService.reconcileLessonCategoriesInTransaction(transaction, {
         lessonId: lesson.id,
         lesson: updatedLessonData,
-        desiredCategoryIds: practiceCategoryIds,
+        ...(practiceCategorySelections !== undefined
+          ? { desiredCategorySelections: practiceCategorySelections }
+          : { desiredCategoryIds: practiceCategoryIds }),
         actorId: user.uid,
       });
       transaction.set(lessonRef, updatedLessonData);
@@ -226,6 +281,7 @@ export async function PUT(request: NextRequest) {
       success: true,
       lesson: {
         ...result.updatedLessonData,
+        practiceCategorySelections: result.assignments.practiceCategorySelections,
         practiceCategoryIds: result.assignments.practiceCategoryIds,
         practiceCategories: result.assignments.practiceCategories,
       },

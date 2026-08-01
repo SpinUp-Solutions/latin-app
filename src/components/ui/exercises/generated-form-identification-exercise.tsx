@@ -10,11 +10,8 @@ import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { useGetMultiParadigmWordsQuery } from '@/src/store/api/advancedVocabularyApi';
-import { deriveParadigm } from '@/src/utils/paradigm';
 import { Card, CardContent } from '../card';
-import { Button } from '../button';
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
-import type { PartOfSpeech, PronounType, PronounPerson } from '@/shared/types/vocabulary/schemas/enums';
 import {
   FormIdentificationItemSchema,
   type FormIdentificationItem,
@@ -31,56 +28,53 @@ import {
   scoreSingleFieldFormIdentificationAnswer,
   normalize,
 } from '@/src/utils/exercises/generatedFormIdentificationExercise';
-import {
-  extractStepValue,
-  getHintForStep,
-  extractStepValuesFromPaths,
-  getAcceptedAnswersForMultipleValues,
-  getAcceptedAnswersForStep,
-  formatPrimaryAnswersDisplay,
-  filterPathsByPreviousAnswers,
-  getDisplayForm,
-  enrichPathsWithSteps,
-  deduplicatePathsBySteps,
-  getAnswerableStepsForWord,
-} from '@/src/utils/exercises/formIdentificationHelpers';
-import { hasSelectedForm } from '@/src/utils/exercises/formSelection';
 import { formatLabel } from '@/src/utils/label-formatter';
 import { normalizeCollection, buildLegacyParadigmConfigs } from '@/src/utils/exercises/legacyExerciseCompat';
-import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
-import { resolveRuntimeMode } from '@/src/types/runtime-mode';
+import type { ExerciseAnswer, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
 import { getContentTypeLabel } from '@/src/lib/content/registry';
+import { createGeneratedFormIdentificationItems } from '@/src/lib/tests/generated-exercises';
+import { RecordedAnswerControls } from './recorded-answer-controls';
+import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
 interface Props {
   exercise: GeneratedFormIdentificationExercise;
   onComplete?: (score: number) => void;
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
+  initialAnswer?: ExerciseAnswer;
   resolvedItems?: Array<FormIdentificationItem | SingleFieldFormIdentificationItem | MultiAnswerFormIdentificationItem>;
-  testMode?: boolean;
+  allowGeneratedExerciseQueries?: boolean;
 }
+
+type ItemType = FormIdentificationItem | SingleFieldFormIdentificationItem | MultiAnswerFormIdentificationItem;
+
+const getExpectedAnswerCount = (item: ItemType) => {
+  const paths = (item as { primaryFormPaths?: unknown[] }).primaryFormPaths;
+  const explicit = (item as { expectedAnswerCount?: unknown }).expectedAnswerCount;
+  if (Array.isArray(paths)) return paths.length;
+  return typeof explicit === 'number' && explicit > 0 ? explicit : 1;
+};
 
 const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
   exercise,
   onComplete,
   runtimeMode,
   onAnswer,
+  initialAnswer,
   resolvedItems,
-  testMode,
+  allowGeneratedExerciseQueries = false,
 }) => {
-  const mode = resolveRuntimeMode(runtimeMode, testMode);
+  const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
-  const [userAnswer, setUserAnswer] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [correctAnswers, setCorrectAnswers] = useState(0);
+  const testAnswerMode = mode === 'test';
   const [wordAnswers, setWordAnswers] = useState<Record<string, Record<string, string>>>({});
   const [multiAnswerSlots, setMultiAnswerSlots] = useState<Record<string, string[][]>>({});
-  const [testEarnedUnits, setTestEarnedUnits] = useState(0);
-  const [testSubmitted, setTestSubmitted] = useState(false);
-  const [pendingTestEarnedUnits, setPendingTestEarnedUnits] = useState(0);
-  const [submittedAnswers, setSubmittedAnswers] = useState<Record<string, string>>({});
 
-  const config = exercise.data.generatorConfig;
+  const config = exercise.data.generatorConfig ?? {
+    collection: '',
+    wordSource: 'filters' as const,
+    count: 0,
+  };
   const isSingleField = exercise.data.mode === 'single-field';
   const requireAllPrimaryAnswers = exercise.data.requireAllPrimaryAnswers ?? false;
   const isMultiAnswerMode = !isSingleField && requireAllPrimaryAnswers;
@@ -106,178 +100,22 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
       count: config.count,
       paradigmConfigs,
     },
-    { skip: mode === 'test' || resolvedItems !== undefined }
+    { skip: (mode === 'test' && !allowGeneratedExerciseQueries) || resolvedItems !== undefined }
   );
 
-  type ItemType = FormIdentificationItem | SingleFieldFormIdentificationItem | MultiAnswerFormIdentificationItem;
   const items: ItemType[] = useMemo(() => {
     if (resolvedItems) return resolvedItems;
     if (!data?.words) return [];
-
-    const words = data.words as unknown as ExerciseWordResponse[];
-
-    if (isSingleField) {
-      return words.map(word => {
-        const hasSelected = hasSelectedForm(word);
-        const wordAny = word as Record<string, unknown>;
-        const paradigm = deriveParadigm(
-          word.part_of_speech as PartOfSpeech,
-          wordAny.pronoun_type as PronounType | undefined,
-          wordAny.person as PronounPerson | undefined
-        );
-        const paradigmConfig = paradigm ? exercise.data.paradigmConfigs?.[paradigm] : undefined;
-
-        const basePrimaryPaths = (word.primary_form_paths || (word.form_path ? [word.form_path] : [])) as Array<
-          Record<string, string | undefined>
-        >;
-        const baseOptionalPaths = (word.optional_form_paths || []) as Array<Record<string, string | undefined>>;
-        const steps = getAnswerableStepsForWord(word, paradigmConfig?.steps || [], basePrimaryPaths);
-
-        const enrichedPrimaryPaths = enrichPathsWithSteps(basePrimaryPaths, word, steps);
-        const enrichedOptionalPaths = enrichPathsWithSteps(baseOptionalPaths, word, steps);
-
-        // Deduplicate paths based on only the requested steps
-        // This handles syncretism where paths differ only in fields not being asked
-        const dedupedPrimaryPaths = deduplicatePathsBySteps(enrichedPrimaryPaths, steps);
-        const dedupedOptionalPaths = deduplicatePathsBySteps(enrichedOptionalPaths, steps);
-
-        const pathDisplays = dedupedPrimaryPaths
-          .map(path => {
-            const pathValues = steps
-              .map(step => {
-                const val = path[step];
-                return val ? getDisplayForm(val) : null;
-              })
-              .filter(Boolean);
-            return pathValues.join(',');
-          })
-          .filter(display => display.length > 0);
-
-        const correctAnswerDisplay = pathDisplays.join(';');
-
-        return {
-          id: word.id,
-          wordId: word.id,
-          word: word.root_word,
-          root_word: word.root_word,
-          dictionary_entry: word.dictionary_entry ?? null,
-          selected_form: word.selected_form,
-          hasSelectedForm: hasSelected,
-          steps,
-          correctAnswerDisplay,
-          hint: word.definitions?.join('; '),
-          primaryFormPaths: dedupedPrimaryPaths,
-          optionalFormPaths: dedupedOptionalPaths,
-        } as SingleFieldFormIdentificationItem;
-      });
-    }
-
-    if (isMultiAnswerMode) {
-      return words.flatMap(word => {
-        const hasSelected = hasSelectedForm(word);
-        const wordAny = word as Record<string, unknown>;
-        const paradigm = deriveParadigm(
-          word.part_of_speech as PartOfSpeech,
-          wordAny.pronoun_type as PronounType | undefined,
-          wordAny.person as PronounPerson | undefined
-        );
-        const paradigmConfig = paradigm ? exercise.data.paradigmConfigs?.[paradigm] : undefined;
-
-        const basePrimaryPaths = (word.primary_form_paths || (word.form_path ? [word.form_path] : [])) as Array<
-          Record<string, string | undefined>
-        >;
-        const baseOptionalPaths = (word.optional_form_paths || []) as Array<Record<string, string | undefined>>;
-        const steps = getAnswerableStepsForWord(word, paradigmConfig?.steps || [], basePrimaryPaths);
-
-        const enrichedPrimaryPaths = enrichPathsWithSteps(basePrimaryPaths, word, steps);
-        const enrichedOptionalPaths = enrichPathsWithSteps(baseOptionalPaths, word, steps);
-
-        // Deduplicate paths based on only the requested steps
-        // This handles syncretism where paths differ only in fields not being asked
-        const dedupedPrimaryPaths = deduplicatePathsBySteps(enrichedPrimaryPaths, steps);
-        const dedupedOptionalPaths = deduplicatePathsBySteps(enrichedOptionalPaths, steps);
-
-        const expectedAnswerCount = dedupedPrimaryPaths.length;
-
-        return steps.map((step, stepIndex) => {
-          const stepValues = extractStepValuesFromPaths(dedupedPrimaryPaths, step);
-          const correctAnswerDisplay = stepValues.join(';');
-
-          return {
-            id: `${word.id}-${step}`,
-            wordId: word.id,
-            word: word.root_word,
-            root_word: word.root_word,
-            dictionary_entry: word.dictionary_entry ?? null,
-            selected_form: word.selected_form,
-            hasSelectedForm: hasSelected,
-            step,
-            steps,
-            stepIndex,
-            totalSteps: steps.length,
-            primaryFormPaths: dedupedPrimaryPaths,
-            optionalFormPaths: dedupedOptionalPaths,
-            hint: word.definitions?.join('; '),
-            expectedAnswerCount,
-            correctAnswerDisplay,
-          } as MultiAnswerFormIdentificationItem;
-        });
-      });
-    }
-
-    return words.flatMap(word => {
-      const hasSelected = hasSelectedForm(word);
-      const wordAny = word as Record<string, unknown>;
-      const paradigm = deriveParadigm(
-        word.part_of_speech as PartOfSpeech,
-        wordAny.pronoun_type as PronounType | undefined,
-        wordAny.person as PronounPerson | undefined
-      );
-      const paradigmConfig = paradigm ? exercise.data.paradigmConfigs?.[paradigm] : undefined;
-
-      const basePrimaryPaths = (word.primary_form_paths || (word.form_path ? [word.form_path] : [])) as Array<
-        Record<string, string | undefined>
-      >;
-      const baseOptionalPaths = (word.optional_form_paths || []) as Array<Record<string, string | undefined>>;
-      const steps = getAnswerableStepsForWord(word, paradigmConfig?.steps || [], basePrimaryPaths);
-      const enrichedPrimaryPaths = enrichPathsWithSteps(basePrimaryPaths, word, steps);
-      const enrichedOptionalPaths = enrichPathsWithSteps(baseOptionalPaths, word, steps);
-      const dedupedPrimaryPaths = deduplicatePathsBySteps(enrichedPrimaryPaths, steps);
-      const dedupedOptionalPaths = deduplicatePathsBySteps(enrichedOptionalPaths, steps);
-
-      const previousAnswers = wordAnswers[word.id] || {};
-
-      return steps.map(step => {
-        const filteredPrimaryPaths = filterPathsByPreviousAnswers(dedupedPrimaryPaths, previousAnswers);
-        const filteredOptionalPaths = filterPathsByPreviousAnswers(dedupedOptionalPaths, previousAnswers);
-
-        const primaryValues = extractStepValuesFromPaths(filteredPrimaryPaths, step);
-        const optionalValues = extractStepValuesFromPaths(filteredOptionalPaths, step);
-
-        const allCorrectValues = Array.from(new Set([...primaryValues, ...optionalValues]));
-        const acceptedAnswers = getAcceptedAnswersForMultipleValues(allCorrectValues);
-        const correctAnswer = formatPrimaryAnswersDisplay(filteredPrimaryPaths, step) || extractStepValue(word, step);
-
-        return {
-          id: `${word.id}-${step}`,
-          wordId: word.id,
-          word: word.root_word,
-          root_word: word.root_word,
-          dictionary_entry: word.dictionary_entry ?? null,
-          selected_form: word.selected_form,
-          hasSelectedForm: hasSelected,
-          step,
-          correctAnswer,
-          acceptedAnswers: acceptedAnswers.length > 0 ? acceptedAnswers : getAcceptedAnswersForStep(correctAnswer),
-          hint: getHintForStep(word, step),
-          primaryFormPaths: filteredPrimaryPaths,
-          optionalFormPaths: filteredOptionalPaths,
-        } as FormIdentificationItem;
-      });
-    });
-  }, [data?.words, exercise.data, wordAnswers, isSingleField, isMultiAnswerMode, resolvedItems]);
+    return createGeneratedFormIdentificationItems(
+      exercise,
+      data.words as unknown as ExerciseWordResponse[],
+      wordAnswers
+    );
+  }, [data?.words, exercise, wordAnswers, resolvedItems]);
 
   const validatedItems = useMemo(() => {
+    if (mode === 'test') return items;
+
     if (isSingleField) {
       return items
         .map(item => SingleFieldFormIdentificationItemSchema.safeParse(item))
@@ -321,7 +159,17 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
       .map(item => FormIdentificationItemSchema.safeParse(item))
       .filter((result): result is { success: true; data: FormIdentificationItem } => result.success)
       .map(result => result.data);
-  }, [items, isSingleField, isMultiAnswerMode]);
+  }, [items, isSingleField, isMultiAnswerMode, mode]);
+  const restoredAnswers = initialAnswer?.type === 'generated-form-identification' ? initialAnswer.answers : {};
+  const firstUnansweredIndex = validatedItems.findIndex(item => !restoredAnswers[item.id]?.trim());
+  const restoredIndex = firstUnansweredIndex >= 0 ? firstUnansweredIndex : Math.max(validatedItems.length - 1, 0);
+  const restoredItemId = validatedItems[restoredIndex]?.id;
+  const [userAnswer, setUserAnswer] = useState(restoredItemId ? (restoredAnswers[restoredItemId] ?? '') : '');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [testSubmitted, setTestSubmitted] = useState(
+    Boolean(restoredItemId && restoredAnswers[restoredItemId]?.trim())
+  );
+  const [submittedAnswers, setSubmittedAnswers] = useState<Record<string, string>>(restoredAnswers);
 
   const {
     currentIndex,
@@ -333,6 +181,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
     nextItem,
   } = useExerciseProgression({
     totalItems: validatedItems.length,
+    initialIndex: restoredIndex,
     itemProgressionDelay: exercise.itemProgressionDelay,
     progressionRules: exercise.feedbackConfig.progressionRules,
   });
@@ -354,7 +203,6 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
     delayMs: exercise.itemProgressionDelay,
     onReset: () => {
       setUserAnswer('');
-      setCorrectAnswers(0);
       setWordAnswers({});
       setMultiAnswerSlots({});
       setIsProcessing(false);
@@ -364,17 +212,21 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
   });
 
   const handleSubmit = () => {
-    if (isProcessing || validatedItems.length === 0) return;
+    if (isProcessing || validatedItems.length === 0 || !userAnswer.trim()) return;
     if (currentIndex >= validatedItems.length) return;
 
     const currentItem = validatedItems[currentIndex];
     const nextAnswers = { ...submittedAnswers, [currentItem.id]: userAnswer };
     setSubmittedAnswers(nextAnswers);
-    if (mode === 'test') onAnswer?.({ type: 'generated-form-identification', answers: nextAnswers });
     setIsProcessing(true);
 
+    if (testAnswerMode) {
+      onAnswer?.({ type: 'generated-form-identification', answers: nextAnswers });
+      setTestSubmitted(true);
+      return;
+    }
+
     if (assessmentMode) {
-      let earnedUnits = 0;
       let fullyCorrect = false;
 
       if (isSingleField) {
@@ -382,7 +234,6 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
           userAnswer,
           currentItem as SingleFieldFormIdentificationItem
         );
-        earnedUnits = credit.earnedUnits;
         fullyCorrect = credit.availableUnits > 0 && credit.earnedUnits === credit.availableUnits;
       } else if (isMultiAnswerMode) {
         const multiItem = currentItem as MultiAnswerFormIdentificationItem;
@@ -400,12 +251,10 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
             setMultiAnswerSlots(prev => ({ ...prev, [multiItem.wordId]: updatedSlots }));
           }
         }
-        earnedUnits = fullyCorrect ? 1 : 0;
       } else {
         const stepItem = currentItem as FormIdentificationItem;
         const validation = validateGeneratedFormIdentificationExercise(userAnswer, stepItem);
         fullyCorrect = validation.isCorrect;
-        earnedUnits = fullyCorrect ? 1 : 0;
         if (fullyCorrect) {
           setWordAnswers(prev => ({
             ...prev,
@@ -414,7 +263,6 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
         }
       }
 
-      setPendingTestEarnedUnits(earnedUnits);
       setTestSubmitted(true);
       if (fullyCorrect) handleCorrect(isLastItem);
       else handleIncorrect();
@@ -455,11 +303,16 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
         [wordId]: updatedSlots,
       }));
 
-      const newCorrectAnswers = correctAnswers + 1;
-      setCorrectAnswers(newCorrectAnswers);
       handleCorrect(isLastItem);
 
-      const finalScore = isLastItem ? Math.round((newCorrectAnswers / validatedItems.length) * 100) : null;
+      const finalScore = isLastItem
+        ? Math.round(
+            gradeExercisePercentage(
+              { exercise, resolvedItems: validatedItems },
+              { type: 'generated-form-identification', answers: nextAnswers }
+            )
+          )
+        : null;
 
       autoAdvanceIfEnabled(() => {
         setUserAnswer('');
@@ -486,11 +339,16 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
         }));
       }
 
-      const newCorrectAnswers = correctAnswers + 1;
-      setCorrectAnswers(newCorrectAnswers);
       handleCorrect(isLastItem);
 
-      const finalScore = isLastItem ? Math.round((newCorrectAnswers / validatedItems.length) * 100) : null;
+      const finalScore = isLastItem
+        ? Math.round(
+            gradeExercisePercentage(
+              { exercise, resolvedItems: validatedItems },
+              { type: 'generated-form-identification', answers: nextAnswers }
+            )
+          )
+        : null;
 
       autoAdvanceIfEnabled(() => {
         setUserAnswer('');
@@ -508,27 +366,21 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
     setUserAnswer(value);
   };
 
-  const totalTestUnits = useMemo(
-    () =>
-      isSingleField
-        ? (validatedItems as SingleFieldFormIdentificationItem[]).reduce(
-            (total, item) => total + item.primaryFormPaths.length * item.steps.length,
-            0
-          )
-        : validatedItems.length,
-    [validatedItems, isSingleField]
-  );
-
   const continueTest = () => {
-    const earned = testEarnedUnits + pendingTestEarnedUnits;
-    setTestEarnedUnits(earned);
     if (isLastItem) {
-      onComplete?.(totalTestUnits > 0 ? (earned / totalTestUnits) * 100 : 0);
+      const score = testAnswerMode
+        ? 0
+        : gradeExercisePercentage(
+            { exercise, resolvedItems: validatedItems },
+            { type: 'generated-form-identification', answers: submittedAnswers }
+          );
+      onComplete?.(score);
       return;
     }
-    setUserAnswer('');
-    setPendingTestEarnedUnits(0);
-    setTestSubmitted(false);
+    const nextItemId = validatedItems[currentIndex + 1]?.id;
+    const nextAnswer = nextItemId ? (submittedAnswers[nextItemId] ?? '') : '';
+    setUserAnswer(nextAnswer);
+    setTestSubmitted(Boolean(nextAnswer.trim()));
     setIsProcessing(false);
     reset();
     nextItem();
@@ -643,10 +495,8 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
                 </span>
                 <div className="text-xs text-gray-500 mt-1">
                   Format: values separated by commas
-                  {(currentItem as SingleFieldFormIdentificationItem).primaryFormPaths.length > 1 &&
-                    ', multiple answers by semicolons'}{' '}
-                  (e.g.,{' '}
-                  {(currentItem as SingleFieldFormIdentificationItem).primaryFormPaths.length > 1
+                  {getExpectedAnswerCount(currentItem) > 1 && ', multiple answers by semicolons'} (e.g.,{' '}
+                  {getExpectedAnswerCount(currentItem) > 1
                     ? `${(currentItem as SingleFieldFormIdentificationItem).steps.map(() => 'x').join(',')};${(currentItem as SingleFieldFormIdentificationItem).steps.map(() => 'y').join(',')}`
                     : (currentItem as SingleFieldFormIdentificationItem).steps.map(() => 'x').join(',')}
                   )
@@ -680,7 +530,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
             onSubmit={handleSubmit}
             placeholder={
               isSingleField
-                ? `e.g., ${(currentItem as SingleFieldFormIdentificationItem).steps.map(() => 'value').join(',')}${(currentItem as SingleFieldFormIdentificationItem).primaryFormPaths.length > 1 ? ';...' : ''}`
+                ? `e.g., ${(currentItem as SingleFieldFormIdentificationItem).steps.map(() => 'value').join(',')}${getExpectedAnswerCount(currentItem) > 1 ? ';...' : ''}`
                 : isMultiAnswerMode && (currentItem as MultiAnswerFormIdentificationItem).expectedAnswerCount > 1
                   ? `e.g., answer1;answer2`
                   : 'Type your answer...'
@@ -688,28 +538,25 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
             disabled={isProcessing || testSubmitted}
           />
 
-          {!assessmentMode && <FeedbackDisplay
-            isCorrect={isCorrect}
-            message={message}
-            level={level}
-            hint={currentItem.hint}
-            correctAnswer={
-              isSingleField
-                ? (currentItem as SingleFieldFormIdentificationItem).correctAnswerDisplay
-                : isMultiAnswerMode
-                  ? (currentItem as MultiAnswerFormIdentificationItem).correctAnswerDisplay
-                  : (currentItem as FormIdentificationItem).correctAnswer
-            }
-            showExplanation={showExplanation}
-            onContinue={!assessmentMode && isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
-          />}
+          {!assessmentMode && (
+            <FeedbackDisplay
+              isCorrect={isCorrect}
+              message={message}
+              level={level}
+              hint={currentItem.hint}
+              correctAnswer={
+                isSingleField
+                  ? (currentItem as SingleFieldFormIdentificationItem).correctAnswerDisplay
+                  : isMultiAnswerMode
+                    ? (currentItem as MultiAnswerFormIdentificationItem).correctAnswerDisplay
+                    : (currentItem as FormIdentificationItem).correctAnswer
+              }
+              showExplanation={showExplanation}
+              onContinue={!assessmentMode && isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
+            />
+          )}
           {assessmentMode && testSubmitted && (
-            <div className="space-y-3">
-              <div className="rounded-md bg-gray-50 p-3 text-sm">Answer recorded.</div>
-              <Button onClick={continueTest} className="w-full">
-                {isLastItem ? 'Finish exercise' : 'Continue'}
-              </Button>
-            </div>
+            <RecordedAnswerControls isLastItem={isLastItem} onContinue={continueTest} />
           )}
         </CardContent>
       </Card>

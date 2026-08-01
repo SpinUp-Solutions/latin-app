@@ -8,6 +8,7 @@ import type { GeneratedExerciseType } from '@/src/config/exerciseSelectFields';
 import { getExerciseAdditionalFields } from '@/src/config/exerciseSelectFields';
 import { composeSelectFields } from '@/src/utils/generated/selectComposer';
 import { deriveTableTypeFromPOS } from '@/src/utils/generated/tableType';
+import { filterOverlappingPronounParadigms } from '@/src/utils/generated/pronounParadigmFiltering';
 import { PARADIGM_TABLE_TYPE, PARADIGM_POS_GROUP } from '@/src/config/paradigmDefinitions';
 
 interface GetAdvancedWordsArgs {
@@ -500,22 +501,7 @@ export const advancedVocabularyApi = createApi({
           }
         }
 
-        const filteredWords = allWords.filter(word => {
-          if (
-            word.part_of_speech === 'pronoun' &&
-            word.pronoun_type === 'personal' &&
-            (word.person === '1st' || word.person === '2nd')
-          ) {
-            const genderedConfig = paradigmConfigs['pronoun-gendered'];
-            if (
-              genderedConfig?.enabled &&
-              (!genderedConfig.filters.pronounType || genderedConfig.filters.pronounType === 'all')
-            ) {
-              return false;
-            }
-          }
-          return true;
-        });
+        const filteredWords = filterOverlappingPronounParadigms(allWords, paradigmConfigs);
 
         const shuffled = shuffleArray(filteredWords);
 

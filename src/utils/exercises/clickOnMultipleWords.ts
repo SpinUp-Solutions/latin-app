@@ -49,7 +49,6 @@ export const validateClickOnMultipleWords = (
     } else {
       score = isCorrect ? 100 : baseScore;
     }
-    score = Math.round(score);
   }
 
   return {

@@ -3,6 +3,12 @@ import { adminDb, adminStorage } from '@/src/services/firebase-admin';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 import { PracticeCategoryError, practiceCategoryService } from '@/src/lib/practice-categories/service';
+import {
+  assertLegacyNormalPlacementChangeAllowedInTransaction,
+  assertPlacedLessonReplacementAllowedInTransaction,
+} from '@/src/lib/learning-units/learning-path-service';
+import type { Lesson } from '@/src/types/lesson';
+import { LearningPathServiceError } from '@/src/lib/learning-units/learning-path-errors';
 
 const SNAPSHOT_PREFIX = 'lesson-snapshots/';
 const BATCH_SIZE = 200;
@@ -60,19 +66,17 @@ function parseBoolean(value: boolean | string | undefined, fallback = false): bo
 
 function isSnapshotLesson(value: unknown): value is SnapshotLesson {
   return (
-    !!value &&
-    typeof value === 'object' &&
-    'id' in value &&
-    typeof value.id === 'string' &&
-    isLessonDocumentData(value)
+    !!value && typeof value === 'object' && 'id' in value && typeof value.id === 'string' && isLessonDocumentData(value)
   );
 }
 
 async function restoreSnapshotLesson(lesson: SnapshotLesson, actorId: string) {
   const {
     id,
+    practiceCategorySelections: _practiceCategorySelections,
     practiceCategoryIds: _practiceCategoryIds,
     practiceCategories: _practiceCategories,
+    practiceCategoryPlacements: _practiceCategoryPlacements,
     ...lessonData
   } = lesson;
   lessonData.kind = 'lesson';
@@ -83,6 +87,16 @@ async function restoreSnapshotLesson(lesson: SnapshotLesson, actorId: string) {
     if (existingLesson.exists && !isLessonDocumentData(existingLesson.data())) {
       throw new Error(`Learning unit ${id} is not a lesson`);
     }
+    await assertLegacyNormalPlacementChangeAllowedInTransaction(
+      transaction,
+      adminDb,
+      existingLesson.exists ? existingLesson.data() : undefined,
+      lessonData
+    );
+    await assertPlacedLessonReplacementAllowedInTransaction(transaction, adminDb, id, {
+      type: (lessonData.type ?? 'normal') as Lesson['type'],
+      pages: Array.isArray(lessonData.pages) ? (lessonData.pages as Lesson['pages']) : [],
+    });
     await practiceCategoryService.reconcileLessonCategoriesInTransaction(transaction, {
       lessonId: id,
       lesson: lessonData,
@@ -168,11 +182,13 @@ export async function POST(request: NextRequest) {
 
     if (error instanceof SnapshotRestoreError) {
       const cause = error.failures[0].cause;
+      const domainCause =
+        cause instanceof PracticeCategoryError || cause instanceof LearningPathServiceError ? cause : null;
       return NextResponse.json(
         {
           success: false,
           error: error.message,
-          ...(cause instanceof PracticeCategoryError ? { code: cause.code } : {}),
+          ...(domainCause ? { code: domainCause.code } : {}),
           data: {
             partialRestore: error.restoredLessons > 0,
             restoredLessons: error.restoredLessons,
@@ -180,11 +196,14 @@ export async function POST(request: NextRequest) {
             failedLessonIds: error.failures.map(failure => failure.lessonId),
           },
         },
-        { status: cause instanceof PracticeCategoryError ? cause.status : 500 }
+        { status: domainCause ? domainCause.status : 500 }
       );
     }
 
     if (error instanceof PracticeCategoryError) {
+      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
+    }
+    if (error instanceof LearningPathServiceError) {
       return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
     }
 
