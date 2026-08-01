@@ -1,17 +1,44 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, FileCheck2 } from 'lucide-react';
-import { Button } from '@/src/components/ui/button';
-import PageTemplate from '@/src/components/ui/lesson/page-template';
+import { useEffect, useMemo, useState } from 'react';
+import { FileCheck2 } from 'lucide-react';
+import { TestTakingView } from '@/src/components/ui/test/test-taking-view';
+import { isExerciseType } from '@/src/lib/content/registry';
 import type { Page } from '@/src/types/page';
+import type { ExerciseAnswer, ExerciseAnswerEvent } from '@/src/types/runtime-mode';
 
-export function TestVersionPreview({ pages }: { pages: Page[] }) {
+interface TestVersionPreviewProps {
+  title: string;
+  description?: string;
+  pages: Page[];
+  vocabularyPoolId?: string | null;
+}
+
+export function TestVersionPreview({ title, description, pages, vocabularyPoolId }: TestVersionPreviewProps) {
   const [pageIndex, setPageIndex] = useState(0);
+  const [answers, setAnswers] = useState<Record<string, ExerciseAnswer>>({});
+  const [completedExerciseIds, setCompletedExerciseIds] = useState<Set<string>>(new Set());
+  const [status, setStatus] = useState('Preview mode — answers are not saved.');
+
+  const totalExercises = useMemo(
+    () => pages.reduce((total, page) => total + page.items.filter(item => isExerciseType(item.type)).length, 0),
+    [pages]
+  );
 
   useEffect(() => {
-    setPageIndex(current => Math.min(current, Math.max(0, pages.length - 1)));
-  }, [pages.length]);
+    setPageIndex(0);
+    setAnswers({});
+    setCompletedExerciseIds(new Set());
+    setStatus('Preview mode — answers are not saved.');
+  }, [pages]);
+
+  const handleAnswer = (event: ExerciseAnswerEvent) => {
+    setAnswers(current => ({ ...current, [event.exerciseId]: event.answer }));
+  };
+
+  const handleExerciseComplete = (exerciseId: string) => {
+    setCompletedExerciseIds(current => new Set(current).add(exerciseId));
+  };
 
   if (pages.length === 0) {
     return (
@@ -25,20 +52,24 @@ export function TestVersionPreview({ pages }: { pages: Page[] }) {
   }
 
   return (
-    <div className="space-y-6">
-      <PageTemplate key={pages[pageIndex].id} page={pages[pageIndex]} pageIndex={pageIndex} runtimeMode="preview" />
-      <div className="flex items-center justify-between border-t pt-4">
-        <Button variant="outline" disabled={pageIndex === 0} onClick={() => setPageIndex(index => index - 1)}>
-          <ChevronLeft className="mr-2 h-4 w-4" /> Previous
-        </Button>
-        <span className="text-sm text-gray-500">Page {pageIndex + 1} of {pages.length}</span>
-        <Button
-          variant="outline"
-          disabled={pageIndex === pages.length - 1}
-          onClick={() => setPageIndex(index => index + 1)}>
-          Next <ChevronRight className="ml-2 h-4 w-4" />
-        </Button>
-      </div>
-    </div>
+    <TestTakingView
+      title={title}
+      description={description}
+      pages={pages}
+      currentPageIndex={pageIndex}
+      answeredCount={completedExerciseIds.size}
+      totalExercises={totalExercises}
+      allowGeneratedExerciseQueries
+      vocabularyPoolId={vocabularyPoolId}
+      preview
+      embedded
+      status={status}
+      answers={answers}
+      onAnswer={handleAnswer}
+      onExerciseComplete={handleExerciseComplete}
+      onPrevious={() => setPageIndex(index => Math.max(0, index - 1))}
+      onNext={() => setPageIndex(index => Math.min(pages.length - 1, index + 1))}
+      onReview={() => setStatus('Review and submission are unavailable in preview. Answers are not saved.')}
+    />
   );
 }

@@ -4,9 +4,16 @@ import { Lesson } from '@/src/types/lesson';
 import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 import { verifyAdminAccess } from '../../../../../../lib/verifyAdminAccess';
 import { getLessonContentCounts } from '@/src/utils/lessonSummary';
-import { optionalPracticeCategoryIdsSchema } from '@/src/lib/practice-categories/schemas';
+import {
+  optionalPracticeCategoryIdsSchema,
+  optionalPracticeCategorySelectionsSchema,
+} from '@/src/lib/practice-categories/schemas';
 import { practiceCategoryService } from '@/src/lib/practice-categories/service';
 import { practiceCategoryRouteErrorResponse } from '@/src/lib/practice-categories/api';
+import {
+  assertLegacyNormalPlacementChangeAllowedInTransaction,
+  assertPlacedLessonReplacementAllowedInTransaction,
+} from '@/src/lib/learning-units/learning-path-service';
 
 interface RouteParams {
   params: Promise<{
@@ -56,16 +63,24 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       if (!isLessonDocumentData(rawLesson)) {
         throw new RecoveryRouteError('Recovery item does not contain a lesson', 400);
       }
+      if (rawLesson.showWordSearch !== undefined && typeof rawLesson.showWordSearch !== 'boolean') {
+        throw new RecoveryRouteError('showWordSearch must be a boolean', 400);
+      }
       if (!rawLesson?.id || !rawLesson.title || !rawLesson.type) {
         throw new RecoveryRouteError('Recovery lesson ID, title, and type are required', 400);
       }
       const fallbackCategoryIds = rawLesson.practiceCategories?.map(category => category.id);
+      const practiceCategorySelections = optionalPracticeCategorySelectionsSchema.parse(
+        rawLesson.practiceCategorySelections
+      );
       const practiceCategoryIds = optionalPracticeCategoryIdsSchema.parse(
         rawLesson.practiceCategoryIds ?? fallbackCategoryIds
       );
       const {
+        practiceCategorySelections: _practiceCategorySelections,
         practiceCategoryIds: _practiceCategoryIds,
         practiceCategories: _practiceCategories,
+        practiceCategoryPlacements: _practiceCategoryPlacements,
         ...lesson
       } = rawLesson;
       const lessonRef = adminDb.collection('lessons').doc(lesson.id);
@@ -89,6 +104,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             updatedAt: now,
             updatedBy: user.uid,
             version: (existingLesson?.version || 0) + 1,
+            showWordSearch:
+              rawLesson.showWordSearch ??
+              (typeof existingLesson?.showWordSearch === 'boolean' ? existingLesson.showWordSearch : true),
             isLive: existingLesson?.isLive ?? false,
             liveOrder: existingLesson?.liveOrder ?? null,
             publishedAt: existingLesson?.publishedAt || null,
@@ -105,16 +123,29 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             updatedAt: now,
             updatedBy: user.uid,
             version: 1,
+            showWordSearch: rawLesson.showWordSearch ?? false,
             isLive: false,
             liveOrder: null,
             publishedAt: null,
             publishedBy: null,
           };
 
+      await assertLegacyNormalPlacementChangeAllowedInTransaction(
+        transaction,
+        adminDb,
+        lessonExists ? existingLesson : undefined,
+        lessonData
+      );
+      await assertPlacedLessonReplacementAllowedInTransaction(transaction, adminDb, lesson.id, {
+        type: lessonData.type,
+        pages: lessonData.pages || [],
+      });
       const assignments = await practiceCategoryService.reconcileLessonCategoriesInTransaction(transaction, {
         lessonId: lesson.id,
         lesson: lessonData,
-        desiredCategoryIds: lessonExists ? practiceCategoryIds : (practiceCategoryIds ?? []),
+        ...(practiceCategorySelections !== undefined
+          ? { desiredCategorySelections: practiceCategorySelections }
+          : { desiredCategoryIds: lessonExists ? practiceCategoryIds : (practiceCategoryIds ?? []) }),
         actorId: user.uid,
       });
       transaction.set(lessonRef, lessonData);
@@ -133,6 +164,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       success: true,
       lesson: {
         ...result.lessonData,
+        practiceCategorySelections: result.assignments.practiceCategorySelections,
         practiceCategoryIds: result.assignments.practiceCategoryIds,
         practiceCategories: result.assignments.practiceCategories,
       },

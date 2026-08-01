@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useGetStudentLessonsQuery } from '@/src/store/api/lessonApi';
+import { useGetStudentDashboardQuery } from '@/src/store/api/lessonApi';
 import { BookOpen, Pencil, Headphones, CheckCircle, Play, ChevronDown, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/src/hooks/useAuth';
 import { cn } from '@/src/lib/utils';
@@ -13,6 +13,7 @@ type PracticeView = 'vocab' | 'sentence-diagramming' | 'listening';
 
 interface PracticeSidebarProps {
   currentLessonId: string;
+  showWordSearch?: boolean;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
 }
@@ -80,7 +81,12 @@ const defaultExpanded: Record<PracticeView, boolean> = {
   listening: false,
 };
 
-export default function PracticeSidebar({ currentLessonId, isCollapsed = false, onToggleCollapse }: PracticeSidebarProps) {
+export default function PracticeSidebar({
+  currentLessonId,
+  showWordSearch = true,
+  isCollapsed = false,
+  onToggleCollapse,
+}: PracticeSidebarProps) {
   const [expandedSections, setExpandedSections] = useState<Record<PracticeView, boolean>>(() => {
     if (typeof window === 'undefined') return defaultExpanded;
     try {
@@ -103,7 +109,7 @@ export default function PracticeSidebar({ currentLessonId, isCollapsed = false, 
     }
   }, [expandedSections]);
 
-  const { data: studentLessons, isLoading } = useGetStudentLessonsQuery(user?.uid, {
+  const { data: studentDashboard, isLoading } = useGetStudentDashboardQuery(user?.uid ?? '', {
     skip: !user?.uid,
   });
 
@@ -119,8 +125,8 @@ export default function PracticeSidebar({ currentLessonId, isCollapsed = false, 
   };
 
   const getLessonsForType = (lessonType: string) => {
-    if (!studentLessons) return [];
-    return studentLessons.filter(lesson => lesson.type === lessonType);
+    if (!studentDashboard) return [];
+    return studentDashboard.practiceLessons.filter(lesson => lesson.type === lessonType);
   };
 
   const EXPANDED_WIDTH = '20rem';
@@ -146,9 +152,11 @@ export default function PracticeSidebar({ currentLessonId, isCollapsed = false, 
             <p className="text-base text-roman-stone">{isLoading ? 'Loading...' : 'Browse lessons by type'}</p>
           </div>
 
-          <div className="relative flex-shrink-0">
-            <WordSearchPanel />
-          </div>
+          {showWordSearch && (
+            <div className="relative flex-shrink-0">
+              <WordSearchPanel />
+            </div>
+          )}
 
           <div className="flex-1 overflow-y-auto relative">
             {isLoading ? (

@@ -8,11 +8,46 @@ export const firestoreDocumentIdSchema = nonEmptyIdSchema.refine(
   'ID must be a single Firestore document path segment'
 );
 export const passingPercentageSchema = z.number().int().min(1).max(100).nullable();
+export const MAX_LEARNING_PATH_UNITS = 5000;
+export const MAX_LEARNING_PATH_JSON_BYTES = 750 * 1024;
+
+const utf8ByteLength = (value: string) => {
+  let bytes = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code < 0x80) bytes += 1;
+    else if (code < 0x800) bytes += 2;
+    else if (code >= 0xd800 && code <= 0xdbff && index + 1 < value.length) {
+      const next = value.charCodeAt(index + 1);
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        bytes += 4;
+        index += 1;
+      } else {
+        bytes += 3;
+      }
+    } else {
+      bytes += 3;
+    }
+  }
+  return bytes;
+};
+
+const hasSafeLearningPathJsonSize = (value: unknown) =>
+  utf8ByteLength(JSON.stringify(value)) <= MAX_LEARNING_PATH_JSON_BYTES;
+
+const addLearningPathSizeIssue = (value: unknown, context: z.RefinementCtx) => {
+  if (!hasSafeLearningPathJsonSize(value)) {
+    context.addIssue({
+      code: 'custom',
+      message: 'Learning Path payload is too large to save safely',
+    });
+  }
+};
 
 const nullableAuditFieldSchema = z.string().min(1).nullable();
 const optionalAuditFieldSchema = z.string().min(1).optional();
 
-export const contentItemSchema = z
+const contentItemSchema = z
   .object({
     id: nonEmptyIdSchema,
     type: z.string().trim().min(1),
@@ -38,21 +73,17 @@ export const pageSchema = z
   })
   .passthrough();
 
-export const rotationVersionReferenceSchema = z
+const rotationVersionReferenceSchema = z
   .object({
     versionId: firestoreDocumentIdSchema,
   })
   .strict();
 
-export const learningUnitBaseSchema = z.object({
+const learningUnitBaseSchema = z.object({
   id: firestoreDocumentIdSchema,
   kind: z.enum(['lesson', 'test']),
   title: z.string().trim().min(1),
   description: z.string(),
-  isLive: z.boolean(),
-  liveOrder: z.number().int().nonnegative().nullable(),
-  publishedAt: nullableAuditFieldSchema,
-  publishedBy: nullableAuditFieldSchema,
   createdAt: optionalAuditFieldSchema,
   createdBy: optionalAuditFieldSchema,
   updatedAt: optionalAuditFieldSchema,
@@ -65,6 +96,11 @@ const lessonUnitShapeSchema = learningUnitBaseSchema
     type: z.enum(LESSON_UNIT_TYPES),
     pages: z.array(pageSchema),
     vocabulary_pool: firestoreDocumentIdSchema.nullable().optional(),
+    showWordSearch: z.boolean().optional(),
+    isLive: z.boolean(),
+    liveOrder: z.number().int().nonnegative().nullable(),
+    publishedAt: nullableAuditFieldSchema,
+    publishedBy: nullableAuditFieldSchema,
     version: z.number().int().positive().optional(),
     totalPages: z.number().int().nonnegative().optional(),
     totalItems: z.number().int().nonnegative().optional(),
@@ -84,8 +120,6 @@ function refineLessonUnit(value: z.infer<typeof lessonUnitShapeSchema>, context:
     context.addIssue({ code: 'custom', message, path: ['pages'] });
   }
 }
-
-export const lessonUnitSchema = lessonUnitShapeSchema.superRefine(refineLessonUnit);
 
 const testUnitShapeSchema = learningUnitBaseSchema
   .extend({
@@ -116,27 +150,12 @@ function refineTestUnit(
       path: ['rotationVersions'],
     });
   }
-
-  if (value.isLive && value.rotationVersions.length === 0) {
-    context.addIssue({
-      code: 'custom',
-      message: 'A live test must have at least one version in normal rotation',
-      path: ['rotationVersions'],
-    });
-  }
 }
 
 export const testUnitSchema = testUnitShapeSchema.superRefine(refineTestUnit);
 export const testUnitCreateSchema = testUnitShapeSchema.superRefine((value, context) =>
   refineTestUnit(value, context, true)
 );
-export const testUnitPublicationSchema = testUnitShapeSchema.superRefine((value, context) =>
-  refineTestUnit(value, context, true)
-);
-
-// Keep the longer name available to services that describe this boundary as a
-// creation schema rather than a create command.
-export const testUnitCreationSchema = testUnitCreateSchema;
 
 export const learningUnitDocumentSchema = z
   .discriminatedUnion('kind', [lessonUnitShapeSchema, testUnitShapeSchema])
@@ -145,4 +164,138 @@ export const learningUnitDocumentSchema = z
     else refineTestUnit(value, context);
   });
 
-export type LearningUnitDocument = z.infer<typeof learningUnitDocumentSchema>;
+const uniqueUnitIdsSchema = z
+  .array(firestoreDocumentIdSchema)
+  .max(MAX_LEARNING_PATH_UNITS)
+  .superRefine((unitIds, context) => {
+    if (new Set(unitIds).size !== unitIds.length) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Learning Path unit IDs must be unique',
+      });
+    }
+  });
+
+const learningPathCutoverSchema = z
+  .object({
+    state: z.enum(['active', 'inactive']),
+    migrationId: nonEmptyIdSchema,
+    sourceHash: z.string().regex(/^[a-f0-9]{64}$/),
+    appliedAt: z.string().min(1),
+    appliedBy: nonEmptyIdSchema,
+    rolledBackAt: z.string().min(1).optional(),
+    rolledBackBy: nonEmptyIdSchema.optional(),
+  })
+  .strict()
+  .superRefine((cutover, context) => {
+    const hasRollbackAudit = Boolean(cutover.rolledBackAt && cutover.rolledBackBy);
+    if (Boolean(cutover.rolledBackAt) !== Boolean(cutover.rolledBackBy)) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Rollback audit fields must be supplied together',
+      });
+    }
+    if (cutover.state === 'active' && hasRollbackAudit) {
+      context.addIssue({
+        code: 'custom',
+        message: 'An active cutover cannot retain rollback audit fields',
+      });
+    }
+    if (cutover.state === 'inactive' && !hasRollbackAudit) {
+      context.addIssue({
+        code: 'custom',
+        message: 'An inactive cutover requires rollback audit fields',
+      });
+    }
+  });
+
+export const learningPathDocumentSchema = z
+  .object({
+    id: z.literal('default'),
+    revision: z.number().int().nonnegative().safe(),
+    unitIds: uniqueUnitIdsSchema,
+    updatedAt: z.string().min(1),
+    updatedBy: nonEmptyIdSchema,
+    cutover: learningPathCutoverSchema.optional(),
+  })
+  .strict()
+  .superRefine(addLearningPathSizeIssue);
+
+export const saveLearningPathInputSchema = z
+  .object({
+    expectedRevision: z.number().int().nonnegative().safe(),
+    unitIds: uniqueUnitIdsSchema,
+  })
+  .strict()
+  .superRefine(addLearningPathSizeIssue);
+
+const learningPathMigrationSourceSchema = z
+  .array(
+    z
+      .object({
+        unitId: firestoreDocumentIdSchema,
+        liveOrder: z.number().int().nonnegative().safe(),
+      })
+      .strict()
+  )
+  .max(MAX_LEARNING_PATH_UNITS);
+
+export const learningPathMigrationManifestSchema = z
+  .object({
+    migrationId: nonEmptyIdSchema,
+    createdAt: z.string().min(1),
+    sourceHash: z.string().regex(/^[a-f0-9]{64}$/),
+    unitIds: uniqueUnitIdsSchema,
+    source: learningPathMigrationSourceSchema,
+  })
+  .strict()
+  .superRefine((manifest, context) => {
+    addLearningPathSizeIssue(manifest, context);
+    const sourceIds = manifest.source.map(record => record.unitId);
+    if (new Set(sourceIds).size !== sourceIds.length) {
+      context.addIssue({ code: 'custom', message: 'Migration source unit IDs must be unique', path: ['source'] });
+    }
+    const orders = manifest.source.map(record => record.liveOrder);
+    if (new Set(orders).size !== orders.length) {
+      context.addIssue({ code: 'custom', message: 'Migration source orders must be unique', path: ['source'] });
+    }
+    const orderedSourceIds = [...manifest.source]
+      .sort((left, right) => left.liveOrder - right.liveOrder)
+      .map(record => record.unitId);
+    if (
+      orderedSourceIds.length !== manifest.unitIds.length ||
+      orderedSourceIds.some((unitId, index) => unitId !== manifest.unitIds[index])
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Manifest unitIds must exactly match source records in liveOrder order',
+        path: ['unitIds'],
+      });
+    }
+  });
+
+export type SaveLearningPathInput = z.infer<typeof saveLearningPathInputSchema>;
+export type LearningPathMigrationManifestInput = z.infer<typeof learningPathMigrationManifestSchema>;
+
+export const learningPathMigrationActionSchema = z.discriminatedUnion('action', [
+  z
+    .object({
+      action: z.literal('dry-run'),
+      migrationId: nonEmptyIdSchema,
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal('apply'),
+      manifest: learningPathMigrationManifestSchema,
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal('verify'),
+      manifest: learningPathMigrationManifestSchema,
+    })
+    .strict(),
+  z.object({ action: z.literal('rollback') }).strict(),
+  z.object({ action: z.literal('retire') }).strict(),
+]);

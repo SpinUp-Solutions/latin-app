@@ -14,9 +14,10 @@ import { PracticeCategoryChips } from '@/src/components/ui/admin/practice-catego
 interface SortableLessonItemProps {
   lesson: LessonSummary;
   id: string;
+  onNavigate?: (href: string) => void;
 }
 
-export function SortableLessonItem({ lesson, id }: SortableLessonItemProps) {
+export function SortableLessonItem({ lesson, id, onNavigate }: SortableLessonItemProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 
   const style = {
@@ -38,7 +39,7 @@ export function SortableLessonItem({ lesson, id }: SortableLessonItemProps) {
         <GripVertical className="w-5 h-5" />
       </button>
 
-      <div className="flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
+      <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-primary/15 bg-primary/[0.08] text-sm font-semibold text-primary shadow-[0_1px_2px_rgb(15_23_42/0.06)]">
         {(lesson.liveOrder || 0) + 1}
       </div>
 
@@ -72,7 +73,15 @@ export function SortableLessonItem({ lesson, id }: SortableLessonItemProps) {
 
       <div className="flex items-center gap-2">
         <Button size="sm" variant="outline" asChild>
-          <Link href={`/admin/lessons/edit/${lesson.id}`}>Edit</Link>
+          <Link
+            href={`/admin/lessons/edit/${lesson.id}`}
+            onClick={event => {
+              if (!onNavigate) return;
+              event.preventDefault();
+              onNavigate(`/admin/lessons/edit/${lesson.id}`);
+            }}>
+            Edit
+          </Link>
         </Button>
       </div>
     </div>

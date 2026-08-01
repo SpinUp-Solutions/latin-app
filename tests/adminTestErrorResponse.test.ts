@@ -1,16 +1,9 @@
 import { testRouteErrorResponse } from '@/src/app/api/admin/tests/errorResponse';
 import { AdminAccessError } from '@/src/lib/verifyAdminAccess';
 
-jest.mock('next/server', () => ({
-  NextResponse: {
-    json: (body: unknown, init: { status: number }) => ({ body, status: init.status }),
-  },
-}));
+jest.mock('next/server', () => jest.requireActual('./helpers/routeMocks'));
 
-jest.mock('@/src/services/firebase-admin', () => ({
-  adminAuth: {},
-  adminDb: {},
-}));
+jest.mock('@/src/services/firebase-admin', () => jest.requireActual('./helpers/routeMocks'));
 
 describe('admin test API error responses', () => {
   it.each([

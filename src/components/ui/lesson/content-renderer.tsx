@@ -34,14 +34,22 @@ import {
 import { VocabularyViewer } from './VocabularyViewer';
 import { VocabularyPoolViewer } from './VocabularyPoolViewer';
 import TextComponent from './text-component';
-import { DiagramAttempt } from '@/src/features/sentence-diagramming';
-import type { ExerciseAnswerEvent, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
+import { DiagramAuditSubmission } from '@/src/features/sentence-diagramming';
+import {
+  TEST_RUNTIME_FEEDBACK_CONFIG,
+  type ExerciseAnswerEvent,
+  type ExerciseAnswerHandler,
+  type ExerciseAnswer,
+  type RuntimeMode,
+} from '@/src/types/runtime-mode';
+import { isExerciseType } from '@/src/lib/content/registry';
 import type { GeneratedTranslationItem } from '@/src/utils/exercises/generatedTranslationExercise';
 import type {
   FormIdentificationItem,
   MultiAnswerFormIdentificationItem,
   SingleFieldFormIdentificationItem,
 } from '@/src/types/exercises/schemas/form-identification';
+import type { VocabularyPoolStudyData } from '@/src/types/vocabulary';
 
 export interface ResolvedGeneratedExerciseState {
   items: unknown[];
@@ -52,33 +60,43 @@ interface ContentRendererProps {
   onComplete?: (score: number) => void;
   runtimeMode?: RuntimeMode;
   onAnswer?: (event: ExerciseAnswerEvent) => void;
+  initialAnswer?: ExerciseAnswer;
   resolvedExerciseState?: ResolvedGeneratedExerciseState;
-  /** @deprecated Use runtimeMode="test". */
-  testMode?: boolean;
+  allowGeneratedExerciseQueries?: boolean;
+  vocabularyPoolId?: string | null;
+  resolvedVocabularyPool?: VocabularyPoolStudyData;
   pageIndex?: number;
   itemIndex?: number;
-  onDiagrammingAttempt?: (attempt: DiagramAttempt) => void;
+  onDiagrammingAttempt?: (attempt: DiagramAuditSubmission) => void;
 }
 
 export const ContentRenderer: React.FC<ContentRendererProps> = ({
   content,
   onComplete,
   runtimeMode,
-  testMode,
   pageIndex,
   itemIndex,
   onAnswer,
+  initialAnswer,
   resolvedExerciseState,
+  allowGeneratedExerciseQueries = false,
+  vocabularyPoolId,
+  resolvedVocabularyPool,
   onDiagrammingAttempt,
 }) => {
+  const mode = runtimeMode ?? 'practice';
+  const renderedContent =
+    mode === 'test' && isExerciseType(content.type)
+      ? ({ ...content, feedbackConfig: TEST_RUNTIME_FEEDBACK_CONFIG } as ContentItem)
+      : content;
   const handleAnswer: ExerciseAnswerHandler | undefined = onAnswer
     ? answer => onAnswer({ exerciseId: content.id, answer, pageIndex, itemIndex })
     : undefined;
-  const modeProps = { runtimeMode, testMode, onAnswer: handleAnswer };
+  const modeProps = { runtimeMode: mode, onAnswer: handleAnswer, initialAnswer };
 
-  switch (content.type) {
+  switch (renderedContent.type) {
     case 'text':
-      const textContent = content as TextContent;
+      const textContent = renderedContent as TextContent;
       return (
         <TextComponent
           title={textContent.title || ''}
@@ -89,7 +107,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
       );
 
     case 'emphasis': //enum
-      const emphasisContent = content as TextContent;
+      const emphasisContent = renderedContent as TextContent;
       return (
         <TextComponent
           title={emphasisContent.title || ''}
@@ -100,26 +118,32 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
       );
 
     case 'table':
-      const tableContent = content as TableContent;
+      const tableContent = renderedContent as TableContent;
       return <ConjugationTable data={tableContent.tableData} className="my-4" audioPath={tableContent.audioPath} />;
 
     case 'vocabulary':
-      return <VocabularyViewer content={content as VocabularyContent} />;
+      return <VocabularyViewer content={renderedContent as VocabularyContent} />;
 
     case 'vocabulary-pool':
-      return <VocabularyPoolViewer content={content as VocabularyPoolContent} />;
+      return (
+        <VocabularyPoolViewer
+          content={renderedContent as VocabularyPoolContent}
+          poolId={vocabularyPoolId}
+          resolvedPool={resolvedVocabularyPool}
+        />
+      );
 
     case 'matching':
-      const matchingExercise = content as MatchingExercise;
+      const matchingExercise = renderedContent as MatchingExercise;
       return <MatchingTable exercise={matchingExercise} onComplete={onComplete} {...modeProps} />;
 
     case 'fill':
-      return <FillExercise exercise={content as FillExerciseType} onComplete={onComplete} {...modeProps} />;
+      return <FillExercise exercise={renderedContent as FillExerciseType} onComplete={onComplete} {...modeProps} />;
 
     case 'text-selection':
       return (
         <TextSelectionExercise
-          exercise={content as TextSelectionExerciseType}
+          exercise={renderedContent as TextSelectionExerciseType}
           onComplete={onComplete}
           {...modeProps}
         />
@@ -128,7 +152,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
     case 'fill-embolded-text':
       return (
         <FillEmboldedTextExercise
-          exercise={content as FillEmboldedTextExerciseType}
+          exercise={renderedContent as FillEmboldedTextExerciseType}
           onComplete={onComplete}
           {...modeProps}
         />
@@ -137,7 +161,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
     case 'sentence-diagramming':
       return (
         <SentenceDiagrammingExercise
-          exercise={content as SentenceDiagrammingExerciseType}
+          exercise={renderedContent as SentenceDiagrammingExerciseType}
           onComplete={onComplete}
           {...modeProps}
           onAttempt={onDiagrammingAttempt}
@@ -147,7 +171,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
     case 'multiple-choice':
       return (
         <MultipleChoiceExercise
-          exercise={content as MultipleChoiceExerciseType}
+          exercise={renderedContent as MultipleChoiceExerciseType}
           onComplete={onComplete}
           {...modeProps}
         />
@@ -155,18 +179,18 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
 
     case 'odd-one-out':
       return (
-        <OddOneOutExercise exercise={content as OddOneOutExerciseType} onComplete={onComplete} {...modeProps} />
+        <OddOneOutExercise exercise={renderedContent as OddOneOutExerciseType} onComplete={onComplete} {...modeProps} />
       );
 
     case 'table-fill':
       return (
-        <TableFillExercise exercise={content as TableFillExerciseType} onComplete={onComplete} {...modeProps} />
+        <TableFillExercise exercise={renderedContent as TableFillExerciseType} onComplete={onComplete} {...modeProps} />
       );
 
     case 'click-on-multiple-words':
       return (
         <ClickOnMultipleWordsExercise
-          exercise={content as ClickOnMultipleWordsExerciseType}
+          exercise={renderedContent as ClickOnMultipleWordsExerciseType}
           onComplete={onComplete}
           {...modeProps}
         />
@@ -175,9 +199,10 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
     case 'generated-translation':
       return (
         <GeneratedTranslationExercise
-          exercise={content as GeneratedTranslationExerciseType}
+          exercise={renderedContent as GeneratedTranslationExerciseType}
           onComplete={onComplete}
           {...modeProps}
+          allowGeneratedExerciseQueries={allowGeneratedExerciseQueries}
           resolvedItems={resolvedExerciseState?.items as GeneratedTranslationItem[] | undefined}
         />
       );
@@ -185,30 +210,36 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
     case 'generated-form-identification':
       return (
         <GeneratedFormIdentificationExercise
-          exercise={content as GeneratedFormIdentificationExerciseType}
+          exercise={renderedContent as GeneratedFormIdentificationExerciseType}
           onComplete={onComplete}
           {...modeProps}
+          allowGeneratedExerciseQueries={allowGeneratedExerciseQueries}
           resolvedItems={
-            resolvedExerciseState?.items as Array<
-              FormIdentificationItem | MultiAnswerFormIdentificationItem | SingleFieldFormIdentificationItem
-            > | undefined
+            resolvedExerciseState?.items as
+              | Array<FormIdentificationItem | MultiAnswerFormIdentificationItem | SingleFieldFormIdentificationItem>
+              | undefined
           }
         />
       );
 
     case 'translation-grading':
       return (
-        <TranslationGradingExercise exercise={content as TranslationGradingExerciseType} onComplete={onComplete} />
+        <TranslationGradingExercise
+          exercise={renderedContent as TranslationGradingExerciseType}
+          onComplete={onComplete}
+        />
       );
 
     case 'listening-passage':
-      return <ListeningPassageExercise exercise={content as ListeningPassageExerciseType} onComplete={onComplete} />;
+      return (
+        <ListeningPassageExercise exercise={renderedContent as ListeningPassageExerciseType} onComplete={onComplete} />
+      );
 
     default:
       return (
         <div className="text-center p-4 bg-gray-100">
-          <p>Unknown content type: {content.type}</p>
-          {content.type === 'intro' && (
+          <p>Unknown content type: {renderedContent.type}</p>
+          {renderedContent.type === 'intro' && (
             <p>
               You might be trying to render an old intro content type. Please update to text instead. Preview:
               <TextComponent title="" content="" className="" />

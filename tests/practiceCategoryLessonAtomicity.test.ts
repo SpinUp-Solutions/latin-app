@@ -3,11 +3,7 @@ import { POST } from '@/src/app/api/admin/lessons/route';
 const mockReconcile = jest.fn();
 const mockCreate = jest.fn();
 
-jest.mock('next/server', () => ({
-  NextResponse: {
-    json: (body: unknown, init?: { status?: number }) => ({ body, status: init?.status ?? 200 }),
-  },
-}));
+jest.mock('next/server', () => jest.requireActual('./helpers/routeMocks'));
 
 jest.mock('@/src/lib/verifyAdminAccess', () => ({
   AdminAccessError: class AdminAccessError extends Error {},
@@ -49,6 +45,13 @@ jest.mock('@/src/services/firebase-admin', () => ({
 describe('atomic lesson and practice-category writes', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockReconcile.mockReset();
+    mockReconcile.mockResolvedValue({
+      practiceCategorySelections: [{ categoryId: 'authors', tagIds: ['cicero'] }],
+      practiceCategoryIds: ['authors'],
+      practiceCategories: [],
+      memberships: [],
+    });
     jest.spyOn(console, 'error').mockImplementation(() => undefined);
   });
 
@@ -75,5 +78,33 @@ describe('atomic lesson and practice-category writes', () => {
     expect(response.status).toBe(400);
     expect(response.body.code).toBe('CATEGORY_TYPE_MISMATCH');
     expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('reconciles canonical category-owned tag selections without persisting local assignment fields', async () => {
+    const response = (await POST({
+      json: async () => ({
+        id: 'lesson-1',
+        title: 'Vocabulary lesson',
+        type: 'vocab',
+        pages: [],
+        practiceCategorySelections: [{ categoryId: 'authors', tagIds: ['cicero'] }],
+        practiceCategoryIds: ['legacy-ignored'],
+        practiceCategories: [{ id: 'authors', name: 'Authors' }],
+      }),
+    } as never)) as unknown as { status: number; body: { lesson: Record<string, unknown> } };
+
+    expect(response.status).toBe(200);
+    expect(mockReconcile).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        lessonId: 'lesson-1',
+        desiredCategorySelections: [{ categoryId: 'authors', tagIds: ['cicero'] }],
+      })
+    );
+    const persistedLesson = mockCreate.mock.calls[0][1] as Record<string, unknown>;
+    expect(persistedLesson).not.toHaveProperty('practiceCategorySelections');
+    expect(persistedLesson).not.toHaveProperty('practiceCategoryIds');
+    expect(persistedLesson).not.toHaveProperty('practiceCategories');
+    expect(response.body.lesson.practiceCategorySelections).toEqual([{ categoryId: 'authors', tagIds: ['cicero'] }]);
   });
 });

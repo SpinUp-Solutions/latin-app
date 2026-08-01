@@ -32,7 +32,6 @@ export const PageAutoAdvanceEditor: React.FC<PageAutoAdvanceEditorProps> = ({
     onChange({ ...autoAdvance, delay: finalValue });
   };
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   React.useEffect(() => {
     setDelayInputValue(autoAdvance.delay.toString());
   }, [autoAdvance.delay]);

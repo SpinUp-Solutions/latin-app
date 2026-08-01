@@ -1,9 +1,9 @@
 import React from 'react';
 import { Button } from '@/src/components/ui/button';
-import { Input } from '@/src/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
-import { Search, Filter, RotateCcw } from 'lucide-react';
+import { Filter, RotateCcw } from 'lucide-react';
+import { AdminSearchInput } from '@/src/components/admin/shell';
 
 interface PoolFiltersProps {
   filters: {
@@ -48,15 +48,14 @@ export const PoolFilters: React.FC<PoolFiltersProps> = ({ filters, onFiltersChan
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Search pools..."
-              value={filters.search}
-              onChange={e => onFiltersChange({ search: e.target.value })}
-              className="pl-10"
-            />
-          </div>
+          <AdminSearchInput
+            value={filters.search}
+            onValueChange={search => onFiltersChange({ search })}
+            label="Search vocabulary pools"
+            clearLabel="Clear pool search"
+            placeholder="Search pools..."
+            disabled={loading}
+          />
 
           {/* Difficulty */}
           <Select

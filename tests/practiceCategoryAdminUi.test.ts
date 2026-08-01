@@ -13,6 +13,7 @@ const category: PracticeCategoryWithCounts = {
   normalizedName: 'authors',
   status: 'active',
   categoryOrder: 0,
+  tags: [],
   createdAt: '2026-07-14T00:00:00.000Z',
   createdBy: 'admin',
   updatedAt: '2026-07-14T00:00:00.000Z',
@@ -55,5 +56,26 @@ describe('practice category admin UI contracts', () => {
 
     expect(hasApiErrorStatus(error, 409)).toBe(true);
     expect(getApiErrorMessage(error, 'fallback')).toBe('A Vocabulary category with this name already exists');
+  });
+
+  it('turns structured validation issues into actionable messages', () => {
+    const error = {
+      status: 400,
+      data: {
+        error: 'Invalid request',
+        code: 'VALIDATION_ERROR',
+        issues: [
+          { path: 'version.pages', message: 'A test version must contain at least one scored exercise' },
+          {
+            path: 'version.pages.0.items.1.maxPoints',
+            message: 'Test exercises require a positive whole-number maxPoints',
+          },
+        ],
+      },
+    };
+
+    expect(getApiErrorMessage(error, 'fallback')).toBe(
+      'Please fix: Version › pages: A test version must contain at least one scored exercise; Version › Page 1 › Item 2 › max points: Test exercises require a positive whole-number maxPoints'
+    );
   });
 });

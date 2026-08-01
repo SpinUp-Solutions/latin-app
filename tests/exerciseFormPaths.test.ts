@@ -3,6 +3,7 @@ import { parseFormPathFromString } from '@/src/utils/exerciseFormPaths';
 describe('parseFormPathFromString', () => {
   it('parses finite conjugation paths', () => {
     expect(parseFormPathFromString('indicative.active.perfect.singular.first', 'conjugation')).toEqual({
+      verb_form: 'finite',
       tense: 'perfect',
       voice: 'active',
       mood: 'indicative',
@@ -17,9 +18,10 @@ describe('parseFormPathFromString', () => {
 
   it('parses present active infinitive paths', () => {
     expect(parseFormPathFromString('nonFinite.infinitive.present.active', 'conjugation')).toEqual({
+      verb_form: 'infinitive',
       tense: 'present',
       voice: 'active',
-      mood: 'infinitive',
+      mood: '',
       person: '',
       number: '',
     });
@@ -27,9 +29,10 @@ describe('parseFormPathFromString', () => {
 
   it('parses perfect active infinitive paths', () => {
     expect(parseFormPathFromString('nonFinite.infinitive.perfect.active', 'conjugation')).toEqual({
+      verb_form: 'infinitive',
       tense: 'perfect',
       voice: 'active',
-      mood: 'infinitive',
+      mood: '',
       person: '',
       number: '',
     });
@@ -37,9 +40,10 @@ describe('parseFormPathFromString', () => {
 
   it('parses future passive infinitive paths', () => {
     expect(parseFormPathFromString('nonFinite.infinitive.future.passive', 'conjugation')).toEqual({
+      verb_form: 'infinitive',
       tense: 'future',
       voice: 'passive',
-      mood: 'infinitive',
+      mood: '',
       person: '',
       number: '',
     });
@@ -47,9 +51,10 @@ describe('parseFormPathFromString', () => {
 
   it('parses participle paths', () => {
     expect(parseFormPathFromString('nonFinite.participle.present.active.nominative.masculine.singular', 'conjugation')).toEqual({
+      verb_form: 'participle',
       tense: 'present',
       voice: 'active',
-      mood: 'participle',
+      mood: '',
       person: '',
       number: 'singular',
       case: 'nominative',
@@ -59,9 +64,10 @@ describe('parseFormPathFromString', () => {
 
   it('parses gerund paths', () => {
     expect(parseFormPathFromString('gerund.genitive', 'conjugation')).toEqual({
+      verb_form: 'gerund',
       tense: '',
       voice: '',
-      mood: 'gerund',
+      mood: '',
       person: '',
       number: '',
       case: 'genitive',
@@ -70,9 +76,10 @@ describe('parseFormPathFromString', () => {
 
   it('parses supine paths', () => {
     expect(parseFormPathFromString('supine.accusative', 'conjugation')).toEqual({
+      verb_form: 'supine',
       tense: '',
       voice: '',
-      mood: 'supine',
+      mood: '',
       person: '',
       number: '',
       case: 'accusative',

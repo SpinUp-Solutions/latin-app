@@ -48,7 +48,6 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({
     onItemProgressionDelayChange?.(finalValue);
   };
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   React.useEffect(() => {
     setTimingInputValue((itemProgressionDelay || 2000).toString());
   }, [itemProgressionDelay]);

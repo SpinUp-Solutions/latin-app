@@ -44,6 +44,7 @@ export function toLessonSummary(id: string, data: Partial<Lesson>): LessonSummar
     description: data.description,
     type: data.type || 'normal',
     vocabulary_pool: data.vocabulary_pool,
+    showWordSearch: data.showWordSearch !== false,
     isLive: data.isLive || false,
     liveOrder: data.liveOrder ?? null,
     publishedAt: data.publishedAt ?? null,

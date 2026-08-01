@@ -1,7 +1,6 @@
 import { configureStore } from '@reduxjs/toolkit';
 import { setupListeners } from '@reduxjs/toolkit/query';
 import authReducer from './slices/authSlice';
-import lessonReducer from './slices/lessonSlice';
 import lessonEditorReducer from './slices/lessonEditorSlice';
 import clipboardReducer from './slices/clipboardSlice';
 import vocabularyPoolsReducer from './slices/vocabularyPoolSlice';
@@ -17,7 +16,6 @@ import { vocabularyWordRequestsApi } from './api/vocabularyWordRequestsApi';
 export const store = configureStore({
   reducer: {
     auth: authReducer,
-    lesson: lessonReducer,
     lessonEditor: lessonEditorReducer,
     clipboard: clipboardReducer,
     vocabularyPools: vocabularyPoolsReducer,

@@ -61,6 +61,7 @@ export function pageDocumentDraftToTestVersion(
     id: draft.ownerId,
     name: draft.title,
     pages: draft.pages,
+    vocabularyPoolId: existing?.vocabularyPoolId,
     ...summary,
     createdAt: existing?.createdAt,
     createdBy: existing?.createdBy,

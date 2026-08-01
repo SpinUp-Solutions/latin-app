@@ -1,9 +1,10 @@
 // Main admin components
 export { LessonBuilder } from './LessonBuilder';
 export { LessonManager } from './LessonManager';
-export { TestVersionEditor } from './TestBuilder';
+export { TestVersionEditor } from './TestVersionEditor';
 export { TestManager } from './TestManager';
-export { TestRunner } from './TestRunner';
+export { MockTestManager } from './MockTestManager';
+export { MockAssignmentDialog } from './MockAssignmentDialog';
 
 // Content editor components
 export { ContentEditor } from './ContentEditor';

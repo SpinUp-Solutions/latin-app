@@ -1,7 +1,30 @@
-import type { MockTest } from '@/src/types/test';
+import type { MockTest, TestUnitSummary, TestVersionSummary } from '@/src/types/test';
 import type { TestVersion } from '@/src/types/test';
 import type { TestUnit } from '@/src/types/learning-unit';
 import { isExerciseType } from '@/src/lib/content/registry';
+
+export const TEST_VERSION_SUMMARY_FIELDS = [
+  'name',
+  'totalPages',
+  'totalItems',
+  'totalExercises',
+  'totalPoints',
+  'createdAt',
+  'createdBy',
+  'updatedAt',
+  'updatedBy',
+] as const;
+
+export function toTestUnitSummary(test: TestUnit, versions: readonly TestVersionSummary[]): TestUnitSummary {
+  const totals = versions.map(version => version.totalPoints);
+  const { rotationVersions: _rotationVersions, ...metadata } = test;
+  return {
+    ...metadata,
+    rotationVersionCount: versions.length,
+    minTotalPoints: totals.length ? Math.min(...totals) : 0,
+    maxTotalPoints: totals.length ? Math.max(...totals) : 0,
+  };
+}
 
 export interface TestVersionSummaryFields {
   totalPages: number;
@@ -98,9 +121,6 @@ export function validateTestAssignmentGraph({ tests, mocks, versions, versionIds
         errors.push(`Test ${test.id} references missing rotation version ${reference.versionId}`);
       }
     }
-    if (test.isLive && test.rotationVersions.length === 0) {
-      errors.push(`Live test ${test.id} must have at least one valid rotation version`);
-    }
   }
 
   for (const [versionId, owners] of rotationOwnersByVersion) {
@@ -119,4 +139,47 @@ export function validateTestAssignmentGraph({ tests, mocks, versions, versionIds
   }
 
   return errors;
+}
+
+export interface SubmittedVersionSelectionRecord {
+  versionId: string;
+  submittedAt: string;
+}
+
+/**
+ * Selects from the least-used eligible versions across the complete submitted
+ * history. When possible, the immediately previous version is removed from an
+ * otherwise tied candidate set before the random choice is made.
+ */
+export function selectLeastUsedTestVersion(
+  eligibleVersionIds: readonly string[],
+  submittedHistory: readonly SubmittedVersionSelectionRecord[],
+  random: () => number = Math.random
+): string {
+  if (eligibleVersionIds.length === 0) throw new Error('A test needs at least one eligible rotation version');
+
+  const uniqueVersionIds = [...new Set(eligibleVersionIds)];
+  if (uniqueVersionIds.length !== eligibleVersionIds.length) {
+    throw new Error('Eligible rotation version IDs must be unique');
+  }
+
+  const usage = new Map(uniqueVersionIds.map(versionId => [versionId, 0]));
+  for (const attempt of submittedHistory) {
+    if (usage.has(attempt.versionId)) usage.set(attempt.versionId, usage.get(attempt.versionId)! + 1);
+  }
+
+  const leastUses = Math.min(...usage.values());
+  let candidates = uniqueVersionIds.filter(versionId => usage.get(versionId) === leastUses);
+  const previous = submittedHistory.reduce<SubmittedVersionSelectionRecord | undefined>(
+    (latest, attempt) => (!latest || attempt.submittedAt >= latest.submittedAt ? attempt : latest),
+    undefined
+  );
+
+  if (candidates.length > 1 && previous && candidates.includes(previous.versionId)) {
+    candidates = candidates.filter(versionId => versionId !== previous.versionId);
+  }
+
+  const randomValue = random();
+  const boundedRandom = Number.isFinite(randomValue) ? Math.min(Math.max(randomValue, 0), 0.9999999999999999) : 0;
+  return candidates[Math.floor(boundedRandom * candidates.length)];
 }

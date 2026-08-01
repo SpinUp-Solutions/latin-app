@@ -27,42 +27,111 @@ export const regenerateContentIds = (
   return { content: newContent, idMapping };
 };
 
-const regenerateNestedIds = (obj: unknown, idMapping: IdMapping): void => {
-  if (!obj || typeof obj !== 'object') return;
+const asRecord = (value: unknown): Record<string, unknown> | undefined => (
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined
+);
 
-  if (Array.isArray(obj)) {
-    obj.forEach(item => regenerateNestedIds(item, idMapping));
-    return;
-  }
+const regenerateEntityIds = (value: unknown, idMapping: IdMapping): void => {
+  if (!Array.isArray(value)) return;
 
-  Object.keys(obj as Record<string, unknown>).forEach(key => {
-    const objRecord = obj as Record<string, unknown>;
-    const value = objRecord[key];
-
-    if (key === 'id' && typeof value === 'string' && value !== objRecord.id) {
-      const newId = generateId('nested');
-      idMapping[value] = newId;
-      objRecord[key] = newId;
-    } else if (typeof value === 'object') {
-      regenerateNestedIds(value, idMapping);
-    }
+  value.forEach(entity => {
+    const record = asRecord(entity);
+    if (!record || typeof record.id !== 'string') return;
+    const oldId = record.id;
+    const newId = idMapping[oldId] ?? generateId('nested');
+    idMapping[oldId] = newId;
+    record.id = newId;
   });
 };
 
-const updateIdReferences = (obj: unknown, idMapping: IdMapping): void => {
+/**
+ * Regenerates only authored entity identities declared by persisted content
+ * schemas. Some nested `id` fields are canonical data, not copy identities:
+ * sentence-diagram token IDs are derived from token indexes and annotation IDs
+ * are derived from their kind/span. Replacing those makes a copied diagram
+ * invalid, so sentence-diagramming intentionally has no nested ID route here.
+ */
+const regenerateNestedIds = (content: RenderableContentItem, idMapping: IdMapping): void => {
+  const record = content as unknown as Record<string, unknown>;
+  const data = asRecord(record.data);
+
+  switch (content.type) {
+    case 'matching':
+      regenerateEntityIds(data?.leftColumn, idMapping);
+      regenerateEntityIds(data?.rightColumn, idMapping);
+      // Retained for persisted legacy matching documents that model an
+      // authored pair as its own entity.
+      regenerateEntityIds(data?.pairs, idMapping);
+      break;
+    case 'multiple-choice':
+      regenerateEntityIds(data?.options, idMapping);
+      break;
+    case 'odd-one-out':
+      regenerateEntityIds(data?.items, idMapping);
+      break;
+    case 'table-fill':
+      regenerateEntityIds(data?.columns, idMapping);
+      regenerateEntityIds(data?.rows, idMapping);
+      break;
+    case 'text-selection':
+      regenerateEntityIds(data?.questions, idMapping);
+      break;
+    case 'vocabulary':
+      regenerateEntityIds(record.vocabularyItems, idMapping);
+      break;
+    case 'table': {
+      const tableData = asRecord(record.tableData);
+      regenerateEntityIds(tableData?.columns, idMapping);
+      regenerateEntityIds(tableData?.rows, idMapping);
+      break;
+    }
+    default:
+      break;
+  }
+};
+
+const isReferenceValueKey = (key: string): boolean => (
+  key === 'target'
+  || /(?:target|source|left|right|from|to)(?:Id|Ref)$/i.test(key)
+);
+
+const hasIdentityKeys = (key: string): boolean => (
+  key === 'answers'
+  || key === 'cells'
+  || /(?:By|To)(?:Id|Ref)$/i.test(key)
+);
+
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const updateIdReferences = (obj: unknown, idMapping: IdMapping, parentKey?: string): void => {
   if (!obj || typeof obj !== 'object') return;
 
   if (Array.isArray(obj)) {
-    obj.forEach(item => updateIdReferences(item, idMapping));
+    obj.forEach(item => updateIdReferences(item, idMapping, parentKey));
     return;
   }
 
-  Object.keys(obj as Record<string, unknown>).forEach(key => {
-    const objRecord = obj as Record<string, unknown>;
-    const value = objRecord[key];
+  const objRecord = obj as Record<string, unknown>;
+
+  // Matching answers are keyed by left-column IDs, and table row cells are
+  // keyed by column IDs. These are references too, even though they are
+  // object keys rather than values.
+  if (parentKey && hasIdentityKeys(parentKey)) {
+    Object.keys(objRecord).forEach(key => {
+      const mappedKey = idMapping[key];
+      if (mappedKey && mappedKey !== key) {
+        objRecord[mappedKey] = objRecord[key];
+        delete objRecord[key];
+      }
+    });
+  }
+
+  Object.entries(objRecord).forEach(([key, value]) => {
 
     if (typeof value === 'string') {
-      if (key.includes('Id') || key.includes('Ref') || key === 'target') {
+      if (parentKey === 'answers' || isReferenceValueKey(key)) {
         if (idMapping[value]) {
           objRecord[key] = idMapping[value];
         }
@@ -71,13 +140,13 @@ const updateIdReferences = (obj: unknown, idMapping: IdMapping): void => {
       if (value.includes('data-tooltip-id=') || value.includes('id=') || value.includes('data-id=')) {
         let updatedValue = value;
         Object.keys(idMapping).forEach(oldId => {
-          const regex = new RegExp(`\\b${oldId}\\b`, 'g');
+          const regex = new RegExp(`\\b${escapeRegExp(oldId)}\\b`, 'g');
           updatedValue = updatedValue.replace(regex, idMapping[oldId]);
         });
         objRecord[key] = updatedValue;
       }
     } else if (typeof value === 'object') {
-      updateIdReferences(value, idMapping);
+      updateIdReferences(value, idMapping, key);
     }
   });
 };

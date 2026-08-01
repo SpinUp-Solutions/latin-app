@@ -1,7 +1,8 @@
 import { zodResponseFormat } from 'openai/helpers/zod';
 import { openai, AUTOCOMPLETE_MODEL, MAX_TOKENS } from './client';
+import { calculateModelCost } from './model-registry';
 import { getPromptForPartOfSpeech, SYSTEM_PROMPT } from './prompts';
-import { AIAutocompleteRequest, AIAutocompleteResponse, AICompletableField, CostBreakdown } from './types';
+import { AIAutocompleteRequest, AIAutocompleteResponse, AICompletableField } from './types';
 import { PartOfSpeech } from '../types/vocabulary/schemas/enums';
 import { VocabularyWord } from '../types/vocabulary/schemas';
 import {
@@ -60,7 +61,7 @@ type ResponseDiagnosticsSource = {
   incomplete_details?: unknown;
   output?: Array<{
     type: string;
-    status?: string;
+    status?: string | null;
   }>;
 };
 
@@ -267,33 +268,7 @@ function mergeValue(existingValue: unknown, incomingValue: unknown, overwriteExi
   return shouldOverwrite(existingValue, overwriteExisting) ? incomingValue : existingValue;
 }
 
-function calculateCost(usage: {
-  input_tokens?: number;
-  output_tokens?: number;
-  total_tokens?: number;
-}): CostBreakdown {
-  const promptTokens = usage.input_tokens ?? 0;
-  const completionTokens = usage.output_tokens ?? 0;
-  const totalTokens = usage.total_tokens ?? 0;
-
-  const inputCostPer1M = 0.75;
-  const outputCostPer1M = 4.5;
-
-  const inputCost = (promptTokens / 1_000_000) * inputCostPer1M;
-  const outputCost = (completionTokens / 1_000_000) * outputCostPer1M;
-  const totalCost = inputCost + outputCost;
-
-  return {
-    inputCost,
-    outputCost,
-    totalCost,
-    tokens: {
-      promptTokens,
-      completionTokens,
-      totalTokens,
-    },
-  };
-}
+const calculateCost = (usage: unknown) => calculateModelCost(usage, AUTOCOMPLETE_MODEL);
 
 export async function autocompleteVocabularyWord(request: AIAutocompleteRequest): Promise<AIAutocompleteResponse> {
   console.log('[Autocomplete] Starting autocomplete for:', request.word, request.part_of_speech);

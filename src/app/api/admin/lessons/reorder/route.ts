@@ -2,37 +2,78 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
+import { assertLegacyNormalPlacementAllowedInTransaction } from '@/src/lib/learning-units/learning-path-service';
+import { LearningPathServiceError } from '@/src/lib/learning-units/learning-path-errors';
+import type { LessonUnitType } from '@/src/types/learning-unit';
 
 interface ReorderUpdate {
   lessonId: string;
   liveOrder: number;
 }
 
+class ReorderError extends Error {
+  constructor(
+    readonly status: 400 | 404 | 409,
+    message: string
+  ) {
+    super(message);
+    this.name = 'ReorderError';
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const user = await verifyAdminAccess(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const { updates }: { updates: ReorderUpdate[] } = await request.json();
 
-    if (!Array.isArray(updates) || updates.length === 0) {
-      return NextResponse.json({ error: 'Updates array required' }, { status: 400 });
+    if (
+      !Array.isArray(updates) ||
+      updates.length === 0 ||
+      updates.length > 500 ||
+      updates.some(
+        update =>
+          !update ||
+          typeof update.lessonId !== 'string' ||
+          !Number.isSafeInteger(update.liveOrder) ||
+          update.liveOrder < 0
+      ) ||
+      new Set(updates.map(update => update.lessonId)).size !== updates.length ||
+      new Set(updates.map(update => update.liveOrder)).size !== updates.length
+    ) {
+      return NextResponse.json(
+        { error: 'Updates must contain 1-500 unique lesson IDs and unique nonnegative orders' },
+        { status: 400 }
+      );
     }
 
-    const batch = adminDb.batch();
+    await adminDb.runTransaction(async transaction => {
+      const refs = updates.map(update => adminDb.collection('lessons').doc(update.lessonId));
+      const snapshots = await transaction.getAll(...refs);
+      const lessonTypes = new Set<LessonUnitType>();
 
-    for (const { lessonId, liveOrder } of updates) {
-      const lessonRef = adminDb.collection('lessons').doc(lessonId);
-      const lessonDoc = await lessonRef.get();
-      if (!lessonDoc.exists || !isLessonDocumentData(lessonDoc.data())) {
-        return NextResponse.json({ error: `Lesson ${lessonId} not found` }, { status: 404 });
+      snapshots.forEach((snapshot, index) => {
+        const data = snapshot.data();
+        if (!snapshot.exists || !isLessonDocumentData(data)) {
+          throw new ReorderError(404, `Lesson ${updates[index].lessonId} not found`);
+        }
+        lessonTypes.add((data.type ?? 'normal') as LessonUnitType);
+      });
+      if (lessonTypes.size !== 1) {
+        throw new ReorderError(409, 'All reordered lessons must have the same lesson type');
       }
-      batch.update(lessonRef, { liveOrder, updatedAt: new Date().toISOString() });
-    }
+      if (lessonTypes.has('normal')) {
+        await assertLegacyNormalPlacementAllowedInTransaction(transaction, adminDb);
+      }
 
-    await batch.commit();
+      const updatedAt = new Date().toISOString();
+      updates.forEach((update, index) => {
+        transaction.update(refs[index], {
+          liveOrder: update.liveOrder,
+          updatedAt,
+          updatedBy: user.uid,
+        });
+      });
+    });
 
     return NextResponse.json({
       success: true,
@@ -40,6 +81,12 @@ export async function POST(request: NextRequest) {
       updatedCount: updates.length,
     });
   } catch (error) {
+    if (error instanceof ReorderError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    if (error instanceof LearningPathServiceError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     console.error('Error reordering lessons:', error);
     return NextResponse.json({ error: 'Failed to reorder lessons' }, { status: 500 });
   }

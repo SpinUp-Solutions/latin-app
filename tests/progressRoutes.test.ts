@@ -6,15 +6,12 @@ const mockTransactionSet = jest.fn();
 const mockVerifyAdminAccess = jest.fn(async () => ({ uid: 'admin-1' }));
 const mockVerifyIdToken = jest.fn(async () => ({ uid: 'user-1' }));
 const mockRunTransaction = jest.fn();
+const mockGetLessonProgressAccess = jest.fn(async (..._args: unknown[]) => 'allowed');
 const mockCollection = jest.fn((collection: string) => ({
   doc: (id: string) => ({ collection, id }),
 }));
 
-jest.mock('next/server', () => ({
-  NextResponse: {
-    json: (body: unknown, init?: { status?: number }) => ({ body, status: init?.status || 200 }),
-  },
-}));
+jest.mock('next/server', () => jest.requireActual('./helpers/routeMocks'));
 
 jest.mock('firebase-admin', () => ({
   auth: () => ({ verifyIdToken: mockVerifyIdToken }),
@@ -36,6 +33,10 @@ jest.mock('@/src/services/firebase-admin', () => ({
     collection: (collection: string) => mockCollection(collection),
     runTransaction: (...args: unknown[]) => mockRunTransaction(...args),
   },
+}));
+
+jest.mock('@/src/lib/learning-units/progression-access', () => ({
+  getLessonProgressAccessInTransaction: (...args: unknown[]) => mockGetLessonProgressAccess(...args),
 }));
 
 const lesson = {
@@ -72,6 +73,7 @@ function configureTransaction(progressData: Record<string, unknown> | undefined)
 beforeEach(() => {
   jest.clearAllMocks();
   mockVerifyIdToken.mockResolvedValue({ uid: 'user-1' });
+  mockGetLessonProgressAccess.mockResolvedValue('allowed');
 });
 
 describe('progress update route', () => {
@@ -93,6 +95,27 @@ describe('progress update route', () => {
     expect(response.status).toBe(400);
     expect(response.body.error).toBe('Invalid progress request');
     expect(mockRunTransaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects progress writes to a server-locked lesson', async () => {
+    configureTransaction(undefined);
+    mockGetLessonProgressAccess.mockResolvedValue('locked');
+
+    const response = (await updateProgress(request({ action: 'visit-page', pageId: 'page-1' }), {
+      params: Promise.resolve({ userId: 'user-1', lessonId: 'lesson-1' }),
+    })) as unknown as { body: { error: string }; status: number };
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe('Lesson is locked');
+    expect(mockRunTransaction).toHaveBeenCalledTimes(1);
+    expect(mockGetLessonProgressAccess).toHaveBeenCalledWith(
+      expect.objectContaining({ get: expect.any(Function), set: mockTransactionSet }),
+      expect.anything(),
+      expect.objectContaining({ id: 'lesson-1' }),
+      'user-1',
+      false
+    );
+    expect(mockTransactionSet).not.toHaveBeenCalled();
   });
 
   it('silently marks the lesson complete when the final required exercise is recorded', async () => {

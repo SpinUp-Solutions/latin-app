@@ -188,4 +188,24 @@ describe('compareDiagramAnnotationSets', () => {
       isComplete: false,
     });
   });
+
+  it('penalizes extra annotations even when every expected annotation is present', () => {
+    const tokens = tokenizeDiagramSentence('amat');
+    const wholeWord = {
+      startTokenIndex: 0,
+      endTokenIndex: 0,
+      startCharOffset: 0,
+      endCharOffset: tokens[0].text.length,
+    };
+    const solution = [createAnnotation('verb', wholeWord)];
+    const student = [...solution, createAnnotation('active', wholeWord)];
+
+    expect(compareDiagramAnnotationSets(student, solution, tokens)).toMatchObject({
+      matched: 1,
+      expected: 1,
+      extra: 1,
+      accuracy: 50,
+      isComplete: false,
+    });
+  });
 });

@@ -11,32 +11,51 @@ import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
-import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
-import { resolveRuntimeMode } from '@/src/types/runtime-mode';
+import type { ExerciseAnswer, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
+import { RecordedAnswerControls } from './recorded-answer-controls';
+import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
 interface Props {
   exercise: FillEmboldedTextExercise;
   onComplete?: (score: number) => void;
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
-  testMode?: boolean;
+  initialAnswer?: ExerciseAnswer;
 }
 
-const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComplete, runtimeMode, onAnswer, testMode }) => {
-  const mode = resolveRuntimeMode(runtimeMode, testMode);
+const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
+  exercise,
+  onComplete,
+  runtimeMode,
+  onAnswer,
+  initialAnswer,
+}) => {
+  const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
-  const [userAnswer, setUserAnswer] = useState('');
-  const [submittedAnswers, setSubmittedAnswers] = useState<string[]>([]);
+  const testAnswerMode = mode === 'test';
+  const restoredAnswers = initialAnswer?.type === 'fill-embolded-text' ? initialAnswer.answers : [];
+  const firstIncompleteIndex = exercise.data.words.findIndex((_, index) => !restoredAnswers[index]?.trim());
+  const restoredIndex = firstIncompleteIndex >= 0 ? firstIncompleteIndex : Math.max(exercise.data.words.length - 1, 0);
+  const [userAnswer, setUserAnswer] = useState(restoredAnswers[restoredIndex] ?? '');
+  const [submittedAnswers, setSubmittedAnswers] = useState<string[]>(restoredAnswers);
   const [selectedWordIndex, setSelectedWordIndex] = useState<number | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [correctAnswers, setCorrectAnswers] = useState(0);
+  const [testSubmitted, setTestSubmitted] = useState(Boolean(restoredAnswers[restoredIndex]?.trim()));
 
-  const { currentIndex, isLastItem, isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance, resetIndex } =
-    useExerciseProgression({
-      totalItems: exercise.data.words.length,
-      itemProgressionDelay: exercise.itemProgressionDelay,
-      progressionRules: exercise.feedbackConfig.progressionRules,
-    });
+  const {
+    currentIndex,
+    isLastItem,
+    isAwaitingConfirmation,
+    autoAdvanceIfEnabled,
+    confirmAdvance,
+    resetIndex,
+    nextItem,
+  } = useExerciseProgression({
+    totalItems: exercise.data.words.length,
+    initialIndex: restoredIndex,
+    itemProgressionDelay: exercise.itemProgressionDelay,
+    progressionRules: exercise.feedbackConfig.progressionRules,
+  });
 
   const {
     isCorrect,
@@ -57,8 +76,9 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
     onReset: () => {
       setUserAnswer('');
       setSelectedWordIndex(null);
-      setCorrectAnswers(0);
       setIsProcessing(false);
+      setTestSubmitted(false);
+      setSubmittedAnswers([]);
       resetIndex();
       resetExercise();
     },
@@ -83,18 +103,25 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
   }
 
   const handleSubmit = () => {
-    if (isProcessing) return;
+    if (isProcessing || !userAnswer.trim()) return;
 
-    const validation = validateFillEmboldedTextExercise(userAnswer, exercise, currentIndex);
     const nextAnswers = [...submittedAnswers];
     nextAnswers[currentIndex] = userAnswer;
     setSubmittedAnswers(nextAnswers);
-    if (mode === 'test') onAnswer?.({ type: 'fill-embolded-text', answers: nextAnswers });
     setIsProcessing(true);
 
+    if (testAnswerMode) {
+      onAnswer?.({ type: 'fill-embolded-text', answers: nextAnswers });
+      setTestSubmitted(true);
+      return;
+    }
+
+    const validation = validateFillEmboldedTextExercise(userAnswer, exercise, currentIndex);
+    const finalScore = isLastItem
+      ? Math.round(gradeExercisePercentage({ exercise }, { type: 'fill-embolded-text', answers: nextAnswers }))
+      : null;
+
     if (validation.isCorrect) {
-      const newCorrectAnswers = correctAnswers + 1;
-      setCorrectAnswers(newCorrectAnswers);
       handleCorrect(isLastItem);
 
       const hasVisibleExplanation =
@@ -102,14 +129,12 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
         hasVisibleFeedbackContent(currentWord.explanation);
 
       if (isLastItem) {
-        const finalScore = Math.round((newCorrectAnswers / exercise.data.words.length) * 100);
-
         autoAdvanceIfEnabled(() => {
           setUserAnswer('');
           setSelectedWordIndex(null);
           reset();
           setIsProcessing(false);
-          onComplete?.(finalScore);
+          onComplete?.(finalScore!);
         }, hasVisibleExplanation);
       } else {
         autoAdvanceIfEnabled(() => {
@@ -122,7 +147,6 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
     } else {
       handleIncorrect();
       if (assessmentMode) {
-        const finalScore = isLastItem ? Math.round((correctAnswers / exercise.data.words.length) * 100) : null;
         autoAdvanceIfEnabled(() => {
           setUserAnswer('');
           setSelectedWordIndex(null);
@@ -141,6 +165,20 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
     if (isCorrect === false) {
       clearFeedback();
     }
+  };
+
+  const continueTest = () => {
+    if (isLastItem) {
+      onComplete?.(0);
+      return;
+    }
+    const nextAnswer = submittedAnswers[currentIndex + 1] ?? '';
+    setUserAnswer(nextAnswer);
+    setSelectedWordIndex(null);
+    setTestSubmitted(Boolean(nextAnswer.trim()));
+    setIsProcessing(false);
+    reset();
+    nextItem();
   };
 
   return (
@@ -206,17 +244,21 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({ exercise, onComple
           />
         </div>
 
-        <FeedbackDisplay
-          isCorrect={isCorrect}
-          message={assessmentMode ? '' : message}
-          level={assessmentMode ? null : level}
-          hint={assessmentMode ? undefined : currentWord.hint}
-          correctAnswer={assessmentMode ? undefined : currentWord.correctAnswer}
-          explanation={assessmentMode ? undefined : currentWord.explanation}
-          showExplanation={!assessmentMode && showExplanation}
-          onContinue={(isCorrect || assessmentMode) && isAwaitingConfirmation ? confirmAdvance : undefined}
-          allowContinueOnIncorrect={assessmentMode}
-        />
+        {testAnswerMode ? (
+          testSubmitted && <RecordedAnswerControls isLastItem={isLastItem} onContinue={continueTest} />
+        ) : (
+          <FeedbackDisplay
+            isCorrect={isCorrect}
+            message={assessmentMode ? '' : message}
+            level={assessmentMode ? null : level}
+            hint={assessmentMode ? undefined : currentWord.hint}
+            correctAnswer={assessmentMode ? undefined : currentWord.correctAnswer}
+            explanation={assessmentMode ? undefined : currentWord.explanation}
+            showExplanation={!assessmentMode && showExplanation}
+            onContinue={(isCorrect || assessmentMode) && isAwaitingConfirmation ? confirmAdvance : undefined}
+            allowContinueOnIncorrect={assessmentMode}
+          />
+        )}
       </div>
     </div>
   );

@@ -2,10 +2,9 @@
 
 import React, { useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
-import { useGetStudentLessonsQuery } from '@/src/store/api/lessonApi';
-import { LessonStatus } from '@/src/types/lesson';
-import { BookOpen, CheckCircle, Lock, Play, ChevronLeft } from 'lucide-react';
+import { useGetStudentDashboardQuery } from '@/src/store/api/lessonApi';
+import { LessonStatus, type StudentLearningUnitSummary } from '@/src/types/lesson';
+import { BookOpen, CheckCircle, Lock, Play, ChevronLeft, FileCheck2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/src/hooks/useAuth';
 import { stripHtmlTags } from '@/src/utils/exercises';
@@ -61,27 +60,26 @@ export default function LessonSidebar({ currentLessonId, isCollapsed = false, on
   const router = useRouter();
   const { user } = useAuth();
 
-  const { data: studentLessons, isLoading } = useGetStudentLessonsQuery(user?.uid, {
+  const {
+    data: studentDashboard,
+    isLoading,
+    isError,
+    refetch,
+  } = useGetStudentDashboardQuery(user?.uid ?? '', {
     skip: !user?.uid,
   });
 
-  const lessons = useMemo(() => {
-    if (!studentLessons) return [];
-    return studentLessons
-      .filter(lesson => isLessonDocumentData(lesson) && lesson.type === 'normal')
-      .map(lesson => ({
-        ...lesson,
-        totalPages: lesson.pages.length,
-      }));
-  }, [studentLessons]);
+  const learningUnits = useMemo(() => {
+    return studentDashboard?.learningPath ?? [];
+  }, [studentDashboard]);
 
-  const handleLessonClick = useCallback(
-    (lessonId: string, status: LessonStatus) => {
-      if (status === 'locked') {
-        toast.error('Complete the previous lesson to unlock this one');
+  const handleUnitClick = useCallback(
+    (unit: StudentLearningUnitSummary) => {
+      if (unit.status === 'locked') {
+        toast.error(unit.lockedReason || 'Complete the previous learning unit to unlock this one');
         return;
       }
-      router.push(`/lesson/${lessonId}`);
+      router.push(unit.kind === 'test' ? `/test/${unit.id}` : `/lesson/${unit.id}`);
     },
     [router]
   );
@@ -111,11 +109,15 @@ export default function LessonSidebar({ currentLessonId, isCollapsed = false, on
                 <BookOpen className="h-6 w-6 text-roman-red drop-shadow-lg relative" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="text-2xl font-serif text-gray-800">Your Lessons</h3>
+                <h3 className="text-2xl font-serif text-gray-800">Your Learning Path</h3>
               </div>
             </div>
             <p className="text-base text-roman-stone ml-15">
-              {isLoading ? 'Loading...' : `${lessons.length} lessons available`}
+              {isLoading
+                ? 'Loading...'
+                : isError
+                  ? 'Unable to load your path'
+                  : `${learningUnits.length} learning units available`}
             </p>
           </div>
 
@@ -124,67 +126,112 @@ export default function LessonSidebar({ currentLessonId, isCollapsed = false, on
               <div className="flex items-center justify-center py-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red" />
               </div>
-            ) : lessons.length === 0 ? (
+            ) : isError ? (
+              <div className="space-y-3 px-6 py-12 text-center">
+                <p className="text-sm text-gray-600">Your Learning Path could not be loaded.</p>
+                <button
+                  type="button"
+                  className="rounded-lg bg-roman-red px-4 py-2 text-sm font-medium text-white hover:bg-roman-red/90"
+                  onClick={() => void refetch()}>
+                  Retry
+                </button>
+              </div>
+            ) : learningUnits.length === 0 ? (
               <div className="px-6 py-12 text-center">
                 <div className="relative h-16 w-16 bg-gradient-to-br from-gray-100 to-gray-50 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg">
                   <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-2xl" />
                   <BookOpen className="h-8 w-8 text-gray-300 relative" />
                 </div>
-                <p className="text-base text-gray-500">No lessons available</p>
+                <p className="text-base text-gray-500">No learning units available</p>
               </div>
             ) : (
               <div className="space-y-3 p-4">
-                {lessons.map(lesson => {
-                  const config = sidebarStatusConfig[lesson.status || 'available'];
-                  const isCurrentLesson = lesson.id === currentLessonId;
+                {learningUnits.map(unit => {
+                  const config = sidebarStatusConfig[unit.status || 'available'];
+                  const isTest = unit.kind === 'test';
+                  const isCurrentLesson = unit.id === currentLessonId;
 
                   return (
-                    <div
-                      key={lesson.id}
-                      onClick={() => handleLessonClick(lesson.id, lesson.status || 'available')}
+                    <button
+                      type="button"
+                      key={unit.id}
+                      onClick={() => handleUnitClick(unit)}
+                      aria-current={isCurrentLesson ? 'page' : undefined}
+                      aria-disabled={unit.status === 'locked'}
                       className={`
-                        group relative cursor-pointer transition-all duration-300 rounded-2xl shadow-lg hover:shadow-xl transform hover:-translate-y-1
-                        ${config.card}
+                        group relative w-full cursor-pointer rounded-2xl text-left shadow-lg transition-all duration-300 hover:-translate-y-1 hover:shadow-xl
+                        ${isTest ? 'border border-indigo-200 bg-gradient-to-br from-indigo-100 via-violet-50 to-white' : config.card}
                         ${isCurrentLesson ? 'ring-2 ring-roman-red ring-offset-2' : ''}
-                        ${lesson.status === 'locked' ? 'cursor-not-allowed' : ''}
+                        ${unit.status === 'locked' ? 'cursor-not-allowed opacity-60' : ''}
                       `}>
                       <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-2xl" />
                       <div className="relative p-4">
                         <div className="flex items-start gap-3">
                           <div
-                            className={`relative flex-shrink-0 h-10 w-10 rounded-xl flex items-center justify-center shadow-md border ${config.iconBg} ${config.icon} border-current/20`}>
+                            className={`relative flex-shrink-0 h-10 w-10 rounded-xl flex items-center justify-center shadow-md border ${
+                              isTest
+                                ? 'border-indigo-300 bg-indigo-700 text-white'
+                                : `${config.iconBg} ${config.icon} border-current/20`
+                            }`}>
                             <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-xl" />
-                            <div className="relative">{config.showIcon || <BookOpen className="h-5 w-5" />}</div>
+                            <div className="relative">
+                              {isTest ? (
+                                <FileCheck2 className="h-5 w-5" />
+                              ) : (
+                                config.showIcon || <BookOpen className="h-5 w-5" />
+                              )}
+                            </div>
                           </div>
                           <div className="flex-1 min-w-0">
-                            <h4 className="text-base font-serif text-gray-900 truncate mb-1">{lesson.title}</h4>
-                            {lesson.description && (
+                            <div className="flex items-center gap-2">
+                              <h4 className="min-w-0 flex-1 truncate text-base font-serif text-gray-900">
+                                {unit.title}
+                              </h4>
+                              {isTest && (
+                                <span className="rounded-full bg-indigo-700 px-2 py-0.5 text-[10px] font-bold tracking-wide text-white">
+                                  TEST
+                                </span>
+                              )}
+                            </div>
+                            {unit.description && (
                               <p className="text-sm text-roman-stone mt-1 line-clamp-2">
-                                {stripHtmlTags(lesson.description)}
+                                {stripHtmlTags(unit.description)}
                               </p>
                             )}
 
                             <div className="flex items-center gap-2 mt-2 text-xs text-roman-stone font-medium">
-                              <span>{lesson.totalPages} pages</span>
-                              {lesson.currentPageIndex !== undefined && lesson.currentPageIndex > 0 && (
-                                <span>• Page {lesson.currentPageIndex + 1}</span>
+                              {unit.kind === 'test' ? (
+                                <span>
+                                  {unit.passingPercentage === null ? 'Score only' : `Pass ≥ ${unit.passingPercentage}%`}
+                                </span>
+                              ) : (
+                                <>
+                                  <span>{unit.totalPages} pages</span>
+                                  {unit.currentPageIndex !== undefined && unit.currentPageIndex > 0 && (
+                                    <span>• Page {unit.currentPageIndex + 1}</span>
+                                  )}
+                                </>
                               )}
                             </div>
 
-                            {typeof lesson.progress === 'number' && lesson.progress > 0 && (
+                            {unit.status === 'locked' && unit.lockedReason && (
+                              <p className="mt-2 text-xs font-medium text-gray-600">{unit.lockedReason}</p>
+                            )}
+
+                            {unit.kind === 'lesson' && typeof unit.progress === 'number' && unit.progress > 0 && (
                               <div className="mt-3">
                                 <div className="flex justify-between items-center mb-1.5">
                                   <span className="text-xs text-gray-600 font-medium">Progress</span>
-                                  <span className="text-xs font-semibold text-gray-700">{lesson.progress}%</span>
+                                  <span className="text-xs font-semibold text-gray-700">{unit.progress}%</span>
                                 </div>
                                 <div className="h-1.5 bg-white/50 rounded-full overflow-hidden shadow-inner">
                                   <div
                                     className={`h-full rounded-full transition-all duration-300 ${
-                                      lesson.status === 'completed'
+                                      unit.status === 'completed'
                                         ? 'bg-gradient-to-r from-roman-green to-emerald-600'
                                         : 'bg-gradient-to-r from-roman-red to-roman-terracotta'
                                     }`}
-                                    style={{ width: `${lesson.progress}%` }}
+                                    style={{ width: `${unit.progress}%` }}
                                   />
                                 </div>
                               </div>
@@ -192,7 +239,7 @@ export default function LessonSidebar({ currentLessonId, isCollapsed = false, on
                           </div>
                         </div>
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -211,7 +258,7 @@ export default function LessonSidebar({ currentLessonId, isCollapsed = false, on
           <span
             className="mt-6 text-xs font-medium uppercase tracking-wide text-roman-stone"
             style={{ writingMode: 'vertical-rl' }}>
-            Lessons
+            Path
           </span>
         </div>
       </div>

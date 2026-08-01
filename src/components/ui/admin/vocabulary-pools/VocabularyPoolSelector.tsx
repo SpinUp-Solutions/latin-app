@@ -24,12 +24,14 @@ interface VocabularyPoolSelectorProps {
   selectedPoolId?: string;
   onPoolSelect: (poolId: string | undefined) => void;
   disabled?: boolean;
+  assignmentLabel?: string;
 }
 
 export const VocabularyPoolSelector: React.FC<VocabularyPoolSelectorProps> = ({
   selectedPoolId,
   onPoolSelect,
   disabled = false,
+  assignmentLabel = 'lesson',
 }) => {
   const [difficulty, setDifficulty] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -119,7 +121,7 @@ export const VocabularyPoolSelector: React.FC<VocabularyPoolSelectorProps> = ({
         <DialogContent className="max-w-4xl max-h-[80vh]">
           <DialogHeader>
             <DialogTitle>Select Vocabulary Pool</DialogTitle>
-            <DialogDescription>Choose a vocabulary pool to assign to this lesson</DialogDescription>
+            <DialogDescription>Choose a vocabulary pool to assign to this {assignmentLabel}</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">

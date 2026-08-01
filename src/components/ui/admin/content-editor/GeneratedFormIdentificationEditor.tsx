@@ -406,7 +406,7 @@ const GeneratedFormIdentificationEditorView: React.FC<{
 
                                 return (
                                   <div key={step} className="text-gray-600">
-                                    <strong className="capitalize">{step}:</strong> {displayValue}{' '}
+                                    <strong className="capitalize">{step.replace(/_/g, ' ')}:</strong> {displayValue}{' '}
                                     {answers.length > 1 && `(or ${answers.slice(1).join(', ')})`}
                                     {uniqueOptionalValues.length > 0 && (
                                       <span className="text-gray-400 text-xs ml-1">

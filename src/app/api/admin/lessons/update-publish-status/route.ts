@@ -4,6 +4,8 @@ import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 import type { Lesson } from '@/src/types/lesson';
 import { validateLessonProgression } from '@/src/utils/lessonProgress';
+import { assertLegacyNormalPlacementAllowedInTransaction } from '@/src/lib/learning-units/learning-path-service';
+import { LearningPathServiceError } from '@/src/lib/learning-units/learning-path-errors';
 
 interface UpdateRequest {
   lessonIds: string[];
@@ -60,6 +62,9 @@ export async function POST(request: NextRequest) {
     }
 
     const processedCount = await adminDb.runTransaction(async transaction => {
+      if (lessonType === 'normal') {
+        await assertLegacyNormalPlacementAllowedInTransaction(transaction, adminDb);
+      }
       const lessonRefs = lessonIds.map(lessonId => adminDb.collection('lessons').doc(lessonId));
       const lessonDocs = await transaction.getAll(...lessonRefs);
       const lessons = lessonDocs.map((lessonDoc, index) => {
@@ -151,6 +156,9 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (error instanceof PublishStatusError) {
       return NextResponse.json({ error: error.message, ...error.details }, { status: error.status });
+    }
+    if (error instanceof LearningPathServiceError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
     }
     console.error('Error updating lesson publish status:', error);
     return NextResponse.json({ error: 'Failed to update lessons' }, { status: 500 });

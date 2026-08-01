@@ -7,9 +7,10 @@ import ContentRenderer from './content-renderer';
 import { ExerciseErrorBoundary } from './exercise-error-boundary';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { isExerciseType } from '@/src/utils/lessonUtils';
-import { DiagramAttempt } from '@/src/features/sentence-diagramming';
-import type { ExerciseAnswerEvent, RuntimeMode } from '@/src/types/runtime-mode';
+import { DiagramAuditSubmission } from '@/src/features/sentence-diagramming';
+import type { ExerciseAnswer, ExerciseAnswerEvent, RuntimeMode } from '@/src/types/runtime-mode';
 import type { ResolvedGeneratedExerciseState } from './content-renderer';
+import type { VocabularyPoolStudyData } from '@/src/types/vocabulary';
 
 interface PageTemplateProps {
   page: Page;
@@ -17,9 +18,13 @@ interface PageTemplateProps {
   onExerciseComplete?: (exerciseId: string, score: number) => void;
   runtimeMode?: RuntimeMode;
   onAnswer?: (event: ExerciseAnswerEvent) => void;
+  answers?: Record<string, ExerciseAnswer>;
   resolvedExerciseState?: Record<string, ResolvedGeneratedExerciseState>;
+  allowGeneratedExerciseQueries?: boolean;
+  vocabularyPoolId?: string | null;
+  resolvedVocabularyPool?: VocabularyPoolStudyData;
   onPageComplete?: () => void;
-  onDiagrammingAttempt?: (itemIndex: number, exerciseId: string, attempt: DiagramAttempt) => void;
+  onDiagrammingAttempt?: (itemIndex: number, exerciseId: string, attempt: DiagramAuditSubmission) => void;
 }
 
 export const PageTemplate: React.FC<PageTemplateProps> = ({
@@ -28,7 +33,11 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({
   onExerciseComplete,
   runtimeMode = 'practice',
   onAnswer,
+  answers,
   resolvedExerciseState,
+  allowGeneratedExerciseQueries = false,
+  vocabularyPoolId,
+  resolvedVocabularyPool,
   onPageComplete,
   onDiagrammingAttempt,
 }) => {
@@ -89,7 +98,11 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({
               itemIndex={index}
               runtimeMode={runtimeMode}
               onAnswer={onAnswer}
+              initialAnswer={answers?.[item.id]}
               resolvedExerciseState={resolvedExerciseState?.[item.id]}
+              allowGeneratedExerciseQueries={allowGeneratedExerciseQueries}
+              vocabularyPoolId={vocabularyPoolId}
+              resolvedVocabularyPool={resolvedVocabularyPool}
               onComplete={(score: number) => handleItemComplete(index, score)}
               onDiagrammingAttempt={attempt => onDiagrammingAttempt?.(index, item.id, attempt)}
             />

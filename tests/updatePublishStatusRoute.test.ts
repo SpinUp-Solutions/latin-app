@@ -3,13 +3,10 @@ import { POST } from '@/src/app/api/admin/lessons/update-publish-status/route';
 const mockRunTransaction = jest.fn();
 const mockCollection = jest.fn();
 
-jest.mock('next/server', () => ({
-  NextResponse: {
-    json: (body: unknown, init?: { status?: number }) => ({ body, status: init?.status ?? 200 }),
-  },
-}));
+jest.mock('next/server', () => jest.requireActual('./helpers/routeMocks'));
 
 jest.mock('@/src/lib/verifyAdminAccess', () => ({
+  ...jest.requireActual('@/src/lib/verifyAdminAccess'),
   verifyAdminAccess: jest.fn(async () => ({ uid: 'admin-1' })),
 }));
 
@@ -31,16 +28,19 @@ function request(body: Record<string, unknown>) {
   return { json: async () => body } as never;
 }
 
-function configureFirestore(lessons: Record<string, LessonData>) {
+function configureFirestore(
+  lessons: Record<string, LessonData>,
+  learningPath?: Record<string, unknown>
+) {
   const updates: Array<{ id: string; data: Record<string, unknown> }> = [];
-  const collection = {
-    doc: (id: string) => ({ id }),
+  mockCollection.mockImplementation((collectionName: string) => ({
+    doc: (id: string) => ({ collectionName, id }),
     where: () => ({
+      collectionName,
       kind: 'live-lessons-query',
-      orderBy: () => ({ kind: 'ordered-live-lessons-query' }),
+      orderBy: () => ({ collectionName, kind: 'ordered-live-lessons-query' }),
     }),
-  };
-  mockCollection.mockReturnValue(collection);
+  }));
 
   const snapshot = (id: string) => ({
     id,
@@ -49,11 +49,20 @@ function configureFirestore(lessons: Record<string, LessonData>) {
   });
   const transaction = {
     getAll: jest.fn(async (...refs: Array<{ id: string }>) => refs.map(ref => snapshot(ref.id))),
-    get: jest.fn(async () => ({
-      docs: Object.entries(lessons)
-        .filter(([, lesson]) => lesson.isLive)
-        .map(([id]) => snapshot(id)),
-    })),
+    get: jest.fn(async (ref: { collectionName: string; id?: string }) => {
+      if (ref.collectionName === 'learningPaths') {
+        return {
+          id: ref.id,
+          exists: Boolean(learningPath),
+          data: () => learningPath,
+        };
+      }
+      return {
+        docs: Object.entries(lessons)
+          .filter(([, lesson]) => lesson.isLive)
+          .map(([id]) => snapshot(id)),
+      };
+    }),
     update: jest.fn((ref: { id: string }, data: Record<string, unknown>) => {
       updates.push({ id: ref.id, data });
     }),
@@ -107,7 +116,7 @@ describe('update lesson publish status', () => {
     expect(response.body).toMatchObject({ success: true, processedCount: 1 });
     expect(transaction.update).toHaveBeenCalledTimes(1);
     expect(transaction.update).toHaveBeenCalledWith(
-      { id: 'normal2' },
+      expect.objectContaining({ id: 'normal2' }),
       expect.objectContaining({ isLive: false, liveOrder: null, publishedAt: null })
     );
   });
@@ -173,8 +182,94 @@ describe('update lesson publish status', () => {
     expect(response.status).toBe(200);
     expect(response.body).toMatchObject({ success: true, processedCount: 1 });
     expect(transaction.update).toHaveBeenCalledWith(
-      { id: 'normal2' },
+      expect.objectContaining({ id: 'normal2' }),
       expect.objectContaining({ isLive: true, liveOrder: 1 })
     );
+  });
+
+  it.each([
+    [
+      'active stabilization',
+      {
+        revision: 1,
+        unitIds: ['normal1'],
+        updatedAt: 'now',
+        updatedBy: 'admin',
+        cutover: {
+          state: 'active',
+          migrationId: 'migration-1',
+          sourceHash: 'a'.repeat(64),
+          appliedAt: 'now',
+          appliedBy: 'admin',
+        },
+      },
+    ],
+    [
+      'retired cutover',
+      {
+        revision: 1,
+        unitIds: ['normal1'],
+        updatedAt: 'now',
+        updatedBy: 'admin',
+      },
+    ],
+  ])('rejects legacy normal publication after %s', async (_label, learningPath) => {
+    const { transaction } = configureFirestore(
+      {
+        normal1: { type: 'normal', isLive: true, liveOrder: 0, pages: [] },
+        normal2: {
+          type: 'normal',
+          isLive: false,
+          liveOrder: null,
+          pages: [{ id: 'page-1', items: [] }],
+        },
+      },
+      learningPath
+    );
+
+    const response = (await POST(
+      request({
+        lessonIds: ['normal2'],
+        isLive: true,
+        lessonType: 'normal',
+        expectedLiveLessonIds: ['normal1'],
+      })
+    )) as unknown as { status: number; body: { code: string } };
+
+    expect(response.status).toBe(409);
+    expect(response.body.code).toBe('LEGACY_NORMAL_PLACEMENT_RETIRED');
+    expect(transaction.update).not.toHaveBeenCalled();
+  });
+
+  it('keeps practice publication available after normal fallback retirement', async () => {
+    const { transaction } = configureFirestore(
+      {
+        vocab1: { type: 'vocab', isLive: true, liveOrder: 0, pages: [] },
+        vocab2: {
+          type: 'vocab',
+          isLive: false,
+          liveOrder: null,
+          pages: [{ id: 'page-1', items: [] }],
+        },
+      },
+      {
+        revision: 1,
+        unitIds: ['normal1'],
+        updatedAt: 'now',
+        updatedBy: 'admin',
+      }
+    );
+
+    const response = (await POST(
+      request({
+        lessonIds: ['vocab2'],
+        isLive: true,
+        lessonType: 'vocab',
+        expectedLiveLessonIds: ['vocab1'],
+      })
+    )) as unknown as { status: number };
+
+    expect(response.status).toBe(200);
+    expect(transaction.update).toHaveBeenCalledTimes(1);
   });
 });

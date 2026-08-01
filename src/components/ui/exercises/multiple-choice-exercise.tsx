@@ -12,23 +12,31 @@ import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { cn } from '@/src/lib/utils';
 import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
-import type { ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
-import { resolveRuntimeMode } from '@/src/types/runtime-mode';
+import type { ExerciseAnswer, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
+import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
 interface Props {
   exercise: MultipleChoiceExercise;
   onComplete?: (score: number) => void;
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
+  initialAnswer?: ExerciseAnswer;
   /** @deprecated Use runtimeMode="test". */
-  testMode?: boolean;
 }
 
-const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete, runtimeMode, onAnswer, testMode }) => {
-  const mode = resolveRuntimeMode(runtimeMode, testMode);
+const MultipleChoiceExerciseComponent: React.FC<Props> = ({
+  exercise,
+  onComplete,
+  runtimeMode,
+  onAnswer,
+  initialAnswer,
+}) => {
+  const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
-  const [selectedOptionIds, setSelectedOptionIds] = useState<string[]>([]);
-  const [hasSubmitted, setHasSubmitted] = useState(false);
+  const testAnswerMode = mode === 'test';
+  const restoredOptionIds = initialAnswer?.type === 'multiple-choice' ? initialAnswer.selectedOptionIds : [];
+  const [selectedOptionIds, setSelectedOptionIds] = useState<string[]>(restoredOptionIds);
+  const [hasSubmitted, setHasSubmitted] = useState(restoredOptionIds.length > 0);
   const [isProcessing, setIsProcessing] = useState(false);
   const { isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance } = useExerciseProgression({
     totalItems: 1,
@@ -79,13 +87,18 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
 
     setIsProcessing(true);
     setHasSubmitted(true);
-    if (mode === 'test') onAnswer?.({ type: 'multiple-choice', selectedOptionIds });
+    if (testAnswerMode) {
+      onAnswer?.({ type: 'multiple-choice', selectedOptionIds });
+      setIsProcessing(false);
+      onComplete?.(0);
+      return;
+    }
 
+    const score = Math.round(gradeExercisePercentage({ exercise }, { type: 'multiple-choice', selectedOptionIds }));
     const validation = validateMultipleChoiceExercise(selectedOptionIds, exercise);
 
     if (validation.isCorrect) {
       handleCorrect(true);
-      const score = 100;
       const hasVisibleExplanation =
         (exercise.feedbackConfig.successMessage?.showExplanation ?? true) &&
         hasVisibleFeedbackContent(exercise.data.explanation);
@@ -97,7 +110,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
     } else {
       handleIncorrect();
       setIsProcessing(false);
-      if (assessmentMode) onComplete?.(0);
+      if (assessmentMode) onComplete?.(score);
     }
   };
 
@@ -202,19 +215,21 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({ exercise, onComplete
           </div>
         )}
 
-        {!assessmentMode && <FeedbackDisplay
-          isCorrect={isCorrect}
-          message={message}
-          level={level}
-          hint={exercise.data.hint}
-          correctAnswer={exercise.data.options
-            .filter(opt => opt.isCorrect)
-            .map(opt => opt.text)
-            .join(', ')}
-          explanation={exercise.data.explanation}
-          showExplanation={showExplanation}
-          onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
-        />}
+        {!assessmentMode && (
+          <FeedbackDisplay
+            isCorrect={isCorrect}
+            message={message}
+            level={level}
+            hint={exercise.data.hint}
+            correctAnswer={exercise.data.options
+              .filter(opt => opt.isCorrect)
+              .map(opt => opt.text)
+              .join(', ')}
+            explanation={exercise.data.explanation}
+            showExplanation={showExplanation}
+            onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
+          />
+        )}
       </div>
     </div>
   );
