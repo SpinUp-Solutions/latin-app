@@ -50,11 +50,24 @@ const getPreparedPaths = (exercise: GeneratedFormIdentificationExercise, word: E
   );
   const config = paradigm ? exercise.data.paradigmConfigs?.[paradigm] : undefined;
   const paths = getPaths(word);
-  const steps = getAnswerableStepsForWord(word, config?.steps || [], paths.primary);
+  const candidateSteps = getAnswerableStepsForWord(word, config?.steps || [], paths.primary);
+  const enrichedPrimary = enrichPathsWithSteps(paths.primary, word, candidateSteps);
+  const steps = candidateSteps.filter(
+    step => enrichedPrimary.length > 0 && enrichedPrimary.every(path => Boolean(path[step]))
+  );
+
+  if (steps.length === 0) {
+    return { steps, primary: [], optional: [] };
+  }
+
+  const enrichedOptional = enrichPathsWithSteps(paths.optional, word, steps).filter(path =>
+    steps.every(step => Boolean(path[step]))
+  );
+
   return {
     steps,
-    primary: deduplicatePathsBySteps(enrichPathsWithSteps(paths.primary, word, steps), steps),
-    optional: deduplicatePathsBySteps(enrichPathsWithSteps(paths.optional, word, steps), steps),
+    primary: deduplicatePathsBySteps(enrichedPrimary, steps),
+    optional: deduplicatePathsBySteps(enrichedOptional, steps),
   };
 };
 
@@ -91,33 +104,39 @@ export function createGeneratedFormIdentificationItems(
   words: ExerciseWordResponse[],
   previousAnswers: Record<string, Record<string, string>> = {}
 ): ResolvedFormIdentificationItem[] {
+  const usableWords = words.filter(word => getExerciseDisplayForm(word).trim().length > 0);
+
   if (exercise.data.mode === 'single-field') {
-    return words.map(word => {
+    return usableWords.flatMap<SingleFieldFormIdentificationItem>(word => {
       const paths = getPreparedPaths(exercise, word);
+      if (paths.steps.length === 0 || paths.primary.length === 0) return [];
+
       const correctAnswerDisplay = paths.primary
         .map(path => paths.steps.map(step => (path[step] ? getDisplayForm(path[step]!) : '')).join(','))
         .filter(Boolean)
         .join(';');
 
-      return {
-        id: word.id,
-        wordId: word.id,
-        word: word.root_word,
-        root_word: word.root_word,
-        dictionary_entry: word.dictionary_entry ?? null,
-        selected_form: word.selected_form,
-        hasSelectedForm: hasSelectedForm(word),
-        steps: paths.steps,
-        correctAnswerDisplay,
-        hint: word.definitions?.join('; '),
-        primaryFormPaths: paths.primary,
-        optionalFormPaths: paths.optional,
-      };
+      return [
+        {
+          id: word.id,
+          wordId: word.id,
+          word: word.root_word,
+          root_word: word.root_word,
+          dictionary_entry: word.dictionary_entry ?? null,
+          selected_form: word.selected_form,
+          hasSelectedForm: hasSelectedForm(word),
+          steps: paths.steps,
+          correctAnswerDisplay,
+          hint: word.definitions?.join('; '),
+          primaryFormPaths: paths.primary,
+          optionalFormPaths: paths.optional,
+        },
+      ];
     });
   }
 
   if (exercise.data.requireAllPrimaryAnswers) {
-    return words.flatMap(word => {
+    return usableWords.flatMap(word => {
       const paths = getPreparedPaths(exercise, word);
       return paths.steps.map((step, stepIndex) => ({
         id: `${word.id}-${step}`,
@@ -135,12 +154,15 @@ export function createGeneratedFormIdentificationItems(
         optionalFormPaths: paths.optional,
         hint: word.definitions?.join('; '),
         expectedAnswerCount: paths.primary.length,
-        correctAnswerDisplay: extractStepValuesFromPaths(paths.primary, step).join(';'),
+        correctAnswerDisplay: paths.primary
+          .map(path => path[step])
+          .filter(Boolean)
+          .join(';'),
       }));
     });
   }
 
-  return words.flatMap(word => {
+  return usableWords.flatMap(word => {
     const paths = getPreparedPaths(exercise, word);
     const answered = previousAnswers[word.id] || {};
 
@@ -150,7 +172,10 @@ export function createGeneratedFormIdentificationItems(
       const allValues = Array.from(
         new Set([...extractStepValuesFromPaths(primary, step), ...extractStepValuesFromPaths(optional, step)])
       );
-      const correctAnswer = formatPrimaryAnswersDisplay(primary, step) || extractStepValue(word, step);
+      const correctAnswer =
+        formatPrimaryAnswersDisplay(primary, step) ||
+        formatPrimaryAnswersDisplay(optional, step) ||
+        extractStepValue(word, step);
       const acceptedAnswers = getAcceptedAnswersForMultipleValues(allValues);
 
       return {

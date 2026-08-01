@@ -141,7 +141,11 @@ export function enrichPathsWithSteps(
 ): Array<Record<string, string | undefined>> {
   return paths.map(path => {
     const enrichedPath: Record<string, string | undefined> = { ...path };
+    const verbSupport = isVerb(word) ? getSupportedVerbFormStepsForParsedPath(path) : null;
     steps.forEach(step => {
+      if (isVerb(word) && (!verbSupport || !verbSupport.supportedSteps.includes(step))) {
+        return;
+      }
       if (!enrichedPath[step]) {
         enrichedPath[step] = extractStepValue(word, step);
       }
@@ -155,19 +159,18 @@ export function getAnswerableStepsForWord(
   steps: FormIdentificationStep[],
   formPaths: Array<Record<string, string | undefined>>
 ): FormIdentificationStep[] {
-  if (!isVerb(word) || formPaths.length === 0) {
+  if (!isVerb(word)) {
     return steps;
   }
 
-  const normalizedSteps = normalizeVerbFormStepsForParsedPaths(formPaths, steps);
-  const supportedStepSets = formPaths
-    .map(path => getSupportedVerbFormStepsForParsedPath(path))
-    .filter((support): support is NonNullable<typeof support> => support !== null)
-    .map(support => new Set<FormIdentificationStep>(support.supportedSteps));
+  if (formPaths.length === 0) return [];
 
-  if (supportedStepSets.length === 0) {
-    return normalizedSteps;
-  }
+  const normalizedSteps = normalizeVerbFormStepsForParsedPaths(formPaths, steps);
+  const supports = formPaths.map(path => getSupportedVerbFormStepsForParsedPath(path));
+
+  if (supports.some(support => support === null)) return [];
+
+  const supportedStepSets = supports.map(support => new Set<FormIdentificationStep>(support!.supportedSteps));
 
   return normalizedSteps.filter(step => supportedStepSets.every(supportedSteps => supportedSteps.has(step)));
 }
@@ -542,6 +545,8 @@ export function hasValidFormData(word: ExerciseWordResponse, steps: FormIdentifi
     steps,
     formPaths as Array<Record<string, string | undefined>>
   );
+
+  if (answerableSteps.length === 0) return false;
 
   return formPaths.some(path => {
     return answerableSteps.every(step => {

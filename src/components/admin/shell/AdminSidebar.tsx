@@ -14,6 +14,7 @@ import {
   Layers3,
   LayoutDashboard,
   LibraryBig,
+  Sparkles,
   Tags,
   type LucideIcon,
 } from 'lucide-react';
@@ -56,7 +57,10 @@ const navigationGroups: NavigationGroup[] = [
   },
   {
     label: 'System',
-    items: [{ href: '/admin/diagramming-attempts', label: 'Diagramming Attempts', icon: ClipboardList }],
+    items: [
+      { href: '/admin/ai-evaluations', label: 'AI Evaluations', icon: Sparkles },
+      { href: '/admin/diagramming-attempts', label: 'Diagramming Attempts', icon: ClipboardList },
+    ],
   },
 ];
 

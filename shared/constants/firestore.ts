@@ -13,3 +13,6 @@ export const MOCK_TEST_ORDERING_DOCUMENT_ID = 'default';
 export const TEST_ATTEMPTS_COLLECTION = 'testAttempts';
 export const TEST_ATTEMPT_SESSIONS_COLLECTION = 'testAttemptSessions';
 export const USER_PROGRESS_COLLECTION = 'userProgress';
+export const AI_EVALUATION_CASES_COLLECTION = 'aiEvaluationCases';
+export const AI_EVALUATION_RESULT_CACHE_COLLECTION = 'aiEvaluationResultCache';
+export const AI_EVALUATION_RUN_THROTTLES_COLLECTION = 'aiEvaluationRunThrottles';

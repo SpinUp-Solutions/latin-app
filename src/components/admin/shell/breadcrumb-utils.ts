@@ -89,6 +89,7 @@ export const BREADCRUMB_ROUTES: BreadcrumbRoute[] = [
     parentHrefs: () => ['/admin/practice-categories'],
   },
   { template: 'practice-categories', crumbs: ['Practice Categories'] },
+  { template: 'ai-evaluations', crumbs: ['AI Evaluations'] },
   { template: 'diagramming-attempts', crumbs: ['Diagramming Attempts'] },
 ];
 
@@ -106,6 +107,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   vocabulary: 'Vocabulary',
   'vocabulary-pools': 'Vocabulary Pools',
   'practice-categories': 'Practice Categories',
+  'ai-evaluations': 'AI Evaluations',
   'diagramming-attempts': 'Diagramming Attempts',
   versions: 'Versions',
   advanced: 'Advanced Filters',

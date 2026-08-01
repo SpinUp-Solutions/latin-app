@@ -719,6 +719,18 @@
   ],
   "fieldOverrides": [
     {
+      "collectionGroup": "aiEvaluationResultCache",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "aiEvaluationRunThrottles",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
       "collectionGroup": "testAttempts",
       "fieldPath": "answers",
       "indexes": []

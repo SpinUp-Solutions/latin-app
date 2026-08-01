@@ -58,6 +58,35 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // AI evaluation inputs, generated outputs, and cache records are admin-only
+    // server data accessed through authenticated Firebase Functions.
+    match /aiEvaluationCases/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /aiEvaluationResultCache/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /aiEvaluationRunThrottles/{document=**} {
+      allow read, write: if false;
+    }
+
+    // User profiles remain readable for username availability checks, but the
+    // role consumed by server-side admin authorization must not be writable by
+    // clients. Administrative role changes use the Admin SDK, which bypasses
+    // these rules.
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.role == 'student';
+      allow update: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.role == resource.data.role;
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
     match /{collection}/{document=**} {
       allow read, write: if collection != 'diagramming_attempts'
         && collection != 'lessons'
@@ -71,7 +100,11 @@ service cloud.firestore {
         && collection != 'mockTests'
         && collection != 'mockTestOrdering'
         && collection != 'userProgress'
-        && collection != 'userProgressMigrationV2Backups';
+        && collection != 'userProgressMigrationV2Backups'
+        && collection != 'aiEvaluationCases'
+        && collection != 'aiEvaluationResultCache'
+        && collection != 'aiEvaluationRunThrottles'
+        && collection != 'users';
     }
   }
 }

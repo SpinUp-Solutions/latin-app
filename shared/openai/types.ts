@@ -1,5 +1,5 @@
-import { VocabularyWord } from '../types/vocabulary/schemas';
-import { PartOfSpeech } from '../types/vocabulary/schemas/enums';
+import type { VocabularyWord } from '../types/vocabulary/schemas';
+import type { PartOfSpeech } from '../types/vocabulary/schemas/enums';
 
 export type AIProvider = 'openai';
 
@@ -34,6 +34,14 @@ export interface TokenUsage {
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
+  /** Input tokens not read from or written to the prompt cache. */
+  ordinaryInputTokens?: number;
+  /** Input tokens served from OpenAI's prompt cache. */
+  cachedInputTokens?: number;
+  /** Input tokens written to the prompt cache, when reported by the API. */
+  cacheWriteTokens?: number;
+  /** Reasoning tokens are included in completionTokens and are informational. */
+  reasoningTokens?: number;
 }
 
 export interface CostBreakdown {
@@ -41,6 +49,18 @@ export interface CostBreakdown {
   outputCost: number;
   totalCost: number;
   tokens: TokenUsage;
+  /** Version/source of the price table used for this estimate. */
+  pricingVersion?: string;
+  pricingSource?: string;
+}
+
+export type CostMeasurementStatus = 'measured' | 'not-incurred-app-cache' | 'not-incurred-coalesced' | 'unavailable';
+
+export interface CostMeasurement {
+  status: CostMeasurementStatus;
+  /** Present only when the amount was calculated from measured token usage. */
+  cost?: CostBreakdown;
+  reason?: string;
 }
 
 export interface ErrorDetails {
@@ -65,6 +85,8 @@ export interface AIAutocompleteResponse {
 export type OpenAIStructuredOutput = Partial<VocabularyWord>;
 
 export type TranslationDirection = 'latin-to-english' | 'english-to-latin';
+export const LETTER_GRADES = ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D', 'D-', 'F'] as const;
+export type LetterGrade = (typeof LETTER_GRADES)[number];
 
 export interface TranslationGradingRequest {
   sourceText: string;
