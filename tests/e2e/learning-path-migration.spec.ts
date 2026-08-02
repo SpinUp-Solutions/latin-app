@@ -68,7 +68,9 @@ test.describe('Learning Path migration acceptance', () => {
     await seedAcceptanceData();
     const { db } = getE2EAdmin();
     await db.collection('learningPaths').doc('default').delete();
+    const migrationRecords = await db.collection('learningPathMigrations').get();
     await Promise.all([
+      ...migrationRecords.docs.map(document => document.ref.delete()),
       db
         .collection('lessons')
         .doc(LEGACY_LESSON_IDS[0])
@@ -103,8 +105,15 @@ test.describe('Learning Path migration acceptance', () => {
     });
     expect(manifest.sourceHash).toMatch(/^[a-f0-9]{64}$/);
     expect((await db.collection('learningPaths').doc('default').get()).exists).toBe(false);
+    await expect(
+      db
+        .collection('learningPathMigrations')
+        .doc(manifest.migrationId)
+        .get()
+        .then(snapshot => snapshot.data())
+    ).resolves.toMatchObject({ status: 'prepared', manifest });
 
-    const applyResponse = await command(request, token, { action: 'apply', manifest });
+    const applyResponse = await command(request, token, { action: 'apply', migrationId: manifest.migrationId });
     expect(applyResponse.status()).toBe(200);
     const firstApply = (await applyResponse.json()) as {
       applied: boolean;
@@ -119,14 +128,14 @@ test.describe('Learning Path migration acceptance', () => {
       },
     });
 
-    const retryResponse = await command(request, token, { action: 'apply', manifest });
+    const retryResponse = await command(request, token, { action: 'apply', migrationId: manifest.migrationId });
     expect(retryResponse.status()).toBe(200);
     await expect(retryResponse.json()).resolves.toMatchObject({
       applied: false,
       path: { revision: 1, unitIds: LEGACY_LESSON_IDS },
     });
 
-    const verifyResponse = await command(request, token, { action: 'verify', manifest });
+    const verifyResponse = await command(request, token, { action: 'verify', migrationId: manifest.migrationId });
     expect(verifyResponse.status()).toBe(200);
     await expect(verifyResponse.json()).resolves.toMatchObject({
       verified: true,
@@ -144,7 +153,10 @@ test.describe('Learning Path migration acceptance', () => {
       path: { cutover: { state: 'active' } },
     });
 
-    const rollbackResponse = await command(request, token, { action: 'rollback' });
+    const rollbackResponse = await command(request, token, {
+      action: 'rollback',
+      migrationId: manifest.migrationId,
+    });
     expect(rollbackResponse.status()).toBe(200);
     await expect(rollbackResponse.json()).resolves.toMatchObject({
       path: { revision: 1, unitIds: LEGACY_LESSON_IDS, cutover: { state: 'inactive' } },
@@ -161,21 +173,30 @@ test.describe('Learning Path migration acceptance', () => {
       path: { cutover: { state: 'inactive' } },
     });
 
-    const reapplyResponse = await command(request, token, { action: 'apply', manifest });
+    const reapplyResponse = await command(request, token, {
+      action: 'apply',
+      migrationId: manifest.migrationId,
+    });
     expect(reapplyResponse.status()).toBe(200);
     await expect(reapplyResponse.json()).resolves.toMatchObject({
       applied: true,
       path: { revision: 2, unitIds: LEGACY_LESSON_IDS, cutover: { state: 'active' } },
     });
 
-    const secondVerifyResponse = await command(request, token, { action: 'verify', manifest });
+    const secondVerifyResponse = await command(request, token, {
+      action: 'verify',
+      migrationId: manifest.migrationId,
+    });
     expect(secondVerifyResponse.status()).toBe(200);
     await expect(secondVerifyResponse.json()).resolves.toMatchObject({
       verified: true,
       path: { revision: 2, unitIds: LEGACY_LESSON_IDS },
     });
 
-    const retireResponse = await command(request, token, { action: 'retire' });
+    const retireResponse = await command(request, token, {
+      action: 'retire',
+      migrationId: manifest.migrationId,
+    });
     expect(retireResponse.status()).toBe(200);
     const retired = (await retireResponse.json()) as { path: Record<string, unknown> };
     expect(retired.path).toMatchObject({ revision: 2, unitIds: LEGACY_LESSON_IDS });
@@ -198,7 +219,10 @@ test.describe('Learning Path migration acceptance', () => {
     });
     expect(retiredViewBody.path).not.toHaveProperty('cutover');
 
-    const unavailableRollback = await command(request, token, { action: 'rollback' });
+    const unavailableRollback = await command(request, token, {
+      action: 'rollback',
+      migrationId: manifest.migrationId,
+    });
     expect(unavailableRollback.status()).toBe(409);
     await expect(unavailableRollback.json()).resolves.toMatchObject({ code: 'ROLLBACK_UNAVAILABLE' });
 
