@@ -4,6 +4,7 @@ export const PRACTICE_CATEGORIES_COLLECTION = 'practiceCategories';
 export const PRACTICE_CATEGORY_MEMBERSHIPS_COLLECTION = 'practiceCategoryMemberships';
 export const LEARNING_UNITS_COLLECTION = 'lessons';
 export const LEARNING_PATHS_COLLECTION = 'learningPaths';
+export const LEARNING_PATH_MIGRATIONS_COLLECTION = 'learningPathMigrations';
 export const DEFAULT_LEARNING_PATH_ID = 'default';
 export const TEST_VERSIONS_COLLECTION = 'testVersions';
 export const TEST_VERSION_DRAFTS_COLLECTION = 'testVersionDrafts';
