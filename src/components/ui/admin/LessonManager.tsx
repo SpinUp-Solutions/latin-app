@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 import { Button } from '@/src/components/ui/button';
@@ -133,43 +133,9 @@ function LessonDescription({ content }: { content?: string }) {
 }
 
 function LessonTitle({ content }: { content: string }) {
-  const titleRef = useRef<HTMLDivElement>(null);
-  const [isCompact, setIsCompact] = useState(false);
-
-  useEffect(() => {
-    setIsCompact(false);
-  }, [content]);
-
-  useEffect(() => {
-    if (isCompact) return;
-
-    const titleElement = titleRef.current;
-    if (!titleElement) return;
-
-    const measure = () => {
-      if (titleElement.scrollHeight > titleElement.clientHeight + 1) {
-        setIsCompact(true);
-      }
-    };
-
-    measure();
-    if (typeof ResizeObserver === 'undefined') return;
-
-    const resizeObserver = new ResizeObserver(measure);
-    resizeObserver.observe(titleElement);
-    return () => resizeObserver.disconnect();
-  }, [content, isCompact]);
-
   return (
-    <h3 className="relative h-11 min-w-0 flex-1">
-      <div
-        ref={titleRef}
-        className={cn(
-          'flex h-11 items-center overflow-hidden pr-10 font-serif tracking-tight text-foreground',
-          isCompact ? 'text-xl leading-5' : 'text-3xl leading-none'
-        )}>
-        <SimpleRichDisplay content={content} className="!block whitespace-normal" />
-      </div>
+    <h3 className="relative min-w-0 flex-1 pr-10 font-serif text-xl leading-5 tracking-tight text-foreground">
+      <SimpleRichDisplay content={content} className="!block break-words whitespace-normal" />
       <div
         className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-white via-white/95 to-transparent"
         aria-hidden="true"
