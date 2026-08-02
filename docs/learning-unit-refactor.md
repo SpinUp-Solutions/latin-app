@@ -753,6 +753,7 @@ Keep the existing Firestore `lessons` collection for learning units during the i
 ```text
 lessons/{learningUnitId}       LessonUnit or TestUnit during migration
 learningPaths/default          Revisioned ordered normal-flow aggregate and cutover state
+learningPathMigrations/{id}    Immutable manifest plus resumable lifecycle audit events
 testVersions/{versionId}       Separately stored version pages and scoring
 mockTests/{mockTestId}         Mock Tests category containers
 testAttempts/{attemptId}       Attempt lifecycle and frozen statistics
@@ -1282,7 +1283,7 @@ Phase 5 ships as three independently reviewable and independently rollbackable s
 
 #### Phase 5C: Migration, cutover, and fallback retirement
 
-- Add an admin-only dry-run/apply/verify/rollback/retire workflow around one reviewed immutable normal-order manifest. Fail closed on source ambiguity, a source-hash change, or an unexpected live test; never invent a tie-breaker.
+- Add an admin-only prepare/apply/verify/rollback/retire workflow around one reviewed immutable normal-order manifest. Persist the manifest and lifecycle events server-side so refreshes and operator handoffs are resumable; make retirement rerun the complete production projection verification immediately before its irreversible write; fail closed on source ambiguity, a source-hash change, an unverified retirement, or an unexpected live test.
 - Make cutover transactional rather than introducing a maintenance lock or continuous legacy mirror. The migration and every legacy normal placement mutation read the singleton path/cutover state, so activation serializes with in-flight placement edits.
 - Keep the stabilization window read-only: ordinary Learning Path saves are rejected while `cutover` is present, legacy placement fields are never mutated after cutover, and rollback therefore only flips `cutover.state` to `inactive` without rewriting any lesson documents.
 - Switch the Phase 5A dashboard service's normal-sequence source to the active Learning Path, retaining the legacy derivation only as the inactive-fallback compatibility read.
@@ -1295,7 +1296,7 @@ Implementation notes:
 
 - Phase 5A added the authenticated summary-only student dashboard and authorized single-lesson detail projections, migrated every former full-list consumer, preserved normal gating and practice/category order, and retained full-page reads only as a compatibility fallback for legacy documents missing summary counts.
 - Phase 5B added the strict singleton aggregate, revisioned complete-sequence service and API, server-only Firestore rule, placed-unit mutation guards, RTK Query ownership, and the normal Learning Path organizer with explicit stale-edit reconciliation. The three practice modes remain on their existing placement APIs, and the fetched lesson Redux mirror was removed.
-- Phase 5C added deterministic dry-run manifests, source-bound SHA-256 validation, transactional apply/verify/rollback/reapply/retire commands, frozen-window and retired-state mutation guards, production admin/student projection parity verification, and active/inactive/retired reader switching. The obsolete full-content `/api/lessons` list is retired with `410 Gone`.
+- Phase 5C added deterministic manifests, source-bound SHA-256 validation, transactional apply/verify/rollback/reapply/retire commands, durable server-side manifest/audit records with pre-record cutover recovery, refresh-safe admin controls, frozen-window and retired-state mutation guards, production admin/student projection parity verification, and active/inactive/retired reader switching. The obsolete full-content `/api/lessons` list is retired with `410 Gone`.
 - Independent review was run after 5A, 5B, and 5C. Findings covering summary fallback parity, wrong-kind placement, stale-draft membership reconciliation, alternate mutation routes, manifest integrity, fallback corruption, projection parity, active-read isolation, transaction interleaving, practice independence, inactive rollback invariants, dashboard cache invalidation, dirty-draft navigation protection, and dangling-reference repair were fixed and re-reviewed until clean.
 - Final local verification passed TypeScript, all 49 Jest suites/290 tests, quiet ESLint, `git diff --check`, and the Next.js production build. Firestore rules and all code changes remain local; nothing was deployed.
 
