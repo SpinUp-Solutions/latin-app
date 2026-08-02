@@ -58,7 +58,7 @@ const navigationGroups: NavigationGroup[] = [
   {
     label: 'System',
     items: [
-      { href: '/admin/ai-evaluations', label: 'AI Evaluations', icon: Sparkles },
+      { href: '/admin/ai-evaluations', label: 'AI Evaluations', icon: Sparkles, disabled: true },
       { href: '/admin/diagramming-attempts', label: 'Diagramming Attempts', icon: ClipboardList },
     ],
   },
@@ -139,28 +139,52 @@ export function AdminSidebar({ onNavigate, collapsed = false, onToggleCollapse, 
                 const isActive = item.href === activeHref;
                 return (
                   <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      onClick={onNavigate}
-                      aria-current={isActive ? 'page' : undefined}
-                      title={collapsed ? item.label : undefined}
-                      className={cn(
-                        'group/link flex min-h-9 items-center gap-2 rounded-r-lg border-l-2 px-3 py-1.5 text-sm transition-[background-color,color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                        collapsed && 'justify-center gap-0 rounded-lg border-l-0 px-2',
-                        isActive
-                          ? 'border-primary bg-primary/[0.09] font-medium text-primary'
-                          : 'border-transparent text-foreground/70 hover:bg-roman-parchment/80 hover:text-foreground'
-                      )}>
-                      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                      <span
+                    {item.disabled ? (
+                      <div
+                        aria-disabled="true"
+                        title={collapsed ? `${item.label} (WIP)` : undefined}
                         className={cn(
-                          'min-w-0 flex-1 truncate whitespace-nowrap transition-[max-width,opacity,transform] duration-150 ease-out motion-reduce:transition-none',
-                          collapsed ? 'max-w-0 -translate-x-1 opacity-0' : 'max-w-48 translate-x-0 opacity-100'
+                          'group/link flex min-h-9 cursor-not-allowed items-center gap-2 rounded-r-lg border-l-2 border-transparent px-3 py-1.5 text-sm text-foreground/35',
+                          collapsed && 'justify-center gap-0 rounded-lg border-l-0 px-2'
                         )}>
-                        {item.label}
-                      </span>
-                      {isActive && !collapsed && <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
-                    </Link>
+                        <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span
+                          className={cn(
+                            'min-w-0 flex-1 truncate whitespace-nowrap transition-[max-width,opacity,transform] duration-150 ease-out motion-reduce:transition-none',
+                            collapsed ? 'max-w-0 -translate-x-1 opacity-0' : 'max-w-48 translate-x-0 opacity-100'
+                          )}>
+                          {item.label}
+                        </span>
+                        {!collapsed && (
+                          <span className="shrink-0 rounded-full bg-foreground/[0.07] px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase tracking-[0.08em] text-foreground/45">
+                            WIP
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <Link
+                        href={item.href}
+                        onClick={onNavigate}
+                        aria-current={isActive ? 'page' : undefined}
+                        title={collapsed ? item.label : undefined}
+                        className={cn(
+                          'group/link flex min-h-9 items-center gap-2 rounded-r-lg border-l-2 px-3 py-1.5 text-sm transition-[background-color,color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                          collapsed && 'justify-center gap-0 rounded-lg border-l-0 px-2',
+                          isActive
+                            ? 'border-primary bg-primary/[0.09] font-medium text-primary'
+                            : 'border-transparent text-foreground/70 hover:bg-roman-parchment/80 hover:text-foreground'
+                        )}>
+                        <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span
+                          className={cn(
+                            'min-w-0 flex-1 truncate whitespace-nowrap transition-[max-width,opacity,transform] duration-150 ease-out motion-reduce:transition-none',
+                            collapsed ? 'max-w-0 -translate-x-1 opacity-0' : 'max-w-48 translate-x-0 opacity-100'
+                          )}>
+                          {item.label}
+                        </span>
+                        {isActive && !collapsed && <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
+                      </Link>
+                    )}
                   </li>
                 );
               })}

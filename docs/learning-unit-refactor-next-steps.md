@@ -514,7 +514,8 @@ rollback, the focused cleanup release can remove the temporary workflow.
 This cleanup removes or simplifies:
 
 - `src/app/api/admin/learning-path/migration/route.ts`;
-- the `learningPathMigrations` collection constant and server-only rule;
+- the application-level `learningPathMigrations` collection constant while
+  retaining its deny-only Firestore rule for the archived production record;
 - migration action, source, manifest, and cutover schemas/types;
 - manifest hashing, source comparison, apply, verify, rollback, and retire
   service methods;
@@ -527,6 +528,8 @@ This cleanup removes or simplifies:
 Preserve:
 
 - `learningPaths/default` as the canonical revisioned aggregate;
+- the retired `learningPathMigrations` records and their server-only Firestore
+  rule as the permanent cutover audit trail;
 - ordinary complete-sequence save validation and stale-revision protection;
 - student and admin projection behavior;
 - deletion, lesson-validity, test-rotation, and ownership safety guards;

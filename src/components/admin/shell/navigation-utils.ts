@@ -3,6 +3,7 @@ import { routeMatchesTemplate } from './breadcrumb-utils';
 export interface AdminNavigationItem {
   href: string;
   label: string;
+  disabled?: boolean;
 }
 
 const EDITOR_NAVIGATION_TARGETS = [

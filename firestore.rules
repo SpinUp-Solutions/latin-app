@@ -24,6 +24,12 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // The migration runtime is retired, but its immutable production audit
+    // records remain server-only for operational history and incident review.
+    match /learningPathMigrations/{document=**} {
+      allow read, write: if false;
+    }
+
     // Assessment content, attempts, and gate-controlling progress are available
     // only through authenticated server routes. The Admin SDK bypasses rules.
     match /testVersions/{document=**} {
@@ -91,6 +97,7 @@ service cloud.firestore {
       allow read, write: if collection != 'diagramming_attempts'
         && collection != 'lessons'
         && collection != 'learningPaths'
+        && collection != 'learningPathMigrations'
         && collection != 'practiceCategories'
         && collection != 'practiceCategoryMemberships'
         && collection != 'testVersions'
