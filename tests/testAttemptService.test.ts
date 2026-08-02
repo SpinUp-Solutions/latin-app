@@ -803,6 +803,19 @@ const fillExerciseWith = (id: string, items: Array<{ text: string; answer: strin
   data: { items },
 });
 
+const translationGradingExercise = {
+  id: 'translation-assessment',
+  type: 'translation-grading',
+  title: 'Translate',
+  instructions: '',
+  maxPoints: 8,
+  feedbackConfig: { escalationLevels: [] },
+  translationDirection: 'latin-to-english',
+  data: {
+    items: [{ latinText: '<p>Puella cantat.</p>' }, { latinText: 'Pueri currunt.' }],
+  },
+};
+
 const versionDocumentWith = (id: string, exercise: StoredDocument, totalPoints: number) => ({
   ...versionDocument(id, exercise),
   totalPoints,
@@ -920,6 +933,69 @@ describe('test attempt submission and sticky completion', () => {
       updatedAt: timestamp,
       progressSchemaVersion: 2,
     });
+  });
+
+  it('grades test translations on the server and normalizes the /10 scores to maxPoints', async () => {
+    const db = new FakeFirestore();
+    db.seed('lessons', 'test-1', testDocument(['version-a']));
+    db.seed('testVersions', 'version-a', versionDocumentWith('version-a', translationGradingExercise, 8));
+    const gradeTestTranslation = jest.fn(async ({ sourceText }: { sourceText: string }) =>
+      sourceText === 'Puella cantat.' ? 9 : 6
+    );
+    const service = new TestAttemptService(db as never, () => timestamp, { gradeTestTranslation });
+    const started = await service.startAttempt(startInput, 'student-1');
+    await service.saveAttemptAnswers(
+      started.attempt.id,
+      {
+        answers: {
+          'translation-assessment': {
+            type: 'translation-grading',
+            translations: ['The girl sings.', 'The boys run.'],
+          },
+        },
+      },
+      'student-1'
+    );
+
+    const result = await service.submitAttempt(started.attempt.id, 'student-1');
+
+    expect(gradeTestTranslation).toHaveBeenCalledTimes(2);
+    expect(result.attempt).toMatchObject({ score: 6, maxScore: 8, percentage: 75, outcome: 'passed' });
+    expect(result.attempt.exerciseResults['translation-assessment']).toEqual({
+      title: 'Translate',
+      awardedPoints: 6,
+      maxPoints: 8,
+    });
+  });
+
+  it('keeps a translation attempt resumable when AI grading is unavailable', async () => {
+    const db = new FakeFirestore();
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    db.seed('lessons', 'test-1', testDocument(['version-a']));
+    db.seed('testVersions', 'version-a', versionDocumentWith('version-a', translationGradingExercise, 8));
+    const service = new TestAttemptService(db as never, () => timestamp, {
+      gradeTestTranslation: async () => Promise.reject(new Error('provider unavailable')),
+    });
+    const started = await service.startAttempt(startInput, 'student-1');
+    await service.saveAttemptAnswers(
+      started.attempt.id,
+      {
+        answers: {
+          'translation-assessment': {
+            type: 'translation-grading',
+            translations: ['The girl sings.', 'The boys run.'],
+          },
+        },
+      },
+      'student-1'
+    );
+
+    await expect(service.submitAttempt(started.attempt.id, 'student-1')).rejects.toMatchObject({
+      code: 'ATTEMPT_GRADING_UNAVAILABLE',
+      status: 503,
+    });
+    expect(db.read('testAttempts', started.attempt.id)).toMatchObject({ status: 'in-progress' });
+    consoleError.mockRestore();
   });
 
   it('completes a score-only test on submission regardless of score', async () => {

@@ -14,7 +14,7 @@ export const OPENAI_MODELS_SOURCE = 'https://developers.openai.com/api/docs/mode
 // and may take up to 24 hours despite its lower price: https://developers.openai.com/api/docs/guides/batch
 export const OPENAI_BATCH_GUIDE_SOURCE = 'https://developers.openai.com/api/docs/guides/batch';
 export const OPENAI_PROMPT_CACHING_SOURCE = 'https://developers.openai.com/api/docs/guides/prompt-caching';
-export const TRANSLATION_GRADING_PROMPT_VERSION = 'translation-grading-v2';
+export const TRANSLATION_GRADING_PROMPT_VERSION = 'translation-grading-v3';
 
 export type OpenAIReasoningEffort = 'low' | 'high';
 

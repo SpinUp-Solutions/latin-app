@@ -37,7 +37,8 @@ const evaluationCase: EvaluationCase = {
 const successResult = (model: string, effort: 'low' | 'high') => ({
   success: true as const,
   data: {
-    grade: 'A' as const,
+    feedbackLevel: 'Excellent' as const,
+    isPassing: true,
     notes: 'Good.',
     suggestedText: 'All Gaul is divided.',
     breakdown: [],

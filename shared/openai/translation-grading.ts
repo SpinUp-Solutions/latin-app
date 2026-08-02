@@ -11,22 +11,22 @@ import {
   TranslationGradingRequest,
   TranslationGradingResponse,
   CostBreakdown,
-  LETTER_GRADES,
-  type LetterGrade,
+  TRANSLATION_FEEDBACK_LEVELS,
+  type TranslationFeedbackLevel,
   TokenUsage,
 } from './types';
 
-const SYSTEM_PROMPT = `You are a warm, encouraging Latin tutor helping students grow through thoughtful feedback on their translations.
+const LESSON_SYSTEM_PROMPT = `You are a warm, encouraging Latin tutor helping students grow through thoughtful feedback on their translations.
 You may be asked to grade Latin -> English or English -> Latin. Follow the specified direction.
 
-Grading scale:
-- A: Accurate meaning, correct grammar, natural English
-- B: Minor errors (word choice, articles) but meaning clear
-- C: Some errors but shows understanding of structure
-- D: Significant errors but some correct elements
-- F: Completely wrong or nonsensical
+Feedback levels:
+- Excellent: equivalent to a score from 90 through 100
+- Very good: equivalent to a score from 85 through 89
+- Good: equivalent to a score from 80 through 84
+- Adequate: equivalent to a score from 75 through 79
+- Not quite right: equivalent to a score below 75
 
-Use +/- for finer distinction. Celebrate effort and progress. Frame corrections as opportunities to grow.
+Return exactly one of those feedback levels. Never include a numerical score, percentage, or letter grade in the feedback. Celebrate effort and progress. Frame corrections as opportunities to grow.
 
 In notes: lead with genuine praise for what the student did well, then gently suggest areas to improve. Keep it to 2-3 sentences.
 
@@ -98,6 +98,12 @@ Example grammaticalBreakdown for "Si quid est in me ingeni, quod sentio quam sit
   }
 ]`;
 
+const TEST_SYSTEM_PROMPT = `You are an exacting Latin assessment grader. Grade a student's translation in the requested direction.
+
+Evaluate accuracy of meaning, morphology, syntax, vocabulary, and idiom. Preserve legitimate translation variants and do not penalize stylistic differences that retain the source meaning and grammar.
+
+Return only a score from 0 through 10, where 10 is fully correct and 0 shows no meaningful correspondence. You may use decimal values when partial credit is warranted. Do not return feedback, a suggested answer, or any other fields.`;
+
 export interface BreakdownItem {
   latinSegment: string;
   yourTranslation: string;
@@ -113,19 +119,24 @@ export interface GrammaticalBreakdownItem {
 }
 
 export interface TranslationGradingOutput {
-  grade: LetterGrade;
+  feedbackLevel: TranslationFeedbackLevel;
+  isPassing: boolean;
   notes: string;
   suggestedText: string;
   breakdown: BreakdownItem[];
   grammaticalBreakdown: GrammaticalBreakdownItem[];
 }
 
-const TRANSLATION_GRADING_JSON_SCHEMA = {
+export interface TestTranslationGradingOutput {
+  score: number;
+}
+
+const LESSON_TRANSLATION_GRADING_JSON_SCHEMA = {
   type: 'object',
   properties: {
-    grade: {
+    feedbackLevel: {
       type: 'string',
-      enum: LETTER_GRADES,
+      enum: TRANSLATION_FEEDBACK_LEVELS,
     },
     notes: { type: 'string' },
     suggestedText: { type: 'string' },
@@ -158,7 +169,16 @@ const TRANSLATION_GRADING_JSON_SCHEMA = {
       },
     },
   },
-  required: ['grade', 'notes', 'suggestedText', 'breakdown', 'grammaticalBreakdown'],
+  required: ['feedbackLevel', 'notes', 'suggestedText', 'breakdown', 'grammaticalBreakdown'],
+  additionalProperties: false,
+} as const;
+
+const TEST_TRANSLATION_GRADING_JSON_SCHEMA = {
+  type: 'object',
+  properties: {
+    score: { type: 'number', minimum: 0, maximum: 10 },
+  },
+  required: ['score'],
   additionalProperties: false,
 } as const;
 
@@ -180,9 +200,9 @@ const grammaticalBreakdownItemSchema = z
   })
   .strict();
 
-export const translationGradingOutputSchema = z
+const lessonTranslationGradingProviderOutputSchema = z
   .object({
-    grade: z.enum(LETTER_GRADES),
+    feedbackLevel: z.enum(TRANSLATION_FEEDBACK_LEVELS),
     notes: z.string(),
     suggestedText: z.string(),
     breakdown: z.array(breakdownItemSchema),
@@ -190,8 +210,21 @@ export const translationGradingOutputSchema = z
   })
   .strict();
 
+export const translationGradingOutputSchema = lessonTranslationGradingProviderOutputSchema.extend({
+  isPassing: z.boolean(),
+});
+
+export const testTranslationGradingOutputSchema = z.object({ score: z.number().min(0).max(10) }).strict();
+
+export const isPassingTranslationFeedback = (level: TranslationFeedbackLevel): boolean =>
+  level === 'Excellent' || level === 'Very good' || level === 'Good';
+
 export function parseTranslationGradingOutput(value: unknown): TranslationGradingOutput {
   return translationGradingOutputSchema.parse(value) as TranslationGradingOutput;
+}
+
+export function parseTestTranslationGradingOutput(value: unknown): TestTranslationGradingOutput {
+  return testTranslationGradingOutputSchema.parse(value);
 }
 
 export type TranslationGradingFailureCode =
@@ -212,9 +245,9 @@ interface TranslationGradingRunBase {
   latencyMs: number;
 }
 
-export interface TranslationGradingRunSuccess extends TranslationGradingRunBase {
+export interface TranslationGradingRunSuccess<T = TranslationGradingOutput> extends TranslationGradingRunBase {
   success: true;
-  data: TranslationGradingOutput;
+  data: T;
 }
 
 export interface TranslationGradingRunFailure extends TranslationGradingRunBase {
@@ -224,16 +257,20 @@ export interface TranslationGradingRunFailure extends TranslationGradingRunBase 
   error: string;
 }
 
-export type TranslationGradingRunResult = TranslationGradingRunSuccess | TranslationGradingRunFailure;
+export type TranslationGradingRunResult<T = TranslationGradingOutput> =
+  | TranslationGradingRunSuccess<T>
+  | TranslationGradingRunFailure;
 
-const PROMPT_INSTRUCTIONS = `Grade the supplied translation according to the requested direction.
+const LESSON_PROMPT_INSTRUCTIONS = `Grade the supplied translation according to the requested direction.
 
 Provide:
-1. A letter grade
+1. One qualitative feedback level from the supplied rubric
 2. Notes with overall feedback (2-3 sentences)
 3. A suggested translation
 4. A breakdown array analyzing the translation segment-by-segment
 5. A grammaticalBreakdown array with phrase-based grammatical analysis of the Latin text (source for Latin -> English, student's translation for English -> Latin)`;
+
+const TEST_PROMPT_INSTRUCTIONS = `Score the supplied translation as an assessment response. Return only the score out of 10 required by the schema.`;
 
 export function buildTranslationGradingPrompt(request: TranslationGradingRequest): string {
   const { stablePrefix, variableSuffix } = buildTranslationGradingPromptParts(request);
@@ -249,9 +286,22 @@ export function buildTranslationGradingPromptParts(request: TranslationGradingRe
   const targetLanguage = direction === 'english-to-latin' ? 'Latin' : 'English';
 
   return {
-    stablePrefix: PROMPT_INSTRUCTIONS,
+    stablePrefix: LESSON_PROMPT_INSTRUCTIONS,
     variableSuffix: `Direction: ${sourceLanguage} to ${targetLanguage}\nSource (${sourceLanguage}): ${sourceText}\nStudent's translation (${targetLanguage}): ${userTranslation}`,
   };
+}
+
+export function buildTestTranslationGradingPrompt(request: TranslationGradingRequest): string {
+  const { stablePrefix, variableSuffix } = buildTestTranslationGradingPromptParts(request);
+  return `${stablePrefix}\n\n${variableSuffix}`;
+}
+
+export function buildTestTranslationGradingPromptParts(request: TranslationGradingRequest): {
+  stablePrefix: string;
+  variableSuffix: string;
+} {
+  const lessonParts = buildTranslationGradingPromptParts(request);
+  return { stablePrefix: TEST_PROMPT_INSTRUCTIONS, variableSuffix: lessonParts.variableSuffix };
 }
 
 const PROMPT_CACHE_SHARDS = 4;
@@ -260,15 +310,20 @@ const PROMPT_CACHE_SHARDS = 4;
  * Automatic prompt caching benefits from one stable routing key. Explicit
  * caching uses shards so an evaluation burst is spread across cache routes.
  */
-export function promptCacheKeyFor(profile: TranslationGradingProfile, variableSuffix: string): string {
-  if (profile.promptCacheMode === 'automatic') return profile.promptCacheKey;
+export function promptCacheKeyFor(
+  profile: TranslationGradingProfile,
+  variableSuffix: string,
+  namespace: 'lesson' | 'test' = 'lesson'
+): string {
+  const baseKey = namespace === 'lesson' ? profile.promptCacheKey : `${profile.promptCacheKey}:${namespace}`;
+  if (profile.promptCacheMode === 'automatic') return baseKey;
 
   let hash = 2166136261;
   for (let index = 0; index < variableSuffix.length; index += 1) {
     hash ^= variableSuffix.charCodeAt(index);
     hash = Math.imul(hash, 16777619);
   }
-  return `${profile.promptCacheKey}:shard-${(hash >>> 0) % PROMPT_CACHE_SHARDS}`;
+  return `${baseKey}:shard-${(hash >>> 0) % PROMPT_CACHE_SHARDS}`;
 }
 
 const costMeasurementFor = (usage: TokenUsage | undefined, cost: CostBreakdown | undefined): CostMeasurement =>
@@ -282,10 +337,38 @@ const responseUsage = (response: { usage?: unknown }, profile: TranslationGradin
   return { usage, cost, costMeasurement: costMeasurementFor(usage, cost) };
 };
 
-async function callOpenAIGrading(
+interface TranslationGradingDefinition<T> {
+  systemPrompt: string;
+  formatName: string;
+  jsonSchema: Record<string, unknown>;
+  cacheNamespace: 'lesson' | 'test';
+  parse: (value: unknown) => T;
+}
+
+const LESSON_GRADING_DEFINITION: TranslationGradingDefinition<TranslationGradingOutput> = {
+  systemPrompt: LESSON_SYSTEM_PROMPT,
+  formatName: 'translation_grading_output',
+  jsonSchema: LESSON_TRANSLATION_GRADING_JSON_SCHEMA as Record<string, unknown>,
+  cacheNamespace: 'lesson',
+  parse: value => {
+    const parsed = lessonTranslationGradingProviderOutputSchema.parse(value);
+    return { ...parsed, isPassing: isPassingTranslationFeedback(parsed.feedbackLevel) };
+  },
+};
+
+const TEST_GRADING_DEFINITION: TranslationGradingDefinition<TestTranslationGradingOutput> = {
+  systemPrompt: TEST_SYSTEM_PROMPT,
+  formatName: 'test_translation_grading_output',
+  jsonSchema: TEST_TRANSLATION_GRADING_JSON_SCHEMA as Record<string, unknown>,
+  cacheNamespace: 'test',
+  parse: parseTestTranslationGradingOutput,
+};
+
+async function callOpenAIGrading<T>(
   prompt: ReturnType<typeof buildTranslationGradingPromptParts>,
-  profile: TranslationGradingProfile
-): Promise<TranslationGradingRunResult> {
+  profile: TranslationGradingProfile,
+  definition: TranslationGradingDefinition<T>
+): Promise<TranslationGradingRunResult<T>> {
   const startTime = Date.now();
   let response: Awaited<ReturnType<typeof openai.responses.create>>;
   try {
@@ -293,7 +376,7 @@ async function callOpenAIGrading(
     response = await openai.responses.create({
       model: profile.model,
       max_output_tokens: profile.maxOutputTokens,
-      instructions: SYSTEM_PROMPT,
+      instructions: definition.systemPrompt,
       reasoning: { effort: profile.reasoningEffort },
       input: explicitPromptCaching
         ? [
@@ -311,15 +394,15 @@ async function callOpenAIGrading(
             },
           ]
         : `${prompt.stablePrefix}\n\n${prompt.variableSuffix}`,
-      prompt_cache_key: promptCacheKeyFor(profile, prompt.variableSuffix),
+      prompt_cache_key: promptCacheKeyFor(profile, prompt.variableSuffix, definition.cacheNamespace),
       ...(explicitPromptCaching ? { prompt_cache_options: { mode: 'explicit' as const, ttl: '30m' as const } } : {}),
       service_tier: 'default',
       store: false,
       text: {
         format: {
           type: 'json_schema',
-          name: 'translation_grading_output',
-          schema: TRANSLATION_GRADING_JSON_SCHEMA as Record<string, unknown>,
+          name: definition.formatName,
+          schema: definition.jsonSchema,
           strict: true,
         },
       },
@@ -404,9 +487,11 @@ async function callOpenAIGrading(
     };
   }
 
-  const parsed = translationGradingOutputSchema.safeParse(parsedJson);
-  if (!parsed.success) {
-    console.error('[translation-grading] invalid structured response', parsed.error);
+  let parsed: T;
+  try {
+    parsed = definition.parse(parsedJson);
+  } catch (error) {
+    console.error('[translation-grading] invalid structured response', error);
     return {
       ...base,
       success: false,
@@ -418,7 +503,7 @@ async function callOpenAIGrading(
   return {
     ...base,
     success: true,
-    data: parsed.data as TranslationGradingOutput,
+    data: parsed,
   };
 }
 
@@ -426,7 +511,14 @@ export async function runTranslationGrading(
   request: TranslationGradingRequest,
   profile: TranslationGradingProfile = TRANSLATION_GRADING_PROFILES.baseline
 ): Promise<TranslationGradingRunResult> {
-  return callOpenAIGrading(buildTranslationGradingPromptParts(request), profile);
+  return callOpenAIGrading(buildTranslationGradingPromptParts(request), profile, LESSON_GRADING_DEFINITION);
+}
+
+export async function runTestTranslationGrading(
+  request: TranslationGradingRequest,
+  profile: TranslationGradingProfile = TRANSLATION_GRADING_PROFILES.baseline
+): Promise<TranslationGradingRunResult<TestTranslationGradingOutput>> {
+  return callOpenAIGrading(buildTestTranslationGradingPromptParts(request), profile, TEST_GRADING_DEFINITION);
 }
 
 export async function gradeTranslation(
@@ -454,7 +546,7 @@ export async function gradeTranslation(
 
     console.log(`[gradeTranslation] ✅ OPENAI responded in ${result.latencyMs}ms`);
     console.log(`[gradeTranslation] Model used: ${result.model}`);
-    console.log(`[gradeTranslation] Tokens: ${result.tokensUsed}, Grade: ${result.data.grade}`);
+    console.log(`[gradeTranslation] Tokens: ${result.tokensUsed}, Feedback: ${result.data.feedbackLevel}`);
 
     return {
       success: true,
@@ -465,6 +557,39 @@ export async function gradeTranslation(
     };
   } catch (error) {
     console.error(`[gradeTranslation] ❌ Unexpected grading error:`, error);
+    return {
+      success: false,
+      error: 'The translation grader could not complete this request.',
+      errorDetails: { message: 'The translation grader could not complete this request.', type: 'unexpected-error' },
+    };
+  }
+}
+
+export async function gradeTestTranslation(
+  request: TranslationGradingRequest
+): Promise<TranslationGradingResponse<TestTranslationGradingOutput>> {
+  try {
+    const result = await runTestTranslationGrading(request, TRANSLATION_GRADING_PROFILES.baseline);
+    if (!result.success) {
+      return {
+        success: false,
+        error: result.error,
+        errorDetails: { message: result.error, type: result.code },
+        tokensUsed: result.tokensUsed,
+        model: result.model,
+        cost: result.cost,
+      };
+    }
+
+    return {
+      success: true,
+      data: result.data,
+      tokensUsed: result.tokensUsed,
+      model: result.model,
+      cost: result.cost,
+    };
+  } catch (error) {
+    console.error('[gradeTestTranslation] Unexpected grading error:', error);
     return {
       success: false,
       error: 'The translation grader could not complete this request.',

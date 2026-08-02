@@ -20,7 +20,15 @@ import type { ExerciseAnswer } from '@/src/types/runtime-mode';
 import type { GeneratedWordLoader } from './generated-exercises';
 import { resolveGeneratedExerciseItems } from './generated-exercises';
 import type { GeneratedTranslationItem } from '@/src/utils/exercises/generatedTranslationExercise';
-import { gradeExercise, maxPointsFor, type ExerciseScore, type ResolvedGeneratedItem } from './grading';
+import {
+  gradeExercise,
+  gradeTranslationAssessment,
+  maxPointsFor,
+  type ExerciseScore,
+  type ResolvedGeneratedItem,
+} from './grading';
+import { parseExerciseAnswer } from './answer-schemas';
+import type { TranslationGradingRequest } from '@/shared/openai/types';
 import type { VocabularyPoolLoader } from './vocabulary-pool-loader.server';
 
 export interface FrozenTestDeliveryState extends TestAttemptDeliveryState {
@@ -291,6 +299,19 @@ function projectGeneratedFormIdentificationExercise(exercise: ExerciseOfType<'ge
   });
 }
 
+function projectTranslationGradingExercise(exercise: ExerciseOfType<'translation-grading'>) {
+  return compact({
+    ...projectExerciseBase(exercise),
+    translationDirection: exercise.translationDirection,
+    data: {
+      items: exercise.data.items.map(item => ({
+        latinText: item.latinText,
+        instructions: item.instructions,
+      })),
+    },
+  });
+}
+
 function sanitizeExercise(exercise: Exercise): Record<string, unknown> {
   switch (exercise.type) {
     case 'matching':
@@ -315,6 +336,8 @@ function sanitizeExercise(exercise: Exercise): Record<string, unknown> {
       return projectGeneratedTranslationExercise(exercise);
     case 'generated-form-identification':
       return projectGeneratedFormIdentificationExercise(exercise);
+    case 'translation-grading':
+      return projectTranslationGradingExercise(exercise);
     default:
       throw new Error(`Exercise type ${exercise.type} is not eligible for test delivery`);
   }
@@ -454,7 +477,8 @@ export function sanitizeTestDeliveryState(state: FrozenTestDeliveryState): Stude
 
 export function gradeFrozenTestDelivery(
   state: FrozenTestDeliveryState,
-  answers: Record<string, ExerciseAnswer | unknown>
+  answers: Record<string, ExerciseAnswer | unknown>,
+  scoreOverrides: Record<string, ExerciseScore> = {}
 ): FrozenDeliveryScore {
   const exerciseResults: GradedExerciseResult[] = [];
 
@@ -469,7 +493,8 @@ export function gradeFrozenTestDelivery(
       const score =
         rawAnswer === undefined
           ? { awardedPoints: 0, maxPoints: maxPointsFor(exercise) }
-          : gradeExercise({ exercise, resolvedItems: state.resolvedExercises[exercise.id]?.items }, rawAnswer);
+          : (scoreOverrides[exercise.id] ??
+            gradeExercise({ exercise, resolvedItems: state.resolvedExercises[exercise.id]?.items }, rawAnswer));
 
       exerciseResults.push({ exerciseId: exercise.id, title: exercise.title || exercise.type, ...score });
     }
@@ -480,4 +505,41 @@ export function gradeFrozenTestDelivery(
     maxPoints: exerciseResults.reduce((total, result) => total + result.maxPoints, 0),
     exerciseResults,
   };
+}
+
+export type TestTranslationGrader = (request: TranslationGradingRequest) => Promise<number>;
+
+const stripHtml = (value: string) => value.replace(/<[^>]*>/g, '').trim();
+
+export async function gradeFrozenTranslationExercises(
+  state: FrozenTestDeliveryState,
+  answers: Record<string, ExerciseAnswer | unknown>,
+  grader: TestTranslationGrader
+): Promise<Record<string, ExerciseScore>> {
+  const translations = state.pages.flatMap(page =>
+    page.items.filter((item): item is ExerciseOfType<'translation-grading'> => item.type === 'translation-grading')
+  );
+
+  const scored = await Promise.all(
+    translations.map(async exercise => {
+      const rawAnswer = answers[exercise.id];
+      if (rawAnswer === undefined) return [exercise.id, undefined] as const;
+      const answer = parseExerciseAnswer(rawAnswer);
+      if (answer.type !== 'translation-grading') {
+        throw new Error(`Answer type ${answer.type} does not match exercise type ${exercise.type}`);
+      }
+
+      const direction = exercise.translationDirection ?? 'latin-to-english';
+      const scores = await Promise.all(
+        exercise.data.items.map((item, index) => {
+          const userTranslation = answer.translations[index]?.trim() ?? '';
+          if (!userTranslation) return Promise.resolve(0);
+          return grader({ sourceText: stripHtml(item.latinText), userTranslation, direction });
+        })
+      );
+      return [exercise.id, gradeTranslationAssessment(exercise, scores)] as const;
+    })
+  );
+
+  return Object.fromEntries(scored.filter((entry): entry is [string, ExerciseScore] => entry[1] !== undefined));
 }

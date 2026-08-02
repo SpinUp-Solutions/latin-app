@@ -135,7 +135,7 @@ describe('test-version boundaries', () => {
     expect(staleSummary.error?.issues.map(issue => issue.message)).toContain('totalPoints must be derived from pages');
   });
 
-  it('rejects duplicate stable IDs, scoring on content, and unsupported exercises', () => {
+  it('rejects duplicate stable IDs and scoring on content', () => {
     const result = testVersionInputSchema.safeParse({
       id: 'version-1',
       name: 'Broken version',
@@ -156,7 +156,6 @@ describe('test-version boundaries', () => {
       expect.arrayContaining([
         expect.stringContaining('duplicate ID'),
         'Non-exercise content cannot define maxPoints',
-        'Exercise type "translation-grading" is not eligible for tests',
       ])
     );
   });
@@ -262,6 +261,6 @@ describe('mock assignment boundaries', () => {
     expect(isExerciseType('matching')).toBe(true);
     expect(isExerciseType('listening-passage')).toBe(false);
     expect(isTestEligibleExerciseType('matching')).toBe(true);
-    expect(isTestEligibleExerciseType('translation-grading')).toBe(false);
+    expect(isTestEligibleExerciseType('translation-grading')).toBe(true);
   });
 });

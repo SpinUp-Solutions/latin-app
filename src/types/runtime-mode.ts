@@ -14,6 +14,7 @@ export type ExerciseAnswer =
   | { type: 'click-on-multiple-words'; selectedWordIndices: number[] }
   | { type: 'generated-translation'; answers: string[] }
   | { type: 'generated-form-identification'; answers: Record<string, string> }
+  | { type: 'translation-grading'; translations: string[] }
   | { type: 'sentence-diagramming'; annotations: DiagramAnnotation[] };
 
 export interface ExerciseAnswerEvent {

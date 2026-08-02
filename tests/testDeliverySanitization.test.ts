@@ -473,12 +473,26 @@ describe('fail-closed exercise delivery projections', () => {
     });
   });
 
-  it('rejects a non-eligible exercise type instead of projecting it', () => {
-    expect(() =>
-      sanitizeTestDeliveryState(
-        stateWith([{ ...base, type: 'translation-grading', data: { text: 'x', futurePrivate: 'secret-future' } }])
-      )
-    ).toThrow('not eligible for test delivery');
+  it('translation grading exposes prompts but no feedback policy or unknown fields', () => {
+    const projected = sanitizeSingle({
+      ...base,
+      type: 'translation-grading',
+      translationDirection: 'english-to-latin',
+      data: {
+        items: [{ latinText: 'The girl sings.', instructions: 'Use the present tense', futurePrivate: 'secret-item' }],
+        futurePrivate: 'secret-data',
+      },
+    });
+
+    expect(projected).toEqual({
+      id: 'exercise',
+      type: 'translation-grading',
+      title: 'Exercise',
+      instructions: 'Do the thing',
+      maxPoints: 4,
+      translationDirection: 'english-to-latin',
+      data: { items: [{ latinText: 'The girl sings.', instructions: 'Use the present tense' }] },
+    });
   });
 });
 

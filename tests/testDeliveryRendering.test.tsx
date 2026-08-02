@@ -10,6 +10,7 @@ import type {
   MatchingExercise,
   MultipleChoiceExercise,
   SentenceDiagrammingExercise,
+  TranslationGradingExercise,
 } from '@/src/types/exercises';
 import { createAnnotationId, createEmptySentenceDiagramDocument } from '@/src/features/sentence-diagramming';
 
@@ -31,6 +32,7 @@ const sanitizeExercise = (
     | MatchingExercise
     | MultipleChoiceExercise
     | SentenceDiagrammingExercise
+    | TranslationGradingExercise
 ) => {
   const state: FrozenTestDeliveryState = {
     versionId: 'version',
@@ -183,6 +185,36 @@ describe('sanitized test delivery rendering', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Check' }));
 
     expect(screen.getByText('Answer recorded.')).toBeInTheDocument();
+  });
+
+  it('records AI translation answers without grading or revealing feedback during a test', () => {
+    const exercise: TranslationGradingExercise = {
+      id: 'ai-translation',
+      type: 'translation-grading',
+      title: 'Translate the sentence',
+      instructions: '',
+      maxPoints: 5,
+      feedbackConfig,
+      translationDirection: 'latin-to-english',
+      data: { items: [{ latinText: 'Puella cantat.' }] },
+    };
+    const { content } = sanitizeExercise(exercise);
+    const onAnswer = jest.fn();
+
+    render(<ContentRenderer content={content.items[0]} runtimeMode="test" onAnswer={onAnswer} />);
+    fireEvent.change(screen.getByPlaceholderText('Type your English translation...'), {
+      target: { value: 'The girl sings.' },
+    });
+    fireEvent.click(screen.getByTitle('Record Translation'));
+
+    expect(screen.getByText('Answer recorded.')).toBeInTheDocument();
+    expect(onAnswer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        exerciseId: 'ai-translation',
+        answer: { type: 'translation-grading', translations: ['The girl sings.'] },
+      })
+    );
+    expect(screen.queryByText('Suggested Translation')).not.toBeInTheDocument();
   });
 
   it('renders and records sanitized generated morphology items', () => {

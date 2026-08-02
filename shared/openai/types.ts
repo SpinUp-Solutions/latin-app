@@ -85,8 +85,8 @@ export interface AIAutocompleteResponse {
 export type OpenAIStructuredOutput = Partial<VocabularyWord>;
 
 export type TranslationDirection = 'latin-to-english' | 'english-to-latin';
-export const LETTER_GRADES = ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D', 'D-', 'F'] as const;
-export type LetterGrade = (typeof LETTER_GRADES)[number];
+export const TRANSLATION_FEEDBACK_LEVELS = ['Excellent', 'Very good', 'Good', 'Adequate', 'Not quite right'] as const;
+export type TranslationFeedbackLevel = (typeof TRANSLATION_FEEDBACK_LEVELS)[number];
 
 export interface TranslationGradingRequest {
   sourceText: string;

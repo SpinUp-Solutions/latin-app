@@ -35,10 +35,13 @@ import { isAnswerForExercise, parseExerciseAnswer } from './answer-schemas';
 import {
   createFrozenTestDeliveryState,
   gradeFrozenTestDelivery,
+  gradeFrozenTranslationExercises,
   sanitizeTestDeliveryState,
   type FrozenDeliveryScore,
   type FrozenTestDeliveryState,
+  type TestTranslationGrader,
 } from './delivery';
+import { gradeTestTranslation } from '@/shared/openai/translation-grading';
 import { TEST_VERSION_SUMMARY_FIELDS, selectLeastUsedTestVersion, validateTestAssignmentGraph } from './domain';
 import { TestServiceError } from './errors';
 import { estimateFirestoreDocumentBytes } from './firestore-size';
@@ -152,6 +155,7 @@ export interface TestAttemptServiceOptions {
   loadGeneratedWords?: GeneratedWordLoader;
   loadVocabularyPool?: VocabularyPoolLoader;
   maxAttemptDocumentBytes?: number;
+  gradeTestTranslation?: TestTranslationGrader;
 }
 
 export class TestAttemptService {
@@ -159,6 +163,7 @@ export class TestAttemptService {
   private readonly loadGeneratedWords: GeneratedWordLoader;
   private readonly loadVocabularyPool: VocabularyPoolLoader;
   private readonly maxAttemptDocumentBytes: number;
+  private readonly gradeTestTranslation: TestTranslationGrader;
 
   constructor(
     private readonly db: Firestore = adminDb,
@@ -169,6 +174,13 @@ export class TestAttemptService {
     this.loadGeneratedWords = options.loadGeneratedWords ?? createFirestoreGeneratedWordLoader(db);
     this.loadVocabularyPool = options.loadVocabularyPool ?? createFirestoreVocabularyPoolLoader(db);
     this.maxAttemptDocumentBytes = options.maxAttemptDocumentBytes ?? MAX_TEST_ATTEMPT_DOCUMENT_BYTES;
+    this.gradeTestTranslation =
+      options.gradeTestTranslation ??
+      (async request => {
+        const result = await gradeTestTranslation(request);
+        if (!result.success || !result.data) throw new Error('The translation grader returned no usable score');
+        return result.data.score;
+      });
   }
 
   private get versions() {
@@ -536,6 +548,35 @@ export class TestAttemptService {
   async submitAttempt(attemptId: string, studentId: string): Promise<SubmitTestAttemptResult> {
     const attemptRef = this.attempts.doc(attemptId);
 
+    const attemptForGrading = await this.db.runTransaction(async transaction => {
+      const attempt = parseAttemptSnapshot(await transaction.get(attemptRef));
+      assertAttemptOwner(attempt, studentId);
+      if (attempt.status === 'in-progress' && attempt.origin.kind === 'normal-test') {
+        await this.assertNormalTestUnlocked(transaction, studentId, attempt.origin.testId, true);
+      }
+      return attempt;
+    });
+    if (attemptForGrading.status === 'submitted') {
+      return { attempt: toStudentAttempt(attemptForGrading) as StudentSubmittedTestAttempt, completionGranted: false };
+    }
+
+    const gradingAnswersFingerprint = JSON.stringify(attemptForGrading.answers);
+    let translationScoreOverrides: Record<string, { awardedPoints: number; maxPoints: number }>;
+    try {
+      translationScoreOverrides = await gradeFrozenTranslationExercises(
+        attemptForGrading.deliveryState as FrozenTestDeliveryState,
+        attemptForGrading.answers,
+        this.gradeTestTranslation
+      );
+    } catch (error) {
+      console.error(`Could not grade translation answers for attempt ${attemptId}`, error);
+      throw new TestServiceError(
+        'ATTEMPT_GRADING_UNAVAILABLE',
+        'Translation grading is temporarily unavailable. Please try submitting again.',
+        503
+      );
+    }
+
     return this.db.runTransaction(async transaction => {
       const attempt = parseAttemptSnapshot(await transaction.get(attemptRef));
       assertAttemptOwner(attempt, studentId);
@@ -543,13 +584,24 @@ export class TestAttemptService {
         // Idempotent resubmission: return the frozen result without regrading.
         return { attempt: toStudentAttempt(attempt) as StudentSubmittedTestAttempt, completionGranted: false };
       }
+      if (JSON.stringify(attempt.answers) !== gradingAnswersFingerprint) {
+        throw new TestServiceError(
+          'ATTEMPT_CHANGED_DURING_SUBMISSION',
+          'An answer changed while the test was being submitted. Please submit again.',
+          409
+        );
+      }
       if (attempt.origin.kind === 'normal-test') {
         await this.assertNormalTestUnlocked(transaction, studentId, attempt.origin.testId, true);
       }
 
       let frozenScore: FrozenDeliveryScore;
       try {
-        frozenScore = gradeFrozenTestDelivery(attempt.deliveryState as FrozenTestDeliveryState, attempt.answers);
+        frozenScore = gradeFrozenTestDelivery(
+          attempt.deliveryState as FrozenTestDeliveryState,
+          attempt.answers,
+          translationScoreOverrides
+        );
       } catch (error) {
         throw configurationError(`Could not grade attempt ${attempt.id} from its frozen delivery state`, error);
       }

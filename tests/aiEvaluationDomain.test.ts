@@ -94,17 +94,17 @@ describe('AI evaluation pricing and cache contracts', () => {
       answerText: 'All Gaul is divided into three parts.',
       model: 'gpt-5.4-mini',
       reasoningEffort: 'low' as const,
-      promptVersion: 'translation-grading-v2',
-      profileVersion: 'translation-grading-v2:baseline',
+      promptVersion: 'translation-grading-v3',
+      profileVersion: 'translation-grading-v3:baseline',
       schemaVersion: 'ai-translation-evaluation-v1',
     };
 
     expect(createEvaluationCacheKey(base)).toBe(createEvaluationCacheKey({ ...base }));
     expect(createEvaluationCacheKey(base)).not.toBe(
-      createEvaluationCacheKey({ ...base, promptVersion: 'translation-grading-v3' })
+      createEvaluationCacheKey({ ...base, promptVersion: 'translation-grading-v4' })
     );
     expect(createEvaluationCacheKey(base)).not.toBe(
-      createEvaluationCacheKey({ ...base, profileVersion: 'translation-grading-v2:baseline-reasoning-high' })
+      createEvaluationCacheKey({ ...base, profileVersion: 'translation-grading-v3:baseline-reasoning-high' })
     );
     expect(createEvaluationCacheKey(base)).not.toBe(
       createEvaluationCacheKey({ ...base, model: 'gpt-5.6-luna', reasoningEffort: 'high' })

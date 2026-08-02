@@ -86,7 +86,11 @@ describe('AI evaluation admin workspace', () => {
       updatedAt: '2026-08-01T00:00:00.000Z',
       updatedBy: 'admin',
     };
-    const cell = (modelKey: 'baseline' | 'candidate', model: string, grade: 'A' | 'A-'): EvaluationCellResult => ({
+    const cell = (
+      modelKey: 'baseline' | 'candidate',
+      model: string,
+      feedbackLevel: 'Excellent' | 'Very good'
+    ): EvaluationCellResult => ({
       answerId: 'answer-1',
       answerLabel: 'Student A',
       modelKey,
@@ -94,7 +98,8 @@ describe('AI evaluation admin workspace', () => {
       actualModel: model,
       reasoningEffort: modelKey === 'baseline' ? 'low' : 'high',
       output: {
-        grade,
+        feedbackLevel,
+        isPassing: true,
         notes: 'Good work.',
         suggestedText: 'If there is any talent in me.',
         breakdown: [],
@@ -159,7 +164,7 @@ describe('AI evaluation admin workspace', () => {
         unknownOriginalCostCells: 0,
         unknownIncurredCostCells: 0,
       },
-      cells: [cell('baseline', 'gpt-5.4-mini', 'A'), cell('candidate', 'gpt-5.6-luna', 'A-')],
+      cells: [cell('baseline', 'gpt-5.4-mini', 'Excellent'), cell('candidate', 'gpt-5.6-luna', 'Very good')],
     };
     mockedSaveEvaluationCaseInFirebase.mockResolvedValue(savedCase as never);
     mockedRunEvaluationInFirebase.mockResolvedValue(runResult);

@@ -300,8 +300,8 @@ function ResultCell({ cell }: { cell: EvaluationCellResult }) {
           <p className="mt-0.5 text-[11px] text-roman-stone">{cell.actualModel || cell.requestedModel}</p>
         </div>
         <div className="rounded-lg border border-primary/20 bg-primary/[0.06] px-3 py-1.5 text-center">
-          <p className="text-2xl font-serif font-bold leading-none text-primary">{cell.output?.grade}</p>
-          <p className="mt-1 text-[10px] font-semibold uppercase tracking-widest text-primary">Grade</p>
+          <p className="text-lg font-serif font-bold leading-tight text-primary">{cell.output?.feedbackLevel}</p>
+          <p className="mt-1 text-[10px] font-semibold uppercase tracking-widest text-primary">Feedback</p>
         </div>
       </div>
       <UsageBadges cell={cell} />

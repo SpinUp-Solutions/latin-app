@@ -1,5 +1,5 @@
 import { TRANSLATION_GRADING_PROFILES } from '@/shared/openai/model-registry';
-import { runTranslationGrading } from '@/shared/openai/translation-grading';
+import { runTestTranslationGrading, runTranslationGrading } from '@/shared/openai/translation-grading';
 import { openai } from '@/shared/openai/client';
 
 jest.mock('@/shared/openai/client', () => ({
@@ -14,7 +14,7 @@ jest.mock('@/shared/openai/client', () => ({
 const createResponse = jest.mocked(openai.responses.create);
 
 const output = {
-  grade: 'A',
+  feedbackLevel: 'Excellent',
   notes: 'Strong work.',
   suggestedText: 'All Gaul is divided.',
   breakdown: [],
@@ -65,7 +65,7 @@ describe('translation grading runner', () => {
 
     expect(result.success).toBe(true);
     if (!result.success) return;
-    expect(result.data).toEqual(output);
+    expect(result.data).toEqual({ ...output, isPassing: true });
     expect(result.requestedModel).toBe('gpt-5.6-luna');
     expect(result.usage?.cachedInputTokens).toBe(20);
     expect(result.usage?.reasoningTokens).toBe(12);
@@ -76,7 +76,7 @@ describe('translation grading runner', () => {
       expect.objectContaining({
         model: 'gpt-5.6-luna',
         reasoning: { effort: 'high' },
-        prompt_cache_key: expect.stringMatching(/^translation-grading-v2:candidate:shard-[0-3]$/),
+        prompt_cache_key: expect.stringMatching(/^translation-grading-v3:candidate:shard-[0-3]$/),
         prompt_cache_options: { mode: 'explicit', ttl: '30m' },
         service_tier: 'default',
         store: false,
@@ -106,9 +106,33 @@ describe('translation grading runner', () => {
 
     const call = createResponse.mock.calls[0][0];
     expect(call.prompt_cache_options).toBeUndefined();
-    expect(call.prompt_cache_key).toBe('translation-grading-v2:baseline');
+    expect(call.prompt_cache_key).toBe('translation-grading-v3:baseline');
     expect(typeof call.input).toBe('string');
     expect(String(call.input)).toContain("Student's translation (English): All Gaul is divided.");
+  });
+
+  it('uses a separate score-only prompt and schema for test grading', async () => {
+    createResponse.mockResolvedValue(
+      responseFor({
+        output: [
+          {
+            type: 'message',
+            id: 'message-1',
+            status: 'completed',
+            role: 'assistant',
+            content: [{ type: 'output_text', text: JSON.stringify({ score: 8.5 }), annotations: [] }],
+          },
+        ],
+      })
+    );
+
+    const result = await runTestTranslationGrading(request);
+
+    expect(result).toMatchObject({ success: true, data: { score: 8.5 } });
+    const call = createResponse.mock.calls[0][0];
+    expect(call.instructions).toContain('assessment grader');
+    expect(call.prompt_cache_key).toBe('translation-grading-v3:baseline:test');
+    expect(call.text?.format).toMatchObject({ name: 'test_translation_grading_output' });
   });
 
   it.each([

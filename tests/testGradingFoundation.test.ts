@@ -3,6 +3,7 @@ import { EXERCISE_ANSWER_SCHEMAS } from '@/src/lib/tests/answer-schemas';
 import {
   createFrozenTestDeliveryState,
   gradeFrozenTestDelivery,
+  gradeFrozenTranslationExercises,
   sanitizeTestDeliveryState,
 } from '@/src/lib/tests/delivery';
 import { resolveGeneratedExerciseItems } from '@/src/lib/tests/generated-exercises';
@@ -10,7 +11,13 @@ import { gradeGeneratedFormIdentification, gradeMatching } from '@/src/lib/tests
 import { estimateFirestoreDocumentBytes } from '@/src/lib/tests/firestore-size';
 import { applyValueFilter } from '@/src/lib/tests/generated-word-loader.server';
 import { filterOverlappingPronounParadigms } from '@/src/utils/generated/pronounParadigmFiltering';
-import type { FillExercise, GeneratedFormIdentificationExercise, MatchingExercise } from '@/src/types/exercises';
+import type {
+  FillExercise,
+  Exercise,
+  GeneratedFormIdentificationExercise,
+  MatchingExercise,
+  TranslationGradingExercise,
+} from '@/src/types/exercises';
 import type {
   FormIdentificationItem,
   MultiAnswerFormIdentificationItem,
@@ -39,7 +46,7 @@ const fillExercise: FillExercise = {
   },
 };
 
-const makeVersion = (exercise = fillExercise): TestVersion => ({
+const makeVersion = (exercise: Exercise = fillExercise): TestVersion => ({
   id: 'version-one',
   name: 'Version A',
   pages: [{ id: 'page-one', items: [exercise] }],
@@ -71,6 +78,41 @@ describe('test grading foundation', () => {
     const state = await createFrozenTestDeliveryState(makeVersion(invalidExercise), async () => []);
 
     expect(() => gradeFrozenTestDelivery(state, {})).toThrow('Exercise fill-one has invalid maxPoints');
+  });
+
+  it('normalizes AI translation scores out of ten to the admin-selected points', async () => {
+    const exercise: TranslationGradingExercise = {
+      id: 'translation-one',
+      type: 'translation-grading',
+      title: 'Translate',
+      instructions: '',
+      maxPoints: 8,
+      feedbackConfig,
+      translationDirection: 'english-to-latin',
+      data: {
+        items: [{ latinText: '<p>The girl sings.</p>' }, { latinText: 'The boys run.' }],
+      },
+    };
+    const state = await createFrozenTestDeliveryState(makeVersion(exercise), async () => []);
+    const grader = jest.fn(async ({ sourceText }: { sourceText: string }) =>
+      sourceText === 'The girl sings.' ? 9 : 6
+    );
+    const answers = {
+      'translation-one': {
+        type: 'translation-grading' as const,
+        translations: ['puella cantat', 'pueri currunt'],
+      },
+    };
+
+    const overrides = await gradeFrozenTranslationExercises(state, answers, grader);
+    const result = gradeFrozenTestDelivery(state, answers, overrides);
+
+    expect(grader).toHaveBeenCalledWith({
+      sourceText: 'The girl sings.',
+      userTranslation: 'puella cantat',
+      direction: 'english-to-latin',
+    });
+    expect(result).toMatchObject({ awardedPoints: 6, maxPoints: 8 });
   });
 
   it('ignores an empty multi-value filter instead of issuing a Firestore in query with no values', () => {
