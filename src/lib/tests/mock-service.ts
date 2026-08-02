@@ -144,18 +144,14 @@ export class MockTestService {
     if (!path.exists) return;
     const parsed = learningPathDocumentSchema.safeParse({ ...path.data(), id: path.id });
     if (!parsed.success) throw configurationError('Learning Path contains invalid data', parsed.error.flatten());
-    if (
-      parsed.data.cutover?.state !== 'inactive' &&
-      parsed.data.unitIds.includes(test.id) &&
-      rotationVersionIds.length === 0
-    ) {
+    if (parsed.data.unitIds.includes(test.id) && rotationVersionIds.length === 0) {
       throw new TestServiceError(
         'PLACED_TEST_REQUIRES_ROTATION_VERSION',
         'Add another version first or remove this test from the Learning Path before making its last rotation version mock-only.',
         409
       );
     }
-    if (parsed.data.cutover?.state !== 'inactive' && parsed.data.unitIds.includes(test.id)) {
+    if (parsed.data.unitIds.includes(test.id)) {
       const snapshots = await transaction.getAll(...rotationVersionIds.map(versionId => this.versions.doc(versionId)));
       const invalid = snapshots.find(
         snapshot =>

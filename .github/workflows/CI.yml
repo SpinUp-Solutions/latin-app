@@ -89,6 +89,3 @@ jobs:
 
       - name: Run assessment browser acceptance
         run: npm run test:e2e:assessment
-
-      - name: Run Learning Path migration acceptance
-        run: npm run test:e2e:migration

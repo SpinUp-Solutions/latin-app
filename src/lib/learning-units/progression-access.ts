@@ -9,7 +9,7 @@ import {
 import type { LearningPathDocument, LessonUnit } from '@/src/types/learning-unit';
 import type { UserProgress } from '@/src/types/lesson';
 import { isLessonDocumentData, normalizeLearningUnit } from './domain';
-import { isLearningPathActive, parseLearningPathSnapshot } from './learning-path-service';
+import { parseLearningPathSnapshot } from './learning-path-service';
 import {
   collectAttemptedNormalTestIds,
   isProgressionLockingDisabled,
@@ -120,14 +120,7 @@ export async function isLearningPathUnitUnlockedInTransaction(
   targetId: string,
   options: ProgressionAccessOptions = {}
 ): Promise<boolean> {
-  return isUnitSequenceUnlockedInTransaction(
-    transaction,
-    db,
-    path.unitIds,
-    studentId,
-    targetId,
-    options
-  );
+  return isUnitSequenceUnlockedInTransaction(transaction, db, path.unitIds, studentId, targetId, options);
 }
 
 /**
@@ -145,36 +138,15 @@ export async function getLessonProgressAccessInTransaction(
     return lesson.isLive ? 'allowed' : 'not-found';
   }
 
-  const pathSnapshot = await transaction.get(
-    db.collection(LEARNING_PATHS_COLLECTION).doc(DEFAULT_LEARNING_PATH_ID)
-  );
+  const pathSnapshot = await transaction.get(db.collection(LEARNING_PATHS_COLLECTION).doc(DEFAULT_LEARNING_PATH_ID));
   const path = parseLearningPathSnapshot(pathSnapshot);
-  let unitIds: string[];
-  if (isLearningPathActive(path)) {
-    unitIds = path!.unitIds;
-  } else {
-    const legacySnapshot = await transaction.get(
-      db
-        .collection(LEARNING_UNITS_COLLECTION)
-        .where('isLive', '==', true)
-        .orderBy('liveOrder', 'asc')
-        .select('kind', 'type', 'liveOrder')
-    );
-    unitIds = legacySnapshot.docs.flatMap(snapshot => {
-      const data = snapshot.data();
-      return isLessonDocumentData(data) && (data.type ?? 'normal') === 'normal' ? [snapshot.id] : [];
-    });
-  }
+  if (!path) return 'not-found';
+  const unitIds = path.unitIds;
 
   if (!unitIds.includes(lesson.id)) return 'not-found';
-  return (await isUnitSequenceUnlockedInTransaction(
-    transaction,
-    db,
-    unitIds,
-    studentId,
-    lesson.id,
-    { hasPersistedTargetActivity }
-  ))
+  return (await isUnitSequenceUnlockedInTransaction(transaction, db, unitIds, studentId, lesson.id, {
+    hasPersistedTargetActivity,
+  }))
     ? 'allowed'
     : 'locked';
 }

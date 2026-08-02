@@ -176,39 +176,6 @@ const uniqueUnitIdsSchema = z
     }
   });
 
-const learningPathCutoverSchema = z
-  .object({
-    state: z.enum(['active', 'inactive']),
-    migrationId: nonEmptyIdSchema,
-    sourceHash: z.string().regex(/^[a-f0-9]{64}$/),
-    appliedAt: z.string().min(1),
-    appliedBy: nonEmptyIdSchema,
-    rolledBackAt: z.string().min(1).optional(),
-    rolledBackBy: nonEmptyIdSchema.optional(),
-  })
-  .strict()
-  .superRefine((cutover, context) => {
-    const hasRollbackAudit = Boolean(cutover.rolledBackAt && cutover.rolledBackBy);
-    if (Boolean(cutover.rolledBackAt) !== Boolean(cutover.rolledBackBy)) {
-      context.addIssue({
-        code: 'custom',
-        message: 'Rollback audit fields must be supplied together',
-      });
-    }
-    if (cutover.state === 'active' && hasRollbackAudit) {
-      context.addIssue({
-        code: 'custom',
-        message: 'An active cutover cannot retain rollback audit fields',
-      });
-    }
-    if (cutover.state === 'inactive' && !hasRollbackAudit) {
-      context.addIssue({
-        code: 'custom',
-        message: 'An inactive cutover requires rollback audit fields',
-      });
-    }
-  });
-
 export const learningPathDocumentSchema = z
   .object({
     id: z.literal('default'),
@@ -216,7 +183,6 @@ export const learningPathDocumentSchema = z
     unitIds: uniqueUnitIdsSchema,
     updatedAt: z.string().min(1),
     updatedBy: nonEmptyIdSchema,
-    cutover: learningPathCutoverSchema.optional(),
   })
   .strict()
   .superRefine(addLearningPathSizeIssue);
@@ -229,73 +195,4 @@ export const saveLearningPathInputSchema = z
   .strict()
   .superRefine(addLearningPathSizeIssue);
 
-const learningPathMigrationSourceSchema = z
-  .array(
-    z
-      .object({
-        unitId: firestoreDocumentIdSchema,
-        liveOrder: z.number().int().nonnegative().safe(),
-      })
-      .strict()
-  )
-  .max(MAX_LEARNING_PATH_UNITS);
-
-export const learningPathMigrationManifestSchema = z
-  .object({
-    migrationId: nonEmptyIdSchema,
-    createdAt: z.string().min(1),
-    sourceHash: z.string().regex(/^[a-f0-9]{64}$/),
-    unitIds: uniqueUnitIdsSchema,
-    source: learningPathMigrationSourceSchema,
-  })
-  .strict()
-  .superRefine((manifest, context) => {
-    addLearningPathSizeIssue(manifest, context);
-    const sourceIds = manifest.source.map(record => record.unitId);
-    if (new Set(sourceIds).size !== sourceIds.length) {
-      context.addIssue({ code: 'custom', message: 'Migration source unit IDs must be unique', path: ['source'] });
-    }
-    const orders = manifest.source.map(record => record.liveOrder);
-    if (new Set(orders).size !== orders.length) {
-      context.addIssue({ code: 'custom', message: 'Migration source orders must be unique', path: ['source'] });
-    }
-    const orderedSourceIds = [...manifest.source]
-      .sort((left, right) => left.liveOrder - right.liveOrder)
-      .map(record => record.unitId);
-    if (
-      orderedSourceIds.length !== manifest.unitIds.length ||
-      orderedSourceIds.some((unitId, index) => unitId !== manifest.unitIds[index])
-    ) {
-      context.addIssue({
-        code: 'custom',
-        message: 'Manifest unitIds must exactly match source records in liveOrder order',
-        path: ['unitIds'],
-      });
-    }
-  });
-
 export type SaveLearningPathInput = z.infer<typeof saveLearningPathInputSchema>;
-export type LearningPathMigrationManifestInput = z.infer<typeof learningPathMigrationManifestSchema>;
-
-export const learningPathMigrationActionSchema = z.discriminatedUnion('action', [
-  z
-    .object({
-      action: z.literal('dry-run'),
-      migrationId: nonEmptyIdSchema,
-    })
-    .strict(),
-  z
-    .object({
-      action: z.literal('apply'),
-      manifest: learningPathMigrationManifestSchema,
-    })
-    .strict(),
-  z
-    .object({
-      action: z.literal('verify'),
-      manifest: learningPathMigrationManifestSchema,
-    })
-    .strict(),
-  z.object({ action: z.literal('rollback') }).strict(),
-  z.object({ action: z.literal('retire') }).strict(),
-]);

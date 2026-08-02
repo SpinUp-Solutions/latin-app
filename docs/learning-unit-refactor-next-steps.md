@@ -152,13 +152,24 @@ representative of production. Do not reuse the staging manifest in production:
 the source IDs, order, hash, timestamps, and migration ID belong to one
 environment.
 
-## 4. Calling the migration API safely
+## 4. Calling the migration API safely (historical)
+
+The instructions in this section are retained as the operational record for
+the completed cutover. The migration endpoint, dashboard controls, and
+temporary cutover state are removed by the code-retirement release below; do
+not use these commands against a current deployment.
 
 The operator endpoint is:
 
 ```text
+GET  /api/admin/learning-path/migration
 POST /api/admin/learning-path/migration
 ```
+
+The GET response makes the workflow resumable after navigation, refresh, or an
+operator handoff. Each prepared manifest and its lifecycle events are stored in
+the server-only `learningPathMigrations/{migrationId}` collection. The admin
+dashboard also offers a JSON download as a second, portable copy.
 
 It requires a Firebase ID token for a user whose Firestore user document has
 `role: "admin"`. Obtain the token through the approved admin authentication
@@ -208,9 +219,12 @@ curl --fail-with-body --silent --show-error \
 jq '.manifest' migration-dry-run-response.json > migration-manifest.json
 ```
 
-The dry run writes no application data. Archive `migration-manifest.json`
-unchanged after review. Do not manually reorder, repair, or reformat its data
-before apply; if it is wrong, fix the source and generate a new manifest.
+The dry run writes no curriculum data. It durably stores the immutable manifest
+and a `prepared` audit event in `learningPathMigrations/{migrationId}` so apply
+and verify no longer depend on browser memory. Archive
+`migration-manifest.json` unchanged after review. Do not manually reorder,
+repair, or reformat its data; if it is wrong, fix the source and generate a new
+manifest ID.
 
 ### 4.2 Review the manifest
 
@@ -236,18 +250,16 @@ manifest's `sourceHash`, which identifies the canonical legacy Firestore source.
 
 ### 4.3 Apply
 
-Build the request from the reviewed file rather than copying fields by hand:
+Apply the server-stored immutable manifest by ID:
 
 ```sh
-jq -n --slurpfile manifest migration-manifest.json \
-  '{action: "apply", manifest: $manifest[0]}' \
-  > migration-apply-request.json
+LATIN_MIGRATION_ID="$(jq -r '.migrationId' migration-manifest.json)"
 
 curl --fail-with-body --silent --show-error \
   -X POST "${LATIN_APP_BASE_URL}/api/admin/learning-path/migration" \
   -H "Authorization: Bearer ${LATIN_ADMIN_ID_TOKEN}" \
   -H "Content-Type: application/json" \
-  --data-binary @migration-apply-request.json \
+  --data "{\"action\":\"apply\",\"migrationId\":\"${LATIN_MIGRATION_ID}\"}" \
   | tee migration-apply-response.json
 ```
 
@@ -261,15 +273,11 @@ run. Never edit the old manifest to make it pass.
 ### 4.4 Verify
 
 ```sh
-jq -n --slurpfile manifest migration-manifest.json \
-  '{action: "verify", manifest: $manifest[0]}' \
-  > migration-verify-request.json
-
 curl --fail-with-body --silent --show-error \
   -X POST "${LATIN_APP_BASE_URL}/api/admin/learning-path/migration" \
   -H "Authorization: Bearer ${LATIN_ADMIN_ID_TOKEN}" \
   -H "Content-Type: application/json" \
-  --data-binary @migration-verify-request.json \
+  --data "{\"action\":\"verify\",\"migrationId\":\"${LATIN_MIGRATION_ID}\"}" \
   | tee migration-verify-response.json
 ```
 
@@ -283,6 +291,10 @@ Verification succeeds only when:
   and order.
 
 If verification fails, use rollback. Do not continue into stabilization.
+
+Verification appends a `verified` audit event only after the stored path, legacy
+source, admin projection, and student projection all pass. Retirement rejects
+any migration whose latest stored state is not `verified`.
 
 ### 4.5 Inspect the admin projection
 
@@ -299,6 +311,29 @@ Before apply it should use the legacy source. During successful stabilization it
 should use the Learning Path source with editing disabled. After retirement it
 should still use the Learning Path source, with editing enabled and no
 `cutover`.
+
+### 4.6 Resume or recover the workflow
+
+The dashboard loads `GET /api/admin/learning-path/migration` on entry. A stored
+record resumes automatically and exposes its manifest download, status, and
+allowed next actions.
+
+Deployments created before durable migration records may report
+`needsRecovery: true` while `learningPaths/default.cutover` is present. Recover
+that exact active migration through the dashboard or API:
+
+```sh
+curl --fail-with-body --silent --show-error \
+  -X POST "${LATIN_APP_BASE_URL}/api/admin/learning-path/migration" \
+  -H "Authorization: Bearer ${LATIN_ADMIN_ID_TOKEN}" \
+  -H "Content-Type: application/json" \
+  --data '{"action":"recover"}' \
+  | tee migration-recover-response.json
+```
+
+Recovery succeeds only when the untouched legacy source hash and ordered IDs
+exactly reconstruct the active cutover. It creates an explicit `recovered`
+audit event and still requires a fresh successful `verify` before retirement.
 
 ## 5. Production cutover sequence
 
@@ -384,7 +419,8 @@ Request:
 
 ```json
 {
-  "action": "rollback"
+  "action": "rollback",
+  "migrationId": "learning-path-prod-YYYYMMDD-HHMM"
 }
 ```
 
@@ -395,7 +431,7 @@ curl --fail-with-body --silent --show-error \
   -X POST "${LATIN_APP_BASE_URL}/api/admin/learning-path/migration" \
   -H "Authorization: Bearer ${LATIN_ADMIN_ID_TOKEN}" \
   -H "Content-Type: application/json" \
-  --data '{"action":"rollback"}' \
+  --data "{\"action\":\"rollback\",\"migrationId\":\"${LATIN_MIGRATION_ID}\"}" \
   | tee migration-rollback-response.json
 ```
 
@@ -423,7 +459,9 @@ the permanent normal-placement source.
 
 Immediately before retirement:
 
-1. run `verify` again with the archived manifest;
+1. confirm the stored migration is still `verified` (the `retire` request also
+   reruns the complete stored-state, admin-projection, and student-projection
+   verification before it writes anything);
 2. capture `learningPaths/default` and its revision;
 3. confirm the path contains lessons only;
 4. obtain the recorded rollback-approver sign-off; and
@@ -433,7 +471,8 @@ Request:
 
 ```json
 {
-  "action": "retire"
+  "action": "retire",
+  "migrationId": "learning-path-prod-YYYYMMDD-HHMM"
 }
 ```
 
@@ -444,9 +483,13 @@ curl --fail-with-body --silent --show-error \
   -X POST "${LATIN_APP_BASE_URL}/api/admin/learning-path/migration" \
   -H "Authorization: Bearer ${LATIN_ADMIN_ID_TOKEN}" \
   -H "Content-Type: application/json" \
-  --data '{"action":"retire"}' \
+  --data "{\"action\":\"retire\",\"migrationId\":\"${LATIN_MIGRATION_ID}\"}" \
   | tee migration-retire-response.json
 ```
+
+The retire endpoint fails closed if its mandatory final verification does not
+pass. Operators no longer need to transfer a manifest file back into this
+request, and a stale earlier verification cannot authorize retirement.
 
 After retirement, confirm:
 
@@ -464,13 +507,14 @@ in the Learning Path.
 
 ## 9. Code retirement after operational retirement
 
-Operational retirement and code retirement are two different releases. After
+Operational retirement and code retirement are two different releases. Once
 every deployed environment has no `cutover` field and no environment needs
-rollback, create a focused cleanup pull request.
+rollback, the focused cleanup release can remove the temporary workflow.
 
-Remove or simplify:
+This cleanup removes or simplifies:
 
 - `src/app/api/admin/learning-path/migration/route.ts`;
+- the `learningPathMigrations` collection constant and server-only rule;
 - migration action, source, manifest, and cutover schemas/types;
 - manifest hashing, source comparison, apply, verify, rollback, and retire
   service methods;

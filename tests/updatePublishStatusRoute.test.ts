@@ -28,10 +28,7 @@ function request(body: Record<string, unknown>) {
   return { json: async () => body } as never;
 }
 
-function configureFirestore(
-  lessons: Record<string, LessonData>,
-  learningPath?: Record<string, unknown>
-) {
+function configureFirestore(lessons: Record<string, LessonData>, learningPath?: Record<string, unknown>) {
   const updates: Array<{ id: string; data: Record<string, unknown> }> = [];
   mockCollection.mockImplementation((collectionName: string) => ({
     doc: (id: string) => ({ collectionName, id }),
@@ -187,33 +184,7 @@ describe('update lesson publish status', () => {
     );
   });
 
-  it.each([
-    [
-      'active stabilization',
-      {
-        revision: 1,
-        unitIds: ['normal1'],
-        updatedAt: 'now',
-        updatedBy: 'admin',
-        cutover: {
-          state: 'active',
-          migrationId: 'migration-1',
-          sourceHash: 'a'.repeat(64),
-          appliedAt: 'now',
-          appliedBy: 'admin',
-        },
-      },
-    ],
-    [
-      'retired cutover',
-      {
-        revision: 1,
-        unitIds: ['normal1'],
-        updatedAt: 'now',
-        updatedBy: 'admin',
-      },
-    ],
-  ])('rejects legacy normal publication after %s', async (_label, learningPath) => {
+  it('rejects legacy normal publication whenever the canonical path exists', async () => {
     const { transaction } = configureFirestore(
       {
         normal1: { type: 'normal', isLive: true, liveOrder: 0, pages: [] },
@@ -224,7 +195,12 @@ describe('update lesson publish status', () => {
           pages: [{ id: 'page-1', items: [] }],
         },
       },
-      learningPath
+      {
+        revision: 1,
+        unitIds: ['normal1'],
+        updatedAt: 'now',
+        updatedBy: 'admin',
+      }
     );
 
     const response = (await POST(
