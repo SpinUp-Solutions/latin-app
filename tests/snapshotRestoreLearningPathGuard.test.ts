@@ -28,8 +28,7 @@ jest.mock('@/src/lib/practice-categories/service', () => {
   return {
     PracticeCategoryError,
     practiceCategoryService: {
-      reconcileLessonCategoriesInTransaction: (...args: unknown[]) =>
-        mockReconcile(...args),
+      reconcileLessonCategoriesInTransaction: (...args: unknown[]) => mockReconcile(...args),
     },
   };
 });
@@ -124,19 +123,7 @@ describe('snapshot restore Learning Path guard', () => {
     expect(mockSet).not.toHaveBeenCalled();
   });
 
-  it.each([
-    [
-      'active',
-      {
-        state: 'active',
-        migrationId: 'migration-1',
-        sourceHash: 'a'.repeat(64),
-        appliedAt: 'before',
-        appliedBy: 'admin-1',
-      },
-    ],
-    ['retired', undefined],
-  ])('rejects normal placement changes while the fallback is %s', async (_label, cutover) => {
+  it('rejects normal placement changes whenever the canonical path exists', async () => {
     mockExistingLesson = {
       kind: 'lesson',
       type: 'normal',
@@ -157,11 +144,6 @@ describe('snapshot restore Learning Path guard', () => {
         publishedBy: 'admin-1',
       },
     ];
-    mockLearningPath = {
-      ...mockLearningPath,
-      ...(cutover ? { cutover } : {}),
-    };
-
     const response = (await POST({
       json: async () => ({
         snapshotPath: 'lesson-snapshots/snapshot-1.json',
@@ -175,55 +157,6 @@ describe('snapshot restore Learning Path guard', () => {
     expect(response.status).toBe(409);
     expect(response.body.code).toBe('LEGACY_NORMAL_PLACEMENT_RETIRED');
     expect(mockSet).not.toHaveBeenCalled();
-  });
-
-  it('allows normal placement changes after rollback', async () => {
-    mockExistingLesson = {
-      kind: 'lesson',
-      type: 'normal',
-      isLive: true,
-      liveOrder: 0,
-      publishedAt: 'before',
-      publishedBy: 'admin-1',
-    };
-    mockSnapshotLessons = [
-      {
-        id: 'lesson-1',
-        title: 'Lesson',
-        type: 'normal',
-        pages: [{ id: 'page-1', items: [] }],
-        isLive: true,
-        liveOrder: 1,
-        publishedAt: 'before',
-        publishedBy: 'admin-1',
-      },
-    ];
-    mockLearningPath = {
-      ...mockLearningPath,
-      cutover: {
-        state: 'inactive',
-        migrationId: 'migration-1',
-        sourceHash: 'a'.repeat(64),
-        appliedAt: 'before',
-        appliedBy: 'admin-1',
-        rolledBackAt: 'now',
-        rolledBackBy: 'admin-1',
-      },
-    };
-    mockReconcile.mockResolvedValue({
-      practiceCategoryIds: [],
-      practiceCategories: [],
-    });
-
-    const response = (await POST({
-      json: async () => ({
-        snapshotPath: 'lesson-snapshots/snapshot-1.json',
-        confirmRestore: true,
-      }),
-    } as never)) as unknown as { status: number };
-
-    expect(response.status).toBe(200);
-    expect(mockSet).toHaveBeenCalledTimes(1);
   });
 
   it('keeps creation of a live practice lesson independent after normal fallback retirement', async () => {

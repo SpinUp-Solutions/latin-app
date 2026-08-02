@@ -152,7 +152,12 @@ representative of production. Do not reuse the staging manifest in production:
 the source IDs, order, hash, timestamps, and migration ID belong to one
 environment.
 
-## 4. Calling the migration API safely
+## 4. Calling the migration API safely (historical)
+
+The instructions in this section are retained as the operational record for
+the completed cutover. The migration endpoint, dashboard controls, and
+temporary cutover state are removed by the code-retirement release below; do
+not use these commands against a current deployment.
 
 The operator endpoint is:
 
@@ -502,13 +507,14 @@ in the Learning Path.
 
 ## 9. Code retirement after operational retirement
 
-Operational retirement and code retirement are two different releases. After
+Operational retirement and code retirement are two different releases. Once
 every deployed environment has no `cutover` field and no environment needs
-rollback, create a focused cleanup pull request.
+rollback, the focused cleanup release can remove the temporary workflow.
 
-Remove or simplify:
+This cleanup removes or simplifies:
 
 - `src/app/api/admin/learning-path/migration/route.ts`;
+- the `learningPathMigrations` collection constant and server-only rule;
 - migration action, source, manifest, and cutover schemas/types;
 - manifest hashing, source comparison, apply, verify, rollback, and retire
   service methods;

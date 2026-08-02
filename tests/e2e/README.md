@@ -18,18 +18,6 @@ Run the assessment suite with:
 npm run test:e2e:assessment
 ```
 
-Run the complete Learning Path migration lifecycle against the same local
-emulators with:
-
-```sh
-npm run test:e2e:migration
-```
-
-This exercises the authenticated operator route through dry run, apply,
-verification, rollback, reapply, and retirement. It also confirms that dry run
-does not initialize the aggregate and that the migration never rewrites legacy
-lesson documents.
-
 Playwright starts both emulators and the local Next.js development server. To
 run all browser tests, use `npm run test:e2e`.
 

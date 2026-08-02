@@ -49,10 +49,11 @@ class FakeQuery {
   }
 
   doc(id: string) {
-    return {
+    const ref = {
       id,
-      get: async () => snapshot(id, this.collections[this.collectionName]?.[id]),
+      get: async () => snapshot(id, this.collections[this.collectionName]?.[id], ref),
     };
+    return ref;
   }
 
   async get() {
@@ -134,8 +135,8 @@ const lesson = (overrides: RecordData): RecordData => ({
   ...overrides,
 });
 
-describe('StudentDashboardService Phase 5A legacy projection', () => {
-  it('preserves legacy normal/practice ordering and returns no page bodies', async () => {
+describe('StudentDashboardService summary projection', () => {
+  it('preserves normal/practice ordering and returns no page bodies', async () => {
     const collections = {
       lessons: {
         'normal-3': lesson({ title: 'Normal 3', liveOrder: 30, totalPages: 4 }),
@@ -166,6 +167,15 @@ describe('StudentDashboardService Phase 5A legacy projection', () => {
           liveOrder: 2,
         },
         draft: lesson({ title: 'Draft', isLive: false, liveOrder: null }),
+      },
+      learningPaths: {
+        default: {
+          id: 'default',
+          revision: 1,
+          unitIds: ['normal-1', 'normal-2', 'normal-3'],
+          updatedAt: 'now',
+          updatedBy: 'admin',
+        },
       },
       userProgress: {
         'user_normal-1': {
@@ -271,9 +281,8 @@ describe('StudentDashboardService Phase 5A legacy projection', () => {
 
     const dashboard = await service.getDashboard('user');
 
-    // This matrix mirrors the legacy route's normal-chain algorithm: source
-    // liveOrder, legacy page-math completion, authoritative v2 completion, and
-    // a later lesson retaining stored cursor metadata while locked.
+    // This matrix covers legacy progress records, page-math completion,
+    // authoritative v2 completion, and stored cursor metadata.
     expect(
       dashboard.learningPath
         .filter((item): item is StudentLessonSummary => item.kind === 'lesson')
@@ -291,8 +300,8 @@ describe('StudentDashboardService Phase 5A legacy projection', () => {
       { id: 'tag-cicero', name: 'Cicero', status: 'active', tagOrder: 0 },
     ]);
     expect(JSON.stringify(dashboard)).not.toContain('"pages"');
-    expect(selectedFieldLog).toHaveLength(1);
-    expect(selectedFieldLog[0]).not.toContain('pages');
+    expect(selectedFieldLog).toHaveLength(2);
+    expect(selectedFieldLog.every(fields => !fields.includes('pages'))).toBe(true);
   });
 
   it('keeps a later reached lesson unlocked when the path changes behind it', async () => {
@@ -319,6 +328,15 @@ describe('StudentDashboardService Phase 5A legacy projection', () => {
           exerciseProgress: [],
           lastAccessedAt: 'now',
           progressSchemaVersion: 2,
+        },
+      },
+      learningPaths: {
+        default: {
+          id: 'default',
+          revision: 1,
+          unitIds: ['first', 'second'],
+          updatedAt: 'now',
+          updatedBy: 'admin',
         },
       },
     };
@@ -353,6 +371,15 @@ describe('StudentDashboardService Phase 5A legacy projection', () => {
           type: 'vocab',
           showWordSearch: false,
         }),
+      },
+      learningPaths: {
+        default: {
+          id: 'default',
+          revision: 1,
+          unitIds: ['normal-1', 'normal-2'],
+          updatedAt: 'now',
+          updatedBy: 'admin',
+        },
       },
       userProgress: {},
     };
@@ -490,7 +517,7 @@ describe('StudentDashboardService Phase 5A legacy projection', () => {
     errorSpy.mockRestore();
   });
 
-  it('switches only the normal sequence to an active path and restores legacy fallback when inactive', async () => {
+  it('uses the canonical path for the normal sequence while preserving practice order', async () => {
     const collections = {
       lessons: {
         legacy: lesson({ title: 'Legacy', liveOrder: 0 }),
@@ -507,13 +534,6 @@ describe('StudentDashboardService Phase 5A legacy projection', () => {
           unitIds: ['placed', 'missing', 'legacy'],
           updatedAt: 'now',
           updatedBy: 'admin',
-          cutover: {
-            state: 'active',
-            migrationId: 'migration-1',
-            sourceHash: 'a'.repeat(64),
-            appliedAt: 'now',
-            appliedBy: 'admin',
-          },
         },
       },
       userProgress: {},
@@ -533,19 +553,6 @@ describe('StudentDashboardService Phase 5A legacy projection', () => {
     expect(active.practiceLessons.map(item => item.id)).toEqual(['practice']);
     expect(errorSpy).toHaveBeenCalledWith('Learning Path references missing unit missing; skipping it');
 
-    collections.learningPaths.default.cutover = {
-      ...collections.learningPaths.default.cutover,
-      state: 'inactive',
-      rolledBackAt: 'later',
-      rolledBackBy: 'admin',
-    } as typeof collections.learningPaths.default.cutover & {
-      rolledBackAt: string;
-      rolledBackBy: string;
-    };
-    const inactive = await service.getDashboard('user');
-    expect(inactive.learningPath.map(item => item.id)).toEqual(['legacy']);
-    await expect(service.getNormalSequenceUnitIds()).resolves.toEqual(['legacy']);
-    expect(inactive.practiceLessons.map(item => item.id)).toEqual(['practice']);
     errorSpy.mockRestore();
   });
 });

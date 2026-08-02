@@ -220,7 +220,7 @@ export class TestAttemptService {
     }
   }
 
-  private parseActiveLearningPath(snapshot: DocumentSnapshot): LearningPathDocument {
+  private parseLearningPath(snapshot: DocumentSnapshot): LearningPathDocument {
     if (!snapshot.exists) {
       throw new TestServiceError('TEST_NOT_AVAILABLE', 'Test is not available', 404);
     }
@@ -234,9 +234,6 @@ export class TestAttemptService {
         parsedPath.error.flatten()
       );
     }
-    if (parsedPath.data.cutover?.state === 'inactive') {
-      throw new TestServiceError('TEST_NOT_AVAILABLE', 'Test is not available', 404);
-    }
     return parsedPath.data;
   }
 
@@ -249,7 +246,7 @@ export class TestAttemptService {
     const pathSnapshot = await transaction.get(
       this.db.collection(LEARNING_PATHS_COLLECTION).doc(DEFAULT_LEARNING_PATH_ID)
     );
-    const path = this.parseActiveLearningPath(pathSnapshot);
+    const path = this.parseLearningPath(pathSnapshot);
     const unlocked = await isLearningPathUnitUnlockedInTransaction(transaction, this.db, path, studentId, testId, {
       hasPersistedTargetActivity,
     });
@@ -382,7 +379,7 @@ export class TestAttemptService {
       versionIds: versionSnapshots.docs.map(snapshot => snapshot.id),
     });
     const parsedPath = learningPathDocumentSchema.safeParse({ ...pathSnapshot.data(), id: pathSnapshot.id });
-    if (pathSnapshot.exists && (!parsedPath.success || parsedPath.data.cutover?.state !== 'inactive')) {
+    if (pathSnapshot.exists) {
       if (!parsedPath.success)
         throw configurationError('Learning Path contains invalid data', parsedPath.error.flatten());
       for (const testId of parsedPath.data.unitIds) {

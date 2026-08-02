@@ -580,9 +580,7 @@ function LiveLessonsPage() {
                       The ordered sequence of normal lessons and tests. Array position is the delivery order.
                     </p>
                   </div>
-                  <Badge variant={pathView?.source === 'learning-path' ? 'default' : 'secondary'}>
-                    {pathView?.source === 'learning-path' ? 'Learning Path source' : 'Legacy source preview'}
-                  </Badge>
+                  <Badge variant="default">Learning Path source</Badge>
                 </div>
                 {pathView?.editBlockedReason && (
                   <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">

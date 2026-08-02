@@ -46,29 +46,18 @@ export interface TestUnit extends LearningUnitBase {
 
 export type LearningUnit = LessonUnit | TestUnit;
 
-export interface LearningPathCutover {
-  state: 'active' | 'inactive';
-  migrationId: string;
-  sourceHash: string;
-  appliedAt: string;
-  appliedBy: string;
-  rolledBackAt?: string;
-  rolledBackBy?: string;
-}
-
 export interface LearningPathDocument {
   id: 'default';
   revision: number;
   unitIds: string[];
   updatedAt: string;
   updatedBy: string;
-  cutover?: LearningPathCutover;
 }
 
 export interface AdminLearningPathView {
   path: LearningPathDocument | null;
   effectiveUnitIds: string[];
-  source: 'learning-path' | 'legacy';
+  source: 'learning-path';
   canEdit: boolean;
   editBlockedReason?: string;
 }
