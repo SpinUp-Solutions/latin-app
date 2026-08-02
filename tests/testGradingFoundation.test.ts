@@ -90,12 +90,15 @@ describe('test grading foundation', () => {
       feedbackConfig,
       translationDirection: 'english-to-latin',
       data: {
-        items: [{ latinText: '<p>The girl sings.</p>' }, { latinText: 'The boys run.' }],
+        items: [
+          { latinText: '<p>The girl&nbsp;sings.<br>Today.</p><p>Again.</p>' },
+          { latinText: 'The boys run.' },
+        ],
       },
     };
     const state = await createFrozenTestDeliveryState(makeVersion(exercise), async () => []);
     const grader = jest.fn(async ({ sourceText }: { sourceText: string }) =>
-      sourceText === 'The girl sings.' ? 9 : 6
+      sourceText === 'The girl sings. Today. Again.' ? 9 : 6
     );
     const answers = {
       'translation-one': {
@@ -108,7 +111,7 @@ describe('test grading foundation', () => {
     const result = gradeFrozenTestDelivery(state, answers, overrides);
 
     expect(grader).toHaveBeenCalledWith({
-      sourceText: 'The girl sings.',
+      sourceText: 'The girl sings. Today. Again.',
       userTranslation: 'puella cantat',
       direction: 'english-to-latin',
     });

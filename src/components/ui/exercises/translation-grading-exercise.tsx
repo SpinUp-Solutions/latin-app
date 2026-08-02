@@ -14,6 +14,7 @@ import { Textarea } from '@/src/components/ui/textarea';
 import { getContentTypeLabel } from '@/src/lib/content/registry';
 import { Loader2, ChevronLeft, ChevronRight, Check, Lightbulb } from 'lucide-react';
 import type { ExerciseAnswer, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
+import { richTextToPlainText } from '@/src/utils/exercises/helpers';
 import { RecordedAnswerControls } from './recorded-answer-controls';
 import {
   RomanTable,
@@ -112,7 +113,7 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({
     }
 
     const result = await grade({
-      sourceText: currentItem.latinText.replace(/<[^>]*>/g, ''),
+      sourceText: richTextToPlainText(currentItem.latinText),
       userTranslation: currentAnswer,
       direction,
     });

@@ -29,6 +29,7 @@ import {
 } from './grading';
 import { parseExerciseAnswer } from './answer-schemas';
 import type { TranslationGradingRequest } from '@/shared/openai/types';
+import { richTextToPlainText } from '@/src/utils/exercises/helpers';
 import type { VocabularyPoolLoader } from './vocabulary-pool-loader.server';
 
 export interface FrozenTestDeliveryState extends TestAttemptDeliveryState {
@@ -509,8 +510,6 @@ export function gradeFrozenTestDelivery(
 
 export type TestTranslationGrader = (request: TranslationGradingRequest) => Promise<number>;
 
-const stripHtml = (value: string) => value.replace(/<[^>]*>/g, '').trim();
-
 export async function gradeFrozenTranslationExercises(
   state: FrozenTestDeliveryState,
   answers: Record<string, ExerciseAnswer | unknown>,
@@ -534,7 +533,7 @@ export async function gradeFrozenTranslationExercises(
         exercise.data.items.map((item, index) => {
           const userTranslation = answer.translations[index]?.trim() ?? '';
           if (!userTranslation) return Promise.resolve(0);
-          return grader({ sourceText: stripHtml(item.latinText), userTranslation, direction });
+          return grader({ sourceText: richTextToPlainText(item.latinText), userTranslation, direction });
         })
       );
       return [exercise.id, gradeTranslationAssessment(exercise, scores)] as const;
