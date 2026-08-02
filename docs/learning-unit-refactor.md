@@ -752,8 +752,8 @@ Keep the existing Firestore `lessons` collection for learning units during the i
 
 ```text
 lessons/{learningUnitId}       LessonUnit or TestUnit during migration
-learningPaths/default          Revisioned ordered normal-flow aggregate and cutover state
-learningPathMigrations/{id}    Immutable manifest plus resumable lifecycle audit events
+learningPaths/default          Canonical revisioned ordered normal-flow aggregate
+learningPathMigrations/{id}    Retained server-only cutover audit record
 testVersions/{versionId}       Separately stored version pages and scoring
 mockTests/{mockTestId}         Mock Tests category containers
 testAttempts/{attemptId}       Attempt lifecycle and frozen statistics
