@@ -36,6 +36,8 @@ class FakeQuery {
   readonly kind = 'query';
   private filters: Array<{ field: string; value: unknown }> = [];
   private orderField?: string;
+  private orderDirection: 'asc' | 'desc' = 'asc';
+  private limitCount?: number;
   private selectedFields?: string[];
 
   constructor(
@@ -48,8 +50,14 @@ class FakeQuery {
     return this;
   }
 
-  orderBy(field: string) {
+  orderBy(field: string, direction: 'asc' | 'desc' = 'asc') {
     this.orderField = field;
+    this.orderDirection = direction;
+    return this;
+  }
+
+  limit(count: number) {
+    this.limitCount = count;
     return this;
   }
 
@@ -75,11 +83,17 @@ class FakeQuery {
     }
     if (this.orderField) {
       const field = this.orderField;
-      entries.sort(
-        ([, left], [, right]) =>
-          Number(left[field] ?? Number.MAX_SAFE_INTEGER) - Number(right[field] ?? Number.MAX_SAFE_INTEGER)
-      );
+      entries.sort(([, left], [, right]) => {
+        const leftValue = left[field];
+        const rightValue = right[field];
+        const comparison =
+          typeof leftValue === 'number' && typeof rightValue === 'number'
+            ? leftValue - rightValue
+            : String(leftValue ?? '').localeCompare(String(rightValue ?? ''));
+        return comparison * (this.orderDirection === 'desc' ? -1 : 1);
+      });
     }
+    if (this.limitCount !== undefined) entries = entries.slice(0, this.limitCount);
     const docs = entries.map(([id, value]) => {
       const selected = this.selectedFields
         ? Object.fromEntries(
@@ -586,6 +600,108 @@ describe('LearningPathService Phase 5B', () => {
 });
 
 describe('LearningPathService Phase 5C migration lifecycle', () => {
+  it('persists a resumable manifest and lifecycle audit through verified retirement', async () => {
+    let clock = 0;
+    const db = new FakeFirestore({
+      lessons: {
+        first: lesson({ liveOrder: 0 }),
+        second: lesson({ liveOrder: 1 }),
+      },
+      learningPaths: {},
+      learningPathMigrations: {},
+      testVersions: {},
+    });
+    const service = new LearningPathService(db as never, false, () => `time-${++clock}`);
+
+    const prepared = await service.prepareMigration('migration-durable', 'admin-1');
+    expect(prepared).toMatchObject({
+      migrationId: 'migration-durable',
+      status: 'prepared',
+      events: [{ action: 'prepared', by: 'admin-1' }],
+    });
+    await expect(service.getMigrationOverview()).resolves.toMatchObject({
+      migration: { migrationId: 'migration-durable', status: 'prepared' },
+      needsRecovery: false,
+    });
+
+    await service.applyMigration(prepared.manifest, 'admin-2', true);
+    expect(db.records.learningPathMigrations['migration-durable']).toMatchObject({
+      status: 'active',
+      updatedBy: 'admin-2',
+    });
+
+    await service.verifyMigration(prepared.manifest, 'admin-3');
+    expect(db.records.learningPathMigrations['migration-durable']).toMatchObject({
+      status: 'verified',
+      updatedBy: 'admin-3',
+    });
+
+    await service.retireMigration('admin-4', 'migration-durable');
+    expect(db.records.learningPathMigrations['migration-durable']).toMatchObject({
+      status: 'retired',
+      updatedBy: 'admin-4',
+    });
+    expect(db.records.learningPaths.default).not.toHaveProperty('cutover');
+    expect(
+      (db.records.learningPathMigrations['migration-durable'].events as Array<{ action: string }>).map(
+        event => event.action
+      )
+    ).toEqual(['prepared', 'applied', 'verified', 'retired']);
+  });
+
+  it('recovers an active pre-record cutover but still requires final verification before retirement', async () => {
+    const source = [
+      { unitId: 'first', liveOrder: 0 },
+      { unitId: 'second', liveOrder: 1 },
+    ];
+    const sourceHash = hashLearningPathMigrationSource(source);
+    const db = new FakeFirestore({
+      lessons: {
+        first: lesson({ liveOrder: 0 }),
+        second: lesson({ liveOrder: 1 }),
+      },
+      learningPaths: {
+        default: path({
+          revision: 1,
+          unitIds: ['first', 'second'],
+          cutover: {
+            state: 'active',
+            migrationId: 'migration-old-ui',
+            sourceHash,
+            appliedAt: 'apply-time',
+            appliedBy: 'admin-original',
+          },
+        }),
+      },
+      learningPathMigrations: {},
+      testVersions: {},
+    });
+    const service = new LearningPathService(db as never, false, () => 'recovery-time');
+
+    await expect(service.getMigrationOverview()).resolves.toMatchObject({
+      migration: null,
+      needsRecovery: true,
+    });
+    const recovered = await service.recoverMigration('admin-recovery');
+    expect(recovered).toMatchObject({
+      migrationId: 'migration-old-ui',
+      status: 'active',
+      manifest: { createdAt: 'apply-time', sourceHash, unitIds: ['first', 'second'] },
+      events: [
+        { action: 'applied', by: 'admin-original' },
+        { action: 'recovered', by: 'admin-recovery' },
+      ],
+    });
+
+    await expect(service.retireMigration('admin', recovered.migrationId)).rejects.toMatchObject({
+      code: 'MIGRATION_NOT_VERIFIED',
+    });
+    await service.verifyMigration(recovered.manifest, 'admin-verifier');
+    await expect(service.retireMigration('admin-retire', recovered.migrationId)).resolves.toMatchObject({
+      unitIds: ['first', 'second'],
+    });
+  });
+
   it('builds a deterministic reviewed manifest from an un-ordered full live read', async () => {
     const db = new FakeFirestore({
       lessons: {

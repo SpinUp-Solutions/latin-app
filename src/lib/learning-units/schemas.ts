@@ -277,6 +277,41 @@ export const learningPathMigrationManifestSchema = z
 export type SaveLearningPathInput = z.infer<typeof saveLearningPathInputSchema>;
 export type LearningPathMigrationManifestInput = z.infer<typeof learningPathMigrationManifestSchema>;
 
+const learningPathMigrationEventSchema = z
+  .object({
+    action: z.enum(['prepared', 'recovered', 'applied', 'verified', 'rolled-back', 'retired']),
+    at: z.string().min(1),
+    by: nonEmptyIdSchema,
+    pathRevision: z.number().int().nonnegative().safe().optional(),
+  })
+  .strict();
+
+export const learningPathMigrationRecordSchema = z
+  .object({
+    id: nonEmptyIdSchema,
+    migrationId: nonEmptyIdSchema,
+    manifest: learningPathMigrationManifestSchema,
+    status: z.enum(['prepared', 'active', 'verified', 'rolled-back', 'retired']),
+    createdAt: z.string().min(1),
+    createdBy: nonEmptyIdSchema,
+    updatedAt: z.string().min(1),
+    updatedBy: nonEmptyIdSchema,
+    events: z.array(learningPathMigrationEventSchema).min(1).max(100),
+  })
+  .strict()
+  .superRefine((record, context) => {
+    if (record.id !== record.migrationId || record.manifest.migrationId !== record.migrationId) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Migration record, document, and manifest IDs must match',
+        path: ['migrationId'],
+      });
+    }
+    addLearningPathSizeIssue(record, context);
+  });
+
+export type LearningPathMigrationRecord = z.infer<typeof learningPathMigrationRecordSchema>;
+
 export const learningPathMigrationActionSchema = z.discriminatedUnion('action', [
   z
     .object({
@@ -287,15 +322,16 @@ export const learningPathMigrationActionSchema = z.discriminatedUnion('action', 
   z
     .object({
       action: z.literal('apply'),
-      manifest: learningPathMigrationManifestSchema,
+      migrationId: nonEmptyIdSchema,
     })
     .strict(),
   z
     .object({
       action: z.literal('verify'),
-      manifest: learningPathMigrationManifestSchema,
+      migrationId: nonEmptyIdSchema,
     })
     .strict(),
-  z.object({ action: z.literal('rollback') }).strict(),
-  z.object({ action: z.literal('retire') }).strict(),
+  z.object({ action: z.literal('recover') }).strict(),
+  z.object({ action: z.literal('rollback'), migrationId: nonEmptyIdSchema }).strict(),
+  z.object({ action: z.literal('retire'), migrationId: nonEmptyIdSchema }).strict(),
 ]);

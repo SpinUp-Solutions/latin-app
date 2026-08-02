@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { DocumentData, DocumentSnapshot, Firestore, QuerySnapshot, Transaction } from 'firebase-admin/firestore';
 import {
   DEFAULT_LEARNING_PATH_ID,
+  LEARNING_PATH_MIGRATIONS_COLLECTION,
   LEARNING_PATHS_COLLECTION,
   LEARNING_UNITS_COLLECTION,
   MOCK_TESTS_COLLECTION,
@@ -19,8 +20,10 @@ import type { Lesson } from '@/src/types/lesson';
 import {
   learningPathDocumentSchema,
   learningPathMigrationManifestSchema,
+  learningPathMigrationRecordSchema,
   saveLearningPathInputSchema,
   type LearningPathMigrationManifestInput,
+  type LearningPathMigrationRecord,
   type SaveLearningPathInput,
 } from './schemas';
 import { LearningPathServiceError } from './learning-path-errors';
@@ -39,6 +42,22 @@ function learningPathFromSnapshot(snapshot: DocumentSnapshot): LearningPathDocum
     throw new LearningPathServiceError(
       'STALE_LEARNING_PATH_DATA',
       'The Learning Path contains invalid persisted data',
+      409
+    );
+  }
+  return parsed.data;
+}
+
+function migrationRecordFromSnapshot(snapshot: DocumentSnapshot): LearningPathMigrationRecord | null {
+  if (!snapshot.exists) return null;
+  const parsed = learningPathMigrationRecordSchema.safeParse({
+    ...snapshot.data(),
+    id: snapshot.id,
+  });
+  if (!parsed.success) {
+    throw new LearningPathServiceError(
+      'STALE_MIGRATION_DATA',
+      `Learning Path migration ${snapshot.id} contains invalid persisted data`,
       409
     );
   }
@@ -79,6 +98,53 @@ function assertDocumentSize(document: LearningPathDocument) {
   if (bytes > MAX_LEARNING_PATH_DOCUMENT_BYTES) {
     throw new LearningPathServiceError('LEARNING_PATH_TOO_LARGE', 'The Learning Path is too large to save safely', 422);
   }
+}
+
+function assertMigrationRecordSize(record: LearningPathMigrationRecord) {
+  let bytes: number;
+  try {
+    bytes = estimateFirestoreDocumentBytes(record as unknown as Record<string, unknown>);
+  } catch {
+    throw new LearningPathServiceError(
+      'MIGRATION_RECORD_TOO_LARGE',
+      'The Learning Path migration record cannot be serialized safely',
+      422
+    );
+  }
+  if (bytes > MAX_LEARNING_PATH_DOCUMENT_BYTES) {
+    throw new LearningPathServiceError(
+      'MIGRATION_RECORD_TOO_LARGE',
+      'The Learning Path migration record is too large to save safely',
+      422
+    );
+  }
+}
+
+function updateMigrationRecord(
+  record: LearningPathMigrationRecord,
+  status: LearningPathMigrationRecord['status'],
+  action: LearningPathMigrationRecord['events'][number]['action'],
+  at: string,
+  actorId: string,
+  pathRevision?: number
+): LearningPathMigrationRecord {
+  const updated = learningPathMigrationRecordSchema.parse({
+    ...record,
+    status,
+    updatedAt: at,
+    updatedBy: actorId,
+    events: [
+      ...record.events,
+      {
+        action,
+        at,
+        by: actorId,
+        ...(pathRevision === undefined ? {} : { pathRevision }),
+      },
+    ],
+  });
+  assertMigrationRecordSize(updated);
+  return updated;
 }
 
 type LegacyNormalSourceRecord = {
@@ -384,6 +450,10 @@ export class LearningPathService {
     return this.db.collection(LEARNING_PATHS_COLLECTION);
   }
 
+  private get migrations() {
+    return this.db.collection(LEARNING_PATH_MIGRATIONS_COLLECTION);
+  }
+
   private get units() {
     return this.db.collection(LEARNING_UNITS_COLLECTION);
   }
@@ -400,8 +470,51 @@ export class LearningPathService {
     return this.paths.doc(DEFAULT_LEARNING_PATH_ID);
   }
 
+  migrationRef(migrationId: string) {
+    return this.migrations.doc(migrationId);
+  }
+
   async getPath(): Promise<LearningPathDocument | null> {
     return learningPathFromSnapshot(await this.pathRef().get());
+  }
+
+  async getMigrationRecord(migrationId: string): Promise<LearningPathMigrationRecord | null> {
+    return migrationRecordFromSnapshot(await this.migrationRef(migrationId).get());
+  }
+
+  async requireMigrationRecord(migrationId: string): Promise<LearningPathMigrationRecord> {
+    const record = await this.getMigrationRecord(migrationId);
+    if (!record) {
+      throw new LearningPathServiceError(
+        'MIGRATION_NOT_FOUND',
+        `Learning Path migration ${migrationId} has not been prepared or recovered`,
+        404
+      );
+    }
+    return record;
+  }
+
+  async getMigrationOverview(): Promise<{
+    path: LearningPathDocument | null;
+    migration: LearningPathMigrationRecord | null;
+    needsRecovery: boolean;
+  }> {
+    const path = await this.getPath();
+    if (path?.cutover?.state === 'active') {
+      const migration = await this.getMigrationRecord(path.cutover.migrationId);
+      return { path, migration, needsRecovery: !migration };
+    }
+
+    const latest = await this.migrations.orderBy('updatedAt', 'desc').limit(1).get();
+    const latestMigration = latest.docs[0] ? migrationRecordFromSnapshot(latest.docs[0]) : null;
+    if (!path?.cutover) return { path, migration: latestMigration, needsRecovery: false };
+
+    const cutoverMigration = await this.getMigrationRecord(path.cutover.migrationId);
+    const migration =
+      latestMigration && (!cutoverMigration || latestMigration.updatedAt >= cutoverMigration.updatedAt)
+        ? latestMigration
+        : cutoverMigration;
+    return { path, migration, needsRecovery: !migration };
   }
 
   private async getLegacyNormalUnitIds(): Promise<string[]> {
@@ -437,9 +550,7 @@ export class LearningPathService {
   private async validateDesiredUnits(transaction: Transaction, unitIds: string[]): Promise<void> {
     // Firestore requires at least one document reference for getAll. An empty
     // path is valid, and must still reach the complete graph validation below.
-    const snapshots = unitIds.length
-      ? await transaction.getAll(...unitIds.map(unitId => this.units.doc(unitId)))
-      : [];
+    const snapshots = unitIds.length ? await transaction.getAll(...unitIds.map(unitId => this.units.doc(unitId))) : [];
     const tests: Extract<LearningUnit, { kind: 'test' }>[] = [];
 
     for (const snapshot of snapshots) {
@@ -516,15 +627,31 @@ export class LearningPathService {
       transaction.get(this.versions),
     ]);
     try {
-      const allTests = allTestSnapshots.docs.map(parseLearningUnitSnapshot).filter((unit): unit is Extract<LearningUnit, { kind: 'test' }> => unit.kind === 'test');
-      const mocks = activeMockSnapshots.docs.map(snapshot => mockTestDocumentSchema.parse({ ...snapshot.data(), id: snapshot.id }));
-      const graphErrors = validateTestAssignmentGraph({ tests: allTests, mocks, versionIds: allVersionSnapshots.docs.map(snapshot => snapshot.id) });
+      const allTests = allTestSnapshots.docs
+        .map(parseLearningUnitSnapshot)
+        .filter((unit): unit is Extract<LearningUnit, { kind: 'test' }> => unit.kind === 'test');
+      const mocks = activeMockSnapshots.docs.map(snapshot =>
+        mockTestDocumentSchema.parse({ ...snapshot.data(), id: snapshot.id })
+      );
+      const graphErrors = validateTestAssignmentGraph({
+        tests: allTests,
+        mocks,
+        versionIds: allVersionSnapshots.docs.map(snapshot => snapshot.id),
+      });
       if (graphErrors.length > 0) {
-        throw new LearningPathServiceError('INELIGIBLE_LEARNING_UNIT', `Learning Path placement found invalid active delivery ownership: ${graphErrors.join('; ')}`, 409);
+        throw new LearningPathServiceError(
+          'INELIGIBLE_LEARNING_UNIT',
+          `Learning Path placement found invalid active delivery ownership: ${graphErrors.join('; ')}`,
+          409
+        );
       }
     } catch (error) {
       if (error instanceof LearningPathServiceError) throw error;
-      throw new LearningPathServiceError('INELIGIBLE_LEARNING_UNIT', 'Learning Path placement found malformed active delivery ownership', 409);
+      throw new LearningPathServiceError(
+        'INELIGIBLE_LEARNING_UNIT',
+        'Learning Path placement found malformed active delivery ownership',
+        409
+      );
     }
   }
 
@@ -582,9 +709,132 @@ export class LearningPathService {
     });
   }
 
+  async prepareMigration(migrationId: string, actorId: string): Promise<LearningPathMigrationRecord> {
+    return this.db.runTransaction(async transaction => {
+      const [recordSnapshot, pathSnapshot, sourceSnapshot] = await Promise.all([
+        transaction.get(this.migrationRef(migrationId)),
+        transaction.get(this.pathRef()),
+        transaction.get(this.legacyLiveQuery()),
+      ]);
+      const existing = migrationRecordFromSnapshot(recordSnapshot);
+      if (existing) return existing;
+
+      const path = learningPathFromSnapshot(pathSnapshot);
+      if (path && !path.cutover) {
+        throw new LearningPathServiceError(
+          'MIGRATION_CONFLICT',
+          'The Learning Path migration window has already been retired',
+          409
+        );
+      }
+      if (path?.cutover?.state === 'active') {
+        throw new LearningPathServiceError(
+          'MIGRATION_RECOVERY_REQUIRED',
+          `Recover active migration ${path.cutover.migrationId} before continuing its workflow`,
+          409
+        );
+      }
+
+      const source = legacyNormalSourceFromSnapshot(sourceSnapshot, true);
+      const createdAt = this.now();
+      const manifest = learningPathMigrationManifestSchema.parse({
+        migrationId,
+        createdAt,
+        sourceHash: hashLearningPathMigrationSource(source),
+        unitIds: source.map(record => record.unitId),
+        source,
+      });
+      const record = learningPathMigrationRecordSchema.parse({
+        id: migrationId,
+        migrationId,
+        manifest,
+        status: 'prepared',
+        createdAt,
+        createdBy: actorId,
+        updatedAt: createdAt,
+        updatedBy: actorId,
+        events: [{ action: 'prepared', at: createdAt, by: actorId }],
+      });
+      assertMigrationRecordSize(record);
+      transaction.set(this.migrationRef(migrationId), record);
+      return record;
+    });
+  }
+
+  async recoverMigration(actorId: string): Promise<LearningPathMigrationRecord> {
+    return this.db.runTransaction(async transaction => {
+      const [pathSnapshot, sourceSnapshot] = await Promise.all([
+        transaction.get(this.pathRef()),
+        transaction.get(this.legacyLiveQuery()),
+      ]);
+      const path = learningPathFromSnapshot(pathSnapshot);
+      if (!path?.cutover) {
+        throw new LearningPathServiceError(
+          'MIGRATION_RECOVERY_UNAVAILABLE',
+          'There is no active or rolled-back cutover to recover',
+          409
+        );
+      }
+
+      const existing = migrationRecordFromSnapshot(await transaction.get(this.migrationRef(path.cutover.migrationId)));
+      if (existing) return existing;
+
+      const source = legacyNormalSourceFromSnapshot(sourceSnapshot, true);
+      const manifest = learningPathMigrationManifestSchema.parse({
+        migrationId: path.cutover.migrationId,
+        createdAt: path.cutover.appliedAt,
+        sourceHash: hashLearningPathMigrationSource(source),
+        unitIds: source.map(record => record.unitId),
+        source,
+      });
+      if (manifest.sourceHash !== path.cutover.sourceHash || !sameUnitIds(manifest.unitIds, path.unitIds)) {
+        throw new LearningPathServiceError(
+          'MIGRATION_RECOVERY_FAILED',
+          'The current legacy source cannot reconstruct the active Learning Path manifest exactly',
+          409
+        );
+      }
+
+      const recoveredAt = this.now();
+      const events: LearningPathMigrationRecord['events'] = [
+        {
+          action: 'applied',
+          at: path.cutover.appliedAt,
+          by: path.cutover.appliedBy,
+          pathRevision: path.revision,
+        },
+      ];
+      if (path.cutover.state === 'inactive') {
+        events.push({
+          action: 'rolled-back',
+          at: path.cutover.rolledBackAt!,
+          by: path.cutover.rolledBackBy!,
+          pathRevision: path.revision,
+        });
+      }
+      events.push({ action: 'recovered', at: recoveredAt, by: actorId, pathRevision: path.revision });
+
+      const record = learningPathMigrationRecordSchema.parse({
+        id: manifest.migrationId,
+        migrationId: manifest.migrationId,
+        manifest,
+        status: path.cutover.state === 'active' ? 'active' : 'rolled-back',
+        createdAt: path.cutover.appliedAt,
+        createdBy: path.cutover.appliedBy,
+        updatedAt: recoveredAt,
+        updatedBy: actorId,
+        events,
+      });
+      assertMigrationRecordSize(record);
+      transaction.set(this.migrationRef(record.migrationId), record);
+      return record;
+    });
+  }
+
   async applyMigration(
     input: LearningPathMigrationManifestInput,
-    actorId: string
+    actorId: string,
+    persistRecord = false
   ): Promise<{ path: LearningPathDocument; applied: boolean }> {
     const manifest = learningPathMigrationManifestSchema.parse(input);
     return this.db.runTransaction(async transaction => {
@@ -595,6 +845,27 @@ export class LearningPathService {
       const currentPath = learningPathFromSnapshot(pathSnapshot);
       const source = legacyNormalSourceFromSnapshot(sourceSnapshot, true);
       assertManifestMatchesSource(manifest, source);
+
+      const record = persistRecord
+        ? migrationRecordFromSnapshot(await transaction.get(this.migrationRef(manifest.migrationId)))
+        : null;
+      if (persistRecord && !record) {
+        throw new LearningPathServiceError(
+          'MIGRATION_NOT_FOUND',
+          `Learning Path migration ${manifest.migrationId} has not been prepared or recovered`,
+          404
+        );
+      }
+      if (record && !sameMigrationManifest(record.manifest, manifest)) {
+        throw new LearningPathServiceError(
+          'MIGRATION_CONFLICT',
+          'The stored immutable manifest does not match the requested migration',
+          409
+        );
+      }
+      if (record?.status === 'retired') {
+        throw new LearningPathServiceError('MIGRATION_CONFLICT', 'The stored migration has already been retired', 409);
+      }
 
       if (currentPath && !currentPath.cutover) {
         throw new LearningPathServiceError(
@@ -633,12 +904,19 @@ export class LearningPathService {
       };
       assertDocumentSize(path);
       transaction.set(this.pathRef(), path);
+      if (record) {
+        transaction.set(
+          this.migrationRef(manifest.migrationId),
+          updateMigrationRecord(record, 'active', 'applied', appliedAt, actorId, path.revision)
+        );
+      }
       return { path, applied: true };
     });
   }
 
   async verifyMigration(
-    input: LearningPathMigrationManifestInput
+    input: LearningPathMigrationManifestInput,
+    actorId?: string
   ): Promise<{ verified: true; path: LearningPathDocument }> {
     const manifest = learningPathMigrationManifestSchema.parse(input);
     return this.db.runTransaction(async transaction => {
@@ -649,6 +927,23 @@ export class LearningPathService {
       const path = learningPathFromSnapshot(pathSnapshot);
       const source = legacyNormalSourceFromSnapshot(sourceSnapshot, true);
       assertManifestMatchesSource(manifest, source);
+      const record = actorId
+        ? migrationRecordFromSnapshot(await transaction.get(this.migrationRef(manifest.migrationId)))
+        : null;
+      if (actorId && !record) {
+        throw new LearningPathServiceError(
+          'MIGRATION_NOT_FOUND',
+          `Learning Path migration ${manifest.migrationId} has not been prepared or recovered`,
+          404
+        );
+      }
+      if (record && !sameMigrationManifest(record.manifest, manifest)) {
+        throw new LearningPathServiceError(
+          'MIGRATION_CONFLICT',
+          'The stored immutable manifest does not match the active migration',
+          409
+        );
+      }
       if (
         !path ||
         path.cutover?.state !== 'active' ||
@@ -663,11 +958,18 @@ export class LearningPathService {
         );
       }
       await assertPhase5PathContainsNoTests(transaction, this.db, path.unitIds);
+      if (record && actorId) {
+        const verifiedAt = this.now();
+        transaction.set(
+          this.migrationRef(manifest.migrationId),
+          updateMigrationRecord(record, 'verified', 'verified', verifiedAt, actorId, path.revision)
+        );
+      }
       return { verified: true, path };
     });
   }
 
-  async rollbackMigration(actorId: string): Promise<LearningPathDocument> {
+  async rollbackMigration(actorId: string, migrationId?: string): Promise<LearningPathDocument> {
     return this.db.runTransaction(async transaction => {
       const snapshot = await transaction.get(this.pathRef());
       const path = learningPathFromSnapshot(snapshot);
@@ -676,6 +978,23 @@ export class LearningPathService {
           'ROLLBACK_UNAVAILABLE',
           'Learning Path rollback is unavailable after migration retirement',
           409
+        );
+      }
+      if (migrationId && path.cutover.migrationId !== migrationId) {
+        throw new LearningPathServiceError(
+          'MIGRATION_CONFLICT',
+          `Active migration ${path.cutover.migrationId} does not match ${migrationId}`,
+          409
+        );
+      }
+      const record = migrationId
+        ? migrationRecordFromSnapshot(await transaction.get(this.migrationRef(migrationId)))
+        : null;
+      if (migrationId && !record) {
+        throw new LearningPathServiceError(
+          'MIGRATION_NOT_FOUND',
+          `Learning Path migration ${migrationId} has not been prepared or recovered`,
+          404
         );
       }
       await assertPhase5PathContainsNoTests(transaction, this.db, path.unitIds);
@@ -694,11 +1013,17 @@ export class LearningPathService {
         },
       };
       transaction.set(this.pathRef(), rolledBack);
+      if (record) {
+        transaction.set(
+          this.migrationRef(record.migrationId),
+          updateMigrationRecord(record, 'rolled-back', 'rolled-back', rolledBackAt, actorId, path.revision)
+        );
+      }
       return rolledBack;
     });
   }
 
-  async retireMigration(actorId: string): Promise<LearningPathDocument> {
+  async retireMigration(actorId: string, migrationId?: string): Promise<LearningPathDocument> {
     return this.db.runTransaction(async transaction => {
       const snapshot = await transaction.get(this.pathRef());
       const path = learningPathFromSnapshot(snapshot);
@@ -709,7 +1034,50 @@ export class LearningPathService {
           404
         );
       }
-      if (!path.cutover) return path;
+      const record = migrationId
+        ? migrationRecordFromSnapshot(await transaction.get(this.migrationRef(migrationId)))
+        : null;
+      if (migrationId && !record) {
+        throw new LearningPathServiceError(
+          'MIGRATION_NOT_FOUND',
+          `Learning Path migration ${migrationId} has not been prepared or recovered`,
+          404
+        );
+      }
+      if (!path.cutover) {
+        if (record && record.status !== 'retired') {
+          throw new LearningPathServiceError(
+            'MIGRATION_CONFLICT',
+            'The Learning Path is retired but its migration audit record is inconsistent',
+            409
+          );
+        }
+        return path;
+      }
+      if (migrationId && path.cutover.migrationId !== migrationId) {
+        throw new LearningPathServiceError(
+          'MIGRATION_CONFLICT',
+          `Active migration ${path.cutover.migrationId} does not match ${migrationId}`,
+          409
+        );
+      }
+      if (record && record.status !== 'verified') {
+        throw new LearningPathServiceError(
+          'MIGRATION_NOT_VERIFIED',
+          'Run final verification for this stored migration before retirement',
+          409
+        );
+      }
+      if (
+        record &&
+        (record.manifest.sourceHash !== path.cutover.sourceHash || !sameUnitIds(record.manifest.unitIds, path.unitIds))
+      ) {
+        throw new LearningPathServiceError(
+          'MIGRATION_CONFLICT',
+          'The verified migration record does not match the active Learning Path',
+          409
+        );
+      }
       if (path.cutover.state !== 'active') {
         throw new LearningPathServiceError(
           'CUTOVER_NOT_ACTIVE',
@@ -727,6 +1095,12 @@ export class LearningPathService {
         updatedBy: actorId,
       };
       transaction.set(this.pathRef(), retired);
+      if (record) {
+        transaction.set(
+          this.migrationRef(record.migrationId),
+          updateMigrationRecord(record, 'retired', 'retired', retired.updatedAt, actorId, path.revision)
+        );
+      }
       return retired;
     });
   }
@@ -736,4 +1110,14 @@ export const learningPathService = new LearningPathService();
 
 function sameUnitIds(left: string[], right: string[]) {
   return left.length === right.length && left.every((unitId, index) => unitId === right[index]);
+}
+
+function sameMigrationManifest(left: LearningPathMigrationManifestInput, right: LearningPathMigrationManifestInput) {
+  return (
+    left.migrationId === right.migrationId &&
+    left.createdAt === right.createdAt &&
+    left.sourceHash === right.sourceHash &&
+    sameUnitIds(left.unitIds, right.unitIds) &&
+    sameMigrationSource(left.source, right.source)
+  );
 }
