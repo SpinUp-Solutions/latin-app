@@ -23,7 +23,7 @@ import type {
   MultiAnswerFormIdentificationItem,
   SingleFieldFormIdentificationItem,
 } from '@/src/types/exercises/schemas/form-identification';
-import type { TestVersion } from '@/src/types/test';
+import type { TestVersion, TranslationItemScoreRecord } from '@/src/types/test';
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
 
 jest.mock('firebase-admin/firestore', () => ({ FieldPath: { documentId: jest.fn() } }));
@@ -90,10 +90,7 @@ describe('test grading foundation', () => {
       feedbackConfig,
       translationDirection: 'english-to-latin',
       data: {
-        items: [
-          { latinText: '<p>The girl&nbsp;sings.<br>Today.</p><p>Again.</p>' },
-          { latinText: 'The boys run.' },
-        ],
+        items: [{ latinText: '<p>The girl&nbsp;sings.<br>Today.</p><p>Again.</p>' }, { latinText: 'The boys run.' }],
       },
     };
     const state = await createFrozenTestDeliveryState(makeVersion(exercise), async () => []);
@@ -116,6 +113,58 @@ describe('test grading foundation', () => {
       direction: 'english-to-latin',
     });
     expect(result).toMatchObject({ awardedPoints: 6, maxPoints: 8 });
+  });
+
+  it('bounds translation grading and resumes from persisted item scores after a partial failure', async () => {
+    const exercise: TranslationGradingExercise = {
+      id: 'translation-resumable',
+      type: 'translation-grading',
+      title: 'Resumable translation',
+      instructions: '',
+      maxPoints: 7,
+      feedbackConfig,
+      data: { items: Array.from({ length: 7 }, (_, index) => ({ latinText: `Item ${index}` })) },
+    };
+    const state = await createFrozenTestDeliveryState(makeVersion(exercise), async () => []);
+    const answers = {
+      'translation-resumable': {
+        type: 'translation-grading' as const,
+        translations: Array.from({ length: 7 }, (_, index) => `Answer ${index}`),
+      },
+    };
+    const persistedScores: Record<string, TranslationItemScoreRecord> = {};
+    let active = 0;
+    let peak = 0;
+    let calls = 0;
+    let failOnce = true;
+    const grader = jest.fn(async ({ sourceText }: { sourceText: string }) => {
+      active += 1;
+      peak = Math.max(peak, active);
+      await new Promise(resolve => setTimeout(resolve, 2));
+      active -= 1;
+      calls += 1;
+      if (sourceText === 'Item 2' && failOnce) throw new Error('temporary provider failure');
+      return 8;
+    });
+    const options = {
+      attemptId: 'attempt-resumable',
+      answerFingerprint: 'a'.repeat(64),
+      existingScores: persistedScores,
+      onItemScored: (key: string, score: TranslationItemScoreRecord) => {
+        persistedScores[key] = score;
+      },
+    };
+
+    await expect(gradeFrozenTranslationExercises(state, answers, grader, options)).rejects.toThrow(
+      'temporary provider failure'
+    );
+    expect(peak).toBeLessThanOrEqual(3);
+    expect(Object.keys(persistedScores)).toHaveLength(6);
+
+    failOnce = false;
+    const overrides = await gradeFrozenTranslationExercises(state, answers, grader, options);
+    expect(calls).toBe(8);
+    expect(overrides['translation-resumable']).toEqual({ awardedPoints: 5.6, maxPoints: 7 });
   });
 
   it('ignores an empty multi-value filter instead of issuing a Firestore in query with no values', () => {
@@ -429,11 +478,7 @@ describe('test grading foundation', () => {
       ],
     }));
 
-    const state = await createFrozenTestDeliveryState(
-      version,
-      async () => [],
-      loadVocabularyPool as never
-    );
+    const state = await createFrozenTestDeliveryState(version, async () => [], loadVocabularyPool as never);
     const delivery = sanitizeTestDeliveryState(state);
 
     expect(loadVocabularyPool).toHaveBeenCalledWith('pool-one');

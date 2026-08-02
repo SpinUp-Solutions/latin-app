@@ -8,6 +8,11 @@ import {
 } from '@/shared/openai/model-registry';
 import { createEvaluationCacheKey } from '@/src/lib/ai-evaluations/cache-key';
 import { evaluationCaseInputSchema } from '@/src/lib/ai-evaluations/contracts';
+import {
+  translationGradingFingerprintFor,
+  TEST_TRANSLATION_GRADING_FINGERPRINT,
+} from '@/shared/openai/translation-grading';
+import { TEST_TRANSLATION_GRADING_PROFILE } from '@/shared/openai/model-registry';
 
 describe('AI evaluation pricing and cache contracts', () => {
   it('separates ordinary, cached, cache-write, output, and reasoning usage', () => {
@@ -109,6 +114,27 @@ describe('AI evaluation pricing and cache contracts', () => {
     expect(createEvaluationCacheKey(base)).not.toBe(
       createEvaluationCacheKey({ ...base, model: 'gpt-5.6-luna', reasoningEffort: 'high' })
     );
+  });
+
+  it('fingerprints grading behavior while ignoring pricing-only changes', () => {
+    const baseline = translationGradingFingerprintFor(TRANSLATION_GRADING_PROFILES.baseline, 'lesson');
+    const changedOutputBudget = translationGradingFingerprintFor(
+      { ...TRANSLATION_GRADING_PROFILES.baseline, maxOutputTokens: 4_000 },
+      'lesson'
+    );
+    const changedPricing = translationGradingFingerprintFor(
+      {
+        ...TRANSLATION_GRADING_PROFILES.baseline,
+        pricing: { ...TRANSLATION_GRADING_PROFILES.baseline.pricing, inputPerMillion: 99 },
+      },
+      'lesson'
+    );
+
+    expect(baseline).toHaveLength(64);
+    expect(changedOutputBudget).not.toBe(baseline);
+    expect(changedPricing).toBe(baseline);
+    expect(TEST_TRANSLATION_GRADING_FINGERPRINT).not.toBe(baseline);
+    expect(TEST_TRANSLATION_GRADING_PROFILE.maxOutputTokens).toBeLessThan(1_000);
   });
 
   it('rejects unknown fields and duplicate answer ids', () => {

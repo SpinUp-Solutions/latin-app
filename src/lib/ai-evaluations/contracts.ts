@@ -104,8 +104,12 @@ export interface EvaluationCellResult {
   error?: string;
   errorCode?: string;
   latencyMs: number;
+  /** Time spent waiting for the shared provider semaphore. */
+  providerQueueTimeMs?: number;
   generationLatencyMs?: number;
   generatedAt?: string;
+  promptCacheKey?: string;
+  promptCacheNamespace?: 'lesson' | 'test';
   cacheStatus: 'app-cache' | 'openai-prompt-cache' | 'fresh-api' | 'error';
   appCacheHit: boolean;
   openAIPromptCacheHit: boolean;
@@ -131,6 +135,8 @@ export interface EvaluationAggregate {
   generationTimeMs: number;
   /** Provider latency incurred by this run; excludes app-cache and coalesced reuse. */
   providerTimeThisRunMs: number;
+  /** Provider-semaphore wait time incurred by this run; excludes cache reuse. */
+  providerQueueTimeMs?: number;
   originalCost?: CostBreakdown;
   originalCostStatus: EvaluationAggregateCostStatus;
   costIncurredThisRun?: CostBreakdown;

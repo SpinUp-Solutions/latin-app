@@ -63,7 +63,7 @@ export function collectAttemptedNormalTestIds(attempts: readonly AttemptActivity
     if (
       attempt.origin?.kind === 'normal-test' &&
       typeof attempt.origin.testId === 'string' &&
-      (attempt.status === 'in-progress' || attempt.status === 'submitted')
+      (attempt.status === 'in-progress' || attempt.status === 'grading' || attempt.status === 'submitted')
     ) {
       attempted.add(attempt.origin.testId);
     }

@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { DocumentSnapshot, Firestore, Transaction } from 'firebase-admin/firestore';
 import {
   DEFAULT_LEARNING_PATH_ID,
@@ -25,32 +25,34 @@ import type {
   SubmitTestAttemptResult,
   SubmittedTestAttempt,
   TestAttempt,
+  TestAttemptGradingLease,
   TestAttemptOrigin,
   TestAttemptOriginSummary,
   TestAttemptResultSummary,
   TestAttemptSession,
   TestVersion,
+  TranslationItemScoreRecord,
 } from '@/src/types/test';
 import { isAnswerForExercise, parseExerciseAnswer } from './answer-schemas';
 import {
   createFrozenTestDeliveryState,
   gradeFrozenTestDelivery,
   gradeFrozenTranslationExercises,
+  type TranslationGradingOptions,
   sanitizeTestDeliveryState,
   type FrozenDeliveryScore,
   type FrozenTestDeliveryState,
   type TestTranslationGrader,
 } from './delivery';
-import { gradeTestTranslation } from '@/shared/openai/translation-grading';
+import { gradeTestTranslation, TEST_TRANSLATION_GRADING_FINGERPRINT } from '@/shared/openai/translation-grading';
+import { TEST_TRANSLATION_GRADING_PROFILE } from '@/shared/openai/model-registry';
+import { withOpenAIProviderLease } from '@/src/lib/ai-evaluations/provider-budget';
 import { TEST_VERSION_SUMMARY_FIELDS, selectLeastUsedTestVersion, validateTestAssignmentGraph } from './domain';
 import { TestServiceError } from './errors';
 import { estimateFirestoreDocumentBytes } from './firestore-size';
 import type { GeneratedWordLoader } from './generated-exercises';
 import { createFirestoreGeneratedWordLoader } from './generated-word-loader.server';
-import {
-  createFirestoreVocabularyPoolLoader,
-  type VocabularyPoolLoader,
-} from './vocabulary-pool-loader.server';
+import { createFirestoreVocabularyPoolLoader, type VocabularyPoolLoader } from './vocabulary-pool-loader.server';
 import {
   configurationError,
   parseMockSnapshot,
@@ -77,11 +79,35 @@ export const MAX_TEST_ATTEMPT_DOCUMENT_BYTES = 900 * 1024;
  * remaining orders of magnitude below the smallest meaningful score gap.
  */
 export const PASSING_THRESHOLD_TOLERANCE = 1e-9;
+export const TEST_ATTEMPT_GRADING_LEASE_MS = 5 * 60 * 1_000;
+export const TEST_ATTEMPT_GRADING_WAIT_MS = 2 * 60 * 1_000;
+export const TEST_ATTEMPT_GRADING_POLL_MS = 250;
 
 const originId = (origin: TestAttemptOrigin) => (origin.kind === 'normal-test' ? origin.testId : origin.mockTestId);
 
 const sameOrigin = (left: TestAttemptOrigin, right: TestAttemptOrigin) =>
   left.kind === right.kind && originId(left) === originId(right);
+
+const canonicalize = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, nested]) => [key, canonicalize(nested)])
+    );
+  }
+  return value;
+};
+
+export function getTestAttemptAnswerFingerprint(answers: Record<string, unknown>): string {
+  return createHash('sha256')
+    .update(JSON.stringify(canonicalize(answers)), 'utf8')
+    .digest('hex');
+}
+
+const isActiveGradingLease = (lease: TestAttemptGradingLease | undefined, now: string): boolean =>
+  Boolean(lease && Date.parse(lease.expiresAt) > Date.parse(now));
 
 export function getTestAttemptSessionId(studentId: string, origin: TestAttemptOrigin): string {
   return createHash('sha256')
@@ -137,9 +163,18 @@ function toStudentAttempt(attempt: TestAttempt): StudentTestAttempt {
     return studentAttempt;
   }
 
-  const { studentId: _studentId, deliveryState, ...studentAttempt } = attempt;
+  const {
+    studentId: _studentId,
+    deliveryState,
+    gradingLease: _gradingLease,
+    translationScores: _translationScores,
+    ...studentAttempt
+  } = attempt;
   return {
     ...studentAttempt,
+    // Grading is an internal durable state. Students continue to receive the
+    // same resumable delivery shape while the owner finishes the submission.
+    status: 'in-progress',
     delivery: sanitizeTestDeliveryState(deliveryState as FrozenTestDeliveryState),
   };
 }
@@ -156,6 +191,11 @@ export interface TestAttemptServiceOptions {
   loadVocabularyPool?: VocabularyPoolLoader;
   maxAttemptDocumentBytes?: number;
   gradeTestTranslation?: TestTranslationGrader;
+  gradingLeaseMs?: number;
+  gradingWaitMs?: number;
+  gradingPollMs?: number;
+  sleep?: (milliseconds: number) => Promise<void>;
+  requestId?: () => string;
 }
 
 export class TestAttemptService {
@@ -164,6 +204,11 @@ export class TestAttemptService {
   private readonly loadVocabularyPool: VocabularyPoolLoader;
   private readonly maxAttemptDocumentBytes: number;
   private readonly gradeTestTranslation: TestTranslationGrader;
+  private readonly gradingLeaseMs: number;
+  private readonly gradingWaitMs: number;
+  private readonly gradingPollMs: number;
+  private readonly sleep: (milliseconds: number) => Promise<void>;
+  private readonly requestId: () => string;
 
   constructor(
     private readonly db: Firestore = adminDb,
@@ -174,10 +219,20 @@ export class TestAttemptService {
     this.loadGeneratedWords = options.loadGeneratedWords ?? createFirestoreGeneratedWordLoader(db);
     this.loadVocabularyPool = options.loadVocabularyPool ?? createFirestoreVocabularyPoolLoader(db);
     this.maxAttemptDocumentBytes = options.maxAttemptDocumentBytes ?? MAX_TEST_ATTEMPT_DOCUMENT_BYTES;
+    this.gradingLeaseMs = options.gradingLeaseMs ?? TEST_ATTEMPT_GRADING_LEASE_MS;
+    this.gradingWaitMs = options.gradingWaitMs ?? TEST_ATTEMPT_GRADING_WAIT_MS;
+    this.gradingPollMs = options.gradingPollMs ?? TEST_ATTEMPT_GRADING_POLL_MS;
+    this.sleep = options.sleep ?? (milliseconds => new Promise<void>(resolve => setTimeout(resolve, milliseconds)));
+    this.requestId = options.requestId ?? randomUUID;
     this.gradeTestTranslation =
       options.gradeTestTranslation ??
       (async request => {
-        const result = await gradeTestTranslation(request);
+        const { value: result } = await withOpenAIProviderLease(
+          db,
+          TEST_TRANSLATION_GRADING_PROFILE.model,
+          () => gradeTestTranslation(request),
+          { ownerId: `test-grading:${this.requestId()}` }
+        );
         if (!result.success || !result.data) throw new Error('The translation grader returned no usable score');
         return result.data.score;
       });
@@ -423,7 +478,7 @@ export class TestAttemptService {
           if (activeAttempt.studentId !== studentId || !sameOrigin(activeAttempt.origin, origin)) {
             throw configurationError(`Attempt session ${sessionId} points outside its student/origin scope`);
           }
-          if (activeAttempt.status === 'in-progress') {
+          if (activeAttempt.status === 'in-progress' || activeAttempt.status === 'grading') {
             if (origin.kind === 'normal-test') {
               await this.assertNormalTestUnlocked(transaction, studentId, origin.testId, true);
             }
@@ -438,11 +493,7 @@ export class TestAttemptService {
       const { version, passingPercentage } = await this.resolveAttemptVersion(transaction, studentId, origin);
       let deliveryState: FrozenTestDeliveryState;
       try {
-        deliveryState = await createFrozenTestDeliveryState(
-          version,
-          this.loadGeneratedWords,
-          this.loadVocabularyPool
-        );
+        deliveryState = await createFrozenTestDeliveryState(version, this.loadGeneratedWords, this.loadVocabularyPool);
       } catch (error) {
         throw configurationError(
           `Could not resolve frozen delivery for ${origin.kind}:${originId(origin)} version ${version.id}`,
@@ -545,46 +596,142 @@ export class TestAttemptService {
     });
   }
 
-  async submitAttempt(attemptId: string, studentId: string): Promise<SubmitTestAttemptResult> {
+  private async claimGradingAttempt(
+    attemptId: string,
+    studentId: string
+  ): Promise<
+    | { kind: 'submitted'; attempt: SubmittedTestAttempt }
+    | { kind: 'owner'; attempt: InProgressTestAttempt }
+    | { kind: 'join'; attempt: InProgressTestAttempt }
+  > {
     const attemptRef = this.attempts.doc(attemptId);
+    const ownerId = this.requestId();
 
-    const attemptForGrading = await this.db.runTransaction(async transaction => {
+    return this.db.runTransaction(async transaction => {
       const attempt = parseAttemptSnapshot(await transaction.get(attemptRef));
       assertAttemptOwner(attempt, studentId);
-      if (attempt.status === 'in-progress' && attempt.origin.kind === 'normal-test') {
+      if (attempt.status === 'submitted') return { kind: 'submitted', attempt };
+      if (attempt.origin.kind === 'normal-test') {
         await this.assertNormalTestUnlocked(transaction, studentId, attempt.origin.testId, true);
       }
-      return attempt;
-    });
-    if (attemptForGrading.status === 'submitted') {
-      return { attempt: toStudentAttempt(attemptForGrading) as StudentSubmittedTestAttempt, completionGranted: false };
-    }
 
-    const gradingAnswersFingerprint = JSON.stringify(attemptForGrading.answers);
-    let translationScoreOverrides: Record<string, { awardedPoints: number; maxPoints: number }>;
+      const answerFingerprint = getTestAttemptAnswerFingerprint(attempt.answers);
+      const timestamp = this.now();
+      if (attempt.status === 'grading' && isActiveGradingLease(attempt.gradingLease, timestamp)) {
+        if (attempt.gradingLease!.answerFingerprint !== answerFingerprint) {
+          throw new TestServiceError(
+            'ATTEMPT_CHANGED_DURING_SUBMISSION',
+            'An answer changed while the test was being submitted. Please submit again.',
+            409
+          );
+        }
+        return { kind: 'join', attempt };
+      }
+
+      const previousLease = attempt.gradingLease;
+      const lease: TestAttemptGradingLease = {
+        attemptId,
+        answerFingerprint,
+        ownerId,
+        startedAt: previousLease?.answerFingerprint === answerFingerprint ? previousLease.startedAt : timestamp,
+        expiresAt: new Date(Date.parse(timestamp) + this.gradingLeaseMs).toISOString(),
+      };
+      const updated = testAttemptDocumentSchema.parse({
+        ...attempt,
+        status: 'grading',
+        gradingLease: lease,
+        updatedAt: timestamp,
+      }) as InProgressTestAttempt;
+      this.assertAttemptDocumentSize(updated);
+      transaction.set(attemptRef, updated);
+      return { kind: 'owner', attempt: updated };
+    });
+  }
+
+  private async persistTranslationItemScore(
+    attemptId: string,
+    studentId: string,
+    ownerId: string,
+    answerFingerprint: string,
+    scoreKey: string,
+    score: TranslationItemScoreRecord
+  ): Promise<void> {
+    const attemptRef = this.attempts.doc(attemptId);
+    await this.db.runTransaction(async transaction => {
+      const attempt = parseAttemptSnapshot(await transaction.get(attemptRef));
+      assertAttemptOwner(attempt, studentId);
+      if (
+        attempt.status !== 'grading' ||
+        attempt.gradingLease?.ownerId !== ownerId ||
+        attempt.gradingLease.answerFingerprint !== answerFingerprint
+      ) {
+        throw new TestServiceError(
+          'ATTEMPT_CHANGED_DURING_SUBMISSION',
+          'The grading lease changed while the test was being submitted. Please try again.',
+          409
+        );
+      }
+
+      const timestamp = this.now();
+      const updated = testAttemptDocumentSchema.parse({
+        ...attempt,
+        updatedAt: timestamp,
+        gradingLease: {
+          ...attempt.gradingLease,
+          expiresAt: new Date(Date.parse(timestamp) + this.gradingLeaseMs).toISOString(),
+        },
+        translationScores: {
+          ...(attempt.translationScores ?? {}),
+          [scoreKey]: score,
+        },
+      }) as InProgressTestAttempt;
+      this.assertAttemptDocumentSize(updated);
+      transaction.set(attemptRef, updated);
+    });
+  }
+
+  private async releaseFailedGradingLease(attemptId: string, studentId: string, ownerId: string): Promise<void> {
+    const attemptRef = this.attempts.doc(attemptId);
     try {
-      translationScoreOverrides = await gradeFrozenTranslationExercises(
-        attemptForGrading.deliveryState as FrozenTestDeliveryState,
-        attemptForGrading.answers,
-        this.gradeTestTranslation
-      );
+      await this.db.runTransaction(async transaction => {
+        const attempt = parseAttemptSnapshot(await transaction.get(attemptRef));
+        assertAttemptOwner(attempt, studentId);
+        if (attempt.status !== 'grading' || attempt.gradingLease?.ownerId !== ownerId) return;
+        const { gradingLease: _gradingLease, ...withoutLease } = attempt;
+        const updated = testAttemptDocumentSchema.parse({
+          ...withoutLease,
+          status: 'in-progress',
+          updatedAt: this.now(),
+        }) as InProgressTestAttempt;
+        this.assertAttemptDocumentSize(updated);
+        transaction.set(attemptRef, updated);
+      });
     } catch (error) {
-      console.error(`Could not grade translation answers for attempt ${attemptId}`, error);
-      throw new TestServiceError(
-        'ATTEMPT_GRADING_UNAVAILABLE',
-        'Translation grading is temporarily unavailable. Please try submitting again.',
-        503
-      );
+      console.error(`Could not release grading lease for attempt ${attemptId}`, error);
     }
+  }
+
+  private async finalizeGradedAttempt(
+    attemptId: string,
+    studentId: string,
+    answerFingerprint: string,
+    ownerId: string,
+    translationScoreOverrides: Record<string, { awardedPoints: number; maxPoints: number }>
+  ): Promise<SubmitTestAttemptResult> {
+    const attemptRef = this.attempts.doc(attemptId);
 
     return this.db.runTransaction(async transaction => {
       const attempt = parseAttemptSnapshot(await transaction.get(attemptRef));
       assertAttemptOwner(attempt, studentId);
       if (attempt.status === 'submitted') {
-        // Idempotent resubmission: return the frozen result without regrading.
         return { attempt: toStudentAttempt(attempt) as StudentSubmittedTestAttempt, completionGranted: false };
       }
-      if (JSON.stringify(attempt.answers) !== gradingAnswersFingerprint) {
+      if (
+        attempt.status !== 'grading' ||
+        attempt.gradingLease?.ownerId !== ownerId ||
+        attempt.gradingLease.answerFingerprint !== answerFingerprint ||
+        getTestAttemptAnswerFingerprint(attempt.answers) !== answerFingerprint
+      ) {
         throw new TestServiceError(
           'ATTEMPT_CHANGED_DURING_SUBMISSION',
           'An answer changed while the test was being submitted. Please submit again.',
@@ -691,6 +838,112 @@ export class TestAttemptService {
     });
   }
 
+  private async gradeOwnedAttempt(attempt: InProgressTestAttempt, studentId: string): Promise<SubmitTestAttemptResult> {
+    const lease = attempt.gradingLease;
+    if (!lease) {
+      throw new TestServiceError(
+        'ATTEMPT_GRADING_UNAVAILABLE',
+        'Translation grading is temporarily unavailable. Please try submitting again.',
+        503
+      );
+    }
+
+    const answerFingerprint = lease.answerFingerprint;
+    let translationScoreOverrides: Record<string, { awardedPoints: number; maxPoints: number }>;
+    try {
+      const gradingOptions: TranslationGradingOptions = {
+        attemptId: attempt.id,
+        answerFingerprint,
+        existingScores: attempt.translationScores,
+        modelProfileVersion: TEST_TRANSLATION_GRADING_PROFILE.profileVersion,
+        promptSchemaFingerprint: TEST_TRANSLATION_GRADING_FINGERPRINT,
+        now: this.now,
+        onItemScored: (scoreKey, score) =>
+          this.persistTranslationItemScore(attempt.id, studentId, lease.ownerId, answerFingerprint, scoreKey, score),
+      };
+      translationScoreOverrides = await gradeFrozenTranslationExercises(
+        attempt.deliveryState as FrozenTestDeliveryState,
+        attempt.answers,
+        this.gradeTestTranslation,
+        gradingOptions
+      );
+    } catch (error) {
+      await this.releaseFailedGradingLease(attempt.id, studentId, lease.ownerId);
+      console.error(`Could not grade translation answers for attempt ${attempt.id}`, error);
+      throw new TestServiceError(
+        'ATTEMPT_GRADING_UNAVAILABLE',
+        'Translation grading is temporarily unavailable. Please try submitting again.',
+        503
+      );
+    }
+
+    try {
+      return await this.finalizeGradedAttempt(
+        attempt.id,
+        studentId,
+        answerFingerprint,
+        lease.ownerId,
+        translationScoreOverrides
+      );
+    } catch (error) {
+      await this.releaseFailedGradingLease(attempt.id, studentId, lease.ownerId);
+      throw error;
+    }
+  }
+
+  private async waitForGrading(
+    attemptId: string,
+    studentId: string,
+    answerFingerprint: string
+  ): Promise<SubmitTestAttemptResult> {
+    const startedWaitingAt = Date.now();
+    const attemptRef = this.attempts.doc(attemptId);
+
+    while (true) {
+      const attempt = parseAttemptSnapshot(await attemptRef.get());
+      assertAttemptOwner(attempt, studentId);
+      if (attempt.status === 'submitted') {
+        return { attempt: toStudentAttempt(attempt) as StudentSubmittedTestAttempt, completionGranted: false };
+      }
+      if (getTestAttemptAnswerFingerprint(attempt.answers) !== answerFingerprint) {
+        throw new TestServiceError(
+          'ATTEMPT_CHANGED_DURING_SUBMISSION',
+          'An answer changed while the test was being submitted. Please submit again.',
+          409
+        );
+      }
+
+      if (attempt.status === 'in-progress' || !isActiveGradingLease(attempt.gradingLease, this.now())) {
+        const claim = await this.claimGradingAttempt(attemptId, studentId);
+        if (claim.kind === 'submitted') {
+          return { attempt: toStudentAttempt(claim.attempt) as StudentSubmittedTestAttempt, completionGranted: false };
+        }
+        if (claim.kind === 'owner') return this.gradeOwnedAttempt(claim.attempt, studentId);
+        continue;
+      }
+
+      if (Date.now() - startedWaitingAt >= this.gradingWaitMs) {
+        throw new TestServiceError(
+          'ATTEMPT_GRADING_IN_PROGRESS',
+          'This test submission is already being graded. Please check again shortly.',
+          503
+        );
+      }
+      await this.sleep(this.gradingPollMs);
+    }
+  }
+
+  async submitAttempt(attemptId: string, studentId: string): Promise<SubmitTestAttemptResult> {
+    const claim = await this.claimGradingAttempt(attemptId, studentId);
+    if (claim.kind === 'submitted') {
+      return { attempt: toStudentAttempt(claim.attempt) as StudentSubmittedTestAttempt, completionGranted: false };
+    }
+    if (claim.kind === 'join') {
+      return this.waitForGrading(attemptId, studentId, claim.attempt.gradingLease!.answerFingerprint);
+    }
+    return this.gradeOwnedAttempt(claim.attempt, studentId);
+  }
+
   async getAttemptSummary(origin: TestAttemptOrigin, studentId: string): Promise<TestAttemptOriginSummary> {
     const submittedQuery = this.submittedAttemptsQuery(studentId, origin);
     const resultFields = ['score', 'maxScore', 'percentage', 'outcome', 'submittedAt'] as const;
@@ -758,7 +1011,7 @@ export class TestAttemptService {
       console.error(`Attempt session ${sessionSnapshot.id} points at invalid persisted attempt data`, error);
       return null;
     }
-    if (activeAttempt.status !== 'in-progress') return null;
+    if (activeAttempt.status !== 'in-progress' && activeAttempt.status !== 'grading') return null;
     if (activeAttempt.studentId !== studentId || !sameOrigin(activeAttempt.origin, origin)) {
       console.error(`Attempt session ${sessionSnapshot.id} points at an attempt outside its student/origin scope`);
       return null;

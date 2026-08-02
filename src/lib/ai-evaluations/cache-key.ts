@@ -10,6 +10,10 @@ export interface EvaluationCacheKeyInput {
   promptVersion: string;
   profileVersion?: string;
   schemaVersion?: string;
+  /** Hash of prompts, schemas, model settings, output budget, and namespace. */
+  gradingFingerprint?: string;
+  gradingNamespace?: 'lesson' | 'test';
+  outputTokenLimit?: number;
 }
 
 /**
@@ -22,6 +26,9 @@ export function createEvaluationCacheKey(input: EvaluationCacheKeyInput): string
     schemaVersion: input.schemaVersion ?? AI_EVALUATION_SCHEMA_VERSION,
     promptVersion: input.promptVersion,
     profileVersion: input.profileVersion ?? input.promptVersion,
+    gradingFingerprint: input.gradingFingerprint ?? null,
+    gradingNamespace: input.gradingNamespace ?? null,
+    outputTokenLimit: input.outputTokenLimit ?? null,
     direction: input.direction,
     sourceText: input.sourceText,
     answerText: input.answerText,

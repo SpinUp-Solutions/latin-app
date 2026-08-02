@@ -84,10 +84,7 @@ export interface StudentMockTestSummary {
  * visibility change.
  */
 export interface StudentMockTestDetail {
-  mock: Pick<
-    MockTest,
-    'id' | 'title' | 'description' | 'passingPercentage' | 'status' | 'isLive'
-  >;
+  mock: Pick<MockTest, 'id' | 'title' | 'description' | 'passingPercentage' | 'status' | 'isLive'>;
   attempt: Omit<StudentInProgressTestAttempt, 'answers'> | null;
 }
 
@@ -110,10 +107,33 @@ export interface TestAttemptBase {
   updatedAt: string;
 }
 
+export interface TestAttemptGradingLease {
+  attemptId: string;
+  answerFingerprint: string;
+  ownerId: string;
+  startedAt: string;
+  expiresAt: string;
+}
+
+export interface TranslationItemScoreRecord {
+  attemptId: string;
+  exerciseId: string;
+  itemIndex: number;
+  sourceText: string;
+  userTranslation: string;
+  answerFingerprint: string;
+  modelProfileVersion: string;
+  promptSchemaFingerprint: string;
+  score: number;
+  scoredAt: string;
+}
+
 export interface InProgressTestAttempt extends TestAttemptBase {
-  status: 'in-progress';
+  status: 'in-progress' | 'grading';
   answers: Record<string, ExerciseAnswer>;
   deliveryState: TestAttemptDeliveryState;
+  gradingLease?: TestAttemptGradingLease;
+  translationScores?: Record<string, TranslationItemScoreRecord>;
 }
 
 export interface TestAttemptExerciseResult {
@@ -150,7 +170,11 @@ export interface StudentTestDelivery {
   vocabularyPool?: VocabularyPoolStudyData;
 }
 
-export type StudentInProgressTestAttempt = Omit<InProgressTestAttempt, 'studentId' | 'deliveryState'> & {
+export type StudentInProgressTestAttempt = Omit<
+  InProgressTestAttempt,
+  'studentId' | 'deliveryState' | 'gradingLease' | 'translationScores'
+> & {
+  status: 'in-progress';
   delivery: StudentTestDelivery;
 };
 

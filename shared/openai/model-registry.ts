@@ -15,6 +15,8 @@ export const OPENAI_MODELS_SOURCE = 'https://developers.openai.com/api/docs/mode
 export const OPENAI_BATCH_GUIDE_SOURCE = 'https://developers.openai.com/api/docs/guides/batch';
 export const OPENAI_PROMPT_CACHING_SOURCE = 'https://developers.openai.com/api/docs/guides/prompt-caching';
 export const TRANSLATION_GRADING_PROMPT_VERSION = 'translation-grading-v3';
+export const TEST_TRANSLATION_GRADING_PROMPT_VERSION = `${TRANSLATION_GRADING_PROMPT_VERSION}:test`;
+export const TEST_TRANSLATION_GRADING_OUTPUT_TOKEN_LIMIT = 768;
 
 export type OpenAIReasoningEffort = 'low' | 'high';
 
@@ -26,7 +28,7 @@ export interface OpenAIModelPricing {
 }
 
 export interface OpenAIModelProfile {
-  key: 'baseline' | 'candidate';
+  key: 'baseline' | 'candidate' | 'test';
   model: string;
   label: string;
   reasoningEffort: OpenAIReasoningEffort;
@@ -87,7 +89,27 @@ export const TRANSLATION_GRADING_PROFILES = {
 } as const satisfies Record<'baseline' | 'candidate', OpenAIModelProfile>;
 
 export type TranslationGradingProfileKey = keyof typeof TRANSLATION_GRADING_PROFILES;
-export type TranslationGradingProfile = (typeof TRANSLATION_GRADING_PROFILES)[TranslationGradingProfileKey];
+export type TranslationGradingProfile = OpenAIModelProfile;
+
+/**
+ * Test submissions return only a numeric score. Keep their output budget
+ * independent from the detailed lesson-grading profile so a verbose lesson
+ * response cannot consume the same token budget as a score-only response.
+ */
+export const TEST_TRANSLATION_GRADING_PROFILE: OpenAIModelProfile = {
+  key: 'test',
+  model: TRANSLATION_GRADING_PROFILES.baseline.model,
+  label: 'GPT-5.4 Mini · Test score',
+  reasoningEffort: TRANSLATION_GRADING_PROFILES.baseline.reasoningEffort,
+  maxOutputTokens: TEST_TRANSLATION_GRADING_OUTPUT_TOKEN_LIMIT,
+  // Keep the existing baseline route for the short score-only prefix; the
+  // dedicated profile and namespace still distinguish application cache keys.
+  promptCacheKey: TRANSLATION_GRADING_PROFILES.baseline.promptCacheKey,
+  promptCacheMode: 'automatic',
+  promptVersion: TEST_TRANSLATION_GRADING_PROMPT_VERSION,
+  profileVersion: `${TEST_TRANSLATION_GRADING_PROMPT_VERSION}:profile-v1`,
+  pricing: TRANSLATION_GRADING_PROFILES.baseline.pricing,
+};
 
 export const getTranslationGradingProfile = (key: TranslationGradingProfileKey): TranslationGradingProfile =>
   TRANSLATION_GRADING_PROFILES[key];

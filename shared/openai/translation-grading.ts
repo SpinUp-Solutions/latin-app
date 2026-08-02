@@ -1,8 +1,10 @@
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { openai } from './client';
 import {
   calculateProfileCost,
   parseOpenAIUsage,
+  TEST_TRANSLATION_GRADING_PROFILE,
   TRANSLATION_GRADING_PROFILES,
   type TranslationGradingProfile,
 } from './model-registry';
@@ -245,6 +247,9 @@ interface TranslationGradingRunBase {
   cost?: CostBreakdown;
   costMeasurement: CostMeasurement;
   latencyMs: number;
+  /** The exact prompt-cache route selected for server-side telemetry. */
+  promptCacheKey?: string;
+  promptCacheNamespace?: 'lesson' | 'test';
 }
 
 export interface TranslationGradingRunSuccess<T = TranslationGradingOutput> extends TranslationGradingRunBase {
@@ -355,6 +360,7 @@ const responseUsage = (response: { usage?: unknown }, profile: TranslationGradin
 
 interface TranslationGradingDefinition<T> {
   systemPrompt: string;
+  stableUserInstructions: string;
   formatName: string;
   jsonSchema: Record<string, unknown>;
   cacheNamespace: 'lesson' | 'test';
@@ -363,6 +369,7 @@ interface TranslationGradingDefinition<T> {
 
 const LESSON_GRADING_DEFINITION: TranslationGradingDefinition<TranslationGradingOutput> = {
   systemPrompt: LESSON_SYSTEM_PROMPT,
+  stableUserInstructions: LESSON_PROMPT_INSTRUCTIONS,
   formatName: 'translation_grading_output',
   jsonSchema: LESSON_TRANSLATION_GRADING_JSON_SCHEMA as Record<string, unknown>,
   cacheNamespace: 'lesson',
@@ -374,11 +381,51 @@ const LESSON_GRADING_DEFINITION: TranslationGradingDefinition<TranslationGrading
 
 const TEST_GRADING_DEFINITION: TranslationGradingDefinition<TestTranslationGradingOutput> = {
   systemPrompt: TEST_SYSTEM_PROMPT,
+  stableUserInstructions: TEST_PROMPT_INSTRUCTIONS,
   formatName: 'test_translation_grading_output',
   jsonSchema: TEST_TRANSLATION_GRADING_JSON_SCHEMA as Record<string, unknown>,
   cacheNamespace: 'test',
   parse: parseTestTranslationGradingOutput,
 };
+
+/**
+ * Hash the behavior-affecting grading contract, excluding pricing metadata.
+ * This makes app-cache invalidation automatic when prompts, schemas, model
+ * settings, output budgets, or grading namespaces change.
+ */
+export function translationGradingFingerprintFor(
+  profile: TranslationGradingProfile,
+  namespace: 'lesson' | 'test'
+): string {
+  const definition = namespace === 'lesson' ? LESSON_GRADING_DEFINITION : TEST_GRADING_DEFINITION;
+  return createHash('sha256')
+    .update(
+      JSON.stringify({
+        systemPrompt: definition.systemPrompt,
+        stableUserInstructions: definition.stableUserInstructions,
+        formatName: definition.formatName,
+        structuredOutputSchema: definition.jsonSchema,
+        model: profile.model,
+        reasoningEffort: profile.reasoningEffort,
+        maxOutputTokens: profile.maxOutputTokens,
+        promptVersion: profile.promptVersion,
+        profileVersion: profile.profileVersion,
+        promptCacheMode: profile.promptCacheMode,
+        gradingNamespace: namespace,
+      }),
+      'utf8'
+    )
+    .digest('hex');
+}
+
+export const LESSON_TRANSLATION_GRADING_FINGERPRINT = translationGradingFingerprintFor(
+  TRANSLATION_GRADING_PROFILES.baseline,
+  'lesson'
+);
+export const TEST_TRANSLATION_GRADING_FINGERPRINT = translationGradingFingerprintFor(
+  TEST_TRANSLATION_GRADING_PROFILE,
+  'test'
+);
 
 async function callOpenAIGrading<T>(
   prompt: ReturnType<typeof buildTranslationGradingPromptParts>,
@@ -386,6 +433,12 @@ async function callOpenAIGrading<T>(
   definition: TranslationGradingDefinition<T>
 ): Promise<TranslationGradingRunResult<T>> {
   const startTime = Date.now();
+  const selectedPromptCacheKey = promptCacheKeyFor(profile, prompt.variableSuffix, definition.cacheNamespace);
+  console.info('[translation-grading] prompt cache route selected', {
+    namespace: definition.cacheNamespace,
+    model: profile.model,
+    promptCacheKey: selectedPromptCacheKey,
+  });
   let response: Awaited<ReturnType<typeof openai.responses.create>>;
   try {
     const explicitPromptCaching = profile.promptCacheMode === 'explicit';
@@ -410,7 +463,7 @@ async function callOpenAIGrading<T>(
             },
           ]
         : `${prompt.stablePrefix}\n\n${prompt.variableSuffix}`,
-      prompt_cache_key: promptCacheKeyFor(profile, prompt.variableSuffix, definition.cacheNamespace),
+      prompt_cache_key: selectedPromptCacheKey,
       ...(explicitPromptCaching ? { prompt_cache_options: { mode: 'explicit' as const, ttl: '30m' as const } } : {}),
       service_tier: 'default',
       store: false,
@@ -434,6 +487,8 @@ async function callOpenAIGrading<T>(
       requestedModel: profile.model,
       costMeasurement: { status: 'unavailable', reason: 'No provider usage was returned.' },
       latencyMs: Date.now() - startTime,
+      promptCacheKey: selectedPromptCacheKey,
+      promptCacheNamespace: definition.cacheNamespace,
     };
   }
 
@@ -448,6 +503,8 @@ async function callOpenAIGrading<T>(
     cost: diagnostic.cost,
     costMeasurement: diagnostic.costMeasurement,
     latencyMs: Date.now() - startTime,
+    promptCacheKey: selectedPromptCacheKey,
+    promptCacheNamespace: definition.cacheNamespace,
   };
 
   if (response.status === 'incomplete') {
@@ -532,7 +589,7 @@ export async function runTranslationGrading(
 
 export async function runTestTranslationGrading(
   request: TranslationGradingRequest,
-  profile: TranslationGradingProfile = TRANSLATION_GRADING_PROFILES.baseline
+  profile: TranslationGradingProfile = TEST_TRANSLATION_GRADING_PROFILE
 ): Promise<TranslationGradingRunResult<TestTranslationGradingOutput>> {
   return callOpenAIGrading(buildTestTranslationGradingPromptParts(request), profile, TEST_GRADING_DEFINITION);
 }
@@ -585,7 +642,7 @@ export async function gradeTestTranslation(
   request: TranslationGradingRequest
 ): Promise<TranslationGradingResponse<TestTranslationGradingOutput>> {
   try {
-    const result = await runTestTranslationGrading(request, TRANSLATION_GRADING_PROFILES.baseline);
+    const result = await runTestTranslationGrading(request, TEST_TRANSLATION_GRADING_PROFILE);
     if (!result.success) {
       return {
         success: false,

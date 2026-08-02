@@ -474,7 +474,7 @@ function AggregateSummary({ aggregate }: { aggregate: EvaluationAggregate }) {
         icon={Clock3}
         label="Timing"
         value={formatDuration(aggregate.wallTimeMs)}
-        detail={`provider work this run ${formatDuration(aggregate.providerTimeThisRunMs)}`}
+        detail={`provider work ${formatDuration(aggregate.providerTimeThisRunMs)} · queued ${formatDuration(aggregate.providerQueueTimeMs ?? 0)}`}
       />
     </div>
   );

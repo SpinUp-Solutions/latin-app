@@ -1,6 +1,8 @@
+import { randomUUID } from 'node:crypto';
 import type { Firestore } from 'firebase-admin/firestore';
 import {
   runTranslationGrading,
+  translationGradingFingerprintFor,
   type TranslationGradingRunFailure,
   type TranslationGradingRunResult,
   type TranslationGradingRunSuccess,
@@ -26,6 +28,12 @@ import {
   type EvaluationCellResult,
   type EvaluationRunResult,
 } from './contracts';
+import { withOpenAIProviderLease } from './provider-budget';
+import {
+  acquireEvaluationSingleFlight,
+  getEvaluationSingleFlight,
+  releaseEvaluationSingleFlight,
+} from './single-flight';
 
 export const MAX_CONCURRENCY = 4;
 const PROFILES: TranslationGradingProfile[] = [
@@ -38,6 +46,7 @@ type ExecutionOutcome = {
   appCacheHit: boolean;
   chargeable: boolean;
   runLatencyMs: number;
+  providerQueueTimeMs: number;
   generatedAt?: string;
 };
 
@@ -124,7 +133,45 @@ const cacheKeyFor = (evaluationCase: EvaluationCase, job: Pick<EvaluationJob, 'a
     promptVersion: job.profile.promptVersion,
     profileVersion: job.profile.profileVersion,
     schemaVersion: AI_EVALUATION_SCHEMA_VERSION,
+    gradingFingerprint:
+      typeof translationGradingFingerprintFor === 'function'
+        ? translationGradingFingerprintFor(job.profile, 'lesson')
+        : `${job.profile.promptVersion}:${job.profile.profileVersion}:${job.profile.maxOutputTokens}`,
+    gradingNamespace: 'lesson',
+    outputTokenLimit: job.profile.maxOutputTokens,
   });
+
+const cachedOutcomeFor = (
+  cached: Awaited<ReturnType<typeof getCachedEvaluationResult>>,
+  profile: TranslationGradingProfile,
+  runLatencyMs: number,
+  chargeable: boolean,
+  appCacheHit: boolean
+): ExecutionOutcome => {
+  if (!cached) throw new Error('Cannot create a cache outcome without a cached result');
+  const currentCost = calculateTokenUsageCost(cached.usage, profile.pricing);
+  const cachedResult: TranslationGradingRunSuccess = {
+    success: true,
+    data: cached.output,
+    requestedModel: cached.model,
+    model: cached.actualModel,
+    usage: cached.usage,
+    tokensUsed: cached.usage.totalTokens,
+    cost: currentCost,
+    costMeasurement: { status: 'measured', cost: currentCost },
+    latencyMs: cached.latencyMs,
+    promptCacheKey: undefined,
+    promptCacheNamespace: 'lesson',
+  };
+  return {
+    result: cachedResult,
+    appCacheHit,
+    chargeable,
+    runLatencyMs,
+    providerQueueTimeMs: 0,
+    generatedAt: cached.generatedAt,
+  };
+};
 
 async function executeUniqueJob(
   evaluationCase: EvaluationCase,
@@ -139,25 +186,7 @@ async function executeUniqueJob(
     try {
       const cached = await getCachedEvaluationResult(cacheKey, db);
       if (cached) {
-        const currentCost = calculateTokenUsageCost(cached.usage, job.profile.pricing);
-        const cachedResult: TranslationGradingRunSuccess = {
-          success: true,
-          data: cached.output,
-          requestedModel: cached.model,
-          model: cached.actualModel,
-          usage: cached.usage,
-          tokensUsed: cached.usage.totalTokens,
-          cost: currentCost,
-          costMeasurement: { status: 'measured', cost: currentCost },
-          latencyMs: cached.latencyMs,
-        };
-        return {
-          result: cachedResult,
-          appCacheHit: true,
-          chargeable: true,
-          runLatencyMs: Date.now() - runStartedAt,
-          generatedAt: cached.generatedAt,
-        };
+        return cachedOutcomeFor(cached, job.profile, Date.now() - runStartedAt, true, true);
       }
     } catch (error) {
       // A cache outage should not make an interactive evaluation unusable.
@@ -166,17 +195,26 @@ async function executeUniqueJob(
   }
 
   const providerStartedAt = Date.now();
+  let providerQueueTimeMs = 0;
   let result: TranslationGradingRunResult;
   try {
-    result = await runTranslationGrading(
-      {
-        sourceText: evaluationCase.sourceText,
-        userTranslation: job.answer.text,
-        direction: evaluationCase.direction,
-        provider: 'openai',
-      },
-      job.profile
+    const leaseResult = await withOpenAIProviderLease(
+      db,
+      job.profile.model,
+      () =>
+        runTranslationGrading(
+          {
+            sourceText: evaluationCase.sourceText,
+            userTranslation: job.answer.text,
+            direction: evaluationCase.direction,
+            provider: 'openai',
+          },
+          job.profile
+        ),
+      { ownerId: `evaluation:${randomUUID()}` }
     );
+    providerQueueTimeMs = leaseResult.queueTimeMs;
+    result = leaseResult.value;
   } catch (error) {
     result = createUnexpectedFailure(job.profile, error, Date.now() - providerStartedAt);
   }
@@ -210,6 +248,7 @@ async function executeUniqueJob(
     appCacheHit: false,
     chargeable: true,
     runLatencyMs: Date.now() - runStartedAt,
+    providerQueueTimeMs,
     generatedAt,
   };
 }
@@ -233,7 +272,73 @@ async function executeCoalesced(
     };
   }
 
-  const pending = executeUniqueJob(evaluationCase, job, forceRefresh, db);
+  const supportsDistributedSingleFlight =
+    Boolean(db && typeof (db as unknown as { runTransaction?: unknown }).runTransaction === 'function') &&
+    typeof db.collection === 'function';
+  const executeDistributed = async (): Promise<ExecutionOutcome> => {
+    if (!supportsDistributedSingleFlight) return executeUniqueJob(evaluationCase, job, forceRefresh, db);
+
+    const startedAt = Date.now();
+    const maxWaitMs = 2 * 60 * 1_000;
+    const pollMs = 250;
+    const ownerId = `evaluation-single-flight:${randomUUID()}`;
+
+    while (Date.now() - startedAt < maxWaitMs) {
+      let claim;
+      try {
+        claim = await acquireEvaluationSingleFlight(cacheKey, forceRefresh, db, ownerId);
+      } catch (error) {
+        // A single-flight outage must not make an otherwise usable interactive
+        // evaluation fail. The provider gate and app cache remain best effort.
+        console.warn('[ai-evaluations] distributed single-flight unavailable', error);
+        return executeUniqueJob(evaluationCase, job, forceRefresh, db);
+      }
+
+      if (claim.acquired) {
+        try {
+          return await executeUniqueJob(evaluationCase, job, forceRefresh, db);
+        } finally {
+          await releaseEvaluationSingleFlight(claim.lease, db).catch(error =>
+            console.warn('[ai-evaluations] distributed single-flight release failed', error)
+          );
+        }
+      }
+
+      let lease;
+      let cached;
+      try {
+        lease = await getEvaluationSingleFlight(cacheKey, forceRefresh, db);
+        cached = await getCachedEvaluationResult(cacheKey, db);
+      } catch (error) {
+        console.warn('[ai-evaluations] distributed single-flight wait failed', error);
+        return executeUniqueJob(evaluationCase, job, forceRefresh, db);
+      }
+
+      const cacheIsFromThisForcedRun =
+        !forceRefresh ||
+        !lease ||
+        (cached?.generatedAt !== undefined && Date.parse(cached.generatedAt) >= Date.parse(lease.startedAt));
+      if (cached && cacheIsFromThisForcedRun) {
+        return cachedOutcomeFor(cached, job.profile, Date.now() - waitStartedAt, false, false);
+      }
+      if (!lease) continue;
+      await new Promise<void>(resolve => setTimeout(resolve, Math.min(pollMs, maxWaitMs)));
+    }
+
+    return {
+      result: createUnexpectedFailure(
+        job.profile,
+        new Error('A concurrent evaluation owner did not complete before the wait bound expired.'),
+        Date.now() - startedAt
+      ),
+      appCacheHit: false,
+      chargeable: true,
+      runLatencyMs: Date.now() - waitStartedAt,
+      providerQueueTimeMs: 0,
+    };
+  };
+
+  const pending = executeDistributed();
   inFlightResults.set(mapKey, pending);
   try {
     return await pending;
@@ -248,6 +353,7 @@ function createSuccessfulCell(
   appCacheHit: boolean,
   coalescedDuplicate: boolean,
   runLatencyMs: number,
+  providerQueueTimeMs: number,
   generatedAt?: string
 ): EvaluationCellResult {
   const openAIPromptCacheHit = !appCacheHit && !coalescedDuplicate && (result.usage?.cachedInputTokens ?? 0) > 0;
@@ -260,13 +366,16 @@ function createSuccessfulCell(
   return {
     answerId: job.answer.id,
     answerLabel: job.answer.label,
-    modelKey: job.profile.key,
+    modelKey: job.profile.key as 'baseline' | 'candidate',
     requestedModel: result.requestedModel,
     actualModel: result.model,
     reasoningEffort: job.profile.reasoningEffort,
     output: result.data,
     latencyMs: runLatencyMs,
+    providerQueueTimeMs,
     generationLatencyMs: result.latencyMs,
+    promptCacheKey: result.promptCacheKey,
+    promptCacheNamespace: result.promptCacheNamespace,
     generatedAt,
     cacheStatus: appCacheHit ? 'app-cache' : openAIPromptCacheHit ? 'openai-prompt-cache' : 'fresh-api',
     appCacheHit,
@@ -290,20 +399,24 @@ function createFailureCell(
   job: EvaluationJob,
   result: TranslationGradingRunFailure,
   coalescedDuplicate: boolean,
-  runLatencyMs: number
+  runLatencyMs: number,
+  providerQueueTimeMs: number
 ): EvaluationCellResult {
   const measuredCost = costForResult(result);
   return {
     answerId: job.answer.id,
     answerLabel: job.answer.label,
-    modelKey: job.profile.key,
+    modelKey: job.profile.key as 'baseline' | 'candidate',
     requestedModel: result.requestedModel,
     actualModel: result.model,
     reasoningEffort: job.profile.reasoningEffort,
     error: result.error,
     errorCode: result.code,
     latencyMs: runLatencyMs,
+    providerQueueTimeMs,
     generationLatencyMs: result.latencyMs,
+    promptCacheKey: result.promptCacheKey,
+    promptCacheNamespace: result.promptCacheNamespace,
     cacheStatus: 'error',
     appCacheHit: false,
     openAIPromptCacheHit: !coalescedDuplicate && (result.usage?.cachedInputTokens ?? 0) > 0,
@@ -397,9 +510,10 @@ export async function runEvaluationCase(
             outcome.appCacheHit,
             coalescedDuplicate,
             outcome.runLatencyMs,
+            outcome.providerQueueTimeMs,
             outcome.generatedAt
           )
-        : createFailureCell(job, outcome.result, coalescedDuplicate, outcome.runLatencyMs);
+        : createFailureCell(job, outcome.result, coalescedDuplicate, outcome.runLatencyMs, outcome.providerQueueTimeMs);
     });
   });
   const completedAt = new Date();
@@ -425,6 +539,7 @@ export async function runEvaluationCase(
     wallTimeMs: completedAt.getTime() - startedAt.getTime(),
     generationTimeMs: uniqueCells.reduce((sum, cell) => sum + (cell.generationLatencyMs ?? 0), 0),
     providerTimeThisRunMs: providerCells.reduce((sum, cell) => sum + (cell.generationLatencyMs ?? 0), 0),
+    providerQueueTimeMs: providerCells.reduce((sum, cell) => sum + (cell.providerQueueTimeMs ?? 0), 0),
     originalCost: originalMeasurement.cost,
     originalCostStatus: originalMeasurement.status,
     costIncurredThisRun: incurredMeasurement.cost,

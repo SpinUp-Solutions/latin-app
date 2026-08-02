@@ -312,12 +312,39 @@ const testAttemptBaseShape = {
   updatedAt: z.string().min(1),
 };
 
+const testAttemptGradingLeaseSchema = z
+  .object({
+    attemptId: firestoreDocumentIdSchema,
+    answerFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+    ownerId: z.string().min(1).max(200),
+    startedAt: isoTimestampSchema,
+    expiresAt: isoTimestampSchema,
+  })
+  .strict();
+
+const translationItemScoreRecordSchema = z
+  .object({
+    attemptId: firestoreDocumentIdSchema,
+    exerciseId: z.string().min(1),
+    itemIndex: z.number().int().nonnegative(),
+    sourceText: z.string(),
+    userTranslation: z.string(),
+    answerFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+    modelProfileVersion: z.string().min(1),
+    promptSchemaFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+    score: z.number().finite().min(0).max(10),
+    scoredAt: isoTimestampSchema,
+  })
+  .strict();
+
 const inProgressTestAttemptDocumentSchema = z
   .object({
     ...testAttemptBaseShape,
-    status: z.literal('in-progress'),
+    status: z.enum(['in-progress', 'grading']),
     answers: z.record(z.string(), z.unknown()),
     deliveryState: testAttemptDeliveryStateSchema,
+    gradingLease: testAttemptGradingLeaseSchema.optional(),
+    translationScores: z.record(z.string().min(1), translationItemScoreRecordSchema).optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -326,6 +353,20 @@ const inProgressTestAttemptDocumentSchema = z
         code: 'custom',
         message: 'Attempt versionId must match deliveryState.versionId',
         path: ['deliveryState', 'versionId'],
+      });
+    }
+    if (value.status === 'grading' && !value.gradingLease) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Grading attempts require an active grading lease',
+        path: ['gradingLease'],
+      });
+    }
+    if (value.gradingLease && value.gradingLease.attemptId !== value.id) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Grading lease must belong to its attempt',
+        path: ['gradingLease', 'attemptId'],
       });
     }
   });

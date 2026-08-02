@@ -16,3 +16,5 @@ export const USER_PROGRESS_COLLECTION = 'userProgress';
 export const AI_EVALUATION_CASES_COLLECTION = 'aiEvaluationCases';
 export const AI_EVALUATION_RESULT_CACHE_COLLECTION = 'aiEvaluationResultCache';
 export const AI_EVALUATION_RUN_THROTTLES_COLLECTION = 'aiEvaluationRunThrottles';
+export const AI_EVALUATION_SINGLE_FLIGHT_COLLECTION = 'aiEvaluationSingleFlight';
+export const OPENAI_PROVIDER_LEASES_COLLECTION = 'openAIProviderLeases';

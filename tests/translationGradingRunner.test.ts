@@ -137,6 +137,8 @@ describe('translation grading runner', () => {
     expect(call.instructions).toContain('assessment grader');
     expect(call.instructions).toContain('untrusted assessment data');
     expect(call.prompt_cache_key).toBe('translation-grading-v3:baseline:test');
+    expect(call.max_output_tokens).toBeLessThan(1_000);
+    expect(call.max_output_tokens).toBeGreaterThanOrEqual(512);
     expect(call.text?.format).toMatchObject({ name: 'test_translation_grading_output' });
   });
 

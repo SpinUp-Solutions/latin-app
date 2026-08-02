@@ -1,6 +1,7 @@
 import * as dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
+import { randomUUID } from 'node:crypto';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import { getApps, initializeApp } from 'firebase-admin/app';
@@ -9,6 +10,7 @@ import { ZodError } from 'zod';
 import { autocompleteVocabularyWord } from '../../shared/openai/autocomplete';
 import { resolveRootWord, ResolveRootWordRequest } from '../../shared/openai/root-resolver';
 import { gradeTranslation } from '../../shared/openai/translation-grading';
+import { AUTOCOMPLETE_MODEL, DEFAULT_MODEL, TRANSLATION_GRADING_MODEL } from '../../shared/openai/client';
 import { AIAutocompleteRequest, TranslationGradingRequest } from '../../shared/openai/types';
 import {
   evaluationFunctionDeleteRequestSchema,
@@ -25,6 +27,7 @@ import {
   updateEvaluationCase,
 } from '../../src/lib/ai-evaluations/persistence';
 import { AIEvaluationThrottleError, consumeEvaluationRunQuota } from '../../src/lib/ai-evaluations/throttle';
+import { withOpenAIProviderLease } from '../../src/lib/ai-evaluations/provider-budget';
 
 const openaiApiKey = defineSecret('OPENAI_API_KEY');
 const adminApp = getApps()[0] ?? initializeApp();
@@ -80,7 +83,12 @@ export const autocompleteWord = onCall(
     const startTime = Date.now();
 
     try {
-      const result = await autocompleteVocabularyWord(data);
+      const { value: result } = await withOpenAIProviderLease(
+        functionsDb,
+        AUTOCOMPLETE_MODEL,
+        () => autocompleteVocabularyWord(data),
+        { ownerId: `autocomplete:${request.auth!.uid}:${randomUUID()}` }
+      );
       const endTime = Date.now();
 
       console.log(`[Firebase Function] Completed in ${endTime - startTime}ms`);
@@ -124,10 +132,16 @@ export const resolveRootWordFn = onCall(
 
     try {
       const startTime = Date.now();
-      const result = await resolveRootWord({
-        selectedText,
-        context: typeof data.context === 'string' ? data.context : undefined,
-      });
+      const { value: result } = await withOpenAIProviderLease(
+        functionsDb,
+        DEFAULT_MODEL,
+        () =>
+          resolveRootWord({
+            selectedText,
+            context: typeof data.context === 'string' ? data.context : undefined,
+          }),
+        { ownerId: `root-resolver:${request.auth!.uid}:${randomUUID()}` }
+      );
       const elapsed = Date.now() - startTime;
 
       console.log(`[Firebase Function] resolveRootWordFn completed in ${elapsed}ms`);
@@ -174,7 +188,12 @@ export const gradeTranslationFn = onCall(
 
     try {
       const startTime = Date.now();
-      const result = await gradeTranslation(data);
+      const { value: result } = await withOpenAIProviderLease(
+        functionsDb,
+        TRANSLATION_GRADING_MODEL,
+        () => gradeTranslation(data),
+        { ownerId: `lesson-grading:${request.auth!.uid}:${randomUUID()}` }
+      );
       const elapsed = Date.now() - startTime;
 
       console.log(`[gradeTranslationFn] ✅ Completed in ${elapsed}ms`);

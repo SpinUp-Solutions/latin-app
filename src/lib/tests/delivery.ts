@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { Exercise } from '@/src/types/exercises';
 import type {
   FormIdentificationItem,
@@ -7,7 +8,12 @@ import type {
 import type { ListeningPassageExercise } from '@/src/types/exercises/listening-passage';
 import type { EmphasisContent, TableContent, TextContent } from '@/src/types/content';
 import type { Page, RenderableContentItem } from '@/src/types/page';
-import type { StudentTestDelivery, TestAttemptDeliveryState, TestVersion } from '@/src/types/test';
+import type {
+  StudentTestDelivery,
+  TestAttemptDeliveryState,
+  TestVersion,
+  TranslationItemScoreRecord,
+} from '@/src/types/test';
 import type { VocabularyContent, VocabularyPoolContent } from '@/src/types/vocabulary';
 import type { TableData } from '@/src/components/ui/lesson/conjugation-table';
 import {
@@ -29,6 +35,8 @@ import {
 } from './grading';
 import { parseExerciseAnswer } from './answer-schemas';
 import type { TranslationGradingRequest } from '@/shared/openai/types';
+import { TEST_TRANSLATION_GRADING_FINGERPRINT } from '@/shared/openai/translation-grading';
+import { TEST_TRANSLATION_GRADING_PROFILE } from '@/shared/openai/model-registry';
 import { richTextToPlainText } from '@/src/utils/exercises/helpers';
 import type { VocabularyPoolLoader } from './vocabulary-pool-loader.server';
 
@@ -56,16 +64,15 @@ export async function createFrozenTestDeliveryState(
 ): Promise<FrozenTestDeliveryState> {
   const pages = cloneSerializable(version.pages);
   const resolvedExercises: FrozenTestDeliveryState['resolvedExercises'] = {};
-  const usesVocabularyPoolContent = pages.some(page =>
-    page.items.some(item => item.type === 'vocabulary-pool')
-  );
-  const vocabularyPool = version.vocabularyPoolId && usesVocabularyPoolContent
-    ? cloneSerializable(
-        await (loadVocabularyPool
-          ? loadVocabularyPool(version.vocabularyPoolId)
-          : Promise.reject(new Error(`No vocabulary pool loader was provided for ${version.vocabularyPoolId}`)))
-      )
-    : undefined;
+  const usesVocabularyPoolContent = pages.some(page => page.items.some(item => item.type === 'vocabulary-pool'));
+  const vocabularyPool =
+    version.vocabularyPoolId && usesVocabularyPoolContent
+      ? cloneSerializable(
+          await (loadVocabularyPool
+            ? loadVocabularyPool(version.vocabularyPoolId)
+            : Promise.reject(new Error(`No vocabulary pool loader was provided for ${version.vocabularyPoolId}`)))
+        )
+      : undefined;
 
   for (const page of pages) {
     for (const item of page.items) {
@@ -510,35 +517,198 @@ export function gradeFrozenTestDelivery(
 
 export type TestTranslationGrader = (request: TranslationGradingRequest) => Promise<number>;
 
+export const TEST_TRANSLATION_GRADING_CONCURRENCY = 3;
+
+export interface TranslationGradingOptions {
+  concurrency?: number;
+  attemptId?: string;
+  answerFingerprint?: string;
+  existingScores?: Record<string, TranslationItemScoreRecord>;
+  modelProfileVersion?: string;
+  promptSchemaFingerprint?: string;
+  now?: () => string;
+  onItemScored?: (scoreKey: string, score: TranslationItemScoreRecord) => Promise<void> | void;
+}
+
+export function getTranslationItemScoreKey(input: {
+  attemptId: string;
+  exerciseId: string;
+  itemIndex: number;
+  sourceText: string;
+  userTranslation: string;
+  answerFingerprint: string;
+  modelProfileVersion: string;
+  promptSchemaFingerprint: string;
+}): string {
+  return createHash('sha256').update(JSON.stringify(input), 'utf8').digest('hex');
+}
+
+interface TranslationGradingJob {
+  exerciseId: string;
+  itemIndex: number;
+  sourceText: string;
+  userTranslation: string;
+  direction: 'latin-to-english' | 'english-to-latin';
+  scoreKey: string;
+}
+
+interface TranslationGradingJobOutcome {
+  job: TranslationGradingJob;
+  score?: number;
+  error?: unknown;
+}
+
+const isReusableTranslationScore = (
+  score: TranslationItemScoreRecord | undefined,
+  job: TranslationGradingJob,
+  attemptId: string,
+  answerFingerprint: string,
+  modelProfileVersion: string,
+  promptSchemaFingerprint: string
+): score is TranslationItemScoreRecord =>
+  Boolean(
+    score &&
+      score.attemptId === attemptId &&
+      score.exerciseId === job.exerciseId &&
+      score.itemIndex === job.itemIndex &&
+      score.sourceText === job.sourceText &&
+      score.userTranslation === job.userTranslation &&
+      score.answerFingerprint === answerFingerprint &&
+      score.modelProfileVersion === modelProfileVersion &&
+      score.promptSchemaFingerprint === promptSchemaFingerprint &&
+      Number.isFinite(score.score) &&
+      score.score >= 0 &&
+      score.score <= 10
+  );
+
 export async function gradeFrozenTranslationExercises(
   state: FrozenTestDeliveryState,
   answers: Record<string, ExerciseAnswer | unknown>,
-  grader: TestTranslationGrader
+  grader: TestTranslationGrader,
+  options: TranslationGradingOptions = {}
 ): Promise<Record<string, ExerciseScore>> {
   const translations = state.pages.flatMap(page =>
     page.items.filter((item): item is ExerciseOfType<'translation-grading'> => item.type === 'translation-grading')
   );
 
-  const scored = await Promise.all(
-    translations.map(async exercise => {
-      const rawAnswer = answers[exercise.id];
-      if (rawAnswer === undefined) return [exercise.id, undefined] as const;
-      const answer = parseExerciseAnswer(rawAnswer);
-      if (answer.type !== 'translation-grading') {
-        throw new Error(`Answer type ${answer.type} does not match exercise type ${exercise.type}`);
-      }
+  const modelProfileVersion = options.modelProfileVersion ?? TEST_TRANSLATION_GRADING_PROFILE.profileVersion;
+  const promptSchemaFingerprint = options.promptSchemaFingerprint ?? TEST_TRANSLATION_GRADING_FINGERPRINT;
+  const attemptId = options.attemptId ?? 'unpersisted-attempt';
+  const answerFingerprint = options.answerFingerprint ?? '';
+  const now = options.now ?? (() => new Date().toISOString());
+  const scoreByExercise = new Map<string, number[]>();
+  const jobs: TranslationGradingJob[] = [];
 
-      const direction = exercise.translationDirection ?? 'latin-to-english';
-      const scores = await Promise.all(
-        exercise.data.items.map((item, index) => {
-          const userTranslation = answer.translations[index]?.trim() ?? '';
-          if (!userTranslation) return Promise.resolve(0);
-          return grader({ sourceText: richTextToPlainText(item.latinText), userTranslation, direction });
-        })
-      );
-      return [exercise.id, gradeTranslationAssessment(exercise, scores)] as const;
+  for (const exercise of translations) {
+    const rawAnswer = answers[exercise.id];
+    if (rawAnswer === undefined) continue;
+    const answer = parseExerciseAnswer(rawAnswer);
+    if (answer.type !== 'translation-grading') {
+      throw new Error(`Answer type ${answer.type} does not match exercise type ${exercise.type}`);
+    }
+
+    const direction = exercise.translationDirection ?? 'latin-to-english';
+    const scores = new Array<number>(exercise.data.items.length);
+    scoreByExercise.set(exercise.id, scores);
+    exercise.data.items.forEach((item, itemIndex) => {
+      const sourceText = richTextToPlainText(item.latinText);
+      const userTranslation = answer.translations[itemIndex]?.trim() ?? '';
+      const scoreKey = getTranslationItemScoreKey({
+        attemptId,
+        exerciseId: exercise.id,
+        itemIndex,
+        sourceText,
+        userTranslation,
+        answerFingerprint,
+        modelProfileVersion,
+        promptSchemaFingerprint,
+      });
+      jobs.push({ exerciseId: exercise.id, itemIndex, sourceText, userTranslation, direction, scoreKey });
+    });
+  }
+
+  const outcomes = new Array<TranslationGradingJobOutcome>(jobs.length);
+  let nextIndex = 0;
+  const worker = async () => {
+    while (true) {
+      const jobIndex = nextIndex++;
+      if (jobIndex >= jobs.length) return;
+      const job = jobs[jobIndex];
+      try {
+        const persisted = options.existingScores?.[job.scoreKey];
+        const score = isReusableTranslationScore(
+          persisted,
+          job,
+          attemptId,
+          answerFingerprint,
+          modelProfileVersion,
+          promptSchemaFingerprint
+        )
+          ? persisted.score
+          : !job.userTranslation
+            ? 0
+            : await grader({
+                sourceText: job.sourceText,
+                userTranslation: job.userTranslation,
+                direction: job.direction,
+              });
+
+        if (!Number.isFinite(score) || score < 0 || score > 10) {
+          throw new Error(`Translation exercise ${job.exerciseId} has an invalid score`);
+        }
+        const record: TranslationItemScoreRecord = {
+          attemptId,
+          exerciseId: job.exerciseId,
+          itemIndex: job.itemIndex,
+          sourceText: job.sourceText,
+          userTranslation: job.userTranslation,
+          answerFingerprint,
+          modelProfileVersion,
+          promptSchemaFingerprint,
+          score,
+          scoredAt: now(),
+        };
+        if (
+          !isReusableTranslationScore(
+            persisted,
+            job,
+            attemptId,
+            answerFingerprint,
+            modelProfileVersion,
+            promptSchemaFingerprint
+          )
+        ) {
+          await options.onItemScored?.(job.scoreKey, record);
+        }
+        outcomes[jobIndex] = { job, score };
+      } catch (error) {
+        outcomes[jobIndex] = { job, error };
+      }
+    }
+  };
+
+  const concurrency = Math.max(1, Math.floor(options.concurrency ?? TEST_TRANSLATION_GRADING_CONCURRENCY));
+  const workers = Array.from({ length: Math.min(concurrency, Math.max(jobs.length, 1)) }, () => worker());
+  const workerResults = await Promise.allSettled(workers);
+  const unexpectedWorkerFailure = workerResults.find(
+    (result): result is PromiseRejectedResult => result.status === 'rejected'
+  );
+  if (unexpectedWorkerFailure) throw unexpectedWorkerFailure.reason;
+
+  const failures = outcomes.filter((outcome): outcome is TranslationGradingJobOutcome & { error: unknown } =>
+    Boolean(outcome?.error)
+  );
+  if (failures.length > 0) throw failures[0].error;
+
+  for (const outcome of outcomes) {
+    const scores = scoreByExercise.get(outcome.job.exerciseId);
+    if (scores && outcome.score !== undefined) scores[outcome.job.itemIndex] = outcome.score;
+  }
+
+  return Object.fromEntries(
+    translations.flatMap(exercise => {
+      const scores = scoreByExercise.get(exercise.id);
+      return scores ? [[exercise.id, gradeTranslationAssessment(exercise, scores)] as const] : [];
     })
   );
-
-  return Object.fromEntries(scored.filter((entry): entry is [string, ExerciseScore] => entry[1] !== undefined));
 }
