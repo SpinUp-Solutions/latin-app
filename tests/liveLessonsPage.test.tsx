@@ -117,7 +117,7 @@ const lesson = (overrides: Partial<LessonSummary> = {}): LessonSummary => ({
   ...overrides,
 });
 
-const retiredPathView = (overrides: Partial<AdminLearningPathView> = {}): AdminLearningPathView => ({
+const canonicalPathView = (overrides: Partial<AdminLearningPathView> = {}): AdminLearningPathView => ({
   path: {
     id: 'default',
     revision: 3,
@@ -152,7 +152,7 @@ describe('Learning delivery organizer', () => {
       refetch: jest.fn(),
     });
     mockUseGetLearningPathQuery.mockReturnValue({
-      data: retiredPathView(),
+      data: canonicalPathView(),
       isLoading: false,
       refetch: jest.fn(),
     });
@@ -166,32 +166,11 @@ describe('Learning delivery organizer', () => {
     jest.restoreAllMocks();
   });
 
-  it('shows the legacy normal sequence read-only before migration initialization', () => {
-    mockUseGetLearningPathQuery.mockReturnValue({
-      data: {
-        path: null,
-        effectiveUnitIds: ['lesson-1'],
-        source: 'legacy',
-        canEdit: false,
-        editBlockedReason: 'Complete the migration workflow first.',
-      } satisfies AdminLearningPathView,
-      isLoading: false,
-      refetch: jest.fn(),
-    });
-
-    render(<LiveLessonsPage />);
-
-    expect(screen.getByText('Legacy source preview')).toBeInTheDocument();
-    expect(screen.getByText('Complete the migration workflow first.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Remove Lesson one from Learning Path' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Add Lesson two to Learning Path' })).toBeDisabled();
-  });
-
   it('saves the complete local Learning Path draft with its base revision', async () => {
     mockSaveLearningPath.mockReturnValue({
       unwrap: jest.fn().mockResolvedValue({
         path: {
-          ...retiredPathView().path,
+          ...canonicalPathView().path,
           revision: 4,
           unitIds: ['lesson-1', 'lesson-2'],
         },
@@ -219,7 +198,7 @@ describe('Learning delivery organizer', () => {
     mockSaveLearningPath.mockReturnValue({
       unwrap: jest.fn().mockResolvedValue({
         path: {
-          ...retiredPathView().path,
+          ...canonicalPathView().path,
           revision: 4,
           unitIds: ['test-1', 'lesson-1'],
         },
@@ -296,9 +275,9 @@ describe('Learning delivery organizer', () => {
 
   it('lets an admin remove and save a dangling Learning Path reference', async () => {
     mockUseGetLearningPathQuery.mockReturnValue({
-      data: retiredPathView({
+      data: canonicalPathView({
         path: {
-          ...retiredPathView().path!,
+          ...canonicalPathView().path!,
           unitIds: ['missing-unit', 'lesson-1'],
         },
         effectiveUnitIds: ['missing-unit', 'lesson-1'],
@@ -309,7 +288,7 @@ describe('Learning delivery organizer', () => {
     mockSaveLearningPath.mockReturnValue({
       unwrap: jest.fn().mockResolvedValue({
         path: {
-          ...retiredPathView().path,
+          ...canonicalPathView().path,
           revision: 4,
           unitIds: ['lesson-1'],
         },
@@ -380,9 +359,9 @@ describe('Learning delivery organizer', () => {
       refetch: jest.fn(),
     });
     const refetchPath = jest.fn().mockResolvedValue({
-      data: retiredPathView({
+      data: canonicalPathView({
         path: {
-          ...retiredPathView().path!,
+          ...canonicalPathView().path!,
           revision: 4,
           unitIds: ['lesson-3', 'lesson-1'],
         },
@@ -390,7 +369,7 @@ describe('Learning delivery organizer', () => {
       }),
     });
     mockUseGetLearningPathQuery.mockReturnValue({
-      data: retiredPathView(),
+      data: canonicalPathView(),
       isLoading: false,
       refetch: refetchPath,
     });
@@ -404,7 +383,7 @@ describe('Learning delivery organizer', () => {
       .mockReturnValueOnce({
         unwrap: jest.fn().mockResolvedValue({
           path: {
-            ...retiredPathView().path,
+            ...canonicalPathView().path,
             revision: 5,
             unitIds: ['lesson-1', 'lesson-2'],
           },

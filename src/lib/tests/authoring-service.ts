@@ -471,9 +471,7 @@ export class TestAuthoringService {
             409
           );
         }
-        placed =
-          parsedPath.data.cutover?.state !== 'inactive' &&
-          parsedPath.data.unitIds.includes(testId);
+        placed = parsedPath.data.unitIds.includes(testId);
       }
       if (placed && test.rotationVersions.length === 1) {
         throw new TestServiceError(

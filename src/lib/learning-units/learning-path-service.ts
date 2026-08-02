@@ -1,8 +1,6 @@
-import { createHash } from 'node:crypto';
-import type { DocumentData, DocumentSnapshot, Firestore, QuerySnapshot, Transaction } from 'firebase-admin/firestore';
+import type { DocumentSnapshot, Firestore, Transaction } from 'firebase-admin/firestore';
 import {
   DEFAULT_LEARNING_PATH_ID,
-  LEARNING_PATH_MIGRATIONS_COLLECTION,
   LEARNING_PATHS_COLLECTION,
   LEARNING_UNITS_COLLECTION,
   MOCK_TESTS_COLLECTION,
@@ -14,18 +12,10 @@ import type { RotationVersionReference } from '@/src/types/test';
 import { estimateFirestoreDocumentBytes } from '@/src/lib/tests/firestore-size';
 import { mockTestDocumentSchema, testVersionDocumentSchema } from '@/src/lib/tests/schemas';
 import { validateTestAssignmentGraph } from '@/src/lib/tests/domain';
-import { isLessonDocumentData, normalizeLearningUnit } from './domain';
+import { normalizeLearningUnit } from './domain';
 import { validateLessonProgression } from '@/src/utils/lessonProgress';
 import type { Lesson } from '@/src/types/lesson';
-import {
-  learningPathDocumentSchema,
-  learningPathMigrationManifestSchema,
-  learningPathMigrationRecordSchema,
-  saveLearningPathInputSchema,
-  type LearningPathMigrationManifestInput,
-  type LearningPathMigrationRecord,
-  type SaveLearningPathInput,
-} from './schemas';
+import { learningPathDocumentSchema, saveLearningPathInputSchema, type SaveLearningPathInput } from './schemas';
 import { LearningPathServiceError } from './learning-path-errors';
 
 export { LearningPathServiceError } from './learning-path-errors';
@@ -48,28 +38,8 @@ function learningPathFromSnapshot(snapshot: DocumentSnapshot): LearningPathDocum
   return parsed.data;
 }
 
-function migrationRecordFromSnapshot(snapshot: DocumentSnapshot): LearningPathMigrationRecord | null {
-  if (!snapshot.exists) return null;
-  const parsed = learningPathMigrationRecordSchema.safeParse({
-    ...snapshot.data(),
-    id: snapshot.id,
-  });
-  if (!parsed.success) {
-    throw new LearningPathServiceError(
-      'STALE_MIGRATION_DATA',
-      `Learning Path migration ${snapshot.id} contains invalid persisted data`,
-      409
-    );
-  }
-  return parsed.data;
-}
-
 export function parseLearningPathSnapshot(snapshot: DocumentSnapshot): LearningPathDocument | null {
   return learningPathFromSnapshot(snapshot);
-}
-
-export function isLearningPathActive(path: LearningPathDocument | null): boolean {
-  return Boolean(path && path.cutover?.state !== 'inactive');
 }
 
 function parseLearningUnitSnapshot(snapshot: DocumentSnapshot): LearningUnit {
@@ -99,171 +69,6 @@ function assertDocumentSize(document: LearningPathDocument) {
     throw new LearningPathServiceError('LEARNING_PATH_TOO_LARGE', 'The Learning Path is too large to save safely', 422);
   }
 }
-
-function assertMigrationRecordSize(record: LearningPathMigrationRecord) {
-  let bytes: number;
-  try {
-    bytes = estimateFirestoreDocumentBytes(record as unknown as Record<string, unknown>);
-  } catch {
-    throw new LearningPathServiceError(
-      'MIGRATION_RECORD_TOO_LARGE',
-      'The Learning Path migration record cannot be serialized safely',
-      422
-    );
-  }
-  if (bytes > MAX_LEARNING_PATH_DOCUMENT_BYTES) {
-    throw new LearningPathServiceError(
-      'MIGRATION_RECORD_TOO_LARGE',
-      'The Learning Path migration record is too large to save safely',
-      422
-    );
-  }
-}
-
-function updateMigrationRecord(
-  record: LearningPathMigrationRecord,
-  status: LearningPathMigrationRecord['status'],
-  action: LearningPathMigrationRecord['events'][number]['action'],
-  at: string,
-  actorId: string,
-  pathRevision?: number
-): LearningPathMigrationRecord {
-  const updated = learningPathMigrationRecordSchema.parse({
-    ...record,
-    status,
-    updatedAt: at,
-    updatedBy: actorId,
-    events: [
-      ...record.events,
-      {
-        action,
-        at,
-        by: actorId,
-        ...(pathRevision === undefined ? {} : { pathRevision }),
-      },
-    ],
-  });
-  assertMigrationRecordSize(updated);
-  return updated;
-}
-
-type LegacyNormalSourceRecord = {
-  unitId: string;
-  liveOrder: number;
-};
-
-function compareUnitIds(left: string, right: string): number {
-  if (left < right) return -1;
-  if (left > right) return 1;
-  return 0;
-}
-
-function legacyNormalSourceFromSnapshot(
-  snapshot: Pick<QuerySnapshot, 'docs'>,
-  rejectLiveTests = false
-): LegacyNormalSourceRecord[] {
-  const records: LegacyNormalSourceRecord[] = [];
-  const invalid: string[] = [];
-  const liveTests: string[] = [];
-
-  for (const document of snapshot.docs) {
-    const data = document.data() as DocumentData;
-    if (data.kind === 'test') {
-      liveTests.push(document.id);
-      continue;
-    }
-    if (!isLessonDocumentData(data) || (data.type ?? 'normal') !== 'normal') continue;
-    const liveOrder = data.liveOrder;
-    if (typeof liveOrder !== 'number' || !Number.isSafeInteger(liveOrder) || liveOrder < 0) {
-      invalid.push(`${document.id} has invalid liveOrder ${String(liveOrder)}`);
-      continue;
-    }
-    records.push({ unitId: document.id, liveOrder });
-  }
-
-  if (rejectLiveTests && liveTests.length > 0) {
-    throw new LearningPathServiceError(
-      'PHASE5_TEST_PRESENT',
-      `Phase 5 migration found unexpected live test units: ${liveTests.sort().join(', ')}`,
-      409
-    );
-  }
-  const orders = new Map<number, string[]>();
-  for (const record of records) {
-    const ids = orders.get(record.liveOrder) ?? [];
-    ids.push(record.unitId);
-    orders.set(record.liveOrder, ids);
-  }
-  for (const [order, ids] of orders) {
-    if (ids.length > 1) invalid.push(`liveOrder ${order} is duplicated by ${ids.sort().join(', ')}`);
-  }
-  if (invalid.length > 0) {
-    throw new LearningPathServiceError(
-      'INVALID_LEGACY_NORMAL_ORDER',
-      `Legacy normal order is ambiguous: ${invalid.join('; ')}`,
-      409
-    );
-  }
-
-  return records.sort((left, right) => left.liveOrder - right.liveOrder || compareUnitIds(left.unitId, right.unitId));
-}
-
-export function hashLearningPathMigrationSource(source: LegacyNormalSourceRecord[]): string {
-  const canonical = [...source]
-    .sort((left, right) => compareUnitIds(left.unitId, right.unitId))
-    .map(({ unitId, liveOrder }) => ({ unitId, liveOrder }));
-  return createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
-}
-
-function sameMigrationSource(left: LegacyNormalSourceRecord[], right: LegacyNormalSourceRecord[]): boolean {
-  return (
-    left.length === right.length &&
-    left.every(
-      (record, index) => record.unitId === right[index]?.unitId && record.liveOrder === right[index]?.liveOrder
-    )
-  );
-}
-
-function assertManifestMatchesSource(manifest: LearningPathMigrationManifestInput, source: LegacyNormalSourceRecord[]) {
-  const sourceHash = hashLearningPathMigrationSource(source);
-  const manifestSourceHash = hashLearningPathMigrationSource(manifest.source);
-  const unitIds = source.map(record => record.unitId);
-  if (
-    manifestSourceHash !== manifest.sourceHash ||
-    sourceHash !== manifest.sourceHash ||
-    !sameMigrationSource(manifest.source, source) ||
-    !unitIds.every((unitId, index) => manifest.unitIds[index] === unitId) ||
-    unitIds.length !== manifest.unitIds.length
-  ) {
-    throw new LearningPathServiceError(
-      'MIGRATION_SOURCE_CHANGED',
-      'The legacy normal sequence changed after this manifest was reviewed. Run a new dry run.',
-      409
-    );
-  }
-}
-
-async function assertPhase5PathContainsNoTests(transaction: Transaction, db: Firestore, unitIds: string[]) {
-  if (unitIds.length === 0) return;
-  const snapshots = await transaction.getAll(
-    ...unitIds.map(unitId => db.collection(LEARNING_UNITS_COLLECTION).doc(unitId))
-  );
-  const invalidIds = snapshots
-    .filter(snapshot => {
-      if (!snapshot.exists) return true;
-      const data = snapshot.data();
-      return !isLessonDocumentData(data) || (data.type ?? 'normal') !== 'normal';
-    })
-    .map(snapshot => snapshot.id);
-  if (invalidIds.length > 0) {
-    throw new LearningPathServiceError(
-      'PHASE5_TEST_PRESENT',
-      `Phase 5 rollback/retirement requires a lesson-only path; invalid units: ${invalidIds.join(', ')}`,
-      409
-    );
-  }
-}
-
 export async function assertUnitDeletionAllowedInTransaction(
   transaction: Transaction,
   db: Firestore,
@@ -271,7 +76,7 @@ export async function assertUnitDeletionAllowedInTransaction(
 ): Promise<void> {
   const pathSnapshot = await transaction.get(db.collection(LEARNING_PATHS_COLLECTION).doc(DEFAULT_LEARNING_PATH_ID));
   const path = learningPathFromSnapshot(pathSnapshot);
-  if (isLearningPathActive(path) && path!.unitIds.includes(unitId)) {
+  if (path && path.unitIds.includes(unitId)) {
     throw new LearningPathServiceError(
       'PLACED_UNIT_DELETE',
       'Remove this unit from the Learning Path before deleting it',
@@ -288,7 +93,7 @@ export async function assertPlacedLessonReplacementAllowedInTransaction(
 ): Promise<void> {
   const pathSnapshot = await transaction.get(db.collection(LEARNING_PATHS_COLLECTION).doc(DEFAULT_LEARNING_PATH_ID));
   const path = learningPathFromSnapshot(pathSnapshot);
-  if (!isLearningPathActive(path) || !path!.unitIds.includes(unitId)) return;
+  if (!path || !path.unitIds.includes(unitId)) return;
 
   if (lesson.type !== 'normal') {
     throw new LearningPathServiceError(
@@ -322,7 +127,7 @@ export async function assertPlacedTestRotationAllowedInTransaction(
   const path = learningPathFromSnapshot(
     await transaction.get(db.collection(LEARNING_PATHS_COLLECTION).doc(DEFAULT_LEARNING_PATH_ID))
   );
-  if (!isLearningPathActive(path) || !path!.unitIds.includes(testId)) return;
+  if (!path || !path.unitIds.includes(testId)) return;
   if (rotationVersions.length === 0) {
     throw new LearningPathServiceError(
       'PLACED_UNIT_INVALID',
@@ -357,13 +162,11 @@ export async function assertLegacyNormalPlacementAllowedInTransaction(
   const path = learningPathFromSnapshot(
     await transaction.get(db.collection(LEARNING_PATHS_COLLECTION).doc(DEFAULT_LEARNING_PATH_ID))
   );
-  if (!path || path.cutover?.state === 'inactive') return;
+  if (!path) return;
 
   throw new LearningPathServiceError(
     'LEGACY_NORMAL_PLACEMENT_RETIRED',
-    path.cutover
-      ? 'Normal placement is frozen during Learning Path stabilization. Roll back before using the legacy controls.'
-      : 'Normal placement now belongs to the Learning Path organizer.',
+    'Normal placement now belongs to the Learning Path organizer.',
     409
   );
 }
@@ -425,20 +228,6 @@ export async function assertLegacyNormalPlacementChangeAllowedInTransaction(
   }
 }
 
-export function assertLearningPathProjectionParity(
-  expectedUnitIds: string[],
-  adminUnitIds: string[],
-  studentUnitIds: string[]
-): void {
-  if (!sameUnitIds(expectedUnitIds, adminUnitIds) || !sameUnitIds(expectedUnitIds, studentUnitIds)) {
-    throw new LearningPathServiceError(
-      'VERIFICATION_FAILED',
-      'The active admin or student Learning Path projection does not exactly match the reviewed manifest',
-      409
-    );
-  }
-}
-
 export class LearningPathService {
   constructor(
     private readonly db: Firestore = adminDb,
@@ -450,10 +239,6 @@ export class LearningPathService {
     return this.db.collection(LEARNING_PATHS_COLLECTION);
   }
 
-  private get migrations() {
-    return this.db.collection(LEARNING_PATH_MIGRATIONS_COLLECTION);
-  }
-
   private get units() {
     return this.db.collection(LEARNING_UNITS_COLLECTION);
   }
@@ -462,88 +247,23 @@ export class LearningPathService {
     return this.db.collection(TEST_VERSIONS_COLLECTION);
   }
 
-  private legacyLiveQuery() {
-    return this.units.where('isLive', '==', true).select('kind', 'type', 'isLive', 'liveOrder');
-  }
-
   pathRef() {
     return this.paths.doc(DEFAULT_LEARNING_PATH_ID);
-  }
-
-  migrationRef(migrationId: string) {
-    return this.migrations.doc(migrationId);
   }
 
   async getPath(): Promise<LearningPathDocument | null> {
     return learningPathFromSnapshot(await this.pathRef().get());
   }
 
-  async getMigrationRecord(migrationId: string): Promise<LearningPathMigrationRecord | null> {
-    return migrationRecordFromSnapshot(await this.migrationRef(migrationId).get());
-  }
-
-  async requireMigrationRecord(migrationId: string): Promise<LearningPathMigrationRecord> {
-    const record = await this.getMigrationRecord(migrationId);
-    if (!record) {
-      throw new LearningPathServiceError(
-        'MIGRATION_NOT_FOUND',
-        `Learning Path migration ${migrationId} has not been prepared or recovered`,
-        404
-      );
-    }
-    return record;
-  }
-
-  async getMigrationOverview(): Promise<{
-    path: LearningPathDocument | null;
-    migration: LearningPathMigrationRecord | null;
-    needsRecovery: boolean;
-  }> {
-    const path = await this.getPath();
-    if (path?.cutover?.state === 'active') {
-      const migration = await this.getMigrationRecord(path.cutover.migrationId);
-      return { path, migration, needsRecovery: !migration };
-    }
-
-    const latest = await this.migrations.orderBy('updatedAt', 'desc').limit(1).get();
-    const latestMigration = latest.docs[0] ? migrationRecordFromSnapshot(latest.docs[0]) : null;
-    if (!path?.cutover) return { path, migration: latestMigration, needsRecovery: false };
-
-    const cutoverMigration = await this.getMigrationRecord(path.cutover.migrationId);
-    const migration =
-      latestMigration && (!cutoverMigration || latestMigration.updatedAt >= cutoverMigration.updatedAt)
-        ? latestMigration
-        : cutoverMigration;
-    return { path, migration, needsRecovery: !migration };
-  }
-
-  private async getLegacyNormalUnitIds(): Promise<string[]> {
-    const snapshot = await this.legacyLiveQuery().get();
-    return legacyNormalSourceFromSnapshot(snapshot).map(record => record.unitId);
-  }
-
   async getAdminView(): Promise<AdminLearningPathView> {
     const path = await this.getPath();
-    const active = isLearningPathActive(path);
-    const legacyUnitIds = active ? [] : await this.getLegacyNormalUnitIds();
-    const canEdit = Boolean(path && !path.cutover);
-
-    let editBlockedReason: string | undefined;
-    if (!path) {
-      editBlockedReason = 'The Learning Path has not been initialized. Complete the migration workflow first.';
-    } else if (path.cutover) {
-      editBlockedReason =
-        path.cutover.state === 'active'
-          ? 'The Learning Path is read-only during the post-migration stabilization window.'
-          : 'The Learning Path is inactive after rollback. Reapply or retire the migration before editing.';
-    }
 
     return {
       path,
-      effectiveUnitIds: active ? path!.unitIds : legacyUnitIds,
-      source: active ? 'learning-path' : 'legacy',
-      canEdit,
-      ...(editBlockedReason ? { editBlockedReason } : {}),
+      effectiveUnitIds: path?.unitIds ?? [],
+      source: 'learning-path',
+      canEdit: Boolean(path),
+      ...(!path ? { editBlockedReason: 'The Learning Path is not available.' } : {}),
     };
   }
 
@@ -664,14 +384,7 @@ export class LearningPathService {
       if (!currentPath) {
         throw new LearningPathServiceError(
           'LEARNING_PATH_NOT_FOUND',
-          'The Learning Path must be initialized through the migration workflow before it can be edited',
-          409
-        );
-      }
-      if (currentPath.cutover) {
-        throw new LearningPathServiceError(
-          'LEARNING_PATH_FROZEN',
-          'The Learning Path is read-only during the migration stabilization window',
+          'The Learning Path has not been initialized',
           409
         );
       }
@@ -697,427 +410,6 @@ export class LearningPathService {
       return updatedPath;
     });
   }
-
-  async buildMigrationManifest(migrationId: string): Promise<LearningPathMigrationManifestInput> {
-    const source = legacyNormalSourceFromSnapshot(await this.legacyLiveQuery().get(), true);
-    return learningPathMigrationManifestSchema.parse({
-      migrationId,
-      createdAt: this.now(),
-      sourceHash: hashLearningPathMigrationSource(source),
-      unitIds: source.map(record => record.unitId),
-      source,
-    });
-  }
-
-  async prepareMigration(migrationId: string, actorId: string): Promise<LearningPathMigrationRecord> {
-    return this.db.runTransaction(async transaction => {
-      const [recordSnapshot, pathSnapshot, sourceSnapshot] = await Promise.all([
-        transaction.get(this.migrationRef(migrationId)),
-        transaction.get(this.pathRef()),
-        transaction.get(this.legacyLiveQuery()),
-      ]);
-      const existing = migrationRecordFromSnapshot(recordSnapshot);
-      if (existing) return existing;
-
-      const path = learningPathFromSnapshot(pathSnapshot);
-      if (path && !path.cutover) {
-        throw new LearningPathServiceError(
-          'MIGRATION_CONFLICT',
-          'The Learning Path migration window has already been retired',
-          409
-        );
-      }
-      if (path?.cutover?.state === 'active') {
-        throw new LearningPathServiceError(
-          'MIGRATION_RECOVERY_REQUIRED',
-          `Recover active migration ${path.cutover.migrationId} before continuing its workflow`,
-          409
-        );
-      }
-
-      const source = legacyNormalSourceFromSnapshot(sourceSnapshot, true);
-      const createdAt = this.now();
-      const manifest = learningPathMigrationManifestSchema.parse({
-        migrationId,
-        createdAt,
-        sourceHash: hashLearningPathMigrationSource(source),
-        unitIds: source.map(record => record.unitId),
-        source,
-      });
-      const record = learningPathMigrationRecordSchema.parse({
-        id: migrationId,
-        migrationId,
-        manifest,
-        status: 'prepared',
-        createdAt,
-        createdBy: actorId,
-        updatedAt: createdAt,
-        updatedBy: actorId,
-        events: [{ action: 'prepared', at: createdAt, by: actorId }],
-      });
-      assertMigrationRecordSize(record);
-      transaction.set(this.migrationRef(migrationId), record);
-      return record;
-    });
-  }
-
-  async recoverMigration(actorId: string): Promise<LearningPathMigrationRecord> {
-    return this.db.runTransaction(async transaction => {
-      const [pathSnapshot, sourceSnapshot] = await Promise.all([
-        transaction.get(this.pathRef()),
-        transaction.get(this.legacyLiveQuery()),
-      ]);
-      const path = learningPathFromSnapshot(pathSnapshot);
-      if (!path?.cutover) {
-        throw new LearningPathServiceError(
-          'MIGRATION_RECOVERY_UNAVAILABLE',
-          'There is no active or rolled-back cutover to recover',
-          409
-        );
-      }
-
-      const existing = migrationRecordFromSnapshot(await transaction.get(this.migrationRef(path.cutover.migrationId)));
-      if (existing) return existing;
-
-      const source = legacyNormalSourceFromSnapshot(sourceSnapshot, true);
-      const manifest = learningPathMigrationManifestSchema.parse({
-        migrationId: path.cutover.migrationId,
-        createdAt: path.cutover.appliedAt,
-        sourceHash: hashLearningPathMigrationSource(source),
-        unitIds: source.map(record => record.unitId),
-        source,
-      });
-      if (manifest.sourceHash !== path.cutover.sourceHash || !sameUnitIds(manifest.unitIds, path.unitIds)) {
-        throw new LearningPathServiceError(
-          'MIGRATION_RECOVERY_FAILED',
-          'The current legacy source cannot reconstruct the active Learning Path manifest exactly',
-          409
-        );
-      }
-
-      const recoveredAt = this.now();
-      const events: LearningPathMigrationRecord['events'] = [
-        {
-          action: 'applied',
-          at: path.cutover.appliedAt,
-          by: path.cutover.appliedBy,
-          pathRevision: path.revision,
-        },
-      ];
-      if (path.cutover.state === 'inactive') {
-        events.push({
-          action: 'rolled-back',
-          at: path.cutover.rolledBackAt!,
-          by: path.cutover.rolledBackBy!,
-          pathRevision: path.revision,
-        });
-      }
-      events.push({ action: 'recovered', at: recoveredAt, by: actorId, pathRevision: path.revision });
-
-      const record = learningPathMigrationRecordSchema.parse({
-        id: manifest.migrationId,
-        migrationId: manifest.migrationId,
-        manifest,
-        status: path.cutover.state === 'active' ? 'active' : 'rolled-back',
-        createdAt: path.cutover.appliedAt,
-        createdBy: path.cutover.appliedBy,
-        updatedAt: recoveredAt,
-        updatedBy: actorId,
-        events,
-      });
-      assertMigrationRecordSize(record);
-      transaction.set(this.migrationRef(record.migrationId), record);
-      return record;
-    });
-  }
-
-  async applyMigration(
-    input: LearningPathMigrationManifestInput,
-    actorId: string,
-    persistRecord = false
-  ): Promise<{ path: LearningPathDocument; applied: boolean }> {
-    const manifest = learningPathMigrationManifestSchema.parse(input);
-    return this.db.runTransaction(async transaction => {
-      const [pathSnapshot, sourceSnapshot] = await Promise.all([
-        transaction.get(this.pathRef()),
-        transaction.get(this.legacyLiveQuery()),
-      ]);
-      const currentPath = learningPathFromSnapshot(pathSnapshot);
-      const source = legacyNormalSourceFromSnapshot(sourceSnapshot, true);
-      assertManifestMatchesSource(manifest, source);
-
-      const record = persistRecord
-        ? migrationRecordFromSnapshot(await transaction.get(this.migrationRef(manifest.migrationId)))
-        : null;
-      if (persistRecord && !record) {
-        throw new LearningPathServiceError(
-          'MIGRATION_NOT_FOUND',
-          `Learning Path migration ${manifest.migrationId} has not been prepared or recovered`,
-          404
-        );
-      }
-      if (record && !sameMigrationManifest(record.manifest, manifest)) {
-        throw new LearningPathServiceError(
-          'MIGRATION_CONFLICT',
-          'The stored immutable manifest does not match the requested migration',
-          409
-        );
-      }
-      if (record?.status === 'retired') {
-        throw new LearningPathServiceError('MIGRATION_CONFLICT', 'The stored migration has already been retired', 409);
-      }
-
-      if (currentPath && !currentPath.cutover) {
-        throw new LearningPathServiceError(
-          'MIGRATION_CONFLICT',
-          'The Phase 5 migration window has already been retired',
-          409
-        );
-      }
-      if (currentPath?.cutover?.state === 'active') {
-        const sameMigration =
-          currentPath.cutover.migrationId === manifest.migrationId &&
-          currentPath.cutover.sourceHash === manifest.sourceHash &&
-          sameUnitIds(currentPath.unitIds, manifest.unitIds);
-        if (sameMigration) return { path: currentPath, applied: false };
-        throw new LearningPathServiceError(
-          'MIGRATION_CONFLICT',
-          'A different Learning Path migration is already active',
-          409
-        );
-      }
-
-      const appliedAt = this.now();
-      const path: LearningPathDocument = {
-        id: 'default',
-        revision: currentPath ? currentPath.revision + 1 : 1,
-        unitIds: [...manifest.unitIds],
-        updatedAt: appliedAt,
-        updatedBy: actorId,
-        cutover: {
-          state: 'active',
-          migrationId: manifest.migrationId,
-          sourceHash: manifest.sourceHash,
-          appliedAt,
-          appliedBy: actorId,
-        },
-      };
-      assertDocumentSize(path);
-      transaction.set(this.pathRef(), path);
-      if (record) {
-        transaction.set(
-          this.migrationRef(manifest.migrationId),
-          updateMigrationRecord(record, 'active', 'applied', appliedAt, actorId, path.revision)
-        );
-      }
-      return { path, applied: true };
-    });
-  }
-
-  async verifyMigration(
-    input: LearningPathMigrationManifestInput,
-    actorId?: string
-  ): Promise<{ verified: true; path: LearningPathDocument }> {
-    const manifest = learningPathMigrationManifestSchema.parse(input);
-    return this.db.runTransaction(async transaction => {
-      const [pathSnapshot, sourceSnapshot] = await Promise.all([
-        transaction.get(this.pathRef()),
-        transaction.get(this.legacyLiveQuery()),
-      ]);
-      const path = learningPathFromSnapshot(pathSnapshot);
-      const source = legacyNormalSourceFromSnapshot(sourceSnapshot, true);
-      assertManifestMatchesSource(manifest, source);
-      const record = actorId
-        ? migrationRecordFromSnapshot(await transaction.get(this.migrationRef(manifest.migrationId)))
-        : null;
-      if (actorId && !record) {
-        throw new LearningPathServiceError(
-          'MIGRATION_NOT_FOUND',
-          `Learning Path migration ${manifest.migrationId} has not been prepared or recovered`,
-          404
-        );
-      }
-      if (record && !sameMigrationManifest(record.manifest, manifest)) {
-        throw new LearningPathServiceError(
-          'MIGRATION_CONFLICT',
-          'The stored immutable manifest does not match the active migration',
-          409
-        );
-      }
-      if (
-        !path ||
-        path.cutover?.state !== 'active' ||
-        path.cutover.migrationId !== manifest.migrationId ||
-        path.cutover.sourceHash !== manifest.sourceHash ||
-        !sameUnitIds(path.unitIds, manifest.unitIds)
-      ) {
-        throw new LearningPathServiceError(
-          'VERIFICATION_FAILED',
-          'The active Learning Path does not exactly match the reviewed manifest',
-          409
-        );
-      }
-      await assertPhase5PathContainsNoTests(transaction, this.db, path.unitIds);
-      if (record && actorId) {
-        const verifiedAt = this.now();
-        transaction.set(
-          this.migrationRef(manifest.migrationId),
-          updateMigrationRecord(record, 'verified', 'verified', verifiedAt, actorId, path.revision)
-        );
-      }
-      return { verified: true, path };
-    });
-  }
-
-  async rollbackMigration(actorId: string, migrationId?: string): Promise<LearningPathDocument> {
-    return this.db.runTransaction(async transaction => {
-      const snapshot = await transaction.get(this.pathRef());
-      const path = learningPathFromSnapshot(snapshot);
-      if (!path?.cutover) {
-        throw new LearningPathServiceError(
-          'ROLLBACK_UNAVAILABLE',
-          'Learning Path rollback is unavailable after migration retirement',
-          409
-        );
-      }
-      if (migrationId && path.cutover.migrationId !== migrationId) {
-        throw new LearningPathServiceError(
-          'MIGRATION_CONFLICT',
-          `Active migration ${path.cutover.migrationId} does not match ${migrationId}`,
-          409
-        );
-      }
-      const record = migrationId
-        ? migrationRecordFromSnapshot(await transaction.get(this.migrationRef(migrationId)))
-        : null;
-      if (migrationId && !record) {
-        throw new LearningPathServiceError(
-          'MIGRATION_NOT_FOUND',
-          `Learning Path migration ${migrationId} has not been prepared or recovered`,
-          404
-        );
-      }
-      await assertPhase5PathContainsNoTests(transaction, this.db, path.unitIds);
-      if (path.cutover.state === 'inactive') return path;
-
-      const rolledBackAt = this.now();
-      const rolledBack: LearningPathDocument = {
-        ...path,
-        updatedAt: rolledBackAt,
-        updatedBy: actorId,
-        cutover: {
-          ...path.cutover,
-          state: 'inactive',
-          rolledBackAt,
-          rolledBackBy: actorId,
-        },
-      };
-      transaction.set(this.pathRef(), rolledBack);
-      if (record) {
-        transaction.set(
-          this.migrationRef(record.migrationId),
-          updateMigrationRecord(record, 'rolled-back', 'rolled-back', rolledBackAt, actorId, path.revision)
-        );
-      }
-      return rolledBack;
-    });
-  }
-
-  async retireMigration(actorId: string, migrationId?: string): Promise<LearningPathDocument> {
-    return this.db.runTransaction(async transaction => {
-      const snapshot = await transaction.get(this.pathRef());
-      const path = learningPathFromSnapshot(snapshot);
-      if (!path) {
-        throw new LearningPathServiceError(
-          'LEARNING_PATH_NOT_FOUND',
-          'The Learning Path has not been initialized',
-          404
-        );
-      }
-      const record = migrationId
-        ? migrationRecordFromSnapshot(await transaction.get(this.migrationRef(migrationId)))
-        : null;
-      if (migrationId && !record) {
-        throw new LearningPathServiceError(
-          'MIGRATION_NOT_FOUND',
-          `Learning Path migration ${migrationId} has not been prepared or recovered`,
-          404
-        );
-      }
-      if (!path.cutover) {
-        if (record && record.status !== 'retired') {
-          throw new LearningPathServiceError(
-            'MIGRATION_CONFLICT',
-            'The Learning Path is retired but its migration audit record is inconsistent',
-            409
-          );
-        }
-        return path;
-      }
-      if (migrationId && path.cutover.migrationId !== migrationId) {
-        throw new LearningPathServiceError(
-          'MIGRATION_CONFLICT',
-          `Active migration ${path.cutover.migrationId} does not match ${migrationId}`,
-          409
-        );
-      }
-      if (record && record.status !== 'verified') {
-        throw new LearningPathServiceError(
-          'MIGRATION_NOT_VERIFIED',
-          'Run final verification for this stored migration before retirement',
-          409
-        );
-      }
-      if (
-        record &&
-        (record.manifest.sourceHash !== path.cutover.sourceHash || !sameUnitIds(record.manifest.unitIds, path.unitIds))
-      ) {
-        throw new LearningPathServiceError(
-          'MIGRATION_CONFLICT',
-          'The verified migration record does not match the active Learning Path',
-          409
-        );
-      }
-      if (path.cutover.state !== 'active') {
-        throw new LearningPathServiceError(
-          'CUTOVER_NOT_ACTIVE',
-          'Reapply the migration before retiring its fallback',
-          409
-        );
-      }
-      await assertPhase5PathContainsNoTests(transaction, this.db, path.unitIds);
-
-      const retired: LearningPathDocument = {
-        id: 'default',
-        revision: path.revision,
-        unitIds: [...path.unitIds],
-        updatedAt: this.now(),
-        updatedBy: actorId,
-      };
-      transaction.set(this.pathRef(), retired);
-      if (record) {
-        transaction.set(
-          this.migrationRef(record.migrationId),
-          updateMigrationRecord(record, 'retired', 'retired', retired.updatedAt, actorId, path.revision)
-        );
-      }
-      return retired;
-    });
-  }
 }
 
 export const learningPathService = new LearningPathService();
-
-function sameUnitIds(left: string[], right: string[]) {
-  return left.length === right.length && left.every((unitId, index) => unitId === right[index]);
-}
-
-function sameMigrationManifest(left: LearningPathMigrationManifestInput, right: LearningPathMigrationManifestInput) {
-  return (
-    left.migrationId === right.migrationId &&
-    left.createdAt === right.createdAt &&
-    left.sourceHash === right.sourceHash &&
-    sameUnitIds(left.unitIds, right.unitIds) &&
-    sameMigrationSource(left.source, right.source)
-  );
-}

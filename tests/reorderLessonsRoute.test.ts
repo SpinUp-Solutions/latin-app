@@ -22,10 +22,7 @@ const request = (updates: unknown) =>
     json: async () => ({ updates }),
   }) as never;
 
-function configureFirestore(
-  lessons: Record<string, Record<string, unknown>>,
-  learningPath?: Record<string, unknown>
-) {
+function configureFirestore(lessons: Record<string, Record<string, unknown>>, learningPath?: Record<string, unknown>) {
   const updates: Array<{ id: string; data: Record<string, unknown> }> = [];
   mockCollection.mockImplementation((collectionName: string) => ({
     doc: (id: string) => ({ collectionName, id }),
@@ -60,19 +57,6 @@ const retiredPath = {
   updatedBy: 'admin-1',
 };
 
-const inactivePath = {
-  ...retiredPath,
-  cutover: {
-    state: 'inactive',
-    migrationId: 'migration-1',
-    sourceHash: 'a'.repeat(64),
-    appliedAt: 'before',
-    appliedBy: 'admin-1',
-    rolledBackAt: 'now',
-    rolledBackBy: 'admin-1',
-  },
-};
-
 describe('reorder lessons route', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -99,14 +83,11 @@ describe('reorder lessons route', () => {
     expect(transaction.update).not.toHaveBeenCalled();
   });
 
-  it('allows normal reordering after rollback', async () => {
-    const { transaction } = configureFirestore(
-      {
-        'normal-1': { kind: 'lesson', type: 'normal' },
-        'normal-2': { kind: 'lesson', type: 'normal' },
-      },
-      inactivePath
-    );
+  it('allows normal reordering only when the canonical path is absent', async () => {
+    const { transaction } = configureFirestore({
+      'normal-1': { kind: 'lesson', type: 'normal' },
+      'normal-2': { kind: 'lesson', type: 'normal' },
+    });
 
     const response = (await POST(
       request([

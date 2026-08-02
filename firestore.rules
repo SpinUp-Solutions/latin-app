@@ -24,12 +24,6 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Immutable manifests and migration lifecycle audit events are available
-    // only through the authenticated admin operator route.
-    match /learningPathMigrations/{document=**} {
-      allow read, write: if false;
-    }
-
     // Assessment content, attempts, and gate-controlling progress are available
     // only through authenticated server routes. The Admin SDK bypasses rules.
     match /testVersions/{document=**} {
@@ -97,7 +91,6 @@ service cloud.firestore {
       allow read, write: if collection != 'diagramming_attempts'
         && collection != 'lessons'
         && collection != 'learningPaths'
-        && collection != 'learningPathMigrations'
         && collection != 'practiceCategories'
         && collection != 'practiceCategoryMemberships'
         && collection != 'testVersions'

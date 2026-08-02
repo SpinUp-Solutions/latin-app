@@ -29,7 +29,7 @@ import { mockTestService, type MockTestService } from '@/src/lib/tests/mock-serv
 import { TEST_VERSION_SUMMARY_FIELDS, toTestUnitSummary } from '@/src/lib/tests/domain';
 import { testVersionSummaryDocumentSchema } from '@/src/lib/tests/schemas';
 import { isLessonDocumentData, normalizeLearningUnit } from './domain';
-import { isLearningPathActive, parseLearningPathSnapshot } from './learning-path-service';
+import { parseLearningPathSnapshot } from './learning-path-service';
 import {
   collectAttemptedNormalTestIds,
   isProgressionUnitComplete,
@@ -203,7 +203,7 @@ export class StudentDashboardService {
     return this.attempts.getAttemptSummary(origin, userId);
   }
 
-  private async getLegacyLiveLessonSummaries(): Promise<LessonSummary[]> {
+  private async getLiveLessonSummaries(): Promise<LessonSummary[]> {
     const snapshot = await this.units
       .where('isLive', '==', true)
       .orderBy('liveOrder', 'asc')
@@ -518,14 +518,12 @@ export class StudentDashboardService {
     rawPracticeLessons: LessonSummary[];
   }> {
     const [allLessons, pathSnapshot] = await Promise.all([
-      this.getLegacyLiveLessonSummaries(),
+      this.getLiveLessonSummaries(),
       this.db.collection(LEARNING_PATHS_COLLECTION).doc(DEFAULT_LEARNING_PATH_ID).get(),
     ]);
 
     const path = parseLearningPathSnapshot(pathSnapshot);
-    const normalUnits: LearningPathUnitSummary[] = isLearningPathActive(path)
-      ? await this.getPlacedUnitSummaries(path!.unitIds)
-      : allLessons.filter(lesson => lesson.type === 'normal').map(lesson => ({ ...lesson, kind: 'lesson' as const }));
+    const normalUnits: LearningPathUnitSummary[] = path ? await this.getPlacedUnitSummaries(path.unitIds) : [];
     const rawPracticeLessons = PRACTICE_TYPE_ORDER.flatMap(type => allLessons.filter(lesson => lesson.type === type));
 
     return { normalUnits, rawPracticeLessons };
@@ -534,10 +532,7 @@ export class StudentDashboardService {
   private async getNormalUnitSummaries(): Promise<LearningPathUnitSummary[]> {
     const pathSnapshot = await this.db.collection(LEARNING_PATHS_COLLECTION).doc(DEFAULT_LEARNING_PATH_ID).get();
     const path = parseLearningPathSnapshot(pathSnapshot);
-    if (isLearningPathActive(path)) return this.getPlacedUnitSummaries(path!.unitIds);
-    return (await this.getLegacyLiveLessonSummaries())
-      .filter(lesson => lesson.type === 'normal')
-      .map(lesson => ({ ...lesson, kind: 'lesson' as const }));
+    return path ? this.getPlacedUnitSummaries(path.unitIds) : [];
   }
 
   async getNormalSequenceUnitIds(): Promise<string[]> {
