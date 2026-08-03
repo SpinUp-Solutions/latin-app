@@ -132,18 +132,18 @@ describe('AI evaluation pricing and cache contracts', () => {
     expect(invalid.success).toBe(false);
   });
 
-  it('defaults omitted modes to lesson for legacy callers and persisted cases', () => {
+  it('requires grading modes for callers and persisted cases', () => {
     const input = {
       title: 'Case',
       direction: 'latin-to-english' as const,
       sourceText: 'Gallia est omnis divisa.',
       answers: [{ id: 'one', label: 'A', text: 'Gaul is divided.' }],
     };
-    expect(evaluationCaseInputSchema.parse(input).modes).toEqual(['lesson']);
-    expect(
+    expect(evaluationCaseInputSchema.safeParse(input).success).toBe(false);
+    expect(() =>
       parseEvaluationCaseSnapshot({
         exists: true,
-        id: 'legacy-case',
+        id: 'case-without-modes',
         data: () => ({
           ...input,
           createdAt: '2026-08-01T00:00:00.000Z',
@@ -151,8 +151,8 @@ describe('AI evaluation pricing and cache contracts', () => {
           updatedAt: '2026-08-01T00:00:00.000Z',
           updatedBy: 'admin',
         }),
-      } as never).modes
-    ).toEqual(['lesson']);
+      } as never)
+    ).toThrow('contains invalid persisted data');
   });
 
   it('resolves every grading profile from its catalog model', () => {

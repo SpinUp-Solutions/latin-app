@@ -38,7 +38,6 @@ const answerLabelSchema = z
   .max(80, 'Answer label must be 80 characters or fewer');
 
 const evaluationModeSchema = z.enum(TRANSLATION_GRADING_MODES);
-const defaultEvaluationModes: TranslationGradingMode[] = ['lesson'];
 const canonicalEvaluationModes = (modes: readonly TranslationGradingMode[]) =>
   TRANSLATION_GRADING_MODES.filter(mode => modes.includes(mode));
 const evaluationModesSchema = z
@@ -69,7 +68,7 @@ export const evaluationCaseInputSchema = z
       .array(evaluationAnswerInputSchema)
       .min(1, 'Add at least one answer')
       .max(AI_EVALUATION_MAX_ANSWERS, `Use at most ${AI_EVALUATION_MAX_ANSWERS} answers`),
-    modes: evaluationModesSchema.default(defaultEvaluationModes),
+    modes: evaluationModesSchema,
   })
   .strict()
   .superRefine((value, context) => {
