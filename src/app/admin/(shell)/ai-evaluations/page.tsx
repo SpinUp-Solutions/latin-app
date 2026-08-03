@@ -39,7 +39,12 @@ import { RomanCard, RomanCardContent, RomanCardHeader } from '@/src/components/u
 import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
 import { useUnsavedNavigationGuard } from '@/src/hooks/useUnsavedNavigationGuard';
 import { toast } from 'sonner';
-import { TRANSLATION_GRADING_PROFILES } from '@/shared/openai/model-registry';
+import { TRANSLATION_GRADING_MODES } from '@/shared/openai/types';
+import {
+  EVALUATION_TRANSLATION_PROFILE_IDS,
+  getTranslationGradingProfile,
+  type TranslationGradingProfileId,
+} from '@/shared/openai/model-registry';
 import type {
   EvaluationAggregate,
   EvaluationCase,
@@ -61,6 +66,7 @@ const blankCase = (): EvaluationCaseInput => ({
   direction: 'latin-to-english',
   sourceText: '',
   answers: [newAnswer(1)],
+  modes: ['lesson', 'test'],
 });
 
 const formatNumber = (value: number) => new Intl.NumberFormat('en-US').format(Math.round(value));
@@ -75,7 +81,7 @@ const formatMeasuredCost = (value: number | undefined, status: string, lowerBoun
   return `${lowerBound ? '≥' : ''}${formatCost(value)}`;
 };
 
-const profileFor = (key: EvaluationCellResult['modelKey']) => TRANSLATION_GRADING_PROFILES[key];
+const profileFor = (id: TranslationGradingProfileId) => getTranslationGradingProfile(id);
 
 type DisplayedRun = {
   result: EvaluationRunResult;
@@ -88,6 +94,7 @@ function isValidCase(value: EvaluationCaseInput) {
     value.title.trim().length > 0 &&
     value.sourceText.trim().length > 0 &&
     value.answers.length > 0 &&
+    value.modes.length > 0 &&
     value.answers.every(answer => answer.label.trim() && answer.text.trim() && ids.size === value.answers.length)
   );
 }
@@ -206,7 +213,7 @@ function UsageBadges({ cell }: { cell: EvaluationCellResult }) {
 }
 
 function BreakdownDetails({ cell }: { cell: EvaluationCellResult }) {
-  if (!cell.output) return null;
+  if (cell.gradingMode !== 'lesson' || !cell.output) return null;
   return (
     <div className="space-y-2 border-t border-border/60 pt-3">
       <details className="group rounded-md border border-border/60 bg-white/70">
@@ -271,7 +278,7 @@ function BreakdownDetails({ cell }: { cell: EvaluationCellResult }) {
 }
 
 function ResultCell({ cell }: { cell: EvaluationCellResult }) {
-  const profile = profileFor(cell.modelKey);
+  const profile = profileFor(cell.profileId);
   if (cell.error) {
     return (
       <div className="rounded-xl border border-red-200 bg-red-50/70 p-4" role="alert">
@@ -300,22 +307,32 @@ function ResultCell({ cell }: { cell: EvaluationCellResult }) {
           <p className="mt-0.5 text-[11px] text-roman-stone">{cell.actualModel || cell.requestedModel}</p>
         </div>
         <div className="rounded-lg border border-primary/20 bg-primary/[0.06] px-3 py-1.5 text-center">
-          <p className="text-2xl font-serif font-bold leading-none text-primary">{cell.output?.grade}</p>
-          <p className="mt-1 text-[10px] font-semibold uppercase tracking-widest text-primary">Grade</p>
+          <p className="text-lg font-serif font-bold leading-tight text-primary">
+            {cell.gradingMode === 'lesson' ? cell.output?.feedbackLevel : `${cell.output?.score}/10`}
+          </p>
+          <p className="mt-1 text-[10px] font-semibold uppercase tracking-widest text-primary">
+            {cell.gradingMode === 'lesson' ? 'Feedback' : 'Score'}
+          </p>
         </div>
       </div>
       <UsageBadges cell={cell} />
-      <div className="mt-4 space-y-3">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-roman-stone">Overall feedback</p>
-          <p className="mt-1 text-sm leading-relaxed text-foreground/80">{cell.output?.notes}</p>
+      {cell.gradingMode === 'lesson' ? (
+        <div className="mt-4 space-y-3">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-roman-stone">Overall feedback</p>
+            <p className="mt-1 text-sm leading-relaxed text-foreground/80">{cell.output?.notes}</p>
+          </div>
+          <div className="rounded-md border border-primary/10 bg-roman-marble/50 p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-primary/80">
+              Suggested translation
+            </p>
+            <p className="mt-1 font-serif text-sm italic leading-relaxed">{cell.output?.suggestedText}</p>
+          </div>
+          <BreakdownDetails cell={cell} />
         </div>
-        <div className="rounded-md border border-primary/10 bg-roman-marble/50 p-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-primary/80">Suggested translation</p>
-          <p className="mt-1 font-serif text-sm italic leading-relaxed">{cell.output?.suggestedText}</p>
-        </div>
-        <BreakdownDetails cell={cell} />
-      </div>
+      ) : (
+        <p className="mt-4 text-sm leading-relaxed text-foreground/80">{cell.output?.feedback}</p>
+      )}
     </div>
   );
 }
@@ -323,9 +340,9 @@ function ResultCell({ cell }: { cell: EvaluationCellResult }) {
 function ModelComparisonCards({ cells }: { cells: EvaluationCellResult[] }) {
   return (
     <div className="grid gap-4 xl:grid-cols-2">
-      {(['baseline', 'candidate'] as const).map(modelKey => {
-        const profile = profileFor(modelKey);
-        const modelCells = cells.filter(cell => cell.modelKey === modelKey);
+      {EVALUATION_TRANSLATION_PROFILE_IDS.map((profileId, profileIndex) => {
+        const profile = profileFor(profileId);
+        const modelCells = cells.filter(cell => cell.profileId === profileId);
         const uniqueCells = modelCells.filter(cell => !cell.duplicateWithinRun);
         const successfulCells = modelCells.filter(cell => cell.output);
         const usage = uniqueCells.reduce(
@@ -368,13 +385,13 @@ function ModelComparisonCards({ cells }: { cells: EvaluationCellResult[] }) {
         const actualModel = modelCells.find(cell => cell.actualModel)?.actualModel ?? profile.model;
 
         return (
-          <RomanCard key={modelKey} className="border-border/80">
+          <RomanCard key={profileId} className="border-border/80">
             <RomanCardContent className="space-y-4 p-4 sm:p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2">
                     <span
-                      className={`h-2.5 w-2.5 rounded-full ${modelKey === 'baseline' ? 'bg-roman-stone' : 'bg-primary'}`}
+                      className={`h-2.5 w-2.5 rounded-full ${profileIndex === 0 ? 'bg-roman-stone' : 'bg-primary'}`}
                       aria-hidden="true"
                     />
                     <h3 className="font-serif text-lg">{profile.label}</h3>
@@ -567,7 +584,7 @@ function Results({ result, evaluationCase }: { result: EvaluationRunResult; eval
           </h2>
           <p className="mt-1 text-sm text-roman-stone">
             {result.forceRefresh ? 'Fresh API run completed.' : 'Successful cells reuse the app cache when available.'}{' '}
-            Compare both profiles for each answer below.
+            Compare configured profiles for each selected grading mode below.
           </p>
         </div>
         <Badge variant="outline" className="gap-1.5 py-1">
@@ -587,34 +604,56 @@ function Results({ result, evaluationCase }: { result: EvaluationRunResult; eval
           {evaluationCase.sourceText}
         </p>
       </div>
-      <ModelComparisonCards cells={result.cells} />
       <AggregateSummary aggregate={result.aggregate} />
       <AggregateDetails aggregate={result.aggregate} />
-      <div className="space-y-4">
-        {evaluationCase.answers.map(answer => {
-          const cells = result.cells.filter(cell => cell.answerId === answer.id);
-          return (
-            <RomanCard key={answer.id}>
-              <RomanCardHeader className="border-b border-border/60 px-4 py-3 sm:px-5">
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/[0.09] text-xs font-semibold text-primary">
-                    {evaluationCase.answers.indexOf(answer) + 1}
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="font-medium">{answer.label}</h3>
-                    <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-roman-stone">{answer.text}</p>
-                  </div>
-                </div>
-              </RomanCardHeader>
-              <RomanCardContent className="grid gap-4 p-4 xl:grid-cols-2 sm:p-5">
-                {cells.map(cell => (
-                  <ResultCell key={`${cell.answerId}-${cell.modelKey}`} cell={cell} />
-                ))}
-              </RomanCardContent>
-            </RomanCard>
-          );
-        })}
-      </div>
+      {evaluationCase.modes.map(mode => {
+        const modeCells = result.cells.filter(cell => cell.gradingMode === mode);
+        return (
+          <section key={mode} className="space-y-4" aria-labelledby={`evaluation-${mode}-results-heading`}>
+            <div className="flex items-baseline justify-between gap-3 border-t border-border/60 pt-5">
+              <div>
+                <h3 id={`evaluation-${mode}-results-heading`} className="font-serif text-lg">
+                  {mode === 'lesson' ? 'Lesson feedback' : 'Test scoring'}
+                </h3>
+                <p className="mt-1 text-xs text-roman-stone">
+                  {mode === 'lesson'
+                    ? 'Detailed qualitative feedback using the normal lesson grader.'
+                    : 'Compact /10 assessment scores and student-facing feedback.'}
+                </p>
+              </div>
+              <Badge variant="outline">{modeCells.length} cells</Badge>
+            </div>
+            <ModelComparisonCards cells={modeCells} />
+            <div className="space-y-4">
+              {evaluationCase.answers.map(answer => {
+                const cells = modeCells.filter(cell => cell.answerId === answer.id);
+                return (
+                  <RomanCard key={`${mode}-${answer.id}`}>
+                    <RomanCardHeader className="border-b border-border/60 px-4 py-3 sm:px-5">
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/[0.09] text-xs font-semibold text-primary">
+                          {evaluationCase.answers.indexOf(answer) + 1}
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="font-medium">{answer.label}</h4>
+                          <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-roman-stone">
+                            {answer.text}
+                          </p>
+                        </div>
+                      </div>
+                    </RomanCardHeader>
+                    <RomanCardContent className="grid gap-4 p-4 xl:grid-cols-2 sm:p-5">
+                      {cells.map(cell => (
+                        <ResultCell key={`${cell.answerId}-${cell.gradingMode}-${cell.profileId}`} cell={cell} />
+                      ))}
+                    </RomanCardContent>
+                  </RomanCard>
+                );
+              })}
+            </div>
+          </section>
+        );
+      })}
     </section>
   );
 }
@@ -639,6 +678,7 @@ function AIEvaluationsPage() {
     return Boolean(
       form.title.trim() ||
         form.sourceText.trim() ||
+        form.modes.length !== 2 ||
         form.answers.length !== 1 ||
         firstAnswer?.label !== 'Answer 1' ||
         firstAnswer?.text.trim()
@@ -659,6 +699,7 @@ function AIEvaluationsPage() {
     direction: value.direction,
     sourceText: value.sourceText,
     answers: value.answers.map(answer => ({ ...answer })),
+    modes: [...value.modes],
   });
 
   const updateForm = (updater: (previous: EvaluationCaseInput) => EvaluationCaseInput) => {
@@ -819,7 +860,7 @@ function AIEvaluationsPage() {
     <AdminPage>
       <AdminPageHeader
         title="AI Model Evaluations"
-        description="Compare the production translation grader with GPT-5.6 Luna using repeatable, cost-aware cases."
+        description="Compare configured translation-grading profiles across lesson feedback and test scoring."
         actions={
           <Button type="button" variant="outline" onClick={requestNewCase} disabled={interactionLocked}>
             <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
@@ -857,7 +898,7 @@ function AIEvaluationsPage() {
                   <p className="truncate text-sm font-medium">{evaluationCase.title}</p>
                   <p className="mt-1 text-[11px] text-roman-stone">
                     {evaluationCase.direction === 'latin-to-english' ? 'Latin → English' : 'English → Latin'} ·{' '}
-                    {evaluationCase.answers.length} answers
+                    {evaluationCase.answers.length} answers · {evaluationCase.modes.join(' + ')}
                   </p>
                 </button>
               ))}
@@ -865,8 +906,8 @@ function AIEvaluationsPage() {
           )}
           <div className="rounded-lg border border-border/60 bg-roman-marble/45 p-3 text-xs leading-relaxed text-roman-stone">
             <Sparkles className="mb-1 h-4 w-4 text-primary" aria-hidden="true" />
-            API runs use the same grading prompt and schema as production. Successful cells are cached by model, prompt
-            version, direction, source, and answer.
+            API runs use the same task, profile, and schema as production. Successful cells are cached by mode, profile,
+            prompt version, direction, source, and answer.
           </div>
         </aside>
 
@@ -938,6 +979,40 @@ function AIEvaluationsPage() {
                   <p className="text-right text-[11px] text-roman-stone">
                     {form.sourceText.length.toLocaleString()} / 4,000
                   </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Grading modes</Label>
+                  <p className="text-xs text-roman-stone">
+                    Choose the production behavior to compare. Both modes run every selected profile for each answer.
+                  </p>
+                  <div className="flex flex-wrap gap-2" role="group" aria-label="Grading modes">
+                    {TRANSLATION_GRADING_MODES.map(mode => {
+                      const selected = form.modes.includes(mode);
+                      return (
+                        <Button
+                          key={mode}
+                          type="button"
+                          size="sm"
+                          variant={selected ? 'default' : 'outline'}
+                          disabled={selected && form.modes.length === 1}
+                          aria-pressed={selected}
+                          onClick={() =>
+                            updateForm(previous => {
+                              const nextModes = selected
+                                ? previous.modes.filter(current => current !== mode)
+                                : [...previous.modes, mode];
+                              return {
+                                ...previous,
+                                modes: TRANSLATION_GRADING_MODES.filter(current => nextModes.includes(current)),
+                              };
+                            })
+                          }>
+                          {mode === 'lesson' ? 'Lesson feedback' : 'Test scoring'}
+                        </Button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <div className="space-y-3">
@@ -1060,12 +1135,15 @@ function AIEvaluationsPage() {
                 <div>
                   <h2 className="font-serif text-lg">Run side-by-side</h2>
                   <p className="mt-1 max-w-xl text-sm leading-relaxed text-roman-stone">
-                    Both approved OpenAI profiles evaluate every saved answer concurrently. Cached results avoid
+                    Every selected mode runs all configured profiles for each saved answer. Cached results avoid
                     duplicate spend.
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <Badge variant="outline">{TRANSLATION_GRADING_PROFILES.baseline.label}</Badge>
-                    <Badge variant="outline">{TRANSLATION_GRADING_PROFILES.candidate.label}</Badge>
+                    {EVALUATION_TRANSLATION_PROFILE_IDS.map(profileId => (
+                      <Badge key={profileId} variant="outline">
+                        {profileFor(profileId).label}
+                      </Badge>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -1104,7 +1182,7 @@ function AIEvaluationsPage() {
               aria-live="polite">
               <Loader2 className="h-5 w-5 animate-spin text-primary" aria-hidden="true" />
               <div>
-                <p className="text-sm font-medium">Comparing both models…</p>
+                <p className="text-sm font-medium">Comparing selected grading modes…</p>
                 <p className="mt-0.5 text-xs text-roman-stone">
                   Each answer/model cell is independent, so partial failures will remain visible.
                 </p>
@@ -1117,7 +1195,7 @@ function AIEvaluationsPage() {
             <AdminEmptyState
               icon={Gauge}
               title="Your comparison will appear here"
-              description="Save a case, then test the two model profiles side by side."
+              description="Save a case, then compare the configured model profiles side by side."
             />
           )}
         </div>

@@ -5,36 +5,22 @@
  * 2026-08-01: https://developers.openai.com/api/docs/pricing
  */
 
-import type { CostBreakdown, TokenUsage } from './types';
+import type { CostBreakdown, TokenUsage, TranslationGradingMode } from './types';
 
-export const OPENAI_PRICING_VERSION = '2026-08-01';
-export const OPENAI_PRICING_SOURCE = 'https://developers.openai.com/api/docs/pricing';
-export const OPENAI_MODELS_SOURCE = 'https://developers.openai.com/api/docs/models';
-// Batch is intentionally not used for this interactive suite: it is asynchronous
-// and may take up to 24 hours despite its lower price: https://developers.openai.com/api/docs/guides/batch
-export const OPENAI_BATCH_GUIDE_SOURCE = 'https://developers.openai.com/api/docs/guides/batch';
-export const OPENAI_PROMPT_CACHING_SOURCE = 'https://developers.openai.com/api/docs/guides/prompt-caching';
-export const TRANSLATION_GRADING_PROMPT_VERSION = 'translation-grading-v2';
+const OPENAI_PRICING_VERSION = '2026-08-01';
+const OPENAI_PRICING_SOURCE = 'https://developers.openai.com/api/docs/pricing';
+type OpenAIReasoningEffort = 'low' | 'high';
 
-export type OpenAIReasoningEffort = 'low' | 'high';
-
-export interface OpenAIModelPricing {
+interface OpenAIModelPricing {
   inputPerMillion: number;
   cachedInputPerMillion: number;
   cacheWritePerMillion: number;
   outputPerMillion: number;
 }
 
-export interface OpenAIModelProfile {
-  key: 'baseline' | 'candidate';
+interface OpenAIModelDefinition {
   model: string;
   label: string;
-  reasoningEffort: OpenAIReasoningEffort;
-  maxOutputTokens: number;
-  promptCacheKey: string;
-  promptCacheMode: 'automatic' | 'explicit';
-  promptVersion: string;
-  profileVersion: string;
   pricing: OpenAIModelPricing;
 }
 
@@ -54,43 +40,105 @@ const CANDIDATE_PRICING: OpenAIModelPricing = {
   outputPerMillion: 1.2,
 };
 
-export const OPENAI_MODEL_PRICING: Record<string, OpenAIModelPricing> = {
-  'gpt-5.4-mini': BASELINE_PRICING,
-  'gpt-5.6-luna': CANDIDATE_PRICING,
-};
-
-export const TRANSLATION_GRADING_PROFILES = {
-  baseline: {
-    key: 'baseline',
+export const OPENAI_MODEL_CATALOG = {
+  gpt54Mini: {
     model: 'gpt-5.4-mini',
-    label: 'GPT-5.4 Mini · Low',
-    reasoningEffort: 'low',
-    maxOutputTokens: 5000,
-    promptCacheKey: `${TRANSLATION_GRADING_PROMPT_VERSION}:baseline`,
-    promptCacheMode: 'automatic',
-    promptVersion: TRANSLATION_GRADING_PROMPT_VERSION,
-    profileVersion: `${TRANSLATION_GRADING_PROMPT_VERSION}:baseline`,
+    label: 'GPT-5.4 Mini',
     pricing: BASELINE_PRICING,
   },
-  candidate: {
-    key: 'candidate',
+  gpt56Luna: {
     model: 'gpt-5.6-luna',
-    label: 'GPT-5.6 Luna · High',
-    reasoningEffort: 'high',
-    maxOutputTokens: 8000,
-    promptCacheKey: `${TRANSLATION_GRADING_PROMPT_VERSION}:candidate`,
-    promptCacheMode: 'explicit',
-    promptVersion: TRANSLATION_GRADING_PROMPT_VERSION,
-    profileVersion: `${TRANSLATION_GRADING_PROMPT_VERSION}:candidate`,
+    label: 'GPT-5.6 Luna',
     pricing: CANDIDATE_PRICING,
   },
-} as const satisfies Record<'baseline' | 'candidate', OpenAIModelProfile>;
+} as const satisfies Record<string, OpenAIModelDefinition>;
 
-export type TranslationGradingProfileKey = keyof typeof TRANSLATION_GRADING_PROFILES;
-export type TranslationGradingProfile = (typeof TRANSLATION_GRADING_PROFILES)[TranslationGradingProfileKey];
+type OpenAIModelId = keyof typeof OPENAI_MODEL_CATALOG;
 
-export const getTranslationGradingProfile = (key: TranslationGradingProfileKey): TranslationGradingProfile =>
+/**
+ * A run profile is deliberately separate from the model catalog. Profiles
+ * capture how we call a model; tasks own prompts and output schemas.
+ */
+interface TranslationGradingProfileDefinition {
+  key: string;
+  modelId: OpenAIModelId;
+  model: string;
+  label: string;
+  reasoningEffort: OpenAIReasoningEffort;
+  maxOutputTokens: Record<TranslationGradingMode, number>;
+  promptCacheKey: string;
+  promptCacheMode: 'automatic' | 'explicit';
+  profileVersion: string;
+  pricing: OpenAIModelPricing;
+}
+
+interface TranslationGradingProfileOptions {
+  labelSuffix: string;
+  reasoningEffort: OpenAIReasoningEffort;
+  maxOutputTokens: Record<TranslationGradingMode, number>;
+  promptCacheKey: string;
+  promptCacheMode: 'automatic' | 'explicit';
+  profileVersion: string;
+}
+
+const defineTranslationGradingProfile = <const K extends string, const M extends OpenAIModelId>(
+  key: K,
+  modelId: M,
+  options: TranslationGradingProfileOptions
+) => {
+  const model = OPENAI_MODEL_CATALOG[modelId];
+  const { labelSuffix, ...execution } = options;
+  return {
+    key,
+    modelId,
+    model: model.model,
+    label: `${model.label} · ${labelSuffix}`,
+    pricing: model.pricing,
+    ...execution,
+  };
+};
+
+const OPENAI_MODEL_PRICING: Record<string, OpenAIModelPricing> = Object.fromEntries(
+  Object.values(OPENAI_MODEL_CATALOG).map(model => [model.model, model.pricing])
+);
+
+export const TRANSLATION_GRADING_PROFILES = {
+  baseline: defineTranslationGradingProfile('baseline', 'gpt54Mini', {
+    labelSuffix: 'Low',
+    reasoningEffort: 'low',
+    // Keep existing production limits while making the per-task knob clear.
+    maxOutputTokens: { lesson: 5000, test: 5000 },
+    promptCacheKey: 'translation-grading-v3:baseline',
+    promptCacheMode: 'automatic',
+    profileVersion: 'translation-grading-v3:baseline',
+  }),
+  candidate: defineTranslationGradingProfile('candidate', 'gpt56Luna', {
+    labelSuffix: 'High',
+    reasoningEffort: 'high',
+    maxOutputTokens: { lesson: 8000, test: 8000 },
+    promptCacheKey: 'translation-grading-v3:candidate',
+    promptCacheMode: 'explicit',
+    profileVersion: 'translation-grading-v3:candidate',
+  }),
+} as const satisfies Record<string, TranslationGradingProfileDefinition>;
+
+export type TranslationGradingProfileId = keyof typeof TRANSLATION_GRADING_PROFILES;
+export type TranslationGradingProfile = (typeof TRANSLATION_GRADING_PROFILES)[TranslationGradingProfileId];
+
+export const getTranslationGradingProfile = (key: TranslationGradingProfileId): TranslationGradingProfile =>
   TRANSLATION_GRADING_PROFILES[key];
+
+/** Production switches are policy, not call-site conditionals. */
+export const PRODUCTION_TRANSLATION_POLICY = {
+  lesson: 'baseline',
+  test: 'baseline',
+} as const satisfies Record<TranslationGradingMode, TranslationGradingProfileId>;
+
+/** The evaluation workspace renders and runs these registered profiles. */
+export const EVALUATION_TRANSLATION_PROFILE_IDS = [
+  'baseline',
+  'candidate',
+] as const satisfies readonly TranslationGradingProfileId[];
 
 interface RawUsage {
   input_tokens?: unknown;
@@ -229,11 +277,11 @@ export function calculateTokenUsageCost(tokens: TokenUsage, pricing: OpenAIModel
   };
 }
 
-export function calculateOpenAICost(usage: unknown, pricing: OpenAIModelPricing): CostBreakdown {
+function calculateOpenAICost(usage: unknown, pricing: OpenAIModelPricing): CostBreakdown {
   return calculateTokenUsageCost(normalizeOpenAIUsage(usage), pricing);
 }
 
-export function calculateProfileCost(usage: unknown, profile: OpenAIModelProfile): CostBreakdown {
+export function calculateProfileCost(usage: unknown, profile: TranslationGradingProfileDefinition): CostBreakdown {
   return calculateOpenAICost(usage, profile.pricing);
 }
 

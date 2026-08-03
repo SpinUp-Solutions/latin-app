@@ -227,6 +227,8 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
         <TranslationGradingExercise
           exercise={renderedContent as TranslationGradingExerciseType}
           onComplete={onComplete}
+          runtimeMode={mode}
+          initialAnswer={initialAnswer}
         />
       );
 

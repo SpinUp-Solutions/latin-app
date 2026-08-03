@@ -48,6 +48,7 @@ export const EXERCISE_ANSWER_SCHEMAS = {
       answers: z.record(z.string(), z.string()),
     })
     .strict(),
+  'translation-grading': z.object({ type: z.literal('translation-grading'), translations: stringArray }).strict(),
   'sentence-diagramming': z
     .object({
       type: z.literal('sentence-diagramming'),

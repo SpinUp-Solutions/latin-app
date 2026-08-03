@@ -8,6 +8,7 @@ const mockReplace = jest.fn();
 const mockBack = jest.fn();
 const mockStartAttempt = jest.fn();
 const mockSaveAnswers = jest.fn();
+const mockGradeTranslation = jest.fn();
 const mockSubmitAttempt = jest.fn();
 const mockUseGetStudentDashboardQuery = jest.fn();
 const mockUseGetStudentMockDetailQuery = jest.fn();
@@ -38,6 +39,7 @@ jest.mock('@/src/store/api/mockTestApi', () => ({
 jest.mock('@/src/store/api/testApi', () => ({
   useStartTestAttemptMutation: () => [mockStartAttempt, { isLoading: false }],
   useSaveTestAttemptAnswersMutation: () => [mockSaveAnswers],
+  useGradeTestTranslationMutation: () => [mockGradeTranslation, { isLoading: false }],
   useSubmitTestAttemptMutation: () => [mockSubmitAttempt, { isLoading: false }],
 }));
 

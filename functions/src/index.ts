@@ -179,7 +179,7 @@ export const gradeTranslationFn = onCall(
 
       console.log(`[gradeTranslationFn] ✅ Completed in ${elapsed}ms`);
       console.log(`[gradeTranslationFn] Model used: ${result.model}`);
-      console.log(`[gradeTranslationFn] Success: ${result.success}, Grade: ${result.data?.grade}`);
+      console.log(`[gradeTranslationFn] Success: ${result.success}, Feedback: ${result.data?.feedbackLevel}`);
       console.log(`[gradeTranslationFn] ========================================`);
 
       return result;

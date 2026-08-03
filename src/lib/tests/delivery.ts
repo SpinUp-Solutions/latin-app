@@ -7,7 +7,12 @@ import type {
 import type { ListeningPassageExercise } from '@/src/types/exercises/listening-passage';
 import type { EmphasisContent, TableContent, TextContent } from '@/src/types/content';
 import type { Page, RenderableContentItem } from '@/src/types/page';
-import type { StudentTestDelivery, TestAttemptDeliveryState, TestVersion } from '@/src/types/test';
+import type {
+  StudentTestDelivery,
+  TestAttemptDeliveryState,
+  TestTranslationGrades,
+  TestVersion,
+} from '@/src/types/test';
 import type { VocabularyContent, VocabularyPoolContent } from '@/src/types/vocabulary';
 import type { TableData } from '@/src/components/ui/lesson/conjugation-table';
 import {
@@ -20,7 +25,14 @@ import type { ExerciseAnswer } from '@/src/types/runtime-mode';
 import type { GeneratedWordLoader } from './generated-exercises';
 import { resolveGeneratedExerciseItems } from './generated-exercises';
 import type { GeneratedTranslationItem } from '@/src/utils/exercises/generatedTranslationExercise';
-import { gradeExercise, maxPointsFor, type ExerciseScore, type ResolvedGeneratedItem } from './grading';
+import {
+  gradeExercise,
+  gradeTranslationAssessment,
+  maxPointsFor,
+  type ExerciseScore,
+  type ResolvedGeneratedItem,
+} from './grading';
+import { parseExerciseAnswer } from './answer-schemas';
 import type { VocabularyPoolLoader } from './vocabulary-pool-loader.server';
 
 export interface FrozenTestDeliveryState extends TestAttemptDeliveryState {
@@ -291,6 +303,19 @@ function projectGeneratedFormIdentificationExercise(exercise: ExerciseOfType<'ge
   });
 }
 
+function projectTranslationGradingExercise(exercise: ExerciseOfType<'translation-grading'>) {
+  return compact({
+    ...projectExerciseBase(exercise),
+    translationDirection: exercise.translationDirection,
+    data: {
+      items: exercise.data.items.map(item => ({
+        latinText: item.latinText,
+        instructions: item.instructions,
+      })),
+    },
+  });
+}
+
 function sanitizeExercise(exercise: Exercise): Record<string, unknown> {
   switch (exercise.type) {
     case 'matching':
@@ -315,6 +340,8 @@ function sanitizeExercise(exercise: Exercise): Record<string, unknown> {
       return projectGeneratedTranslationExercise(exercise);
     case 'generated-form-identification':
       return projectGeneratedFormIdentificationExercise(exercise);
+    case 'translation-grading':
+      return projectTranslationGradingExercise(exercise);
     default:
       throw new Error(`Exercise type ${exercise.type} is not eligible for test delivery`);
   }
@@ -454,7 +481,8 @@ export function sanitizeTestDeliveryState(state: FrozenTestDeliveryState): Stude
 
 export function gradeFrozenTestDelivery(
   state: FrozenTestDeliveryState,
-  answers: Record<string, ExerciseAnswer | unknown>
+  answers: Record<string, ExerciseAnswer | unknown>,
+  translationGrades: TestTranslationGrades = {}
 ): FrozenDeliveryScore {
   const exerciseResults: GradedExerciseResult[] = [];
 
@@ -469,7 +497,9 @@ export function gradeFrozenTestDelivery(
       const score =
         rawAnswer === undefined
           ? { awardedPoints: 0, maxPoints: maxPointsFor(exercise) }
-          : gradeExercise({ exercise, resolvedItems: state.resolvedExercises[exercise.id]?.items }, rawAnswer);
+          : exercise.type === 'translation-grading'
+            ? gradeSavedTranslationExercise(exercise, rawAnswer, translationGrades[exercise.id] ?? {})
+            : gradeExercise({ exercise, resolvedItems: state.resolvedExercises[exercise.id]?.items }, rawAnswer);
 
       exerciseResults.push({ exerciseId: exercise.id, title: exercise.title || exercise.type, ...score });
     }
@@ -480,4 +510,22 @@ export function gradeFrozenTestDelivery(
     maxPoints: exerciseResults.reduce((total, result) => total + result.maxPoints, 0),
     exerciseResults,
   };
+}
+
+function gradeSavedTranslationExercise(
+  exercise: ExerciseOfType<'translation-grading'>,
+  rawAnswer: unknown,
+  grades: TestTranslationGrades[string]
+): ExerciseScore {
+  const answer = parseExerciseAnswer(rawAnswer);
+  if (answer.type !== exercise.type) {
+    throw new Error(`Answer type ${answer.type} does not match exercise type ${exercise.type}`);
+  }
+
+  const scores = exercise.data.items.map((_, index) => {
+    const userTranslation = answer.translations[index]?.trim() ?? '';
+    const savedGrade = grades[String(index)];
+    return userTranslation && savedGrade?.translation === userTranslation ? savedGrade.score : 0;
+  });
+  return gradeTranslationAssessment(exercise, scores);
 }

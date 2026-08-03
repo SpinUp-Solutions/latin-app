@@ -1,6 +1,6 @@
 import type { DocumentSnapshot, Firestore } from 'firebase-admin/firestore';
+import { AI_EVALUATION_CASES_COLLECTION } from '../../../shared/constants/firestore';
 import {
-  AI_EVALUATION_CASES_COLLECTION,
   evaluationCaseIdSchema,
   evaluationCaseInputSchema,
   type EvaluationCase,
@@ -31,6 +31,7 @@ const parseCaseSnapshot = (snapshot: DocumentSnapshot): EvaluationCase => {
     direction: data?.direction,
     sourceText: data?.sourceText,
     answers: data?.answers,
+    modes: data?.modes,
   });
   const metadata = data as Partial<EvaluationCase> | undefined;
   if (!parsed.success || !metadata?.createdAt || !metadata.createdBy || !metadata.updatedAt || !metadata.updatedBy) {

@@ -4,21 +4,20 @@ import { isValidTokenUsage, parseOpenAIUsage } from '../../../shared/openai/mode
 import type { CostBreakdown, TokenUsage } from '../../../shared/openai/types';
 import {
   parseTranslationGradingOutput,
+  type TestTranslationGradingOutput,
+  type TranslationGradingMode,
   type TranslationGradingOutput,
 } from '../../../shared/openai/translation-grading';
 import { AI_EVALUATION_RESULT_CACHE_COLLECTION } from '../../../shared/constants/firestore';
 
-export { createEvaluationCacheKey } from './cache-key';
-export type { EvaluationCacheKeyInput } from './cache-key';
-
-export const AI_EVALUATION_CACHE_RETENTION_DAYS = 30;
-export const AI_EVALUATION_CACHE_RETENTION_MS = AI_EVALUATION_CACHE_RETENTION_DAYS * 24 * 60 * 60 * 1_000;
+const AI_EVALUATION_CACHE_RETENTION_MS = 30 * 24 * 60 * 60 * 1_000;
 
 export interface CachedEvaluationResult {
   cacheKey: string;
+  gradingMode: TranslationGradingMode;
   model: string;
   actualModel: string;
-  output: TranslationGradingOutput;
+  output: TranslationGradingOutput | TestTranslationGradingOutput;
   usage: TokenUsage;
   cost: CostBreakdown;
   latencyMs: number;
@@ -57,6 +56,7 @@ export const getEvaluationCacheExpiry = (now = Date.now()): Timestamp =>
 
 export async function getCachedEvaluationResult(
   cacheKey: string,
+  gradingMode: TranslationGradingMode,
   db: Firestore
 ): Promise<CachedEvaluationResult | null> {
   const snapshot = await cacheCollection(db).doc(cacheKey).get();
@@ -83,9 +83,10 @@ export async function getCachedEvaluationResult(
     },
     output_tokens_details: { reasoning_tokens: usage?.reasoningTokens ?? 0 },
   });
-  let output: TranslationGradingOutput;
+  let output: TranslationGradingOutput | TestTranslationGradingOutput;
   try {
-    output = parseTranslationGradingOutput(data?.output);
+    if (data?.gradingMode !== gradingMode) return null;
+    output = parseTranslationGradingOutput(gradingMode, data?.output);
   } catch {
     return null;
   }
@@ -105,6 +106,7 @@ export async function getCachedEvaluationResult(
 
   return {
     cacheKey,
+    gradingMode,
     model: data.model,
     actualModel: data.actualModel,
     output,
@@ -120,7 +122,7 @@ export async function setCachedEvaluationResult(result: CachedEvaluationResult, 
   if (!isValidTokenUsage(result.usage) || !isValidCost(result.cost, result.usage)) {
     throw new Error('Cannot cache an evaluation without measured, consistent usage and cost');
   }
-  parseTranslationGradingOutput(result.output);
+  parseTranslationGradingOutput(result.gradingMode, result.output);
   await cacheCollection(db)
     .doc(result.cacheKey)
     .set({
