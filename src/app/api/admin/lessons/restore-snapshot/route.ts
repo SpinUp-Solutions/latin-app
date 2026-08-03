@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb, adminStorage } from '@/src/services/firebase-admin';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
-import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
+import { isLessonDocumentData, normalizeLessonDocumentForWrite } from '@/src/lib/learning-units/domain';
 import { PracticeCategoryError, practiceCategoryService } from '@/src/lib/practice-categories/service';
 import {
   assertLegacyNormalPlacementChangeAllowedInTransaction,
@@ -71,15 +71,8 @@ function isSnapshotLesson(value: unknown): value is SnapshotLesson {
 }
 
 async function restoreSnapshotLesson(lesson: SnapshotLesson, actorId: string) {
-  const {
-    id,
-    practiceCategorySelections: _practiceCategorySelections,
-    practiceCategoryIds: _practiceCategoryIds,
-    practiceCategories: _practiceCategories,
-    practiceCategoryPlacements: _practiceCategoryPlacements,
-    ...lessonData
-  } = lesson;
-  lessonData.kind = 'lesson';
+  const { id } = lesson;
+  const lessonData = normalizeLessonDocumentForWrite(lesson, id);
   const lessonRef = adminDb.collection('lessons').doc(id);
 
   await adminDb.runTransaction(async transaction => {

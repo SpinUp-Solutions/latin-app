@@ -14,6 +14,7 @@ import {
   assertLegacyNormalPlacementChangeAllowedInTransaction,
   assertPlacedLessonReplacementAllowedInTransaction,
 } from '@/src/lib/learning-units/learning-path-service';
+import { lessonAuthoringInputSchema, lessonUnitDocumentSchema } from '@/src/lib/learning-units/schemas';
 
 interface RouteParams {
   params: Promise<{
@@ -66,9 +67,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       if (rawLesson.showWordSearch !== undefined && typeof rawLesson.showWordSearch !== 'boolean') {
         throw new RecoveryRouteError('showWordSearch must be a boolean', 400);
       }
-      if (!rawLesson?.id || !rawLesson.title || !rawLesson.type) {
-        throw new RecoveryRouteError('Recovery lesson ID, title, and type are required', 400);
-      }
       const fallbackCategoryIds = rawLesson.practiceCategories?.map(category => category.id);
       const practiceCategorySelections = optionalPracticeCategorySelectionsSchema.parse(
         rawLesson.practiceCategorySelections
@@ -76,13 +74,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       const practiceCategoryIds = optionalPracticeCategoryIdsSchema.parse(
         rawLesson.practiceCategoryIds ?? fallbackCategoryIds
       );
-      const {
-        practiceCategorySelections: _practiceCategorySelections,
-        practiceCategoryIds: _practiceCategoryIds,
-        practiceCategories: _practiceCategories,
-        practiceCategoryPlacements: _practiceCategoryPlacements,
-        ...lesson
-      } = rawLesson;
+      const lesson = lessonAuthoringInputSchema.parse(rawLesson);
       const lessonRef = adminDb.collection('lessons').doc(lesson.id);
       const existingLessonDoc = await transaction.get(lessonRef);
       const lessonExists = existingLessonDoc.exists;
@@ -92,43 +84,45 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
       const { totalPages, totalItems, totalExercises } = getLessonContentCounts(lesson);
       const now = new Date().toISOString();
-      const lessonData = lessonExists
-        ? {
-            ...lesson,
-            kind: 'lesson' as const,
-            totalPages,
-            totalItems,
-            totalExercises,
-            createdAt: existingLesson?.createdAt || now,
-            createdBy: existingLesson?.createdBy || user.uid,
-            updatedAt: now,
-            updatedBy: user.uid,
-            version: (existingLesson?.version || 0) + 1,
-            showWordSearch:
-              rawLesson.showWordSearch ??
-              (typeof existingLesson?.showWordSearch === 'boolean' ? existingLesson.showWordSearch : true),
-            isLive: existingLesson?.isLive ?? false,
-            liveOrder: existingLesson?.liveOrder ?? null,
-            publishedAt: existingLesson?.publishedAt || null,
-            publishedBy: existingLesson?.publishedBy || null,
-          }
-        : {
-            ...lesson,
-            kind: 'lesson' as const,
-            totalPages,
-            totalItems,
-            totalExercises,
-            createdAt: now,
-            createdBy: user.uid,
-            updatedAt: now,
-            updatedBy: user.uid,
-            version: 1,
-            showWordSearch: rawLesson.showWordSearch ?? false,
-            isLive: false,
-            liveOrder: null,
-            publishedAt: null,
-            publishedBy: null,
-          };
+      const lessonData = lessonUnitDocumentSchema.parse(
+        lessonExists
+          ? {
+              ...lesson,
+              kind: 'lesson' as const,
+              totalPages,
+              totalItems,
+              totalExercises,
+              createdAt: existingLesson?.createdAt || now,
+              createdBy: existingLesson?.createdBy || user.uid,
+              updatedAt: now,
+              updatedBy: user.uid,
+              version: (existingLesson?.version || 0) + 1,
+              showWordSearch:
+                rawLesson.showWordSearch ??
+                (typeof existingLesson?.showWordSearch === 'boolean' ? existingLesson.showWordSearch : true),
+              isLive: existingLesson?.isLive ?? false,
+              liveOrder: existingLesson?.liveOrder ?? null,
+              publishedAt: existingLesson?.publishedAt || null,
+              publishedBy: existingLesson?.publishedBy || null,
+            }
+          : {
+              ...lesson,
+              kind: 'lesson' as const,
+              totalPages,
+              totalItems,
+              totalExercises,
+              createdAt: now,
+              createdBy: user.uid,
+              updatedAt: now,
+              updatedBy: user.uid,
+              version: 1,
+              showWordSearch: rawLesson.showWordSearch ?? false,
+              isLive: false,
+              liveOrder: null,
+              publishedAt: null,
+              publishedBy: null,
+            }
+      );
 
       await assertLegacyNormalPlacementChangeAllowedInTransaction(
         transaction,

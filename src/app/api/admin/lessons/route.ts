@@ -15,6 +15,7 @@ import {
   assertLegacyNormalPlacementChangeAllowedInTransaction,
   assertPlacedLessonReplacementAllowedInTransaction,
 } from '@/src/lib/learning-units/learning-path-service';
+import { lessonAuthoringInputSchema, lessonUnitDocumentSchema } from '@/src/lib/learning-units/schemas';
 
 const LESSON_SUMMARY_FIELDS = [
   'title',
@@ -98,7 +99,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const rawLesson = (await request.json()) as Lesson;
+    const rawLesson = await request.json();
     if (!isLessonDocumentData(rawLesson)) {
       return NextResponse.json({ error: 'Only lesson documents can use the lesson endpoint' }, { status: 400 });
     }
@@ -109,21 +110,11 @@ export async function POST(request: NextRequest) {
       rawLesson.practiceCategorySelections
     );
     const practiceCategoryIds = optionalPracticeCategoryIdsSchema.parse(rawLesson.practiceCategoryIds);
-    const {
-      practiceCategorySelections: _practiceCategorySelections,
-      practiceCategoryIds: _practiceCategoryIds,
-      practiceCategories: _practiceCategories,
-      practiceCategoryPlacements: _practiceCategoryPlacements,
-      ...lesson
-    } = rawLesson;
-
-    if (!lesson.id || !lesson.title || !lesson.type) {
-      return NextResponse.json({ error: 'Lesson ID, title, and type are required' }, { status: 400 });
-    }
+    const lesson = lessonAuthoringInputSchema.parse(rawLesson);
 
     const { totalPages, totalItems, totalExercises } = getLessonContentCounts(lesson);
     const now = new Date().toISOString();
-    const lessonData = {
+    const lessonData = lessonUnitDocumentSchema.parse({
       ...lesson,
       kind: 'lesson' as const,
       totalPages,
@@ -139,7 +130,7 @@ export async function POST(request: NextRequest) {
       liveOrder: null,
       publishedAt: null,
       publishedBy: null,
-    };
+    });
 
     const lessonRef = adminDb.collection('lessons').doc(lesson.id);
     const assignments = await adminDb.runTransaction(async transaction => {
@@ -184,7 +175,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const rawLesson = (await request.json()) as Lesson;
+    const rawLesson = await request.json();
     if (!isLessonDocumentData(rawLesson)) {
       return NextResponse.json({ error: 'Only lesson documents can use the lesson endpoint' }, { status: 400 });
     }
@@ -195,17 +186,7 @@ export async function PUT(request: NextRequest) {
       rawLesson.practiceCategorySelections
     );
     const practiceCategoryIds = optionalPracticeCategoryIdsSchema.parse(rawLesson.practiceCategoryIds);
-    const {
-      practiceCategorySelections: _practiceCategorySelections,
-      practiceCategoryIds: _practiceCategoryIds,
-      practiceCategories: _practiceCategories,
-      practiceCategoryPlacements: _practiceCategoryPlacements,
-      ...lesson
-    } = rawLesson;
-
-    if (!lesson.id || !lesson.title || !lesson.type) {
-      return NextResponse.json({ error: 'Lesson ID, title, and type are required' }, { status: 400 });
-    }
+    const lesson = lessonAuthoringInputSchema.parse(rawLesson);
 
     const { totalPages, totalItems, totalExercises } = getLessonContentCounts(lesson);
     const lessonRef = adminDb.collection('lessons').doc(lesson.id);
@@ -237,7 +218,7 @@ export async function PUT(request: NextRequest) {
         }
       }
 
-      const updatedLessonData = {
+      const updatedLessonData = lessonUnitDocumentSchema.parse({
         ...lesson,
         kind: 'lesson' as const,
         totalPages,
@@ -255,7 +236,7 @@ export async function PUT(request: NextRequest) {
         liveOrder: existingLesson?.liveOrder ?? null,
         publishedAt: existingLesson?.publishedAt || null,
         publishedBy: existingLesson?.publishedBy || null,
-      };
+      });
       const assignments = await practiceCategoryService.reconcileLessonCategoriesInTransaction(transaction, {
         lessonId: lesson.id,
         lesson: updatedLessonData,
