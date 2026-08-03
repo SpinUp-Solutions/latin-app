@@ -7,11 +7,11 @@
 
 import type { CostBreakdown, TokenUsage, TranslationGradingMode } from './types';
 
-export const OPENAI_PRICING_VERSION = '2026-08-01';
-export const OPENAI_PRICING_SOURCE = 'https://developers.openai.com/api/docs/pricing';
-export type OpenAIReasoningEffort = 'low' | 'high';
+const OPENAI_PRICING_VERSION = '2026-08-01';
+const OPENAI_PRICING_SOURCE = 'https://developers.openai.com/api/docs/pricing';
+type OpenAIReasoningEffort = 'low' | 'high';
 
-export interface OpenAIModelPricing {
+interface OpenAIModelPricing {
   inputPerMillion: number;
   cachedInputPerMillion: number;
   cacheWritePerMillion: number;
@@ -59,7 +59,7 @@ type OpenAIModelId = keyof typeof OPENAI_MODEL_CATALOG;
  * A run profile is deliberately separate from the model catalog. Profiles
  * capture how we call a model; tasks own prompts and output schemas.
  */
-export interface TranslationGradingProfileDefinition {
+interface TranslationGradingProfileDefinition {
   key: string;
   modelId: OpenAIModelId;
   model: string;
@@ -277,7 +277,7 @@ export function calculateTokenUsageCost(tokens: TokenUsage, pricing: OpenAIModel
   };
 }
 
-export function calculateOpenAICost(usage: unknown, pricing: OpenAIModelPricing): CostBreakdown {
+function calculateOpenAICost(usage: unknown, pricing: OpenAIModelPricing): CostBreakdown {
   return calculateTokenUsageCost(normalizeOpenAIUsage(usage), pricing);
 }
 

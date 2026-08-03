@@ -17,12 +17,8 @@ import {
   type TranslationGradingProfileId,
 } from '../../../shared/openai/model-registry';
 import type { CostBreakdown, TokenUsage } from '../../../shared/openai/types';
-import {
-  createEvaluationCacheKey,
-  getCachedEvaluationResult,
-  getEvaluationCacheExpiry,
-  setCachedEvaluationResult,
-} from './cache';
+import { getCachedEvaluationResult, getEvaluationCacheExpiry, setCachedEvaluationResult } from './cache';
+import { createEvaluationCacheKey } from './cache-key';
 import {
   AI_EVALUATION_SCHEMA_VERSION,
   emptyCostBreakdown,
@@ -34,7 +30,7 @@ import {
   type EvaluationRunResult,
 } from './contracts';
 
-export const MAX_CONCURRENCY = 4;
+const MAX_CONCURRENCY = 4;
 
 type ExecutionOutcome = {
   result: TranslationGradingRunResult<TranslationGradingOutput | TestTranslationGradingOutput>;

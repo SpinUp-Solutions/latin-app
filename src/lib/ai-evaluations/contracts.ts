@@ -3,7 +3,6 @@ import {
   type CostBreakdown,
   type CostMeasurementStatus,
   type TokenUsage,
-  type TranslationDirection,
   TRANSLATION_GRADING_MODES,
   type TranslationGradingMode,
 } from '../../../shared/openai/types';
@@ -12,12 +11,6 @@ import type {
   TranslationGradingOutput,
 } from '../../../shared/openai/translation-grading';
 import type { TranslationGradingProfileId } from '../../../shared/openai/model-registry';
-
-export {
-  AI_EVALUATION_CASES_COLLECTION,
-  AI_EVALUATION_RESULT_CACHE_COLLECTION,
-  AI_EVALUATION_RUN_THROTTLES_COLLECTION,
-} from '../../../shared/constants/firestore';
 export const AI_EVALUATION_SCHEMA_VERSION = 'ai-translation-evaluation-v2';
 
 const CASE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
@@ -25,7 +18,7 @@ const ANSWER_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/;
 export const AI_EVALUATION_MAX_ANSWERS = 20;
 
 export const evaluationCaseIdSchema = z.string().regex(CASE_ID_PATTERN, 'Invalid evaluation case id');
-export const evaluationAnswerIdSchema = z.string().regex(ANSWER_ID_PATTERN, 'Invalid answer id');
+const evaluationAnswerIdSchema = z.string().regex(ANSWER_ID_PATTERN, 'Invalid answer id');
 
 const titleSchema = z.string().trim().min(1, 'Title is required').max(120, 'Title must be 120 characters or fewer');
 const sourceTextSchema = z
@@ -183,8 +176,6 @@ export type EvaluationCaseInput = z.infer<typeof evaluationCaseInputSchema>;
 export type EvaluationFunctionRunRequest = z.infer<typeof evaluationFunctionRunRequestSchema>;
 export type EvaluationFunctionSaveRequest = z.infer<typeof evaluationFunctionSaveRequestSchema>;
 export type EvaluationFunctionDeleteRequest = z.infer<typeof evaluationFunctionDeleteRequestSchema>;
-export type EvaluationDirection = TranslationDirection;
-
 export const emptyTokenUsage = (): EvaluationUsage => ({
   promptTokens: 0,
   completionTokens: 0,

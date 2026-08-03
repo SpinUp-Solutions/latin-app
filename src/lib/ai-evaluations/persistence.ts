@@ -1,6 +1,6 @@
 import type { DocumentSnapshot, Firestore } from 'firebase-admin/firestore';
+import { AI_EVALUATION_CASES_COLLECTION } from '../../../shared/constants/firestore';
 import {
-  AI_EVALUATION_CASES_COLLECTION,
   evaluationCaseIdSchema,
   evaluationCaseInputSchema,
   type EvaluationCase,

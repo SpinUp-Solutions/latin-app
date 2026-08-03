@@ -10,11 +10,7 @@ import {
 } from '../../../shared/openai/translation-grading';
 import { AI_EVALUATION_RESULT_CACHE_COLLECTION } from '../../../shared/constants/firestore';
 
-export { createEvaluationCacheKey } from './cache-key';
-export type { EvaluationCacheKeyInput } from './cache-key';
-
-export const AI_EVALUATION_CACHE_RETENTION_DAYS = 30;
-export const AI_EVALUATION_CACHE_RETENTION_MS = AI_EVALUATION_CACHE_RETENTION_DAYS * 24 * 60 * 60 * 1_000;
+const AI_EVALUATION_CACHE_RETENTION_MS = 30 * 24 * 60 * 60 * 1_000;
 
 export interface CachedEvaluationResult {
   cacheKey: string;

@@ -25,7 +25,6 @@ export type {
   TestTranslationGradingOutput,
   TranslationGradingMode,
   TranslationGradingOutput,
-  TranslationGradingOutputByMode,
   TranslationGradingRunFailure,
   TranslationGradingRunResult,
   TranslationGradingRunSuccess,

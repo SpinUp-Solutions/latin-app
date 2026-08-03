@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
-import { AI_EVALUATION_SCHEMA_VERSION, type EvaluationDirection } from './contracts';
+import { AI_EVALUATION_SCHEMA_VERSION } from './contracts';
+import type { TranslationDirection } from '../../../shared/openai/types';
 import type { TranslationGradingMode } from '../../../shared/openai/translation-grading';
 
 export interface EvaluationCacheKeyInput {
-  direction: EvaluationDirection;
+  direction: TranslationDirection;
   sourceText: string;
   answerText: string;
   gradingMode: TranslationGradingMode;

@@ -5,11 +5,13 @@ import { runEvaluationCase } from '@/src/lib/ai-evaluations/execution';
 import type { EvaluationCase } from '@/src/lib/ai-evaluations/contracts';
 
 jest.mock('@/shared/openai/translation-grading', () => ({ translationGrader: { grade: jest.fn() } }));
-jest.mock('@/src/lib/ai-evaluations/cache', () => ({
+jest.mock('@/src/lib/ai-evaluations/cache-key', () => ({
   createEvaluationCacheKey: jest.fn(
     (input: { model: string; answerText: string; gradingMode: string; profileId: string }) =>
       `${input.gradingMode}:${input.profileId}:${input.model}:${input.answerText}`
   ),
+}));
+jest.mock('@/src/lib/ai-evaluations/cache', () => ({
   getCachedEvaluationResult: jest.fn(),
   getEvaluationCacheExpiry: jest.fn(() => ({ toMillis: () => Date.now() + 30 * 24 * 60 * 60 * 1_000 })),
   setCachedEvaluationResult: jest.fn(),
