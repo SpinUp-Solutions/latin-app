@@ -1,8 +1,14 @@
+import { EVALUATION_TRANSLATION_PROFILE_IDS } from '../../../shared/openai/model-registry';
+import { TRANSLATION_GRADING_MODES } from '../../../shared/openai/types';
+import { AI_EVALUATION_MAX_ANSWERS } from './contracts';
+
 export const AI_EVALUATION_RUN_WINDOW_MS = 10 * 60 * 1_000;
 export const AI_EVALUATION_RUN_LIMIT = 10;
 export const AI_EVALUATION_FORCE_REFRESH_LIMIT = 3;
 export const AI_EVALUATION_CELL_LIMIT = 200;
 export const AI_EVALUATION_FORCE_REFRESH_CELL_LIMIT = 80;
+export const AI_EVALUATION_MAX_CELLS_PER_RUN =
+  AI_EVALUATION_MAX_ANSWERS * TRANSLATION_GRADING_MODES.length * EVALUATION_TRANSLATION_PROFILE_IDS.length;
 
 export interface EvaluationThrottleState {
   windowStartedAtMs: number;
@@ -25,8 +31,8 @@ export function decideEvaluationThrottle(
   forceRefresh: boolean,
   requestedCells = 1
 ): ThrottleDecision {
-  if (!Number.isSafeInteger(requestedCells) || requestedCells < 1 || requestedCells > 40) {
-    throw new Error('requestedCells must be an integer between 1 and 40');
+  if (!Number.isSafeInteger(requestedCells) || requestedCells < 1 || requestedCells > AI_EVALUATION_MAX_CELLS_PER_RUN) {
+    throw new Error(`requestedCells must be an integer between 1 and ${AI_EVALUATION_MAX_CELLS_PER_RUN}`);
   }
   const currentStart =
     typeof current?.windowStartedAtMs === 'number' && Number.isFinite(current.windowStartedAtMs)

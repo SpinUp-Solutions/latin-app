@@ -149,6 +149,24 @@ export function useBufferedAttemptAnswers() {
     [clearSaveTimer, flushPendingAnswers]
   );
 
+  const adoptPersistedAnswer = useCallback((event: ExerciseAnswerEvent) => {
+    const activeAttempt = activeAttemptRef.current;
+    if (!activeAttempt) return;
+
+    setAnswers(current => ({ ...current, [event.exerciseId]: event.answer }));
+    const queued = pendingAnswersRef.current;
+    if (queued?.scope === activeAttempt.scope && event.exerciseId in queued.answers) {
+      const remaining = { ...queued.answers };
+      delete remaining[event.exerciseId];
+      pendingAnswersRef.current =
+        Object.keys(remaining).length > 0 ? { scope: activeAttempt.scope, answers: remaining } : null;
+    }
+    if (!pendingAnswersRef.current && !saveInFlightRef.current) {
+      setSaveError(null);
+      setSaveStatus('saved');
+    }
+  }, []);
+
   useEffect(() => {
     const protectUnsavedAnswers = (event: BeforeUnloadEvent) => {
       if (!hasUnsavedAnswers()) return;
@@ -170,6 +188,7 @@ export function useBufferedAttemptAnswers() {
 
   return {
     activateAttempt,
+    adoptPersistedAnswer,
     answers,
     flushPendingAnswers,
     hasUnsavedAnswers,

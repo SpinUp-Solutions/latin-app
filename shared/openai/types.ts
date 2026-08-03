@@ -1,8 +1,6 @@
 import type { VocabularyWord } from '../types/vocabulary/schemas';
 import type { PartOfSpeech } from '../types/vocabulary/schemas/enums';
 
-export type AIProvider = 'openai';
-
 export interface AIAutocompleteRequest {
   word: string;
   part_of_speech: PartOfSpeech;
@@ -85,14 +83,15 @@ export interface AIAutocompleteResponse {
 export type OpenAIStructuredOutput = Partial<VocabularyWord>;
 
 export type TranslationDirection = 'latin-to-english' | 'english-to-latin';
-export const LETTER_GRADES = ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D', 'D-', 'F'] as const;
-export type LetterGrade = (typeof LETTER_GRADES)[number];
+export const TRANSLATION_GRADING_MODES = ['lesson', 'test'] as const;
+export type TranslationGradingMode = (typeof TRANSLATION_GRADING_MODES)[number];
+export const TRANSLATION_FEEDBACK_LEVELS = ['Excellent', 'Very good', 'Good', 'Adequate', 'Not quite right'] as const;
+export type TranslationFeedbackLevel = (typeof TRANSLATION_FEEDBACK_LEVELS)[number];
 
 export interface TranslationGradingRequest {
   sourceText: string;
   userTranslation: string;
   direction: TranslationDirection;
-  provider?: AIProvider;
 }
 
 export interface TranslationGradingResponse<T = unknown> {

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { DocumentSnapshot, Firestore, Transaction } from 'firebase-admin/firestore';
+import type { DocumentReference, DocumentSnapshot, Firestore, Transaction } from 'firebase-admin/firestore';
 import {
   DEFAULT_LEARNING_PATH_ID,
   LEARNING_PATHS_COLLECTION,
@@ -29,6 +29,7 @@ import type {
   TestAttemptOriginSummary,
   TestAttemptResultSummary,
   TestAttemptSession,
+  TestTranslationItemGrade,
   TestVersion,
 } from '@/src/types/test';
 import { isAnswerForExercise, parseExerciseAnswer } from './answer-schemas';
@@ -39,6 +40,13 @@ import {
   type FrozenDeliveryScore,
   type FrozenTestDeliveryState,
 } from './delivery';
+import {
+  testTranslationGradingOutputSchema,
+  translationGrader,
+  type TestTranslationGradingOutput,
+} from '@/shared/openai/translation-grading';
+import type { TranslationGradingRequest } from '@/shared/openai/types';
+import { richTextToPlainText } from '@/src/utils/exercises/helpers';
 import { TEST_VERSION_SUMMARY_FIELDS, selectLeastUsedTestVersion, validateTestAssignmentGraph } from './domain';
 import { TestServiceError } from './errors';
 import { estimateFirestoreDocumentBytes } from './firestore-size';
@@ -57,6 +65,7 @@ import {
 } from './persistence';
 import {
   saveTestAttemptAnswersInputSchema,
+  gradeTestTranslationInputSchema,
   startTestAttemptInputSchema,
   submittedAttemptResultProjectionSchema,
   submittedAttemptTrendProjectionSchema,
@@ -64,6 +73,7 @@ import {
   testAttemptDocumentSchema,
   testAttemptSessionDocumentSchema,
   type SaveTestAttemptAnswersInput,
+  type GradeTestTranslationInput,
   type StartTestAttemptInput,
 } from './schemas';
 
@@ -74,6 +84,8 @@ export const MAX_TEST_ATTEMPT_DOCUMENT_BYTES = 900 * 1024;
  * remaining orders of magnitude below the smallest meaningful score gap.
  */
 export const PASSING_THRESHOLD_TOLERANCE = 1e-9;
+
+type TestTranslationGrader = (request: TranslationGradingRequest) => Promise<TestTranslationGradingOutput>;
 
 const originId = (origin: TestAttemptOrigin) => (origin.kind === 'normal-test' ? origin.testId : origin.mockTestId);
 
@@ -147,11 +159,23 @@ function assertAttemptOwner(attempt: TestAttempt, studentId: string) {
   }
 }
 
+function getTranslationExerciseItem(attempt: InProgressTestAttempt, request: GradeTestTranslationInput) {
+  const exercise = attempt.deliveryState.pages.flatMap(page => page.items).find(item => item.id === request.exerciseId);
+  if (!exercise || exercise.type !== 'translation-grading') {
+    throw new TestServiceError('ATTEMPT_ANSWER_INVALID', 'This translation does not belong to the test attempt', 400);
+  }
+
+  const item = exercise.data.items[request.itemIndex];
+  if (!item) throw new TestServiceError('ATTEMPT_ANSWER_INVALID', 'This translation item does not exist', 400);
+  return { exercise, item };
+}
+
 export interface TestAttemptServiceOptions {
   random?: () => number;
   loadGeneratedWords?: GeneratedWordLoader;
   loadVocabularyPool?: VocabularyPoolLoader;
   maxAttemptDocumentBytes?: number;
+  gradeTestTranslation?: TestTranslationGrader;
 }
 
 export class TestAttemptService {
@@ -159,6 +183,7 @@ export class TestAttemptService {
   private readonly loadGeneratedWords: GeneratedWordLoader;
   private readonly loadVocabularyPool: VocabularyPoolLoader;
   private readonly maxAttemptDocumentBytes: number;
+  private readonly gradeTestTranslation: TestTranslationGrader;
 
   constructor(
     private readonly db: Firestore = adminDb,
@@ -169,6 +194,13 @@ export class TestAttemptService {
     this.loadGeneratedWords = options.loadGeneratedWords ?? createFirestoreGeneratedWordLoader(db);
     this.loadVocabularyPool = options.loadVocabularyPool ?? createFirestoreVocabularyPoolLoader(db);
     this.maxAttemptDocumentBytes = options.maxAttemptDocumentBytes ?? MAX_TEST_ATTEMPT_DOCUMENT_BYTES;
+    this.gradeTestTranslation =
+      options.gradeTestTranslation ??
+      (async request => {
+        const result = await translationGrader.grade('test', request);
+        if (!result.success) throw new Error(result.error);
+        return result.data;
+      });
   }
 
   private get versions() {
@@ -193,6 +225,22 @@ export class TestAttemptService {
 
   private get progress() {
     return this.db.collection(USER_PROGRESS_COLLECTION);
+  }
+
+  private async getOwnedInProgressAttempt(
+    transaction: Transaction,
+    attemptRef: DocumentReference,
+    studentId: string
+  ): Promise<InProgressTestAttempt> {
+    const attempt = parseAttemptSnapshot(await transaction.get(attemptRef));
+    assertAttemptOwner(attempt, studentId);
+    if (attempt.status !== 'in-progress') {
+      throw new TestServiceError('ATTEMPT_NOT_IN_PROGRESS', 'This test attempt has already been submitted', 409);
+    }
+    if (attempt.origin.kind === 'normal-test') {
+      await this.assertNormalTestUnlocked(transaction, studentId, attempt.origin.testId, true);
+    }
+    return attempt;
   }
 
   private submittedAttemptsQuery(studentId: string, origin: TestAttemptOrigin) {
@@ -449,6 +497,7 @@ export class TestAttemptService {
           origin,
           status: 'in-progress',
           answers: {},
+          translationGrades: {},
           deliveryState,
           startedAt: timestamp,
           updatedAt: timestamp,
@@ -482,16 +531,12 @@ export class TestAttemptService {
     const attemptRef = this.attempts.doc(attemptId);
 
     return this.db.runTransaction(async transaction => {
-      const attempt = parseAttemptSnapshot(await transaction.get(attemptRef));
-      assertAttemptOwner(attempt, studentId);
-      if (attempt.status !== 'in-progress') {
-        throw new TestServiceError('ATTEMPT_NOT_IN_PROGRESS', 'This test attempt has already been submitted', 409);
-      }
-      if (attempt.origin.kind === 'normal-test') {
-        await this.assertNormalTestUnlocked(transaction, studentId, attempt.origin.testId, true);
-      }
+      const attempt = await this.getOwnedInProgressAttempt(transaction, attemptRef, studentId);
 
       const answers = { ...attempt.answers };
+      const translationGrades = Object.fromEntries(
+        Object.entries(attempt.translationGrades).map(([exerciseId, grades]) => [exerciseId, { ...grades }])
+      );
       const itemsById = new Map(
         attempt.deliveryState.pages.flatMap(page => page.items).map(item => [item.id, item] as const)
       );
@@ -507,6 +552,7 @@ export class TestAttemptService {
         }
         if (rawAnswer === null) {
           delete answers[exerciseId];
+          delete translationGrades[exerciseId];
           continue;
         }
 
@@ -520,15 +566,89 @@ export class TestAttemptService {
           throw new TestServiceError('ATTEMPT_ANSWER_INVALID', `The committed answer must have type ${item.type}`, 400);
         }
         answers[exerciseId] = answer;
+        if (item.type === 'translation-grading') delete translationGrades[exerciseId];
       }
 
       const updated = testAttemptDocumentSchema.parse({
         ...attempt,
         answers,
+        translationGrades,
         updatedAt: this.now(),
       }) as InProgressTestAttempt;
       this.assertAttemptDocumentSize(updated);
       transaction.set(attemptRef, updated);
+      return toStudentAttempt(updated) as StudentInProgressTestAttempt;
+    });
+  }
+
+  async gradeTranslationItem(
+    attemptId: string,
+    input: unknown,
+    studentId: string
+  ): Promise<StudentInProgressTestAttempt> {
+    const request = gradeTestTranslationInputSchema.parse(input);
+    const attemptRef = this.attempts.doc(attemptId);
+
+    const gradingRequest = await this.db.runTransaction(async transaction => {
+      const attempt = await this.getOwnedInProgressAttempt(transaction, attemptRef, studentId);
+      const { exercise, item } = getTranslationExerciseItem(attempt, request);
+
+      return {
+        sourceText: richTextToPlainText(item.latinText),
+        userTranslation: request.userTranslation,
+        direction: exercise.translationDirection ?? 'latin-to-english',
+      } satisfies TranslationGradingRequest;
+    });
+
+    let gradingOutput: TestTranslationGradingOutput;
+    try {
+      gradingOutput = testTranslationGradingOutputSchema.parse(await this.gradeTestTranslation(gradingRequest));
+    } catch (error) {
+      console.error(`Could not grade translation item for attempt ${attemptId}`, error);
+      throw new TestServiceError(
+        'ATTEMPT_GRADING_UNAVAILABLE',
+        'Translation grading is temporarily unavailable. Please try checking the translation again.',
+        503
+      );
+    }
+
+    return this.db.runTransaction(async transaction => {
+      const attempt = await this.getOwnedInProgressAttempt(transaction, attemptRef, studentId);
+      const { exercise } = getTranslationExerciseItem(attempt, request);
+
+      const existingAnswer = attempt.answers[request.exerciseId];
+      const parsedExistingAnswer = existingAnswer === undefined ? null : parseExerciseAnswer(existingAnswer);
+      if (parsedExistingAnswer && parsedExistingAnswer.type !== 'translation-grading') {
+        throw new TestServiceError('ATTEMPT_ANSWER_INVALID', 'The saved translation answer has an invalid type', 400);
+      }
+      const translations = Array.from(
+        { length: exercise.data.items.length },
+        (_, index) => parsedExistingAnswer?.translations[index] ?? ''
+      );
+      translations[request.itemIndex] = request.userTranslation;
+      const grade: TestTranslationItemGrade = {
+        translation: request.userTranslation,
+        score: gradingOutput.score,
+        feedback: gradingOutput.feedback,
+      };
+      const updated = testAttemptDocumentSchema.parse({
+        ...attempt,
+        answers: {
+          ...attempt.answers,
+          [request.exerciseId]: { type: 'translation-grading', translations },
+        },
+        translationGrades: {
+          ...attempt.translationGrades,
+          [request.exerciseId]: {
+            ...attempt.translationGrades[request.exerciseId],
+            [String(request.itemIndex)]: grade,
+          },
+        },
+        updatedAt: this.now(),
+      }) as InProgressTestAttempt;
+      this.assertAttemptDocumentSize(updated);
+      transaction.set(attemptRef, updated);
+
       return toStudentAttempt(updated) as StudentInProgressTestAttempt;
     });
   }
@@ -540,7 +660,6 @@ export class TestAttemptService {
       const attempt = parseAttemptSnapshot(await transaction.get(attemptRef));
       assertAttemptOwner(attempt, studentId);
       if (attempt.status === 'submitted') {
-        // Idempotent resubmission: return the frozen result without regrading.
         return { attempt: toStudentAttempt(attempt) as StudentSubmittedTestAttempt, completionGranted: false };
       }
       if (attempt.origin.kind === 'normal-test') {
@@ -549,7 +668,11 @@ export class TestAttemptService {
 
       let frozenScore: FrozenDeliveryScore;
       try {
-        frozenScore = gradeFrozenTestDelivery(attempt.deliveryState as FrozenTestDeliveryState, attempt.answers);
+        frozenScore = gradeFrozenTestDelivery(
+          attempt.deliveryState as FrozenTestDeliveryState,
+          attempt.answers,
+          attempt.translationGrades
+        );
       } catch (error) {
         throw configurationError(`Could not grade attempt ${attempt.id} from its frozen delivery state`, error);
       }

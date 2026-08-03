@@ -322,7 +322,9 @@ export class MockTestService {
         transaction
       );
       const attempt = activeAttempt
-        ? (({ answers: _answers, ...sanitizedAttempt }) => sanitizedAttempt)(activeAttempt)
+        ? (({ answers: _answers, translationGrades: _translationGrades, ...sanitizedAttempt }) => sanitizedAttempt)(
+            activeAttempt
+          )
         : null;
       if ((!mock.isLive || mock.status !== 'active') && !attempt) {
         throw new TestServiceError('MOCK_TEST_NOT_AVAILABLE', 'Mock test is not available', 404);

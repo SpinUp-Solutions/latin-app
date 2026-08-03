@@ -10,7 +10,13 @@ import { gradeGeneratedFormIdentification, gradeMatching } from '@/src/lib/tests
 import { estimateFirestoreDocumentBytes } from '@/src/lib/tests/firestore-size';
 import { applyValueFilter } from '@/src/lib/tests/generated-word-loader.server';
 import { filterOverlappingPronounParadigms } from '@/src/utils/generated/pronounParadigmFiltering';
-import type { FillExercise, GeneratedFormIdentificationExercise, MatchingExercise } from '@/src/types/exercises';
+import type {
+  FillExercise,
+  Exercise,
+  GeneratedFormIdentificationExercise,
+  MatchingExercise,
+  TranslationGradingExercise,
+} from '@/src/types/exercises';
 import type {
   FormIdentificationItem,
   MultiAnswerFormIdentificationItem,
@@ -39,7 +45,7 @@ const fillExercise: FillExercise = {
   },
 };
 
-const makeVersion = (exercise = fillExercise): TestVersion => ({
+const makeVersion = (exercise: Exercise = fillExercise): TestVersion => ({
   id: 'version-one',
   name: 'Version A',
   pages: [{ id: 'page-one', items: [exercise] }],
@@ -71,6 +77,40 @@ describe('test grading foundation', () => {
     const state = await createFrozenTestDeliveryState(makeVersion(invalidExercise), async () => []);
 
     expect(() => gradeFrozenTestDelivery(state, {})).toThrow('Exercise fill-one has invalid maxPoints');
+  });
+
+  it('normalizes AI translation scores out of ten to the admin-selected points', async () => {
+    const exercise: TranslationGradingExercise = {
+      id: 'translation-one',
+      type: 'translation-grading',
+      title: 'Translate',
+      instructions: '',
+      maxPoints: 8,
+      feedbackConfig,
+      translationDirection: 'english-to-latin',
+      data: {
+        items: [
+          { latinText: '<p>The girl&nbsp;sings.<br>Today.</p><p>Again.</p>' },
+          { latinText: 'The boys run.' },
+        ],
+      },
+    };
+    const state = await createFrozenTestDeliveryState(makeVersion(exercise), async () => []);
+    const answers = {
+      'translation-one': {
+        type: 'translation-grading' as const,
+        translations: ['puella cantat', 'pueri currunt'],
+      },
+    };
+
+    const result = gradeFrozenTestDelivery(state, answers, {
+      'translation-one': {
+        '0': { translation: 'puella cantat', score: 9, feedback: 'Strong translation.' },
+        '1': { translation: 'pueri currunt', score: 6, feedback: 'Check the verb form.' },
+      },
+    });
+
+    expect(result).toMatchObject({ awardedPoints: 6, maxPoints: 8 });
   });
 
   it('ignores an empty multi-value filter instead of issuing a Firestore in query with no values', () => {

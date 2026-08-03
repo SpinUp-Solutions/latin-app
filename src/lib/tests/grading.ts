@@ -176,6 +176,23 @@ export function gradeGeneratedTranslation(
   return scoreFraction(correct, resolvedItems.length, maxPoints);
 }
 
+export function gradeTranslationAssessment(
+  exercise: ExerciseOfType<'translation-grading'>,
+  scoresOutOfTen: number[]
+): ExerciseScore {
+  if (scoresOutOfTen.length !== exercise.data.items.length) {
+    throw new Error(`Translation exercise ${exercise.id} has an invalid score count`);
+  }
+  if (scoresOutOfTen.some(score => !Number.isFinite(score) || score < 0 || score > 10)) {
+    throw new Error(`Translation exercise ${exercise.id} has an invalid score`);
+  }
+  return scoreFraction(
+    scoresOutOfTen.reduce((total, score) => total + score, 0),
+    exercise.data.items.length * 10,
+    maxPointsFor(exercise)
+  );
+}
+
 const isSingleFieldItem = (item: ResolvedGeneratedItem): item is SingleFieldFormIdentificationItem =>
   'steps' in item && !('step' in item) && 'correctAnswerDisplay' in item;
 
@@ -308,6 +325,8 @@ function gradeExerciseAtPoints(input: ExerciseGradingInput, rawAnswer: unknown, 
         >,
         maxPoints
       );
+    case 'translation-grading':
+      throw new Error('Translation grading requires an AI assessment score');
     default:
       throw new Error(`Exercise type ${(exercise as Exercise).type} is not eligible for tests`);
   }
