@@ -3,16 +3,21 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { applicationDefault, deleteApp, initializeApp } from 'firebase-admin/app';
-import { FieldValue, getFirestore, type DocumentData, type DocumentSnapshot } from 'firebase-admin/firestore';
+import {
+  FieldValue,
+  getFirestore,
+  type DocumentData,
+  type DocumentSnapshot,
+  type Timestamp,
+} from 'firebase-admin/firestore';
 import {
   LEGACY_LEARNING_UNIT_FIELDS,
+  LEGACY_LEARNING_UNIT_REPAIR_PROJECT_ID,
+  LEGACY_LEARNING_UNIT_REPAIR_TARGET_IDS,
   planLegacyLearningUnitFieldRepair,
 } from '../src/lib/learning-units/legacy-field-repair';
 import { normalizeLearningUnit } from '../src/lib/learning-units/domain';
 import { validateLessonProgression } from '../src/utils/lessonProgress';
-
-const PRODUCTION_PROJECT_ID = 'latin-app-prod';
-const TARGET_DOCUMENT_IDS = ['lesson-1757796411836', 'lesson-1753896166956', 'lesson-1752695094203'] as const;
 
 type CommandOptions = {
   apply: boolean;
@@ -68,14 +73,19 @@ export function parseCommandOptions(argv: string[]): CommandOptions {
     throw new Error(`Unknown argument: ${argument}\n\n${usage()}`);
   }
 
-  if (projectId !== PRODUCTION_PROJECT_ID) {
-    throw new Error(`Refusing to run: --project must explicitly equal ${PRODUCTION_PROJECT_ID}`);
+  if (projectId !== LEGACY_LEARNING_UNIT_REPAIR_PROJECT_ID) {
+    throw new Error(`Refusing to run: --project must explicitly equal ${LEGACY_LEARNING_UNIT_REPAIR_PROJECT_ID}`);
   }
   return { apply, backupDir, projectId };
 }
 
 function timestampForFilename() {
   return new Date().toISOString().replaceAll(':', '-');
+}
+
+function exactTimestamp(timestamp: Timestamp) {
+  const wholeSecond = new Date(timestamp.seconds * 1000).toISOString().replace('.000Z', '');
+  return `${wholeSecond}.${String(timestamp.nanoseconds).padStart(9, '0')}Z`;
 }
 
 function toBeforeImage(snapshot: DocumentSnapshot): BeforeImage {
@@ -85,8 +95,8 @@ function toBeforeImage(snapshot: DocumentSnapshot): BeforeImage {
   return {
     id: snapshot.id,
     path: snapshot.ref.path,
-    createTime: snapshot.createTime.toDate().toISOString(),
-    updateTime: snapshot.updateTime.toDate().toISOString(),
+    createTime: exactTimestamp(snapshot.createTime),
+    updateTime: exactTimestamp(snapshot.updateTime),
     data: snapshot.data()!,
   };
 }
@@ -143,7 +153,7 @@ export async function runRepairCommand(options: CommandOptions) {
   );
   try {
     const db = getFirestore(app);
-    const refs = TARGET_DOCUMENT_IDS.map(id => db.collection('lessons').doc(id));
+    const refs = LEGACY_LEARNING_UNIT_REPAIR_TARGET_IDS.map(id => db.collection('lessons').doc(id));
     const snapshots = await db.getAll(...refs);
     const beforeImages = snapshots.map(toBeforeImage);
     const plans = beforeImages.map(beforeImage => ({
@@ -196,7 +206,7 @@ export async function runRepairCommand(options: CommandOptions) {
       for (let index = 0; index < currentSnapshots.length; index += 1) {
         const current = currentSnapshots[index];
         const beforeImage = beforeImages[index];
-        if (!current.exists || current.updateTime?.toDate().toISOString() !== beforeImage.updateTime) {
+        if (!current.exists || !current.updateTime || exactTimestamp(current.updateTime) !== beforeImage.updateTime) {
           throw new Error(`Document ${beforeImage.path} changed after backup; aborting without writes`);
         }
         deepStrictEqual(current.data(), beforeImage.data);

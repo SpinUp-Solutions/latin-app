@@ -9,6 +9,14 @@ export const LEGACY_LEARNING_UNIT_FIELDS = [
   'exercises_backup',
 ] as const;
 
+export const LEGACY_LEARNING_UNIT_REPAIR_PROJECT_ID = 'latin-app-prod';
+
+export const LEGACY_LEARNING_UNIT_REPAIR_TARGET_IDS = [
+  'lesson-1757796411836',
+  'lesson-1753896166956',
+  'lesson-1752695094203',
+] as const;
+
 export type LegacyLearningUnitField = (typeof LEGACY_LEARNING_UNIT_FIELDS)[number];
 
 export type LegacyLearningUnitRepairPlan = {
