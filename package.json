@@ -33,7 +33,11 @@
     "functions:prod": "firebase use prod && firebase deploy --only functions",
     "functions:all": "npm run functions:dev && npm run functions:staging && npm run functions:prod",
     "functions:serve": "firebase emulators:start --only functions",
-    "firebase:emulators:e2e": "node tests/e2e/start-emulators.mjs"
+    "firebase:emulators:e2e": "node tests/e2e/start-emulators.mjs",
+    "sync:prod-content": "node scripts/sync-prod-content-to-dev.mjs",
+    "sync:prod-content:dry-run": "node scripts/sync-prod-content-to-dev.mjs",
+    "sync:prod-content:verify": "node scripts/sync-prod-content-to-dev.mjs --verify",
+    "sync:prod-content:rollback": "node scripts/sync-prod-content-to-dev.mjs --rollback"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",
