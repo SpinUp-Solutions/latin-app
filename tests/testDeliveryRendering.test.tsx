@@ -1,6 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import ContentRenderer from '@/src/components/ui/lesson/content-renderer';
+import { TestTranslationGradingProvider } from '@/src/components/ui/test/test-translation-grading-context';
 import { sanitizeTestDeliveryState, type FrozenTestDeliveryState } from '@/src/lib/tests/delivery';
 import type { ContentItem } from '@/src/types/lesson';
 import type {
@@ -206,12 +207,9 @@ describe('sanitized test delivery rendering', () => {
     }));
 
     render(
-      <ContentRenderer
-        content={content.items[0]}
-        runtimeMode="test"
-        onAnswer={onAnswer}
-        onGradeTestTranslation={onGradeTestTranslation}
-      />
+      <TestTranslationGradingProvider value={{ grades: {}, grade: onGradeTestTranslation }}>
+        <ContentRenderer content={content.items[0]} runtimeMode="test" onAnswer={onAnswer} />
+      </TestTranslationGradingProvider>
     );
     fireEvent.change(screen.getByPlaceholderText('Type your English translation...'), {
       target: { value: 'The girl sings.' },
@@ -227,6 +225,29 @@ describe('sanitized test delivery rendering', () => {
     });
     expect(onAnswer).not.toHaveBeenCalled();
     expect(screen.queryByText('Suggested Translation')).not.toBeInTheDocument();
+  });
+
+  it('does not silently record an ungraded translation in test preview', () => {
+    const exercise: TranslationGradingExercise = {
+      id: 'ai-translation-preview',
+      type: 'translation-grading',
+      title: 'Translate the sentence',
+      instructions: '',
+      maxPoints: 5,
+      feedbackConfig,
+      data: { items: [{ latinText: 'Puella cantat.' }] },
+    };
+    const { content } = sanitizeExercise(exercise);
+    const onAnswer = jest.fn();
+
+    render(<ContentRenderer content={content.items[0]} runtimeMode="test" onAnswer={onAnswer} />);
+    fireEvent.change(screen.getByPlaceholderText('Type your English translation...'), {
+      target: { value: 'The girl sings.' },
+    });
+
+    expect(screen.getByTitle('Check Translation')).toBeDisabled();
+    expect(screen.getByText(/live ai grading is available in a student test attempt/i)).toBeInTheDocument();
+    expect(onAnswer).not.toHaveBeenCalled();
   });
 
   it('renders and records sanitized generated morphology items', () => {

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { DocumentSnapshot, Firestore, Transaction } from 'firebase-admin/firestore';
+import type { DocumentReference, DocumentSnapshot, Firestore, Transaction } from 'firebase-admin/firestore';
 import {
   DEFAULT_LEARNING_PATH_ID,
   LEARNING_PATHS_COLLECTION,
@@ -87,7 +87,7 @@ export const MAX_TEST_ATTEMPT_DOCUMENT_BYTES = 900 * 1024;
  */
 export const PASSING_THRESHOLD_TOLERANCE = 1e-9;
 
-export type TestTranslationGrader = (request: TranslationGradingRequest) => Promise<TestTranslationGradingOutput>;
+type TestTranslationGrader = (request: TranslationGradingRequest) => Promise<TestTranslationGradingOutput>;
 
 const originId = (origin: TestAttemptOrigin) => (origin.kind === 'normal-test' ? origin.testId : origin.mockTestId);
 
@@ -161,6 +161,17 @@ function assertAttemptOwner(attempt: TestAttempt, studentId: string) {
   }
 }
 
+function getTranslationExerciseItem(attempt: InProgressTestAttempt, request: GradeTestTranslationInput) {
+  const exercise = attempt.deliveryState.pages.flatMap(page => page.items).find(item => item.id === request.exerciseId);
+  if (!exercise || exercise.type !== 'translation-grading') {
+    throw new TestServiceError('ATTEMPT_ANSWER_INVALID', 'This translation does not belong to the test attempt', 400);
+  }
+
+  const item = exercise.data.items[request.itemIndex];
+  if (!item) throw new TestServiceError('ATTEMPT_ANSWER_INVALID', 'This translation item does not exist', 400);
+  return { exercise, item };
+}
+
 export interface TestAttemptServiceOptions {
   random?: () => number;
   loadGeneratedWords?: GeneratedWordLoader;
@@ -216,6 +227,22 @@ export class TestAttemptService {
 
   private get progress() {
     return this.db.collection(USER_PROGRESS_COLLECTION);
+  }
+
+  private async getOwnedInProgressAttempt(
+    transaction: Transaction,
+    attemptRef: DocumentReference,
+    studentId: string
+  ): Promise<InProgressTestAttempt> {
+    const attempt = parseAttemptSnapshot(await transaction.get(attemptRef));
+    assertAttemptOwner(attempt, studentId);
+    if (attempt.status !== 'in-progress') {
+      throw new TestServiceError('ATTEMPT_NOT_IN_PROGRESS', 'This test attempt has already been submitted', 409);
+    }
+    if (attempt.origin.kind === 'normal-test') {
+      await this.assertNormalTestUnlocked(transaction, studentId, attempt.origin.testId, true);
+    }
+    return attempt;
   }
 
   private submittedAttemptsQuery(studentId: string, origin: TestAttemptOrigin) {
@@ -506,14 +533,7 @@ export class TestAttemptService {
     const attemptRef = this.attempts.doc(attemptId);
 
     return this.db.runTransaction(async transaction => {
-      const attempt = parseAttemptSnapshot(await transaction.get(attemptRef));
-      assertAttemptOwner(attempt, studentId);
-      if (attempt.status !== 'in-progress') {
-        throw new TestServiceError('ATTEMPT_NOT_IN_PROGRESS', 'This test attempt has already been submitted', 409);
-      }
-      if (attempt.origin.kind === 'normal-test') {
-        await this.assertNormalTestUnlocked(transaction, studentId, attempt.origin.testId, true);
-      }
+      const attempt = await this.getOwnedInProgressAttempt(transaction, attemptRef, studentId);
 
       const answers = { ...attempt.answers };
       const translationGrades = Object.fromEntries(
@@ -572,29 +592,8 @@ export class TestAttemptService {
     const attemptRef = this.attempts.doc(attemptId);
 
     const gradingRequest = await this.db.runTransaction(async transaction => {
-      const attempt = parseAttemptSnapshot(await transaction.get(attemptRef));
-      assertAttemptOwner(attempt, studentId);
-      if (attempt.status !== 'in-progress') {
-        throw new TestServiceError('ATTEMPT_NOT_IN_PROGRESS', 'This test attempt has already been submitted', 409);
-      }
-      if (attempt.origin.kind === 'normal-test') {
-        await this.assertNormalTestUnlocked(transaction, studentId, attempt.origin.testId, true);
-      }
-
-      const exercise = attempt.deliveryState.pages
-        .flatMap(page => page.items)
-        .find(item => item.id === request.exerciseId);
-      if (!exercise || exercise.type !== 'translation-grading') {
-        throw new TestServiceError(
-          'ATTEMPT_ANSWER_INVALID',
-          'This translation does not belong to the test attempt',
-          400
-        );
-      }
-      const item = exercise.data.items[request.itemIndex];
-      if (!item) {
-        throw new TestServiceError('ATTEMPT_ANSWER_INVALID', 'This translation item does not exist', 400);
-      }
+      const attempt = await this.getOwnedInProgressAttempt(transaction, attemptRef, studentId);
+      const { exercise, item } = getTranslationExerciseItem(attempt, request);
 
       return {
         sourceText: richTextToPlainText(item.latinText),
@@ -616,25 +615,8 @@ export class TestAttemptService {
     }
 
     return this.db.runTransaction(async transaction => {
-      const attempt = parseAttemptSnapshot(await transaction.get(attemptRef));
-      assertAttemptOwner(attempt, studentId);
-      if (attempt.status !== 'in-progress') {
-        throw new TestServiceError('ATTEMPT_NOT_IN_PROGRESS', 'This test attempt has already been submitted', 409);
-      }
-      if (attempt.origin.kind === 'normal-test') {
-        await this.assertNormalTestUnlocked(transaction, studentId, attempt.origin.testId, true);
-      }
-
-      const exercise = attempt.deliveryState.pages
-        .flatMap(page => page.items)
-        .find(item => item.id === request.exerciseId);
-      if (!exercise || exercise.type !== 'translation-grading' || !exercise.data.items[request.itemIndex]) {
-        throw new TestServiceError(
-          'ATTEMPT_ANSWER_INVALID',
-          'This translation does not belong to the test attempt',
-          400
-        );
-      }
+      const attempt = await this.getOwnedInProgressAttempt(transaction, attemptRef, studentId);
+      const { exercise } = getTranslationExerciseItem(attempt, request);
 
       const existingAnswer = attempt.answers[request.exerciseId];
       const parsedExistingAnswer = existingAnswer === undefined ? null : parseExerciseAnswer(existingAnswer);

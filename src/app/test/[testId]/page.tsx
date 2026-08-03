@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
 import { TestTakingView } from '@/src/components/ui/test/test-taking-view';
+import { TestTranslationGradingProvider } from '@/src/components/ui/test/test-translation-grading-context';
 import { useAuth } from '@/src/hooks/useAuth';
 import { useBufferedAttemptAnswers } from '@/src/hooks/useBufferedAttemptAnswers';
 import { isExerciseType } from '@/src/lib/content/registry';
@@ -678,24 +679,24 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
   );
 
   return (
-    <TestTakingView
-      title={test.title}
-      description={test.description}
-      pages={attempt.delivery.pages}
-      currentPageIndex={pageIndex}
-      answeredCount={answeredCount}
-      totalExercises={exerciseItems.length}
-      status={saveStatus}
-      answers={answers}
-      translationGrades={attempt.translationGrades}
-      resolvedExerciseState={attempt.delivery.resolvedExercises}
-      resolvedVocabularyPool={attempt.delivery.vocabularyPool}
-      onAnswer={recordAnswer}
-      onGradeTestTranslation={gradeTranslation}
-      onPrevious={() => void moveToPage(pageIndex - 1)}
-      onNext={() => void moveToPage(pageIndex + 1)}
-      onReview={() => void openReview()}
-      navigationPending={translationGrading}
-    />
+    <TestTranslationGradingProvider value={{ grades: attempt.translationGrades, grade: gradeTranslation }}>
+      <TestTakingView
+        title={test.title}
+        description={test.description}
+        pages={attempt.delivery.pages}
+        currentPageIndex={pageIndex}
+        answeredCount={answeredCount}
+        totalExercises={exerciseItems.length}
+        status={saveStatus}
+        answers={answers}
+        resolvedExerciseState={attempt.delivery.resolvedExercises}
+        resolvedVocabularyPool={attempt.delivery.vocabularyPool}
+        onAnswer={recordAnswer}
+        onPrevious={() => void moveToPage(pageIndex - 1)}
+        onNext={() => void moveToPage(pageIndex + 1)}
+        onReview={() => void openReview()}
+        navigationPending={translationGrading}
+      />
+    </TestTranslationGradingProvider>
   );
 }

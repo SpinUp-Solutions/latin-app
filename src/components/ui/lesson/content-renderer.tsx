@@ -41,9 +41,7 @@ import {
   type ExerciseAnswerHandler,
   type ExerciseAnswer,
   type RuntimeMode,
-  type TestTranslationGradeHandler,
 } from '@/src/types/runtime-mode';
-import type { TestTranslationItemGrade } from '@/src/types/test';
 import { isExerciseType } from '@/src/lib/content/registry';
 import type { GeneratedTranslationItem } from '@/src/utils/exercises/generatedTranslationExercise';
 import type {
@@ -63,8 +61,6 @@ interface ContentRendererProps {
   runtimeMode?: RuntimeMode;
   onAnswer?: (event: ExerciseAnswerEvent) => void;
   initialAnswer?: ExerciseAnswer;
-  initialTestTranslationGrades?: Record<string, TestTranslationItemGrade>;
-  onGradeTestTranslation?: TestTranslationGradeHandler;
   resolvedExerciseState?: ResolvedGeneratedExerciseState;
   allowGeneratedExerciseQueries?: boolean;
   vocabularyPoolId?: string | null;
@@ -82,8 +78,6 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
   itemIndex,
   onAnswer,
   initialAnswer,
-  initialTestTranslationGrades,
-  onGradeTestTranslation,
   resolvedExerciseState,
   allowGeneratedExerciseQueries = false,
   vocabularyPoolId,
@@ -233,9 +227,8 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
         <TranslationGradingExercise
           exercise={renderedContent as TranslationGradingExerciseType}
           onComplete={onComplete}
-          {...modeProps}
-          initialTestGrades={initialTestTranslationGrades}
-          onGradeTestTranslation={onGradeTestTranslation}
+          runtimeMode={mode}
+          initialAnswer={initialAnswer}
         />
       );
 
