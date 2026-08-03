@@ -73,6 +73,26 @@ export const pageSchema = z
   })
   .passthrough();
 
+/**
+ * Client-controlled lesson fields accepted by the authoring routes. Unknown
+ * top-level fields are deliberately stripped so response-only, audit, legacy,
+ * or otherwise untrusted data cannot be round-tripped into Firestore.
+ *
+ * Pages and content items remain passthrough schemas because their specialized
+ * renderers own additional nested authoring fields.
+ */
+export const lessonAuthoringInputSchema = z
+  .object({
+    id: firestoreDocumentIdSchema,
+    title: z.string().trim().min(1),
+    description: z.string().default(''),
+    type: z.enum(LESSON_UNIT_TYPES),
+    pages: z.array(pageSchema).default([]),
+    vocabulary_pool: firestoreDocumentIdSchema.nullable().optional(),
+    showWordSearch: z.boolean().optional(),
+  })
+  .strip();
+
 const rotationVersionReferenceSchema = z
   .object({
     versionId: firestoreDocumentIdSchema,
@@ -120,6 +140,8 @@ function refineLessonUnit(value: z.infer<typeof lessonUnitShapeSchema>, context:
     context.addIssue({ code: 'custom', message, path: ['pages'] });
   }
 }
+
+export const lessonUnitDocumentSchema = lessonUnitShapeSchema.superRefine(refineLessonUnit);
 
 const testUnitShapeSchema = learningUnitBaseSchema
   .extend({
@@ -196,3 +218,4 @@ export const saveLearningPathInputSchema = z
   .superRefine(addLearningPathSizeIssue);
 
 export type SaveLearningPathInput = z.infer<typeof saveLearningPathInputSchema>;
+export type LessonAuthoringInput = z.infer<typeof lessonAuthoringInputSchema>;

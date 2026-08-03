@@ -193,4 +193,50 @@ describe('snapshot restore Learning Path guard', () => {
     expect(response.status).toBe(200);
     expect(mockSet).toHaveBeenCalledTimes(1);
   });
+
+  it('strips retired and arbitrary fields from restored snapshot documents', async () => {
+    mockExistingLessonExists = false;
+    mockExistingLesson = {};
+    mockLearningPath = { ...mockLearningPath, unitIds: [] };
+    mockSnapshotLessons = [
+      {
+        id: 'vocab-1',
+        title: 'Vocabulary',
+        description: '',
+        type: 'vocab',
+        pages: [{ id: 'page-1', items: [] }],
+        isLive: false,
+        liveOrder: null,
+        publishedAt: null,
+        publishedBy: null,
+        published: true,
+        introduction: [],
+        introduction_backup: [],
+        exercises: [],
+        exercises_backup: [],
+        arbitrarySnapshotField: true,
+      },
+    ];
+    mockReconcile.mockResolvedValue({ practiceCategoryIds: [], practiceCategories: [] });
+
+    const response = (await POST({
+      json: async () => ({
+        snapshotPath: 'lesson-snapshots/snapshot-1.json',
+        confirmRestore: true,
+      }),
+    } as never)) as unknown as { status: number };
+
+    expect(response.status).toBe(200);
+    const persistedLesson = mockSet.mock.calls[0][1] as Record<string, unknown>;
+    for (const field of [
+      'published',
+      'introduction',
+      'introduction_backup',
+      'exercises',
+      'exercises_backup',
+      'arbitrarySnapshotField',
+    ]) {
+      expect(persistedLesson).not.toHaveProperty(field);
+    }
+  });
 });

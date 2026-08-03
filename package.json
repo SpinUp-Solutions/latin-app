@@ -33,7 +33,8 @@
     "functions:prod": "firebase use prod && firebase deploy --only functions",
     "functions:all": "npm run functions:dev && npm run functions:staging && npm run functions:prod",
     "functions:serve": "firebase emulators:start --only functions",
-    "firebase:emulators:e2e": "node tests/e2e/start-emulators.mjs"
+    "firebase:emulators:e2e": "node tests/e2e/start-emulators.mjs",
+    "repair:legacy-learning-units": "tsx scripts/repair-legacy-learning-unit-fields.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",
@@ -128,6 +129,7 @@
     "jest-environment-jsdom": "^29.7.0",
     "prettier": "^3.2.5",
     "typescript": "^5.3.3",
+    "tsx": "^4.23.5",
     "typescript-eslint": "^8.21.0",
     "whatwg-fetch": "^3.6.20"
   },

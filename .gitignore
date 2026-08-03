@@ -48,3 +48,6 @@ public/*.pdf
 public/*.json
 
 firebase-debug.log
+
+# Local before-images created by guarded production repair commands
+/.prod-repair-backups/

@@ -1,5 +1,28 @@
-import type { LearningUnit } from '@/src/types/learning-unit';
+import type { LearningUnit, LessonUnit } from '@/src/types/learning-unit';
 import { learningUnitDocumentSchema } from './schemas';
+
+const LESSON_DOCUMENT_FIELDS = [
+  'id',
+  'kind',
+  'title',
+  'description',
+  'createdAt',
+  'createdBy',
+  'updatedAt',
+  'updatedBy',
+  'type',
+  'pages',
+  'vocabulary_pool',
+  'showWordSearch',
+  'isLive',
+  'liveOrder',
+  'publishedAt',
+  'publishedBy',
+  'version',
+  'totalPages',
+  'totalItems',
+  'totalExercises',
+] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -41,4 +64,31 @@ export function normalizeLearningUnit(value: unknown, snapshotId?: string): Lear
   };
 
   return learningUnitDocumentSchema.parse(normalized) as unknown as LearningUnit;
+}
+
+/**
+ * Canonicalizes a lesson for a whole-document write. This is intentionally
+ * separate from normal reads: stale persisted documents must still fail closed,
+ * while explicit recovery/restore operations may safely shed obsolete fields.
+ */
+export function normalizeLessonDocumentForWrite(value: unknown, snapshotId?: string): LessonUnit {
+  if (!isLessonDocumentData(value)) {
+    throw new Error('Learning unit is not a lesson');
+  }
+  const canonicalFields = Object.fromEntries(
+    LESSON_DOCUMENT_FIELDS.filter(field => Object.prototype.hasOwnProperty.call(value, field)).map(field => [
+      field,
+      value[field],
+    ])
+  );
+  const unit = normalizeLearningUnit(
+    {
+      ...canonicalFields,
+      ...(snapshotId ? { id: snapshotId } : {}),
+      kind: 'lesson',
+    },
+    snapshotId
+  );
+  if (unit.kind !== 'lesson') throw new Error('Learning unit is not a lesson');
+  return unit;
 }

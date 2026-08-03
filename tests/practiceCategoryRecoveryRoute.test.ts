@@ -129,6 +129,35 @@ describe('practice category recovery retry', () => {
     expect(response.body.lesson.practiceCategorySelections).toEqual([{ categoryId: 'category-1', tagIds: [] }]);
   });
 
+  it('strips retired and arbitrary top-level fields when retrying recovery', async () => {
+    mockRecoveryLessonData = {
+      ...mockRecoveryLessonData,
+      published: true,
+      introduction: [{ legacy: true }],
+      introduction_backup: [{ legacy: true }],
+      exercises: [{ legacy: true }],
+      exercises_backup: [{ legacy: true }],
+      arbitraryClientField: 'must not persist',
+    };
+
+    const response = (await POST({} as never, {
+      params: Promise.resolve({ id: 'recovery-1' }),
+    })) as unknown as { status: number };
+
+    expect(response.status).toBe(200);
+    const persistedLesson = mockTransactionSet.mock.calls[0][1] as Record<string, unknown>;
+    for (const field of [
+      'published',
+      'introduction',
+      'introduction_backup',
+      'exercises',
+      'exercises_backup',
+      'arbitraryClientField',
+    ]) {
+      expect(persistedLesson).not.toHaveProperty(field);
+    }
+  });
+
   it('rejects replaying an item that has already left pending state', async () => {
     mockRecoveryStatus = 'recovered';
 
