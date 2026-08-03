@@ -131,11 +131,6 @@ export interface TranslationGradingOutput {
   grammaticalBreakdown: GrammaticalBreakdownItem[];
 }
 
-export interface TestTranslationGradingOutput {
-  score: number;
-  feedback: string;
-}
-
 const LESSON_TRANSLATION_GRADING_JSON_SCHEMA = {
   type: 'object',
   properties: {
@@ -227,15 +222,13 @@ export const testTranslationGradingOutputSchema = z
   })
   .strict();
 
+export type TestTranslationGradingOutput = z.infer<typeof testTranslationGradingOutputSchema>;
+
 export const isPassingTranslationFeedback = (level: TranslationFeedbackLevel): boolean =>
   level === 'Excellent' || level === 'Very good' || level === 'Good';
 
 export function parseTranslationGradingOutput(value: unknown): TranslationGradingOutput {
   return translationGradingOutputSchema.parse(value) as TranslationGradingOutput;
-}
-
-export function parseTestTranslationGradingOutput(value: unknown): TestTranslationGradingOutput {
-  return testTranslationGradingOutputSchema.parse(value);
 }
 
 export type TranslationGradingFailureCode =
@@ -376,7 +369,7 @@ const TEST_GRADING_DEFINITION: TranslationGradingDefinition<TestTranslationGradi
   formatName: 'test_translation_grading_output',
   jsonSchema: TEST_TRANSLATION_GRADING_JSON_SCHEMA as Record<string, unknown>,
   cacheNamespace: 'test',
-  parse: parseTestTranslationGradingOutput,
+  parse: value => testTranslationGradingOutputSchema.parse(value),
 };
 
 async function callOpenAIGrading<T>(
@@ -572,39 +565,6 @@ export async function gradeTranslation(
     };
   } catch (error) {
     console.error(`[gradeTranslation] ❌ Unexpected grading error:`, error);
-    return {
-      success: false,
-      error: 'The translation grader could not complete this request.',
-      errorDetails: { message: 'The translation grader could not complete this request.', type: 'unexpected-error' },
-    };
-  }
-}
-
-export async function gradeTestTranslation(
-  request: TranslationGradingRequest
-): Promise<TranslationGradingResponse<TestTranslationGradingOutput>> {
-  try {
-    const result = await runTestTranslationGrading(request, TRANSLATION_GRADING_PROFILES.baseline);
-    if (!result.success) {
-      return {
-        success: false,
-        error: result.error,
-        errorDetails: { message: result.error, type: result.code },
-        tokensUsed: result.tokensUsed,
-        model: result.model,
-        cost: result.cost,
-      };
-    }
-
-    return {
-      success: true,
-      data: result.data,
-      tokensUsed: result.tokensUsed,
-      model: result.model,
-      cost: result.cost,
-    };
-  } catch (error) {
-    console.error('[gradeTestTranslation] Unexpected grading error:', error);
     return {
       success: false,
       error: 'The translation grader could not complete this request.',

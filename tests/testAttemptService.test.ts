@@ -945,7 +945,7 @@ describe('test attempt submission and sticky completion', () => {
     }));
     const service = new TestAttemptService(db as never, () => timestamp, { gradeTestTranslation });
     const started = await service.startAttempt(startInput, 'student-1');
-    const firstGrade = await service.gradeTranslationItem(
+    const firstGradedAttempt = await service.gradeTranslationItem(
       started.attempt.id,
       {
         exerciseId: 'translation-assessment',
@@ -966,12 +966,12 @@ describe('test attempt submission and sticky completion', () => {
 
     const result = await service.submitAttempt(started.attempt.id, 'student-1');
 
-    expect(firstGrade.grade).toEqual({
+    expect(firstGradedAttempt.translationGrades['translation-assessment']['0']).toEqual({
       translation: 'The girl sings.',
       score: 9,
       feedback: 'Accurate and idiomatic.',
     });
-    expect(firstGrade.attempt.answers['translation-assessment']).toEqual({
+    expect(firstGradedAttempt.answers['translation-assessment']).toEqual({
       type: 'translation-grading',
       translations: ['The girl sings.', ''],
     });

@@ -17,7 +17,6 @@ import { adminDb } from '@/src/services/firebase-admin';
 import type { LearningPathDocument, TestUnit, TestUnitCompletionProgress } from '@/src/types/learning-unit';
 import type {
   InProgressTestAttempt,
-  GradeTestTranslationResult,
   MockTest,
   StartTestAttemptResult,
   StudentInProgressTestAttempt,
@@ -37,13 +36,12 @@ import { isAnswerForExercise, parseExerciseAnswer } from './answer-schemas';
 import {
   createFrozenTestDeliveryState,
   gradeFrozenTestDelivery,
-  scoreFrozenTranslationExercises,
   sanitizeTestDeliveryState,
   type FrozenDeliveryScore,
   type FrozenTestDeliveryState,
 } from './delivery';
 import {
-  gradeTestTranslation,
+  runTestTranslationGrading,
   testTranslationGradingOutputSchema,
   type TestTranslationGradingOutput,
 } from '@/shared/openai/translation-grading';
@@ -199,8 +197,8 @@ export class TestAttemptService {
     this.gradeTestTranslation =
       options.gradeTestTranslation ??
       (async request => {
-        const result = await gradeTestTranslation(request);
-        if (!result.success || !result.data) throw new Error('The translation grader returned no usable score');
+        const result = await runTestTranslationGrading(request);
+        if (!result.success) throw new Error(result.error);
         return result.data;
       });
   }
@@ -585,9 +583,9 @@ export class TestAttemptService {
 
   async gradeTranslationItem(
     attemptId: string,
-    input: GradeTestTranslationInput,
+    input: unknown,
     studentId: string
-  ): Promise<GradeTestTranslationResult> {
+  ): Promise<StudentInProgressTestAttempt> {
     const request = gradeTestTranslationInputSchema.parse(input);
     const attemptRef = this.attempts.doc(attemptId);
 
@@ -651,10 +649,7 @@ export class TestAttemptService {
       this.assertAttemptDocumentSize(updated);
       transaction.set(attemptRef, updated);
 
-      return {
-        attempt: toStudentAttempt(updated) as StudentInProgressTestAttempt,
-        grade,
-      };
+      return toStudentAttempt(updated) as StudentInProgressTestAttempt;
     });
   }
 
@@ -671,17 +666,12 @@ export class TestAttemptService {
         await this.assertNormalTestUnlocked(transaction, studentId, attempt.origin.testId, true);
       }
 
-      const translationScoreOverrides = scoreFrozenTranslationExercises(
-        attempt.deliveryState as FrozenTestDeliveryState,
-        attempt.answers,
-        attempt.translationGrades
-      );
       let frozenScore: FrozenDeliveryScore;
       try {
         frozenScore = gradeFrozenTestDelivery(
           attempt.deliveryState as FrozenTestDeliveryState,
           attempt.answers,
-          translationScoreOverrides
+          attempt.translationGrades
         );
       } catch (error) {
         throw configurationError(`Could not grade attempt ${attempt.id} from its frozen delivery state`, error);

@@ -22,7 +22,7 @@ import {
   useSubmitTestAttemptMutation,
 } from '@/src/store/api/testApi';
 import type { StudentTestSummary } from '@/src/types/lesson';
-import type { TestTranslationGradeEvent, TestTranslationGradeFeedback } from '@/src/types/runtime-mode';
+import type { TestTranslationGradeHandler } from '@/src/types/runtime-mode';
 import type { TestAttemptOrigin } from '@/src/types/test';
 import type { StudentInProgressTestAttempt, StudentSubmittedTestAttempt } from '@/src/types/test';
 
@@ -287,12 +287,12 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
     }
   };
 
-  const gradeTranslation = async (event: TestTranslationGradeEvent): Promise<TestTranslationGradeFeedback> => {
+  const gradeTranslation: TestTranslationGradeHandler = async event => {
     if (!attempt || !user) throw new Error('This test attempt is not available.');
     const requestedOriginKey = originKey;
     try {
       await flushPendingAnswers();
-      const response = await gradeTestTranslation({
+      const updatedAttempt = await gradeTestTranslation({
         uid: user.uid,
         attemptId: attempt.id,
         ...event,
@@ -300,10 +300,9 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
       if (activeOriginKeyRef.current !== requestedOriginKey) {
         throw new Error('The active test changed while the translation was being graded.');
       }
-      const savedAnswer = response.attempt.answers[event.exerciseId];
+      const savedAnswer = updatedAttempt.answers[event.exerciseId];
       if (savedAnswer) adoptPersistedAnswer({ exerciseId: event.exerciseId, answer: savedAnswer });
-      setAttempt(response.attempt);
-      return { score: response.grade.score, feedback: response.grade.feedback };
+      setAttempt(updatedAttempt);
     } catch (error) {
       throw new Error(getApiErrorMessage(error, 'Unable to grade this translation'));
     }

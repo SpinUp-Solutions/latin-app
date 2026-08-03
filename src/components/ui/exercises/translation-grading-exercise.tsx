@@ -55,7 +55,6 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
     Object.fromEntries(restoredTranslations.map((answer, index) => [index, answer]))
   );
   const [passedSentences, setPassedSentences] = useState<Set<number>>(new Set());
-  const [testGrades, setTestGrades] = useState(testGradingRuntime?.grades[exercise.id] ?? {});
   const [testGrading, setTestGrading] = useState(false);
   const [testGradingError, setTestGradingError] = useState<string | null>(null);
   const translationDirection = exercise.translationDirection || 'latin-to-english';
@@ -77,6 +76,7 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
   const { grade, reset: resetGrading, isLoading, data, error } = useTranslationGrading();
 
   const currentAnswer = userAnswers[currentIndex] || '';
+  const testGrades = testGradingRuntime?.grades[exercise.id] ?? {};
   const currentTestGrade = testGrades[String(currentIndex)];
   const testSubmitted = Boolean(currentTestGrade && currentTestGrade.translation === currentAnswer.trim());
   const gradingPending = isLoading || testGrading;
@@ -106,16 +106,12 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
       setTestGrading(true);
       setTestGradingError(null);
       try {
-        const result = await testGradingRuntime.grade({
+        await testGradingRuntime.grade({
           exerciseId: exercise.id,
           itemIndex: currentIndex,
           userTranslation,
         });
         setUserAnswers(previous => ({ ...previous, [currentIndex]: userTranslation }));
-        setTestGrades(previous => ({
-          ...previous,
-          [String(currentIndex)]: { translation: userTranslation, ...result },
-        }));
       } catch (gradingError) {
         setTestGradingError(
           gradingError instanceof Error ? gradingError.message : 'Unable to grade this translation. Please try again.'

@@ -32,12 +32,7 @@ export interface TestTranslationGradeEvent {
   userTranslation: string;
 }
 
-export interface TestTranslationGradeFeedback {
-  score: number;
-  feedback: string;
-}
-
-export type TestTranslationGradeHandler = (event: TestTranslationGradeEvent) => Promise<TestTranslationGradeFeedback>;
+export type TestTranslationGradeHandler = (event: TestTranslationGradeEvent) => Promise<void>;
 
 export const TEST_RUNTIME_FEEDBACK_CONFIG: FeedbackConfig = {
   escalationLevels: [],

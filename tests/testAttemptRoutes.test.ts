@@ -112,17 +112,28 @@ describe('student test-attempt routes', () => {
       userTranslation: 'The girl sings.',
     };
     mockGradeTranslationItem.mockResolvedValue({
-      attempt: { id: 'attempt-1' },
-      grade: { translation: input.userTranslation, score: 9, feedback: 'Accurate and idiomatic.' },
+      id: 'attempt-1',
+      translationGrades: {
+        'translation.one': {
+          '0': { translation: input.userTranslation, score: 9, feedback: 'Accurate and idiomatic.' },
+        },
+      },
     });
 
     const response = (await gradeTranslation(request(input), params('attempt-1'))) as unknown as {
       status: number;
-      body: { grade: { score: number; feedback: string } };
+      body: { attempt: { id: string; translationGrades: Record<string, unknown> } };
     };
 
     expect(response.status).toBe(200);
-    expect(response.body.grade).toMatchObject({ score: 9, feedback: 'Accurate and idiomatic.' });
+    expect(response.body.attempt).toMatchObject({
+      id: 'attempt-1',
+      translationGrades: {
+        'translation.one': {
+          '0': { translation: input.userTranslation, score: 9, feedback: 'Accurate and idiomatic.' },
+        },
+      },
+    });
     expect(mockGradeTranslationItem).toHaveBeenCalledWith('attempt-1', input, 'student-1');
   });
 

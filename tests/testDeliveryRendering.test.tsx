@@ -4,6 +4,8 @@ import ContentRenderer from '@/src/components/ui/lesson/content-renderer';
 import { TestTranslationGradingProvider } from '@/src/components/ui/test/test-translation-grading-context';
 import { sanitizeTestDeliveryState, type FrozenTestDeliveryState } from '@/src/lib/tests/delivery';
 import type { ContentItem } from '@/src/types/lesson';
+import type { TestTranslationGradeHandler } from '@/src/types/runtime-mode';
+import type { TestTranslationGrades } from '@/src/types/test';
 import type {
   FillExercise,
   GeneratedFormIdentificationExercise,
@@ -201,16 +203,32 @@ describe('sanitized test delivery rendering', () => {
     };
     const { content } = sanitizeExercise(exercise);
     const onAnswer = jest.fn();
-    const onGradeTestTranslation = jest.fn(async () => ({
+    const onGradeTestTranslation = jest.fn(async (_event: Parameters<TestTranslationGradeHandler>[0]) => ({
       score: 8.5,
       feedback: 'Accurate overall; check the tense.',
     }));
 
-    render(
-      <TestTranslationGradingProvider value={{ grades: {}, grade: onGradeTestTranslation }}>
-        <ContentRenderer content={content.items[0]} runtimeMode="test" onAnswer={onAnswer} />
-      </TestTranslationGradingProvider>
-    );
+    function TestTranslationHarness() {
+      const [grades, setGrades] = React.useState<TestTranslationGrades>({});
+      const grade: TestTranslationGradeHandler = async event => {
+        const result = await onGradeTestTranslation(event);
+        setGrades(previous => ({
+          ...previous,
+          [event.exerciseId]: {
+            ...previous[event.exerciseId],
+            [String(event.itemIndex)]: { translation: event.userTranslation, ...result },
+          },
+        }));
+      };
+
+      return (
+        <TestTranslationGradingProvider value={{ grades, grade }}>
+          <ContentRenderer content={content.items[0]} runtimeMode="test" onAnswer={onAnswer} />
+        </TestTranslationGradingProvider>
+      );
+    }
+
+    render(<TestTranslationHarness />);
     fireEvent.change(screen.getByPlaceholderText('Type your English translation...'), {
       target: { value: 'The girl sings.' },
     });

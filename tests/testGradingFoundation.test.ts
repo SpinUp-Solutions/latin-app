@@ -3,7 +3,6 @@ import { EXERCISE_ANSWER_SCHEMAS } from '@/src/lib/tests/answer-schemas';
 import {
   createFrozenTestDeliveryState,
   gradeFrozenTestDelivery,
-  scoreFrozenTranslationExercises,
   sanitizeTestDeliveryState,
 } from '@/src/lib/tests/delivery';
 import { resolveGeneratedExerciseItems } from '@/src/lib/tests/generated-exercises';
@@ -104,13 +103,12 @@ describe('test grading foundation', () => {
       },
     };
 
-    const overrides = scoreFrozenTranslationExercises(state, answers, {
+    const result = gradeFrozenTestDelivery(state, answers, {
       'translation-one': {
         '0': { translation: 'puella cantat', score: 9, feedback: 'Strong translation.' },
         '1': { translation: 'pueri currunt', score: 6, feedback: 'Check the verb form.' },
       },
     });
-    const result = gradeFrozenTestDelivery(state, answers, overrides);
 
     expect(result).toMatchObject({ awardedPoints: 6, maxPoints: 8 });
   });

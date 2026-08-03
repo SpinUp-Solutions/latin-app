@@ -178,8 +178,7 @@ export function gradeGeneratedTranslation(
 
 export function gradeTranslationAssessment(
   exercise: ExerciseOfType<'translation-grading'>,
-  scoresOutOfTen: number[],
-  maxPoints = maxPointsFor(exercise)
+  scoresOutOfTen: number[]
 ): ExerciseScore {
   if (scoresOutOfTen.length !== exercise.data.items.length) {
     throw new Error(`Translation exercise ${exercise.id} has an invalid score count`);
@@ -190,7 +189,7 @@ export function gradeTranslationAssessment(
   return scoreFraction(
     scoresOutOfTen.reduce((total, score) => total + score, 0),
     exercise.data.items.length * 10,
-    maxPoints
+    maxPointsFor(exercise)
   );
 }
 

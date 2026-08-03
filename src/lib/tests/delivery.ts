@@ -482,7 +482,7 @@ export function sanitizeTestDeliveryState(state: FrozenTestDeliveryState): Stude
 export function gradeFrozenTestDelivery(
   state: FrozenTestDeliveryState,
   answers: Record<string, ExerciseAnswer | unknown>,
-  scoreOverrides: Record<string, ExerciseScore> = {}
+  translationGrades: TestTranslationGrades = {}
 ): FrozenDeliveryScore {
   const exerciseResults: GradedExerciseResult[] = [];
 
@@ -497,8 +497,9 @@ export function gradeFrozenTestDelivery(
       const score =
         rawAnswer === undefined
           ? { awardedPoints: 0, maxPoints: maxPointsFor(exercise) }
-          : (scoreOverrides[exercise.id] ??
-            gradeExercise({ exercise, resolvedItems: state.resolvedExercises[exercise.id]?.items }, rawAnswer));
+          : exercise.type === 'translation-grading'
+            ? gradeSavedTranslationExercise(exercise, rawAnswer, translationGrades[exercise.id] ?? {})
+            : gradeExercise({ exercise, resolvedItems: state.resolvedExercises[exercise.id]?.items }, rawAnswer);
 
       exerciseResults.push({ exerciseId: exercise.id, title: exercise.title || exercise.type, ...score });
     }
@@ -511,31 +512,20 @@ export function gradeFrozenTestDelivery(
   };
 }
 
-export function scoreFrozenTranslationExercises(
-  state: FrozenTestDeliveryState,
-  answers: Record<string, ExerciseAnswer | unknown>,
-  translationGrades: TestTranslationGrades
-): Record<string, ExerciseScore> {
-  const translations = state.pages.flatMap(page =>
-    page.items.filter((item): item is ExerciseOfType<'translation-grading'> => item.type === 'translation-grading')
-  );
+function gradeSavedTranslationExercise(
+  exercise: ExerciseOfType<'translation-grading'>,
+  rawAnswer: unknown,
+  grades: TestTranslationGrades[string]
+): ExerciseScore {
+  const answer = parseExerciseAnswer(rawAnswer);
+  if (answer.type !== exercise.type) {
+    throw new Error(`Answer type ${answer.type} does not match exercise type ${exercise.type}`);
+  }
 
-  const scored = translations.map(exercise => {
-    const rawAnswer = answers[exercise.id];
-    if (rawAnswer === undefined) return [exercise.id, undefined] as const;
-    const answer = parseExerciseAnswer(rawAnswer);
-    if (answer.type !== 'translation-grading') {
-      throw new Error(`Answer type ${answer.type} does not match exercise type ${exercise.type}`);
-    }
-
-    const scores = exercise.data.items.map((_, index) => {
-      const userTranslation = answer.translations[index]?.trim() ?? '';
-      if (!userTranslation) return 0;
-      const savedGrade = translationGrades[exercise.id]?.[String(index)];
-      return savedGrade?.translation === userTranslation ? savedGrade.score : 0;
-    });
-    return [exercise.id, gradeTranslationAssessment(exercise, scores)] as const;
+  const scores = exercise.data.items.map((_, index) => {
+    const userTranslation = answer.translations[index]?.trim() ?? '';
+    const savedGrade = grades[String(index)];
+    return userTranslation && savedGrade?.translation === userTranslation ? savedGrade.score : 0;
   });
-
-  return Object.fromEntries(scored.filter((entry): entry is [string, ExerciseScore] => entry[1] !== undefined));
+  return gradeTranslationAssessment(exercise, scores);
 }

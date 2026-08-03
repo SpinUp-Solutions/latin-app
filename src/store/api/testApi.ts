@@ -8,7 +8,6 @@ import type {
 } from '@/src/lib/tests/schemas';
 import type { TestUnit } from '@/src/types/learning-unit';
 import type {
-  GradeTestTranslationResult,
   StartTestAttemptResult,
   StudentInProgressTestAttempt,
   SubmitTestAttemptResult,
@@ -194,7 +193,7 @@ export const testApi = appApi.injectEndpoints({
       invalidatesTags: (result, error, { attemptId }) => (result ? [{ type: 'TestAttempt', id: attemptId }] : []),
     }),
     gradeTestTranslation: builder.mutation<
-      GradeTestTranslationResult,
+      StudentInProgressTestAttempt,
       {
         uid: string;
         attemptId: string;
@@ -208,6 +207,7 @@ export const testApi = appApi.injectEndpoints({
         method: 'POST',
         body,
       }),
+      transformResponse: (response: { attempt: StudentInProgressTestAttempt }) => response.attempt,
       invalidatesTags: (result, error, { attemptId }) => (result ? [{ type: 'TestAttempt', id: attemptId }] : []),
     }),
     submitTestAttempt: builder.mutation<SubmitTestAttemptResult, { uid: string; attemptId: string }>({

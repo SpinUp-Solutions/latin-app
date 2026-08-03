@@ -176,11 +176,6 @@ export interface SubmitTestAttemptResult {
   completionGranted: boolean;
 }
 
-export interface GradeTestTranslationResult {
-  attempt: StudentInProgressTestAttempt;
-  grade: TestTranslationItemGrade;
-}
-
 export interface TestAttemptResultSummary {
   attemptId: string;
   score: number;
