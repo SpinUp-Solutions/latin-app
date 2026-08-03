@@ -1,4 +1,5 @@
 import { PATCH as saveAnswer } from '@/src/app/api/test-attempts/[attemptId]/answers/route';
+import { POST as gradeTranslation } from '@/src/app/api/test-attempts/[attemptId]/translation-grade/route';
 import { POST as submitAttempt } from '@/src/app/api/test-attempts/[attemptId]/submit/route';
 import { POST as startAttempt } from '@/src/app/api/test-attempts/start/route';
 import { TestServiceError } from '@/src/lib/tests/errors';
@@ -6,6 +7,7 @@ import { TestServiceError } from '@/src/lib/tests/errors';
 const mockVerifyRequestAuth = jest.fn();
 const mockStartAttempt = jest.fn();
 const mockSaveAttemptAnswers = jest.fn();
+const mockGradeTranslationItem = jest.fn();
 const mockSubmitAttempt = jest.fn();
 
 jest.mock('next/server', () => jest.requireActual('./helpers/routeMocks'));
@@ -20,6 +22,7 @@ jest.mock('@/src/lib/tests/attempt-service', () => ({
   testAttemptService: {
     startAttempt: (...args: unknown[]) => mockStartAttempt(...args),
     saveAttemptAnswers: (...args: unknown[]) => mockSaveAttemptAnswers(...args),
+    gradeTranslationItem: (...args: unknown[]) => mockGradeTranslationItem(...args),
     submitAttempt: (...args: unknown[]) => mockSubmitAttempt(...args),
   },
 }));
@@ -100,6 +103,27 @@ describe('student test-attempt routes', () => {
     expect(response.body.attempt.id).toBe('attempt-1');
     expect(response.body.completionGranted).toBe(true);
     expect(mockSubmitAttempt).toHaveBeenCalledWith('attempt-1', 'student-1');
+  });
+
+  it('grades and persists a translation item for the authenticated student', async () => {
+    const input = {
+      exerciseId: 'translation.one',
+      itemIndex: 0,
+      userTranslation: 'The girl sings.',
+    };
+    mockGradeTranslationItem.mockResolvedValue({
+      attempt: { id: 'attempt-1' },
+      grade: { translation: input.userTranslation, score: 9, feedback: 'Accurate and idiomatic.' },
+    });
+
+    const response = (await gradeTranslation(request(input), params('attempt-1'))) as unknown as {
+      status: number;
+      body: { grade: { score: number; feedback: string } };
+    };
+
+    expect(response.status).toBe(200);
+    expect(response.body.grade).toMatchObject({ score: 9, feedback: 'Accurate and idiomatic.' });
+    expect(mockGradeTranslationItem).toHaveBeenCalledWith('attempt-1', input, 'student-1');
   });
 
   it('maps submission domain errors and rejects unauthenticated submits', async () => {

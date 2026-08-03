@@ -8,7 +8,13 @@ import { ExerciseErrorBoundary } from './exercise-error-boundary';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { isExerciseType } from '@/src/utils/lessonUtils';
 import { DiagramAuditSubmission } from '@/src/features/sentence-diagramming';
-import type { ExerciseAnswer, ExerciseAnswerEvent, RuntimeMode } from '@/src/types/runtime-mode';
+import type {
+  ExerciseAnswer,
+  ExerciseAnswerEvent,
+  RuntimeMode,
+  TestTranslationGradeHandler,
+} from '@/src/types/runtime-mode';
+import type { TestTranslationGrades } from '@/src/types/test';
 import type { ResolvedGeneratedExerciseState } from './content-renderer';
 import type { VocabularyPoolStudyData } from '@/src/types/vocabulary';
 
@@ -19,6 +25,8 @@ interface PageTemplateProps {
   runtimeMode?: RuntimeMode;
   onAnswer?: (event: ExerciseAnswerEvent) => void;
   answers?: Record<string, ExerciseAnswer>;
+  translationGrades?: TestTranslationGrades;
+  onGradeTestTranslation?: TestTranslationGradeHandler;
   resolvedExerciseState?: Record<string, ResolvedGeneratedExerciseState>;
   allowGeneratedExerciseQueries?: boolean;
   vocabularyPoolId?: string | null;
@@ -34,6 +42,8 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({
   runtimeMode = 'practice',
   onAnswer,
   answers,
+  translationGrades,
+  onGradeTestTranslation,
   resolvedExerciseState,
   allowGeneratedExerciseQueries = false,
   vocabularyPoolId,
@@ -99,6 +109,8 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({
               runtimeMode={runtimeMode}
               onAnswer={onAnswer}
               initialAnswer={answers?.[item.id]}
+              initialTestTranslationGrades={translationGrades?.[item.id]}
+              onGradeTestTranslation={onGradeTestTranslation}
               resolvedExerciseState={resolvedExerciseState?.[item.id]}
               allowGeneratedExerciseQueries={allowGeneratedExerciseQueries}
               vocabularyPoolId={vocabularyPoolId}

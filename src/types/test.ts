@@ -2,6 +2,7 @@ import type { TestUnit } from './learning-unit';
 import type { Page } from './page';
 import type { ExerciseAnswer } from './runtime-mode';
 import type { VocabularyPoolStudyData } from './vocabulary';
+import type { TestTranslationGradingOutput } from '@/shared/openai/translation-grading';
 
 export interface RotationVersionReference {
   versionId: string;
@@ -88,7 +89,7 @@ export interface StudentMockTestDetail {
     MockTest,
     'id' | 'title' | 'description' | 'passingPercentage' | 'status' | 'isLive'
   >;
-  attempt: Omit<StudentInProgressTestAttempt, 'answers'> | null;
+  attempt: Omit<StudentInProgressTestAttempt, 'answers' | 'translationGrades'> | null;
 }
 
 export type TestAttemptOrigin = { kind: 'normal-test'; testId: string } | { kind: 'mock-test'; mockTestId: string };
@@ -110,9 +111,16 @@ export interface TestAttemptBase {
   updatedAt: string;
 }
 
+export interface TestTranslationItemGrade extends TestTranslationGradingOutput {
+  translation: string;
+}
+
+export type TestTranslationGrades = Record<string, Record<string, TestTranslationItemGrade>>;
+
 export interface InProgressTestAttempt extends TestAttemptBase {
   status: 'in-progress';
   answers: Record<string, ExerciseAnswer>;
+  translationGrades: TestTranslationGrades;
   deliveryState: TestAttemptDeliveryState;
 }
 
@@ -166,6 +174,11 @@ export interface SubmitTestAttemptResult {
   attempt: StudentSubmittedTestAttempt;
   /** True only when this submission newly wrote the sticky normal-flow completion record. */
   completionGranted: boolean;
+}
+
+export interface GradeTestTranslationResult {
+  attempt: StudentInProgressTestAttempt;
+  grade: TestTranslationItemGrade;
 }
 
 export interface TestAttemptResultSummary {

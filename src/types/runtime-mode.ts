@@ -26,6 +26,19 @@ export interface ExerciseAnswerEvent {
 
 export type ExerciseAnswerHandler = (answer: ExerciseAnswer) => void;
 
+export interface TestTranslationGradeEvent {
+  exerciseId: string;
+  itemIndex: number;
+  userTranslation: string;
+}
+
+export interface TestTranslationGradeFeedback {
+  score: number;
+  feedback: string;
+}
+
+export type TestTranslationGradeHandler = (event: TestTranslationGradeEvent) => Promise<TestTranslationGradeFeedback>;
+
 export const TEST_RUNTIME_FEEDBACK_CONFIG: FeedbackConfig = {
   escalationLevels: [],
   successMessage: { showExplanation: false },

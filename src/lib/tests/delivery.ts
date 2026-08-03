@@ -7,7 +7,12 @@ import type {
 import type { ListeningPassageExercise } from '@/src/types/exercises/listening-passage';
 import type { EmphasisContent, TableContent, TextContent } from '@/src/types/content';
 import type { Page, RenderableContentItem } from '@/src/types/page';
-import type { StudentTestDelivery, TestAttemptDeliveryState, TestVersion } from '@/src/types/test';
+import type {
+  StudentTestDelivery,
+  TestAttemptDeliveryState,
+  TestTranslationGrades,
+  TestVersion,
+} from '@/src/types/test';
 import type { VocabularyContent, VocabularyPoolContent } from '@/src/types/vocabulary';
 import type { TableData } from '@/src/components/ui/lesson/conjugation-table';
 import {
@@ -28,8 +33,6 @@ import {
   type ResolvedGeneratedItem,
 } from './grading';
 import { parseExerciseAnswer } from './answer-schemas';
-import type { TranslationGradingRequest } from '@/shared/openai/types';
-import { richTextToPlainText } from '@/src/utils/exercises/helpers';
 import type { VocabularyPoolLoader } from './vocabulary-pool-loader.server';
 
 export interface FrozenTestDeliveryState extends TestAttemptDeliveryState {
@@ -508,37 +511,31 @@ export function gradeFrozenTestDelivery(
   };
 }
 
-export type TestTranslationGrader = (request: TranslationGradingRequest) => Promise<number>;
-
-export async function gradeFrozenTranslationExercises(
+export function scoreFrozenTranslationExercises(
   state: FrozenTestDeliveryState,
   answers: Record<string, ExerciseAnswer | unknown>,
-  grader: TestTranslationGrader
-): Promise<Record<string, ExerciseScore>> {
+  translationGrades: TestTranslationGrades
+): Record<string, ExerciseScore> {
   const translations = state.pages.flatMap(page =>
     page.items.filter((item): item is ExerciseOfType<'translation-grading'> => item.type === 'translation-grading')
   );
 
-  const scored = await Promise.all(
-    translations.map(async exercise => {
-      const rawAnswer = answers[exercise.id];
-      if (rawAnswer === undefined) return [exercise.id, undefined] as const;
-      const answer = parseExerciseAnswer(rawAnswer);
-      if (answer.type !== 'translation-grading') {
-        throw new Error(`Answer type ${answer.type} does not match exercise type ${exercise.type}`);
-      }
+  const scored = translations.map(exercise => {
+    const rawAnswer = answers[exercise.id];
+    if (rawAnswer === undefined) return [exercise.id, undefined] as const;
+    const answer = parseExerciseAnswer(rawAnswer);
+    if (answer.type !== 'translation-grading') {
+      throw new Error(`Answer type ${answer.type} does not match exercise type ${exercise.type}`);
+    }
 
-      const direction = exercise.translationDirection ?? 'latin-to-english';
-      const scores = await Promise.all(
-        exercise.data.items.map((item, index) => {
-          const userTranslation = answer.translations[index]?.trim() ?? '';
-          if (!userTranslation) return Promise.resolve(0);
-          return grader({ sourceText: richTextToPlainText(item.latinText), userTranslation, direction });
-        })
-      );
-      return [exercise.id, gradeTranslationAssessment(exercise, scores)] as const;
-    })
-  );
+    const scores = exercise.data.items.map((_, index) => {
+      const userTranslation = answer.translations[index]?.trim() ?? '';
+      if (!userTranslation) return 0;
+      const savedGrade = translationGrades[exercise.id]?.[String(index)];
+      return savedGrade?.translation === userTranslation ? savedGrade.score : 0;
+    });
+    return [exercise.id, gradeTranslationAssessment(exercise, scores)] as const;
+  });
 
   return Object.fromEntries(scored.filter((entry): entry is [string, ExerciseScore] => entry[1] !== undefined));
 }

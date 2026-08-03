@@ -8,7 +8,8 @@ import { RomanPlayerShell } from '@/src/components/ui/core/roman-player-shell';
 import { PageTemplate } from '@/src/components/ui/lesson/page-template';
 import { cn } from '@/src/lib/utils';
 import type { Page } from '@/src/types/page';
-import type { ExerciseAnswer, ExerciseAnswerEvent } from '@/src/types/runtime-mode';
+import type { ExerciseAnswer, ExerciseAnswerEvent, TestTranslationGradeHandler } from '@/src/types/runtime-mode';
+import type { TestTranslationGrades } from '@/src/types/test';
 import type { ResolvedGeneratedExerciseState } from '@/src/components/ui/lesson/content-renderer';
 import type { VocabularyPoolStudyData } from '@/src/types/vocabulary';
 
@@ -22,11 +23,13 @@ export interface TestTakingViewProps {
   status: React.ReactNode;
   preview?: boolean;
   answers?: Record<string, ExerciseAnswer>;
+  translationGrades?: TestTranslationGrades;
   resolvedExerciseState?: Record<string, ResolvedGeneratedExerciseState>;
   allowGeneratedExerciseQueries?: boolean;
   vocabularyPoolId?: string | null;
   resolvedVocabularyPool?: VocabularyPoolStudyData;
   onAnswer?: (event: ExerciseAnswerEvent) => void;
+  onGradeTestTranslation?: TestTranslationGradeHandler;
   onExerciseComplete?: (exerciseId: string, score: number) => void;
   onPrevious: () => void;
   onNext: () => void;
@@ -45,11 +48,13 @@ export function TestTakingView({
   status,
   preview = false,
   answers,
+  translationGrades,
   resolvedExerciseState,
   allowGeneratedExerciseQueries = false,
   vocabularyPoolId,
   resolvedVocabularyPool,
   onAnswer,
+  onGradeTestTranslation,
   onExerciseComplete,
   onPrevious,
   onNext,
@@ -104,6 +109,8 @@ export function TestTakingView({
               runtimeMode="test"
               onAnswer={onAnswer}
               answers={answers}
+              translationGrades={translationGrades}
+              onGradeTestTranslation={onGradeTestTranslation}
               resolvedExerciseState={resolvedExerciseState}
               allowGeneratedExerciseQueries={allowGeneratedExerciseQueries}
               vocabularyPoolId={vocabularyPoolId}

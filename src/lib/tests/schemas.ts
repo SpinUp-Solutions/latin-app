@@ -312,11 +312,20 @@ const testAttemptBaseShape = {
   updatedAt: z.string().min(1),
 };
 
+const testTranslationItemGradeSchema = z
+  .object({
+    translation: z.string().min(1).max(10_000),
+    score: z.number().finite().min(0).max(10),
+    feedback: z.string().trim().min(1).max(400),
+  })
+  .strict();
+
 const inProgressTestAttemptDocumentSchema = z
   .object({
     ...testAttemptBaseShape,
     status: z.literal('in-progress'),
     answers: z.record(z.string(), z.unknown()),
+    translationGrades: z.record(z.string(), z.record(z.string(), testTranslationItemGradeSchema)).default({}),
     deliveryState: testAttemptDeliveryStateSchema,
   })
   .strict()
@@ -400,6 +409,14 @@ export const saveTestAttemptAnswersInputSchema = z
   .refine(value => Object.keys(value.answers).length > 0, 'At least one answer is required')
   .refine(value => Object.keys(value.answers).length <= 100, 'No more than 100 answers may be saved at once');
 
+export const gradeTestTranslationInputSchema = z
+  .object({
+    exerciseId: firestoreDocumentIdSchema,
+    itemIndex: z.number().int().nonnegative().max(499),
+    userTranslation: z.string().trim().min(1).max(10_000),
+  })
+  .strict();
+
 export const createTestUnitInputSchema = z
   .object({
     id: firestoreDocumentIdSchema,
@@ -453,3 +470,4 @@ export type DuplicateStandaloneMockVersionIntoTestInput = z.infer<
 export type ReorderMockTestsInput = z.infer<typeof reorderMockTestsInputSchema>;
 export type StartTestAttemptInput = z.infer<typeof startTestAttemptInputSchema>;
 export type SaveTestAttemptAnswersInput = z.infer<typeof saveTestAttemptAnswersInputSchema>;
+export type GradeTestTranslationInput = z.infer<typeof gradeTestTranslationInputSchema>;

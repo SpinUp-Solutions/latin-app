@@ -17,6 +17,7 @@ import { adminDb } from '@/src/services/firebase-admin';
 import type { LearningPathDocument, TestUnit, TestUnitCompletionProgress } from '@/src/types/learning-unit';
 import type {
   InProgressTestAttempt,
+  GradeTestTranslationResult,
   MockTest,
   StartTestAttemptResult,
   StudentInProgressTestAttempt,
@@ -29,19 +30,25 @@ import type {
   TestAttemptOriginSummary,
   TestAttemptResultSummary,
   TestAttemptSession,
+  TestTranslationItemGrade,
   TestVersion,
 } from '@/src/types/test';
 import { isAnswerForExercise, parseExerciseAnswer } from './answer-schemas';
 import {
   createFrozenTestDeliveryState,
   gradeFrozenTestDelivery,
-  gradeFrozenTranslationExercises,
+  scoreFrozenTranslationExercises,
   sanitizeTestDeliveryState,
   type FrozenDeliveryScore,
   type FrozenTestDeliveryState,
-  type TestTranslationGrader,
 } from './delivery';
-import { gradeTestTranslation } from '@/shared/openai/translation-grading';
+import {
+  gradeTestTranslation,
+  testTranslationGradingOutputSchema,
+  type TestTranslationGradingOutput,
+} from '@/shared/openai/translation-grading';
+import type { TranslationGradingRequest } from '@/shared/openai/types';
+import { richTextToPlainText } from '@/src/utils/exercises/helpers';
 import { TEST_VERSION_SUMMARY_FIELDS, selectLeastUsedTestVersion, validateTestAssignmentGraph } from './domain';
 import { TestServiceError } from './errors';
 import { estimateFirestoreDocumentBytes } from './firestore-size';
@@ -60,6 +67,7 @@ import {
 } from './persistence';
 import {
   saveTestAttemptAnswersInputSchema,
+  gradeTestTranslationInputSchema,
   startTestAttemptInputSchema,
   submittedAttemptResultProjectionSchema,
   submittedAttemptTrendProjectionSchema,
@@ -67,6 +75,7 @@ import {
   testAttemptDocumentSchema,
   testAttemptSessionDocumentSchema,
   type SaveTestAttemptAnswersInput,
+  type GradeTestTranslationInput,
   type StartTestAttemptInput,
 } from './schemas';
 
@@ -77,6 +86,8 @@ export const MAX_TEST_ATTEMPT_DOCUMENT_BYTES = 900 * 1024;
  * remaining orders of magnitude below the smallest meaningful score gap.
  */
 export const PASSING_THRESHOLD_TOLERANCE = 1e-9;
+
+export type TestTranslationGrader = (request: TranslationGradingRequest) => Promise<TestTranslationGradingOutput>;
 
 const originId = (origin: TestAttemptOrigin) => (origin.kind === 'normal-test' ? origin.testId : origin.mockTestId);
 
@@ -179,7 +190,7 @@ export class TestAttemptService {
       (async request => {
         const result = await gradeTestTranslation(request);
         if (!result.success || !result.data) throw new Error('The translation grader returned no usable score');
-        return result.data.score;
+        return result.data;
       });
   }
 
@@ -461,6 +472,7 @@ export class TestAttemptService {
           origin,
           status: 'in-progress',
           answers: {},
+          translationGrades: {},
           deliveryState,
           startedAt: timestamp,
           updatedAt: timestamp,
@@ -504,6 +516,9 @@ export class TestAttemptService {
       }
 
       const answers = { ...attempt.answers };
+      const translationGrades = Object.fromEntries(
+        Object.entries(attempt.translationGrades).map(([exerciseId, grades]) => [exerciseId, { ...grades }])
+      );
       const itemsById = new Map(
         attempt.deliveryState.pages.flatMap(page => page.items).map(item => [item.id, item] as const)
       );
@@ -519,6 +534,7 @@ export class TestAttemptService {
         }
         if (rawAnswer === null) {
           delete answers[exerciseId];
+          delete translationGrades[exerciseId];
           continue;
         }
 
@@ -532,11 +548,13 @@ export class TestAttemptService {
           throw new TestServiceError('ATTEMPT_ANSWER_INVALID', `The committed answer must have type ${item.type}`, 400);
         }
         answers[exerciseId] = answer;
+        if (item.type === 'translation-grading') delete translationGrades[exerciseId];
       }
 
       const updated = testAttemptDocumentSchema.parse({
         ...attempt,
         answers,
+        translationGrades,
         updatedAt: this.now(),
       }) as InProgressTestAttempt;
       this.assertAttemptDocumentSize(updated);
@@ -545,34 +563,54 @@ export class TestAttemptService {
     });
   }
 
-  async submitAttempt(attemptId: string, studentId: string): Promise<SubmitTestAttemptResult> {
+  async gradeTranslationItem(
+    attemptId: string,
+    input: GradeTestTranslationInput,
+    studentId: string
+  ): Promise<GradeTestTranslationResult> {
+    const request = gradeTestTranslationInputSchema.parse(input);
     const attemptRef = this.attempts.doc(attemptId);
 
-    const attemptForGrading = await this.db.runTransaction(async transaction => {
+    const gradingRequest = await this.db.runTransaction(async transaction => {
       const attempt = parseAttemptSnapshot(await transaction.get(attemptRef));
       assertAttemptOwner(attempt, studentId);
-      if (attempt.status === 'in-progress' && attempt.origin.kind === 'normal-test') {
+      if (attempt.status !== 'in-progress') {
+        throw new TestServiceError('ATTEMPT_NOT_IN_PROGRESS', 'This test attempt has already been submitted', 409);
+      }
+      if (attempt.origin.kind === 'normal-test') {
         await this.assertNormalTestUnlocked(transaction, studentId, attempt.origin.testId, true);
       }
-      return attempt;
-    });
-    if (attemptForGrading.status === 'submitted') {
-      return { attempt: toStudentAttempt(attemptForGrading) as StudentSubmittedTestAttempt, completionGranted: false };
-    }
 
-    const gradingAnswersFingerprint = JSON.stringify(attemptForGrading.answers);
-    let translationScoreOverrides: Record<string, { awardedPoints: number; maxPoints: number }>;
+      const exercise = attempt.deliveryState.pages
+        .flatMap(page => page.items)
+        .find(item => item.id === request.exerciseId);
+      if (!exercise || exercise.type !== 'translation-grading') {
+        throw new TestServiceError(
+          'ATTEMPT_ANSWER_INVALID',
+          'This translation does not belong to the test attempt',
+          400
+        );
+      }
+      const item = exercise.data.items[request.itemIndex];
+      if (!item) {
+        throw new TestServiceError('ATTEMPT_ANSWER_INVALID', 'This translation item does not exist', 400);
+      }
+
+      return {
+        sourceText: richTextToPlainText(item.latinText),
+        userTranslation: request.userTranslation,
+        direction: exercise.translationDirection ?? 'latin-to-english',
+      } satisfies TranslationGradingRequest;
+    });
+
+    let gradingOutput: TestTranslationGradingOutput;
     try {
-      translationScoreOverrides = await gradeFrozenTranslationExercises(
-        attemptForGrading.deliveryState as FrozenTestDeliveryState,
-        attemptForGrading.answers,
-        this.gradeTestTranslation
-      );
+      gradingOutput = testTranslationGradingOutputSchema.parse(await this.gradeTestTranslation(gradingRequest));
     } catch (error) {
-      console.error(`Could not grade translation answers for attempt ${attemptId}`, error);
+      console.error(`Could not grade translation item for attempt ${attemptId}`, error);
       throw new TestServiceError(
         'ATTEMPT_GRADING_UNAVAILABLE',
-        'Translation grading is temporarily unavailable. Please try submitting again.',
+        'Translation grading is temporarily unavailable. Please try checking the translation again.',
         503
       );
     }
@@ -580,21 +618,82 @@ export class TestAttemptService {
     return this.db.runTransaction(async transaction => {
       const attempt = parseAttemptSnapshot(await transaction.get(attemptRef));
       assertAttemptOwner(attempt, studentId);
-      if (attempt.status === 'submitted') {
-        // Idempotent resubmission: return the frozen result without regrading.
-        return { attempt: toStudentAttempt(attempt) as StudentSubmittedTestAttempt, completionGranted: false };
-      }
-      if (JSON.stringify(attempt.answers) !== gradingAnswersFingerprint) {
-        throw new TestServiceError(
-          'ATTEMPT_CHANGED_DURING_SUBMISSION',
-          'An answer changed while the test was being submitted. Please submit again.',
-          409
-        );
+      if (attempt.status !== 'in-progress') {
+        throw new TestServiceError('ATTEMPT_NOT_IN_PROGRESS', 'This test attempt has already been submitted', 409);
       }
       if (attempt.origin.kind === 'normal-test') {
         await this.assertNormalTestUnlocked(transaction, studentId, attempt.origin.testId, true);
       }
 
+      const exercise = attempt.deliveryState.pages
+        .flatMap(page => page.items)
+        .find(item => item.id === request.exerciseId);
+      if (!exercise || exercise.type !== 'translation-grading' || !exercise.data.items[request.itemIndex]) {
+        throw new TestServiceError(
+          'ATTEMPT_ANSWER_INVALID',
+          'This translation does not belong to the test attempt',
+          400
+        );
+      }
+
+      const existingAnswer = attempt.answers[request.exerciseId];
+      const parsedExistingAnswer = existingAnswer === undefined ? null : parseExerciseAnswer(existingAnswer);
+      if (parsedExistingAnswer && parsedExistingAnswer.type !== 'translation-grading') {
+        throw new TestServiceError('ATTEMPT_ANSWER_INVALID', 'The saved translation answer has an invalid type', 400);
+      }
+      const translations = Array.from(
+        { length: exercise.data.items.length },
+        (_, index) => parsedExistingAnswer?.translations[index] ?? ''
+      );
+      translations[request.itemIndex] = request.userTranslation;
+      const grade: TestTranslationItemGrade = {
+        translation: request.userTranslation,
+        score: gradingOutput.score,
+        feedback: gradingOutput.feedback,
+      };
+      const updated = testAttemptDocumentSchema.parse({
+        ...attempt,
+        answers: {
+          ...attempt.answers,
+          [request.exerciseId]: { type: 'translation-grading', translations },
+        },
+        translationGrades: {
+          ...attempt.translationGrades,
+          [request.exerciseId]: {
+            ...attempt.translationGrades[request.exerciseId],
+            [String(request.itemIndex)]: grade,
+          },
+        },
+        updatedAt: this.now(),
+      }) as InProgressTestAttempt;
+      this.assertAttemptDocumentSize(updated);
+      transaction.set(attemptRef, updated);
+
+      return {
+        attempt: toStudentAttempt(updated) as StudentInProgressTestAttempt,
+        grade,
+      };
+    });
+  }
+
+  async submitAttempt(attemptId: string, studentId: string): Promise<SubmitTestAttemptResult> {
+    const attemptRef = this.attempts.doc(attemptId);
+
+    return this.db.runTransaction(async transaction => {
+      const attempt = parseAttemptSnapshot(await transaction.get(attemptRef));
+      assertAttemptOwner(attempt, studentId);
+      if (attempt.status === 'submitted') {
+        return { attempt: toStudentAttempt(attempt) as StudentSubmittedTestAttempt, completionGranted: false };
+      }
+      if (attempt.origin.kind === 'normal-test') {
+        await this.assertNormalTestUnlocked(transaction, studentId, attempt.origin.testId, true);
+      }
+
+      const translationScoreOverrides = scoreFrozenTranslationExercises(
+        attempt.deliveryState as FrozenTestDeliveryState,
+        attempt.answers,
+        attempt.translationGrades
+      );
       let frozenScore: FrozenDeliveryScore;
       try {
         frozenScore = gradeFrozenTestDelivery(

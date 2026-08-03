@@ -935,30 +935,46 @@ describe('test attempt submission and sticky completion', () => {
     });
   });
 
-  it('grades test translations on the server and normalizes the /10 scores to maxPoints', async () => {
+  it('grades and saves test translations immediately, then normalizes saved /10 scores to maxPoints', async () => {
     const db = new FakeFirestore();
     db.seed('lessons', 'test-1', testDocument(['version-a']));
     db.seed('testVersions', 'version-a', versionDocumentWith('version-a', translationGradingExercise, 8));
-    const gradeTestTranslation = jest.fn(async ({ sourceText }: { sourceText: string }) =>
-      sourceText === 'Puella cantat.' ? 9 : 6
-    );
+    const gradeTestTranslation = jest.fn(async ({ sourceText }: { sourceText: string }) => ({
+      score: sourceText === 'Puella cantat.' ? 9 : 6,
+      feedback: sourceText === 'Puella cantat.' ? 'Accurate and idiomatic.' : 'Check the subject and verb.',
+    }));
     const service = new TestAttemptService(db as never, () => timestamp, { gradeTestTranslation });
     const started = await service.startAttempt(startInput, 'student-1');
-    await service.saveAttemptAnswers(
+    const firstGrade = await service.gradeTranslationItem(
       started.attempt.id,
       {
-        answers: {
-          'translation-assessment': {
-            type: 'translation-grading',
-            translations: ['The girl sings.', 'The boys run.'],
-          },
-        },
+        exerciseId: 'translation-assessment',
+        itemIndex: 0,
+        userTranslation: 'The girl sings.',
+      },
+      'student-1'
+    );
+    await service.gradeTranslationItem(
+      started.attempt.id,
+      {
+        exerciseId: 'translation-assessment',
+        itemIndex: 1,
+        userTranslation: 'The boys run.',
       },
       'student-1'
     );
 
     const result = await service.submitAttempt(started.attempt.id, 'student-1');
 
+    expect(firstGrade.grade).toEqual({
+      translation: 'The girl sings.',
+      score: 9,
+      feedback: 'Accurate and idiomatic.',
+    });
+    expect(firstGrade.attempt.answers['translation-assessment']).toEqual({
+      type: 'translation-grading',
+      translations: ['The girl sings.', ''],
+    });
     expect(gradeTestTranslation).toHaveBeenCalledTimes(2);
     expect(result.attempt).toMatchObject({ score: 6, maxScore: 8, percentage: 75, outcome: 'passed' });
     expect(result.attempt.exerciseResults['translation-assessment']).toEqual({
@@ -977,24 +993,25 @@ describe('test attempt submission and sticky completion', () => {
       gradeTestTranslation: async () => Promise.reject(new Error('provider unavailable')),
     });
     const started = await service.startAttempt(startInput, 'student-1');
-    await service.saveAttemptAnswers(
-      started.attempt.id,
-      {
-        answers: {
-          'translation-assessment': {
-            type: 'translation-grading',
-            translations: ['The girl sings.', 'The boys run.'],
-          },
+    await expect(
+      service.gradeTranslationItem(
+        started.attempt.id,
+        {
+          exerciseId: 'translation-assessment',
+          itemIndex: 0,
+          userTranslation: 'The girl sings.',
         },
-      },
-      'student-1'
-    );
-
-    await expect(service.submitAttempt(started.attempt.id, 'student-1')).rejects.toMatchObject({
+        'student-1'
+      )
+    ).rejects.toMatchObject({
       code: 'ATTEMPT_GRADING_UNAVAILABLE',
       status: 503,
     });
-    expect(db.read('testAttempts', started.attempt.id)).toMatchObject({ status: 'in-progress' });
+    expect(db.read('testAttempts', started.attempt.id)).toMatchObject({
+      status: 'in-progress',
+      answers: {},
+      translationGrades: {},
+    });
     consoleError.mockRestore();
   });
 

@@ -15,8 +15,13 @@ import { isExerciseAnswerComplete } from '@/src/lib/tests/answer-completion';
 import { getApiErrorCode, getApiErrorMessage } from '@/src/store/api/baseQuery';
 import { useGetStudentDashboardQuery } from '@/src/store/api/lessonApi';
 import { useGetStudentMockDetailQuery } from '@/src/store/api/mockTestApi';
-import { useStartTestAttemptMutation, useSubmitTestAttemptMutation } from '@/src/store/api/testApi';
+import {
+  useGradeTestTranslationMutation,
+  useStartTestAttemptMutation,
+  useSubmitTestAttemptMutation,
+} from '@/src/store/api/testApi';
 import type { StudentTestSummary } from '@/src/types/lesson';
+import type { TestTranslationGradeEvent, TestTranslationGradeFeedback } from '@/src/types/runtime-mode';
 import type { TestAttemptOrigin } from '@/src/types/test';
 import type { StudentInProgressTestAttempt, StudentSubmittedTestAttempt } from '@/src/types/test';
 
@@ -50,9 +55,11 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
     refetch: refetchMockDetail,
   } = useGetStudentMockDetailQuery({ uid: user?.uid ?? '', mockId: testId }, { skip: !user?.uid || !isMockTest });
   const [startAttempt, { isLoading: starting }] = useStartTestAttemptMutation();
+  const [gradeTestTranslation, { isLoading: translationGrading }] = useGradeTestTranslationMutation();
   const [submitAttempt, { isLoading: submitting }] = useSubmitTestAttemptMutation();
   const {
     activateAttempt,
+    adoptPersistedAnswer,
     answers,
     flushPendingAnswers,
     hasUnsavedAnswers,
@@ -279,6 +286,28 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
     }
   };
 
+  const gradeTranslation = async (event: TestTranslationGradeEvent): Promise<TestTranslationGradeFeedback> => {
+    if (!attempt || !user) throw new Error('This test attempt is not available.');
+    const requestedOriginKey = originKey;
+    try {
+      await flushPendingAnswers();
+      const response = await gradeTestTranslation({
+        uid: user.uid,
+        attemptId: attempt.id,
+        ...event,
+      }).unwrap();
+      if (activeOriginKeyRef.current !== requestedOriginKey) {
+        throw new Error('The active test changed while the translation was being graded.');
+      }
+      const savedAnswer = response.attempt.answers[event.exerciseId];
+      if (savedAnswer) adoptPersistedAnswer({ exerciseId: event.exerciseId, answer: savedAnswer });
+      setAttempt(response.attempt);
+      return { score: response.grade.score, feedback: response.grade.feedback };
+    } catch (error) {
+      throw new Error(getApiErrorMessage(error, 'Unable to grade this translation'));
+    }
+  };
+
   const submit = async () => {
     if (!attempt || !user) return;
     const requestedOriginKey = originKey;
@@ -438,7 +467,8 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
               <div className="mt-1 text-sm text-roman-stone">{points}</div>
             </div>
             <ul className="space-y-3 text-sm text-gray-700">
-              <li>Answer feedback is withheld until you submit.</li>
+              <li>Translation exercises show brief AI feedback when you check each answer.</li>
+              <li>Feedback for other exercise types is withheld until you submit.</li>
               <li>Your committed answers are saved and can be resumed after a refresh.</li>
               <li>This test is untimed. Review your answers before submitting.</li>
             </ul>
@@ -621,7 +651,10 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
               <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
               Return to test
             </Button>
-            <Button className="bg-roman-red hover:bg-roman-red/90" disabled={submitting} onClick={submit}>
+            <Button
+              className="bg-roman-red hover:bg-roman-red/90"
+              disabled={submitting || translationGrading}
+              onClick={submit}>
               {submitting ? 'Submitting…' : 'Submit Test'}
             </Button>
           </div>
@@ -630,7 +663,9 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
     );
   }
 
-  const saveStatus = saveError ? (
+  const saveStatus = translationGrading ? (
+    <span>Grading and saving translation…</span>
+  ) : saveError ? (
     <span className="font-medium text-red-700">{saveError}</span>
   ) : answerSaveStatus === 'recorded' ? (
     <span>Answer recorded. Saving…</span>
@@ -652,12 +687,15 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
       totalExercises={exerciseItems.length}
       status={saveStatus}
       answers={answers}
+      translationGrades={attempt.translationGrades}
       resolvedExerciseState={attempt.delivery.resolvedExercises}
       resolvedVocabularyPool={attempt.delivery.vocabularyPool}
       onAnswer={recordAnswer}
+      onGradeTestTranslation={gradeTranslation}
       onPrevious={() => void moveToPage(pageIndex - 1)}
       onNext={() => void moveToPage(pageIndex + 1)}
       onReview={() => void openReview()}
+      navigationPending={translationGrading}
     />
   );
 }

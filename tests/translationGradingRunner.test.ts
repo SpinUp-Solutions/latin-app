@@ -124,7 +124,13 @@ describe('translation grading runner', () => {
             id: 'message-1',
             status: 'completed',
             role: 'assistant',
-            content: [{ type: 'output_text', text: JSON.stringify({ score: 8.5 }), annotations: [] }],
+            content: [
+              {
+                type: 'output_text',
+                text: JSON.stringify({ score: 8.5, feedback: 'Accurate overall; check the final tense.' }),
+                annotations: [],
+              },
+            ],
           },
         ],
       })
@@ -132,7 +138,10 @@ describe('translation grading runner', () => {
 
     const result = await runTestTranslationGrading(request);
 
-    expect(result).toMatchObject({ success: true, data: { score: 8.5 } });
+    expect(result).toMatchObject({
+      success: true,
+      data: { score: 8.5, feedback: 'Accurate overall; check the final tense.' },
+    });
     const call = createResponse.mock.calls[0][0];
     expect(call.instructions).toContain('assessment grader');
     expect(call.instructions).toContain('untrusted assessment data');

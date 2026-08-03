@@ -187,7 +187,7 @@ describe('sanitized test delivery rendering', () => {
     expect(screen.getByText('Answer recorded.')).toBeInTheDocument();
   });
 
-  it('records AI translation answers without grading or revealing feedback during a test', () => {
+  it('grades AI translations immediately and shows compact test feedback', async () => {
     const exercise: TranslationGradingExercise = {
       id: 'ai-translation',
       type: 'translation-grading',
@@ -200,20 +200,32 @@ describe('sanitized test delivery rendering', () => {
     };
     const { content } = sanitizeExercise(exercise);
     const onAnswer = jest.fn();
+    const onGradeTestTranslation = jest.fn(async () => ({
+      score: 8.5,
+      feedback: 'Accurate overall; check the tense.',
+    }));
 
-    render(<ContentRenderer content={content.items[0]} runtimeMode="test" onAnswer={onAnswer} />);
+    render(
+      <ContentRenderer
+        content={content.items[0]}
+        runtimeMode="test"
+        onAnswer={onAnswer}
+        onGradeTestTranslation={onGradeTestTranslation}
+      />
+    );
     fireEvent.change(screen.getByPlaceholderText('Type your English translation...'), {
       target: { value: 'The girl sings.' },
     });
-    fireEvent.click(screen.getByTitle('Record Translation'));
+    fireEvent.click(screen.getByTitle('Check Translation'));
 
-    expect(screen.getByText('Answer recorded.')).toBeInTheDocument();
-    expect(onAnswer).toHaveBeenCalledWith(
-      expect.objectContaining({
-        exerciseId: 'ai-translation',
-        answer: { type: 'translation-grading', translations: ['The girl sings.'] },
-      })
-    );
+    expect(await screen.findByText('8.5/10')).toBeInTheDocument();
+    expect(screen.getByText('Accurate overall; check the tense.')).toBeInTheDocument();
+    expect(onGradeTestTranslation).toHaveBeenCalledWith({
+      exerciseId: 'ai-translation',
+      itemIndex: 0,
+      userTranslation: 'The girl sings.',
+    });
+    expect(onAnswer).not.toHaveBeenCalled();
     expect(screen.queryByText('Suggested Translation')).not.toBeInTheDocument();
   });
 

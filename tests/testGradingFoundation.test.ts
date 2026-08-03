@@ -3,7 +3,7 @@ import { EXERCISE_ANSWER_SCHEMAS } from '@/src/lib/tests/answer-schemas';
 import {
   createFrozenTestDeliveryState,
   gradeFrozenTestDelivery,
-  gradeFrozenTranslationExercises,
+  scoreFrozenTranslationExercises,
   sanitizeTestDeliveryState,
 } from '@/src/lib/tests/delivery';
 import { resolveGeneratedExerciseItems } from '@/src/lib/tests/generated-exercises';
@@ -97,9 +97,6 @@ describe('test grading foundation', () => {
       },
     };
     const state = await createFrozenTestDeliveryState(makeVersion(exercise), async () => []);
-    const grader = jest.fn(async ({ sourceText }: { sourceText: string }) =>
-      sourceText === 'The girl sings. Today. Again.' ? 9 : 6
-    );
     const answers = {
       'translation-one': {
         type: 'translation-grading' as const,
@@ -107,14 +104,14 @@ describe('test grading foundation', () => {
       },
     };
 
-    const overrides = await gradeFrozenTranslationExercises(state, answers, grader);
+    const overrides = scoreFrozenTranslationExercises(state, answers, {
+      'translation-one': {
+        '0': { translation: 'puella cantat', score: 9, feedback: 'Strong translation.' },
+        '1': { translation: 'pueri currunt', score: 6, feedback: 'Check the verb form.' },
+      },
+    });
     const result = gradeFrozenTestDelivery(state, answers, overrides);
 
-    expect(grader).toHaveBeenCalledWith({
-      sourceText: 'The girl sings. Today. Again.',
-      userTranslation: 'puella cantat',
-      direction: 'english-to-latin',
-    });
     expect(result).toMatchObject({ awardedPoints: 6, maxPoints: 8 });
   });
 
