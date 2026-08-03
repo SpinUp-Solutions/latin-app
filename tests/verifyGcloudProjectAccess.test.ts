@@ -1,4 +1,9 @@
-import { LEGACY_REPAIR_REQUIRED_PERMISSIONS, verifyGcloudProjectAccess } from '@/src/lib/verifyGcloudProjectAccess';
+import {
+  LEGACY_REPAIR_REQUIRED_PERMISSIONS,
+  LEGACY_REPAIR_REQUIRED_STORAGE_PERMISSIONS,
+  verifyGcloudProjectAccess,
+  verifyGcloudStorageAccess,
+} from '@/src/lib/verifyGcloudProjectAccess';
 
 function request(token?: string) {
   return {
@@ -31,6 +36,8 @@ describe('gcloud project access verification', () => {
       email: 'admin@example.com',
       authentication: 'gcloud-oauth-access-token',
       permissions: [...LEGACY_REPAIR_REQUIRED_PERMISSIONS].sort(),
+      accessToken: 'short-lived-token',
+      expiresIn: 3000,
     });
 
     expect(fetchImplementation).toHaveBeenNthCalledWith(
@@ -41,6 +48,28 @@ describe('gcloud project access verification', () => {
         headers: expect.objectContaining({ Authorization: 'Bearer short-lived-token' }),
       })
     );
+  });
+
+  it('requires permission to create the durable production snapshot', async () => {
+    const operator = {
+      email: 'admin@example.com',
+      authentication: 'gcloud-oauth-access-token' as const,
+      permissions: [...LEGACY_REPAIR_REQUIRED_PERMISSIONS],
+      accessToken: 'short-lived-token',
+      expiresIn: 3000,
+    };
+    const fetchImplementation = jest
+      .fn()
+      .mockResolvedValue(jsonResponse({ permissions: [...LEGACY_REPAIR_REQUIRED_STORAGE_PERMISSIONS] }));
+
+    await expect(
+      verifyGcloudStorageAccess(
+        operator,
+        'latin-app-prod.firebasestorage.app',
+        LEGACY_REPAIR_REQUIRED_STORAGE_PERMISSIONS,
+        fetchImplementation
+      )
+    ).resolves.toBeUndefined();
   });
 
   it('rejects requests without a bearer token before making any network request', async () => {
