@@ -1,10 +1,13 @@
 import { createHash } from 'node:crypto';
 import { AI_EVALUATION_SCHEMA_VERSION, type EvaluationDirection } from './contracts';
+import type { TranslationGradingMode } from '../../../shared/openai/translation-grading';
 
 export interface EvaluationCacheKeyInput {
   direction: EvaluationDirection;
   sourceText: string;
   answerText: string;
+  gradingMode: TranslationGradingMode;
+  profileId: string;
   model: string;
   reasoningEffort: 'low' | 'high';
   promptVersion: string;
@@ -22,6 +25,8 @@ export function createEvaluationCacheKey(input: EvaluationCacheKeyInput): string
     schemaVersion: input.schemaVersion ?? AI_EVALUATION_SCHEMA_VERSION,
     promptVersion: input.promptVersion,
     profileVersion: input.profileVersion ?? input.promptVersion,
+    gradingMode: input.gradingMode,
+    profileId: input.profileId,
     direction: input.direction,
     sourceText: input.sourceText,
     answerText: input.answerText,

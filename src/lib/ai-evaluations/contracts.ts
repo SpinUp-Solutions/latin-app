@@ -4,18 +4,25 @@ import {
   type CostMeasurementStatus,
   type TokenUsage,
   type TranslationDirection,
+  TRANSLATION_GRADING_MODES,
+  type TranslationGradingMode,
 } from '../../../shared/openai/types';
-import type { TranslationGradingOutput } from '../../../shared/openai/translation-grading';
+import type {
+  TestTranslationGradingOutput,
+  TranslationGradingOutput,
+} from '../../../shared/openai/translation-grading';
+import type { TranslationGradingProfileId } from '../../../shared/openai/model-registry';
 
 export {
   AI_EVALUATION_CASES_COLLECTION,
   AI_EVALUATION_RESULT_CACHE_COLLECTION,
   AI_EVALUATION_RUN_THROTTLES_COLLECTION,
 } from '../../../shared/constants/firestore';
-export const AI_EVALUATION_SCHEMA_VERSION = 'ai-translation-evaluation-v1';
+export const AI_EVALUATION_SCHEMA_VERSION = 'ai-translation-evaluation-v2';
 
 const CASE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 const ANSWER_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/;
+export const AI_EVALUATION_MAX_ANSWERS = 20;
 
 export const evaluationCaseIdSchema = z.string().regex(CASE_ID_PATTERN, 'Invalid evaluation case id');
 export const evaluationAnswerIdSchema = z.string().regex(ANSWER_ID_PATTERN, 'Invalid answer id');
@@ -37,6 +44,21 @@ const answerLabelSchema = z
   .min(1, 'Answer label is required')
   .max(80, 'Answer label must be 80 characters or fewer');
 
+const evaluationModeSchema = z.enum(TRANSLATION_GRADING_MODES);
+const defaultEvaluationModes: TranslationGradingMode[] = ['lesson'];
+const canonicalEvaluationModes = (modes: readonly TranslationGradingMode[]) =>
+  TRANSLATION_GRADING_MODES.filter(mode => modes.includes(mode));
+const evaluationModesSchema = z
+  .array(evaluationModeSchema)
+  .min(1, 'Choose at least one grading mode')
+  .max(TRANSLATION_GRADING_MODES.length)
+  .superRefine((modes, context) => {
+    if (new Set(modes).size !== modes.length) {
+      context.addIssue({ code: 'custom', message: 'Grading modes must be unique' });
+    }
+  })
+  .transform(canonicalEvaluationModes);
+
 export const evaluationAnswerInputSchema = z
   .object({
     id: evaluationAnswerIdSchema,
@@ -50,7 +72,11 @@ export const evaluationCaseInputSchema = z
     title: titleSchema,
     direction: z.enum(['latin-to-english', 'english-to-latin']),
     sourceText: sourceTextSchema,
-    answers: z.array(evaluationAnswerInputSchema).min(1, 'Add at least one answer').max(20, 'Use at most 20 answers'),
+    answers: z
+      .array(evaluationAnswerInputSchema)
+      .min(1, 'Add at least one answer')
+      .max(AI_EVALUATION_MAX_ANSWERS, `Use at most ${AI_EVALUATION_MAX_ANSWERS} answers`),
+    modes: evaluationModesSchema.default(defaultEvaluationModes),
   })
   .strict()
   .superRefine((value, context) => {
@@ -63,7 +89,6 @@ export const evaluationCaseInputSchema = z
     });
   });
 
-export const evaluationRunRequestSchema = z.object({ forceRefresh: z.boolean().default(false) }).strict();
 export const evaluationFunctionRunRequestSchema = z
   .object({ caseId: evaluationCaseIdSchema, forceRefresh: z.boolean().default(false) })
   .strict();
@@ -71,12 +96,6 @@ export const evaluationFunctionSaveRequestSchema = z
   .object({ caseId: evaluationCaseIdSchema.optional(), input: evaluationCaseInputSchema })
   .strict();
 export const evaluationFunctionDeleteRequestSchema = z.object({ caseId: evaluationCaseIdSchema }).strict();
-
-export interface EvaluationCaseAnswer {
-  id: string;
-  label: string;
-  text: string;
-}
 
 export interface EvaluationCase extends z.infer<typeof evaluationCaseInputSchema> {
   id: string;
@@ -86,21 +105,22 @@ export interface EvaluationCase extends z.infer<typeof evaluationCaseInputSchema
   updatedBy: string;
 }
 
-export interface EvaluationUsage extends TokenUsage {
+interface EvaluationUsage extends TokenUsage {
   /** Original OpenAI response usage, before any app-cache reuse. */
 }
 
-export type EvaluationCellCostStatus = CostMeasurementStatus;
-export type EvaluationAggregateCostStatus = 'measured' | 'lower-bound' | 'unavailable';
+type EvaluationCellCostStatus = CostMeasurementStatus;
+type EvaluationAggregateCostStatus = 'measured' | 'lower-bound' | 'unavailable';
 
-export interface EvaluationCellResult {
+interface EvaluationCellResultBase<M extends TranslationGradingMode> {
   answerId: string;
   answerLabel: string;
-  modelKey: 'baseline' | 'candidate';
+  gradingMode: M;
+  profileId: TranslationGradingProfileId;
   requestedModel: string;
   actualModel?: string;
   reasoningEffort: 'low' | 'high';
-  output?: TranslationGradingOutput;
+  output?: M extends 'lesson' ? TranslationGradingOutput : TestTranslationGradingOutput;
   error?: string;
   errorCode?: string;
   latencyMs: number;
@@ -120,6 +140,11 @@ export interface EvaluationCellResult {
   costIncurredThisRunStatus: EvaluationCellCostStatus;
   costIncurredThisRunReason?: string;
 }
+
+type EvaluationLessonCellResult = EvaluationCellResultBase<'lesson'>;
+type EvaluationTestCellResult = EvaluationCellResultBase<'test'>;
+export type EvaluationCellResult = EvaluationLessonCellResult | EvaluationTestCellResult;
+export type EvaluationCellResultCommon = Omit<EvaluationLessonCellResult, 'gradingMode' | 'output'>;
 
 export interface EvaluationAggregate {
   cellCount: number;
@@ -155,7 +180,6 @@ export interface EvaluationRunResult {
 }
 
 export type EvaluationCaseInput = z.infer<typeof evaluationCaseInputSchema>;
-export type EvaluationRunRequest = z.infer<typeof evaluationRunRequestSchema>;
 export type EvaluationFunctionRunRequest = z.infer<typeof evaluationFunctionRunRequestSchema>;
 export type EvaluationFunctionSaveRequest = z.infer<typeof evaluationFunctionSaveRequestSchema>;
 export type EvaluationFunctionDeleteRequest = z.infer<typeof evaluationFunctionDeleteRequestSchema>;

@@ -31,6 +31,9 @@ const parseCaseSnapshot = (snapshot: DocumentSnapshot): EvaluationCase => {
     direction: data?.direction,
     sourceText: data?.sourceText,
     answers: data?.answers,
+    // Cases created before modes existed preserve their original lesson-only
+    // meaning instead of silently doubling their model calls and cost.
+    modes: data?.modes ?? ['lesson'],
   });
   const metadata = data as Partial<EvaluationCase> | undefined;
   if (!parsed.success || !metadata?.createdAt || !metadata.createdBy || !metadata.updatedAt || !metadata.updatedBy) {

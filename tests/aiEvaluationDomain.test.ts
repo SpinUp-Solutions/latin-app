@@ -3,11 +3,13 @@ import {
   calculateModelCost,
   calculateTokenUsageCost,
   normalizeOpenAIUsage,
+  OPENAI_MODEL_CATALOG,
   parseOpenAIUsage,
   TRANSLATION_GRADING_PROFILES,
 } from '@/shared/openai/model-registry';
 import { createEvaluationCacheKey } from '@/src/lib/ai-evaluations/cache-key';
 import { evaluationCaseInputSchema } from '@/src/lib/ai-evaluations/contracts';
+import { parseEvaluationCaseSnapshot } from '@/src/lib/ai-evaluations/persistence';
 
 describe('AI evaluation pricing and cache contracts', () => {
   it('separates ordinary, cached, cache-write, output, and reasoning usage', () => {
@@ -92,11 +94,13 @@ describe('AI evaluation pricing and cache contracts', () => {
       direction: 'latin-to-english' as const,
       sourceText: 'Gallia est omnis divisa in partes tres.',
       answerText: 'All Gaul is divided into three parts.',
+      gradingMode: 'lesson' as const,
+      profileId: 'baseline',
       model: 'gpt-5.4-mini',
       reasoningEffort: 'low' as const,
       promptVersion: 'translation-grading-v3',
       profileVersion: 'translation-grading-v3:baseline',
-      schemaVersion: 'ai-translation-evaluation-v1',
+      schemaVersion: 'ai-translation-evaluation-v2',
     };
 
     expect(createEvaluationCacheKey(base)).toBe(createEvaluationCacheKey({ ...base }));
@@ -109,6 +113,8 @@ describe('AI evaluation pricing and cache contracts', () => {
     expect(createEvaluationCacheKey(base)).not.toBe(
       createEvaluationCacheKey({ ...base, model: 'gpt-5.6-luna', reasoningEffort: 'high' })
     );
+    expect(createEvaluationCacheKey(base)).not.toBe(createEvaluationCacheKey({ ...base, gradingMode: 'test' }));
+    expect(createEvaluationCacheKey(base)).not.toBe(createEvaluationCacheKey({ ...base, profileId: 'candidate' }));
   });
 
   it('rejects unknown fields and duplicate answer ids', () => {
@@ -124,5 +130,48 @@ describe('AI evaluation pricing and cache contracts', () => {
     });
 
     expect(invalid.success).toBe(false);
+  });
+
+  it('defaults omitted modes to lesson for legacy callers and persisted cases', () => {
+    const input = {
+      title: 'Case',
+      direction: 'latin-to-english' as const,
+      sourceText: 'Gallia est omnis divisa.',
+      answers: [{ id: 'one', label: 'A', text: 'Gaul is divided.' }],
+    };
+    expect(evaluationCaseInputSchema.parse(input).modes).toEqual(['lesson']);
+    expect(
+      parseEvaluationCaseSnapshot({
+        exists: true,
+        id: 'legacy-case',
+        data: () => ({
+          ...input,
+          createdAt: '2026-08-01T00:00:00.000Z',
+          createdBy: 'admin',
+          updatedAt: '2026-08-01T00:00:00.000Z',
+          updatedBy: 'admin',
+        }),
+      } as never).modes
+    ).toEqual(['lesson']);
+  });
+
+  it('resolves every grading profile from its catalog model', () => {
+    for (const profile of Object.values(TRANSLATION_GRADING_PROFILES)) {
+      const model = OPENAI_MODEL_CATALOG[profile.modelId];
+      expect(profile.model).toBe(model.model);
+      expect(profile.pricing).toBe(model.pricing);
+      expect(profile.label).toContain(model.label);
+    }
+  });
+
+  it('canonicalizes evaluation modes and rejects duplicates', () => {
+    const input = {
+      title: 'Case',
+      direction: 'latin-to-english' as const,
+      sourceText: 'Gallia est omnis divisa.',
+      answers: [{ id: 'one', label: 'A', text: 'Gaul is divided.' }],
+    };
+    expect(evaluationCaseInputSchema.parse({ ...input, modes: ['test', 'lesson'] }).modes).toEqual(['lesson', 'test']);
+    expect(evaluationCaseInputSchema.safeParse({ ...input, modes: ['lesson', 'lesson'] }).success).toBe(false);
   });
 });

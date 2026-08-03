@@ -1,5 +1,4 @@
 import OpenAI from 'openai';
-import { TRANSLATION_GRADING_PROFILES } from './model-registry';
 
 let openAIClient: OpenAI | undefined;
 
@@ -19,7 +18,6 @@ export const openai = {
 
 export const DEFAULT_MODEL = 'gpt-5.4-mini';
 export const AUTOCOMPLETE_MODEL = 'gpt-5.4-mini';
-export const TRANSLATION_GRADING_MODEL = TRANSLATION_GRADING_PROFILES.baseline.model;
 
 export const DEFAULT_TEMPERATURE = 0.2;
 

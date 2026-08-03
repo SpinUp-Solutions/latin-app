@@ -52,6 +52,7 @@ describe('AI evaluation admin workspace', () => {
       direction: 'latin-to-english',
       sourceText: 'Gallia est omnis divisa.',
       answers: [{ id: 'answer-loaded', label: 'Answer', text: 'All Gaul is divided.' }],
+      modes: ['lesson', 'test'],
       createdAt: '2026-08-01T00:00:00.000Z',
       createdBy: 'admin',
       updatedAt: '2026-08-01T00:00:00.000Z',
@@ -81,22 +82,24 @@ describe('AI evaluation admin workspace', () => {
       direction: 'latin-to-english',
       sourceText: 'Si quid est in me ingeni.',
       answers: [{ id: 'answer-1', label: 'Student A', text: 'If there is talent in me.' }],
+      modes: ['lesson', 'test'],
       createdAt: '2026-08-01T00:00:00.000Z',
       createdBy: 'admin',
       updatedAt: '2026-08-01T00:00:00.000Z',
       updatedBy: 'admin',
     };
     const cell = (
-      modelKey: 'baseline' | 'candidate',
+      profileId: 'baseline' | 'candidate',
       model: string,
       feedbackLevel: 'Excellent' | 'Very good'
     ): EvaluationCellResult => ({
       answerId: 'answer-1',
       answerLabel: 'Student A',
-      modelKey,
+      gradingMode: 'lesson',
+      profileId,
       requestedModel: model,
       actualModel: model,
-      reasoningEffort: modelKey === 'baseline' ? 'low' : 'high',
+      reasoningEffort: profileId === 'baseline' ? 'low' : 'high',
       output: {
         feedbackLevel,
         isPassing: true,
@@ -128,15 +131,47 @@ describe('AI evaluation admin workspace', () => {
         tokens: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
       },
     });
+    const testCell = (profileId: 'baseline' | 'candidate', model: string): EvaluationCellResult => ({
+      answerId: 'answer-1',
+      answerLabel: 'Student A',
+      gradingMode: 'test',
+      profileId,
+      requestedModel: model,
+      actualModel: model,
+      reasoningEffort: profileId === 'baseline' ? 'low' : 'high',
+      output: { score: 8.5, feedback: 'Accurate overall; check the final tense.' },
+      latencyMs: 120,
+      generationLatencyMs: 120,
+      cacheStatus: 'fresh-api',
+      appCacheHit: false,
+      openAIPromptCacheHit: false,
+      coalescedDuplicate: false,
+      duplicateWithinRun: false,
+      usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+      originalCostStatus: 'measured',
+      originalCost: {
+        inputCost: 0.00001,
+        outputCost: 0.00002,
+        totalCost: 0.00003,
+        tokens: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+      },
+      costIncurredThisRunStatus: 'measured',
+      costIncurredThisRun: {
+        inputCost: 0.00001,
+        outputCost: 0.00002,
+        totalCost: 0.00003,
+        tokens: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+      },
+    });
     const runResult: EvaluationRunResult = {
       caseId: 'case-1',
-      schemaVersion: 'ai-translation-evaluation-v1',
+      schemaVersion: 'ai-translation-evaluation-v2',
       forceRefresh: false,
       startedAt: '2026-08-01T00:00:00.000Z',
       completedAt: '2026-08-01T00:00:00.500Z',
       aggregate: {
-        cellCount: 2,
-        evaluatedCellCount: 2,
+        cellCount: 4,
+        evaluatedCellCount: 4,
         failedCellCount: 0,
         appCacheHits: 0,
         openAIPromptCacheHits: 0,
@@ -164,7 +199,12 @@ describe('AI evaluation admin workspace', () => {
         unknownOriginalCostCells: 0,
         unknownIncurredCostCells: 0,
       },
-      cells: [cell('baseline', 'gpt-5.4-mini', 'Excellent'), cell('candidate', 'gpt-5.6-luna', 'Very good')],
+      cells: [
+        cell('baseline', 'gpt-5.4-mini', 'Excellent'),
+        cell('candidate', 'gpt-5.6-luna', 'Very good'),
+        testCell('baseline', 'gpt-5.4-mini'),
+        testCell('candidate', 'gpt-5.6-luna'),
+      ],
     };
     mockedSaveEvaluationCaseInFirebase.mockResolvedValue(savedCase as never);
     mockedRunEvaluationInFirebase.mockResolvedValue(runResult);
@@ -183,6 +223,7 @@ describe('AI evaluation admin workspace', () => {
         expect.objectContaining({
           title: savedCase.title,
           answers: [expect.objectContaining({ text: savedCase.answers[0].text })],
+          modes: ['lesson', 'test'],
         }),
         undefined
       )
@@ -197,6 +238,8 @@ describe('AI evaluation admin workspace', () => {
     expect(screen.getAllByText('GPT-5.4 Mini · Low').length).toBeGreaterThan(0);
     expect(screen.getAllByText('GPT-5.6 Luna · High').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Good work.')).toHaveLength(2);
+    expect(screen.getByRole('heading', { name: 'Test scoring' })).toBeInTheDocument();
+    expect(screen.getAllByText('8.5/10')).toHaveLength(2);
     expect(screen.getByRole('button', { name: /Cicero case/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText('Immutable run snapshot')).toBeInTheDocument();
 
@@ -211,6 +254,7 @@ describe('AI evaluation admin workspace', () => {
       direction: 'latin-to-english',
       sourceText: 'Gallia est omnis divisa.',
       answers: [{ id: 'answer-save', label: 'Answer', text: 'All Gaul is divided.' }],
+      modes: ['lesson'],
       createdAt: '2026-08-01T00:00:00.000Z',
       createdBy: 'admin',
       updatedAt: '2026-08-01T00:00:00.000Z',
@@ -225,6 +269,8 @@ describe('AI evaluation admin workspace', () => {
 
     render(<AIEvaluationsPage />);
     const title = await screen.findByLabelText('Case title');
+    expect(screen.getByRole('button', { name: 'Lesson feedback' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Test scoring' })).toBeEnabled();
     fireEvent.change(title, { target: { value: 'Updated case' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save case' }));
 
@@ -244,6 +290,7 @@ describe('AI evaluation admin workspace', () => {
       direction: 'latin-to-english',
       sourceText: 'Gallia est omnis divisa.',
       answers: [{ id: 'answer-race', label: 'Answer', text: 'All Gaul is divided.' }],
+      modes: ['lesson'],
       createdAt: '2026-08-01T00:00:00.000Z',
       createdBy: 'admin',
       updatedAt: '2026-08-01T00:00:00.000Z',
@@ -255,7 +302,7 @@ describe('AI evaluation admin workspace', () => {
     });
     const staleResult: EvaluationRunResult = {
       caseId: 'different-case',
-      schemaVersion: 'ai-translation-evaluation-v1',
+      schemaVersion: 'ai-translation-evaluation-v2',
       forceRefresh: false,
       startedAt: '2026-08-01T00:00:00.000Z',
       completedAt: '2026-08-01T00:00:00.100Z',

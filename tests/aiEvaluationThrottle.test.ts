@@ -1,6 +1,7 @@
 import {
   AI_EVALUATION_FORCE_REFRESH_LIMIT,
   AI_EVALUATION_FORCE_REFRESH_CELL_LIMIT,
+  AI_EVALUATION_MAX_CELLS_PER_RUN,
   AI_EVALUATION_RUN_LIMIT,
   AI_EVALUATION_RUN_WINDOW_MS,
   decideEvaluationThrottle,
@@ -88,5 +89,11 @@ describe('AI evaluation run throttle', () => {
     const blocked = decideEvaluationThrottle(second.state, 3_000, true, 1);
     expect(blocked.allowed).toBe(false);
     expect(blocked.reason).toBe('force-refresh-cells');
+  });
+
+  it('accepts the configured lesson-and-test comparison maximum', () => {
+    const decision = decideEvaluationThrottle(undefined, 4_000, false, AI_EVALUATION_MAX_CELLS_PER_RUN);
+    expect(decision.allowed).toBe(true);
+    expect(decision.state.cellCount).toBe(AI_EVALUATION_MAX_CELLS_PER_RUN);
   });
 });

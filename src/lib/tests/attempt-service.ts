@@ -41,8 +41,8 @@ import {
   type FrozenTestDeliveryState,
 } from './delivery';
 import {
-  runTestTranslationGrading,
   testTranslationGradingOutputSchema,
+  translationGrader,
   type TestTranslationGradingOutput,
 } from '@/shared/openai/translation-grading';
 import type { TranslationGradingRequest } from '@/shared/openai/types';
@@ -197,7 +197,7 @@ export class TestAttemptService {
     this.gradeTestTranslation =
       options.gradeTestTranslation ??
       (async request => {
-        const result = await runTestTranslationGrading(request);
+        const result = await translationGrader.grade('test', request);
         if (!result.success) throw new Error(result.error);
         return result.data;
       });

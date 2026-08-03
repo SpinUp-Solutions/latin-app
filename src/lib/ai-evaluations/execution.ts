@@ -1,14 +1,20 @@
 import type { Firestore } from 'firebase-admin/firestore';
 import {
-  runTranslationGrading,
   type TranslationGradingRunFailure,
   type TranslationGradingRunResult,
   type TranslationGradingRunSuccess,
+  translationGrader,
+  type TranslationGradingMode,
+  type TestTranslationGradingOutput,
+  type TranslationGradingOutput,
 } from '../../../shared/openai/translation-grading';
+import { getTranslationGradingTask } from '../../../shared/openai/translation-grading-tasks';
 import {
   calculateTokenUsageCost,
-  TRANSLATION_GRADING_PROFILES,
+  EVALUATION_TRANSLATION_PROFILE_IDS,
+  getTranslationGradingProfile,
   type TranslationGradingProfile,
+  type TranslationGradingProfileId,
 } from '../../../shared/openai/model-registry';
 import type { CostBreakdown, TokenUsage } from '../../../shared/openai/types';
 import {
@@ -24,17 +30,14 @@ import {
   type EvaluationAggregate,
   type EvaluationCase,
   type EvaluationCellResult,
+  type EvaluationCellResultCommon,
   type EvaluationRunResult,
 } from './contracts';
 
 export const MAX_CONCURRENCY = 4;
-const PROFILES: TranslationGradingProfile[] = [
-  TRANSLATION_GRADING_PROFILES.baseline,
-  TRANSLATION_GRADING_PROFILES.candidate,
-];
 
 type ExecutionOutcome = {
-  result: TranslationGradingRunResult;
+  result: TranslationGradingRunResult<TranslationGradingOutput | TestTranslationGradingOutput>;
   appCacheHit: boolean;
   chargeable: boolean;
   runLatencyMs: number;
@@ -108,20 +111,26 @@ async function mapWithConcurrency<T, R>(
 
 interface EvaluationJob {
   answer: EvaluationCase['answers'][number];
+  mode: TranslationGradingMode;
+  profileId: TranslationGradingProfileId;
   profile: TranslationGradingProfile;
   duplicateWithinRun: boolean;
   index: number;
-  cacheKey: string;
 }
 
-const cacheKeyFor = (evaluationCase: EvaluationCase, job: Pick<EvaluationJob, 'answer' | 'profile'>) =>
+const cacheKeyFor = (
+  evaluationCase: EvaluationCase,
+  job: Pick<EvaluationJob, 'answer' | 'mode' | 'profileId' | 'profile'>
+) =>
   createEvaluationCacheKey({
     direction: evaluationCase.direction,
     sourceText: evaluationCase.sourceText,
     answerText: job.answer.text,
+    gradingMode: job.mode,
+    profileId: job.profileId,
     model: job.profile.model,
     reasoningEffort: job.profile.reasoningEffort,
-    promptVersion: job.profile.promptVersion,
+    promptVersion: getTranslationGradingTask(job.mode).promptVersion,
     profileVersion: job.profile.profileVersion,
     schemaVersion: AI_EVALUATION_SCHEMA_VERSION,
   });
@@ -137,10 +146,10 @@ async function executeUniqueJob(
 
   if (!forceRefresh) {
     try {
-      const cached = await getCachedEvaluationResult(cacheKey, db);
+      const cached = await getCachedEvaluationResult(cacheKey, job.mode, db);
       if (cached) {
         const currentCost = calculateTokenUsageCost(cached.usage, job.profile.pricing);
-        const cachedResult: TranslationGradingRunSuccess = {
+        const cachedResult: TranslationGradingRunSuccess<TranslationGradingOutput | TestTranslationGradingOutput> = {
           success: true,
           data: cached.output,
           requestedModel: cached.model,
@@ -166,16 +175,16 @@ async function executeUniqueJob(
   }
 
   const providerStartedAt = Date.now();
-  let result: TranslationGradingRunResult;
+  let result: TranslationGradingRunResult<TranslationGradingOutput | TestTranslationGradingOutput>;
   try {
-    result = await runTranslationGrading(
+    result = await translationGrader.grade(
+      job.mode,
       {
         sourceText: evaluationCase.sourceText,
         userTranslation: job.answer.text,
         direction: evaluationCase.direction,
-        provider: 'openai',
       },
-      job.profile
+      job.profileId
     );
   } catch (error) {
     result = createUnexpectedFailure(job.profile, error, Date.now() - providerStartedAt);
@@ -189,6 +198,7 @@ async function executeUniqueJob(
       await setCachedEvaluationResult(
         {
           cacheKey,
+          gradingMode: job.mode,
           model: result.requestedModel,
           actualModel: result.model ?? result.requestedModel,
           output: result.data,
@@ -244,7 +254,7 @@ async function executeCoalesced(
 
 function createSuccessfulCell(
   job: EvaluationJob,
-  result: TranslationGradingRunSuccess,
+  result: TranslationGradingRunSuccess<TranslationGradingOutput | TestTranslationGradingOutput>,
   appCacheHit: boolean,
   coalescedDuplicate: boolean,
   runLatencyMs: number,
@@ -257,14 +267,13 @@ function createSuccessfulCell(
     : coalescedDuplicate
       ? 'not-incurred-coalesced'
       : result.costMeasurement.status;
-  return {
+  const base: EvaluationCellResultCommon = {
     answerId: job.answer.id,
     answerLabel: job.answer.label,
-    modelKey: job.profile.key,
+    profileId: job.profileId,
     requestedModel: result.requestedModel,
     actualModel: result.model,
     reasoningEffort: job.profile.reasoningEffort,
-    output: result.data,
     latencyMs: runLatencyMs,
     generationLatencyMs: result.latencyMs,
     generatedAt,
@@ -284,6 +293,14 @@ function createSuccessfulCell(
         ? 'Reused an identical in-flight model request.'
         : result.costMeasurement.reason,
   };
+
+  if (job.mode === 'lesson' && 'feedbackLevel' in result.data) {
+    return { ...base, gradingMode: 'lesson', output: result.data };
+  }
+  if (job.mode === 'test' && 'score' in result.data) {
+    return { ...base, gradingMode: 'test', output: result.data };
+  }
+  throw new Error(`Translation grading task ${job.mode} returned an incompatible output shape`);
 }
 
 function createFailureCell(
@@ -293,10 +310,10 @@ function createFailureCell(
   runLatencyMs: number
 ): EvaluationCellResult {
   const measuredCost = costForResult(result);
-  return {
+  const base: EvaluationCellResultCommon = {
     answerId: job.answer.id,
     answerLabel: job.answer.label,
-    modelKey: job.profile.key,
+    profileId: job.profileId,
     requestedModel: result.requestedModel,
     actualModel: result.model,
     reasoningEffort: job.profile.reasoningEffort,
@@ -318,6 +335,7 @@ function createFailureCell(
       ? 'Reused an identical in-flight model request.'
       : result.costMeasurement.reason,
   };
+  return job.mode === 'lesson' ? { ...base, gradingMode: 'lesson' } : { ...base, gradingMode: 'test' };
 }
 
 function measurementStatusFor(
@@ -346,7 +364,6 @@ function measurementStatusFor(
 }
 
 interface EvaluationJobGroup {
-  cacheKey: string;
   jobs: EvaluationJob[];
 }
 
@@ -354,18 +371,20 @@ function buildEvaluationJobGroups(evaluationCase: EvaluationCase): EvaluationJob
   const groups = new Map<string, EvaluationJobGroup>();
   let index = 0;
   for (const answer of evaluationCase.answers) {
-    for (const profile of PROFILES) {
-      const identity = { answer, profile };
-      const cacheKey = cacheKeyFor(evaluationCase, identity);
-      const group = groups.get(cacheKey) ?? { cacheKey, jobs: [] };
-      group.jobs.push({
-        ...identity,
-        cacheKey,
-        index,
-        duplicateWithinRun: group.jobs.length > 0,
-      });
-      groups.set(cacheKey, group);
-      index += 1;
+    for (const mode of evaluationCase.modes) {
+      for (const profileId of EVALUATION_TRANSLATION_PROFILE_IDS) {
+        const profile = getTranslationGradingProfile(profileId);
+        const identity = { answer, mode, profileId, profile };
+        const cacheKey = cacheKeyFor(evaluationCase, identity);
+        const group = groups.get(cacheKey) ?? { jobs: [] };
+        group.jobs.push({
+          ...identity,
+          index,
+          duplicateWithinRun: group.jobs.length > 0,
+        });
+        groups.set(cacheKey, group);
+        index += 1;
+      }
     }
   }
   return [...groups.values()];
@@ -385,7 +404,9 @@ export async function runEvaluationCase(
   const outcomes = await mapWithConcurrency(groups, MAX_CONCURRENCY, group =>
     executeCoalesced(evaluationCase, group.jobs[0], forceRefresh, db)
   );
-  const cells = new Array<EvaluationCellResult>(evaluationCase.answers.length * PROFILES.length);
+  const cells = new Array<EvaluationCellResult>(
+    evaluationCase.answers.length * evaluationCase.modes.length * EVALUATION_TRANSLATION_PROFILE_IDS.length
+  );
   groups.forEach((group, groupIndex) => {
     const outcome = outcomes[groupIndex];
     group.jobs.forEach((job, duplicateIndex) => {
