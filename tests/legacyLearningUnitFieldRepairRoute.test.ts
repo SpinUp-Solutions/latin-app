@@ -2,13 +2,23 @@ import { POST } from '@/src/app/api/admin/lessons/repair-legacy-fields/route';
 import { LegacyLearningUnitRepairOperationError } from '@/src/lib/learning-units/legacy-field-repair-operation';
 
 const verifyGcloudProjectAccess = jest.fn();
+const verifyGcloudStorageAccess = jest.fn();
 const runLegacyLearningUnitRepairOperation = jest.fn();
+const terminate = jest.fn();
 
 jest.mock('next/server', () => jest.requireActual('./helpers/routeMocks'));
-jest.mock('@/src/services/firebase-admin', () => ({ adminDb: { name: 'db' }, adminStorage: { name: 'storage' } }));
+jest.mock('firebase-admin/firestore', () => ({
+  Firestore: jest.fn(() => ({ name: 'db', terminate: (...args: unknown[]) => terminate(...args) })),
+}));
+jest.mock('@google-cloud/storage', () => ({ Storage: jest.fn(() => ({ name: 'storage' })) }));
+jest.mock('google-auth-library', () => ({
+  OAuth2Client: jest.fn(() => ({ setCredentials: jest.fn() })),
+  GoogleAuth: jest.fn(() => ({ name: 'auth' })),
+}));
 jest.mock('@/src/lib/verifyGcloudProjectAccess', () => ({
   ...jest.requireActual('@/src/lib/verifyGcloudProjectAccess'),
   verifyGcloudProjectAccess: (...args: unknown[]) => verifyGcloudProjectAccess(...args),
+  verifyGcloudStorageAccess: (...args: unknown[]) => verifyGcloudStorageAccess(...args),
 }));
 jest.mock('@/src/lib/learning-units/legacy-field-repair-operation', () => ({
   LegacyLearningUnitRepairOperationError: class LegacyLearningUnitRepairOperationError extends Error {
@@ -38,7 +48,10 @@ describe('legacy learning-unit field repair route', () => {
       email: 'operator@example.com',
       authentication: 'gcloud-oauth-access-token',
       permissions: ['datastore.entities.get', 'datastore.entities.list', 'datastore.entities.update'],
+      accessToken: 'gcloud-token',
+      expiresIn: 3000,
     });
+    verifyGcloudStorageAccess.mockResolvedValue(undefined);
     runLegacyLearningUnitRepairOperation.mockResolvedValue({ mode: 'dry-run', planHash: 'a'.repeat(64) });
   });
 
@@ -51,6 +64,10 @@ describe('legacy learning-unit field repair route', () => {
     expect(response.status).toBe(200);
     expect(response.body).toMatchObject({ mode: 'dry-run', planHash: 'a'.repeat(64) });
     expect(verifyGcloudProjectAccess).toHaveBeenCalledWith(expect.anything(), 'latin-app-prod');
+    expect(verifyGcloudStorageAccess).toHaveBeenCalledWith(
+      expect.objectContaining({ email: 'operator@example.com' }),
+      'latin-app-prod.firebasestorage.app'
+    );
     expect(runLegacyLearningUnitRepairOperation).toHaveBeenCalledWith(
       expect.objectContaining({
         projectId: 'latin-app-prod',
@@ -84,16 +101,8 @@ describe('legacy learning-unit field repair route', () => {
     expect(response.body).toEqual({ error: 'Verification failed' });
   });
 
-  it('refuses to initialize against a non-production Firebase project', async () => {
-    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID = 'wellduel-dev';
-
-    const response = (await POST(request({ mode: 'dry-run' }))) as unknown as {
-      status: number;
-      body: { error: string };
-    };
-
-    expect(response.status).toBe(503);
-    expect(response.body.error).toContain('latin-app-prod');
-    expect(verifyGcloudProjectAccess).not.toHaveBeenCalled();
+  it('terminates the request-scoped production Firestore client after the operation', async () => {
+    await POST(request({ mode: 'dry-run' }));
+    expect(terminate).toHaveBeenCalledTimes(1);
   });
 });

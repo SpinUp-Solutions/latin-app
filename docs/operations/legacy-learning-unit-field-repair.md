@@ -15,7 +15,7 @@ The operation can delete only `published`, `introduction`, `introduction_backup`
 - Set `PROD_BASE_URL` to the production application's origin, without a trailing slash.
 - Confirm `gcloud auth list --filter=status:ACTIVE` shows the intended operator.
 
-No static migration secret or Firebase password is needed. Each request uses a short-lived token from `gcloud auth print-access-token`; the endpoint independently checks the token identity and its production IAM permissions.
+No static migration secret or Firebase password is needed. Each request uses a short-lived token from `gcloud auth print-access-token`; the endpoint independently checks the token identity and its production IAM permissions. The same request-scoped token is used for production Firestore and the protected production snapshot, so the endpoint behaves consistently from the edge and production Netlify deployments instead of inheriting their ambient Firebase project.
 
 ## 1. Dry run
 

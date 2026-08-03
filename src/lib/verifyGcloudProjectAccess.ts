@@ -9,10 +9,14 @@ export const LEGACY_REPAIR_REQUIRED_PERMISSIONS = [
   'datastore.entities.update',
 ] as const;
 
+export const LEGACY_REPAIR_REQUIRED_STORAGE_PERMISSIONS = ['storage.buckets.get', 'storage.objects.create'] as const;
+
 export type GcloudProjectOperator = {
   email: string;
   authentication: 'gcloud-oauth-access-token';
   permissions: string[];
+  accessToken: string;
+  expiresIn: number;
 };
 
 export class GcloudProjectAccessError extends Error {
@@ -61,7 +65,7 @@ async function readTokenIdentity(token: string, fetchImplementation: FetchImplem
     throw new GcloudProjectAccessError('The gcloud OAuth token has no valid operator identity', 401);
   }
 
-  return email;
+  return { email, expiresIn };
 }
 
 async function readProjectPermissions(
@@ -106,7 +110,7 @@ export async function verifyGcloudProjectAccess(
   fetchImplementation: FetchImplementation = fetch
 ): Promise<GcloudProjectOperator> {
   const token = bearerToken(request);
-  const [email, grantedPermissions] = await Promise.all([
+  const [identity, grantedPermissions] = await Promise.all([
     readTokenIdentity(token, fetchImplementation),
     readProjectPermissions(token, projectId, permissions, fetchImplementation),
   ]);
@@ -120,8 +124,44 @@ export async function verifyGcloudProjectAccess(
   }
 
   return {
-    email,
+    email: identity.email,
     authentication: 'gcloud-oauth-access-token',
     permissions: [...grantedPermissions].sort(),
+    accessToken: token,
+    expiresIn: identity.expiresIn,
   };
+}
+
+export async function verifyGcloudStorageAccess(
+  operator: GcloudProjectOperator,
+  bucket: string,
+  permissions: readonly string[] = LEGACY_REPAIR_REQUIRED_STORAGE_PERMISSIONS,
+  fetchImplementation: FetchImplementation = fetch
+) {
+  const query = new URLSearchParams();
+  for (const permission of permissions) query.append('permissions', permission);
+  const response = await fetchImplementation(
+    `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(bucket)}/iam/testPermissions?${query}`,
+    {
+      headers: { Authorization: `Bearer ${operator.accessToken}` },
+      cache: 'no-store',
+    }
+  );
+
+  if (!response.ok) {
+    const status = response.status === 401 ? 401 : response.status === 403 ? 403 : 502;
+    throw new GcloudProjectAccessError('Unable to verify production snapshot permissions', status);
+  }
+
+  const payload = (await response.json()) as { permissions?: unknown };
+  const grantedPermissions = Array.isArray(payload.permissions)
+    ? payload.permissions.filter((permission): permission is string => typeof permission === 'string')
+    : [];
+  const missingPermissions = permissions.filter(permission => !grantedPermissions.includes(permission));
+  if (missingPermissions.length > 0) {
+    throw new GcloudProjectAccessError(
+      `The gcloud identity lacks required snapshot permissions: ${missingPermissions.join(', ')}`,
+      403
+    );
+  }
 }

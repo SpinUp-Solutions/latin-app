@@ -1,12 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { adminDb, adminStorage } from '@/src/services/firebase-admin';
+import { Firestore } from 'firebase-admin/firestore';
+import { Storage } from '@google-cloud/storage';
+import { GoogleAuth, OAuth2Client } from 'google-auth-library';
 import {
   LegacyLearningUnitRepairOperationError,
   runLegacyLearningUnitRepairOperation,
 } from '@/src/lib/learning-units/legacy-field-repair-operation';
-import { LEGACY_LEARNING_UNIT_REPAIR_PROJECT_ID } from '@/src/lib/learning-units/legacy-field-repair';
-import { GcloudProjectAccessError, verifyGcloudProjectAccess } from '@/src/lib/verifyGcloudProjectAccess';
+import {
+  LEGACY_LEARNING_UNIT_REPAIR_PROJECT_ID,
+  LEGACY_LEARNING_UNIT_REPAIR_STORAGE_BUCKET,
+} from '@/src/lib/learning-units/legacy-field-repair';
+import {
+  GcloudProjectAccessError,
+  verifyGcloudProjectAccess,
+  verifyGcloudStorageAccess,
+} from '@/src/lib/verifyGcloudProjectAccess';
 
 const requestSchema = z.discriminatedUnion('mode', [
   z.object({ mode: z.literal('dry-run') }).strict(),
@@ -24,23 +33,26 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
-    const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
-    if (projectId !== LEGACY_LEARNING_UNIT_REPAIR_PROJECT_ID) {
-      throw new LegacyLearningUnitRepairOperationError(
-        `Refusing to run outside ${LEGACY_LEARNING_UNIT_REPAIR_PROJECT_ID}`,
-        503
-      );
-    }
-
-    const operator = await verifyGcloudProjectAccess(request, projectId);
+    const operator = await verifyGcloudProjectAccess(request, LEGACY_LEARNING_UNIT_REPAIR_PROJECT_ID);
+    await verifyGcloudStorageAccess(operator, LEGACY_LEARNING_UNIT_REPAIR_STORAGE_BUCKET);
     const input = requestSchema.parse((await request.json().catch(() => ({}))) as unknown);
-    const result = await runLegacyLearningUnitRepairOperation({
-      db: adminDb,
-      storage: adminStorage,
-      projectId,
-      operator,
-      request: input,
-    });
+    const oauth = new OAuth2Client();
+    oauth.setCredentials({ access_token: operator.accessToken });
+    const auth = new GoogleAuth({ projectId: LEGACY_LEARNING_UNIT_REPAIR_PROJECT_ID, authClient: oauth });
+    const db = new Firestore({ projectId: LEGACY_LEARNING_UNIT_REPAIR_PROJECT_ID, auth } as never);
+    const storage = new Storage({ projectId: LEGACY_LEARNING_UNIT_REPAIR_PROJECT_ID, authClient: auth as never });
+    let result;
+    try {
+      result = await runLegacyLearningUnitRepairOperation({
+        db,
+        storage,
+        projectId: LEGACY_LEARNING_UNIT_REPAIR_PROJECT_ID,
+        operator,
+        request: input,
+      });
+    } finally {
+      await db.terminate();
+    }
 
     return NextResponse.json(result, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {

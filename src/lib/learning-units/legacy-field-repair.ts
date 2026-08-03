@@ -10,6 +10,7 @@ export const LEGACY_LEARNING_UNIT_FIELDS = [
 ] as const;
 
 export const LEGACY_LEARNING_UNIT_REPAIR_PROJECT_ID = 'latin-app-prod';
+export const LEGACY_LEARNING_UNIT_REPAIR_STORAGE_BUCKET = 'latin-app-prod.firebasestorage.app';
 
 export const LEGACY_LEARNING_UNIT_REPAIR_TARGET_IDS = [
   'lesson-1757796411836',

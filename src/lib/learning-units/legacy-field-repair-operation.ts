@@ -7,11 +7,12 @@ import {
   type Firestore,
   type Timestamp,
 } from 'firebase-admin/firestore';
-import type { Storage } from 'firebase-admin/storage';
+import type { Storage } from '@google-cloud/storage';
 import { normalizeLearningUnit } from './domain';
 import {
   LEGACY_LEARNING_UNIT_FIELDS,
   LEGACY_LEARNING_UNIT_REPAIR_PROJECT_ID,
+  LEGACY_LEARNING_UNIT_REPAIR_STORAGE_BUCKET,
   LEGACY_LEARNING_UNIT_REPAIR_TARGET_IDS,
   planLegacyLearningUnitFieldRepair,
 } from './legacy-field-repair';
@@ -220,7 +221,7 @@ async function saveBeforeImageSnapshot(
   };
 
   await storage
-    .bucket()
+    .bucket(LEGACY_LEARNING_UNIT_REPAIR_STORAGE_BUCKET)
     .file(path)
     .save(JSON.stringify(payload, null, 2), {
       contentType: 'application/json',
