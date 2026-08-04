@@ -602,6 +602,23 @@ async function executeFirestoreChunk(targetResource, operations) {
   });
 }
 
+function isFirestoreTransactionTooBig(error) {
+  const code = error && typeof error === 'object' ? error.code : undefined;
+  const message = error instanceof Error ? error.message : String(error);
+  return Number(code) === 3 && /transaction too big/i.test(message);
+}
+
+async function executeFirestoreChunkWithSplit(targetResource, operations) {
+  try {
+    await executeFirestoreChunk(targetResource, operations);
+  } catch (error) {
+    if (!isFirestoreTransactionTooBig(error) || operations.length <= 1) throw error;
+    const midpoint = Math.ceil(operations.length / 2);
+    await executeFirestoreChunkWithSplit(targetResource, operations.slice(0, midpoint));
+    await executeFirestoreChunkWithSplit(targetResource, operations.slice(midpoint));
+  }
+}
+
 export async function executeFirestoreOperations(targetResource, operations) {
   assertWriteBoundary(targetResource?.projectId, 'Firestore');
   assertFirestoreResource(targetResource, TARGET_PROJECT_ID, 'Target');
@@ -609,7 +626,7 @@ export async function executeFirestoreOperations(targetResource, operations) {
     if (!MIRRORED_COLLECTIONS.includes(operation.collection)) throw new SyncError('WRITE_SCOPE_VIOLATION', `Refusing to write collection ${operation.collection}`);
   }
   for (const chunk of chunkOperations(operations)) {
-    await executeFirestoreChunk(targetResource, chunk);
+    await executeFirestoreChunkWithSplit(targetResource, chunk);
   }
 }
 

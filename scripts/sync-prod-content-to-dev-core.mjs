@@ -34,8 +34,12 @@ export const EXPLICITLY_PROTECTED_COLLECTIONS = [
   'words-latin-dev',
   ...PRESERVED_REFERENCE_COLLECTIONS,
 ];
-export const MAX_BATCH_WRITES = 399;
-export const MAX_BATCH_BYTES = 7_500_000;
+// Firestore's 10 MiB transaction limit includes more than the serialized
+// document payload (reads, writes, and index-entry expansion all count). Keep
+// the client-side ceiling deliberately conservative; the adapter also halves
+// a chunk if Firestore still reports that a transaction is too large.
+export const MAX_BATCH_WRITES = 100;
+export const MAX_BATCH_BYTES = 1_500_000;
 export const STORAGE_FOLDER_MARKER_NAME = 'lessons/';
 export const EXIT_CODES = Object.freeze({
   OK: 0,

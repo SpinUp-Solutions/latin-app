@@ -79,7 +79,7 @@ class FakeFirestore {
   readonly databaseId = '(default)';
   transactionCalls = 0;
 
-  constructor(projectId: string) {
+  constructor(projectId: string, private readonly maxWritesPerTransaction?: number) {
     this.projectId = projectId;
   }
 
@@ -93,6 +93,9 @@ class FakeFirestore {
     this.transactionCalls += 1;
     const transaction = new FakeTransaction(this);
     await callback(transaction);
+    if (this.maxWritesPerTransaction !== undefined && transaction.writes.length > this.maxWritesPerTransaction) {
+      throw Object.assign(new Error('3 INVALID_ARGUMENT: Transaction too big. Decrease transaction size.'), { code: 3 });
+    }
     transaction.commit();
   }
 }
@@ -223,6 +226,22 @@ describe('production content sync adapter safety', () => {
     db.documents.set('lessons/lesson-1', { data: { id: 'lesson-1', keep: 'drifted' }, updateTime: 't2' });
     await expect(executeFirestoreOperations(target, [{ collection: 'lessons', id: 'lesson-1', action: 'update', source: { data: { id: 'lesson-1', keep: 'new' } }, target: { updateTime: 't1' } }])).rejects.toThrow(/changed after planning/);
     expect(db.documents.get('lessons/lesson-1')?.data.keep).toBe('drifted');
+  });
+
+  it('halves only Firestore transaction-too-big chunks and preserves every write', async () => {
+    const db = new FakeFirestore(TARGET_PROJECT_ID, 2);
+    const operations = Array.from({ length: 5 }, (_, index) => ({
+      collection: 'vocabulary_words_v5',
+      id: `word-${index}`,
+      action: 'create',
+      source: { data: { id: `word-${index}`, value: `value-${index}` } },
+      target: null,
+    }));
+
+    await executeFirestoreOperations({ projectId: TARGET_PROJECT_ID, db }, operations);
+
+    expect(db.transactionCalls).toBe(5);
+    expect([...db.documents.keys()].sort()).toEqual(operations.map(operation => `${operation.collection}/${operation.id}`).sort());
   });
 
   it('pins the captured source generation and rejects metadata-only target drift', async () => {
