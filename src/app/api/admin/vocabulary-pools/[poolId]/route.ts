@@ -4,7 +4,6 @@ import { FieldPath } from 'firebase-admin/firestore';
 import type { Word } from '@/src/types/admin-vocabulary';
 import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 import { buildPoolSearchTokens } from '@/src/utils/vocabularyPoolSummary';
-import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 
 export const dynamic = 'force-dynamic';
 
@@ -213,21 +212,6 @@ export async function DELETE(
 ): Promise<NextResponse> {
   try {
     const { poolId } = await params;
-
-    const lessonsQuery = await adminDb.collection('lessons').where('vocabulary_pool', '==', poolId).get();
-    const lessonUsingPool = lessonsQuery.docs.find(doc => isLessonDocumentData(doc.data()));
-
-    if (lessonUsingPool) {
-      const lessonData = lessonUsingPool.data();
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Cannot delete pool that is assigned to lessons. Found in lesson: ${lessonData.title}`,
-        },
-        { status: 400 }
-      );
-    }
-
     await adminDb.runTransaction(async transaction => {
       const poolRef = adminDb.collection('vocabulary_pools').doc(poolId);
       const poolDoc = await transaction.get(poolRef);

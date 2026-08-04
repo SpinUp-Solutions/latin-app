@@ -4,6 +4,7 @@ import {
   VocabularyPoolSummary,
   VocabularyPoolWithWords,
   CreatePoolRequest,
+  VocabularyPoolUsageResponse,
 } from '@/src/types/vocabulary-pool';
 import { Word } from '@/src/types/admin-vocabulary';
 import { createAuthenticatedBaseQuery } from './baseQuery';
@@ -28,12 +29,18 @@ interface ParadigmSummaryData {
 export const vocabularyPoolApi = createApi({
   reducerPath: 'vocabularyPoolApi',
   baseQuery: createAuthenticatedBaseQuery(),
-  tagTypes: ['Pool', 'PoolList', 'AvailableWords'],
+  tagTypes: ['Pool', 'PoolList', 'PoolUsage', 'AvailableWords'],
   keepUnusedDataFor: 60 * 5,
   refetchOnMountOrArgChange: 300,
   refetchOnFocus: false,
   refetchOnReconnect: true,
   endpoints: builder => ({
+    getVocabularyPoolUsages: builder.query<VocabularyPoolUsageResponse, void>({
+      query: () => '/admin/vocabulary-pools/usages',
+      transformResponse: (response: { success: boolean; data: VocabularyPoolUsageResponse }) => response.data,
+      providesTags: [{ type: 'PoolUsage', id: 'MANAGEMENT' }],
+    }),
+
     getPools: builder.query<
       { pools: VocabularyPoolSummary[]; hasMore: boolean; lastPoolId: string | null },
       {
@@ -152,6 +159,7 @@ export const vocabularyPoolApi = createApi({
       invalidatesTags: (result, error, poolId) => [
         { type: 'Pool', id: poolId },
         { type: 'PoolList', id: 'LIST' },
+        { type: 'PoolUsage', id: 'MANAGEMENT' },
       ],
     }),
 
@@ -240,6 +248,7 @@ export const vocabularyPoolApi = createApi({
 });
 
 export const {
+  useGetVocabularyPoolUsagesQuery,
   useGetPoolsQuery,
   useGetPoolQuery,
   useGetPoolSummaryQuery,

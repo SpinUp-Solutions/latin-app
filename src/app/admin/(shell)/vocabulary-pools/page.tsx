@@ -7,12 +7,18 @@ import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
-import { useGetPoolsQuery, useDeletePoolMutation } from '@/src/store/api/vocabularyPoolApi';
+import {
+  useGetPoolsQuery,
+  useDeletePoolMutation,
+  useGetVocabularyPoolUsagesQuery,
+} from '@/src/store/api/vocabularyPoolApi';
+import { getApiErrorMessage } from '@/src/store/api/baseQuery';
 import { useAppSelector, useAppDispatch } from '@/src/store/hooks';
 import { updateFilters } from '@/src/store/slices/vocabularyPoolSlice';
 import { PoolFilters } from '@/src/components/ui/admin/vocabulary-pools/PoolFilters';
 import { PoolList } from '@/src/components/ui/admin/vocabulary-pools/PoolList';
 import { AdminPage, AdminPageHeader } from '@/src/components/admin/shell';
+import { buildVocabularyPoolDeleteConfirmation } from '@/src/lib/vocabulary-pools/delete-confirmation';
 
 function VocabularyPoolsPage() {
   const router = useRouter();
@@ -20,24 +26,33 @@ function VocabularyPoolsPage() {
   const filters = useAppSelector(state => state.vocabularyPools.filters);
   const [lastPoolId, setLastPoolId] = useState<string | null>(null);
   const { data, isLoading, isFetching, error } = useGetPoolsQuery({ filters, lastPoolId });
+  const {
+    data: usageData,
+    error: usageError,
+    isLoading: usageLoading,
+  } = useGetVocabularyPoolUsagesQuery(undefined, { refetchOnMountOrArgChange: true });
   const [deletePoolMutation] = useDeletePoolMutation();
 
   const pools = data?.pools ?? [];
   const hasMore = data?.hasMore ?? false;
   const loadingMore = isFetching && lastPoolId !== null;
+  const usageStatus = usageData?.status ?? 'unavailable';
+  const usageUnavailable = Boolean(usageError) || (!usageLoading && usageStatus === 'unavailable');
+  const usageUnavailableMessage = `${usageData?.message ?? 'Assignment checks are unavailable.'} You can still delete a pool, but it may break lessons or exercises.`;
 
   useEffect(() => {
     setLastPoolId(null);
   }, [filters]);
 
   const handleDeletePool = async (poolId: string, poolName: string) => {
-    if (confirm(`Are you sure you want to delete "${poolName}"? This action cannot be undone.`)) {
-      try {
-        await deletePoolMutation(poolId).unwrap();
-        toast.success('Pool deleted successfully');
-      } catch {
-        toast.error('Failed to delete pool');
-      }
+    const usages = usageStatus === 'available' ? (usageData?.usagesByPoolId[poolId] ?? []) : [];
+    if (!window.confirm(buildVocabularyPoolDeleteConfirmation(poolName, usages, usageStatus))) return;
+
+    try {
+      await deletePoolMutation(poolId).unwrap();
+      toast.success('Pool deleted successfully');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to delete pool'));
     }
   };
 
@@ -70,6 +85,12 @@ function VocabularyPoolsPage() {
           </div>
         )}
 
+        {usageUnavailable && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4" role="alert">
+            <p className="text-amber-800">{usageUnavailableMessage}</p>
+          </div>
+        )}
+
         <PoolList
           pools={pools}
           loading={isLoading}
@@ -80,6 +101,7 @@ function VocabularyPoolsPage() {
           }}
           onEdit={pool => router.push(`/admin/vocabulary-pools/${pool.id}/edit`)}
           onDelete={handleDeletePool}
+          usagesByPoolId={usageData?.usagesByPoolId ?? {}}
         />
       </div>
     </AdminPage>
