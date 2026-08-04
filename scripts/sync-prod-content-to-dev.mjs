@@ -13,6 +13,7 @@ import {
   RUN_SCHEMA_VERSION,
   SOURCE_PROJECT_ID,
   SOURCE_STORAGE_BUCKET,
+  STORAGE_FOLDER_MARKER_NAME,
   TARGET_PROJECT_ID,
   TARGET_STORAGE_BUCKET,
   SyncError,
@@ -29,6 +30,7 @@ import {
   decodeFirestoreValue,
   encodeFirestoreValue,
   formatTimeForHash,
+  isZeroByteStorageFolderMarker,
   normalizeDocumentRecord,
   normalizeStorageRecord,
   operationsByCollection,
@@ -269,27 +271,28 @@ async function listRootCollectionNames(db) {
   return collections.map(collection => collection.id).sort();
 }
 
-async function listBucketObjects(bucket) {
+export async function listBucketObjects(bucket) {
   const [files] = await bucket.getFiles();
   const records = [];
   for (const file of files) {
     const [metadata] = await file.getMetadata();
-    records.push(
-      normalizeStorageRecord({
-        name: metadata.name ?? file.name,
-        generation: metadata.generation,
-        metageneration: metadata.metageneration,
-        size: metadata.size,
-        md5Hash: metadata.md5Hash,
-        crc32c: metadata.crc32c,
-        contentType: metadata.contentType,
-        cacheControl: metadata.cacheControl,
-        contentEncoding: metadata.contentEncoding,
-        contentDisposition: metadata.contentDisposition,
-        contentLanguage: metadata.contentLanguage,
-        metadata: metadata.metadata ?? {},
-      })
-    );
+    const captured = {
+      name: metadata.name ?? file.name,
+      generation: metadata.generation,
+      metageneration: metadata.metageneration,
+      size: metadata.size,
+      md5Hash: metadata.md5Hash,
+      crc32c: metadata.crc32c,
+      contentType: metadata.contentType,
+      cacheControl: metadata.cacheControl,
+      contentEncoding: metadata.contentEncoding,
+      contentDisposition: metadata.contentDisposition,
+      contentLanguage: metadata.contentLanguage,
+      metadata: metadata.metadata ?? {},
+    };
+    // Inspect the raw SDK metadata so a missing size cannot be normalized to
+    // zero and accidentally treated as the approved non-content marker.
+    if (!isZeroByteStorageFolderMarker(captured)) records.push(normalizeStorageRecord(captured));
   }
   return records.sort((left, right) => left.name.localeCompare(right.name));
 }
@@ -550,7 +553,9 @@ export async function executeStorageOperations(sourceResource, targetResource, o
   assertWriteBoundary(targetResource?.projectId, 'Storage');
   assertStorageResource(targetResource, TARGET_PROJECT_ID, TARGET_STORAGE_BUCKET, 'Target');
   for (const operation of operations) {
-    if (!operation.name.startsWith(LESSONS_PREFIX)) throw new SyncError('WRITE_SCOPE_VIOLATION', `Refusing to write Storage object ${operation.name}`);
+    if (!operation.name.startsWith(LESSONS_PREFIX) || operation.name === STORAGE_FOLDER_MARKER_NAME) {
+      throw new SyncError('WRITE_SCOPE_VIOLATION', `Refusing to write Storage object ${operation.name}`);
+    }
   }
   for (const operation of operations) {
     const targetFile = targetResource.bucket.file(operation.name);
@@ -768,7 +773,9 @@ export async function executeStorageRollbackOperations(targetResource, backupBuc
   assertBackupBucketHandle(backupBucket, 'Rollback backup');
   const prepared = [];
   for (const operation of operations) {
-    if (!operation.name.startsWith(LESSONS_PREFIX)) throw new SyncError('WRITE_SCOPE_VIOLATION', `Refusing to write Storage object ${operation.name}`);
+    if (!operation.name.startsWith(LESSONS_PREFIX) || operation.name === STORAGE_FOLDER_MARKER_NAME) {
+      throw new SyncError('WRITE_SCOPE_VIOLATION', `Refusing to write Storage object ${operation.name}`);
+    }
     if (operation.action === 'preserve') continue;
     const current = currentStorage.get(operation.name);
     if (operation.action === 'delete') {

@@ -6,16 +6,18 @@ import {
   SOURCE_STORAGE_BUCKET,
   TARGET_PROJECT_ID,
   TARGET_STORAGE_BUCKET,
-  SyncError,
+  assertStorageScope,
+  buildContentFingerprint,
+  buildManifest,
   canonicalJson,
   chunkOperations,
-  collectFixtureClosure,
   createPlan,
   dataHash,
   decodeFirestoreValue,
   encodeFirestoreValue,
   assertPlanHash,
   normalizeStorageRecord,
+  isZeroByteStorageFolderMarker,
   safePathSegment,
   sha256,
   validateCurrentTargetState,
@@ -46,7 +48,7 @@ class DocumentReference {
 }
 
 type TestDocument = { id: string; data: Record<string, unknown>; updateTime: string; createTime: string };
-type TestStorageRecord = { name: string; generation: string; metageneration: string; size: string; md5Hash: string; crc32c: null; contentType: string; metadata: Record<string, unknown> };
+type TestStorageRecord = { name: string; generation: string; metageneration: string; size: string; md5Hash: string | null; crc32c: null; contentType: string | null; metadata: Record<string, unknown> };
 type TestState = {
   projectId: string;
   storageBucket: string;
@@ -100,6 +102,10 @@ function path(unitIds: string[]) {
 
 function storage(name: string, md5Hash = 'hash'): TestStorageRecord {
   return { name, generation: '1', metageneration: '1', size: '5', md5Hash, crc32c: null, contentType: 'audio/mpeg', metadata: {} };
+}
+
+function folderMarker(size = '0', name = 'lessons/'): TestStorageRecord {
+  return { name, generation: '1', metageneration: '1', size, md5Hash: null, crc32c: null, contentType: null, metadata: {} };
 }
 
 function state(projectId: string, bucket: string, collections: Record<string, TestDocument[]> = {}, storageObjects: TestStorageRecord[] = []): TestState {
@@ -167,6 +173,37 @@ describe('production content sync pure core', () => {
     expect(renormalized.metadata).toEqual(record.metadata);
   });
 
+  it('ignores only the exact zero-byte lessons/ folder marker everywhere in planning and fingerprints', () => {
+    const clean = baseStates();
+    const marked = baseStates();
+    marked.source.storage.push(folderMarker());
+    marked.target.storage.push(folderMarker());
+
+    expect(isZeroByteStorageFolderMarker(folderMarker())).toBe(true);
+    expect(isZeroByteStorageFolderMarker(folderMarker('1'))).toBe(false);
+    expect(isZeroByteStorageFolderMarker(folderMarker('0', 'lessons'))).toBe(false);
+    expect(buildManifest(marked.source).storage).not.toEqual(expect.arrayContaining([expect.objectContaining({ name: 'lessons/' })]));
+    expect(buildContentFingerprint(marked.source)).toBe(buildContentFingerprint(clean.source));
+
+    const cleanPlan = createPlan(clean.source, clean.target);
+    const markedPlan = createPlan(marked.source, marked.target);
+    expect(markedPlan.planHash).toBe(cleanPlan.planHash);
+    expect(markedPlan.storageOperations.some(operation => operation.name === 'lessons/')).toBe(false);
+    expect(markedPlan.audit.storage.summary).toEqual(cleanPlan.audit.storage.summary);
+    expect(markedPlan.projectedState.storage.some(record => record.name === 'lessons/')).toBe(false);
+  });
+
+  it('rejects non-zero markers, near matches, and out-of-scope Storage objects', () => {
+    expect(() => assertStorageScope([folderMarker('1')], 'test')).toThrow(/outside lessons/);
+    expect(() => assertStorageScope([folderMarker('0', 'lessons')], 'test')).toThrow(/outside lessons/);
+    expect(() => assertStorageScope([storage('lessons//')], 'test')).toThrow(/outside lessons/);
+    expect(() => assertStorageScope([storage('other/lessons/audio.mp3')], 'test')).toThrow(/outside lessons/);
+
+    const nonZero = baseStates();
+    nonZero.source.storage.push(folderMarker('1'));
+    expect(() => createPlan(nonZero.source, nonZero.target)).toThrow(/outside lessons/);
+  });
+
   it('builds a plan that overlays dev fixtures and retains their dependency closure', () => {
     const { source, target } = baseStates();
     const plan = createPlan(source, target);
@@ -186,14 +223,58 @@ describe('production content sync pure core', () => {
     expect(plan.storageOperations.find(operation => operation.name === 'unrelated/private.txt')).toBeUndefined();
   });
 
-  it('rejects an ambiguous fixture collision and missing membership dependency', () => {
+  it('rejects collisions that would require rewriting protected fixture collections and missing memberships', () => {
     const { source, target } = baseStates();
     source.collections.vocabulary_pools.push(record('vocabulary_pools', 'pool-fixture', { name: 'Different', wordDocIds: ['word-prod'] }));
-    expect(() => collectFixtureClosure(source, target)).toThrow(SyncError);
+    expect(() => createPlan(source, target)).toThrow(/protected vocabulary pool fixture/i);
 
     const missingMembership = baseStates();
     missingMembership.target.collections.practiceCategoryMemberships = [record('practiceCategoryMemberships', 'bad', { lessonId: 'missing' })];
     expect(() => createPlan(missingMembership.source, missingMembership.target)).toThrow(/missing lesson/);
+  });
+
+  it('deterministically clones colliding pool and word data for mutable dev-only lesson fixtures', () => {
+    const { source, target } = baseStates();
+    target.excludedCollections.testVersions[0].data = { name: 'Fixture', pages: [] };
+    source.collections.vocabulary_pools.push(
+      record('vocabulary_pools', 'pool-fixture', { name: 'Production fixture ID', wordDocIds: ['word-fixture'] })
+    );
+    source.collections.vocabulary_words_v5.push(
+      record('vocabulary_words_v5', 'word-fixture', { word: 'different', part_of_speech: 'noun' })
+    );
+
+    const plan = createPlan(source, target);
+    const poolRemap = plan.audit.fixtureClosure.fixtureRemaps.find(remap => remap.kind === 'vocabulary_pool');
+    const wordRemap = plan.audit.fixtureClosure.fixtureRemaps.find(remap => remap.kind === 'vocabulary_word');
+    expect(poolRemap).toMatchObject({ originalId: 'pool-fixture' });
+    expect(wordRemap).toMatchObject({ originalId: 'word-fixture' });
+    if (!poolRemap || !wordRemap) throw new Error('Expected deterministic pool and word remaps');
+    expect(poolRemap.remappedId).toMatch(/^dev-fixture-pool-[a-f0-9]{32}$/);
+    expect(wordRemap.remappedId).toMatch(/^dev-fixture-word-[a-f0-9]{32}$/);
+    expect(plan.audit.fixtureClosure.affectedLessonIds).toEqual(['category-fixture']);
+    expect(plan.closure.preservedPoolIds).toEqual(new Set([poolRemap.remappedId]));
+    expect(plan.closure.preservedWordIds).toEqual(new Set([wordRemap.remappedId]));
+
+    const projected = plan.projectedState as unknown as TestState;
+    const projectedLesson = projected.collections.lessons.find(record => record.id === 'category-fixture');
+    const projectedPool = projected.collections.vocabulary_pools.find(record => record.id === poolRemap.remappedId);
+    const projectedWord = projected.collections.vocabulary_words_v5.find(record => record.id === wordRemap.remappedId);
+    if (!projectedLesson || !projectedPool || !projectedWord) throw new Error('Expected remapped projected fixture records');
+    expect(projectedLesson.data.vocabulary_pool).toBe(poolRemap.remappedId);
+    expect(projectedPool.data.wordDocIds).toEqual([wordRemap.remappedId]);
+    expect(projectedWord.data).toEqual(target.collections.vocabulary_words_v5.find(record => record.id === 'word-fixture')?.data);
+
+    expect(plan.firestoreOperations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ collection: 'vocabulary_words_v5', id: wordRemap.remappedId, action: 'create' }),
+      expect.objectContaining({ collection: 'vocabulary_pools', id: poolRemap.remappedId, action: 'create' }),
+      expect.objectContaining({ collection: 'lessons', id: 'category-fixture', action: 'update' }),
+    ]));
+    expect(plan.firestoreOperations.some(operation => operation.collection === 'testVersions')).toBe(false);
+    expect(sha256({
+      ...plan.planPayload,
+      fixtureClosure: { ...plan.planPayload.fixtureClosure, fixtureRemaps: [] },
+    })).not.toBe(plan.planHash);
+    expect(createPlan(source, target).planHash).toBe(plan.planHash);
   });
 
   it('rejects non-canonical learning paths and storage outside lessons/**', () => {

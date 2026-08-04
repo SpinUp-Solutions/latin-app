@@ -5,6 +5,7 @@ import {
   executeStorageOperations,
   executeStorageRollbackOperations,
   ensureBackupBucket,
+  listBucketObjects,
   rollbackPlan,
 } from '../scripts/sync-prod-content-to-dev.mjs';
 import {
@@ -13,6 +14,7 @@ import {
   SOURCE_STORAGE_BUCKET,
   TARGET_PROJECT_ID,
   TARGET_STORAGE_BUCKET,
+  assertStorageScope,
   byteHash,
   buildExcludedFingerprint,
   buildManifest,
@@ -236,6 +238,26 @@ describe('production content sync adapter safety', () => {
     targetBucket.objects.set(operation.name, { bytes: Buffer.from('old'), generation: '9', metageneration: '2', metadata: {} });
     const update = { ...operation, action: 'update', target: storageRecord(operation.name, '9', '1') };
     await expect(executeStorageOperations({ projectId: SOURCE_PROJECT_ID, bucket: sourceBucket }, { projectId: TARGET_PROJECT_ID, bucket: targetBucket }, [update])).rejects.toThrow(/metageneration precondition/);
+  });
+
+  it('filters only the exact zero-byte folder marker during bucket capture', async () => {
+    const listed = (metadata: Record<string, unknown>) => ({
+      name: metadata.name,
+      getMetadata: async () => [metadata],
+    });
+    const bucket = {
+      getFiles: async () => [[
+        listed({ name: 'lessons/', size: '0', generation: '1', metageneration: '1', md5Hash: null, crc32c: null, contentType: null, metadata: {} }),
+        listed({ name: 'lessons/', size: '1', generation: '2', metageneration: '1', md5Hash: 'marker-md5', crc32c: null, contentType: null, metadata: {} }),
+        listed({ name: 'lessons/', generation: '3', metageneration: '1', md5Hash: null, crc32c: null, contentType: null, metadata: {} }),
+        listed({ name: 'lessons', size: '0', generation: '1', metageneration: '1', md5Hash: 'root-md5', crc32c: null, contentType: null, metadata: {} }),
+        listed({ name: 'other/lessons/audio.mp3', size: '1', generation: '1', metageneration: '1', md5Hash: 'other-md5', crc32c: null, contentType: 'audio/mpeg', metadata: {} }),
+      ]],
+    };
+    const records = await listBucketObjects(bucket);
+    expect(records.map(record => record.name)).toEqual(['lessons', 'lessons/', 'lessons/', 'other/lessons/audio.mp3']);
+    expect(records.filter(record => record.name === 'lessons/')).toHaveLength(2);
+    expect(() => assertStorageScope(records, 'captured')).toThrow(/outside lessons/);
   });
 
   it('rejects source-labeled or swapped handles before SDK mutation methods', async () => {

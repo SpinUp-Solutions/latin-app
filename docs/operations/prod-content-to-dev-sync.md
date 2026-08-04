@@ -7,6 +7,8 @@ This is a deliberately manual admin CLI. It mirrors the approved content subset 
 - `latin-app-prod` is the hard-coded, read-only source. The command never calls a Firestore, Storage, Auth, IAM, bucket-policy, or project-configuration write against production.
 - `latin-app-dev` is the only writable project. Project, bucket, database, and emulator overrides are rejected.
 - Firebase Auth, `users`, `userProgress`, `attempts`, `requests`, migration records/snapshots, `words-latin-dev`, all preserved fixture collections, and Storage outside `lessons/**` are excluded from the write plan.
+- The exact Storage object `lessons/` is accepted only as a zero-byte folder marker and is ignored during capture, hashing, planning, backup, apply, rollback, and verification. A non-zero `lessons/` object, a near-match such as `lessons`, or any other out-of-scope object presented as controlled content remains a hard validation failure.
+- A dev-only lesson fixture whose pool/word ID collides with different production data is preserved through deterministic `dev-fixture-*` clones. The plan rewrites only the preserved lesson and cloned pool, records the remaps in the hashed audit, and backs up those writes normally. It never rewrites `practiceCategoryMemberships`, `testVersions`, or `testVersionDrafts`; a collision requiring a protected-collection edit remains a hard failure.
 - No credentials, raw Auth users, or raw source records are printed or placed in audit manifests. Apply intentionally emits a one-time `rollbackToken`; handle it as a secret and only its hash is stored in the run manifest. Auth is represented by a one-way fingerprint only.
 
 ## Prerequisites
@@ -52,7 +54,7 @@ node -e "const p=require('/tmp/prod-content-sync-plan.json'); console.log(JSON.s
 
 The plan shows `create`, `update`, `delete`, and `preserve` operations. `preserve` includes unchanged production content and dev fixture content retained by the closure. A missing or ambiguous fixture dependency, invalid learning path, missing checksum, source reference failure, or protected-scope violation exits non-zero and produces a structured error.
 
-Current read-only validation evidence (2026-08-03): the authenticated inspection saw production counts of 93 lessons, 1 learning path, 88 pools, 1,765 words, and 5 `lessons/**` Storage objects; development had 38 lessons, 1 learning path, 11 pools, 1,170 words, 13 practice memberships, 3 test versions, 1 test-version draft, and 20 `lessons/**` objects. The plan stopped before producing a `planHash` because `lessons/lesson-1763487236530` references missing production pool `nQ7R0Z772t1hPo05J9cK` inside a nested generator configuration. This is an intentional fail-closed result; no apply, setup, or other live write was run.
+Current read-only validation evidence (2026-08-04): the production repair was confirmed; production has no empty pool-reference strings and the formerly missing pool reference is no longer present at the previously reported paths. After ignoring only the confirmed zero-byte development `lessons/` marker and deterministically isolating one real fixture pool/word collision, the authenticated dry run completed with plan hash `9acb127ec745b7051bb24c711c84aec2221ba19ae813746304d525a4751b13d0`. It recorded one pool clone, one word clone, and one affected dev-only lesson. No apply, setup, rollback, or other live write was run.
 
 ## Apply — explicit authorization only
 
@@ -123,7 +125,7 @@ tool                sync-prod-content-to-dev
 mode                dry-run | apply | verify | rollback-dry-run | rollback-apply
 source              hard-coded project, bucket, manifestHash, contentFingerprint
 target              hard-coded project, bucket, pre/post fingerprints, expected projected-content fingerprint, Auth/exclusion fingerprints
-fixtureClosure      preserved lesson/pool/word IDs and storage lesson prefixes
+fixtureClosure      preserved IDs/prefixes plus deterministic remaps and affected mutable fixture lessons
 validation          projected counts and pass/fail result
 firestore           operation list + create/update/delete/preserve summary
 storage             operation list + create/update/delete/preserve summary
@@ -141,13 +143,14 @@ Before proposing or running this task, an agent must:
 
 1. read this runbook and inspect the current branch/package scripts;
 2. confirm the source/target constants and reject all project overrides;
-3. run the default dry-run and save the JSON audit;
-4. review validation, closure, protected-scope, and storage summaries;
-5. ask for explicit user authorization before `--apply`;
-6. retain the returned `planHash`, `runId`, and rollback token securely;
-7. run `--verify` after apply and preserve the artifact for audit;
-8. use rollback dry-run first and require both token and post-sync fingerprint match for rollback apply;
-9. never call an Auth write, production write, migration/snapshot write, or unrelated Storage operation.
+3. confirm that any `lessons/` object is exactly zero bytes before it can be treated as the non-content folder marker; stop on any other scope violation;
+4. run the default dry-run and save the JSON audit;
+5. review validation, closure, fixture remaps, affected lesson IDs, protected-scope, and storage summaries;
+6. ask for explicit user authorization before `--apply`;
+7. retain the returned `planHash`, `runId`, and rollback token securely;
+8. run `--verify` after apply and preserve the artifact for audit;
+9. use rollback dry-run first and require both token and post-sync fingerprint match for rollback apply;
+10. never call an Auth write, production write, migration/snapshot write, or unrelated Storage operation.
 
 ## Cleanup and retention plan
 

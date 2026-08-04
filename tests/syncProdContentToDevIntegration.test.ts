@@ -6,6 +6,7 @@ import {
   buildContentFingerprint,
   buildManifest,
   createPlan,
+  isZeroByteStorageFolderMarker,
   sha256,
 } from '../scripts/sync-prod-content-to-dev-core.mjs';
 
@@ -182,6 +183,46 @@ describe('production content sync equivalent integration workflow', () => {
     expect(() => partial.apply(createPlan(clean.source, clean.target), 'lessons')).toThrow(/simulated failure/);
     expect(() => partial.apply(createPlan(clean.source, clean.target))).toThrow(/cannot resume/);
     expect(buildContentFingerprint(clean.target)).not.toBe(partialBefore);
+  });
+
+  it('keeps the zero-byte lessons/ folder marker out of the integration plan and fingerprint', () => {
+    const clean = fixtures();
+    const marked = fixtures();
+    const marker = { name: 'lessons/', generation: '1', metageneration: '1', size: '0', md5Hash: null, crc32c: null, contentType: null, metadata: {} };
+    marked.source.storage.push(marker);
+    marked.target.storage.push(marker);
+
+    expect(isZeroByteStorageFolderMarker(marker)).toBe(true);
+    expect(createPlan(marked.source, marked.target).planHash).toBe(createPlan(clean.source, clean.target).planHash);
+    expect(buildContentFingerprint(marked.target)).toBe(buildContentFingerprint(clean.target));
+  });
+
+  it('applies and rolls back deterministic clones for a mutable fixture collision', () => {
+    const { source, target } = fixtures();
+    source.collections.vocabulary_pools.push(doc('vocabulary_pools', 'shared-pool', { name: 'Production', wordDocIds: ['shared-word'] }));
+    source.collections.vocabulary_words_v5.push(doc('vocabulary_words_v5', 'shared-word', { word: 'production', part_of_speech: 'noun' }));
+    target.collections.lessons.push({ ...lesson('fixture-lesson'), data: { ...lesson('fixture-lesson').data, vocabulary_pool: 'shared-pool' } });
+    target.collections.vocabulary_pools.push(doc('vocabulary_pools', 'shared-pool', { name: 'Fixture', wordDocIds: ['shared-word'] }));
+    target.collections.vocabulary_words_v5.push(doc('vocabulary_words_v5', 'shared-word', { word: 'fixture', part_of_speech: 'verb' }));
+    target.excludedCollections.practiceCategoryMemberships = [doc('practiceCategoryMemberships', 'membership', { lessonId: 'fixture-lesson' })];
+
+    const before = buildContentFingerprint(target);
+    const plan = createPlan(source, target);
+    const poolRemap = plan.audit.fixtureClosure.fixtureRemaps.find(remap => remap.kind === 'vocabulary_pool');
+    const wordRemap = plan.audit.fixtureClosure.fixtureRemaps.find(remap => remap.kind === 'vocabulary_word');
+    if (!poolRemap || !wordRemap) throw new Error('Expected deterministic pool and word remaps');
+    const harness = new InMemorySyncHarness(target);
+    harness.apply(plan);
+
+    expect(harness.verify()).toBe(true);
+    expect(target.collections.vocabulary_pools.find(record => record.id === 'shared-pool')?.data.name).toBe('Production');
+    expect(target.collections.vocabulary_pools.find(record => record.id === poolRemap.remappedId)?.data.name).toBe('Fixture');
+    expect(target.collections.lessons.find(record => record.id === 'fixture-lesson')?.data.vocabulary_pool).toBe(poolRemap.remappedId);
+    expect(target.collections.vocabulary_words_v5.find(record => record.id === wordRemap.remappedId)?.data.word).toBe('fixture');
+
+    const postSyncManifestHash = buildManifest(target).manifestHash;
+    harness.rollback(postSyncManifestHash);
+    expect(buildContentFingerprint(target)).toBe(before);
   });
 
   it('verifies the post-sync fingerprint and requires it unchanged for rollback', () => {
