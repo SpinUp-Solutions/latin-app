@@ -80,6 +80,12 @@ describe('student dashboard test card', () => {
     expect(screen.queryByText('Not passed — informational only')).not.toBeInTheDocument();
   });
 
+  it('keeps a failed frozen normal result actionable after its current threshold is removed', () => {
+    render(<TestCard test={testSummary({ passingPercentage: null, relatedLiveMocks: [{ id: 'mock-1', title: 'Chapter 4 rehearsal', passingPercentage: 70 }] })} onTestClick={jest.fn()} />);
+
+    expect(screen.getByRole('link', { name: /Practice with the Chapter 4 rehearsal Mock Test/i })).toHaveAttribute('href', '/test/mock-1?origin=mock');
+  });
+
   it('uses the same fixed-height footprint as lesson cards', () => {
     const { container } = render(<TestCard test={testSummary()} onTestClick={jest.fn()} />);
 

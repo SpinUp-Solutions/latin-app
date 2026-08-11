@@ -137,6 +137,48 @@ describe('student test-attempt routes', () => {
     expect(mockGradeTranslationItem).toHaveBeenCalledWith('attempt-1', input, 'student-1');
   });
 
+  it('returns a clear conflict when a translation item is already graded', async () => {
+    mockGradeTranslationItem.mockRejectedValue(
+      new TestServiceError(
+        'ATTEMPT_TRANSLATION_ALREADY_GRADED',
+        'This translation item has already been graded with a different answer',
+        409
+      )
+    );
+
+    const response = (await gradeTranslation(
+      request({ exerciseId: 'translation.one', itemIndex: 0, userTranslation: 'A different answer.' }),
+      params('attempt-1')
+    )) as unknown as { status: number; body: { code: string; error: string } };
+
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual({
+      code: 'ATTEMPT_TRANSLATION_ALREADY_GRADED',
+      error: 'This translation item has already been graded with a different answer',
+    });
+  });
+
+  it('returns a clear rate limit when the translation grading budget is exhausted', async () => {
+    mockGradeTranslationItem.mockRejectedValue(
+      new TestServiceError(
+        'ATTEMPT_TRANSLATION_GRADING_RATE_LIMITED',
+        'Too many translation grading requests. Please try again after the grading window resets.',
+        429
+      )
+    );
+
+    const response = (await gradeTranslation(
+      request({ exerciseId: 'translation.one', itemIndex: 0, userTranslation: 'The girl sings.' }),
+      params('attempt-1')
+    )) as unknown as { status: number; body: { code: string; error: string } };
+
+    expect(response.status).toBe(429);
+    expect(response.body).toEqual({
+      code: 'ATTEMPT_TRANSLATION_GRADING_RATE_LIMITED',
+      error: 'Too many translation grading requests. Please try again after the grading window resets.',
+    });
+  });
+
   it('maps submission domain errors and rejects unauthenticated submits', async () => {
     mockVerifyRequestAuth.mockResolvedValueOnce(null);
     const unauthenticated = (await submitAttempt(request(), params('attempt-1'))) as unknown as { status: number };

@@ -60,7 +60,26 @@ describe('admin test routes', () => {
       version: {
         id: 'version-1',
         name: 'Version A',
-        pages: [{ id: 'page-1', items: [{ id: 'question-1', type: 'multiple-choice', maxPoints: 2 }] }],
+        pages: [
+          {
+            id: 'page-1',
+            items: [
+              {
+                id: 'question-1',
+                type: 'multiple-choice',
+                maxPoints: 2,
+                data: {
+                  question: 'Which answer is correct?',
+                  options: [
+                    { id: 'answer-a', text: 'A', isCorrect: true },
+                    { id: 'answer-b', text: 'B', isCorrect: false },
+                  ],
+                  allowMultipleSelections: false,
+                },
+              },
+            ],
+          },
+        ],
       },
     };
     mockCreateTestWithVersion.mockResolvedValue({ test: { id: 'test-1' }, version: { id: 'version-1' } });

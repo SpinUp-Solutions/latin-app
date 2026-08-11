@@ -13,6 +13,7 @@ import { useAuth } from '@/src/hooks/useAuth';
 import { useBufferedAttemptAnswers } from '@/src/hooks/useBufferedAttemptAnswers';
 import { isExerciseType } from '@/src/lib/content/registry';
 import { isExerciseAnswerComplete } from '@/src/lib/tests/answer-completion';
+import { formatScorePercentage, formatScoreShortfall } from '@/src/lib/tests/formatting';
 import { getApiErrorCode, getApiErrorMessage } from '@/src/store/api/baseQuery';
 import { useGetStudentDashboardQuery } from '@/src/store/api/lessonApi';
 import { useGetStudentMockDetailQuery } from '@/src/store/api/mockTestApi';
@@ -62,6 +63,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
     activateAttempt,
     adoptPersistedAnswer,
     answers,
+    clearAnswer,
     flushPendingAnswers,
     hasUnsavedAnswers,
     recordAnswer,
@@ -75,6 +77,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
   const [result, setResult] = useState<StudentSubmittedTestAttempt | null>(null);
   const [pageIndex, setPageIndex] = useState(0);
   const [mockRetakeAvailability, setMockRetakeAvailability] = useState<MockRetakeAvailability>('unchecked');
+  const [editingExerciseId, setEditingExerciseId] = useState<string | null>(null);
   const allowNextHistoryPopRef = useRef(false);
   const historyNavigationPendingRef = useRef(false);
   const historyEffectActiveRef = useRef(false);
@@ -347,6 +350,38 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
     }
   };
 
+  const openExercise = async (exerciseId: string, exercisePageIndex: number, clearExisting: boolean) => {
+    if (!attempt) return;
+    if (!clearExisting) {
+      setPageIndex(exercisePageIndex);
+      setScreen('taking');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    const previousAnswer = answers[exerciseId];
+    setEditingExerciseId(exerciseId);
+    clearAnswer(exerciseId);
+    try {
+      await flushPendingAnswers();
+      setAttempt(current => {
+        if (!current) return current;
+        const nextAnswers = { ...current.answers };
+        const nextTranslationGrades = { ...current.translationGrades };
+        delete nextAnswers[exerciseId];
+        delete nextTranslationGrades[exerciseId];
+        return { ...current, answers: nextAnswers, translationGrades: nextTranslationGrades };
+      });
+      setPageIndex(exercisePageIndex);
+      setScreen('taking');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch {
+      if (previousAnswer) recordAnswer({ exerciseId, answer: previousAnswer });
+      toast.error('This answer could not be reopened. Try again.');
+    } finally {
+      setEditingExerciseId(null);
+    }
+  };
+
   if (authLoading || dashboardLoading || (isMockTest && mockDetailLoading) || (!user && !dashboardError)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-roman-marble">
@@ -531,14 +566,14 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
                       : 'Test complete'
                     : 'Keep going'}
               </h1>
-              <div className="text-5xl font-semibold text-roman-red">{Math.round(result.percentage)}%</div>
+              <div className="text-5xl font-semibold text-roman-red">{formatScorePercentage(result.percentage)}%</div>
               <p className="text-lg">
                 {formatPoints(result.score)} / {formatPoints(result.maxScore)} points
               </p>
               {result.outcome === 'not-passed' && result.passingPercentage !== null && (
                 <div className="rounded-lg bg-amber-50 p-3 text-amber-950">
-                  You need {result.passingPercentage}% — you reached {Math.round(result.percentage)}%. You are{' '}
-                  {shortfall.toFixed(1).replace(/\.0$/, '')} percentage points away.
+                  You need {result.passingPercentage}% — you reached {formatScorePercentage(result.percentage)}%. You
+                  are {formatScoreShortfall(shortfall)} percentage points away.
                 </div>
               )}
               {!isMockTest && result.outcome === 'not-passed' && normalTest?.relatedLiveMocks?.[0] && (
@@ -640,6 +675,51 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
                   </ul>
                 </div>
               )}
+              <div className="space-y-2">
+                <h2 className="font-semibold text-slate-900">Review each exercise</h2>
+                <ul className="divide-y rounded-lg border border-slate-200 bg-white">
+                  {exerciseItems.map(item => {
+                    const complete = isExerciseAnswerComplete(item.exercise, answers[item.id], item.resolvedItemCount);
+                    const hasRecordedAnswer = Boolean(answers[item.id]);
+                    const translationIsFinal =
+                      item.exercise.type === 'translation-grading' &&
+                      Object.keys(attempt.translationGrades[item.id] ?? {}).length > 0;
+                    const clearExisting = complete && !translationIsFinal;
+                    const actionLabel = translationIsFinal
+                      ? complete
+                        ? 'Review answer'
+                        : 'Continue exercise'
+                      : complete
+                        ? 'Edit answer'
+                        : hasRecordedAnswer
+                          ? 'Continue exercise'
+                          : 'Answer exercise';
+                    return (
+                      <li
+                        key={item.id}
+                        className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <div className="font-medium text-slate-900">
+                            Page {item.pageIndex + 1}: {item.title}
+                          </div>
+                          <div className={complete ? 'text-sm text-emerald-700' : 'text-sm text-amber-700'}>
+                            {complete ? 'Answer recorded' : 'Needs an answer'}
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={editingExerciseId !== null}
+                          aria-label={`${actionLabel.replace(' answer', '').replace(' exercise', '')} ${item.title}`}
+                          onClick={() => void openExercise(item.id, item.pageIndex, clearExisting)}>
+                          {editingExerciseId === item.id ? 'Opening…' : actionLabel}
+                        </Button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
               <p className="text-sm text-gray-600">
                 Submission is final for this attempt. Exact questions and answers cannot be reopened afterward, but your
                 score breakdown will be retained.
@@ -647,13 +727,13 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
             </CardContent>
           </Card>
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
-            <Button variant="outline" onClick={() => setScreen('taking')}>
+            <Button variant="outline" disabled={editingExerciseId !== null} onClick={() => setScreen('taking')}>
               <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
               Return to test
             </Button>
             <Button
               className="bg-roman-red hover:bg-roman-red/90"
-              disabled={submitting || translationGrading}
+              disabled={submitting || translationGrading || editingExerciseId !== null}
               onClick={submit}>
               {submitting ? 'Submitting…' : 'Submit Test'}
             </Button>

@@ -149,6 +149,40 @@ export function useBufferedAttemptAnswers() {
     [clearSaveTimer, flushPendingAnswers]
   );
 
+  const clearAnswer = useCallback(
+    (exerciseId: string) => {
+      const activeAttempt = activeAttemptRef.current;
+      if (!activeAttempt) return;
+
+      setAnswers(current => {
+        const next = { ...current };
+        delete next[exerciseId];
+        return next;
+      });
+      const queued = pendingAnswersRef.current;
+      pendingAnswersRef.current =
+        queued?.scope === activeAttempt.scope
+          ? {
+              scope: activeAttempt.scope,
+              answers: { ...queued.answers, [exerciseId]: null },
+            }
+          : {
+              scope: activeAttempt.scope,
+              answers: { [exerciseId]: null },
+            };
+      setSaveError(null);
+      setSaveStatus('recorded');
+
+      clearSaveTimer();
+      saveTimerRef.current = setTimeout(() => {
+        void flushPendingAnswers().catch(() => {
+          toast.error('An answer is still waiting to be saved. Try again before leaving.');
+        });
+      }, ANSWER_SAVE_DEBOUNCE_MS);
+    },
+    [clearSaveTimer, flushPendingAnswers]
+  );
+
   const adoptPersistedAnswer = useCallback((event: ExerciseAnswerEvent) => {
     const activeAttempt = activeAttemptRef.current;
     if (!activeAttempt) return;
@@ -190,6 +224,7 @@ export function useBufferedAttemptAnswers() {
     activateAttempt,
     adoptPersistedAnswer,
     answers,
+    clearAnswer,
     flushPendingAnswers,
     hasUnsavedAnswers,
     recordAnswer,

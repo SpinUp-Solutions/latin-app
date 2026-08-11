@@ -75,7 +75,25 @@ const version = {
   id: 'version-1',
   name: 'Version A',
   pages: [
-    { id: 'page-1', title: 'Page A', items: [{ id: 'question-1', type: 'multiple-choice' as const, maxPoints: 1 }] },
+    {
+      id: 'page-1',
+      title: 'Page A',
+      items: [
+        {
+          id: 'question-1',
+          type: 'multiple-choice' as const,
+          maxPoints: 1,
+          data: {
+            question: 'Which answer is correct?',
+            options: [
+              { id: 'answer-a', text: 'A', isCorrect: true },
+              { id: 'answer-b', text: 'B', isCorrect: false },
+            ],
+            allowMultipleSelections: false,
+          },
+        },
+      ],
+    },
   ],
   totalPages: 1,
   totalItems: 1,

@@ -121,6 +121,7 @@ export const TestCard = memo(
 
     return (
       <RomanCard
+        data-testid="dashboard-test-card"
         className={`group h-36 cursor-pointer rounded-3xl border shadow-xl transition-all duration-300 hover:-translate-y-2 hover:scale-[1.02] hover:shadow-2xl ${
           locked
             ? 'border-gray-300 bg-gradient-to-br from-gray-100 to-gray-50'
@@ -137,17 +138,36 @@ export const TestCard = memo(
               <div className="mt-1 line-clamp-1 text-sm text-gray-600">
                 <SimpleRichDisplay content={test.description || ''} />
               </div>
-              <div className="mt-2 truncate text-xs font-semibold text-indigo-800">
+              <div className="mt-2 flex min-w-0 items-center gap-2 text-xs font-semibold text-indigo-800">
                 {locked ? (
-                  <span>{test.lockedReason || 'Complete the previous learning unit to unlock'}</span>
-                ) : latestOutcome ? (
-                  <span className={summary.latest?.outcome === 'not-passed' ? 'text-amber-700' : 'text-emerald-700'}>
-                    {latestOutcome}
+                  <span className="truncate">
+                    {test.lockedReason || 'Complete the previous learning unit to unlock'}
                   </span>
-                ) : summary.inProgressAttemptId ? (
-                  <span className="text-amber-700">In progress</span>
                 ) : (
-                  <span>{test.passingPercentage === null ? 'Score only · cannot fail' : `Pass ≥ ${test.passingPercentage}%`}</span>
+                  <>
+                    {latestOutcome ? (
+                      <span
+                        className={`shrink-0 ${summary.latest?.outcome === 'not-passed' ? 'text-amber-700' : 'text-emerald-700'}`}>
+                        {latestOutcome}
+                      </span>
+                    ) : summary.inProgressAttemptId ? (
+                      <span className="shrink-0 text-amber-700">In progress</span>
+                    ) : (
+                      <span className="truncate">
+                        {test.passingPercentage === null
+                          ? 'Score only · cannot fail'
+                          : `Pass ≥ ${test.passingPercentage}%`}
+                      </span>
+                    )}
+                    {summary.latest?.outcome === 'not-passed' && test.relatedLiveMocks?.[0] && (
+                      <a
+                        className="min-w-0 truncate text-teal-800 underline-offset-2 hover:underline"
+                        href={`/test/${encodeURIComponent(test.relatedLiveMocks[0].id)}?origin=mock`}
+                        onClick={event => event.stopPropagation()}>
+                        Practice with the {test.relatedLiveMocks[0].title} Mock Test
+                      </a>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -244,9 +264,12 @@ export default function DashboardPage() {
     [router, learningUnits, vocabLessons, diagrammingLessons, listeningLessons]
   );
 
-  const handleMockClick = useCallback((mockTestId: string) => {
-    router.push(`/test/${encodeURIComponent(mockTestId)}?origin=mock`);
-  }, [router]);
+  const handleMockClick = useCallback(
+    (mockTestId: string) => {
+      router.push(`/test/${encodeURIComponent(mockTestId)}?origin=mock`);
+    },
+    [router]
+  );
 
   useEffect(() => {
     if (!loading && !user) {

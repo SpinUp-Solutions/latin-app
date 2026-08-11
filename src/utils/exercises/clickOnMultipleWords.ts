@@ -42,7 +42,11 @@ export const validateClickOnMultipleWords = (
   let score = 0;
   if (totalRequired > 0) {
     const baseScore = (correctSelections / totalRequired) * 100;
-    if (allowOverSelection && overSelections > 0) {
+    if (!allowOverSelection && overSelections > 0) {
+      // Strict mode treats any extra selection as a failed exercise, even when
+      // every required word was also selected.
+      score = 0;
+    } else if (allowOverSelection && overSelections > 0) {
       // Apply penalty for over-selections in lenient mode
       const penalty = Math.min(baseScore, overSelections * 10); // 10% penalty per extra selection
       score = Math.max(0, baseScore - penalty);

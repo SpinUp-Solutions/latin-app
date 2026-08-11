@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { DocumentReference, DocumentSnapshot, Firestore, Transaction } from 'firebase-admin/firestore';
 import {
   DEFAULT_LEARNING_PATH_ID,
@@ -30,6 +30,8 @@ import type {
   TestAttemptResultSummary,
   TestAttemptSession,
   TestTranslationItemGrade,
+  TestTranslationGradeReservations,
+  TestTranslationGradeRequestWindows,
   TestVersion,
 } from '@/src/types/test';
 import { isAnswerForExercise, parseExerciseAnswer } from './answer-schemas';
@@ -52,11 +54,9 @@ import { TestServiceError } from './errors';
 import { estimateFirestoreDocumentBytes } from './firestore-size';
 import type { GeneratedWordLoader } from './generated-exercises';
 import { createFirestoreGeneratedWordLoader } from './generated-word-loader.server';
+import { createFirestoreVocabularyPoolLoader, type VocabularyPoolLoader } from './vocabulary-pool-loader.server';
 import {
-  createFirestoreVocabularyPoolLoader,
-  type VocabularyPoolLoader,
-} from './vocabulary-pool-loader.server';
-import {
+  assertVersionReadyForStudentVisibility,
   configurationError,
   parseMockSnapshot,
   parseTestSnapshot,
@@ -84,6 +84,11 @@ export const MAX_TEST_ATTEMPT_DOCUMENT_BYTES = 900 * 1024;
  * remaining orders of magnitude below the smallest meaningful score gap.
  */
 export const PASSING_THRESHOLD_TOLERANCE = 1e-9;
+
+/** Longer than the route timeout, while still making a crashed grading request recoverable. */
+export const TRANSLATION_GRADING_RESERVATION_MS = 5 * 60 * 1000;
+export const TRANSLATION_GRADING_REQUEST_WINDOW_MS = 10 * 60 * 1000;
+export const MAX_TRANSLATION_GRADING_REQUESTS_PER_WINDOW = 5;
 
 type TestTranslationGrader = (request: TranslationGradingRequest) => Promise<TestTranslationGradingOutput>;
 
@@ -146,12 +151,36 @@ function toStudentAttempt(attempt: TestAttempt): StudentTestAttempt {
     return studentAttempt;
   }
 
-  const { studentId: _studentId, deliveryState, ...studentAttempt } = attempt;
+  const {
+    studentId: _studentId,
+    deliveryState,
+    translationGradeReservations: _translationGradeReservations,
+    translationGradeRequestWindows: _translationGradeRequestWindows,
+    ...studentAttempt
+  } = attempt;
   return {
     ...studentAttempt,
     delivery: sanitizeTestDeliveryState(deliveryState as FrozenTestDeliveryState),
   };
 }
+
+const translationReservationIsActive = (expiresAt: string, now: string) => Date.parse(expiresAt) > Date.parse(now);
+
+function withoutTranslationGradeReservation(
+  reservations: TestTranslationGradeReservations,
+  exerciseId: string,
+  itemIndex: number
+): TestTranslationGradeReservations {
+  const exerciseReservations = { ...reservations[exerciseId] };
+  delete exerciseReservations[String(itemIndex)];
+  const updated = { ...reservations };
+  if (Object.keys(exerciseReservations).length === 0) delete updated[exerciseId];
+  else updated[exerciseId] = exerciseReservations;
+  return updated;
+}
+
+const translationRequestWindowIsActive = (windowStartedAt: string, now: string) =>
+  Date.parse(windowStartedAt) + TRANSLATION_GRADING_REQUEST_WINDOW_MS > Date.parse(now);
 
 function assertAttemptOwner(attempt: TestAttempt, studentId: string) {
   if (attempt.studentId !== studentId) {
@@ -241,6 +270,37 @@ export class TestAttemptService {
       await this.assertNormalTestUnlocked(transaction, studentId, attempt.origin.testId, true);
     }
     return attempt;
+  }
+
+  private async releaseTranslationGradeReservation(
+    attemptRef: DocumentReference,
+    studentId: string,
+    request: GradeTestTranslationInput,
+    reservationToken: string
+  ): Promise<void> {
+    try {
+      await this.db.runTransaction(async transaction => {
+        const snapshot = await transaction.get(attemptRef);
+        if (!snapshot.exists) return;
+        const attempt = parseAttemptSnapshot(snapshot);
+        if (attempt.status !== 'in-progress' || attempt.studentId !== studentId) return;
+        const reservation = attempt.translationGradeReservations[request.exerciseId]?.[String(request.itemIndex)];
+        if (!reservation || reservation.token !== reservationToken) return;
+
+        const updated = testAttemptDocumentSchema.parse({
+          ...attempt,
+          translationGradeReservations: withoutTranslationGradeReservation(
+            attempt.translationGradeReservations,
+            request.exerciseId,
+            request.itemIndex
+          ),
+        }) as InProgressTestAttempt;
+        transaction.set(attemptRef, updated);
+      });
+    } catch (error) {
+      // The lease expires automatically if cleanup itself is interrupted.
+      console.error(`Could not release translation grading reservation for attempt ${attemptRef.id}`, error);
+    }
   }
 
   private submittedAttemptsQuery(studentId: string, origin: TestAttemptOrigin) {
@@ -472,13 +532,10 @@ export class TestAttemptService {
       }
 
       const { version, passingPercentage } = await this.resolveAttemptVersion(transaction, studentId, origin);
+      assertVersionReadyForStudentVisibility(version);
       let deliveryState: FrozenTestDeliveryState;
       try {
-        deliveryState = await createFrozenTestDeliveryState(
-          version,
-          this.loadGeneratedWords,
-          this.loadVocabularyPool
-        );
+        deliveryState = await createFrozenTestDeliveryState(version, this.loadGeneratedWords, this.loadVocabularyPool);
       } catch (error) {
         throw configurationError(
           `Could not resolve frozen delivery for ${origin.kind}:${originId(origin)} version ${version.id}`,
@@ -498,6 +555,8 @@ export class TestAttemptService {
           status: 'in-progress',
           answers: {},
           translationGrades: {},
+          translationGradeReservations: {},
+          translationGradeRequestWindows: {},
           deliveryState,
           startedAt: timestamp,
           updatedAt: timestamp,
@@ -537,9 +596,16 @@ export class TestAttemptService {
       const translationGrades = Object.fromEntries(
         Object.entries(attempt.translationGrades).map(([exerciseId, grades]) => [exerciseId, { ...grades }])
       );
+      const translationGradeReservations = Object.fromEntries(
+        Object.entries(attempt.translationGradeReservations).map(([exerciseId, reservations]) => [
+          exerciseId,
+          { ...reservations },
+        ])
+      );
       const itemsById = new Map(
         attempt.deliveryState.pages.flatMap(page => page.items).map(item => [item.id, item] as const)
       );
+      const timestamp = this.now();
 
       for (const [exerciseId, rawAnswer] of Object.entries(changes.answers)) {
         const item = itemsById.get(exerciseId);
@@ -549,6 +615,27 @@ export class TestAttemptService {
             'An answer does not belong to an exercise in this attempt',
             400
           );
+        }
+        if (item.type === 'translation-grading') {
+          if (Object.keys(translationGrades[exerciseId] ?? {}).length > 0) {
+            throw new TestServiceError(
+              'ATTEMPT_TRANSLATION_ALREADY_GRADED',
+              'A graded translation answer is final for this attempt',
+              409
+            );
+          }
+          const activeReservation = Object.values(translationGradeReservations[exerciseId] ?? {}).some(reservation =>
+            translationReservationIsActive(reservation.expiresAt, timestamp)
+          );
+          if (activeReservation) {
+            throw new TestServiceError(
+              'ATTEMPT_TRANSLATION_GRADING_IN_PROGRESS',
+              'This translation is already being graded',
+              409
+            );
+          }
+          // An abandoned provider request must not permanently lock the answer.
+          delete translationGradeReservations[exerciseId];
         }
         if (rawAnswer === null) {
           delete answers[exerciseId];
@@ -573,7 +660,8 @@ export class TestAttemptService {
         ...attempt,
         answers,
         translationGrades,
-        updatedAt: this.now(),
+        translationGradeReservations,
+        updatedAt: timestamp,
       }) as InProgressTestAttempt;
       this.assertAttemptDocumentSize(updated);
       transaction.set(attemptRef, updated);
@@ -588,23 +676,97 @@ export class TestAttemptService {
   ): Promise<StudentInProgressTestAttempt> {
     const request = gradeTestTranslationInputSchema.parse(input);
     const attemptRef = this.attempts.doc(attemptId);
+    const reservationToken = randomUUID();
 
-    const gradingRequest = await this.db.runTransaction(async transaction => {
+    const preparation = await this.db.runTransaction(async transaction => {
       const attempt = await this.getOwnedInProgressAttempt(transaction, attemptRef, studentId);
       const { exercise, item } = getTranslationExerciseItem(attempt, request);
+      const existingGrade = attempt.translationGrades[request.exerciseId]?.[String(request.itemIndex)];
+      if (existingGrade) {
+        if (existingGrade.translation !== request.userTranslation) {
+          throw new TestServiceError(
+            'ATTEMPT_TRANSLATION_ALREADY_GRADED',
+            'This translation item has already been graded with a different answer',
+            409
+          );
+        }
+        return {
+          kind: 'existing' as const,
+          attempt: toStudentAttempt(attempt) as StudentInProgressTestAttempt,
+        };
+      }
+
+      const timestamp = this.now();
+      const existingReservation = attempt.translationGradeReservations[request.exerciseId]?.[String(request.itemIndex)];
+      if (existingReservation && translationReservationIsActive(existingReservation.expiresAt, timestamp)) {
+        throw new TestServiceError(
+          'ATTEMPT_TRANSLATION_GRADING_IN_PROGRESS',
+          'This translation is already being graded',
+          409
+        );
+      }
+
+      const existingRequestWindow =
+        attempt.translationGradeRequestWindows[request.exerciseId]?.[String(request.itemIndex)];
+      const requestWindowActive =
+        existingRequestWindow && translationRequestWindowIsActive(existingRequestWindow.windowStartedAt, timestamp);
+      if (requestWindowActive && existingRequestWindow.count >= MAX_TRANSLATION_GRADING_REQUESTS_PER_WINDOW) {
+        throw new TestServiceError(
+          'ATTEMPT_TRANSLATION_GRADING_RATE_LIMITED',
+          'Too many translation grading requests. Please try again after the grading window resets.',
+          429
+        );
+      }
+
+      const exerciseRequestWindows = {
+        ...attempt.translationGradeRequestWindows[request.exerciseId],
+        [String(request.itemIndex)]: requestWindowActive
+          ? { ...existingRequestWindow, count: existingRequestWindow.count + 1 }
+          : { windowStartedAt: timestamp, count: 1 },
+      };
+      const translationGradeRequestWindows: TestTranslationGradeRequestWindows = {
+        ...attempt.translationGradeRequestWindows,
+        [request.exerciseId]: exerciseRequestWindows,
+      };
+
+      const exerciseReservations = {
+        ...attempt.translationGradeReservations[request.exerciseId],
+        [String(request.itemIndex)]: {
+          token: reservationToken,
+          expiresAt: new Date(Date.parse(timestamp) + TRANSLATION_GRADING_RESERVATION_MS).toISOString(),
+        },
+      };
+      const reservedAttempt = testAttemptDocumentSchema.parse({
+        ...attempt,
+        translationGradeReservations: {
+          ...attempt.translationGradeReservations,
+          [request.exerciseId]: exerciseReservations,
+        },
+        translationGradeRequestWindows,
+      }) as InProgressTestAttempt;
+      this.assertAttemptDocumentSize(reservedAttempt);
+      transaction.set(attemptRef, reservedAttempt);
 
       return {
-        sourceText: richTextToPlainText(item.latinText),
-        userTranslation: request.userTranslation,
-        direction: exercise.translationDirection ?? 'latin-to-english',
-      } satisfies TranslationGradingRequest;
+        kind: 'reserved' as const,
+        gradingRequest: {
+          sourceText: richTextToPlainText(item.latinText),
+          userTranslation: request.userTranslation,
+          direction: exercise.translationDirection ?? 'latin-to-english',
+        } satisfies TranslationGradingRequest,
+      };
     });
+
+    if (preparation.kind === 'existing') return preparation.attempt;
 
     let gradingOutput: TestTranslationGradingOutput;
     try {
-      gradingOutput = testTranslationGradingOutputSchema.parse(await this.gradeTestTranslation(gradingRequest));
+      gradingOutput = testTranslationGradingOutputSchema.parse(
+        await this.gradeTestTranslation(preparation.gradingRequest)
+      );
     } catch (error) {
       console.error(`Could not grade translation item for attempt ${attemptId}`, error);
+      await this.releaseTranslationGradeReservation(attemptRef, studentId, request, reservationToken);
       throw new TestServiceError(
         'ATTEMPT_GRADING_UNAVAILABLE',
         'Translation grading is temporarily unavailable. Please try checking the translation again.',
@@ -612,45 +774,63 @@ export class TestAttemptService {
       );
     }
 
-    return this.db.runTransaction(async transaction => {
-      const attempt = await this.getOwnedInProgressAttempt(transaction, attemptRef, studentId);
-      const { exercise } = getTranslationExerciseItem(attempt, request);
+    try {
+      return await this.db.runTransaction(async transaction => {
+        const attempt = await this.getOwnedInProgressAttempt(transaction, attemptRef, studentId);
+        const { exercise } = getTranslationExerciseItem(attempt, request);
+        const reservation = attempt.translationGradeReservations[request.exerciseId]?.[String(request.itemIndex)];
+        if (!reservation || reservation.token !== reservationToken) {
+          throw new TestServiceError(
+            'ATTEMPT_TRANSLATION_GRADING_IN_PROGRESS',
+            'This translation grading request no longer owns the item reservation',
+            409
+          );
+        }
 
-      const existingAnswer = attempt.answers[request.exerciseId];
-      const parsedExistingAnswer = existingAnswer === undefined ? null : parseExerciseAnswer(existingAnswer);
-      if (parsedExistingAnswer && parsedExistingAnswer.type !== 'translation-grading') {
-        throw new TestServiceError('ATTEMPT_ANSWER_INVALID', 'The saved translation answer has an invalid type', 400);
-      }
-      const translations = Array.from(
-        { length: exercise.data.items.length },
-        (_, index) => parsedExistingAnswer?.translations[index] ?? ''
-      );
-      translations[request.itemIndex] = request.userTranslation;
-      const grade: TestTranslationItemGrade = {
-        translation: request.userTranslation,
-        score: gradingOutput.score,
-        feedback: gradingOutput.feedback,
-      };
-      const updated = testAttemptDocumentSchema.parse({
-        ...attempt,
-        answers: {
-          ...attempt.answers,
-          [request.exerciseId]: { type: 'translation-grading', translations },
-        },
-        translationGrades: {
-          ...attempt.translationGrades,
-          [request.exerciseId]: {
-            ...attempt.translationGrades[request.exerciseId],
-            [String(request.itemIndex)]: grade,
+        const existingAnswer = attempt.answers[request.exerciseId];
+        const parsedExistingAnswer = existingAnswer === undefined ? null : parseExerciseAnswer(existingAnswer);
+        if (parsedExistingAnswer && parsedExistingAnswer.type !== 'translation-grading') {
+          throw new TestServiceError('ATTEMPT_ANSWER_INVALID', 'The saved translation answer has an invalid type', 400);
+        }
+        const translations = Array.from(
+          { length: exercise.data.items.length },
+          (_, index) => parsedExistingAnswer?.translations[index] ?? ''
+        );
+        translations[request.itemIndex] = request.userTranslation;
+        const grade: TestTranslationItemGrade = {
+          translation: request.userTranslation,
+          score: gradingOutput.score,
+          feedback: gradingOutput.feedback,
+        };
+        const updated = testAttemptDocumentSchema.parse({
+          ...attempt,
+          answers: {
+            ...attempt.answers,
+            [request.exerciseId]: { type: 'translation-grading', translations },
           },
-        },
-        updatedAt: this.now(),
-      }) as InProgressTestAttempt;
-      this.assertAttemptDocumentSize(updated);
-      transaction.set(attemptRef, updated);
+          translationGrades: {
+            ...attempt.translationGrades,
+            [request.exerciseId]: {
+              ...attempt.translationGrades[request.exerciseId],
+              [String(request.itemIndex)]: grade,
+            },
+          },
+          translationGradeReservations: withoutTranslationGradeReservation(
+            attempt.translationGradeReservations,
+            request.exerciseId,
+            request.itemIndex
+          ),
+          updatedAt: this.now(),
+        }) as InProgressTestAttempt;
+        this.assertAttemptDocumentSize(updated);
+        transaction.set(attemptRef, updated);
 
-      return toStudentAttempt(updated) as StudentInProgressTestAttempt;
-    });
+        return toStudentAttempt(updated) as StudentInProgressTestAttempt;
+      });
+    } catch (error) {
+      await this.releaseTranslationGradeReservation(attemptRef, studentId, request, reservationToken);
+      throw error;
+    }
   }
 
   async submitAttempt(attemptId: string, studentId: string): Promise<SubmitTestAttemptResult> {
@@ -661,6 +841,19 @@ export class TestAttemptService {
       assertAttemptOwner(attempt, studentId);
       if (attempt.status === 'submitted') {
         return { attempt: toStudentAttempt(attempt) as StudentSubmittedTestAttempt, completionGranted: false };
+      }
+      const gradingTimestamp = this.now();
+      const translationGradingInProgress = Object.values(attempt.translationGradeReservations).some(reservations =>
+        Object.values(reservations).some(reservation =>
+          translationReservationIsActive(reservation.expiresAt, gradingTimestamp)
+        )
+      );
+      if (translationGradingInProgress) {
+        throw new TestServiceError(
+          'ATTEMPT_TRANSLATION_GRADING_IN_PROGRESS',
+          'Wait for translation grading to finish before submitting this test',
+          409
+        );
       }
       if (attempt.origin.kind === 'normal-test') {
         await this.assertNormalTestUnlocked(transaction, studentId, attempt.origin.testId, true);

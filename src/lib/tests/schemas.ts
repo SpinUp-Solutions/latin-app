@@ -2,6 +2,11 @@ import { z } from 'zod';
 import { isExerciseType, isKnownContentType, isTestEligibleExerciseType } from '@/src/lib/content/registry';
 import { firestoreDocumentIdSchema, pageSchema, passingPercentageSchema } from '@/src/lib/learning-units/schemas';
 import { validatePageDocumentIds } from '@/src/utils/lessonProgress';
+import { validateActiveTestExerciseConfiguration } from './active-exercise-validation';
+import {
+  formatFormIdentificationConfigurationIssue,
+  getGeneratedFormIdentificationConfigurationIssues,
+} from '@/src/utils/exercises/formIdentificationConfiguration';
 import { getTestVersionSummaryFields } from './domain';
 
 const optionalAuditFieldSchema = z.string().min(1).optional();
@@ -27,19 +32,30 @@ const testVersionContentShape = {
 
 const testVersionInputShapeSchema = z.object(testVersionContentShape).strict();
 
-export const testVersionDraftInputSchema = z
+const testVersionDraftInputShapeSchema = z
   .object({
     ...testVersionContentShape,
     pages: z.array(pageSchema),
   })
   .strict();
 
-export const updateTestVersionDraftInputSchema = testVersionDraftInputSchema.omit({ id: true });
+export const testVersionDraftInputSchema = testVersionDraftInputShapeSchema.superRefine((value, context) =>
+  addFormIdentificationConfigurationIssues(value.pages, context)
+);
+
+export const updateTestVersionDraftInputSchema = testVersionDraftInputShapeSchema
+  .omit({ id: true })
+  .superRefine((value, context) => addFormIdentificationConfigurationIssues(value.pages, context));
 
 function refineTestVersionContent(
   value: Pick<z.infer<typeof testVersionInputShapeSchema>, 'pages'>,
-  context: z.RefinementCtx
+  context: z.RefinementCtx,
+  options: { validateExerciseConfigurations?: boolean } = {}
 ) {
+  if (options.validateExerciseConfigurations !== false) {
+    addFormIdentificationConfigurationIssues(value.pages, context);
+  }
+
   for (const message of validatePageDocumentIds(value.pages, 'Test version')) {
     context.addIssue({ code: 'custom', message, path: ['pages'] });
   }
@@ -84,6 +100,18 @@ function refineTestVersionContent(
           path: [...path, 'maxPoints'],
         });
       }
+
+      if (options.validateExerciseConfigurations !== false) {
+        for (const exerciseIssue of validateActiveTestExerciseConfiguration(
+          item as unknown as Record<string, unknown>
+        )) {
+          context.addIssue({
+            code: 'custom',
+            message: exerciseIssue.message,
+            path: [...path, ...exerciseIssue.path],
+          });
+        }
+      }
     });
   });
 
@@ -92,6 +120,19 @@ function refineTestVersionContent(
       code: 'custom',
       message: 'A test version must contain at least one scored exercise',
       path: ['pages'],
+    });
+  }
+}
+
+function addFormIdentificationConfigurationIssues(
+  pages: readonly { items?: readonly unknown[] }[],
+  context: z.RefinementCtx
+) {
+  for (const issue of getGeneratedFormIdentificationConfigurationIssues(pages)) {
+    context.addIssue({
+      code: 'custom',
+      message: formatFormIdentificationConfigurationIssue(issue),
+      path: ['pages', issue.pageIndex, 'items', issue.itemIndex, 'data', 'paradigmConfigs', 'verb-conjugation'],
     });
   }
 }
@@ -132,7 +173,10 @@ const testVersionDocumentShapeSchema = z
 export const testVersionSummaryDocumentSchema = testVersionDocumentShapeSchema.omit({ pages: true });
 
 export const testVersionDocumentSchema = testVersionDocumentShapeSchema.superRefine((value, context) => {
-  refineTestVersionContent(value, context);
+  // Existing active versions remain readable for backward compatibility. All
+  // create, update, activation, and duplication paths pass through the strict
+  // input validator before a new active document is written.
+  refineTestVersionContent(value, context, { validateExerciseConfigurations: false });
   const derived = getTestVersionSummaryFields(value.pages);
 
   (Object.keys(derived) as (keyof typeof derived)[]).forEach(field => {
@@ -165,6 +209,7 @@ const testVersionDraftDocumentShapeSchema = z
 export const testVersionDraftSummaryDocumentSchema = testVersionDraftDocumentShapeSchema.omit({ pages: true });
 
 export const testVersionDraftDocumentSchema = testVersionDraftDocumentShapeSchema.superRefine((value, context) => {
+  addFormIdentificationConfigurationIssues(value.pages, context);
   const derived = getTestVersionSummaryFields(value.pages);
 
   (Object.keys(derived) as (keyof typeof derived)[]).forEach(field => {
@@ -320,12 +365,32 @@ const testTranslationItemGradeSchema = z
   })
   .strict();
 
+const testTranslationGradeReservationSchema = z
+  .object({
+    token: z.string().uuid(),
+    expiresAt: isoTimestampSchema,
+  })
+  .strict();
+
+const testTranslationGradeRequestWindowSchema = z
+  .object({
+    windowStartedAt: isoTimestampSchema,
+    count: z.number().int().positive().max(1_000),
+  })
+  .strict();
+
 const inProgressTestAttemptDocumentSchema = z
   .object({
     ...testAttemptBaseShape,
     status: z.literal('in-progress'),
     answers: z.record(z.string(), z.unknown()),
     translationGrades: z.record(z.string(), z.record(z.string(), testTranslationItemGradeSchema)).default({}),
+    translationGradeReservations: z
+      .record(z.string(), z.record(z.string(), testTranslationGradeReservationSchema))
+      .default({}),
+    translationGradeRequestWindows: z
+      .record(z.string(), z.record(z.string(), testTranslationGradeRequestWindowSchema))
+      .default({}),
     deliveryState: testAttemptDeliveryStateSchema,
   })
   .strict()

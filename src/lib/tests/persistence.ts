@@ -16,6 +16,7 @@ import {
   testVersionDraftDocumentSchema,
   testVersionDraftSummaryDocumentSchema,
   testVersionDocumentSchema,
+  testVersionInputSchema,
   testVersionSummaryDocumentSchema,
   type TestVersionDraftInput,
   type TestVersionInput,
@@ -122,6 +123,39 @@ export function configurationError(message: string, error?: unknown): TestServic
   );
 }
 
+/**
+ * Legacy active documents remain readable, but any transition that newly
+ * exposes one to students must satisfy the current authoring invariants.
+ */
+export function safeParseVersionForStudentVisibility(version: TestVersion) {
+  return testVersionInputSchema.safeParse({
+    id: version.id,
+    name: version.name,
+    pages: version.pages,
+    vocabularyPoolId: version.vocabularyPoolId,
+  });
+}
+
+export function isStoredVersionReadyForStudentVisibility(snapshot: DocumentSnapshot): boolean {
+  if (!snapshot.exists) return false;
+  const parsed = testVersionDocumentSchema.safeParse({
+    ...snapshot.data(),
+    id: snapshot.id,
+  });
+  return parsed.success && safeParseVersionForStudentVisibility(parsed.data as TestVersion).success;
+}
+
+export function assertVersionReadyForStudentVisibility(version: TestVersion): TestVersion {
+  const parsed = safeParseVersionForStudentVisibility(version);
+  if (!parsed.success) {
+    throw configurationError(
+      `Test version ${version.id} cannot become student-visible because its exercise configuration is invalid`,
+      parsed.error.flatten()
+    );
+  }
+  return version;
+}
+
 export async function getVersionSummaries(db: Firestore, versionIds: readonly string[]): Promise<TestVersionSummary[]> {
   if (versionIds.length === 0) return [];
 
@@ -151,9 +185,10 @@ export function buildVersion(
   created?: Pick<TestVersion, 'createdAt' | 'createdBy'>
 ): TestVersion {
   const timestamp = now();
+  const parsedInput = testVersionInputSchema.parse(input);
   return testVersionDocumentSchema.parse({
-    ...input,
-    ...getTestVersionSummaryFields(input.pages),
+    ...parsedInput,
+    ...getTestVersionSummaryFields(parsedInput.pages),
     createdAt: created?.createdAt ?? timestamp,
     createdBy: created?.createdBy ?? actorId,
     updatedAt: timestamp,

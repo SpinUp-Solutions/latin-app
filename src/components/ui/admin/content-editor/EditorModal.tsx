@@ -6,10 +6,11 @@ interface EditorModalProps {
   title: string;
   onClose: () => void;
   onSave: () => void;
+  saveDisabled?: boolean;
   children: React.ReactNode;
 }
 
-export const EditorModal: React.FC<EditorModalProps> = ({ title, onClose, onSave, children }) => {
+export const EditorModal: React.FC<EditorModalProps> = ({ title, onClose, onSave, saveDisabled = false, children }) => {
   return (
     <div
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
@@ -32,7 +33,9 @@ export const EditorModal: React.FC<EditorModalProps> = ({ title, onClose, onSave
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={onSave}>Save Changes</Button>
+          <Button onClick={onSave} disabled={saveDisabled}>
+            Save Changes
+          </Button>
         </div>
       </div>
     </div>

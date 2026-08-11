@@ -6,6 +6,7 @@ import {
   tokenizeDiagramSentence,
 } from '@/src/features/sentence-diagramming/model';
 import { validateSentenceDiagramDocument } from '@/src/features/sentence-diagramming/validation';
+import { testVersionDocumentSchema, testVersionInputSchema } from '@/src/lib/tests/schemas';
 
 jest.mock('@/src/services/firebase-admin', () => jest.requireActual('./helpers/routeMocks'));
 jest.mock('firebase-admin/firestore', () => ({ FieldPath: { documentId: jest.fn() } }));
@@ -184,7 +185,26 @@ function mockDb(seed: Record<string, Record<string, Record<string, unknown>>>, e
 const version = {
   id: 'v1',
   name: 'A',
-  pages: [{ id: 'p1', items: [{ id: 'q1', type: 'multiple-choice', maxPoints: 1 }] }],
+  pages: [
+    {
+      id: 'p1',
+      items: [
+        {
+          id: 'q1',
+          type: 'multiple-choice',
+          maxPoints: 1,
+          data: {
+            question: 'Which answer is correct?',
+            options: [
+              { id: 'answer-a', text: 'A', isCorrect: true },
+              { id: 'answer-b', text: 'B', isCorrect: false },
+            ],
+            allowMultipleSelections: false,
+          },
+        },
+      ],
+    },
+  ],
   totalPages: 1,
   totalItems: 1,
   totalExercises: 1,
@@ -193,6 +213,10 @@ const version = {
   createdBy: 'a',
   updatedAt: at,
   updatedBy: 'a',
+};
+const invalidLegacyVersion = {
+  ...version,
+  pages: [{ id: 'legacy-page', items: [{ id: 'legacy-question', type: 'multiple-choice', maxPoints: 1 }] }],
 };
 const test = {
   id: 't1',
@@ -561,6 +585,59 @@ describe('mock transactional lifecycle', () => {
     ]);
   });
 
+  it('cannot remove a valid placed-test version while a strict-invalid legacy survivor remains', async () => {
+    const placedPath = {
+      revision: 1,
+      unitIds: ['t1'],
+      updatedAt: at,
+      updatedBy: 'admin',
+    };
+    const invalidSurvivor = { ...invalidLegacyVersion, id: 'v2', name: 'Invalid survivor' };
+    const authoringMemory = mockDb({
+      lessons: { t1: { ...test, rotationVersions: [{ versionId: 'v1' }, { versionId: 'v2' }] } },
+      testVersions: { v1: version, v2: invalidSurvivor },
+      testVersionDrafts: {},
+      mockTests: {},
+      mockTestOrdering: {},
+      learningPaths: { default: placedPath },
+    });
+
+    await expect(
+      new TestAuthoringService(authoringMemory.db as never, () => at).deactivateTestVersion('t1', 'v1', 'admin')
+    ).rejects.toMatchObject({ code: 'PLACED_TEST_REQUIRES_ROTATION_VERSION' });
+    expect(authoringMemory.get('testVersions', 'v1')).toEqual(version);
+    expect(authoringMemory.get('testVersionDrafts', 'v1')).toBeUndefined();
+    expect(authoringMemory.get('lessons', 't1')).toMatchObject({
+      rotationVersions: [{ versionId: 'v1' }, { versionId: 'v2' }],
+    });
+
+    const assignmentMemory = mockDb({
+      lessons: { t1: { ...test, rotationVersions: [{ versionId: 'v1' }, { versionId: 'v2' }] } },
+      testVersions: { v1: version, v2: invalidSurvivor },
+      testVersionDrafts: {},
+      mockTests: {},
+      mockTestOrdering: {},
+      learningPaths: { default: placedPath },
+    });
+    await expect(
+      new MockTestService(assignmentMemory.db as never, () => at).assignVersionToMock(
+        {
+          testId: 't1',
+          versionId: 'v1',
+          title: 'Valid target',
+          description: '',
+          passingPercentage: null,
+          isLive: true,
+        },
+        'admin'
+      )
+    ).rejects.toMatchObject({ code: 'PLACED_TEST_REQUIRES_ROTATION_VERSION' });
+    expect(assignmentMemory.get('mockTests', mock.id)).toBeUndefined();
+    expect(assignmentMemory.get('lessons', 't1')).toMatchObject({
+      rotationVersions: [{ versionId: 'v1' }, { versionId: 'v2' }],
+    });
+  });
+
   it('uses the same nested identity rewrite for normal and standalone mock duplicates without mutating their source', async () => {
     const richVersion = {
       ...version,
@@ -874,6 +951,143 @@ describe('mock transactional lifecycle', () => {
     const published = await service.updateMock('hidden', { isLive: true }, 'admin');
     expect(published).toMatchObject({ status: 'active', isLive: true, mockOrder: 0 });
     expect(memory.get('mockTests', 'archived')).toMatchObject({ isLive: false, mockOrder: null });
+  });
+
+  it('keeps invalid legacy versions readable but blocks every mock publication and rotation transition', async () => {
+    expect(testVersionDocumentSchema.safeParse(invalidLegacyVersion).success).toBe(true);
+    expect(
+      testVersionInputSchema.safeParse({
+        id: invalidLegacyVersion.id,
+        name: invalidLegacyVersion.name,
+        pages: invalidLegacyVersion.pages,
+      }).success
+    ).toBe(false);
+
+    const errors = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const assignMemory = mockDb({
+      lessons: { t1: { ...test, rotationVersions: [{ versionId: 'v1' }] } },
+      testVersions: { v1: invalidLegacyVersion },
+      mockTests: {},
+      mockTestOrdering: {},
+      learningPaths: {},
+    });
+    await expect(
+      new MockTestService(assignMemory.db as never, () => at).assignVersionToMock(
+        {
+          testId: 't1',
+          versionId: 'v1',
+          title: 'Invalid legacy assignment',
+          description: '',
+          passingPercentage: null,
+          isLive: true,
+        },
+        'admin'
+      )
+    ).rejects.toMatchObject({ code: 'TEST_CONFIGURATION_ERROR' });
+    expect(assignMemory.get('mockTests', mock.id)).toBeUndefined();
+    expect(assignMemory.get('lessons', 't1')).toMatchObject({ rotationVersions: [{ versionId: 'v1' }] });
+
+    const archivedParent = { ...mock, status: 'archived' as const, isLive: false, mockOrder: null };
+    const reassignMemory = mockDb({
+      lessons: { t1: { ...test, rotationVersions: [{ versionId: 'v1' }] } },
+      testVersions: { v1: invalidLegacyVersion },
+      mockTests: { [mock.id]: archivedParent },
+      mockTestOrdering: {},
+      learningPaths: {},
+    });
+    await expect(
+      new MockTestService(reassignMemory.db as never, () => at).assignVersionToMock(
+        {
+          testId: 't1',
+          versionId: 'v1',
+          title: 'Invalid legacy reassignment',
+          description: '',
+          passingPercentage: null,
+          isLive: false,
+        },
+        'admin'
+      )
+    ).rejects.toMatchObject({ code: 'TEST_CONFIGURATION_ERROR' });
+    expect(reassignMemory.get('mockTests', mock.id)).toMatchObject({ status: 'archived', isLive: false });
+
+    const archivedStandalone = {
+      ...mock,
+      id: 'standalone-archived',
+      parent: { kind: 'standalone' as const },
+      status: 'archived' as const,
+      isLive: false,
+      mockOrder: null,
+    };
+    const reactivateMemory = mockDb({
+      lessons: {},
+      testVersions: { v1: invalidLegacyVersion },
+      mockTests: { 'standalone-archived': archivedStandalone },
+      mockTestOrdering: {},
+      learningPaths: {},
+    });
+    await expect(
+      new MockTestService(reactivateMemory.db as never, () => at).reactivateStandaloneMock(
+        'standalone-archived',
+        { isLive: false },
+        'admin'
+      )
+    ).rejects.toMatchObject({ code: 'TEST_CONFIGURATION_ERROR' });
+    expect(reactivateMemory.get('mockTests', 'standalone-archived')).toMatchObject({ status: 'archived' });
+
+    const hiddenStandalone = {
+      ...mock,
+      id: 'standalone-hidden',
+      parent: { kind: 'standalone' as const },
+      isLive: false,
+      mockOrder: null,
+    };
+    const publishMemory = mockDb({
+      lessons: {},
+      testVersions: { v1: invalidLegacyVersion },
+      mockTests: { 'standalone-hidden': hiddenStandalone },
+      mockTestOrdering: {},
+      learningPaths: {},
+    });
+    await expect(
+      new MockTestService(publishMemory.db as never, () => at).updateMock(
+        'standalone-hidden',
+        { isLive: true },
+        'admin'
+      )
+    ).rejects.toMatchObject({ code: 'TEST_CONFIGURATION_ERROR' });
+    expect(publishMemory.get('mockTests', 'standalone-hidden')).toMatchObject({ isLive: false, mockOrder: null });
+
+    const hiddenParent = { ...mock, isLive: false, mockOrder: null };
+    const archiveMemory = mockDb({
+      lessons: { t1: { ...test, rotationVersions: [] } },
+      testVersions: { v1: invalidLegacyVersion },
+      mockTests: { [mock.id]: hiddenParent },
+      mockTestOrdering: {},
+      learningPaths: {},
+    });
+    await expect(
+      new MockTestService(archiveMemory.db as never, () => at).archiveMock(mock.id, 'admin')
+    ).rejects.toMatchObject({ code: 'TEST_CONFIGURATION_ERROR' });
+    expect(archiveMemory.get('mockTests', mock.id)).toMatchObject({ status: 'active', isLive: false });
+    expect(archiveMemory.get('lessons', 't1')).toMatchObject({ rotationVersions: [] });
+
+    const moveMemory = mockDb({
+      lessons: { t1: { ...test, rotationVersions: [] } },
+      testVersions: { v1: invalidLegacyVersion },
+      mockTests: { 'standalone-hidden': hiddenStandalone },
+      mockTestOrdering: {},
+      learningPaths: {},
+    });
+    await expect(
+      new MockTestService(moveMemory.db as never, () => at).moveStandaloneMockToTest(
+        'standalone-hidden',
+        { testId: 't1' },
+        'admin'
+      )
+    ).rejects.toMatchObject({ code: 'TEST_CONFIGURATION_ERROR' });
+    expect(moveMemory.get('mockTests', 'standalone-hidden')).toMatchObject({ status: 'active', isLive: false });
+    expect(moveMemory.get('lessons', 't1')).toMatchObject({ rotationVersions: [] });
+    errors.mockRestore();
   });
 
   it('projects isolated live cards with twelve chronological trend points and related-nudge filtering', async () => {
