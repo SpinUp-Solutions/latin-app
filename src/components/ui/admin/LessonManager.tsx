@@ -369,16 +369,19 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
                 <LessonMetric icon={FileText} label="Items" value={lesson.totalItems} />
               </div>
 
-              <div className="flex items-center gap-2 border-t px-5 py-3 sm:px-6">
+              <div className="flex items-center gap-3 border-t px-5 py-3 sm:px-6">
                 <Button
                   size="sm"
                   variant="ghost"
                   onClick={() => router.push(`/admin/lessons/preview/${lesson.id}`)}
-                  className="flex-1 border border-border bg-white font-sans text-foreground hover:bg-roman-parchment hover:text-foreground sm:flex-none">
+                  className="flex-1 border border-border bg-white font-sans text-foreground hover:bg-roman-parchment hover:text-foreground sm:w-40 sm:flex-none">
                   <Eye className="mr-1.5 h-4 w-4" aria-hidden="true" />
                   Preview
                 </Button>
-                <Button size="sm" onClick={() => onEditLesson(lesson)} className="flex-1 font-sans sm:flex-none">
+                <Button
+                  size="sm"
+                  onClick={() => onEditLesson(lesson)}
+                  className="flex-1 font-sans sm:w-40 sm:flex-none">
                   <Edit className="mr-1.5 h-4 w-4" aria-hidden="true" />
                   Edit lesson
                 </Button>
@@ -386,7 +389,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
                   size="icon"
                   variant="ghost"
                   onClick={() => handleDeleteLesson(lesson.id, lesson.title)}
-                  className="h-9 w-9 shrink-0 font-sans text-roman-stone hover:bg-primary/10 hover:text-primary"
+                  className="h-9 w-9 shrink-0 border border-border bg-white font-sans text-roman-stone hover:bg-primary/10 hover:text-primary"
                   aria-label={`Delete ${lesson.title}`}
                   title="Delete lesson">
                   <Trash2 className="h-4 w-4" aria-hidden="true" />
