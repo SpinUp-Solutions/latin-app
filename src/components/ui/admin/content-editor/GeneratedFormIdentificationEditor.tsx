@@ -2,6 +2,7 @@ import React from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent } from '@/src/components/ui/card';
 import { Checkbox } from '@/src/components/ui/checkbox';
+import { Alert, AlertDescription, AlertTitle } from '@/src/components/ui/alert';
 import { Input } from '@/src/components/ui/input';
 import { Label } from '@/src/components/ui/label';
 import { GeneratedFormIdentificationExercise } from '@/src/types/exercises/generated-form-identification';
@@ -27,7 +28,8 @@ import { parseMultiFilterValue, serializeMultiFilterValue } from '@/src/utils/wo
 import { deriveParadigm } from '@/src/utils/paradigm';
 import type { FormIdentificationStep } from '@/src/types/exercises/schemas/form-identification';
 import { getExerciseDisplayForm, hasSelectedForm } from '@/src/utils/exercises/formSelection';
-import { Loader2 } from 'lucide-react';
+import { getGeneratedFormIdentificationConfigurationMessages } from '@/src/utils/exercises/formIdentificationConfiguration';
+import { AlertTriangle, Loader2 } from 'lucide-react';
 
 export const GeneratedFormIdentificationEditor: React.FC = () => {
   const editingContent = useAppSelector(
@@ -47,6 +49,7 @@ const GeneratedFormIdentificationEditorView: React.FC<{
   const isSingleField = editingContent.data.mode === 'single-field';
 
   const editor = useFormIdentificationEditor(editingContent);
+  const configurationMessages = getGeneratedFormIdentificationConfigurationMessages(editingContent);
 
   const setMode = (mode: 'step-by-step' | 'single-field') => {
     editor.updateContent({
@@ -265,6 +268,21 @@ const GeneratedFormIdentificationEditorView: React.FC<{
         filtersContent={filtersContent}
         poolContent={poolContent}
       />
+
+      {configurationMessages.length > 0 && (
+        <Alert className="border-amber-200 bg-amber-50 text-amber-900">
+          <AlertTriangle className="h-4 w-4 text-amber-600" />
+          <AlertTitle>Selected form needs a question</AlertTitle>
+          <AlertDescription>
+            <p>Choose at least one question that applies to every selected form before saving.</p>
+            <ul className="list-disc pl-4">
+              {configurationMessages.map(message => (
+                <li key={message}>{message}</li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {editor.paradigmInfo.isLoading ? (
         <Card>

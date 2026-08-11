@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import { LESSON_UNIT_TYPES } from '@/src/types/learning-unit';
 import { validatePageDocumentIds } from '@/src/utils/lessonProgress';
+import {
+  formatFormIdentificationConfigurationIssue,
+  getGeneratedFormIdentificationConfigurationIssues,
+} from '@/src/utils/exercises/formIdentificationConfiguration';
 
 export const nonEmptyIdSchema = z.string().trim().min(1);
 export const firestoreDocumentIdSchema = nonEmptyIdSchema.refine(
@@ -73,6 +77,19 @@ export const pageSchema = z
   })
   .passthrough();
 
+function addFormIdentificationConfigurationIssues(
+  pages: readonly { items?: readonly unknown[] }[],
+  context: z.RefinementCtx
+) {
+  for (const issue of getGeneratedFormIdentificationConfigurationIssues(pages)) {
+    context.addIssue({
+      code: 'custom',
+      message: formatFormIdentificationConfigurationIssue(issue),
+      path: ['pages', issue.pageIndex, 'items', issue.itemIndex, 'data', 'paradigmConfigs', 'verb-conjugation'],
+    });
+  }
+}
+
 /**
  * Client-controlled lesson fields accepted by the authoring routes. Unknown
  * top-level fields are deliberately stripped so response-only, audit, legacy,
@@ -91,7 +108,8 @@ export const lessonAuthoringInputSchema = z
     vocabulary_pool: firestoreDocumentIdSchema.nullable().optional(),
     showWordSearch: z.boolean().optional(),
   })
-  .strip();
+  .strip()
+  .superRefine((value, context) => addFormIdentificationConfigurationIssues(value.pages, context));
 
 const rotationVersionReferenceSchema = z
   .object({
@@ -129,6 +147,8 @@ const lessonUnitShapeSchema = learningUnitBaseSchema
   .strict();
 
 function refineLessonUnit(value: z.infer<typeof lessonUnitShapeSchema>, context: z.RefinementCtx) {
+  addFormIdentificationConfigurationIssues(value.pages, context);
+
   if (value.pages.length === 0) {
     if (value.isLive) {
       context.addIssue({ code: 'custom', message: 'Lesson must contain at least one page.', path: ['pages'] });

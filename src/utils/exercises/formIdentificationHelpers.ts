@@ -18,7 +18,6 @@ import {
 import {
   getSupportedVerbFormStepsForParsedPath,
   getVerbFormKindForParsedPath,
-  normalizeVerbFormStepsForParsedPaths,
 } from './verbFormStepCompatibility';
 
 type VerbWordResponse = Extract<ExerciseWordResponse, { part_of_speech: 'verb' }>;
@@ -165,14 +164,13 @@ export function getAnswerableStepsForWord(
 
   if (formPaths.length === 0) return [];
 
-  const normalizedSteps = normalizeVerbFormStepsForParsedPaths(formPaths, steps);
   const supports = formPaths.map(path => getSupportedVerbFormStepsForParsedPath(path));
 
   if (supports.some(support => support === null)) return [];
 
   const supportedStepSets = supports.map(support => new Set<FormIdentificationStep>(support!.supportedSteps));
 
-  return normalizedSteps.filter(step => supportedStepSets.every(supportedSteps => supportedSteps.has(step)));
+  return steps.filter(step => supportedStepSets.every(supportedSteps => supportedSteps.has(step)));
 }
 
 /**

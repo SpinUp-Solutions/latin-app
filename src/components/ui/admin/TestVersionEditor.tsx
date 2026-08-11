@@ -51,7 +51,10 @@ import { UnsavedNavigationDialog } from '@/src/components/ui/core/UnsavedNavigat
 import { clearStableTestEditorIdentity, getStableTestEditorIdentity } from '@/src/lib/tests/editor-session';
 import { MockAssignmentDialog } from './MockAssignmentDialog';
 import { VocabularyPoolSelector } from './vocabulary-pools/VocabularyPoolSelector';
-import { normalizeGeneratedFormIdentificationPages } from '@/src/utils/exercises/formIdentificationCompatibility';
+import {
+  formatFormIdentificationConfigurationIssue,
+  getGeneratedFormIdentificationConfigurationIssues,
+} from '@/src/utils/exercises/formIdentificationConfiguration';
 import { formatApiValidationIssues, getApiErrorMessage } from '@/src/store/api/baseQuery';
 
 interface TestVersionEditorProps {
@@ -204,6 +207,11 @@ export function TestVersionEditor({
   }, [dispatch]);
 
   const summary = useMemo(() => getTestVersionSummaryFields(document?.pages ?? []), [document?.pages]);
+  const formIdentificationIssues = useMemo(
+    () => getGeneratedFormIdentificationConfigurationIssues(document?.pages ?? []),
+    [document?.pages]
+  );
+  const hasFormIdentificationIssues = formIdentificationIssues.length > 0;
   const settingsDirty = !shallowEqual(settings, initialSettings.current);
   const dirty = editorDirty || settingsDirty;
 
@@ -226,12 +234,12 @@ export function TestVersionEditor({
 
   const save = () => {
     if (!document) return;
-    const normalizedDocument = {
-      ...document,
-      pages: normalizeGeneratedFormIdentificationPages(document.pages),
-    };
+    if (hasFormIdentificationIssues) {
+      setSaveErrors(formIdentificationIssues.map(formatFormIdentificationConfigurationIssue));
+      return;
+    }
     const version = {
-      ...pageDocumentDraftToTestVersion(normalizedDocument, summary, initialVersion),
+      ...pageDocumentDraftToTestVersion(document, summary, initialVersion),
       vocabularyPoolId,
     };
     const submittedDocument = document;
@@ -397,7 +405,7 @@ export function TestVersionEditor({
                         dirty && !saving && 'shadow-md shadow-roman-red/25 ring-2 ring-roman-gold/50 ring-offset-1'
                       )}
                       onClick={save}
-                      disabled={saving || !testTitle.trim() || !document.title.trim()}>
+                      disabled={saving || hasFormIdentificationIssues || !testTitle.trim() || !document.title.trim()}>
                       {saving ? (
                         <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden="true" />
                       ) : (
@@ -419,6 +427,20 @@ export function TestVersionEditor({
               <ul className="mt-1 list-disc space-y-1 pl-5">
                 {saveErrors.map(message => (
                   <li key={message}>{message}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {hasFormIdentificationIssues && (
+            <div
+              role="alert"
+              className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm">
+              <p className="font-medium">Fix the morphology configuration before saving:</p>
+              <ul className="mt-1 list-disc space-y-1 pl-5">
+                {formIdentificationIssues.map(issue => (
+                  <li key={`${issue.pageIndex}-${issue.itemIndex}-${issue.message}`}>
+                    {formatFormIdentificationConfigurationIssue(issue)}
+                  </li>
                 ))}
               </ul>
             </div>

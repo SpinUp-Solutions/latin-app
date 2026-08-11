@@ -2,7 +2,6 @@ import type { FormIdentificationStep } from '@/src/types/exercises/schemas/form-
 import type { VerbFormKind } from '@/src/types/api/exercise-word-responses';
 
 const FINITE_MOODS = new Set(['indicative', 'subjunctive', 'imperative']);
-const NON_FINITE_FORM_KINDS = new Set<VerbFormKind>(['infinitive', 'participle', 'gerund', 'supine']);
 
 const SUPPORTED_STEPS = {
   finite: ['conjugation', 'verb_form', 'tense', 'voice', 'mood', 'person', 'number'],
@@ -103,54 +102,6 @@ export function getSupportedVerbFormStepsForParsedPath(
   return null;
 }
 
-function normalizeStepsForFormKinds(
-  steps: readonly FormIdentificationStep[],
-  formKinds: readonly VerbFormKind[]
-): FormIdentificationStep[] {
-  const hasFinite = formKinds.includes('finite');
-  const hasNonFinite = formKinds.some(kind => NON_FINITE_FORM_KINDS.has(kind));
-  const shouldReplaceMood = hasNonFinite && !hasFinite;
-  const shouldAddVerbForm = hasNonFinite && hasFinite;
-  const normalized: FormIdentificationStep[] = [];
-
-  for (const step of steps) {
-    if (step === 'mood' && shouldReplaceMood) {
-      if (!normalized.includes('verb_form')) normalized.push('verb_form');
-      continue;
-    }
-
-    if (step === 'mood' && shouldAddVerbForm && !normalized.includes('verb_form')) {
-      normalized.push('verb_form');
-    }
-
-    if (!normalized.includes(step)) normalized.push(step);
-  }
-
-  return normalized;
-}
-
-export function normalizeVerbFormStepsForSelectedPaths(
-  selectedCellPaths: readonly string[],
-  steps: readonly FormIdentificationStep[]
-): FormIdentificationStep[] {
-  const formKinds = selectedCellPaths
-    .map(getSupportedVerbFormStepsForPath)
-    .filter((support): support is VerbPathStepSupport => support !== null)
-    .map(support => support.formKind);
-  return normalizeStepsForFormKinds(steps, formKinds);
-}
-
-export function normalizeVerbFormStepsForParsedPaths(
-  paths: Array<Record<string, string | undefined>>,
-  steps: readonly FormIdentificationStep[]
-): FormIdentificationStep[] {
-  const formKinds = paths
-    .map(getSupportedVerbFormStepsForParsedPath)
-    .filter((support): support is VerbPathStepSupport => support !== null)
-    .map(support => support.formKind);
-  return normalizeStepsForFormKinds(steps, formKinds);
-}
-
 export function getVerbFormKindForParsedPath(
   path: Record<string, string | undefined> | null | undefined
 ): VerbFormKind | '' {
@@ -158,37 +109,48 @@ export function getVerbFormKindForParsedPath(
   return getSupportedVerbFormStepsForParsedPath(path)?.formKind ?? '';
 }
 
-export function getUnsupportedVerbFormStepWarnings(
-  selectedCellPaths: string[],
+/**
+ * Returns the selected verb form kinds that cannot answer any configured
+ * question. Individual unsupported questions are intentionally allowed:
+ * runtime filtering shows only the questions that apply to each form.
+ */
+export function getVerbFormSelectionsWithNoApplicableSteps(
+  selectedCellPaths: readonly string[],
   steps: readonly FormIdentificationStep[]
-): string[] {
+): VerbPathStepSupport[] {
   if (selectedCellPaths.length === 0 || steps.length === 0) {
-    return [];
+    return selectedCellPaths.length === 0
+      ? []
+      : Array.from(
+          new Map(
+            selectedCellPaths
+              .map(getSupportedVerbFormStepsForPath)
+              .filter((support): support is VerbPathStepSupport => support !== null)
+              .map(support => [support.formKind, support])
+          ).values()
+        );
   }
 
-  const unsupportedByLabel = new Map<string, Set<FormIdentificationStep>>();
+  const selectedSteps = new Set(steps);
+  const invalidSelections = new Map<VerbFormKind, VerbPathStepSupport>();
 
   selectedCellPaths.forEach(path => {
     const support = getSupportedVerbFormStepsForPath(path);
     if (!support) return;
 
-    const supported = new Set(support.supportedSteps);
-    const unsupported = steps.filter(step => !supported.has(step));
-
-    if (unsupported.length === 0) {
-      return;
+    if (!support.supportedSteps.some(step => selectedSteps.has(step))) {
+      invalidSelections.set(support.formKind, support);
     }
-
-    const existing = unsupportedByLabel.get(support.label) ?? new Set<FormIdentificationStep>();
-    unsupported.forEach(step => existing.add(step));
-    unsupportedByLabel.set(support.label, existing);
   });
 
-  return Array.from(unsupportedByLabel.entries()).map(([label, unsupported]) => {
-    const stepList = Array.from(unsupported)
-      .map(step => step.replace(/_/g, ' '))
-      .join(', ');
+  return Array.from(invalidSelections.values());
+}
 
-    return `${label} cannot answer: ${stepList}.`;
-  });
+export function getVerbFormSelectionValidationMessages(
+  selectedCellPaths: readonly string[],
+  steps: readonly FormIdentificationStep[]
+): string[] {
+  return getVerbFormSelectionsWithNoApplicableSteps(selectedCellPaths, steps).map(
+    selection => `${selection.label} have no applicable selected questions.`
+  );
 }
