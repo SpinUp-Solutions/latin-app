@@ -25,6 +25,7 @@ import { TranslationGradingEditor } from './content-editor/TranslationGradingEdi
 import { ListeningPassageEditor } from './content-editor/ListeningPassageEditor';
 
 import { getEditorTitle } from '@/src/utils/editorRegistry';
+import { getGeneratedFormIdentificationConfigurationMessages } from '@/src/utils/exercises/formIdentificationConfiguration';
 
 export const ContentEditor: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -34,7 +35,11 @@ export const ContentEditor: React.FC = () => {
     return null;
   }
 
+  const configurationMessages = getGeneratedFormIdentificationConfigurationMessages(editingContent.content);
+  const saveDisabled = configurationMessages.length > 0;
+
   const handleSave = () => {
+    if (saveDisabled) return;
     dispatch(saveEditingContent());
   };
 
@@ -90,7 +95,11 @@ export const ContentEditor: React.FC = () => {
   };
 
   return (
-    <EditorModal title={getEditorTitle(editingContent.content.type)} onClose={handleClose} onSave={handleSave}>
+    <EditorModal
+      title={getEditorTitle(editingContent.content.type)}
+      onClose={handleClose}
+      onSave={handleSave}
+      saveDisabled={saveDisabled}>
       {renderEditor()}
     </EditorModal>
   );

@@ -31,7 +31,10 @@ import {
 } from '@/src/utils/contentTypeConstants';
 import { ContentEditor } from './ContentEditor';
 import { useClipboard, ClipboardPanel } from '../core/clipboard';
-import { normalizeGeneratedFormIdentificationPages } from '@/src/utils/exercises/formIdentificationCompatibility';
+import {
+  formatFormIdentificationConfigurationIssue,
+  getGeneratedFormIdentificationConfigurationIssues,
+} from '@/src/utils/exercises/formIdentificationConfiguration';
 
 interface LessonBuilderProps {
   initialLesson?: Lesson;
@@ -50,11 +53,12 @@ export const LessonBuilder: React.FC<LessonBuilderProps> = ({ initialLesson, onS
     return <div>Loading lesson...</div>;
   }
 
+  const formIdentificationIssues = getGeneratedFormIdentificationConfigurationIssues(currentLesson.pages);
+  const hasFormIdentificationIssues = formIdentificationIssues.length > 0;
+
   const handleSaveLesson = () => {
-    onSave({
-      ...currentLesson,
-      pages: normalizeGeneratedFormIdentificationPages(currentLesson.pages),
-    });
+    if (hasFormIdentificationIssues) return;
+    onSave(currentLesson);
   };
 
   const handleUpdateLessonInfo = (
@@ -132,7 +136,7 @@ export const LessonBuilder: React.FC<LessonBuilderProps> = ({ initialLesson, onS
               <p className="text-xs text-gray-500">Create and edit lesson content</p>
             </div>
             <div className="flex gap-2">
-              <Button onClick={handleSaveLesson} disabled={isSaving} size="sm">
+              <Button onClick={handleSaveLesson} disabled={isSaving || hasFormIdentificationIssues} size="sm">
                 {isSaving ? (
                   <>
                     <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2"></div>
@@ -144,6 +148,19 @@ export const LessonBuilder: React.FC<LessonBuilderProps> = ({ initialLesson, onS
               </Button>
             </div>
           </div>
+
+          {hasFormIdentificationIssues && (
+            <div role="alert" className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              <p className="font-medium">Fix the morphology configuration before saving:</p>
+              <ul className="mt-1 list-disc pl-5">
+                {formIdentificationIssues.map(issue => (
+                  <li key={`${issue.pageIndex}-${issue.itemIndex}-${issue.message}`}>
+                    {formatFormIdentificationConfigurationIssue(issue)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {/* Lesson Info */}
           <LessonInfoForm

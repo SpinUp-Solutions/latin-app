@@ -176,7 +176,6 @@ describe('generated form-identification failure boundaries', () => {
     expect(stepsForWord(createGeneratedFormIdentificationItems(exercise, [word]), word.id)).toEqual([
       'tense',
       'voice',
-      'verb_form',
     ]);
   });
 
@@ -224,7 +223,6 @@ describe('generated form-identification failure boundaries', () => {
       'conjugation',
       'tense',
       'voice',
-      'verb_form',
       'number',
     ]);
   });

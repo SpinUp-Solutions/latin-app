@@ -1,6 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Card, CardContent } from '@/src/components/ui/card';
-import { Alert, AlertDescription, AlertTitle } from '@/src/components/ui/alert';
 import { Button } from '@/src/components/ui/button';
 import { Badge } from '@/src/components/ui/badge';
 import { Input } from '@/src/components/ui/input';
@@ -20,7 +19,6 @@ import {
   PARADIGM_LABELS,
   PARADIGM_RELEVANT_FILTERS,
 } from '@/src/config/paradigmDefinitions';
-import { getUnsupportedVerbFormStepWarnings } from '@/src/utils/exercises/verbFormStepCompatibility';
 import {
   DndContext,
   closestCenter,
@@ -39,7 +37,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { restrictToVerticalAxis, restrictToParentElement } from '@dnd-kit/modifiers';
-import { AlertTriangle, GripVertical } from 'lucide-react';
+import { GripVertical } from 'lucide-react';
 
 interface MultiParadigmConfigSectionProps {
   availableParadigms: FormParadigm[];
@@ -180,11 +178,6 @@ export const MultiParadigmConfigSection: React.FC<MultiParadigmConfigSectionProp
   const currentSteps = currentConfig?.steps || [];
   const tableType = PARADIGM_TABLE_TYPE[activeParadigm];
   const relevantFilters = PARADIGM_RELEVANT_FILTERS[activeParadigm];
-  const stepCompatibilityWarnings =
-    activeParadigm === 'verb-conjugation'
-      ? getUnsupportedVerbFormStepWarnings(currentConfig?.formSelection?.selectedCellPaths || [], currentSteps)
-      : [];
-
   const nonPronounAvailable = availableParadigms.filter(p => NON_PRONOUN_PARADIGMS.includes(p));
   const pronounAvailable = availableParadigms.filter(p => PRONOUN_PARADIGMS.includes(p));
 
@@ -400,19 +393,6 @@ export const MultiParadigmConfigSection: React.FC<MultiParadigmConfigSectionProp
                       </div>
                     )}
 
-                    {stepCompatibilityWarnings.length > 0 && (
-                      <Alert className="border-amber-200 bg-amber-50 text-amber-900">
-                        <AlertTriangle className="h-4 w-4 text-amber-600" />
-                        <AlertTitle>Step/form mismatch</AlertTitle>
-                        <AlertDescription>
-                          <ul className="list-disc pl-4">
-                            {stepCompatibilityWarnings.map(warning => (
-                              <li key={warning}>{warning}</li>
-                            ))}
-                          </ul>
-                        </AlertDescription>
-                      </Alert>
-                    )}
                   </div>
                 </div>
 

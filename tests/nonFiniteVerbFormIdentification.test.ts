@@ -14,8 +14,7 @@ import {
 } from '@/src/utils/exercises/generatedFormIdentificationExercise';
 import { hasSelectedForm } from '@/src/utils/exercises/formSelection';
 import {
-  getUnsupportedVerbFormStepWarnings,
-  normalizeVerbFormStepsForSelectedPaths,
+  getVerbFormSelectionValidationMessages,
 } from '@/src/utils/exercises/verbFormStepCompatibility';
 import { createGeneratedFormIdentificationItems } from '@/src/lib/tests/generated-exercises';
 
@@ -137,7 +136,7 @@ describe('non-finite verb form identification', () => {
     expect(hasSelectedForm(word)).toBe(true);
   });
 
-  it('generates a Verb Form question instead of a Mood question for participles', () => {
+  it('does not generate a question for participles when only Mood is selected', () => {
     const word = makeVerbWord({
       verb_form: 'participle',
       tense: 'present',
@@ -152,13 +151,7 @@ describe('non-finite verb form identification', () => {
       'nonFinite.participle.present.active.nominative.masculine.singular',
     ]);
 
-    expect(createGeneratedFormIdentificationItems(exercise, [word])).toEqual([
-      expect.objectContaining({
-        step: 'verb_form',
-        correctAnswer: 'participle',
-        acceptedAnswers: expect.arrayContaining(['participle', 'part.', 'part']),
-      }),
-    ]);
+    expect(createGeneratedFormIdentificationItems(exercise, [word])).toEqual([]);
   });
 
   it('continues generating a true Mood question for finite verbs', () => {
@@ -207,10 +200,10 @@ describe('non-finite verb form identification', () => {
       )
       .join(';');
 
-    expect(steps).toEqual(['voice', 'tense', 'verb_form']);
-    expect(correctAnswerDisplay).toBe('pass,pres,inf');
+    expect(steps).toEqual(['voice', 'tense']);
+    expect(correctAnswerDisplay).toBe('pass,pres');
     expect(
-      validateSingleFieldFormIdentificationExercise('pass, pres, infinitive', {
+      validateSingleFieldFormIdentificationExercise('pass, pres', {
         id: word.id,
         wordId: word.id,
         word: word.root_word,
@@ -232,33 +225,6 @@ describe('non-finite verb form identification', () => {
     expect(getAcceptedAnswersForStep('supine')).toEqual(expect.arrayContaining(['supine', 'sup.', 'sup']));
   });
 
-  it('normalizes legacy configured mood steps based on selected verb forms', () => {
-    const configured: FormIdentificationStep[] = ['conjugation', 'tense', 'voice', 'mood'];
-    const finitePath = 'indicative.active.present.singular.first';
-    const participlePath = 'nonFinite.participle.present.active.nominative.masculine.singular';
-
-    expect(normalizeVerbFormStepsForSelectedPaths([finitePath], configured)).toEqual(configured);
-    expect(normalizeVerbFormStepsForSelectedPaths([participlePath], configured)).toEqual([
-      'conjugation',
-      'tense',
-      'voice',
-      'verb_form',
-    ]);
-    expect(normalizeVerbFormStepsForSelectedPaths([finitePath, participlePath], configured)).toEqual([
-      'conjugation',
-      'tense',
-      'voice',
-      'verb_form',
-      'mood',
-    ]);
-    expect(
-      normalizeVerbFormStepsForSelectedPaths(
-        [finitePath, participlePath],
-        ['conjugation', 'tense', 'voice', 'verb_form', 'mood']
-      )
-    ).toEqual(['conjugation', 'tense', 'voice', 'verb_form', 'mood']);
-  });
-
   it('continues grading frozen legacy mood items for existing test attempts', () => {
     expect(
       validateGeneratedFormIdentificationExercise('participle', {
@@ -278,19 +244,21 @@ describe('non-finite verb form identification', () => {
     ).toBe(true);
   });
 
-  it('warns when selected non-finite forms cannot answer selected steps', () => {
-    expect(getUnsupportedVerbFormStepWarnings(['gerund.genitive'], ['conjugation', 'verb_form', 'case'])).toEqual([]);
-    expect(getUnsupportedVerbFormStepWarnings(['gerund.genitive'], ['mood'])).toEqual([
-      'Gerund forms cannot answer: mood.',
+  it('warns only when a selected form cannot answer any selected question', () => {
+    expect(getVerbFormSelectionValidationMessages(['gerund.genitive'], ['conjugation', 'verb_form', 'case'])).toEqual(
+      []
+    );
+    expect(getVerbFormSelectionValidationMessages(['gerund.genitive'], ['mood'])).toEqual([
+      'Gerund forms have no applicable selected questions.',
     ]);
     expect(
-      getUnsupportedVerbFormStepWarnings(['gerund.genitive'], ['tense', 'voice', 'person', 'number', 'gender'])
-    ).toEqual(['Gerund forms cannot answer: tense, voice, person, number, gender.']);
+      getVerbFormSelectionValidationMessages(['gerund.genitive'], ['tense', 'voice', 'person', 'number', 'gender'])
+    ).toEqual(['Gerund forms have no applicable selected questions.']);
     expect(
-      getUnsupportedVerbFormStepWarnings(
+      getVerbFormSelectionValidationMessages(
         ['nonFinite.participle.present.active.nominative.masculine.singular'],
         ['person']
       )
-    ).toEqual(['Participle forms cannot answer: person.']);
+    ).toEqual(['Participle forms have no applicable selected questions.']);
   });
 });
