@@ -141,7 +141,6 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
         });
         setAttempt(response.attempt);
         setPageIndex(0);
-        setScreen('taking');
       })
       .catch(error => {
         if (activeOriginKeyRef.current !== originKey) return;
@@ -247,6 +246,11 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
 
   const begin = async () => {
     if (!user || !test || (isMockTest && !mockTest) || normalTest?.status === 'locked') return;
+    if (isMockTest && attempt) {
+      setScreen('taking');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
     const requestedOriginKey = originKey;
     try {
       const response = await startAttempt({ uid: user.uid, origin }).unwrap();
@@ -259,7 +263,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
       });
       setAttempt(response.attempt);
       setPageIndex(0);
-      setScreen('taking');
+      if (!isMockTest) setScreen('taking');
     } catch (error) {
       const code = getApiErrorCode(error);
       if (code === 'TEST_CONFIGURATION_ERROR' || code === 'TEST_NOT_AVAILABLE') {
@@ -477,6 +481,17 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
       : normalTest && normalTest.minTotalPoints === normalTest.maxTotalPoints
         ? `${formatPoints(normalTest.minTotalPoints)} total points`
         : `${formatPoints(normalTest?.minTotalPoints ?? 0)}–${formatPoints(normalTest?.maxTotalPoints ?? 0)} total points, depending on the version selected`;
+    const mockAction = attempt
+      ? mockDetail?.attempt || attemptSummary?.inProgressAttemptId
+        ? 'Continue Mock Test'
+        : (attemptSummary?.attemptCount ?? 0) > 0
+          ? 'Begin Mock Retake'
+          : 'Begin Mock Test'
+      : attemptSummary?.inProgressAttemptId
+        ? 'Continue Mock Test'
+        : (attemptSummary?.attemptCount ?? 0) > 0
+          ? 'Start Mock Retake'
+          : 'Start Mock Test';
     return (
       <div className="min-h-screen bg-gradient-to-b from-roman-marble via-white to-roman-parchment/60 p-4 sm:p-6 md:p-10">
         <Card className="mx-auto max-w-3xl overflow-hidden rounded-2xl border-roman-red/15 shadow-lg">
@@ -523,16 +538,12 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
                 onClick={begin}>
                 {starting
                   ? 'Preparing test…'
-                  : attemptSummary?.inProgressAttemptId
-                    ? isMockTest
-                      ? 'Continue Mock Test'
-                      : 'Continue Test'
-                    : (attemptSummary?.attemptCount ?? 0) > 0
-                      ? isMockTest
-                        ? 'Start Mock Retake'
-                        : 'Start Retake'
-                      : isMockTest
-                        ? 'Start Mock Test'
+                  : isMockTest
+                    ? mockAction
+                    : attemptSummary?.inProgressAttemptId
+                      ? 'Continue Test'
+                      : (attemptSummary?.attemptCount ?? 0) > 0
+                        ? 'Start Retake'
                         : 'Start Test'}
               </Button>
             </div>

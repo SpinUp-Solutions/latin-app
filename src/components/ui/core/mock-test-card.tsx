@@ -3,7 +3,7 @@
 import React, { memo } from 'react';
 import { ArrowRight, ClipboardCheck, Trophy } from 'lucide-react';
 import type { StudentMockTestSummary } from '@/src/types/test';
-import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
+import { RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { cn } from '@/src/lib/utils';
 import { formatScorePercentage } from '@/src/lib/tests/formatting';
 import { stripHtmlTags } from '@/src/utils/exercises/helpers';
@@ -44,9 +44,12 @@ export const MockTestCard = memo(
     const description = stripHtmlTags(mock.description ?? '');
 
     return (
-      <RomanCard
+      <button
+        type="button"
+        aria-label={`${action}: ${title}`}
+        onClick={() => onMockClick(mock.id)}
         data-testid="mock-test-card"
-        className="group relative flex h-[16rem] min-h-0 w-full flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-5 text-left shadow-[0_12px_35px_-24px_rgba(30,41,59,0.55)] transition duration-300 hover:-translate-y-1 hover:border-teal-300/70 hover:shadow-[0_20px_45px_-24px_rgba(30,41,59,0.45)]">
+        className="group relative flex h-[16rem] min-h-0 w-full flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-5 text-left shadow-[0_12px_35px_-24px_rgba(30,41,59,0.55)] transition duration-300 hover:-translate-y-1 hover:border-teal-300/70 hover:shadow-[0_20px_45px_-24px_rgba(30,41,59,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-roman-red focus-visible:ring-offset-2">
         <div
           aria-hidden="true"
           className="absolute inset-x-0 top-0 h-24 bg-gradient-to-br from-teal-300/35 via-cyan-100/30 to-transparent opacity-80"
@@ -132,20 +135,17 @@ export const MockTestCard = memo(
                 )}>
                 {status}
               </span>
-              <button
-                type="button"
-                className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-lg px-0 py-1 text-sm font-semibold text-slate-800 transition-colors hover:text-roman-red focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-roman-red focus-visible:ring-offset-2"
-                onClick={() => onMockClick(mock.id)}>
+              <span className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-lg px-0 py-1 text-sm font-semibold text-slate-800 transition-colors hover:text-roman-red focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-roman-red focus-visible:ring-offset-2">
                 <span className="truncate">{action}</span>
                 <ArrowRight
                   className="h-4 w-4 shrink-0 transition-transform group-hover:translate-x-1"
                   aria-hidden="true"
                 />
-              </button>
+              </span>
             </div>
           </div>
         </RomanCardContent>
-      </RomanCard>
+      </button>
     );
   }
 );
