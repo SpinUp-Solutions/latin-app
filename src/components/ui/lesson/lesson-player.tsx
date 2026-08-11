@@ -43,7 +43,10 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   resolvedExerciseState,
   testAttemptId,
 }) => {
-  const effectiveRuntimeMode = runtimeMode ?? (trackProgress ? 'practice' : 'preview');
+  // Lesson previews should preserve the normal student feedback experience.
+  // `trackProgress` controls persistence independently; assessment callers pass
+  // an explicit runtime mode when answer-revealing feedback must be withheld.
+  const effectiveRuntimeMode = runtimeMode ?? 'practice';
   const shouldTrackProgress = trackProgress && effectiveRuntimeMode === 'practice';
   const { user } = useAuth();
   const [markExerciseComplete] = useMarkExerciseCompleteMutation();
@@ -119,7 +122,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
 
   const handleDiagrammingAttempt = useCallback(
     async (itemIndex: number, exerciseId: string, attempt: DiagramAuditSubmission) => {
-      if (effectiveRuntimeMode === 'preview') return;
+      if (effectiveRuntimeMode === 'preview' || (effectiveRuntimeMode === 'practice' && !shouldTrackProgress)) return;
       const token = await auth.currentUser?.getIdToken();
       if (!token) return;
       const source =
@@ -146,7 +149,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
         console.warn('Unable to record diagramming attempt', error);
       }
     },
-    [currentPageIndex, effectiveRuntimeMode, lesson.id, testAttemptId]
+    [currentPageIndex, effectiveRuntimeMode, lesson.id, shouldTrackProgress, testAttemptId]
   );
 
   const isListeningLesson = lesson.type === 'listening';
