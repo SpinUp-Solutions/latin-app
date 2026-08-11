@@ -275,7 +275,7 @@ describe('PracticeSection', () => {
     await user.click(mockTestsTab);
 
     expect(screen.getByRole('heading', { name: 'Mock Tests' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Start Mock Test' }));
+    await user.click(screen.getByRole('button', { name: 'Start Mock Test: Chapter rehearsal' }));
     expect(onMockTestClick).toHaveBeenCalledWith('mock-1');
   });
 });

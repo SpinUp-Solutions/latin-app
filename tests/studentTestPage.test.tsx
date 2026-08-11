@@ -571,12 +571,15 @@ describe('student normal test flow', () => {
       </Suspense>
     );
 
-    expect(await screen.findByText('Test in progress')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Record two answers' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Continue Mock Test' })).toBeInTheDocument();
+    expect(screen.queryByText('Test in progress')).not.toBeInTheDocument();
     expect(mockStartAttempt).toHaveBeenCalledWith({
       uid: 'student-1',
       origin: { kind: 'mock-test', mockTestId: 'test-1' },
     });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue Mock Test' }));
+    expect(await screen.findByText('Test in progress')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Record two answers' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Record two answers' }));
     fireEvent.click(screen.getByRole('button', { name: 'Review answers' }));
     expect(await screen.findByText('Every exercise has a recorded answer.')).toBeInTheDocument();
@@ -693,6 +696,7 @@ describe('student normal test flow', () => {
       </Suspense>
     );
     fireEvent.click(await screen.findByRole('button', { name: 'Start Mock Test' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Begin Mock Test' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Record two answers' }));
     fireEvent.click(screen.getByRole('button', { name: 'Review answers' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Submit Test' }));

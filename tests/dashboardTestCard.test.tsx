@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MockTestCard, TestCard } from '@/src/app/dashboard/page';
 import type { StudentTestSummary } from '@/src/types/lesson';
 import type { StudentMockTestSummary } from '@/src/types/test';
@@ -55,9 +55,22 @@ describe('student dashboard test card', () => {
 
   it('makes mock scores, attempt history, and informational passing status accessible', () => {
     const mock: StudentMockTestSummary = {
-      id: 'mock-1', title: 'Chapter 4 rehearsal', description: '', passingPercentage: 70, totalPoints: 10,
-      attemptSummary: { origin: { kind: 'mock-test', mockTestId: 'mock-1' }, inProgressAttemptId: null, attemptCount: 2, best: { ...result, percentage: 80, outcome: 'passed' }, latest: result },
-      scoreTrend: [{ percentage: 60, submittedAt: 'earlier' }, { percentage: 80, submittedAt: 'now' }],
+      id: 'mock-1',
+      title: 'Chapter 4 rehearsal',
+      description: '',
+      passingPercentage: 70,
+      totalPoints: 10,
+      attemptSummary: {
+        origin: { kind: 'mock-test', mockTestId: 'mock-1' },
+        inProgressAttemptId: null,
+        attemptCount: 2,
+        best: { ...result, percentage: 80, outcome: 'passed' },
+        latest: result,
+      },
+      scoreTrend: [
+        { percentage: 60, submittedAt: 'earlier' },
+        { percentage: 80, submittedAt: 'now' },
+      ],
     };
     render(<MockTestCard mock={mock} onMockClick={jest.fn()} />);
 
@@ -65,13 +78,48 @@ describe('student dashboard test card', () => {
     expect(screen.getByText('2 practice attempts')).toBeInTheDocument();
     expect(screen.getByText('Not passed — informational only')).toBeInTheDocument();
     expect(screen.getByLabelText('Recent scores: 60 percent, 80 percent')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Retake Mock Test' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retake Mock Test: Chapter 4 rehearsal' })).toBeInTheDocument();
+  });
+
+  it('makes the whole mock test card actionable', () => {
+    const onMockClick = jest.fn();
+    const mock: StudentMockTestSummary = {
+      id: 'mock-1',
+      title: 'Chapter 4 rehearsal',
+      description: '',
+      passingPercentage: 70,
+      totalPoints: 10,
+      attemptSummary: {
+        origin: { kind: 'mock-test', mockTestId: 'mock-1' },
+        inProgressAttemptId: null,
+        attemptCount: 0,
+        best: null,
+        latest: null,
+      },
+      scoreTrend: [],
+    };
+
+    render(<MockTestCard mock={mock} onMockClick={onMockClick} />);
+
+    fireEvent.click(screen.getByText('Chapter 4 rehearsal'));
+
+    expect(onMockClick).toHaveBeenCalledWith('mock-1');
   });
 
   it('keeps a frozen score-only result score-only after a current passing target is added', () => {
     const mock: StudentMockTestSummary = {
-      id: 'mock-1', title: 'Chapter 4 rehearsal', description: '', passingPercentage: 70, totalPoints: 10,
-      attemptSummary: { origin: { kind: 'mock-test', mockTestId: 'mock-1' }, inProgressAttemptId: null, attemptCount: 1, best: { ...result, outcome: 'score-only' }, latest: { ...result, outcome: 'score-only' } },
+      id: 'mock-1',
+      title: 'Chapter 4 rehearsal',
+      description: '',
+      passingPercentage: 70,
+      totalPoints: 10,
+      attemptSummary: {
+        origin: { kind: 'mock-test', mockTestId: 'mock-1' },
+        inProgressAttemptId: null,
+        attemptCount: 1,
+        best: { ...result, outcome: 'score-only' },
+        latest: { ...result, outcome: 'score-only' },
+      },
       scoreTrend: [],
     };
     render(<MockTestCard mock={mock} onMockClick={jest.fn()} />);
@@ -81,9 +129,20 @@ describe('student dashboard test card', () => {
   });
 
   it('keeps a failed frozen normal result actionable after its current threshold is removed', () => {
-    render(<TestCard test={testSummary({ passingPercentage: null, relatedLiveMocks: [{ id: 'mock-1', title: 'Chapter 4 rehearsal', passingPercentage: 70 }] })} onTestClick={jest.fn()} />);
+    render(
+      <TestCard
+        test={testSummary({
+          passingPercentage: null,
+          relatedLiveMocks: [{ id: 'mock-1', title: 'Chapter 4 rehearsal', passingPercentage: 70 }],
+        })}
+        onTestClick={jest.fn()}
+      />
+    );
 
-    expect(screen.getByRole('link', { name: /Practice with the Chapter 4 rehearsal Mock Test/i })).toHaveAttribute('href', '/test/mock-1?origin=mock');
+    expect(screen.getByRole('link', { name: /Practice with the Chapter 4 rehearsal Mock Test/i })).toHaveAttribute(
+      'href',
+      '/test/mock-1?origin=mock'
+    );
   });
 
   it('uses the same fixed-height footprint as lesson cards', () => {
