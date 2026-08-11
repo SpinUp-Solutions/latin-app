@@ -35,6 +35,29 @@ export interface VocabularyPoolsResponse {
   };
 }
 
+export type VocabularyPoolUsageKind =
+  | 'lesson'
+  | 'lesson-exercise'
+  | 'test-version'
+  | 'test-version-exercise'
+  | 'test-version-draft'
+  | 'test-version-draft-exercise';
+
+/** A saved lesson, test version, or draft that currently references a pool. */
+export interface VocabularyPoolUsage {
+  id: string;
+  poolId: string;
+  kind: VocabularyPoolUsageKind;
+  label: string;
+  editorUrl?: string;
+}
+
+export interface VocabularyPoolUsageResponse {
+  status: 'available' | 'unavailable';
+  usagesByPoolId: Record<string, VocabularyPoolUsage[]>;
+  message?: string;
+}
+
 export interface VocabularyPoolResponse {
   success: boolean;
   data: {
