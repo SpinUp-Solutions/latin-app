@@ -478,18 +478,18 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
         ? `${formatPoints(normalTest.minTotalPoints)} total points`
         : `${formatPoints(normalTest?.minTotalPoints ?? 0)}–${formatPoints(normalTest?.maxTotalPoints ?? 0)} total points, depending on the version selected`;
     return (
-      <div className="min-h-screen bg-gradient-to-br from-roman-marble via-white to-roman-parchment p-4 md:p-10">
-        <Card className="mx-auto max-w-2xl overflow-hidden border-roman-red/20 shadow-xl">
+      <div className="min-h-screen bg-gradient-to-b from-roman-marble via-white to-roman-parchment/60 p-4 sm:p-6 md:p-10">
+        <Card className="mx-auto max-w-3xl overflow-hidden rounded-2xl border-roman-red/15 shadow-lg">
           <div className="h-1.5 bg-roman-red" />
-          <CardHeader className="text-center">
+          <CardHeader className="px-6 pb-5 pt-7 text-center sm:px-8">
             <div className="mx-auto mb-2 rounded-full border-2 border-roman-gold/40 bg-roman-red p-3 text-white shadow-sm">
               <FileCheck2 className="h-7 w-7" aria-hidden="true" />
             </div>
             <CardTitle className="font-serif text-3xl text-roman-red">{test.title}</CardTitle>
             <p className="text-roman-stone">{test.description}</p>
           </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="rounded-xl border border-roman-gold/30 bg-roman-parchment/60 p-4">
+          <CardContent className="space-y-5 px-6 pb-7 sm:px-8">
+            <div className="rounded-xl border border-roman-gold/25 bg-roman-parchment/50 p-4 sm:flex sm:items-center sm:justify-between sm:gap-5">
               <div className="font-semibold text-roman-red">
                 {test.passingPercentage === null
                   ? isMockTest
@@ -499,20 +499,25 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
                     ? `Practice target: ${test.passingPercentage}% — informational only`
                     : `Passing requirement: ${test.passingPercentage}%`}
               </div>
-              <div className="mt-1 text-sm text-roman-stone">{points}</div>
+              <div className="mt-1 shrink-0 text-sm text-roman-stone sm:mt-0">{points} · Untimed</div>
             </div>
-            <ul className="space-y-3 text-sm text-gray-700">
-              <li>Translation exercises show brief AI feedback when you check each answer.</li>
-              <li>Feedback for other exercise types is withheld until you submit.</li>
-              <li>Your committed answers are saved and can be resumed after a refresh.</li>
-              <li>This test is untimed. Review your answers before submitting.</li>
+            <ul className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-sm leading-6 text-slate-700">
+              <li className="flex gap-3 before:mt-2.5 before:h-1.5 before:w-1.5 before:shrink-0 before:rounded-full before:bg-roman-red">
+                Translation exercises show brief AI feedback; other feedback appears after submission.
+              </li>
+              <li className="flex gap-3 before:mt-2.5 before:h-1.5 before:w-1.5 before:shrink-0 before:rounded-full before:bg-roman-red">
+                Your committed answers are saved and can be resumed after a refresh.
+              </li>
+              <li className="flex gap-3 before:mt-2.5 before:h-1.5 before:w-1.5 before:shrink-0 before:rounded-full before:bg-roman-red">
+                Review your answers before submitting.
+              </li>
             </ul>
             <div className="flex flex-col gap-3 sm:flex-row">
-              <Button asChild variant="outline" className="sm:flex-1">
+              <Button asChild variant="outline" className="h-11 rounded-xl sm:flex-1">
                 <Link href="/dashboard">Not now</Link>
               </Button>
               <Button
-                className="bg-roman-red hover:bg-roman-red/90 sm:flex-1"
+                className="h-11 rounded-xl bg-roman-red hover:bg-roman-red/90 sm:flex-1"
                 disabled={starting || (isMockTest && !mockTest)}
                 onClick={begin}>
                 {starting
@@ -646,38 +651,45 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
       item => !isExerciseAnswerComplete(item.exercise, answers[item.id], item.resolvedItemCount)
     );
     return (
-      <div className="min-h-screen bg-roman-marble p-4 md:p-10">
-        <div className="mx-auto max-w-3xl space-y-6">
-          <Card className="overflow-hidden border-roman-red/15">
+      <div className="min-h-screen bg-gradient-to-b from-roman-marble via-white to-roman-parchment/50 p-4 md:p-10">
+        <div className="mx-auto max-w-4xl space-y-5">
+          <Card className="overflow-hidden rounded-2xl border-roman-red/15 shadow-md">
             <div className="h-1.5 bg-roman-red" />
-            <CardHeader>
+            <CardHeader className="px-6 pb-4 pt-6 sm:px-8">
               <CardTitle className="font-serif text-2xl text-roman-red">Review before submitting</CardTitle>
               <p className="text-sm text-roman-stone">
                 {answeredCount} of {exerciseItems.length} exercises answered
               </p>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-5 px-6 pb-7 sm:px-8">
               {unanswered.length === 0 ? (
-                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-900">
-                  Every exercise has a recorded answer.
+                <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-900">
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" aria-hidden="true" />
+                  <div>
+                    <p className="font-medium">Every exercise has a recorded answer.</p>
+                    <p className="mt-1 text-sm text-emerald-800">You can still make changes before submitting.</p>
+                  </div>
                 </div>
               ) : (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-                  <p className="font-medium text-amber-950">
-                    {unanswered.length} unanswered {unanswered.length === 1 ? 'exercise' : 'exercises'}
-                  </p>
-                  <ul className="mt-2 list-inside list-disc text-sm text-amber-900">
-                    {unanswered.map(item => (
-                      <li key={item.id}>
-                        Page {item.pageIndex + 1}: {item.title}
-                      </li>
-                    ))}
-                  </ul>
+                <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" aria-hidden="true" />
+                  <div>
+                    <p className="font-medium text-amber-950">
+                      {unanswered.length} unanswered {unanswered.length === 1 ? 'exercise' : 'exercises'}
+                    </p>
+                    <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-amber-900">
+                      {unanswered.map(item => (
+                        <li key={item.id}>
+                          Page {item.pageIndex + 1}: {item.title}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
               )}
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <h2 className="font-semibold text-slate-900">Review each exercise</h2>
-                <ul className="divide-y rounded-lg border border-slate-200 bg-white">
+                <ul className="space-y-3">
                   {exerciseItems.map(item => {
                     const complete = isExerciseAnswerComplete(item.exercise, answers[item.id], item.resolvedItemCount);
                     const hasRecordedAnswer = Boolean(answers[item.id]);
@@ -697,12 +709,17 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
                     return (
                       <li
                         key={item.id}
-                        className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
+                        className={`flex flex-col gap-4 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between ${
+                          complete ? 'border-emerald-200 bg-emerald-50/70' : 'border-amber-200 bg-amber-50/70'
+                        }`}>
+                        <div className="min-w-0">
                           <div className="font-medium text-slate-900">
                             Page {item.pageIndex + 1}: {item.title}
                           </div>
-                          <div className={complete ? 'text-sm text-emerald-700' : 'text-sm text-amber-700'}>
+                          <div
+                            className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                              complete ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                            }`}>
                             {complete ? 'Answer recorded' : 'Needs an answer'}
                           </div>
                         </div>
@@ -710,6 +727,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
                           type="button"
                           variant="outline"
                           size="sm"
+                          className="shrink-0 rounded-xl border-slate-200 bg-white"
                           disabled={editingExerciseId !== null}
                           aria-label={`${actionLabel.replace(' answer', '').replace(' exercise', '')} ${item.title}`}
                           onClick={() => void openExercise(item.id, item.pageIndex, clearExisting)}>
@@ -720,19 +738,23 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
                   })}
                 </ul>
               </div>
-              <p className="text-sm text-gray-600">
+              <p className="border-t border-slate-100 pt-4 text-sm leading-6 text-gray-600">
                 Submission is final for this attempt. Exact questions and answers cannot be reopened afterward, but your
                 score breakdown will be retained.
               </p>
             </CardContent>
           </Card>
-          <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
-            <Button variant="outline" disabled={editingExerciseId !== null} onClick={() => setScreen('taking')}>
+          <div className="flex flex-col gap-3 rounded-2xl border border-roman-red/15 bg-white p-3 shadow-sm sm:flex-row sm:justify-between">
+            <Button
+              variant="outline"
+              className="rounded-xl"
+              disabled={editingExerciseId !== null}
+              onClick={() => setScreen('taking')}>
               <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
               Return to test
             </Button>
             <Button
-              className="bg-roman-red hover:bg-roman-red/90"
+              className="rounded-xl bg-roman-red hover:bg-roman-red/90"
               disabled={submitting || translationGrading || editingExerciseId !== null}
               onClick={submit}>
               {submitting ? 'Submitting…' : 'Submit Test'}
