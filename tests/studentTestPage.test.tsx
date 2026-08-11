@@ -605,6 +605,14 @@ describe('student normal test flow', () => {
 
   it('never offers a retake from the stale mock detail after submit when the refreshed live card is gone', async () => {
     mockSearchParams.mockReturnValue(new URLSearchParams('origin=mock'));
+    let resolveDashboardRefresh!: (value: unknown) => void;
+    let resolveMockDetailRefresh!: (value: unknown) => void;
+    const dashboardRefresh = new Promise<unknown>(resolve => {
+      resolveDashboardRefresh = resolve;
+    });
+    const mockDetailRefresh = new Promise<unknown>(resolve => {
+      resolveMockDetailRefresh = resolve;
+    });
     const liveMock = {
       id: 'mock-1',
       title: 'Practice mock',
@@ -669,20 +677,8 @@ describe('student normal test flow', () => {
         },
       }),
     });
-    mockRefetchDashboard.mockResolvedValue({ data: { ...dashboard, mockTests: [] } });
-    mockRefetchMockDetail.mockResolvedValue({
-      data: {
-        mock: {
-          id: 'mock-1',
-          title: 'Practice mock',
-          description: '',
-          passingPercentage: 70,
-          status: 'archived',
-          isLive: false,
-        },
-        attempt: null,
-      },
-    });
+    mockRefetchDashboard.mockReturnValue(dashboardRefresh);
+    mockRefetchMockDetail.mockReturnValue(mockDetailRefresh);
     const params = Promise.resolve({ testId: 'mock-1' }) as Promise<{ testId: string }> & {
       status: 'fulfilled';
       value: { testId: string };
@@ -702,8 +698,25 @@ describe('student normal test flow', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Submit Test' }));
 
     expect(await screen.findByText('Keep going')).toBeInTheDocument();
-    await waitFor(() => expect(mockRefetchDashboard).toHaveBeenCalled());
-    expect(screen.getByText('This mock test is no longer available for another attempt.')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Loading retake options' })).toBeInTheDocument();
+    expect(screen.queryByText(/Checking whether this mock is still available/)).not.toBeInTheDocument();
+    resolveDashboardRefresh({ data: { ...dashboard, mockTests: [] } });
+    resolveMockDetailRefresh({
+      data: {
+        mock: {
+          id: 'mock-1',
+          title: 'Practice mock',
+          description: '',
+          passingPercentage: 70,
+          status: 'archived',
+          isLive: false,
+        },
+        attempt: null,
+      },
+    });
+    await waitFor(() =>
+      expect(screen.getByText('This mock test is no longer available for another attempt.')).toBeInTheDocument()
+    );
     expect(screen.queryByRole('button', { name: 'Retake Mock Test' })).not.toBeInTheDocument();
   });
 

@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { AlertTriangle, ArrowLeft, CheckCircle2, FileCheck2, RotateCcw } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CheckCircle2, FileCheck2, Loader2, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
@@ -631,11 +631,18 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
               <Link href="/dashboard">Back to dashboard</Link>
             </Button>
             {isMockTest && mockRetakeAvailability !== 'available' ? (
-              <p className="self-center text-sm text-gray-600">
-                {mockRetakeAvailability === 'checking'
-                  ? 'Checking whether this mock is still available for another attempt…'
-                  : 'This mock test is no longer available for another attempt.'}
-              </p>
+              mockRetakeAvailability === 'checking' ? (
+                <div
+                  className="flex self-center items-center justify-center text-roman-red"
+                  role="status"
+                  aria-label="Loading retake options">
+                  <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+                </div>
+              ) : (
+                <p className="self-center text-sm text-gray-600">
+                  This mock test is no longer available for another attempt.
+                </p>
+              )
             ) : (
               <Button
                 className="bg-roman-red hover:bg-roman-red/90"
