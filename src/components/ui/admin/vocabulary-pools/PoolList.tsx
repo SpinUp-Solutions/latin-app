@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Badge } from '@/src/components/ui/badge';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
+import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { Edit, Trash2, Library, Calendar, Hash, Loader2 } from 'lucide-react';
 import { useInfiniteScroll } from '@/src/hooks/useInfiniteScroll';
 import type { VocabularyPoolSummary, VocabularyPoolUsage } from '@/src/types/vocabulary-pool';
@@ -114,10 +115,10 @@ export const PoolList: React.FC<PoolListProps> = ({
                           <li key={usage.id}>
                             {usage.editorUrl ? (
                               <a href={usage.editorUrl} className="text-roman-red hover:underline">
-                                {usage.label}
+                                <SimpleRichDisplay content={usage.label} />
                               </a>
                             ) : (
-                              usage.label
+                              <SimpleRichDisplay content={usage.label} />
                             )}
                           </li>
                         ))}
