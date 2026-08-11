@@ -1,7 +1,5 @@
-import { collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
-import { db } from './firebase';
+import { auth } from './firebase';
 import { stripMacrons } from '@/src/utils/exercises/helpers';
-import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 
 type WordFormLike =
   | string
@@ -44,8 +42,6 @@ export interface WordLookupResult {
 }
 
 export class WordLookupService {
-  private static readonly COLLECTION_NAME = VOCABULARY_WORDS_COLLECTION;
-
   /**
    * Search for a word in the Firebase words collection
    * Supports macron-insensitive matching via the sort_key field
@@ -58,36 +54,19 @@ export class WordLookupService {
         return { found: false, error: 'Search term cannot be empty' };
       }
 
-      const normalizedTerm = searchTerm.toLowerCase().trim();
-      const wordsRef = collection(db, this.COLLECTION_NAME);
-
-      // Query for exact match first
-      const exactQuery = query(wordsRef, where('word', '==', normalizedTerm), limit(1));
-      const exactSnapshot = await getDocs(exactQuery);
-
-      if (!exactSnapshot.empty) {
-        const doc = exactSnapshot.docs[0];
-        const wordData = { id: doc.id, ...doc.data() } as TooltipLookupWord;
-        return { found: true, word: wordData };
-      }
-
-      // Fallback: macron-insensitive search via sort_key
-      const searchKey = stripMacrons(normalizedTerm);
-      const sortKeyQuery = query(
-        wordsRef,
-        orderBy('sort_key'),
-        where('sort_key', '>=', searchKey),
-        where('sort_key', '<=', searchKey + '\uf8ff'),
-        limit(5)
-      );
-      const sortKeySnapshot = await getDocs(sortKeyQuery);
-
-      if (!sortKeySnapshot.empty) {
-        // Prefer an exact sort_key match, otherwise take the first result
-        const exactSortKeyDoc = sortKeySnapshot.docs.find(doc => doc.data().sort_key === searchKey);
-        const bestDoc = exactSortKeyDoc || sortKeySnapshot.docs[0];
-        const wordData = { id: bestDoc.id, ...bestDoc.data() } as TooltipLookupWord;
-        return { found: true, word: wordData };
+      const user = auth.currentUser;
+      if (!user) return { found: false, error: 'Authentication required' };
+      const token = await user.getIdToken();
+      const response = await fetch(`/api/words/search?search=${encodeURIComponent(searchTerm.trim())}&limit=5`, {
+        headers: { authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error(response.status === 401 ? 'Authentication required' : 'Word lookup failed');
+      const payload = (await response.json()) as { data?: { words?: TooltipLookupWord[] } };
+      const words = payload.data?.words ?? [];
+      if (words.length > 0) {
+        const searchKey = stripMacrons(searchTerm.toLowerCase().trim());
+        const exact = words.find(word => stripMacrons(word.word.toLowerCase()) === searchKey);
+        return { found: true, word: exact ?? words[0] };
       }
 
       return { found: false };

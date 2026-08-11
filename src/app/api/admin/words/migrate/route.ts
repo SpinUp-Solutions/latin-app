@@ -1,8 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
+import { AdminAccessError, verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import {
+  LEGACY_VOCABULARY_WORDS_COLLECTION,
+  requireVocabularyWordMigrationCollections,
+  VocabularyWordCollectionError,
+} from '@/src/lib/vocabulary/word-collection.server';
+import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
+import { prepareVocabularyContentRevisionBump } from '@/src/lib/vocabulary-pools/content-revision.server';
+import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
 
-const DEFAULT_SOURCE_COLLECTION = 'vocabulary_words_v4';
-const DEFAULT_TARGET_COLLECTION = 'vocabulary_words_v5';
+const DEFAULT_SOURCE_COLLECTION = LEGACY_VOCABULARY_WORDS_COLLECTION;
+const DEFAULT_TARGET_COLLECTION = VOCABULARY_WORDS_COLLECTION;
 
 const stripMacrons = (str: string): string => {
   return str
@@ -15,16 +24,19 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
+    await verifyAdminAccess(request);
     const { searchParams } = new URL(request.url);
     const dryRun = searchParams.get('dryRun') === 'true';
-    const sourceCollection = searchParams.get('sourceCollection') || DEFAULT_SOURCE_COLLECTION;
-    const targetCollection = searchParams.get('targetCollection') || DEFAULT_TARGET_COLLECTION;
+    const { sourceCollection, targetCollection } = requireVocabularyWordMigrationCollections(
+      searchParams.get('sourceCollection') || DEFAULT_SOURCE_COLLECTION,
+      searchParams.get('targetCollection') || DEFAULT_TARGET_COLLECTION
+    );
 
     const snapshot = await adminDb.collection(sourceCollection).get();
 
     const migratedWords = [];
     const errors = [];
-    const BATCH_SIZE = 500;
+    const BATCH_SIZE = 400;
 
     const docsToMigrate = [];
 
@@ -66,20 +78,23 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     if (!dryRun) {
-      const batches = [];
       for (let i = 0; i < docsToMigrate.length; i += BATCH_SIZE) {
         const chunk = docsToMigrate.slice(i, i + BATCH_SIZE);
-        const batch = adminDb.batch();
-
-        for (const docToMigrate of chunk) {
-          const docRef = adminDb.collection(targetCollection).doc(docToMigrate.id);
-          batch.set(docRef, docToMigrate.data);
-        }
-
-        batches.push(batch.commit());
+        await runVocabularyContentMutation(adminDb, async transaction => {
+          const targetRefs = chunk.map(docToMigrate => adminDb.collection(targetCollection).doc(docToMigrate.id));
+          const existingTargets = targetRefs.length > 0 ? await transaction.getAll(...targetRefs) : [];
+          if (existingTargets.some(target => Boolean(target.data()?._deletionPending))) {
+            throw new AdminAccessError(
+              'A vocabulary word deletion is in progress. Retry the migration after it finishes.',
+              409,
+              'WORD_DELETE_IN_PROGRESS'
+            );
+          }
+          const applyContentRevision = await prepareVocabularyContentRevisionBump(transaction, adminDb);
+          chunk.forEach((docToMigrate, index) => transaction.set(targetRefs[index], docToMigrate.data));
+          applyContentRevision();
+        });
       }
-
-      await Promise.all(batches);
     }
 
     const summary = {
@@ -102,6 +117,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       data: summary,
     });
   } catch (error) {
+    if (error instanceof AdminAccessError) {
+      return NextResponse.json({ success: false, error: error.message }, { status: error.status });
+    }
+    if (error instanceof VocabularyWordCollectionError) {
+      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
+    }
     console.error('Error during migration:', error);
     return NextResponse.json(
       {

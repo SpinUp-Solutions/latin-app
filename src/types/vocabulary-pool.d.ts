@@ -58,6 +58,16 @@ export interface VocabularyPoolUsageResponse {
   message?: string;
 }
 
+export interface VocabularyPoolDeletionChallenge {
+  token: string;
+  expiresAt: string;
+  poolName: string;
+  wordCount: number;
+  usageStatus: 'available' | 'unavailable';
+  usages: VocabularyPoolUsage[];
+  message?: string;
+}
+
 export interface VocabularyPoolResponse {
   success: boolean;
   data: {

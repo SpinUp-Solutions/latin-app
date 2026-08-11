@@ -12,17 +12,8 @@ export const FIRESTORE_DATABASE = '(default)';
 export const BACKUP_LOCATION = 'US';
 export const SOFT_DELETE_RETENTION_SECONDS = 7 * 24 * 60 * 60;
 export const LIFECYCLE_DELETE_AGE_DAYS = 30;
-export const MIRRORED_COLLECTIONS = [
-  'lessons',
-  'learningPaths',
-  'vocabulary_pools',
-  'vocabulary_words_v5',
-];
-export const PRESERVED_REFERENCE_COLLECTIONS = [
-  'practiceCategoryMemberships',
-  'testVersions',
-  'testVersionDrafts',
-];
+export const MIRRORED_COLLECTIONS = ['lessons', 'learningPaths', 'vocabulary_pools', 'vocabulary_words_v5'];
+export const PRESERVED_REFERENCE_COLLECTIONS = ['practiceCategoryMemberships', 'testVersions', 'testVersionDrafts'];
 export const EXPLICITLY_PROTECTED_COLLECTIONS = [
   'users',
   'userProgress',
@@ -54,6 +45,10 @@ const LESSONS_PREFIX = 'lessons/';
 const VALUE_TAG = '__syncType';
 const POOL_REFERENCE_KEYS = new Set(['vocabulary_pool', 'vocabularyPoolId', 'poolId', 'pool_id']);
 const WORD_ID_ARRAY_KEYS = new Set(['wordDocIds', 'wordIds']);
+const LOCAL_REVISION_FIELDS = Object.freeze({
+  vocabulary_pools: ['_assignmentRevision', '_wordContentRevision'],
+  vocabulary_words_v5: ['_poolReferenceRevision'],
+});
 
 export class SyncError extends Error {
   constructor(code, message, details = undefined) {
@@ -89,7 +84,12 @@ function isGeoPointLike(value) {
 }
 
 function isDocumentReferenceLike(value) {
-  return Boolean(value) && typeof value === 'object' && typeof value.path === 'string' && value.constructor?.name === 'DocumentReference';
+  return (
+    Boolean(value) &&
+    typeof value === 'object' &&
+    typeof value.path === 'string' &&
+    value.constructor?.name === 'DocumentReference'
+  );
 }
 
 function canonicalNumber(value) {
@@ -149,6 +149,23 @@ export function dataHash(value) {
   return sha256({ kind: 'firestore-document-data', value });
 }
 
+export function syncDocumentDataHash(collection, value) {
+  if (!isObject(value)) return dataHash(value);
+  const normalized = { ...value };
+  for (const field of LOCAL_REVISION_FIELDS[collection] ?? []) delete normalized[field];
+  return dataHash(normalized);
+}
+
+export function rebaseLocalRevisionFields(collection, sourceData, targetData = {}) {
+  const rebased = { ...sourceData };
+  for (const field of LOCAL_REVISION_FIELDS[collection] ?? []) {
+    if (isObject(targetData) && Object.prototype.hasOwnProperty.call(targetData, field))
+      rebased[field] = targetData[field];
+    else delete rebased[field];
+  }
+  return rebased;
+}
+
 export function normalizeDocumentRecord(collection, input) {
   const id = typeof input?.id === 'string' ? input.id : undefined;
   const data = isObject(input?.data) ? input.data : input;
@@ -160,12 +177,14 @@ export function normalizeDocumentRecord(collection, input) {
     data,
     createTime: input.createTime ?? null,
     updateTime: input.updateTime ?? null,
-    hash: dataHash(data),
+    hash: syncDocumentDataHash(collection, data),
+    exactDataHash: dataHash(data),
   };
 }
 
 function normalizeStorageInput(input) {
-  if (!input || typeof input.name !== 'string' || !input.name) throw new SyncError('INVALID_STORAGE_RECORD', 'Invalid Storage object record');
+  if (!input || typeof input.name !== 'string' || !input.name)
+    throw new SyncError('INVALID_STORAGE_RECORD', 'Invalid Storage object record');
   return {
     name: input.name,
     generation: input.generation == null ? null : String(input.generation),
@@ -289,7 +308,9 @@ export function buildManifest(state, { includeTimes = true, includeGeneration = 
     projectId: state.projectId,
     storageBucket: state.storageBucket,
     database: state.database ?? FIRESTORE_DATABASE,
-    collections: Object.fromEntries(Object.entries(collections).map(([name, records]) => [name, collectionManifest(records, includeTimes)])),
+    collections: Object.fromEntries(
+      Object.entries(collections).map(([name, records]) => [name, collectionManifest(records, includeTimes)])
+    ),
     storage: storageManifest(storage, includeGeneration),
     excludedCollections: Object.fromEntries(
       Object.entries(excludedCollections).map(([name, records]) => [name, collectionManifest(records, includeTimes)])
@@ -304,6 +325,16 @@ export function buildContentFingerprint(state) {
   const manifest = buildManifest(state, { includeTimes: false, includeGeneration: false });
   const { capturedAt: _capturedAt, manifestHash: _manifestHash, ...payload } = manifest;
   return sha256(payload);
+}
+
+/** Hash only the mirrored Firestore collections and controlled lesson Storage. */
+export function buildMirroredContentFingerprint(state) {
+  const manifest = buildManifest(state, { includeTimes: false, includeGeneration: false });
+  return sha256({
+    schemaVersion: PLAN_SCHEMA_VERSION,
+    collections: manifest.collections,
+    storage: manifest.storage,
+  });
 }
 
 export function buildExcludedFingerprint(state) {
@@ -325,7 +356,8 @@ function storageByName(records = []) {
 }
 
 function requireString(value, label) {
-  if (typeof value !== 'string' || value.trim() === '') throw new SyncError('INVALID_SCHEMA', `${label} must be a non-empty string`);
+  if (typeof value !== 'string' || value.trim() === '')
+    throw new SyncError('INVALID_SCHEMA', `${label} must be a non-empty string`);
   return value;
 }
 
@@ -339,8 +371,13 @@ export function validateStrictLearningPath(record, label = 'learningPath') {
   const unknown = Object.keys(record).filter(key => !allowed.has(key));
   if (unknown.length) throw new SyncError('INVALID_LEARNING_PATH', `${label} has non-canonical fields`, { unknown });
   if (record.id !== 'default') throw new SyncError('INVALID_LEARNING_PATH', `${label}.id must be default`);
-  if (!Number.isSafeInteger(record.revision) || record.revision < 0) throw new SyncError('INVALID_LEARNING_PATH', `${label}.revision must be non-negative`);
-  if (!Array.isArray(record.unitIds) || record.unitIds.some(id => typeof id !== 'string' || !id.trim()) || new Set(record.unitIds).size !== record.unitIds.length) {
+  if (!Number.isSafeInteger(record.revision) || record.revision < 0)
+    throw new SyncError('INVALID_LEARNING_PATH', `${label}.revision must be non-negative`);
+  if (
+    !Array.isArray(record.unitIds) ||
+    record.unitIds.some(id => typeof id !== 'string' || !id.trim()) ||
+    new Set(record.unitIds).size !== record.unitIds.length
+  ) {
     throw new SyncError('INVALID_LEARNING_PATH', `${label}.unitIds must be unique non-empty strings`);
   }
   requireString(record.updatedAt, `${label}.updatedAt`);
@@ -351,7 +388,8 @@ export function validateStrictLearningPath(record, label = 'learningPath') {
 }
 
 function validatePages(pages, label) {
-  if (!Array.isArray(pages) || pages.length === 0) throw new SyncError('INVALID_SCHEMA', `${label}.pages must be non-empty`);
+  if (!Array.isArray(pages) || pages.length === 0)
+    throw new SyncError('INVALID_SCHEMA', `${label}.pages must be non-empty`);
   const pageIds = new Set();
   const itemIds = new Set();
   for (const [pageIndex, page] of pages.entries()) {
@@ -359,7 +397,8 @@ function validatePages(pages, label) {
     requireString(page.id, `${label}.pages[${pageIndex}].id`);
     if (pageIds.has(page.id)) throw new SyncError('INVALID_SCHEMA', `${label} has duplicate page ID ${page.id}`);
     pageIds.add(page.id);
-    if (!Array.isArray(page.items)) throw new SyncError('INVALID_SCHEMA', `${label}.pages[${pageIndex}].items must be an array`);
+    if (!Array.isArray(page.items))
+      throw new SyncError('INVALID_SCHEMA', `${label}.pages[${pageIndex}].items must be an array`);
     for (const [itemIndex, item] of page.items.entries()) {
       assertRecord(item, `${label}.pages[${pageIndex}].items[${itemIndex}]`);
       requireString(item.id, `${label}.pages[${pageIndex}].items[${itemIndex}].id`);
@@ -375,16 +414,19 @@ function validateLessonRecord(data, label, fallbackId) {
   requireString(data.id ?? fallbackId, `${label}.id`);
   if (data.kind === undefined || data.kind === 'lesson') {
     requireString(data.title, `${label}.title`);
-    if (data.description !== undefined && typeof data.description !== 'string') throw new SyncError('INVALID_SCHEMA', `${label}.description must be a string`);
+    if (data.description !== undefined && typeof data.description !== 'string')
+      throw new SyncError('INVALID_SCHEMA', `${label}.description must be a string`);
     requireString(data.type, `${label}.type`);
     validatePages(data.pages, label);
   } else if (data.kind === 'test') {
-    if (!Array.isArray(data.rotationVersions)) throw new SyncError('INVALID_SCHEMA', `${label}.rotationVersions must be an array`);
+    if (!Array.isArray(data.rotationVersions))
+      throw new SyncError('INVALID_SCHEMA', `${label}.rotationVersions must be an array`);
     const ids = data.rotationVersions.map(reference => {
       assertRecord(reference, `${label}.rotationVersions entry`);
       return requireString(reference.versionId, `${label}.rotationVersions.versionId`);
     });
-    if (new Set(ids).size !== ids.length) throw new SyncError('INVALID_SCHEMA', `${label} has duplicate version references`);
+    if (new Set(ids).size !== ids.length)
+      throw new SyncError('INVALID_SCHEMA', `${label} has duplicate version references`);
   } else {
     throw new SyncError('INVALID_SCHEMA', `${label}.kind must be lesson or test`);
   }
@@ -392,17 +434,29 @@ function validateLessonRecord(data, label, fallbackId) {
 
 export function collectPoolIds(value) {
   const result = new Set();
-  const visit = (current, key = '') => {
+  const visit = (current, key = '', parentKey = '') => {
     if (typeof current === 'string' && POOL_REFERENCE_KEYS.has(key)) {
+      if (parentKey === 'generatorConfig' && ['poolId', 'pool_id'].includes(key)) return;
       result.add(current);
       return;
     }
     if (Array.isArray(current)) {
-      current.forEach(entry => visit(entry, key));
+      current.forEach(entry => visit(entry, key, parentKey));
       return;
     }
     if (!isObject(current)) return;
-    Object.entries(current).forEach(([childKey, childValue]) => visit(childValue, childKey));
+    Object.entries(current).forEach(([childKey, childValue]) => {
+      if (
+        key === 'generatorConfig' &&
+        ['poolId', 'pool_id'].includes(childKey) &&
+        current.wordSource === 'pool' &&
+        typeof childValue === 'string'
+      ) {
+        result.add(childValue);
+        return;
+      }
+      visit(childValue, childKey, key);
+    });
   };
   visit(value);
   return result;
@@ -457,10 +511,12 @@ function rewriteFixtureReferences(value, poolRemaps, wordRemaps, key = '') {
   }
   if (!isObject(value) || isOpaqueFirestoreValue(value)) return value;
   return Object.fromEntries(
-    Object.entries(value).map(([childKey, childValue]) => [
-      childKey,
-      rewriteFixtureReferences(childValue, poolRemaps, wordRemaps, childKey),
-    ])
+    Object.entries(value).map(([childKey, childValue]) => {
+      if (key === 'generatorConfig' && ['poolId', 'pool_id'].includes(childKey) && value.wordSource !== 'pool') {
+        return [childKey, childValue];
+      }
+      return [childKey, rewriteFixtureReferences(childValue, poolRemaps, wordRemaps, childKey)];
+    })
   );
 }
 
@@ -492,9 +548,12 @@ export function assertStorageScope(records, label) {
     if (isZeroByteStorageFolderMarker(record)) continue;
     const normalized = normalizeStorageRecord(record);
     if (!normalized.name.startsWith(LESSONS_PREFIX) || !lessonIdFromStorageName(normalized.name)) {
-      throw new SyncError('INVALID_STORAGE_SCOPE', `${label} contains an object outside lessons/**`, { name: normalized.name });
+      throw new SyncError('INVALID_STORAGE_SCOPE', `${label} contains an object outside lessons/**`, {
+        name: normalized.name,
+      });
     }
-    if (!normalized.md5Hash && !normalized.crc32c) throw new SyncError('MISSING_STORAGE_CHECKSUM', `${label} object ${normalized.name} has no checksum`);
+    if (!normalized.md5Hash && !normalized.crc32c)
+      throw new SyncError('MISSING_STORAGE_CHECKSUM', `${label} object ${normalized.name} has no checksum`);
   }
 }
 
@@ -511,8 +570,13 @@ function fixtureLessons(targetCollections, sourceCollections) {
   }
   for (const membership of targetCollections.practiceCategoryMemberships ?? []) {
     const lessonId = membership.data?.lessonId;
-    if (typeof lessonId !== 'string' || !lessonId) throw new SyncError('INVALID_FIXTURE_DEPENDENCY', `Membership ${membership.id} has no lessonId`);
-    if (!targetLessons.has(lessonId)) throw new SyncError('MISSING_FIXTURE_DEPENDENCY', `Membership ${membership.id} references missing lesson ${lessonId}`);
+    if (typeof lessonId !== 'string' || !lessonId)
+      throw new SyncError('INVALID_FIXTURE_DEPENDENCY', `Membership ${membership.id} has no lessonId`);
+    if (!targetLessons.has(lessonId))
+      throw new SyncError(
+        'MISSING_FIXTURE_DEPENDENCY',
+        `Membership ${membership.id} references missing lesson ${lessonId}`
+      );
     if (!sourceIds.has(lessonId)) {
       ids.add(lessonId);
       reasons[lessonId] = [...new Set([...(reasons[lessonId] ?? []), `membership:${membership.id}`])];
@@ -544,12 +608,16 @@ function assertCloneDestination(collection, clone, sourceRecords, targetRecords)
   }
   const target = targetRecords.get(clone.id);
   if (target && target.hash !== clone.hash) {
-    throw new SyncError('FIXTURE_REMAP_COLLISION', `Fixture clone ${collection}/${clone.id} collides with different dev data`, {
-      collection,
-      id: clone.id,
-      targetHash: target.hash,
-      cloneHash: clone.hash,
-    });
+    throw new SyncError(
+      'FIXTURE_REMAP_COLLISION',
+      `Fixture clone ${collection}/${clone.id} collides with different dev data`,
+      {
+        collection,
+        id: clone.id,
+        targetHash: target.hash,
+        cloneHash: clone.hash,
+      }
+    );
   }
   return target ?? clone;
 }
@@ -572,7 +640,8 @@ export function resolveFixtureDependencyCollisions(sourceState, targetState) {
   const fixture = fixtureLessons(target, source);
 
   const mutableLessons = [...fixture.ids].map(id => targetLessons.get(id)).filter(Boolean);
-  for (const lesson of mutableLessons) assertCollision('lesson fixture', lesson.id, sourceLessons.get(lesson.id), lesson);
+  for (const lesson of mutableLessons)
+    assertCollision('lesson fixture', lesson.id, sourceLessons.get(lesson.id), lesson);
 
   const protectedRecords = [
     ...(target.testVersions ?? []).map(record => ({ collection: 'testVersions', record })),
@@ -606,7 +675,10 @@ export function resolveFixtureDependencyCollisions(sourceState, targetState) {
     const sourcePool = sourcePools.get(poolId);
     const targetPool = targetPools.get(poolId);
     if (!targetPool) continue;
-    if (!Array.isArray(targetPool.data.wordDocIds) || targetPool.data.wordDocIds.some(id => typeof id !== 'string' || !id.trim())) {
+    if (
+      !Array.isArray(targetPool.data.wordDocIds) ||
+      targetPool.data.wordDocIds.some(id => typeof id !== 'string' || !id.trim())
+    ) {
       throw new SyncError('INVALID_FIXTURE_DEPENDENCY', `Vocabulary pool ${poolId} has an invalid wordDocIds list`);
     }
     for (const wordId of targetPool.data.wordDocIds) mutablePoolWordIds.add(wordId);
@@ -619,7 +691,10 @@ export function resolveFixtureDependencyCollisions(sourceState, targetState) {
     const targetWord = targetWords.get(wordId);
     if (!sourceWord || !targetWord || sourceWord.hash === targetWord.hash) continue;
     if (protectedDirectWordIds.has(wordId)) {
-      throw new SyncError('AMBIGUOUS_FIXTURE_DEPENDENCY', `Protected fixture word ${wordId} differs between production and dev`);
+      throw new SyncError(
+        'AMBIGUOUS_FIXTURE_DEPENDENCY',
+        `Protected fixture word ${wordId} differs between production and dev`
+      );
     }
     wordRemaps.set(wordId, fixtureCloneId('word', wordId, targetWord.hash));
   }
@@ -642,14 +717,18 @@ export function resolveFixtureDependencyCollisions(sourceState, targetState) {
   }
 
   const clonedWords = [];
-  for (const [originalId, remappedId] of [...wordRemaps.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+  for (const [originalId, remappedId] of [...wordRemaps.entries()].sort(([left], [right]) =>
+    left.localeCompare(right)
+  )) {
     const targetWord = targetWords.get(originalId);
     const clone = normalizeDocumentRecord('vocabulary_words_v5', { id: remappedId, data: targetWord.data });
     clonedWords.push(assertCloneDestination('vocabulary_words_v5', clone, sourceWords, targetWords));
   }
 
   const clonedPools = [];
-  for (const [originalId, remappedId] of [...poolRemaps.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+  for (const [originalId, remappedId] of [...poolRemaps.entries()].sort(([left], [right]) =>
+    left.localeCompare(right)
+  )) {
     const targetPool = targetPools.get(originalId);
     const data = rewriteFixtureReferences(targetPool.data, new Map(), wordRemaps);
     const clone = normalizeDocumentRecord('vocabulary_pools', { id: remappedId, data });
@@ -738,10 +817,14 @@ export function collectFixtureClosure(sourceState, targetState) {
     const poolId = pendingPools.pop();
     const targetPool = targetPools.get(poolId);
     const sourcePool = sourcePools.get(poolId);
-    if (!targetPool && !sourcePool) throw new SyncError('MISSING_FIXTURE_DEPENDENCY', `Fixture references missing vocabulary pool ${poolId}`);
+    if (!targetPool && !sourcePool)
+      throw new SyncError('MISSING_FIXTURE_DEPENDENCY', `Fixture references missing vocabulary pool ${poolId}`);
     assertCollision('vocabulary pool fixture', poolId, sourcePool, targetPool);
     const selectedPool = targetPool ?? sourcePool;
-    if (!Array.isArray(selectedPool.data.wordDocIds) || selectedPool.data.wordDocIds.some(id => typeof id !== 'string' || !id.trim())) {
+    if (
+      !Array.isArray(selectedPool.data.wordDocIds) ||
+      selectedPool.data.wordDocIds.some(id => typeof id !== 'string' || !id.trim())
+    ) {
       throw new SyncError('INVALID_FIXTURE_DEPENDENCY', `Vocabulary pool ${poolId} has an invalid wordDocIds list`);
     }
     for (const wordId of selectedPool.data.wordDocIds) wordIds.add(wordId);
@@ -749,7 +832,8 @@ export function collectFixtureClosure(sourceState, targetState) {
   for (const wordId of wordIds) {
     const targetWord = targetWords.get(wordId);
     const sourceWord = sourceWords.get(wordId);
-    if (!targetWord && !sourceWord) throw new SyncError('MISSING_FIXTURE_DEPENDENCY', `Fixture references missing vocabulary word ${wordId}`);
+    if (!targetWord && !sourceWord)
+      throw new SyncError('MISSING_FIXTURE_DEPENDENCY', `Fixture references missing vocabulary word ${wordId}`);
     assertCollision('vocabulary word fixture', wordId, sourceWord, targetWord);
   }
   return {
@@ -769,21 +853,35 @@ function validateSourceState(sourceState) {
   const pools = collections.vocabulary_pools ?? [];
   const words = collections.vocabulary_words_v5 ?? [];
   for (const record of lessons) validateLessonRecord(record.data, `source lessons/${record.id}`, record.id);
-  for (const record of paths) validateStrictLearningPath({ ...record.data, id: record.data.id ?? record.id }, `source learningPaths/${record.id}`);
+  for (const record of paths)
+    validateStrictLearningPath(
+      { ...record.data, id: record.data.id ?? record.id },
+      `source learningPaths/${record.id}`
+    );
   const wordIds = new Set(words.map(record => record.id));
   const poolIds = new Set(pools.map(record => record.id));
   for (const pool of pools) {
-    if (!Array.isArray(pool.data.wordDocIds)) throw new SyncError('INVALID_SCHEMA', `source vocabulary_pools/${pool.id}.wordDocIds must be an array`);
+    if (!Array.isArray(pool.data.wordDocIds))
+      throw new SyncError('INVALID_SCHEMA', `source vocabulary_pools/${pool.id}.wordDocIds must be an array`);
     for (const wordId of pool.data.wordDocIds) {
-      if (typeof wordId !== 'string' || !wordId.trim() || !wordIds.has(wordId)) throw new SyncError('MISSING_SOURCE_REFERENCE', `Source pool ${pool.id} references missing word ${wordId}`);
+      if (typeof wordId !== 'string' || !wordId.trim() || !wordIds.has(wordId))
+        throw new SyncError('MISSING_SOURCE_REFERENCE', `Source pool ${pool.id} references missing word ${wordId}`);
     }
   }
   const lessonIds = new Set(lessons.map(record => record.id));
-  for (const path of paths) for (const unitId of path.data.unitIds) if (!lessonIds.has(unitId)) throw new SyncError('MISSING_SOURCE_REFERENCE', `Source path references missing lesson ${unitId}`);
+  for (const path of paths)
+    for (const unitId of path.data.unitIds)
+      if (!lessonIds.has(unitId))
+        throw new SyncError('MISSING_SOURCE_REFERENCE', `Source path references missing lesson ${unitId}`);
   for (const lesson of lessons) {
-    for (const poolId of collectPoolIds(lesson.data)) if (!poolIds.has(poolId)) throw new SyncError('MISSING_SOURCE_REFERENCE', `Source lesson ${lesson.id} references missing pool ${poolId}`);
-    for (const wordId of collectWordIds(lesson.data)) if (!wordIds.has(wordId)) throw new SyncError('MISSING_SOURCE_REFERENCE', `Source lesson ${lesson.id} references missing word ${wordId}`);
-    if ([...collectConfiguredWordCollections(lesson.data)].includes('words-latin-dev')) throw new SyncError('PROTECTED_COLLECTION_REFERENCE', `Source lesson ${lesson.id} references words-latin-dev`);
+    for (const poolId of collectPoolIds(lesson.data))
+      if (!poolIds.has(poolId))
+        throw new SyncError('MISSING_SOURCE_REFERENCE', `Source lesson ${lesson.id} references missing pool ${poolId}`);
+    for (const wordId of collectWordIds(lesson.data))
+      if (!wordIds.has(wordId))
+        throw new SyncError('MISSING_SOURCE_REFERENCE', `Source lesson ${lesson.id} references missing word ${wordId}`);
+    if ([...collectConfiguredWordCollections(lesson.data)].includes('words-latin-dev'))
+      throw new SyncError('PROTECTED_COLLECTION_REFERENCE', `Source lesson ${lesson.id} references words-latin-dev`);
   }
 }
 
@@ -793,33 +891,81 @@ export function validateProjectedState(sourceState, targetState, closure) {
   const lessons = new Map((source.lessons ?? []).map(record => [record.id, record]));
   const pools = new Map((source.vocabulary_pools ?? []).map(record => [record.id, record]));
   const words = new Map((source.vocabulary_words_v5 ?? []).map(record => [record.id, record]));
-  for (const id of closure.preservedLessonIds) if (!lessons.has(id) && target.lessons?.some(record => record.id === id)) lessons.set(id, target.lessons.find(record => record.id === id));
-  for (const id of closure.preservedPoolIds) if (!pools.has(id) && target.vocabulary_pools?.some(record => record.id === id)) pools.set(id, target.vocabulary_pools.find(record => record.id === id));
-  for (const id of closure.preservedWordIds) if (!words.has(id) && target.vocabulary_words_v5?.some(record => record.id === id)) words.set(id, target.vocabulary_words_v5.find(record => record.id === id));
+  for (const id of closure.preservedLessonIds)
+    if (!lessons.has(id) && target.lessons?.some(record => record.id === id))
+      lessons.set(
+        id,
+        target.lessons.find(record => record.id === id)
+      );
+  for (const id of closure.preservedPoolIds)
+    if (!pools.has(id) && target.vocabulary_pools?.some(record => record.id === id))
+      pools.set(
+        id,
+        target.vocabulary_pools.find(record => record.id === id)
+      );
+  for (const id of closure.preservedWordIds)
+    if (!words.has(id) && target.vocabulary_words_v5?.some(record => record.id === id))
+      words.set(
+        id,
+        target.vocabulary_words_v5.find(record => record.id === id)
+      );
   for (const [id, record] of lessons) validateLessonRecord(record.data, `projected lessons/${id}`, id);
   for (const record of source.learningPaths ?? []) {
-    validateStrictLearningPath({ ...record.data, id: record.data.id ?? record.id }, `projected learningPaths/${record.id}`);
-    for (const unitId of record.data.unitIds) if (!lessons.has(unitId)) throw new SyncError('MISSING_PROJECTED_REFERENCE', `Learning path references missing lesson ${unitId}`);
+    validateStrictLearningPath(
+      { ...record.data, id: record.data.id ?? record.id },
+      `projected learningPaths/${record.id}`
+    );
+    for (const unitId of record.data.unitIds)
+      if (!lessons.has(unitId))
+        throw new SyncError('MISSING_PROJECTED_REFERENCE', `Learning path references missing lesson ${unitId}`);
   }
   for (const [id, pool] of pools) {
-    if (!Array.isArray(pool.data.wordDocIds)) throw new SyncError('INVALID_SCHEMA', `Projected pool ${id} has no wordDocIds array`);
-    for (const wordId of pool.data.wordDocIds) if (!words.has(wordId)) throw new SyncError('MISSING_PROJECTED_REFERENCE', `Projected pool ${id} references missing word ${wordId}`);
+    if (!Array.isArray(pool.data.wordDocIds))
+      throw new SyncError('INVALID_SCHEMA', `Projected pool ${id} has no wordDocIds array`);
+    for (const wordId of pool.data.wordDocIds)
+      if (!words.has(wordId))
+        throw new SyncError('MISSING_PROJECTED_REFERENCE', `Projected pool ${id} references missing word ${wordId}`);
   }
   for (const [id, lesson] of lessons) {
-    for (const poolId of collectPoolIds(lesson.data)) if (!pools.has(poolId)) throw new SyncError('MISSING_PROJECTED_REFERENCE', `Projected lesson ${id} references missing pool ${poolId}`);
-    for (const wordId of collectWordIds(lesson.data)) if (!words.has(wordId)) throw new SyncError('MISSING_PROJECTED_REFERENCE', `Projected lesson ${id} references missing word ${wordId}`);
+    for (const poolId of collectPoolIds(lesson.data))
+      if (!pools.has(poolId))
+        throw new SyncError('MISSING_PROJECTED_REFERENCE', `Projected lesson ${id} references missing pool ${poolId}`);
+    for (const wordId of collectWordIds(lesson.data))
+      if (!words.has(wordId))
+        throw new SyncError('MISSING_PROJECTED_REFERENCE', `Projected lesson ${id} references missing word ${wordId}`);
     if (lesson.data.kind === 'test') {
       const versions = new Map((target.testVersions ?? []).map(record => [record.id, record]));
-      for (const reference of lesson.data.rotationVersions) if (!versions.has(reference.versionId)) throw new SyncError('MISSING_PROJECTED_REFERENCE', `Test ${id} references missing version ${reference.versionId}`);
+      for (const reference of lesson.data.rotationVersions)
+        if (!versions.has(reference.versionId))
+          throw new SyncError(
+            'MISSING_PROJECTED_REFERENCE',
+            `Test ${id} references missing version ${reference.versionId}`
+          );
     }
   }
   for (const collection of ['testVersions', 'testVersionDrafts']) {
     for (const record of target[collection] ?? []) {
-      for (const poolId of collectPoolIds(record.data)) if (!pools.has(poolId)) throw new SyncError('MISSING_PROJECTED_REFERENCE', `${collection}/${record.id} references missing pool ${poolId}`);
-      for (const wordId of collectWordIds(record.data)) if (!words.has(wordId)) throw new SyncError('MISSING_PROJECTED_REFERENCE', `${collection}/${record.id} references missing word ${wordId}`);
+      for (const poolId of collectPoolIds(record.data))
+        if (!pools.has(poolId))
+          throw new SyncError(
+            'MISSING_PROJECTED_REFERENCE',
+            `${collection}/${record.id} references missing pool ${poolId}`
+          );
+      for (const wordId of collectWordIds(record.data))
+        if (!words.has(wordId))
+          throw new SyncError(
+            'MISSING_PROJECTED_REFERENCE',
+            `${collection}/${record.id} references missing word ${wordId}`
+          );
     }
   }
-  return { lessonCount: lessons.size, poolCount: pools.size, wordCount: words.size, testVersionCount: (target.testVersions ?? []).length, testVersionDraftCount: (target.testVersionDrafts ?? []).length };
+  return {
+    lessonCount: lessons.size,
+    poolCount: pools.size,
+    wordCount: words.size,
+    testVersionCount: (target.testVersions ?? []).length,
+    testVersionDraftCount: (target.testVersionDrafts ?? []).length,
+  };
 }
 
 /** Validate the current dev graph without consulting the current production snapshot. */
@@ -829,32 +975,78 @@ export function validateCurrentTargetState(targetState, closure) {
   const paths = target.learningPaths ?? [];
   const pools = recordsById(target.vocabulary_pools ?? []);
   const words = recordsById(target.vocabulary_words_v5 ?? []);
-  for (const id of closure.preservedLessonIds) if (!lessons.has(id)) throw new SyncError('MISSING_PROJECTED_REFERENCE', `Current dev is missing preserved lesson ${id}`);
-  for (const id of closure.preservedPoolIds) if (!pools.has(id)) throw new SyncError('MISSING_PROJECTED_REFERENCE', `Current dev is missing preserved pool ${id}`);
-  for (const id of closure.preservedWordIds) if (!words.has(id)) throw new SyncError('MISSING_PROJECTED_REFERENCE', `Current dev is missing preserved word ${id}`);
+  for (const id of closure.preservedLessonIds)
+    if (!lessons.has(id))
+      throw new SyncError('MISSING_PROJECTED_REFERENCE', `Current dev is missing preserved lesson ${id}`);
+  for (const id of closure.preservedPoolIds)
+    if (!pools.has(id))
+      throw new SyncError('MISSING_PROJECTED_REFERENCE', `Current dev is missing preserved pool ${id}`);
+  for (const id of closure.preservedWordIds)
+    if (!words.has(id))
+      throw new SyncError('MISSING_PROJECTED_REFERENCE', `Current dev is missing preserved word ${id}`);
   for (const [id, record] of lessons) validateLessonRecord(record.data, `current dev lessons/${id}`, id);
   const lessonIds = new Set(lessons.keys());
   for (const record of paths) {
-    validateStrictLearningPath({ ...record.data, id: record.data.id ?? record.id }, `current dev learningPaths/${record.id}`);
-    for (const unitId of record.data.unitIds) if (!lessonIds.has(unitId)) throw new SyncError('MISSING_PROJECTED_REFERENCE', `Current dev path references missing lesson ${unitId}`);
+    validateStrictLearningPath(
+      { ...record.data, id: record.data.id ?? record.id },
+      `current dev learningPaths/${record.id}`
+    );
+    for (const unitId of record.data.unitIds)
+      if (!lessonIds.has(unitId))
+        throw new SyncError('MISSING_PROJECTED_REFERENCE', `Current dev path references missing lesson ${unitId}`);
   }
   for (const [id, pool] of pools) {
-    if (!Array.isArray(pool.data.wordDocIds)) throw new SyncError('INVALID_SCHEMA', `Current dev pool ${id} has no wordDocIds array`);
-    for (const wordId of pool.data.wordDocIds) if (!words.has(wordId)) throw new SyncError('MISSING_PROJECTED_REFERENCE', `Current dev pool ${id} references missing word ${wordId}`);
+    if (!Array.isArray(pool.data.wordDocIds))
+      throw new SyncError('INVALID_SCHEMA', `Current dev pool ${id} has no wordDocIds array`);
+    for (const wordId of pool.data.wordDocIds)
+      if (!words.has(wordId))
+        throw new SyncError('MISSING_PROJECTED_REFERENCE', `Current dev pool ${id} references missing word ${wordId}`);
   }
   const testVersionIds = new Set((target.testVersions ?? []).map(record => record.id));
   for (const [id, lesson] of lessons) {
-    for (const poolId of collectPoolIds(lesson.data)) if (!pools.has(poolId)) throw new SyncError('MISSING_PROJECTED_REFERENCE', `Current dev lesson ${id} references missing pool ${poolId}`);
-    for (const wordId of collectWordIds(lesson.data)) if (!words.has(wordId)) throw new SyncError('MISSING_PROJECTED_REFERENCE', `Current dev lesson ${id} references missing word ${wordId}`);
-    if (lesson.data.kind === 'test') for (const reference of lesson.data.rotationVersions) if (!testVersionIds.has(reference.versionId)) throw new SyncError('MISSING_PROJECTED_REFERENCE', `Current dev test ${id} references missing version ${reference.versionId}`);
+    for (const poolId of collectPoolIds(lesson.data))
+      if (!pools.has(poolId))
+        throw new SyncError(
+          'MISSING_PROJECTED_REFERENCE',
+          `Current dev lesson ${id} references missing pool ${poolId}`
+        );
+    for (const wordId of collectWordIds(lesson.data))
+      if (!words.has(wordId))
+        throw new SyncError(
+          'MISSING_PROJECTED_REFERENCE',
+          `Current dev lesson ${id} references missing word ${wordId}`
+        );
+    if (lesson.data.kind === 'test')
+      for (const reference of lesson.data.rotationVersions)
+        if (!testVersionIds.has(reference.versionId))
+          throw new SyncError(
+            'MISSING_PROJECTED_REFERENCE',
+            `Current dev test ${id} references missing version ${reference.versionId}`
+          );
   }
   for (const collection of ['testVersions', 'testVersionDrafts']) {
     for (const record of target[collection] ?? []) {
-      for (const poolId of collectPoolIds(record.data)) if (!pools.has(poolId)) throw new SyncError('MISSING_PROJECTED_REFERENCE', `Current dev ${collection}/${record.id} references missing pool ${poolId}`);
-      for (const wordId of collectWordIds(record.data)) if (!words.has(wordId)) throw new SyncError('MISSING_PROJECTED_REFERENCE', `Current dev ${collection}/${record.id} references missing word ${wordId}`);
+      for (const poolId of collectPoolIds(record.data))
+        if (!pools.has(poolId))
+          throw new SyncError(
+            'MISSING_PROJECTED_REFERENCE',
+            `Current dev ${collection}/${record.id} references missing pool ${poolId}`
+          );
+      for (const wordId of collectWordIds(record.data))
+        if (!words.has(wordId))
+          throw new SyncError(
+            'MISSING_PROJECTED_REFERENCE',
+            `Current dev ${collection}/${record.id} references missing word ${wordId}`
+          );
     }
   }
-  return { lessonCount: lessons.size, poolCount: pools.size, wordCount: words.size, testVersionCount: (target.testVersions ?? []).length, testVersionDraftCount: (target.testVersionDrafts ?? []).length };
+  return {
+    lessonCount: lessons.size,
+    poolCount: pools.size,
+    wordCount: words.size,
+    testVersionCount: (target.testVersions ?? []).length,
+    testVersionDraftCount: (target.testVersionDrafts ?? []).length,
+  };
 }
 
 function diffDocuments(collection, desiredRecords, targetRecords, preservedIds) {
@@ -865,13 +1057,38 @@ function diffDocuments(collection, desiredRecords, targetRecords, preservedIds) 
     const source = desired.get(id);
     const current = target.get(id);
     if (!current) operations.push({ collection, id, action: 'create', reason: 'missing-in-dev', source, target: null });
-    else if (source.hash !== current.hash) operations.push({ collection, id, action: 'update', reason: 'content-differs', source, target: current });
-    else operations.push({ collection, id, action: 'preserve', reason: 'already-matches-source', source, target: current });
+    else if (source.hash !== current.hash)
+      operations.push({ collection, id, action: 'update', reason: 'content-differs', source, target: current });
+    else
+      operations.push({
+        collection,
+        id,
+        action: 'preserve',
+        reason: 'already-matches-source',
+        source,
+        target: current,
+      });
   }
   for (const id of [...target.keys()].sort()) {
     if (desired.has(id)) continue;
-    if (preservedIds.has(id)) operations.push({ collection, id, action: 'preserve', reason: 'fixture-dependency', source: null, target: target.get(id) });
-    else operations.push({ collection, id, action: 'delete', reason: 'stale-in-dev', source: null, target: target.get(id) });
+    if (preservedIds.has(id))
+      operations.push({
+        collection,
+        id,
+        action: 'preserve',
+        reason: 'fixture-dependency',
+        source: null,
+        target: target.get(id),
+      });
+    else
+      operations.push({
+        collection,
+        id,
+        action: 'delete',
+        reason: 'stale-in-dev',
+        source: null,
+        target: target.get(id),
+      });
   }
   return operations;
 }
@@ -883,14 +1100,36 @@ function diffStorage(sourceRecords, targetRecords, preservedLessonIds) {
   for (const name of [...source.keys()].sort()) {
     const sourceRecord = source.get(name);
     const targetRecord = target.get(name);
-    if (!targetRecord) operations.push({ name, action: 'create', reason: 'missing-in-dev', source: sourceRecord, target: null });
-    else if (sourceRecord.contentHash !== targetRecord.contentHash) operations.push({ name, action: 'update', reason: 'checksum-or-metadata-differs', source: sourceRecord, target: targetRecord });
-    else operations.push({ name, action: 'preserve', reason: 'already-matches-source', source: sourceRecord, target: targetRecord });
+    if (!targetRecord)
+      operations.push({ name, action: 'create', reason: 'missing-in-dev', source: sourceRecord, target: null });
+    else if (sourceRecord.contentHash !== targetRecord.contentHash)
+      operations.push({
+        name,
+        action: 'update',
+        reason: 'checksum-or-metadata-differs',
+        source: sourceRecord,
+        target: targetRecord,
+      });
+    else
+      operations.push({
+        name,
+        action: 'preserve',
+        reason: 'already-matches-source',
+        source: sourceRecord,
+        target: targetRecord,
+      });
   }
   for (const name of [...target.keys()].sort()) {
     if (source.has(name)) continue;
     const lessonId = lessonIdFromStorageName(name);
-    if (lessonId && preservedLessonIds.has(lessonId)) operations.push({ name, action: 'preserve', reason: 'fixture-lesson-prefix', source: null, target: target.get(name) });
+    if (lessonId && preservedLessonIds.has(lessonId))
+      operations.push({
+        name,
+        action: 'preserve',
+        reason: 'fixture-lesson-prefix',
+        source: null,
+        target: target.get(name),
+      });
     else operations.push({ name, action: 'delete', reason: 'stale-in-dev', source: null, target: target.get(name) });
   }
   return operations;
@@ -903,6 +1142,8 @@ function operationAudit(operation) {
     reason: operation.reason,
     sourceHash: operation.source?.hash ?? operation.source?.contentHash ?? null,
     targetHash: operation.target?.hash ?? operation.target?.contentHash ?? null,
+    sourceContentHash: operation.source?.contentHash ?? null,
+    targetContentHash: operation.target?.contentHash ?? null,
     targetUpdateTime: formatTimeForHash(operation.target?.updateTime),
     targetGeneration: operation.target?.generation ?? null,
   };
@@ -926,8 +1167,16 @@ function projectedState(sourceState, targetState, closure) {
   const collections = {};
   for (const collection of MIRRORED_COLLECTIONS) {
     const desired = new Map((source[collection] ?? []).map(record => [record.id, record]));
-    const preserve = collection === 'lessons' ? closure.preservedLessonIds : collection === 'vocabulary_pools' ? closure.preservedPoolIds : collection === 'vocabulary_words_v5' ? closure.preservedWordIds : new Set();
-    for (const record of target[collection] ?? []) if (preserve.has(record.id) && !desired.has(record.id)) desired.set(record.id, record);
+    const preserve =
+      collection === 'lessons'
+        ? closure.preservedLessonIds
+        : collection === 'vocabulary_pools'
+          ? closure.preservedPoolIds
+          : collection === 'vocabulary_words_v5'
+            ? closure.preservedWordIds
+            : new Set();
+    for (const record of target[collection] ?? [])
+      if (preserve.has(record.id) && !desired.has(record.id)) desired.set(record.id, record);
     collections[collection] = [...desired.values()];
   }
   return {
@@ -940,7 +1189,11 @@ function projectedState(sourceState, targetState, closure) {
       ...sourceStorage,
       ...targetStorage.filter(record => {
         const lessonId = lessonIdFromStorageName(record.name);
-        return lessonId && closure.preservedStorageLessonIds.has(lessonId) && !sourceStorage.some(sourceRecord => sourceRecord.name === record.name);
+        return (
+          lessonId &&
+          closure.preservedStorageLessonIds.has(lessonId) &&
+          !sourceStorage.some(sourceRecord => sourceRecord.name === record.name)
+        );
       }),
     ],
     excludedStorage: targetState.excludedStorage,
@@ -949,10 +1202,14 @@ function projectedState(sourceState, targetState, closure) {
 }
 
 export function createPlan(sourceState, targetState) {
-  if (sourceState.projectId !== SOURCE_PROJECT_ID) throw new SyncError('SOURCE_PROJECT_MISMATCH', `Source must be ${SOURCE_PROJECT_ID}`);
-  if (targetState.projectId !== TARGET_PROJECT_ID) throw new SyncError('TARGET_PROJECT_MISMATCH', `Target must be ${TARGET_PROJECT_ID}`);
-  if (sourceState.storageBucket !== SOURCE_STORAGE_BUCKET) throw new SyncError('SOURCE_BUCKET_MISMATCH', `Source bucket must be ${SOURCE_STORAGE_BUCKET}`);
-  if (targetState.storageBucket !== TARGET_STORAGE_BUCKET) throw new SyncError('TARGET_BUCKET_MISMATCH', `Target bucket must be ${TARGET_STORAGE_BUCKET}`);
+  if (sourceState.projectId !== SOURCE_PROJECT_ID)
+    throw new SyncError('SOURCE_PROJECT_MISMATCH', `Source must be ${SOURCE_PROJECT_ID}`);
+  if (targetState.projectId !== TARGET_PROJECT_ID)
+    throw new SyncError('TARGET_PROJECT_MISMATCH', `Target must be ${TARGET_PROJECT_ID}`);
+  if (sourceState.storageBucket !== SOURCE_STORAGE_BUCKET)
+    throw new SyncError('SOURCE_BUCKET_MISMATCH', `Source bucket must be ${SOURCE_STORAGE_BUCKET}`);
+  if (targetState.storageBucket !== TARGET_STORAGE_BUCKET)
+    throw new SyncError('TARGET_BUCKET_MISMATCH', `Target bucket must be ${TARGET_STORAGE_BUCKET}`);
   validateSourceState(sourceState);
   assertStorageScope(sourceState.storage ?? [], 'Source');
   assertStorageScope(targetState.storage ?? [], 'Target controlled Storage');
@@ -966,20 +1223,46 @@ export function createPlan(sourceState, targetState) {
   const sourceContentFingerprint = buildContentFingerprint(sourceState);
   const targetContentFingerprint = buildContentFingerprint(targetState);
   const firestoreOperations = [
-    ...diffDocuments('vocabulary_words_v5', expectedState.collections.vocabulary_words_v5 ?? [], targetState.collections.vocabulary_words_v5 ?? [], closure.preservedWordIds),
-    ...diffDocuments('vocabulary_pools', expectedState.collections.vocabulary_pools ?? [], targetState.collections.vocabulary_pools ?? [], closure.preservedPoolIds),
-    ...diffDocuments('lessons', expectedState.collections.lessons ?? [], targetState.collections.lessons ?? [], closure.preservedLessonIds),
-    ...diffDocuments('learningPaths', expectedState.collections.learningPaths ?? [], targetState.collections.learningPaths ?? [], new Set()),
+    ...diffDocuments(
+      'vocabulary_words_v5',
+      expectedState.collections.vocabulary_words_v5 ?? [],
+      targetState.collections.vocabulary_words_v5 ?? [],
+      closure.preservedWordIds
+    ),
+    ...diffDocuments(
+      'vocabulary_pools',
+      expectedState.collections.vocabulary_pools ?? [],
+      targetState.collections.vocabulary_pools ?? [],
+      closure.preservedPoolIds
+    ),
+    ...diffDocuments(
+      'lessons',
+      expectedState.collections.lessons ?? [],
+      targetState.collections.lessons ?? [],
+      closure.preservedLessonIds
+    ),
+    ...diffDocuments(
+      'learningPaths',
+      expectedState.collections.learningPaths ?? [],
+      targetState.collections.learningPaths ?? [],
+      new Set()
+    ),
   ];
-  const storageOperations = diffStorage(sourceState.storage ?? [], targetState.storage ?? [], closure.preservedStorageLessonIds);
-  for (const operation of firestoreOperations) if (!MIRRORED_COLLECTIONS.includes(operation.collection)) throw new SyncError('WRITE_SCOPE_VIOLATION', `Plan attempted protected collection ${operation.collection}`);
+  const storageOperations = diffStorage(
+    sourceState.storage ?? [],
+    targetState.storage ?? [],
+    closure.preservedStorageLessonIds
+  );
+  for (const operation of firestoreOperations)
+    if (!MIRRORED_COLLECTIONS.includes(operation.collection))
+      throw new SyncError('WRITE_SCOPE_VIOLATION', `Plan attempted protected collection ${operation.collection}`);
   const planPayload = {
     schemaVersion: PLAN_SCHEMA_VERSION,
     tool: TOOL_NAME,
     sourceProjectId: SOURCE_PROJECT_ID,
     targetProjectId: TARGET_PROJECT_ID,
-    sourceManifestHash: sourceManifest.manifestHash,
-    targetManifestHash: targetManifest.manifestHash,
+    sourceMirroredContentFingerprint: buildMirroredContentFingerprint(sourceState),
+    targetMirroredContentFingerprint: buildMirroredContentFingerprint(targetState),
     fixtureClosure: {
       preservedLessonIds: [...closure.preservedLessonIds].sort(),
       preservedPoolIds: [...closure.preservedPoolIds].sort(),
@@ -1016,7 +1299,9 @@ export function createPlan(sourceState, targetState) {
         storageBucket: SOURCE_STORAGE_BUCKET,
         manifestHash: sourceManifest.manifestHash,
         contentFingerprint: sourceContentFingerprint,
-        counts: Object.fromEntries(Object.entries(sourceManifest.collections).map(([name, records]) => [name, records.length])),
+        counts: Object.fromEntries(
+          Object.entries(sourceManifest.collections).map(([name, records]) => [name, records.length])
+        ),
       },
       target: {
         projectId: TARGET_PROJECT_ID,
@@ -1024,7 +1309,9 @@ export function createPlan(sourceState, targetState) {
         manifestHash: targetManifest.manifestHash,
         contentFingerprint: targetContentFingerprint,
         excludedFingerprint: buildExcludedFingerprint(targetState),
-        counts: Object.fromEntries(Object.entries(targetManifest.collections).map(([name, records]) => [name, records.length])),
+        counts: Object.fromEntries(
+          Object.entries(targetManifest.collections).map(([name, records]) => [name, records.length])
+        ),
       },
       fixtureClosure: {
         preservedLessonIds: [...closure.preservedLessonIds].sort(),
@@ -1037,9 +1324,15 @@ export function createPlan(sourceState, targetState) {
         affectedLessonIds: fixtureResolution.affectedLessonIds,
       },
       validation: { ok: true, projected: projectedValidation },
-      firestore: { operations: firestoreOperations.map(operationAudit), summary: summarizeOperations(firestoreOperations) },
+      firestore: {
+        operations: firestoreOperations.map(operationAudit),
+        summary: summarizeOperations(firestoreOperations),
+      },
       storage: { operations: storageOperations.map(operationAudit), summary: summarizeOperations(storageOperations) },
-      preconditions: { sourceManifestHash: sourceManifest.manifestHash, targetManifestHash: targetManifest.manifestHash },
+      preconditions: {
+        sourceManifestHash: sourceManifest.manifestHash,
+        targetManifestHash: targetManifest.manifestHash,
+      },
       planHash,
     },
   };
@@ -1051,8 +1344,10 @@ export function encodeFirestoreValue(value) {
   if (typeof value === 'number') return canonicalNumber(value);
   if (typeof value === 'bigint') return { [VALUE_TAG]: 'bigint', value: value.toString() };
   if (value instanceof Date) return { [VALUE_TAG]: 'date', value: value.toISOString() };
-  if (Buffer.isBuffer(value) || value instanceof Uint8Array) return { [VALUE_TAG]: 'bytes', base64: Buffer.from(value).toString('base64') };
-  if (isTimestampLike(value)) return { [VALUE_TAG]: 'timestamp-parts', seconds: String(value.seconds), nanoseconds: Number(value.nanoseconds) };
+  if (Buffer.isBuffer(value) || value instanceof Uint8Array)
+    return { [VALUE_TAG]: 'bytes', base64: Buffer.from(value).toString('base64') };
+  if (isTimestampLike(value))
+    return { [VALUE_TAG]: 'timestamp-parts', seconds: String(value.seconds), nanoseconds: Number(value.nanoseconds) };
   if (isGeoPointLike(value)) return { [VALUE_TAG]: 'geopoint', latitude: value.latitude, longitude: value.longitude };
   if (isDocumentReferenceLike(value)) return { [VALUE_TAG]: 'document-reference', path: value.path };
   if (Array.isArray(value)) return value.map(encodeFirestoreValue);
@@ -1067,15 +1362,19 @@ export function encodeFirestoreValue(value) {
 }
 
 export function decodeFirestoreValue(value, db, types = {}) {
-  if (value === null || typeof value === 'string' || typeof value === 'boolean' || typeof value === 'number') return value;
+  if (value === null || typeof value === 'string' || typeof value === 'boolean' || typeof value === 'number')
+    return value;
   if (Array.isArray(value)) return value.map(entry => decodeFirestoreValue(entry, db, types));
   if (!isObject(value)) throw new SyncError('INVALID_BACKUP', 'Invalid encoded Firestore value');
   if (value[VALUE_TAG] === 'map') {
     if (!Array.isArray(value.entries)) throw new SyncError('INVALID_BACKUP', 'Invalid encoded Firestore map');
-    return Object.fromEntries(value.entries.map(entry => {
-      if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string') throw new SyncError('INVALID_BACKUP', 'Invalid encoded Firestore map entry');
-      return [entry[0], decodeFirestoreValue(entry[1], db, types)];
-    }));
+    return Object.fromEntries(
+      value.entries.map(entry => {
+        if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string')
+          throw new SyncError('INVALID_BACKUP', 'Invalid encoded Firestore map entry');
+        return [entry[0], decodeFirestoreValue(entry[1], db, types)];
+      })
+    );
   }
   if (value[VALUE_TAG] === 'date') return new Date(value.value);
   if (value[VALUE_TAG] === 'bigint') return BigInt(value.value);
@@ -1087,7 +1386,10 @@ export function decodeFirestoreValue(value, db, types = {}) {
     if (value.value === '-Infinity') return -Infinity;
     if (value.value === '-0') return -0;
   }
-  if (value[VALUE_TAG] === 'geopoint') return types.GeoPoint ? new types.GeoPoint(value.latitude, value.longitude) : { latitude: value.latitude, longitude: value.longitude };
+  if (value[VALUE_TAG] === 'geopoint')
+    return types.GeoPoint
+      ? new types.GeoPoint(value.latitude, value.longitude)
+      : { latitude: value.latitude, longitude: value.longitude };
   if (value[VALUE_TAG] === 'timestamp-parts') {
     const seconds = Number(value.seconds);
     const nanoseconds = Number(value.nanoseconds);
@@ -1110,7 +1412,14 @@ export function chunkOperations(operations) {
   let current = [];
   let bytes = 0;
   for (const operation of operations) {
-    const operationBytes = Buffer.byteLength(canonicalJson({ collection: operation.collection, id: operation.id, action: operation.action, data: operation.source?.data ?? null }));
+    const operationBytes = Buffer.byteLength(
+      canonicalJson({
+        collection: operation.collection,
+        id: operation.id,
+        action: operation.action,
+        data: operation.source?.data ?? null,
+      })
+    );
     if (current.length && (current.length >= MAX_BATCH_WRITES || bytes + operationBytes > MAX_BATCH_BYTES)) {
       chunks.push(current);
       current = [];
@@ -1141,11 +1450,15 @@ export function assertPlanHash(currentPlanHash, suppliedPlanHash) {
 }
 
 export function operationsByCollection(plan, collection) {
-  return plan.firestoreOperations.filter(operation => operation.collection === collection && ['create', 'update', 'delete'].includes(operation.action));
+  return plan.firestoreOperations.filter(
+    operation => operation.collection === collection && ['create', 'update', 'delete'].includes(operation.action)
+  );
 }
 
 export function summarizeOperationsForRollback(operations) {
-  const mapped = operations.map(operation => ({ action: operation.action === 'restore' ? 'update' : operation.action }));
+  const mapped = operations.map(operation => ({
+    action: operation.action === 'restore' ? 'update' : operation.action,
+  }));
   return summarizeOperations(mapped);
 }
 

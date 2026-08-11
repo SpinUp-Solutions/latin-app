@@ -30,6 +30,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PartOfSpeechSchema, type PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 import { buildEmptyWord, isPlaceholderWord } from '@/src/utils/vocabulary-defaults';
 import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
+import { fetchVocabularyBackup } from '@/src/services/vocabularyBackupService';
 
 const EMPTY_WORDS: VocabularyWordWithId[] = [];
 const PART_OF_SPEECH_OPTIONS = PartOfSpeechSchema.options;
@@ -46,6 +47,7 @@ function AdminVocabularyPage() {
   const [poolWarning, setPoolWarning] = useState<{
     word: VocabularyWordWithId;
     pools: { id: string; name: string }[];
+    confirmationToken: string;
   } | null>(null);
   const TARGET_COLLECTION = VOCABULARY_WORDS_COLLECTION;
 
@@ -204,18 +206,27 @@ function AdminVocabularyPage() {
     setSelectedWordId(null);
   };
 
-  const handleDeleteWord = async (word: VocabularyWordWithId, confirm = false) => {
+  const handleDeleteWord = async (word: VocabularyWordWithId, confirmationToken?: string) => {
     setDeletingWordId(word.id);
     try {
-      await deleteWord({ wordId: word.id, confirm }).unwrap();
+      await deleteWord({ wordId: word.id, confirmationToken }).unwrap();
       toast.success(`Word "${word.word}" deleted successfully`);
       if (selectedWordId === word.id) {
         setSelectedWordId(null);
       }
     } catch (error) {
       const fetchError = error as { status?: number; data?: DeleteWordResponse };
-      if (fetchError.status === 409 && fetchError.data?.warning && fetchError.data.referencedPools) {
-        setPoolWarning({ word, pools: fetchError.data.referencedPools });
+      if (
+        fetchError.status === 409 &&
+        fetchError.data?.warning &&
+        fetchError.data.referencedPools &&
+        fetchError.data.confirmationToken
+      ) {
+        setPoolWarning({
+          word,
+          pools: fetchError.data.referencedPools,
+          confirmationToken: fetchError.data.confirmationToken,
+        });
         return;
       }
       console.error('Delete word error:', error);
@@ -229,13 +240,22 @@ function AdminVocabularyPage() {
   const handleConfirmDeleteWithPools = async () => {
     if (!poolWarning) return;
     setPoolWarning(null);
-    await handleDeleteWord(poolWarning.word, true);
+    await handleDeleteWord(poolWarning.word, poolWarning.confirmationToken);
   };
 
-  const handleBackup = () => {
-    const url = `/api/admin/words/backup?collection=${TARGET_COLLECTION}`;
-    window.open(url, '_blank');
-    toast.success('Backup download started');
+  const handleBackup = async () => {
+    try {
+      const { blob, filename } = await fetchVocabularyBackup(TARGET_COLLECTION);
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(objectUrl);
+      toast.success('Backup downloaded');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Vocabulary backup failed');
+    }
   };
 
   return (

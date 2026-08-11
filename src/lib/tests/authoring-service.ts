@@ -8,11 +8,7 @@ import {
   TEST_VERSION_DRAFTS_COLLECTION,
   TEST_VERSIONS_COLLECTION,
 } from '@/shared/constants/firestore';
-import {
-  learningPathDocumentSchema,
-  testUnitCreateSchema,
-  testUnitSchema,
-} from '@/src/lib/learning-units/schemas';
+import { learningPathDocumentSchema, testUnitCreateSchema, testUnitSchema } from '@/src/lib/learning-units/schemas';
 import { adminDb } from '@/src/services/firebase-admin';
 import type { TestUnit } from '@/src/types/learning-unit';
 import type {
@@ -23,6 +19,8 @@ import type {
   TestVersionSummary,
 } from '@/src/types/test';
 import { regeneratePageIds } from '@/src/utils/idUtils';
+import { assertVocabularyPoolAssignmentsAllowedInTransaction } from '@/src/lib/vocabulary-pools/assignment.server';
+import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
 import { toTestUnitSummary } from './domain';
 import { TestServiceError } from './errors';
 import {
@@ -149,7 +147,7 @@ export class TestAuthoringService {
     const versionRef = this.versions.doc(parsed.version.id);
     const draftRef = this.drafts.doc(parsed.version.id);
 
-    return this.db.runTransaction(async transaction => {
+    return runVocabularyContentMutation(this.db, async transaction => {
       const [existingTest, existingVersion, existingDraft] = await Promise.all([
         transaction.get(testRef),
         transaction.get(versionRef),
@@ -174,6 +172,13 @@ export class TestAuthoringService {
         updatedBy: actorId,
       }) as TestUnit;
 
+      const applyVocabularyPoolAssignmentRevisions = await assertVocabularyPoolAssignmentsAllowedInTransaction(
+        transaction,
+        this.db,
+        undefined,
+        version
+      );
+      applyVocabularyPoolAssignmentRevisions();
       transaction.create(versionRef, version);
       transaction.create(testRef, test);
       return { test, version };
@@ -184,7 +189,7 @@ export class TestAuthoringService {
     const changes = updateTestUnitInputSchema.parse(input);
     const ref = this.units.doc(testId);
 
-    return this.db.runTransaction(async transaction => {
+    return runVocabularyContentMutation(this.db, async transaction => {
       const current = parseTestSnapshot(await transaction.get(ref));
       const updated = testUnitSchema.parse({
         ...current,
@@ -202,7 +207,7 @@ export class TestAuthoringService {
     const testRef = this.units.doc(testId);
     const versionRef = this.versions.doc(changes.versionId);
 
-    return this.db.runTransaction(async transaction => {
+    return runVocabularyContentMutation(this.db, async transaction => {
       const [testSnapshot, versionSnapshot] = await Promise.all([
         transaction.get(testRef),
         transaction.get(versionRef),
@@ -235,6 +240,13 @@ export class TestAuthoringService {
         }
       );
 
+      const applyVocabularyPoolAssignmentRevisions = await assertVocabularyPoolAssignmentsAllowedInTransaction(
+        transaction,
+        this.db,
+        currentVersion,
+        version
+      );
+      applyVocabularyPoolAssignmentRevisions();
       transaction.set(testRef, test);
       transaction.set(versionRef, version);
       return { test, version };
@@ -247,7 +259,7 @@ export class TestAuthoringService {
     const versionRef = this.versions.doc(parsed.id);
     const draftRef = this.drafts.doc(parsed.id);
 
-    return this.db.runTransaction(async transaction => {
+    return runVocabularyContentMutation(this.db, async transaction => {
       const [testSnapshot, existingVersion, existingDraft] = await Promise.all([
         transaction.get(testRef),
         transaction.get(versionRef),
@@ -275,27 +287,26 @@ export class TestAuthoringService {
         updatedBy: actorId,
       }) as TestUnit;
 
+      const applyVocabularyPoolAssignmentRevisions = await assertVocabularyPoolAssignmentsAllowedInTransaction(
+        transaction,
+        this.db,
+        undefined,
+        version
+      );
+      applyVocabularyPoolAssignmentRevisions();
       transaction.create(draftRef, version);
       transaction.set(testRef, test);
       return { test, version };
     });
   }
 
-  async updateTestVersionDraft(
-    testId: string,
-    versionId: string,
-    input: UpdateTestVersionDraftInput,
-    actorId: string
-  ) {
+  async updateTestVersionDraft(testId: string, versionId: string, input: UpdateTestVersionDraftInput, actorId: string) {
     const changes = updateTestVersionDraftInputSchema.parse(input);
     const testRef = this.units.doc(testId);
     const draftRef = this.drafts.doc(versionId);
 
-    return this.db.runTransaction(async transaction => {
-      const [testSnapshot, draftSnapshot] = await Promise.all([
-        transaction.get(testRef),
-        transaction.get(draftRef),
-      ]);
+    return runVocabularyContentMutation(this.db, async transaction => {
+      const [testSnapshot, draftSnapshot] = await Promise.all([transaction.get(testRef), transaction.get(draftRef)]);
       const currentTest = parseTestSnapshot(testSnapshot);
       const currentDraft = parseVersionDraftSnapshot(draftSnapshot);
       if (currentDraft.testId !== testId) {
@@ -317,6 +328,13 @@ export class TestAuthoringService {
         updatedAt: this.now(),
         updatedBy: actorId,
       }) as TestUnit;
+      const applyVocabularyPoolAssignmentRevisions = await assertVocabularyPoolAssignmentsAllowedInTransaction(
+        transaction,
+        this.db,
+        currentDraft,
+        version
+      );
+      applyVocabularyPoolAssignmentRevisions();
       transaction.set(draftRef, version);
       transaction.set(testRef, test);
       return { test, version };
@@ -338,7 +356,7 @@ export class TestAuthoringService {
     const sourceRef = this.versions.doc(sourceVersionId);
     const targetVersionRef = this.versions.doc(targetVersionId);
     const targetDraftRef = this.drafts.doc(targetVersionId);
-    return this.db.runTransaction(async transaction => {
+    return runVocabularyContentMutation(this.db, async transaction => {
       const [testSnapshot, sourceSnapshot, targetVersionSnapshot, targetDraftSnapshot] = await Promise.all([
         transaction.get(testRef),
         transaction.get(sourceRef),
@@ -381,6 +399,13 @@ export class TestAuthoringService {
         updatedAt: this.now(),
         updatedBy: actorId,
       }) as TestUnit;
+      const applyVocabularyPoolAssignmentRevisions = await assertVocabularyPoolAssignmentsAllowedInTransaction(
+        transaction,
+        this.db,
+        undefined,
+        version
+      );
+      applyVocabularyPoolAssignmentRevisions();
       transaction.create(targetDraftRef, version);
       transaction.set(testRef, updatedTest);
       return { test: updatedTest, version };
@@ -392,7 +417,7 @@ export class TestAuthoringService {
     const draftRef = this.drafts.doc(versionId);
     const versionRef = this.versions.doc(versionId);
 
-    return this.db.runTransaction(async transaction => {
+    return runVocabularyContentMutation(this.db, async transaction => {
       const [testSnapshot, draftSnapshot, versionSnapshot] = await Promise.all([
         transaction.get(testRef),
         transaction.get(draftRef),
@@ -427,6 +452,13 @@ export class TestAuthoringService {
         updatedAt: this.now(),
         updatedBy: actorId,
       }) as TestUnit;
+      const applyVocabularyPoolAssignmentRevisions = await assertVocabularyPoolAssignmentsAllowedInTransaction(
+        transaction,
+        this.db,
+        draft,
+        version
+      );
+      applyVocabularyPoolAssignmentRevisions();
       transaction.create(versionRef, version);
       transaction.set(testRef, updatedTest);
       transaction.delete(draftRef);
@@ -440,7 +472,7 @@ export class TestAuthoringService {
     const versionRef = this.versions.doc(versionId);
     const pathRef = this.db.collection(LEARNING_PATHS_COLLECTION).doc(DEFAULT_LEARNING_PATH_ID);
 
-    return this.db.runTransaction(async transaction => {
+    return runVocabularyContentMutation(this.db, async transaction => {
       const [testSnapshot, draftSnapshot, versionSnapshot, pathSnapshot] = await Promise.all([
         transaction.get(testRef),
         transaction.get(draftRef),
@@ -497,6 +529,13 @@ export class TestAuthoringService {
         updatedAt: this.now(),
         updatedBy: actorId,
       }) as TestUnit;
+      const applyVocabularyPoolAssignmentRevisions = await assertVocabularyPoolAssignmentsAllowedInTransaction(
+        transaction,
+        this.db,
+        version,
+        draft
+      );
+      applyVocabularyPoolAssignmentRevisions();
       transaction.create(draftRef, draft);
       transaction.set(testRef, updatedTest);
       transaction.delete(versionRef);

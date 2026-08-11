@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { FieldValue } from 'firebase-admin/firestore';
 import { adminDb, adminStorage } from '@/src/services/firebase-admin';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
 
 const LESSONS_COLLECTION = 'lessons';
 const PREVIEW_LIMIT_DEFAULT = 25;
@@ -342,19 +343,17 @@ async function commitLessonUpdates(
 
   for (let index = 0; index < updates.length; index += BATCH_SIZE) {
     const chunk = updates.slice(index, index + BATCH_SIZE);
-    const batch = adminDb.batch();
-
-    for (const update of chunk) {
-      const docRef = adminDb.collection(LESSONS_COLLECTION).doc(update.lessonId);
-      batch.update(docRef, {
-        pages: update.pages,
-        updatedAt: new Date().toISOString(),
-        updatedBy: userId,
-        version: FieldValue.increment(1),
-      });
-    }
-
-    await batch.commit();
+    await runVocabularyContentMutation(adminDb, async transaction => {
+      for (const update of chunk) {
+        const docRef = adminDb.collection(LESSONS_COLLECTION).doc(update.lessonId);
+        transaction.update(docRef, {
+          pages: update.pages,
+          updatedAt: new Date().toISOString(),
+          updatedBy: userId,
+          version: FieldValue.increment(1),
+        });
+      }
+    });
     batchesCommitted += 1;
   }
 

@@ -4,6 +4,7 @@ import type { Lesson } from '@/src/types/lesson';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import { getLessonContentCounts } from '@/src/utils/lessonSummary';
 import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
+import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
 
 const BATCH_SIZE = 400;
 
@@ -41,11 +42,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     if (!dryRun) {
       for (let index = 0; index < updates.length; index += BATCH_SIZE) {
-        const batch = adminDb.batch();
-        for (const update of updates.slice(index, index + BATCH_SIZE)) {
-          batch.update(update.ref, update.counts);
-        }
-        await batch.commit();
+        await runVocabularyContentMutation(adminDb, async transaction => {
+          for (const update of updates.slice(index, index + BATCH_SIZE)) {
+            transaction.update(update.ref, update.counts);
+          }
+        });
       }
     }
 

@@ -70,9 +70,12 @@ export const useWordSelection = () => {
     [dispatch]
   );
 
-  const handleAddAllVisible = useCallback(() => {
-    dispatch(addWords(availableWords));
-  }, [dispatch, availableWords]);
+  const handleAddAllVisible = useCallback(
+    (words: Word[] = availableWords) => {
+      dispatch(addWords(words));
+    },
+    [dispatch, availableWords]
+  );
 
   const handleRemoveWord = useCallback(
     (wordId: string) => {

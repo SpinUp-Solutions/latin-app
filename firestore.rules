@@ -78,6 +78,49 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Vocabulary authoring and deletion archives are exposed only through
+    // authenticated server routes. Direct SDK access would bypass admin checks,
+    // confirmation challenges, and immutable archive guarantees.
+    match /vocabulary_pools/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /vocabulary_words_v5/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /vocabulary_words_v4/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /vocabulary_word_requests/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /deleted_vocabulary_pools/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /vocabulary_pool_archives/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /vocabulary_pool_deletion_challenges/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /vocabulary_word_deletion_challenges/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /content_sync_locks/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /vocabulary_content_state/{document=**} {
+      allow read, write: if false;
+    }
+
     // User profiles remain readable for username availability checks, but the
     // role consumed by server-side admin authorization must not be writable by
     // clients. Administrative role changes use the Admin SDK, which bypasses
@@ -95,6 +138,7 @@ service cloud.firestore {
 
     match /{collection}/{document=**} {
       allow read, write: if collection != 'diagramming_attempts'
+        && !collection.matches('vocabulary_words_v[0-9]+')
         && collection != 'lessons'
         && collection != 'learningPaths'
         && collection != 'learningPathMigrations'
@@ -111,6 +155,16 @@ service cloud.firestore {
         && collection != 'aiEvaluationCases'
         && collection != 'aiEvaluationResultCache'
         && collection != 'aiEvaluationRunThrottles'
+        && collection != 'vocabulary_pools'
+        && collection != 'vocabulary_words_v5'
+        && collection != 'vocabulary_words_v4'
+        && collection != 'vocabulary_word_requests'
+        && collection != 'deleted_vocabulary_pools'
+        && collection != 'vocabulary_pool_archives'
+        && collection != 'vocabulary_pool_deletion_challenges'
+        && collection != 'vocabulary_word_deletion_challenges'
+        && collection != 'content_sync_locks'
+        && collection != 'vocabulary_content_state'
         && collection != 'users';
     }
   }

@@ -36,11 +36,15 @@ function configureFirestore(lessons: Record<string, Record<string, unknown>>, le
         data: () => lessons[ref.id],
       }))
     ),
-    get: jest.fn(async (ref: { id: string }) => ({
-      id: ref.id,
-      exists: Boolean(learningPath),
-      data: () => learningPath,
-    })),
+    get: jest.fn(async (ref: { collectionName?: string; id: string }) =>
+      ref.collectionName === 'content_sync_locks'
+        ? { id: ref.id, exists: false, data: () => undefined }
+        : {
+            id: ref.id,
+            exists: Boolean(learningPath),
+            data: () => learningPath,
+          }
+    ),
     update: jest.fn((ref: { id: string }, data: Record<string, unknown>) => {
       updates.push({ id: ref.id, data });
     }),
@@ -117,7 +121,10 @@ describe('reorder lessons route', () => {
     )) as unknown as { status: number };
 
     expect(response.status).toBe(200);
-    expect(transaction.get).not.toHaveBeenCalled();
+    expect(transaction.get).toHaveBeenCalledTimes(1);
+    expect(transaction.get).toHaveBeenCalledWith(
+      expect.objectContaining({ collectionName: 'content_sync_locks', id: 'prod-content-to-dev' })
+    );
     expect(transaction.update).toHaveBeenCalledTimes(2);
   });
 

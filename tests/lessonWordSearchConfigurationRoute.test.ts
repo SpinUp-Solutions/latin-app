@@ -42,21 +42,27 @@ jest.mock('@/src/lib/practice-categories/service', () => {
 
 jest.mock('@/src/services/firebase-admin', () => ({
   adminDb: {
-    collection: () => ({
-      doc: (id: string) => ({ id }),
+    collection: (collectionName: string) => ({
+      doc: (id: string) => ({ id, collectionName }),
     }),
     runTransaction: async (
       callback: (transaction: {
-        get: () => Promise<{ exists: boolean; data: () => Record<string, unknown> | undefined }>;
+        get: (ref: { collectionName?: string }) => Promise<{
+          exists: boolean;
+          data: () => Record<string, unknown> | undefined;
+        }>;
         create: typeof mockCreate;
         set: typeof mockSet;
       }) => unknown
     ) =>
       callback({
-        get: async () => ({
-          exists: existingLessonData !== undefined,
-          data: () => existingLessonData,
-        }),
+        get: async ref =>
+          ref.collectionName === 'content_sync_locks'
+            ? { exists: false, data: () => undefined }
+            : {
+                exists: existingLessonData !== undefined,
+                data: () => existingLessonData,
+              },
         create: mockCreate,
         set: mockSet,
       }),
