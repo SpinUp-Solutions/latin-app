@@ -64,7 +64,10 @@ export function gradeMatching(
   maxPoints = maxPointsFor(exercise)
 ): ExerciseScore {
   const expected = Object.entries(exercise.data.answers);
-  const requiredRounds = exercise.data.requiredRepetitions || 1;
+  const requiredRounds = exercise.data.requiredRepetitions ?? 1;
+  if (!Number.isInteger(requiredRounds) || requiredRounds < 1 || requiredRounds > 10) {
+    throw new Error(`Matching exercise ${exercise.id} has invalid requiredRepetitions`);
+  }
   let correct = 0;
 
   for (let roundIndex = 0; roundIndex < requiredRounds; roundIndex += 1) {

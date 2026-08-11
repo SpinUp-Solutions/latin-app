@@ -10,7 +10,19 @@ const pages = [
     id: 'page-1',
     items: [
       { id: 'instructions', type: 'text', content: 'Read carefully.' },
-      { id: 'question-1', type: 'multiple-choice', maxPoints: 3 },
+      {
+        id: 'question-1',
+        type: 'multiple-choice',
+        maxPoints: 3,
+        data: {
+          question: 'Which answer is correct?',
+          options: [
+            { id: 'answer-a', text: 'A', isCorrect: true },
+            { id: 'answer-b', text: 'B', isCorrect: false },
+          ],
+          allowMultipleSelections: false,
+        },
+      },
     ],
   },
 ];

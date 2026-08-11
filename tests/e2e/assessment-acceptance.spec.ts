@@ -181,8 +181,8 @@ test.describe('Assessment acceptance', () => {
     const studentContext = await browser.newContext();
     const studentPage = await studentContext.newPage();
     await signIn(studentPage, E2E_USERS.mock);
-    const mockSection = studentPage.getByRole('region', { name: 'Mock Tests' });
-    await expect(mockSection.getByRole('heading', { level: 3 })).toHaveText([
+    const mockGrid = studentPage.getByTestId('mock-test-grid');
+    await expect(mockGrid.getByRole('heading', { level: 3 })).toHaveText([
       'Required-pass practice',
       'Ordered fixed-version mock',
     ]);

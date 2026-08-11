@@ -27,6 +27,7 @@ import {
   buildVersionDraft,
   buildVersion,
   getVersionSummaries,
+  isStoredVersionReadyForStudentVisibility,
   parseMockSnapshot,
   parseTestSnapshot,
   parseVersionDraftSnapshot,
@@ -512,6 +513,20 @@ export class TestAuthoringService {
           409
         );
       }
+      const remainingRotationVersions = test.rotationVersions.filter(reference => reference.versionId !== versionId);
+      if (placed) {
+        const remainingSnapshots = await Promise.all(
+          remainingRotationVersions.map(reference => transaction.get(this.versions.doc(reference.versionId)))
+        );
+        const invalid = remainingSnapshots.find(snapshot => !isStoredVersionReadyForStudentVisibility(snapshot));
+        if (invalid) {
+          throw new TestServiceError(
+            'PLACED_TEST_REQUIRES_ROTATION_VERSION',
+            `A test in the Learning Path cannot retain missing or invalid rotation version ${invalid.id}.`,
+            409
+          );
+        }
+      }
       const draft = this.buildVersionDraft(
         testId,
         testVersionDraftInputSchema.parse({
@@ -525,7 +540,7 @@ export class TestAuthoringService {
       );
       const updatedTest = testUnitSchema.parse({
         ...test,
-        rotationVersions: test.rotationVersions.filter(reference => reference.versionId !== versionId),
+        rotationVersions: remainingRotationVersions,
         updatedAt: this.now(),
         updatedBy: actorId,
       }) as TestUnit;

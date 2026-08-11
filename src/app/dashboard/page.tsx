@@ -24,6 +24,7 @@ import { SwiperNavigation } from '@/src/components/ui/core/swiper-nav';
 import { PracticeSection } from '@/src/components/ui/core/PracticeSection';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { FeedbackBanner } from '@/src/components/ui/core/feedback-banner';
+import { formatScorePercentage } from '@/src/lib/tests/formatting';
 export { MockTestCard } from '@/src/components/ui/core/mock-test-card';
 
 const statusConfig: Record<LessonStatus, { card: string }> = {
@@ -126,6 +127,7 @@ export const TestCard = memo(
 
     return (
       <RomanCard
+        data-testid="dashboard-test-card"
         className={`group cursor-pointer rounded-3xl border shadow-xl transition-all duration-300 hover:-translate-y-2 hover:scale-[1.02] hover:shadow-2xl ${
           locked
             ? 'border-gray-300 bg-gradient-to-br from-gray-100 to-gray-50'
@@ -178,14 +180,16 @@ export const TestCard = memo(
                   <Trophy className="h-3.5 w-3.5" aria-hidden="true" />
                   Best
                 </div>
-                <div className="text-2xl font-semibold text-indigo-800">{Math.round(summary.best.percentage)}%</div>
+                <div className="text-2xl font-semibold text-indigo-800">
+                  {formatScorePercentage(summary.best.percentage)}%
+                </div>
               </div>
               <div>
                 <div className="text-xs text-gray-500">Latest</div>
                 <div className="font-medium text-gray-900">
                   {formatPoints(summary.latest?.score ?? 0)} / {formatPoints(summary.latest?.maxScore ?? 0)}
                 </div>
-                <div className="text-xs text-gray-600">{Math.round(summary.latest?.percentage ?? 0)}%</div>
+                <div className="text-xs text-gray-600">{formatScorePercentage(summary.latest?.percentage ?? 0)}%</div>
                 {latestOutcome && (
                   <div
                     className={`mt-1 text-xs font-semibold ${
@@ -305,9 +309,12 @@ export default function DashboardPage() {
     [router, learningUnits, vocabLessons, diagrammingLessons, listeningLessons]
   );
 
-  const handleMockClick = useCallback((mockTestId: string) => {
-    router.push(`/test/${encodeURIComponent(mockTestId)}?origin=mock`);
-  }, [router]);
+  const handleMockClick = useCallback(
+    (mockTestId: string) => {
+      router.push(`/test/${encodeURIComponent(mockTestId)}?origin=mock`);
+    },
+    [router]
+  );
 
   useEffect(() => {
     if (!loading && !user) {

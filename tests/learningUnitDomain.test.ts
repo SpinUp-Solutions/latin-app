@@ -11,7 +11,19 @@ const versionPages = [
     id: 'page-1',
     items: [
       { id: 'instructions', type: 'text', content: 'Read carefully.' },
-      { id: 'question-1', type: 'multiple-choice', maxPoints: 3 },
+      {
+        id: 'question-1',
+        type: 'multiple-choice',
+        maxPoints: 3,
+        data: {
+          question: 'Which answer is correct?',
+          options: [
+            { id: 'answer-a', text: 'A', isCorrect: true },
+            { id: 'answer-b', text: 'B', isCorrect: false },
+          ],
+          allowMultipleSelections: false,
+        },
+      },
     ],
   },
 ];
@@ -153,10 +165,7 @@ describe('test-version boundaries', () => {
 
     const messages = result.error?.issues.map(issue => issue.message) ?? [];
     expect(messages).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining('duplicate ID'),
-        'Non-exercise content cannot define maxPoints',
-      ])
+      expect.arrayContaining([expect.stringContaining('duplicate ID'), 'Non-exercise content cannot define maxPoints'])
     );
   });
 

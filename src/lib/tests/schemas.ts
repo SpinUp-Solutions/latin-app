@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { isExerciseType, isKnownContentType, isTestEligibleExerciseType } from '@/src/lib/content/registry';
 import { firestoreDocumentIdSchema, pageSchema, passingPercentageSchema } from '@/src/lib/learning-units/schemas';
 import { validatePageDocumentIds } from '@/src/utils/lessonProgress';
+import { validateActiveTestExerciseConfiguration } from './active-exercise-validation';
 import { getTestVersionSummaryFields } from './domain';
 
 const optionalAuditFieldSchema = z.string().min(1).optional();
@@ -38,7 +39,8 @@ export const updateTestVersionDraftInputSchema = testVersionDraftInputSchema.omi
 
 function refineTestVersionContent(
   value: Pick<z.infer<typeof testVersionInputShapeSchema>, 'pages'>,
-  context: z.RefinementCtx
+  context: z.RefinementCtx,
+  options: { validateExerciseConfigurations?: boolean } = {}
 ) {
   for (const message of validatePageDocumentIds(value.pages, 'Test version')) {
     context.addIssue({ code: 'custom', message, path: ['pages'] });
@@ -83,6 +85,18 @@ function refineTestVersionContent(
           message: 'Test exercises require a positive whole-number maxPoints',
           path: [...path, 'maxPoints'],
         });
+      }
+
+      if (options.validateExerciseConfigurations !== false) {
+        for (const exerciseIssue of validateActiveTestExerciseConfiguration(
+          item as unknown as Record<string, unknown>
+        )) {
+          context.addIssue({
+            code: 'custom',
+            message: exerciseIssue.message,
+            path: [...path, ...exerciseIssue.path],
+          });
+        }
       }
     });
   });
@@ -132,7 +146,10 @@ const testVersionDocumentShapeSchema = z
 export const testVersionSummaryDocumentSchema = testVersionDocumentShapeSchema.omit({ pages: true });
 
 export const testVersionDocumentSchema = testVersionDocumentShapeSchema.superRefine((value, context) => {
-  refineTestVersionContent(value, context);
+  // Existing active versions remain readable for backward compatibility. All
+  // create, update, activation, and duplication paths pass through the strict
+  // input validator before a new active document is written.
+  refineTestVersionContent(value, context, { validateExerciseConfigurations: false });
   const derived = getTestVersionSummaryFields(value.pages);
 
   (Object.keys(derived) as (keyof typeof derived)[]).forEach(field => {
@@ -320,12 +337,32 @@ const testTranslationItemGradeSchema = z
   })
   .strict();
 
+const testTranslationGradeReservationSchema = z
+  .object({
+    token: z.string().uuid(),
+    expiresAt: isoTimestampSchema,
+  })
+  .strict();
+
+const testTranslationGradeRequestWindowSchema = z
+  .object({
+    windowStartedAt: isoTimestampSchema,
+    count: z.number().int().positive().max(1_000),
+  })
+  .strict();
+
 const inProgressTestAttemptDocumentSchema = z
   .object({
     ...testAttemptBaseShape,
     status: z.literal('in-progress'),
     answers: z.record(z.string(), z.unknown()),
     translationGrades: z.record(z.string(), z.record(z.string(), testTranslationItemGradeSchema)).default({}),
+    translationGradeReservations: z
+      .record(z.string(), z.record(z.string(), testTranslationGradeReservationSchema))
+      .default({}),
+    translationGradeRequestWindows: z
+      .record(z.string(), z.record(z.string(), testTranslationGradeRequestWindowSchema))
+      .default({}),
     deliveryState: testAttemptDeliveryStateSchema,
   })
   .strict()
