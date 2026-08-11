@@ -61,4 +61,33 @@ describe('vocabulary pool list usage status', () => {
     expect(screen.getByText('Lesson: Three')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Show less' })).toBeInTheDocument();
   });
+
+  it('renders rich text in assigned usage labels instead of showing HTML tags', () => {
+    render(
+      <PoolList
+        pools={[pool]}
+        loading={false}
+        loadingMore={false}
+        hasMore={false}
+        onLoadMore={jest.fn()}
+        onEdit={jest.fn()}
+        onDelete={jest.fn()}
+        usagesByPoolId={{
+          'pool-1': [
+            {
+              id: 'rich-usage',
+              poolId: 'pool-1',
+              kind: 'lesson-exercise',
+              label: 'Lesson: <p></p> (Copy) → <p><strong>Dictionary Entries</strong></p>',
+              editorUrl: '/admin/lessons/edit/one',
+            },
+          ],
+        }}
+      />
+    );
+
+    expect(screen.getByRole('link', { name: 'Lesson: (Copy) → Dictionary Entries' })).toBeInTheDocument();
+    expect(screen.getByText('Dictionary Entries').tagName).toBe('STRONG');
+    expect(screen.queryByText(/<p>/)).not.toBeInTheDocument();
+  });
 });
