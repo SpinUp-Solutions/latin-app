@@ -86,6 +86,7 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete, runtimeM
     if (testAnswerMode) {
       onAnswer?.({ type: 'fill', answers: nextAnswers });
       setTestSubmitted(true);
+      if (isLastItem) onComplete?.(0);
       return;
     }
 
@@ -190,7 +191,7 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete, runtimeM
         />
 
         {testAnswerMode ? (
-          testSubmitted && <RecordedAnswerControls isLastItem={isLastItem} onContinue={continueTest} />
+          testSubmitted && <RecordedAnswerControls isLastItem={isLastItem} onContinue={continueTest} hideFinishAction />
         ) : (
           <FeedbackDisplay
             isCorrect={isCorrect}

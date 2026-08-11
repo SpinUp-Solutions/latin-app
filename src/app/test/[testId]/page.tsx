@@ -493,20 +493,21 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
               <div className="font-semibold text-roman-red">
                 {test.passingPercentage === null
                   ? isMockTest
-                    ? 'Score only — this mock is practice and never gates your Learning Path'
-                    : 'Score only — this test cannot be failed'
+                    ? 'Practice only — your score will not affect your Learning Path'
+                    : 'Complete this test to continue — any score counts'
                   : isMockTest
-                    ? `Practice target: ${test.passingPercentage}% — informational only`
-                    : `Passing requirement: ${test.passingPercentage}%`}
+                    ? `Aim for ${test.passingPercentage}% — this is practice and will not affect your Learning Path`
+                    : `Score ${test.passingPercentage}% or higher to continue along your Learning Path`}
               </div>
               <div className="mt-1 shrink-0 text-sm text-roman-stone sm:mt-0">{points} · Untimed</div>
             </div>
             <ul className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-sm leading-6 text-slate-700">
               <li className="flex gap-3 before:mt-2.5 before:h-1.5 before:w-1.5 before:shrink-0 before:rounded-full before:bg-roman-red">
-                Translation exercises show brief AI feedback; other feedback appears after submission.
+                For translations, you’ll get brief guidance as you go. Feedback on other questions appears after you
+                submit.
               </li>
               <li className="flex gap-3 before:mt-2.5 before:h-1.5 before:w-1.5 before:shrink-0 before:rounded-full before:bg-roman-red">
-                Your committed answers are saved and can be resumed after a refresh.
+                Your answers save automatically, so you can refresh or return later without losing your work.
               </li>
               <li className="flex gap-3 before:mt-2.5 before:h-1.5 before:w-1.5 before:shrink-0 before:rounded-full before:bg-roman-red">
                 Review your answers before submitting.
