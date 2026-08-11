@@ -6,7 +6,12 @@ import {
   sanitizeTestDeliveryState,
 } from '@/src/lib/tests/delivery';
 import { resolveGeneratedExerciseItems } from '@/src/lib/tests/generated-exercises';
-import { gradeGeneratedFormIdentification, gradeMatching } from '@/src/lib/tests/grading';
+import {
+  gradeClickOnMultipleWords,
+  gradeGeneratedFormIdentification,
+  gradeMatching,
+  gradeOddOneOut,
+} from '@/src/lib/tests/grading';
 import { estimateFirestoreDocumentBytes } from '@/src/lib/tests/firestore-size';
 import { applyValueFilter } from '@/src/lib/tests/generated-word-loader.server';
 import { filterOverlappingPronounParadigms } from '@/src/utils/generated/pronounParadigmFiltering';
@@ -15,6 +20,8 @@ import type {
   Exercise,
   GeneratedFormIdentificationExercise,
   MatchingExercise,
+  OddOneOutExercise,
+  ClickOnMultipleWordsExercise,
   TranslationGradingExercise,
 } from '@/src/types/exercises';
 import type {
@@ -89,10 +96,7 @@ describe('test grading foundation', () => {
       feedbackConfig,
       translationDirection: 'english-to-latin',
       data: {
-        items: [
-          { latinText: '<p>The girl&nbsp;sings.<br>Today.</p><p>Again.</p>' },
-          { latinText: 'The boys run.' },
-        ],
+        items: [{ latinText: '<p>The girl&nbsp;sings.<br>Today.</p><p>Again.</p>' }, { latinText: 'The boys run.' }],
       },
     };
     const state = await createFrozenTestDeliveryState(makeVersion(exercise), async () => []);
@@ -307,6 +311,119 @@ describe('test grading foundation', () => {
     ).toEqual({ awardedPoints: 4.5, maxPoints: 6 });
   });
 
+  it('does not credit a matching item with a duplicate display value but the wrong ID', () => {
+    const exercise: MatchingExercise = {
+      id: 'matching-duplicates',
+      type: 'matching',
+      title: 'Matching',
+      instructions: '',
+      maxPoints: 2,
+      feedbackConfig,
+      data: {
+        leftColumn: [{ id: 'left-a', value: 'A' }],
+        rightColumn: [
+          { id: 'right-a', value: 'Same label' },
+          { id: 'right-b', value: 'Same label' },
+        ],
+        answers: { 'left-a': 'right-a' },
+      },
+    };
+
+    expect(
+      gradeMatching(exercise, {
+        type: 'matching',
+        rounds: [{ 'left-a': 'right-b' }],
+      })
+    ).toEqual({ awardedPoints: 0, maxPoints: 2 });
+  });
+
+  it('rejects fractional matching repetitions before they can award more than maxPoints', () => {
+    const exercise: MatchingExercise = {
+      id: 'matching-fractional-rounds',
+      type: 'matching',
+      title: 'Matching',
+      instructions: '',
+      maxPoints: 2,
+      feedbackConfig,
+      data: {
+        leftColumn: [{ id: 'left-a', value: 'A' }],
+        rightColumn: [{ id: 'right-a', value: 'One' }],
+        answers: { 'left-a': 'right-a' },
+        requiredRepetitions: 1.5,
+      },
+    };
+
+    expect(() =>
+      gradeMatching(exercise, {
+        type: 'matching',
+        rounds: [{ 'left-a': 'right-a' }, { 'left-a': 'right-a' }],
+      })
+    ).toThrow('invalid requiredRepetitions');
+  });
+
+  it('fails strict click-selection scoring when any extra word is selected', () => {
+    const exercise: ClickOnMultipleWordsExercise = {
+      id: 'strict-click',
+      type: 'click-on-multiple-words',
+      title: 'Click',
+      instructions: '',
+      maxPoints: 3,
+      feedbackConfig,
+      data: {
+        passage: 'amo amas amat',
+        correctWordIndices: [0, 1],
+        allowOverSelection: false,
+      },
+    };
+
+    expect(
+      gradeClickOnMultipleWords(exercise, {
+        type: 'click-on-multiple-words',
+        selectedWordIndices: [0, 1, 2],
+      })
+    ).toEqual({ awardedPoints: 0, maxPoints: 3 });
+
+    expect(
+      gradeClickOnMultipleWords(exercise, {
+        type: 'click-on-multiple-words',
+        selectedWordIndices: [0],
+      })
+    ).toEqual({ awardedPoints: 1.5, maxPoints: 3 });
+  });
+
+  it('requires a nonblank explanation only when odd-one-out config requires one', () => {
+    const exercise: OddOneOutExercise = {
+      id: 'odd-one',
+      type: 'odd-one-out',
+      title: 'Odd one out',
+      instructions: '',
+      maxPoints: 2,
+      feedbackConfig,
+      data: {
+        question: 'Which one differs?',
+        items: [
+          { id: 'regular', text: 'Regular', isOddOneOut: false },
+          { id: 'odd', text: 'Odd', isOddOneOut: true },
+        ],
+        requireExplanation: true,
+      },
+    };
+    const blankAnswer = {
+      type: 'odd-one-out' as const,
+      selectedItemId: 'odd',
+      explanation: '<p><br>&nbsp;\u200B</p>',
+    };
+
+    expect(gradeOddOneOut(exercise, blankAnswer)).toEqual({ awardedPoints: 0, maxPoints: 2 });
+    expect(gradeOddOneOut(exercise, { ...blankAnswer, explanation: '<p>It has a different ending.</p>' })).toEqual({
+      awardedPoints: 2,
+      maxPoints: 2,
+    });
+    expect(gradeOddOneOut({ ...exercise, data: { ...exercise.data, requireExplanation: false } }, blankAnswer)).toEqual(
+      { awardedPoints: 2, maxPoints: 2 }
+    );
+  });
+
   it('does not throw when a multi-answer morphology response skips an intermediate step', () => {
     const exercise = {
       id: 'multi-morphology',
@@ -424,11 +541,7 @@ describe('test grading foundation', () => {
       ],
     }));
 
-    const state = await createFrozenTestDeliveryState(
-      version,
-      async () => [],
-      loadVocabularyPool as never
-    );
+    const state = await createFrozenTestDeliveryState(version, async () => [], loadVocabularyPool as never);
     const delivery = sanitizeTestDeliveryState(state);
 
     expect(loadVocabularyPool).toHaveBeenCalledWith('pool-one');

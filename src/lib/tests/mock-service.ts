@@ -27,9 +27,11 @@ import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lo
 import { TestAttemptService } from './attempt-service';
 import { TestServiceError } from './errors';
 import {
+  assertVersionReadyForStudentVisibility,
   buildVersion,
   configurationError,
   getVersionSummaries,
+  isStoredVersionReadyForStudentVisibility,
   parseMockSnapshot,
   parseTestSnapshot,
   parseVersionSnapshot,
@@ -42,7 +44,6 @@ import {
   moveStandaloneMockToTestInputSchema,
   reactivateStandaloneMockInputSchema,
   reorderMockTestsInputSchema,
-  testVersionDocumentSchema,
   updateMockTestInputSchema,
   updateTestVersionInputSchema,
   type AssignVersionToMockInput,
@@ -161,11 +162,10 @@ export class MockTestService {
       );
     }
     if (parsed.data.unitIds.includes(test.id)) {
-      const snapshots = await transaction.getAll(...rotationVersionIds.map(versionId => this.versions.doc(versionId)));
-      const invalid = snapshots.find(
-        snapshot =>
-          !snapshot.exists || !testVersionDocumentSchema.safeParse({ ...snapshot.data(), id: snapshot.id }).success
+      const snapshots = await Promise.all(
+        rotationVersionIds.map(versionId => transaction.get(this.versions.doc(versionId)))
       );
+      const invalid = snapshots.find(snapshot => !isStoredVersionReadyForStudentVisibility(snapshot));
       if (invalid) {
         throw new TestServiceError(
           'PLACED_TEST_REQUIRES_ROTATION_VERSION',
@@ -238,7 +238,7 @@ export class MockTestService {
       transaction.get(this.db.collection('lessons').where('kind', '==', 'test')),
       transaction.get(this.mocks.where('status', '==', 'active')),
     ]);
-    parseVersionSnapshot(versionSnapshot);
+    const version = parseVersionSnapshot(versionSnapshot);
     for (const snapshot of testSnapshots.docs) {
       const test = parseTestSnapshot(snapshot);
       if (test.rotationVersions.some(reference => reference.versionId === versionId) && test.id !== targetTestId) {
@@ -260,6 +260,7 @@ export class MockTestService {
         );
       }
     }
+    return version;
   }
 
   private buildMock(
@@ -432,7 +433,7 @@ export class MockTestService {
         transaction.get(mockRef),
       ]);
       const test = parseTestSnapshot(testSnapshot);
-      parseVersionSnapshot(versionSnapshot);
+      const version = parseVersionSnapshot(versionSnapshot);
       const existing = priorMock.exists ? parseMockSnapshot(priorMock) : undefined;
       if (
         existing &&
@@ -446,6 +447,7 @@ export class MockTestService {
       if (!inRotation && !existing)
         throw new TestServiceError('TEST_VERSION_NOT_IN_TEST', 'Test version is not assigned to this test', 409);
       await this.assertVersionClaim(transaction, parsed.versionId, parsed.testId, mockRef.id);
+      assertVersionReadyForStudentVisibility(version);
       const remainingRotationIds = test.rotationVersions
         .filter(reference => reference.versionId !== parsed.versionId)
         .map(reference => reference.versionId);
@@ -498,7 +500,8 @@ export class MockTestService {
       let parent: TestUnit | undefined;
       if (mock.parent.kind === 'test')
         parent = parseTestSnapshot(await transaction.get(this.units.doc(mock.parent.testId)));
-      await this.assertVersionClaim(transaction, mock.versionId, parent?.id, mock.id);
+      const version = await this.assertVersionClaim(transaction, mock.versionId, parent?.id, mock.id);
+      if (parent) assertVersionReadyForStudentVisibility(version);
       const archived = this.buildMock({ ...mock, status: 'archived', isLive: false, mockOrder: null }, actorId, mock);
       const liveScope = await this.readLiveMockOrderScope(transaction);
       transaction.set(mockRef, archived);
@@ -535,7 +538,8 @@ export class MockTestService {
         );
       }
       if (mock.status === 'active') return mock;
-      await this.assertVersionClaim(transaction, mock.versionId, undefined, mock.id);
+      const version = await this.assertVersionClaim(transaction, mock.versionId, undefined, mock.id);
+      assertVersionReadyForStudentVisibility(version);
       const reactivated = this.buildMock(
         {
           ...mock,
@@ -567,7 +571,8 @@ export class MockTestService {
           'Only an active standalone mock can be moved to normal rotation',
           409
         );
-      await this.assertVersionClaim(transaction, mock.versionId, test.id, mock.id);
+      const version = await this.assertVersionClaim(transaction, mock.versionId, test.id, mock.id);
+      assertVersionReadyForStudentVisibility(version);
       if (test.rotationVersions.some(reference => reference.versionId === mock.versionId))
         throw new TestServiceError('VERSION_ALREADY_ASSIGNED', 'Version is already in this test rotation', 409);
       const archived = this.buildMock({ ...mock, status: 'archived', isLive: false, mockOrder: null }, actorId, mock);
@@ -672,7 +677,8 @@ export class MockTestService {
           409
         );
       const isLive = changes.isLive ?? current.isLive;
-      await this.assertVersionClaim(transaction, current.versionId, undefined, current.id);
+      const version = await this.assertVersionClaim(transaction, current.versionId, undefined, current.id);
+      if (!current.isLive && isLive) assertVersionReadyForStudentVisibility(version);
       const updated = this.buildMock(
         {
           ...current,

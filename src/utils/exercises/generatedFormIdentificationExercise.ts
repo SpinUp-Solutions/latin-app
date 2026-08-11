@@ -127,8 +127,9 @@ export interface SingleFieldPartialCredit {
 
 /**
  * Scores each requested grammatical field independently. Submitted paths are
- * paired with distinct expected paths to produce the highest legitimate score;
- * missing and extra values receive no credit and never subtract points.
+ * paired with distinct expected paths to produce the highest legitimate score.
+ * The submitted answer must retain the authored path and field shape so extra
+ * guesses cannot be hidden among otherwise valid partial answers.
  */
 export const scoreSingleFieldFormIdentificationAnswer = (
   userAnswer: string,
@@ -138,10 +139,11 @@ export const scoreSingleFieldFormIdentificationAnswer = (
   const expectedPaths = validatedItem.primaryFormPaths;
   const steps = validatedItem.steps;
   const availableUnits = expectedPaths.length * steps.length;
-  const userPaths = userAnswer
-    .split(';')
-    .map(path => path.split(',').map(normalize))
-    .filter(path => path.some(Boolean));
+  const userPaths = userAnswer.split(';').map(path => path.split(',').map(normalize));
+
+  if (userPaths.length !== expectedPaths.length || userPaths.some(path => path.length > steps.length)) {
+    return { earnedUnits: 0, availableUnits };
+  }
 
   const pathScores = userPaths.map(userPath =>
     expectedPaths.map(expectedPath =>

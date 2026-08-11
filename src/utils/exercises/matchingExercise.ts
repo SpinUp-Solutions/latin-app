@@ -15,13 +15,13 @@ export const validateMatchingExercise = (
 ): MatchingValidationResult => {
   const { rightColumn, answers: finalAnswer } = exercise.data;
 
-  // Get the expected right item value for this left item
+  // Get the expected right item for this left item
   const expectedRightId = finalAnswer[leftItem.id];
   const expectedRightItem = rightColumn.find(item => item.id === expectedRightId);
-  const expectedValue = expectedRightItem?.value;
 
-  // Check if the selected right item's value matches the expected value
-  const isCorrect = Boolean(expectedValue && rightItem.value === expectedValue);
+  // IDs are the authored answer identity. Display values are not necessarily
+  // unique, so comparing labels could credit a different right-side item.
+  const isCorrect = Boolean(expectedRightItem && rightItem.id === expectedRightId);
 
   return {
     isCorrect,

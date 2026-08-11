@@ -23,9 +23,16 @@ describe('single-field generated form partial credit', () => {
     });
   });
 
-  it('accepts aliases and ignores extra values without a penalty', () => {
+  it('rejects extra fields even when every authored field is correct', () => {
     expect(scoreSingleFieldFormIdentificationAnswer('1st,pl,pres,extra', item)).toEqual({
-      earnedUnits: 3,
+      earnedUnits: 0,
+      availableUnits: 3,
+    });
+  });
+
+  it('rejects extra paths instead of selecting the best submitted guess', () => {
+    expect(scoreSingleFieldFormIdentificationAnswer('wrong,wrong,wrong;1st,pl,pres', item)).toEqual({
+      earnedUnits: 0,
       availableUnits: 3,
     });
   });
@@ -46,9 +53,16 @@ describe('single-field generated form partial credit', () => {
     });
   });
 
-  it('gives missing fields zero credit', () => {
+  it('keeps legitimate partial credit when trailing fields are missing', () => {
     expect(scoreSingleFieldFormIdentificationAnswer('first', item)).toEqual({
       earnedUnits: 1,
+      availableUnits: 3,
+    });
+  });
+
+  it('preserves partial credit when the submitted answer has the correct shape', () => {
+    expect(scoreSingleFieldFormIdentificationAnswer('first,,present', item)).toEqual({
+      earnedUnits: 2,
       availableUnits: 3,
     });
   });

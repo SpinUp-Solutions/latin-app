@@ -10,7 +10,8 @@ import { adminDb } from '@/src/services/firebase-admin';
 import type { AdminLearningPathView, LearningPathDocument, LearningUnit } from '@/src/types/learning-unit';
 import type { RotationVersionReference } from '@/src/types/test';
 import { estimateFirestoreDocumentBytes } from '@/src/lib/tests/firestore-size';
-import { mockTestDocumentSchema, testVersionDocumentSchema } from '@/src/lib/tests/schemas';
+import { mockTestDocumentSchema } from '@/src/lib/tests/schemas';
+import { isStoredVersionReadyForStudentVisibility } from '@/src/lib/tests/persistence';
 import { validateTestAssignmentGraph } from '@/src/lib/tests/domain';
 import { normalizeLearningUnit } from './domain';
 import { validateLessonProgression } from '@/src/utils/lessonProgress';
@@ -70,6 +71,7 @@ function assertDocumentSize(document: LearningPathDocument) {
     throw new LearningPathServiceError('LEARNING_PATH_TOO_LARGE', 'The Learning Path is too large to save safely', 422);
   }
 }
+
 export async function assertUnitDeletionAllowedInTransaction(
   transaction: Transaction,
   db: Firestore,
@@ -140,13 +142,7 @@ export async function assertPlacedTestRotationAllowedInTransaction(
   const snapshots = await transaction.getAll(
     ...rotationVersions.map(reference => db.collection(TEST_VERSIONS_COLLECTION).doc(reference.versionId))
   );
-  const invalid = snapshots.find(snapshot => {
-    const parsed = testVersionDocumentSchema.safeParse({
-      ...snapshot.data(),
-      id: snapshot.id,
-    });
-    return !snapshot.exists || !parsed.success;
-  });
+  const invalid = snapshots.find(snapshot => !isStoredVersionReadyForStudentVisibility(snapshot));
   if (invalid) {
     throw new LearningPathServiceError(
       'PLACED_UNIT_INVALID',
@@ -318,13 +314,7 @@ export class LearningPathService {
       : [];
     const validVersionIds = new Set<string>();
     for (const snapshot of versionSnapshots) {
-      if (
-        snapshot.exists &&
-        testVersionDocumentSchema.safeParse({
-          ...snapshot.data(),
-          id: snapshot.id,
-        }).success
-      ) {
+      if (isStoredVersionReadyForStudentVisibility(snapshot)) {
         validVersionIds.add(snapshot.id);
       }
     }

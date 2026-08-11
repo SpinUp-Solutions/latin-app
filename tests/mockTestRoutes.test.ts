@@ -44,7 +44,26 @@ const validMock = {
   version: {
     id: 'version-1',
     name: 'A',
-    pages: [{ id: 'page-1', items: [{ id: 'question-1', type: 'multiple-choice', maxPoints: 1 }] }],
+    pages: [
+      {
+        id: 'page-1',
+        items: [
+          {
+            id: 'question-1',
+            type: 'multiple-choice',
+            maxPoints: 1,
+            data: {
+              question: 'Which answer is correct?',
+              options: [
+                { id: 'answer-a', text: 'A', isCorrect: true },
+                { id: 'answer-b', text: 'B', isCorrect: false },
+              ],
+              allowMultipleSelections: false,
+            },
+          },
+        ],
+      },
+    ],
   },
 };
 
