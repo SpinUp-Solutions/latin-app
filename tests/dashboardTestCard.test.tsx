@@ -85,4 +85,10 @@ describe('student dashboard test card', () => {
 
     expect(screen.getByRole('link', { name: /Practice with the Chapter 4 rehearsal Mock Test/i })).toHaveAttribute('href', '/test/mock-1?origin=mock');
   });
+
+  it('uses the same fixed-height footprint as lesson cards', () => {
+    const { container } = render(<TestCard test={testSummary()} onTestClick={jest.fn()} />);
+
+    expect(container.firstChild).toHaveClass('h-36');
+  });
 });
