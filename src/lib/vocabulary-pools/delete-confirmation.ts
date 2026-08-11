@@ -13,12 +13,13 @@ export function buildVocabularyPoolDeleteConfirmation(
   usageStatus: 'available' | 'unavailable'
 ): string {
   const opening = `Are you sure you want to delete "${poolName}"?`;
-
   if (usageStatus !== 'available') {
-    return `${opening}\n\nAssignments could not be checked. Deleting this pool may break lessons or exercises that use it.\n\nThis action cannot be undone.`;
+    return `${opening}\n\nAssignments could not be checked, so this pool cannot be deleted right now.`;
   }
 
-  if (usages.length === 0) return `${opening} This action cannot be undone.`;
+  if (usages.length === 0) {
+    return `${opening}\n\nThe pool will be archived and removed from management. This action cannot be undone.`;
+  }
 
   const usageNames = usages
     .slice(0, USAGE_LIMIT)
@@ -28,5 +29,5 @@ export function buildVocabularyPoolDeleteConfirmation(
   const overflow = remaining > 0 ? `\n• +${remaining} more` : '';
   const assignment = usages.length === 1 ? 'assignment' : 'assignments';
 
-  return `${opening}\n\nThis pool is assigned to ${usages.length} saved ${assignment}:\n${usageNames}${overflow}\n\nDeleting it may break that saved content. This action cannot be undone.`;
+  return `${opening}\n\nThis pool is assigned to ${usages.length} saved ${assignment}:\n${usageNames}${overflow}\n\nRemove these assignments before deleting the pool.`;
 }

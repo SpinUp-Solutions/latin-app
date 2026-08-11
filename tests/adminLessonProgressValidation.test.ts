@@ -4,6 +4,9 @@ const setLesson = jest.fn();
 let existingLessonData: Record<string, unknown>;
 let learningPathData: Record<string, unknown> | undefined;
 const getDocument = jest.fn(async (target: { collection?: string; id?: string }) => {
+  if (target.collection === 'content_sync_locks') {
+    return { id: target.id, exists: false, data: () => undefined };
+  }
   if (target.collection === 'learningPaths') {
     return {
       id: 'default',
@@ -27,8 +30,7 @@ jest.mock('@/src/lib/verifyAdminAccess', () => ({
 
 jest.mock('@/src/services/firebase-admin', () => ({
   adminDb: {
-    runTransaction: (callback: (transaction: unknown) => unknown) =>
-      callback({ get: getDocument, set: setLesson }),
+    runTransaction: (callback: (transaction: unknown) => unknown) => callback({ get: getDocument, set: setLesson }),
     collection: (collection: string) => ({
       doc: (id: string) => ({ collection, id, get: getDocument, set: setLesson }),
     }),

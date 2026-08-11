@@ -1,5 +1,6 @@
-import { FieldPath, type Firestore, type Query, type QueryDocumentSnapshot } from 'firebase-admin/firestore';
+import type { Firestore, Query, QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
+import { getReadableVocabularyPool, loadVocabularyPoolWords } from '@/src/lib/vocabulary-pools/archive.server';
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
 import type { GeneratorFilters, FormSelection } from '@/src/types/exercises/base';
 import type { FormParadigm, ParadigmConfigs } from '@/src/types/exercises/paradigm';
@@ -154,32 +155,44 @@ function mapWord(doc: QueryDocumentSnapshot, spec: WordQuerySpec): ExerciseWordR
       ? selection.optionalPaths.map(path => parseFormPathFromString(path, parsedTableType)).filter(Boolean)
       : undefined;
 
-  return {
-    ...data,
+  const result = {
     id: doc.id,
     root_word: String(data.word || ''),
     dictionary_entry: typeof data.dictionary_entry === 'string' ? data.dictionary_entry : null,
     selected_form: selection?.selected.form || String(data.word || ''),
+    part_of_speech: data.part_of_speech,
     form_path: formPath,
     primary_form_paths: primary?.length ? primary : undefined,
     optional_form_paths: optional?.length ? optional : undefined,
-  } as unknown as ExerciseWordResponse;
+    ...(typeof data.conjugation === 'string' ? { conjugation: data.conjugation } : {}),
+    ...(typeof data.declension === 'string' ? { declension: data.declension } : {}),
+    ...(Array.isArray(data.definitions)
+      ? { definitions: data.definitions.filter(value => typeof value === 'string') }
+      : {}),
+    ...(typeof data.is_deponent === 'boolean' ? { is_deponent: data.is_deponent } : {}),
+    ...(typeof data.translation === 'string' ? { translation: data.translation } : {}),
+    ...(typeof data.gender === 'string' ? { gender: data.gender } : {}),
+    ...(typeof data.pronoun_type === 'string' ? { pronoun_type: data.pronoun_type } : {}),
+    ...(typeof data.person === 'string' || data.person === null ? { person: data.person } : {}),
+  };
+  return result as ExerciseWordResponse;
 }
 
-async function loadPoolDocuments(db: Firestore, collection: string, poolId: string, limit?: number | 'all') {
-  const pool = await db.collection('vocabulary_pools').doc(poolId).get();
-  if (!pool.exists) throw new Error(`Vocabulary pool ${poolId} was not found`);
-  const allIds = (pool.data()?.wordDocIds || []) as string[];
-  const ids = limit === 'all' || limit === undefined ? allIds : shuffle(allIds).slice(0, limit);
-  const snapshots = await Promise.all(
-    Array.from({ length: Math.ceil(ids.length / 10) }, (_, index) =>
-      db
-        .collection(collection)
-        .where(FieldPath.documentId(), 'in', ids.slice(index * 10, index * 10 + 10))
-        .get()
-    )
-  );
-  return snapshots.flatMap(snapshot => snapshot.docs);
+export function requireGeneratedVocabularyCollection(collection?: string): string {
+  if (!collection || collection === VOCABULARY_WORDS_COLLECTION) return VOCABULARY_WORDS_COLLECTION;
+  if (/^vocabulary_words_v\d+$/.test(collection)) return VOCABULARY_WORDS_COLLECTION;
+  throw new Error('Generated exercises must use the configured vocabulary collection');
+}
+
+async function loadPoolDocuments(db: Firestore, poolId: string, limit?: number | 'all') {
+  const pool = await getReadableVocabularyPool(db, poolId);
+  if (!pool) throw new Error(`Vocabulary pool ${poolId} was not found`);
+  const wordIds = Array.isArray(pool.data.wordDocIds)
+    ? pool.data.wordDocIds.filter((id: unknown): id is string => typeof id === 'string' && Boolean(id))
+    : [];
+  const selectedWordIds =
+    limit === 'all' || limit === undefined || limit >= wordIds.length ? wordIds : shuffle(wordIds).slice(0, limit);
+  return loadVocabularyPoolWords(pool, selectedWordIds);
 }
 
 async function loadQueryDocuments(db: Firestore, collection: string, spec: WordQuerySpec, count: number | 'all') {
@@ -210,13 +223,15 @@ async function loadQueryDocuments(db: Firestore, collection: string, spec: WordQ
 export function createFirestoreGeneratedWordLoader(db: Firestore): GeneratedWordLoader {
   return async exercise => {
     const config = exercise.data.generatorConfig;
-    const collection = normalizeCollection(config.collection || VOCABULARY_WORDS_COLLECTION);
+    const collection = requireGeneratedVocabularyCollection(
+      normalizeCollection(config.collection || VOCABULARY_WORDS_COLLECTION)
+    );
     const specs = getQuerySpecs(exercise);
     const count = config.count || 'all';
     const poolId = config.wordSource === 'pool' ? config.poolId : null;
 
     if (poolId) {
-      const documents = await loadPoolDocuments(db, collection, poolId, config.poolWordLimit || 'all');
+      const documents = await loadPoolDocuments(db, poolId, config.poolWordLimit || 'all');
       const activeSpecs = specs.length ? specs : [{ filters: {} }];
       const words = activeSpecs.flatMap(spec =>
         documents

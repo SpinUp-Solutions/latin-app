@@ -11,6 +11,7 @@ import {
   useGetPoolsQuery,
   useDeletePoolMutation,
   useGetVocabularyPoolUsagesQuery,
+  usePreparePoolDeletionMutation,
 } from '@/src/store/api/vocabularyPoolApi';
 import { getApiErrorMessage } from '@/src/store/api/baseQuery';
 import { useAppSelector, useAppDispatch } from '@/src/store/hooks';
@@ -31,6 +32,7 @@ function VocabularyPoolsPage() {
     error: usageError,
     isLoading: usageLoading,
   } = useGetVocabularyPoolUsagesQuery(undefined, { refetchOnMountOrArgChange: true });
+  const [preparePoolDeletion] = usePreparePoolDeletionMutation();
   const [deletePoolMutation] = useDeletePoolMutation();
 
   const pools = data?.pools ?? [];
@@ -38,18 +40,45 @@ function VocabularyPoolsPage() {
   const loadingMore = isFetching && lastPoolId !== null;
   const usageStatus = usageData?.status ?? 'unavailable';
   const usageUnavailable = Boolean(usageError) || (!usageLoading && usageStatus === 'unavailable');
-  const usageUnavailableMessage = `${usageData?.message ?? 'Assignment checks are unavailable.'} You can still delete a pool, but it may break lessons or exercises.`;
+  const usageUnavailableMessage = `${usageData?.message ?? 'Assignment checks are unavailable.'} Deletion is disabled until assignments can be verified.`;
 
   useEffect(() => {
     setLastPoolId(null);
   }, [filters]);
 
-  const handleDeletePool = async (poolId: string, poolName: string) => {
-    const usages = usageStatus === 'available' ? (usageData?.usagesByPoolId[poolId] ?? []) : [];
-    if (!window.confirm(buildVocabularyPoolDeleteConfirmation(poolName, usages, usageStatus))) return;
+  const handleDeletePool = async (poolId: string) => {
+    let challenge;
+    try {
+      challenge = await preparePoolDeletion(poolId).unwrap();
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to check pool assignments'));
+      return;
+    }
+
+    if (challenge.usageStatus !== 'available') {
+      toast.error('Assignment checks are unavailable. The pool was not deleted.');
+      return;
+    }
+    if (challenge.usages.length > 0) {
+      toast.error(
+        `Remove this pool from ${challenge.usages.length} saved ${challenge.usages.length === 1 ? 'assignment' : 'assignments'} before deleting it.`
+      );
+      return;
+    }
+
+    if (
+      !window.confirm(
+        buildVocabularyPoolDeleteConfirmation(challenge.poolName, challenge.usages, challenge.usageStatus)
+      )
+    ) {
+      return;
+    }
 
     try {
-      await deletePoolMutation(poolId).unwrap();
+      await deletePoolMutation({
+        poolId,
+        confirmationToken: challenge.token,
+      }).unwrap();
       toast.success('Pool deleted successfully');
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Failed to delete pool'));

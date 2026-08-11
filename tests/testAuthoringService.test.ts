@@ -50,11 +50,41 @@ const versionDocument = {
 const { pages: _versionPages, ...versionSummaryDocument } = versionDocument;
 
 describe('test persistence service', () => {
+  it('rejects a test assignment transaction while production-content maintenance owns the lock', async () => {
+    const create = jest.fn();
+    const transaction = {
+      get: jest.fn(async (ref: { collection: string; id: string }) =>
+        ref.collection === 'content_sync_locks' ? snapshot(ref.id, { ownerId: 'sync-owner' }) : snapshot(ref.id)
+      ),
+      create,
+      update: jest.fn(),
+    };
+    const db = {
+      collection: (collection: string) => ({ doc: (id: string) => ({ collection, id }) }),
+      runTransaction: (callback: (value: typeof transaction) => unknown) => callback(transaction),
+    };
+    const service = new TestAuthoringService(db as never, () => timestamp);
+
+    await expect(
+      service.createTestWithVersion(
+        {
+          test: { id: 'test-1', title: 'Chapter test', description: '', passingPercentage: 70 },
+          version: { id: 'version-1', name: 'Version A', pages, vocabularyPoolId: 'pool-1' },
+        },
+        'admin-1'
+      )
+    ).rejects.toMatchObject({ status: 409, code: 'VOCABULARY_CONTENT_SYNC_IN_PROGRESS' });
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it('creates the container and first derived version in one transaction', async () => {
     const create = jest.fn();
     const transaction = {
-      get: jest.fn(async (ref: { id: string }) => snapshot(ref.id)),
+      get: jest.fn(async (ref: { collection: string; id: string }) =>
+        ref.collection === 'vocabulary_pools' ? snapshot(ref.id, { name: 'Pool' }) : snapshot(ref.id)
+      ),
       create,
+      update: jest.fn(),
     };
     const db = {
       collection: (collection: string) => ({
@@ -100,12 +130,19 @@ describe('test persistence service', () => {
   it('updates test settings and an assigned version in one transaction', async () => {
     const set = jest.fn();
     const transaction = {
-      get: jest.fn(async (ref: { id: string }) =>
-        ref.id === 'test-1'
-          ? snapshot('test-1', testDocument)
-          : snapshot('version-1', { ...versionDocument, vocabularyPoolId: 'pool-existing' })
+      get: jest.fn(async (ref: { collection: string; id: string }) =>
+        ref.collection === 'content_sync_locks'
+          ? snapshot(ref.id)
+          : ref.collection === 'vocabulary_pools'
+            ? snapshot(ref.id, { name: 'Pool' })
+            : ref.collection === 'deleted_vocabulary_pools'
+              ? snapshot(ref.id)
+              : ref.id === 'test-1'
+                ? snapshot('test-1', testDocument)
+                : snapshot('version-1', { ...versionDocument, vocabularyPoolId: 'pool-existing' })
       ),
       set,
+      update: jest.fn(),
     };
     const db = {
       collection: (collection: string) => ({
@@ -146,10 +183,12 @@ describe('test persistence service', () => {
 
   it('refuses a stale normal-version save after ownership leaves the rotation', async () => {
     const transaction = {
-      get: jest.fn(async (ref: { id: string }) =>
-        ref.id === 'test-1'
-          ? snapshot('test-1', { ...testDocument, rotationVersions: [] })
-          : snapshot('version-1', versionDocument)
+      get: jest.fn(async (ref: { collection?: string; id: string }) =>
+        ref.collection === 'content_sync_locks'
+          ? snapshot(ref.id)
+          : ref.id === 'test-1'
+            ? snapshot('test-1', { ...testDocument, rotationVersions: [] })
+            : snapshot('version-1', versionDocument)
       ),
       set: jest.fn(),
     };

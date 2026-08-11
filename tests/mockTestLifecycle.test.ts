@@ -19,9 +19,7 @@ type LiveOrderedMockFixture = OrderedMockFixture & { mockOrder: number };
 type Ref = { collection: string; id: string; get: () => Promise<Snapshot> };
 type Snapshot = { id: string; exists: boolean; data: () => Fixture | undefined };
 type Query = { __collection: string; get: () => Promise<{ docs: Snapshot[] }> };
-type Write =
-  | { kind: 'set' | 'create'; ref: Ref; value: Fixture }
-  | { kind: 'delete'; ref: Ref };
+type Write = { kind: 'set' | 'create'; ref: Ref; value: Fixture } | { kind: 'delete'; ref: Ref };
 type Transaction = {
   get: (source: Ref | Query) => Promise<Snapshot | { docs: Snapshot[] }>;
   set: (ref: Ref, value: Fixture) => void;
@@ -451,6 +449,45 @@ describe('mock transactional lifecycle', () => {
     });
   });
 
+  it('does not duplicate archived pool assignments into either new version path', async () => {
+    const archivedVersion = { ...version, vocabularyPoolId: 'archived-pool' };
+    const normalMemory = mockDb({
+      lessons: { t1: { ...test, rotationVersions: [{ versionId: 'v1' }] } },
+      testVersions: { v1: archivedVersion },
+      testVersionDrafts: {},
+      deleted_vocabulary_pools: { 'archived-pool': { archiveId: 'archive-1' } },
+      mockTests: {},
+      mockTestOrdering: {},
+      learningPaths: {},
+    });
+    await expect(
+      new TestAuthoringService(normalMemory.db as never, () => at).duplicateTestVersion(
+        't1',
+        'v1',
+        { requestId: 'archived-copy' },
+        'admin-2'
+      )
+    ).rejects.toMatchObject({ code: 'VOCABULARY_POOL_ARCHIVED' });
+
+    const standalone = { ...mock, id: 'standalone-1', parent: { kind: 'standalone' as const } };
+    const mockMemory = mockDb({
+      lessons: { t1: test },
+      testVersions: { v1: archivedVersion },
+      testVersionDrafts: {},
+      deleted_vocabulary_pools: { 'archived-pool': { archiveId: 'archive-1' } },
+      mockTests: { 'standalone-1': standalone },
+      mockTestOrdering: {},
+      learningPaths: {},
+    });
+    await expect(
+      new MockTestService(mockMemory.db as never, () => at).duplicateStandaloneMockVersionIntoTest(
+        'standalone-1',
+        { testId: 't1', requestId: 'archived-mock-copy' },
+        'admin-2'
+      )
+    ).rejects.toMatchObject({ code: 'VOCABULARY_POOL_ARCHIVED' });
+  });
+
   it('keeps incomplete versions inactive until an explicit successful activation', async () => {
     const memory = mockDb({
       lessons: { t1: test },
@@ -470,12 +507,7 @@ describe('mock transactional lifecycle', () => {
     await expect(service.activateTestVersion('t1', 'draft-1', 'admin')).rejects.toBeDefined();
     expect(memory.get('testVersionDrafts', 'draft-1')).toBeDefined();
 
-    await service.updateTestVersionDraft(
-      't1',
-      'draft-1',
-      { name: 'Ready', pages: version.pages },
-      'admin'
-    );
+    await service.updateTestVersionDraft('t1', 'draft-1', { name: 'Ready', pages: version.pages }, 'admin');
     const activated = await service.activateTestVersion('t1', 'draft-1', 'admin');
     expect(activated.version).toMatchObject({ id: 'draft-1', name: 'Ready', totalExercises: 1 });
     expect(memory.get('testVersionDrafts', 'draft-1')).toBeUndefined();

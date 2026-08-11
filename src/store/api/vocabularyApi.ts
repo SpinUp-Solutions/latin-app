@@ -6,6 +6,7 @@ import { z, ZodError } from 'zod';
 
 type ZodIssue = z.core.$ZodIssue;
 import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
+import { vocabularyPoolApi } from './vocabularyPoolApi';
 
 interface WordsResponse {
   success: boolean;
@@ -25,9 +26,12 @@ interface WordsResponse {
 export interface DeleteWordResponse {
   success: boolean;
   warning?: boolean;
+  confirmationToken?: string;
   referencedPools?: { id: string; name: string }[];
+  referencedPoolCount?: number;
   message?: string;
   cleanedPools?: string[];
+  cleanedPoolCount?: number;
 }
 
 export interface VocabularySearchResult {
@@ -169,6 +173,7 @@ export const vocabularyApi = createApi({
 
         try {
           await queryFulfilled;
+          dispatch(vocabularyPoolApi.util.invalidateTags([{ type: 'Pool', id: 'STUDENT_LIST' }]));
         } catch {
           patchResults.forEach(patch => patch.undo());
         }
@@ -216,12 +221,21 @@ export const vocabularyApi = createApi({
         response.data.words,
     }),
 
-    deleteWord: builder.mutation<DeleteWordResponse, { wordId: string; confirm?: boolean }>({
-      query: ({ wordId, confirm }) => ({
-        url: `/admin/words/${wordId}${confirm ? '?confirm=true' : ''}`,
+    deleteWord: builder.mutation<DeleteWordResponse, { wordId: string; confirmationToken?: string }>({
+      query: ({ wordId, confirmationToken }) => ({
+        url: `/admin/words/${wordId}`,
         method: 'DELETE',
+        ...(confirmationToken ? { body: { confirmationToken } } : {}),
       }),
       transformResponse: (response: DeleteWordResponse) => response,
+      async onQueryStarted(_argument, { dispatch, queryFulfilled }) {
+        try {
+          await queryFulfilled;
+          dispatch(vocabularyPoolApi.util.invalidateTags([{ type: 'Pool', id: 'STUDENT_LIST' }]));
+        } catch {
+          // Failed deletions leave cached pool content unchanged.
+        }
+      },
       invalidatesTags: result =>
         result?.success
           ? [

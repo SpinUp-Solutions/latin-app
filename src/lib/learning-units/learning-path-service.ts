@@ -17,6 +17,7 @@ import { validateLessonProgression } from '@/src/utils/lessonProgress';
 import type { Lesson } from '@/src/types/lesson';
 import { learningPathDocumentSchema, saveLearningPathInputSchema, type SaveLearningPathInput } from './schemas';
 import { LearningPathServiceError } from './learning-path-errors';
+import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
 
 export { LearningPathServiceError } from './learning-path-errors';
 
@@ -378,7 +379,7 @@ export class LearningPathService {
   async save(input: SaveLearningPathInput, actorId: string): Promise<LearningPathDocument> {
     const parsedInput = saveLearningPathInputSchema.parse(input);
 
-    return this.db.runTransaction(async transaction => {
+    return runVocabularyContentMutation(this.db, async transaction => {
       const pathSnapshot = await transaction.get(this.pathRef());
       const currentPath = learningPathFromSnapshot(pathSnapshot);
       if (!currentPath) {

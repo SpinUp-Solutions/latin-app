@@ -1,4 +1,5 @@
-import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import { createApi } from '@reduxjs/toolkit/query/react';
+import type { FetchBaseQueryError } from '@reduxjs/toolkit/query';
 import { type VocabularyWordWithId } from '@/src/types/vocabulary/index';
 import type { TableType } from '@/src/utils/schema-helpers';
 import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
@@ -9,7 +10,11 @@ import { getExerciseAdditionalFields } from '@/src/config/exerciseSelectFields';
 import { composeSelectFields } from '@/src/utils/generated/selectComposer';
 import { deriveTableTypeFromPOS } from '@/src/utils/generated/tableType';
 import { filterOverlappingPronounParadigms } from '@/src/utils/generated/pronounParadigmFiltering';
+import { normalizeCollection } from '@/src/utils/exercises/legacyExerciseCompat';
 import { PARADIGM_TABLE_TYPE, PARADIGM_POS_GROUP } from '@/src/config/paradigmDefinitions';
+import { createAuthenticatedBaseQuery } from './baseQuery';
+
+export const normalizeAdvancedVocabularyCollection = (collection?: string) => normalizeCollection(collection);
 
 interface GetAdvancedWordsArgs {
   collection?: string;
@@ -40,6 +45,7 @@ export interface GetAdvancedWordsResponse {
     filters: Record<string, string | number | boolean>;
     collection: string;
     totalCount?: number;
+    nextPoolOffset?: number;
   };
 }
 
@@ -72,25 +78,90 @@ function shuffleArray<T>(array: T[]): T[] {
   return result;
 }
 
-function getPoolQueryParams(poolId: string, poolWordLimit?: number | null, poolSampleSeed?: string): URLSearchParams {
+export function getPoolQueryParams(
+  poolId: string,
+  poolWordLimit?: number | null,
+  poolSampleSeed?: string
+): URLSearchParams {
   const params = new URLSearchParams();
   params.append('poolId', poolId);
 
   if (typeof poolWordLimit === 'number' && poolWordLimit > 0) {
-    params.append('limit', String(poolWordLimit));
-    if (poolSampleSeed) {
-      params.append('poolSampleSeed', poolSampleSeed);
-    }
+    params.append('limit', String(Math.min(200, Math.floor(poolWordLimit))));
   } else {
-    params.append('fetchAll', 'true');
+    params.append('limit', '200');
   }
+  if (poolSampleSeed) params.append('poolSampleSeed', poolSampleSeed);
 
   return params;
 }
 
+export async function fetchGeneratedWordPages(
+  baseQuery: (argument: { url: string }) => unknown,
+  initialParams: URLSearchParams,
+  fetchAllPages: boolean,
+  maxPoolIds?: number
+): Promise<{ data?: GetAdvancedWordsResponse; error?: FetchBaseQueryError }> {
+  const words: VocabularyWordWithId[] = [];
+  const params = new URLSearchParams(initialParams);
+  let lastResponse: GetAdvancedWordsResponse | null = null;
+  while (true) {
+    if (params.has('poolId') && typeof maxPoolIds === 'number' && maxPoolIds > 0) {
+      const currentOffset = Number(params.get('poolOffset') ?? '0');
+      const remainingIds = maxPoolIds - currentOffset;
+      if (remainingIds <= 0) break;
+      params.set('limit', String(Math.min(Number(params.get('limit') ?? '200'), remainingIds)));
+    }
+    const result = (await baseQuery({ url: `/words/generated?${params.toString()}` })) as {
+      data?: unknown;
+      error?: FetchBaseQueryError;
+    };
+    if (result.error) return { error: result.error };
+    const response = result.data as GetAdvancedWordsResponse;
+    lastResponse = response;
+    words.push(...response.data.words);
+    if (
+      params.has('poolId') &&
+      typeof maxPoolIds === 'number' &&
+      maxPoolIds > 0 &&
+      Number(response.data.nextPoolOffset) >= maxPoolIds
+    )
+      break;
+    if (!fetchAllPages || !response.data.hasMore) break;
+    if (params.has('poolId')) {
+      const currentOffset = Number(params.get('poolOffset') ?? '0');
+      const nextOffset = response.data.nextPoolOffset;
+      if (!Number.isSafeInteger(nextOffset) || Number(nextOffset) <= currentOffset) {
+        return { error: { status: 'CUSTOM_ERROR', error: 'Invalid generated pool pagination response' } };
+      }
+      params.set('poolOffset', String(nextOffset));
+    } else {
+      const previousCursor = params.get('lastWordId');
+      const nextCursor = response.data.lastWordId;
+      if (!nextCursor || nextCursor === previousCursor) {
+        return { error: { status: 'CUSTOM_ERROR', error: 'Invalid generated word pagination response' } };
+      }
+      params.set('lastWordId', nextCursor);
+    }
+  }
+  if (!lastResponse) return { error: { status: 'CUSTOM_ERROR', error: 'Empty generated word response' } };
+  return {
+    data: {
+      ...lastResponse,
+      data: {
+        ...lastResponse.data,
+        words: typeof maxPoolIds === 'number' && maxPoolIds > 0 ? words.slice(0, maxPoolIds) : words,
+        hasMore: false,
+        lastWordId: null,
+        nextPoolOffset: undefined,
+      },
+    },
+  };
+}
+
 export const advancedVocabularyApi = createApi({
   reducerPath: 'advancedVocabularyApi',
-  baseQuery: fetchBaseQuery({ baseUrl: '/api' }),
+  baseQuery: createAuthenticatedBaseQuery(),
   tagTypes: ['AdvancedWordList'],
   endpoints: builder => ({
     getAdvancedWords: builder.query<GetAdvancedWordsResponse['data'], GetAdvancedWordsArgs>({
@@ -98,7 +169,7 @@ export const advancedVocabularyApi = createApi({
         const params = new URLSearchParams();
 
         if (args.collection) {
-          params.append('collection', args.collection);
+          params.append('collection', normalizeAdvancedVocabularyCollection(args.collection));
         }
         if (args.partOfSpeech && args.partOfSpeech !== 'all') {
           params.append('wordType', args.partOfSpeech);
@@ -208,10 +279,8 @@ export const advancedVocabularyApi = createApi({
     getMultiPosWords: builder.query<GetAdvancedWordsResponse['data'], MultiPosQueryArgs>({
       async queryFn(arg, _api, _extraOptions, baseQuery) {
         const { exerciseType, collection, wordSource, poolId, poolWordLimit, count, posConfigs } = arg;
-        const poolSampleSeed =
-          wordSource === 'pool' && poolId && typeof poolWordLimit === 'number' && poolWordLimit > 0
-            ? Math.random().toString(36).slice(2)
-            : undefined;
+        const normalizedCollection = normalizeAdvancedVocabularyCollection(collection);
+        const poolSampleSeed = wordSource === 'pool' && poolId ? Math.random().toString(36).slice(2) : undefined;
 
         const safePosConfigs = posConfigs && typeof posConfigs === 'object' ? posConfigs : {};
 
@@ -228,12 +297,18 @@ export const advancedVocabularyApi = createApi({
             const additionalFields = getExerciseAdditionalFields(exerciseType);
             const selectFields = composeSelectFields(additionalFields, {});
             const params = getPoolQueryParams(poolId, poolWordLimit, poolSampleSeed);
-            params.append('collection', collection);
+            params.append('collection', normalizedCollection);
+            params.append('exerciseMode', 'true');
             if (selectFields.length > 0) {
               params.append('select', selectFields.join(','));
             }
 
-            const result = await baseQuery({ url: `/admin/words?${params.toString()}` });
+            const result = await fetchGeneratedWordPages(
+              baseQuery,
+              params,
+              true,
+              typeof poolWordLimit === 'number' && poolWordLimit > 0 ? Math.floor(poolWordLimit) : undefined
+            );
             if (result.error) {
               return { error: result.error };
             }
@@ -248,12 +323,21 @@ export const advancedVocabularyApi = createApi({
                 lastWordId: null,
                 limit: null,
                 filters: {},
-                collection,
+                collection: normalizedCollection,
               },
             };
           }
 
-          return { data: { words: [], hasMore: false, lastWordId: null, limit: null, filters: {}, collection } };
+          return {
+            data: {
+              words: [],
+              hasMore: false,
+              lastWordId: null,
+              limit: null,
+              filters: {},
+              collection: normalizedCollection,
+            },
+          };
         }
 
         const additionalFields = getExerciseAdditionalFields(exerciseType);
@@ -266,7 +350,7 @@ export const advancedVocabularyApi = createApi({
             const tableType = deriveTableTypeFromPOS(pos, cfg.filters?.pronounType, cfg.filters?.pronounPerson);
 
             const params = new URLSearchParams();
-            params.append('collection', collection);
+            params.append('collection', normalizedCollection);
             params.append('wordType', pos);
 
             if (wordSource === 'pool') {
@@ -275,9 +359,9 @@ export const advancedVocabularyApi = createApi({
                 poolParams.forEach((value, key) => params.append(key, value));
               }
             } else if (count === 'all') {
-              params.append('fetchAll', 'true');
+              params.append('limit', '200');
             } else if (typeof count === 'number') {
-              params.append('limit', String(count));
+              params.append('limit', String(Math.min(200, Math.max(1, Math.floor(count)))));
               // Use random starting point for true randomization in filter mode
               params.append('randomStart', String(Math.random()));
             }
@@ -321,9 +405,14 @@ export const advancedVocabularyApi = createApi({
               if (cfg.filters.search) params.append('search', cfg.filters.search);
             }
 
-            return baseQuery({
-              url: `/admin/words?${params.toString()}`,
-            });
+            return fetchGeneratedWordPages(
+              baseQuery,
+              params,
+              wordSource === 'pool' ? true : count === 'all',
+              wordSource === 'pool' && typeof poolWordLimit === 'number' && poolWordLimit > 0
+                ? Math.floor(poolWordLimit)
+                : undefined
+            );
           })
         );
 
@@ -349,7 +438,7 @@ export const advancedVocabularyApi = createApi({
             lastWordId: null,
             limit: null,
             filters: {},
-            collection,
+            collection: normalizedCollection,
           },
         };
       },
@@ -360,10 +449,8 @@ export const advancedVocabularyApi = createApi({
     getMultiParadigmWords: builder.query<GetAdvancedWordsResponse['data'], MultiParadigmQueryArgs>({
       async queryFn(arg, _api, _extraOptions, baseQuery) {
         const { exerciseType, collection, wordSource, poolId, poolWordLimit, count, paradigmConfigs } = arg;
-        const poolSampleSeed =
-          wordSource === 'pool' && poolId && typeof poolWordLimit === 'number' && poolWordLimit > 0
-            ? Math.random().toString(36).slice(2)
-            : undefined;
+        const normalizedCollection = normalizeAdvancedVocabularyCollection(collection);
+        const poolSampleSeed = wordSource === 'pool' && poolId ? Math.random().toString(36).slice(2) : undefined;
 
         const safeParadigmConfigs = paradigmConfigs && typeof paradigmConfigs === 'object' ? paradigmConfigs : {};
 
@@ -380,12 +467,18 @@ export const advancedVocabularyApi = createApi({
             const additionalFields = getExerciseAdditionalFields(exerciseType);
             const selectFields = composeSelectFields(additionalFields, {});
             const params = getPoolQueryParams(poolId, poolWordLimit, poolSampleSeed);
-            params.append('collection', collection);
+            params.append('collection', normalizedCollection);
+            params.append('exerciseMode', 'true');
             if (selectFields.length > 0) {
               params.append('select', selectFields.join(','));
             }
 
-            const result = await baseQuery({ url: `/admin/words?${params.toString()}` });
+            const result = await fetchGeneratedWordPages(
+              baseQuery,
+              params,
+              true,
+              typeof poolWordLimit === 'number' && poolWordLimit > 0 ? Math.floor(poolWordLimit) : undefined
+            );
             if (result.error) {
               return { error: result.error };
             }
@@ -400,12 +493,21 @@ export const advancedVocabularyApi = createApi({
                 lastWordId: null,
                 limit: null,
                 filters: {},
-                collection,
+                collection: normalizedCollection,
               },
             };
           }
 
-          return { data: { words: [], hasMore: false, lastWordId: null, limit: null, filters: {}, collection } };
+          return {
+            data: {
+              words: [],
+              hasMore: false,
+              lastWordId: null,
+              limit: null,
+              filters: {},
+              collection: normalizedCollection,
+            },
+          };
         }
 
         const additionalFields = getExerciseAdditionalFields(exerciseType);
@@ -420,7 +522,7 @@ export const advancedVocabularyApi = createApi({
             });
 
             const params = new URLSearchParams();
-            params.append('collection', collection);
+            params.append('collection', normalizedCollection);
             params.append('wordType', pos);
 
             if (wordSource === 'pool') {
@@ -429,9 +531,9 @@ export const advancedVocabularyApi = createApi({
                 poolParams.forEach((value, key) => params.append(key, value));
               }
             } else if (count === 'all') {
-              params.append('fetchAll', 'true');
+              params.append('limit', '200');
             } else if (typeof count === 'number') {
-              params.append('limit', String(count));
+              params.append('limit', String(Math.min(200, Math.max(1, Math.floor(count)))));
               params.append('randomStart', String(Math.random()));
             }
 
@@ -482,9 +584,14 @@ export const advancedVocabularyApi = createApi({
               }
             }
 
-            return baseQuery({
-              url: `/admin/words?${params.toString()}`,
-            });
+            return fetchGeneratedWordPages(
+              baseQuery,
+              params,
+              wordSource === 'pool' ? true : count === 'all',
+              wordSource === 'pool' && typeof poolWordLimit === 'number' && poolWordLimit > 0
+                ? Math.floor(poolWordLimit)
+                : undefined
+            );
           })
         );
 
@@ -512,7 +619,7 @@ export const advancedVocabularyApi = createApi({
             lastWordId: null,
             limit: null,
             filters: {},
-            collection,
+            collection: normalizedCollection,
           },
         };
       },

@@ -62,6 +62,9 @@ jest.mock('@/src/services/firebase-admin', () => {
       ) =>
         callback({
           get: async ref => {
+            if (ref.collectionName === 'content_sync_locks') {
+              return { id: ref.id, exists: false, data: () => undefined };
+            }
             if (ref.collectionName === 'learningPaths') {
               return {
                 id: 'default',

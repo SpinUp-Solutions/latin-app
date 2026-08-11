@@ -6,6 +6,7 @@ import type { Lesson } from '@/src/types/lesson';
 import { validateLessonProgression } from '@/src/utils/lessonProgress';
 import { assertLegacyNormalPlacementAllowedInTransaction } from '@/src/lib/learning-units/learning-path-service';
 import { LearningPathServiceError } from '@/src/lib/learning-units/learning-path-errors';
+import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
 
 interface UpdateRequest {
   lessonIds: string[];
@@ -61,7 +62,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'startOrder must be a nonnegative integer' }, { status: 400 });
     }
 
-    const processedCount = await adminDb.runTransaction(async transaction => {
+    const processedCount = await runVocabularyContentMutation(adminDb, async transaction => {
       if (lessonType === 'normal') {
         await assertLegacyNormalPlacementAllowedInTransaction(transaction, adminDb);
       }

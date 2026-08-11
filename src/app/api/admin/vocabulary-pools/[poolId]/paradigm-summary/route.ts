@@ -5,25 +5,18 @@ import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 import type { FormParadigm } from '@/src/types/exercises/paradigm';
 import { deriveParadigm } from '@/src/utils/paradigm';
 import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
-
-interface ParadigmSummaryResponse {
-  success: boolean;
-  data: {
-    paradigmSummary: Partial<Record<FormParadigm, number>>;
-    posSummary: Partial<Record<PartOfSpeech, number>>;
-    totalWords: number;
-    poolId: string;
-  };
-}
+import { AdminAccessError, verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ poolId: string }> }
-): Promise<NextResponse<ParadigmSummaryResponse>> {
-  const { poolId } = await params;
+): Promise<NextResponse> {
+  let poolId = '';
   try {
+    await verifyAdminAccess(request);
+    ({ poolId } = await params);
     const poolDoc = await adminDb.collection('vocabulary_pools').doc(poolId).get();
 
     if (!poolDoc.exists) {
@@ -99,6 +92,9 @@ export async function GET(
       },
     });
   } catch (error) {
+    if (error instanceof AdminAccessError) {
+      return NextResponse.json({ success: false, error: error.message }, { status: error.status });
+    }
     console.error('Error fetching paradigm summary:', error);
     return NextResponse.json(
       {

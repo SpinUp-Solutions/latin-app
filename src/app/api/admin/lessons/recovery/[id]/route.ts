@@ -15,6 +15,8 @@ import {
   assertPlacedLessonReplacementAllowedInTransaction,
 } from '@/src/lib/learning-units/learning-path-service';
 import { lessonAuthoringInputSchema, lessonUnitDocumentSchema } from '@/src/lib/learning-units/schemas';
+import { assertVocabularyPoolAssignmentsAllowedInTransaction } from '@/src/lib/vocabulary-pools/assignment.server';
+import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
 
 interface RouteParams {
   params: Promise<{
@@ -44,7 +46,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const { id } = await params;
     const recoveryId = id;
     const recoveryRef = adminDb.collection('lesson_recovery').doc(recoveryId);
-    const result = await adminDb.runTransaction(async transaction => {
+    const result = await runVocabularyContentMutation(adminDb, async transaction => {
       const recoveryDoc = await transaction.get(recoveryRef);
       if (!recoveryDoc.exists) {
         throw new RecoveryRouteError('Recovery item not found', 404);
@@ -134,6 +136,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         type: lessonData.type,
         pages: lessonData.pages || [],
       });
+      const applyVocabularyPoolAssignmentRevisions = await assertVocabularyPoolAssignmentsAllowedInTransaction(
+        transaction,
+        adminDb,
+        lessonExists ? existingLesson : undefined,
+        lessonData
+      );
       const assignments = await practiceCategoryService.reconcileLessonCategoriesInTransaction(transaction, {
         lessonId: lesson.id,
         lesson: lessonData,
@@ -142,6 +150,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           : { desiredCategoryIds: lessonExists ? practiceCategoryIds : (practiceCategoryIds ?? []) }),
         actorId: user.uid,
       });
+      applyVocabularyPoolAssignmentRevisions();
       transaction.set(lessonRef, lessonData);
       transaction.update(recoveryRef, { status: 'recovered', recoveredAt: now });
       return { lessonExists, lessonData, assignments };

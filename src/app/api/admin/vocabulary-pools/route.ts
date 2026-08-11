@@ -7,6 +7,12 @@ import {
   normalizePoolSearchText,
   toVocabularyPoolSummary,
 } from '@/src/utils/vocabularyPoolSummary';
+import { AdminAccessError, verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import {
+  prepareVocabularyPoolWordMembership,
+  VocabularyPoolWordMembershipError,
+} from '@/src/lib/vocabulary-pools/word-membership.server';
+import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,6 +40,7 @@ const serializePoolSummary = (doc: FirebaseFirestore.QueryDocumentSnapshot | Fir
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
+    await verifyAdminAccess(request);
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '20');
     const lastPoolId = searchParams.get('lastPoolId');
@@ -140,6 +147,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       },
     });
   } catch (error) {
+    if (error instanceof AdminAccessError) {
+      return NextResponse.json({ success: false, error: error.message }, { status: error.status });
+    }
     console.error('Error fetching vocabulary pools:', error);
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
@@ -150,6 +160,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
+    const actor = await verifyAdminAccess(request);
     const requestBody = await request.json();
     console.log('[CREATE POOL] Received request body:', JSON.stringify(requestBody, null, 2));
 
@@ -189,9 +200,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       searchTokens: buildPoolSearchTokens(name),
       metadata: {
         createdAt: now,
-        createdBy: 'admin',
+        createdBy: actor.uid,
         updatedAt: now,
-        updatedBy: 'admin',
+        updatedBy: actor.uid,
         wordCount: wordDocIds.length,
         isActive: true,
         tags: tags.map(tag => tag.toLowerCase().trim()).filter(Boolean),
@@ -206,7 +217,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       tagsCount: poolData.metadata.tags.length,
     });
 
-    const docRef = await adminDb.collection('vocabulary_pools').add(poolData);
+    const docRef = adminDb.collection('vocabulary_pools').doc();
+    await runVocabularyContentMutation(adminDb, async transaction => {
+      const applyWordReferenceRevisions = await prepareVocabularyPoolWordMembership(
+        transaction,
+        adminDb,
+        [],
+        wordDocIds
+      );
+      applyWordReferenceRevisions();
+      transaction.create(docRef, poolData);
+    });
 
     console.log(`[CREATE POOL] ✓ Successfully created pool "${name}" with ID: ${docRef.id}`);
 
@@ -220,6 +241,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
     });
   } catch (error) {
+    if (error instanceof AdminAccessError) {
+      return NextResponse.json({ success: false, error: error.message }, { status: error.status });
+    }
+    if (error instanceof VocabularyPoolWordMembershipError) {
+      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
+    }
     console.error('[CREATE POOL] ✗ Error creating vocabulary pool:', {
       error,
       message: error instanceof Error ? error.message : 'Unknown error',

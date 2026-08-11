@@ -446,7 +446,11 @@ describe('practice category scoped mutations', () => {
     });
     const update = jest.fn();
     const transaction = {
-      get: jest.fn(async () => snapshot('category-1', categoryWithTags)),
+      get: jest.fn(async (target: { collection?: string }) =>
+        target.collection === 'content_sync_locks'
+          ? snapshot('prod-content-to-dev')
+          : snapshot('category-1', categoryWithTags)
+      ),
       update,
     };
     const service = new PracticeCategoryService({
@@ -485,7 +489,11 @@ describe('practice category scoped mutations', () => {
     });
     const archiveUpdate = jest.fn();
     const archiveTransaction = {
-      get: jest.fn(async () => snapshot('category-1', category({ tags: [firstTag, secondTag] }))),
+      get: jest.fn(async (target: { collection?: string }) =>
+        target.collection === 'content_sync_locks'
+          ? snapshot('prod-content-to-dev')
+          : snapshot('category-1', category({ tags: [firstTag, secondTag] }))
+      ),
       update: archiveUpdate,
     };
     const archiveService = new PracticeCategoryService({
@@ -508,16 +516,18 @@ describe('practice category scoped mutations', () => {
 
     const restoreUpdate = jest.fn();
     const restoreTransaction = {
-      get: jest.fn(async () =>
-        snapshot(
-          'category-1',
-          category({
-            tags: [
-              { ...firstTag, status: 'archived' },
-              { ...secondTag, tagOrder: 0 },
-            ],
-          })
-        )
+      get: jest.fn(async (target: { collection?: string }) =>
+        target.collection === 'content_sync_locks'
+          ? snapshot('prod-content-to-dev')
+          : snapshot(
+              'category-1',
+              category({
+                tags: [
+                  { ...firstTag, status: 'archived' },
+                  { ...secondTag, tagOrder: 0 },
+                ],
+              })
+            )
       ),
       update: restoreUpdate,
     };
@@ -558,9 +568,11 @@ describe('practice category scoped mutations', () => {
     const update = jest.fn();
     const transaction = {
       get: jest.fn(async (target: { collection?: string; id?: string }) =>
-        target.collection === 'practiceCategories'
-          ? snapshot('category-1', categoryWithTags)
-          : snapshot(target.id ?? 'membership-1', membership())
+        target.collection === 'content_sync_locks'
+          ? snapshot('prod-content-to-dev')
+          : target.collection === 'practiceCategories'
+            ? snapshot('category-1', categoryWithTags)
+            : snapshot(target.id ?? 'membership-1', membership())
       ),
       update,
     };

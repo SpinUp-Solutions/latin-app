@@ -77,7 +77,11 @@ Write order is:
 5. stale mirrored Firestore and Storage deletions;
 6. `learningPaths` last.
 
-The result contains a `runId`, the post-sync fingerprint, and a one-time `rollbackToken`. Store that token in the operator’s approved secret handling system. It is not stored in the run manifest; only its hash is stored.
+Immediately after the private hash-only run manifest is durable—and before the first content mutation—the apply command emits a `sync-rollback-authority` JSON event on stderr containing the `runId` and one-time `rollbackToken`. Capture that event and store the token in the operator’s approved secret handling system before allowing the command to continue unattended. The final result does not repeat the token. It is never stored in the run manifest; only its hash is stored.
+
+The primary sync lock has a 24-hour crash lease while it is still explicitly marked `manifestDurable: false`. After that lease expires, create and review a fresh dry-run plan; its explicitly authorized apply may atomically reclaim only that expired, provably pre-mutation lock and then revalidates mirrored development state while holding the new lock. Once the rollback-authority event is emitted, the lock is armed with `manifestDurable: true` before the first mutation and is never automatically reclaimed; use the emitted token and the supported rollback-recovery command instead.
+
+If apply fails after the first possible cross-service mutation, it emits the one-time token in the structured `APPLY_RECOVERY_REQUIRED` error, marks the durable run `recovery-required`, and retains its owner-identified development lock. If persisting that failure transition also fails, the durable run may still say `backed-up`; the same exact rollback token plus the retained run owner lock authorizes the same hash-validated recovery path. The rollback dry-run accepts either state only when every affected document/object still matches either its recorded pre-operation hash or planned post-operation content hash. Use the normal token-authorized rollback apply to restore it. Unrelated progress, Auth, and excluded-data drift is preserved and reported observationally; unrelated drift in an affected resource fails closed.
 
 The run manifest is durable at `runs/<runId>/run-manifest.json` in the backup bucket. It records the plan, source/target fingerprints, protected-data fingerprints, backup entries, source drift observation, and verification state without copying raw production data into a Firestore collection.
 
@@ -89,11 +93,11 @@ node scripts/sync-prod-content-to-dev.mjs --verify --run-id <runId>
 
 Verification is read-only and reports machine-readable `checks`, `failures`, and a human-readable status through the JSON fields. It verifies:
 
-- the recorded post-sync manifest and content fingerprints;
+- the recorded mirrored-content fingerprint (mirrored Firestore plus controlled lesson Storage);
 - strict learning-path fields, IDs, and cross-document references;
 - Storage checksums for controlled objects;
-- unchanged excluded development Firestore/Storage fingerprints;
-- unchanged Firebase Auth fingerprint;
+- excluded development Firestore/Storage drift as an observation;
+- Firebase Auth drift as an observation;
 - source readability and source drift since apply.
 
 Source drift after the run is reported as best-effort observation and does not rewrite production or development.
@@ -106,7 +110,7 @@ First inspect the rollback plan:
 node scripts/sync-prod-content-to-dev.mjs --rollback --run-id <runId>
 ```
 
-Rollback refuses to proceed unless current development exactly matches that run’s recorded post-sync manifest. To authorize the live restore, provide both the explicit apply flag and the token printed by the original apply:
+Rollback validates every affected resource against its recorded pre-operation or planned post-operation hash. Unrelated progress, Auth, excluded data, and unaffected authoring drift do not prevent recovery and are not overwritten. To authorize the live restore, provide both the explicit apply flag and the token printed by the original apply:
 
 ```bash
 node scripts/sync-prod-content-to-dev.mjs --rollback \
@@ -115,7 +119,9 @@ node scripts/sync-prod-content-to-dev.mjs --rollback \
   --rollback-token <rollbackToken>
 ```
 
-Rollback restores only the selected run’s before-images, with current-generation/update-time preconditions. It never reads production and never touches Auth or excluded collections. The command verifies the restored development content fingerprint before marking the run `rolled-back`.
+Rollback restores only the selected run’s before-images, with current-generation/update-time preconditions. It never reads production and never touches Auth or excluded collections. The command verifies every affected resource against its exact before-image hash before marking the run `rolled-back`; a full pre-sync fingerprint match is reported separately.
+
+If rollback itself stops after a mutation, it records `rollback-recovery-required` and retains a stable run-bound recovery lock. Re-run the same rollback dry-run and token-authorized apply; already restored resources are accepted only at their recorded pre-operation hashes, while remaining resources must still match their planned post-operation hashes. The run lock contains one exclusive attempt lease, so concurrent retries fail closed; a caught failure releases only its own attempt, and an abandoned process can be reclaimed after the lease expires. A retry can therefore recover the same stable owner even when a prior cross-service manifest update failed after the lock transaction. Each retry still uses a distinct revision operation ID. Legacy schema-v3 Storage audits are upgraded and durably journaled with same-domain content hashes before the first rollback write. Local pool/word concurrency counters are excluded from business-content comparisons and rebased from the development target on sync writes, while exact before-image hashes retain them for rollback integrity. Final unlock is owner-checked and idempotent across an ambiguous Firestore response. The lock is released only after affected resources are restored and the rolled-back manifest is durable.
 
 ## Audit artifact schema
 

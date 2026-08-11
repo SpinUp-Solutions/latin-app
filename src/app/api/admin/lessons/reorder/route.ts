@@ -5,6 +5,7 @@ import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 import { assertLegacyNormalPlacementAllowedInTransaction } from '@/src/lib/learning-units/learning-path-service';
 import { LearningPathServiceError } from '@/src/lib/learning-units/learning-path-errors';
 import type { LessonUnitType } from '@/src/types/learning-unit';
+import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
 
 interface ReorderUpdate {
   lessonId: string;
@@ -46,7 +47,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await adminDb.runTransaction(async transaction => {
+    await runVocabularyContentMutation(adminDb, async transaction => {
       const refs = updates.map(update => adminDb.collection('lessons').doc(update.lessonId));
       const snapshots = await transaction.getAll(...refs);
       const lessonTypes = new Set<LessonUnitType>();
@@ -86,6 +87,15 @@ export async function POST(request: NextRequest) {
     }
     if (error instanceof LearningPathServiceError) {
       return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
+    }
+    if (error instanceof Error && 'status' in error && typeof error.status === 'number') {
+      return NextResponse.json(
+        {
+          error: error.message,
+          ...('code' in error && typeof error.code === 'string' ? { code: error.code } : {}),
+        },
+        { status: error.status }
+      );
     }
     console.error('Error reordering lessons:', error);
     return NextResponse.json({ error: 'Failed to reorder lessons' }, { status: 500 });

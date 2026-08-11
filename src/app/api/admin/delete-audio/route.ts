@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminStorage } from '@/src/services/firebase-admin';
+import { adminDb, adminStorage } from '@/src/services/firebase-admin';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { runVocabularyContentStorageMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
 
 export async function POST(req: NextRequest) {
   try {
     await verifyAdminAccess(req);
   } catch (error) {
+    if (error && typeof error === 'object' && 'status' in error && typeof error.status === 'number') {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'Request blocked' },
+        { status: error.status }
+      );
+    }
     if (error instanceof Error) {
       if (error.message === 'Unauthorized') {
         return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
@@ -37,11 +44,20 @@ export async function POST(req: NextRequest) {
 
     const filePath = decodeURIComponent(audioPath.substring(prefix.length));
 
-    await adminStorage.bucket(bucketName).file(filePath).delete();
+    await runVocabularyContentStorageMutation(adminDb, () => adminStorage.bucket(bucketName).file(filePath).delete());
 
     return NextResponse.json({ success: true, message: 'File deleted successfully' });
   } catch (error) {
     console.error('Error deleting file from Firebase Storage:', error);
+    if (error && typeof error === 'object' && 'status' in error && typeof error.status === 'number') {
+      return NextResponse.json(
+        {
+          error: error instanceof Error ? error.message : 'Request blocked',
+          ...('code' in error && typeof error.code === 'string' ? { code: error.code } : {}),
+        },
+        { status: error.status }
+      );
+    }
     const message = error instanceof Error ? error.message : 'Failed to delete file';
     return new NextResponse(JSON.stringify({ error: message }), { status: 500 });
   }
