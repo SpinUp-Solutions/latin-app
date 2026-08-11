@@ -207,8 +207,8 @@ describe('student normal test flow', () => {
       </Suspense>
     );
 
-    expect(await screen.findByText('Passing requirement: 70%')).toBeInTheDocument();
-    expect(screen.getByText(/committed answers are saved and can be resumed/i)).toBeInTheDocument();
+    expect(await screen.findByText('Score 70% or higher to continue along your Learning Path')).toBeInTheDocument();
+    expect(screen.getByText(/answers save automatically/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Start Test' }));
     expect(await screen.findByRole('button', { name: 'Record two answers' })).toBeInTheDocument();

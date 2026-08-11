@@ -58,13 +58,18 @@ describe('sanitized test delivery rendering', () => {
     };
     const { content } = sanitizeExercise(exercise);
     const onAnswer = jest.fn();
+    const onComplete = jest.fn();
 
-    render(<ContentRenderer content={content.items[0]} runtimeMode="test" onAnswer={onAnswer} />);
+    render(
+      <ContentRenderer content={content.items[0]} runtimeMode="test" onAnswer={onAnswer} onComplete={onComplete} />
+    );
     fireEvent.change(screen.getByPlaceholderText('Type your answer'), { target: { value: 'response' } });
     fireEvent.click(screen.getByRole('button', { name: 'Check' }));
 
     expect(screen.getByText('Answer recorded.')).toBeInTheDocument();
     expect(onAnswer).toHaveBeenCalledWith(expect.objectContaining({ answer: { type: 'fill', answers: ['response'] } }));
+    expect(onComplete).toHaveBeenCalledWith(0);
+    expect(screen.queryByRole('button', { name: 'Finish exercise' })).not.toBeInTheDocument();
   });
 
   it('restores the authenticated student committed answer when an attempt resumes', () => {
