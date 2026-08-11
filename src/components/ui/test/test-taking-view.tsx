@@ -63,8 +63,13 @@ export function TestTakingView({
   const StatusIcon = preview ? Eye : Save;
 
   return (
-    <div data-testid="test-taking-view" className={cn('bg-roman-marble', embedded ? 'min-w-0' : 'min-h-screen')}>
-      <main className={cn('mx-auto w-full max-w-3xl', embedded ? 'p-0' : 'p-4 md:py-8')}>
+    <div
+      data-testid="test-taking-view"
+      className={cn(
+        'bg-roman-marble',
+        embedded ? 'min-w-0' : 'min-h-screen bg-gradient-to-b from-roman-marble via-white to-roman-parchment/50'
+      )}>
+      <main className={cn('mx-auto w-full max-w-4xl', embedded ? 'p-0' : 'p-4 md:py-8')}>
         <RomanPlayerShell
           icon={FileCheck2}
           label={preview ? 'Test preview' : 'Test in progress'}
@@ -73,8 +78,8 @@ export function TestTakingView({
           title={title}
           description={description}
           headingAs={embedded ? 'div' : 'h1'}
-          className="overflow-visible border-roman-red/15 shadow-lg"
-          contentClassName="p-5 md:p-8"
+          className="overflow-visible rounded-2xl border-roman-red/15 shadow-md"
+          contentClassName="p-5 sm:p-7 md:p-8"
           headerAside={
             <div className="shrink-0 text-right text-sm">
               <div className="font-semibold text-roman-red">
@@ -116,11 +121,11 @@ export function TestTakingView({
         </RomanPlayerShell>
 
         <div
-          className="mt-5 flex flex-col gap-3 rounded-xl border border-roman-red/15 bg-white/95 p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+          className="mt-4 flex flex-col gap-3 rounded-2xl border border-roman-red/15 bg-white/95 p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between"
           aria-label="Test page navigation">
           <Button
             variant="outline"
-            className="rounded-full border-roman-red/20 hover:bg-roman-parchment"
+            className="rounded-xl border-roman-red/20 hover:bg-roman-parchment"
             disabled={navigationPending || currentPageIndex === 0}
             onClick={onPrevious}>
             <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
@@ -128,7 +133,7 @@ export function TestTakingView({
           </Button>
           {!isLastPage ? (
             <Button
-              className="rounded-full bg-roman-red hover:bg-roman-red/90"
+              className="rounded-xl bg-roman-red hover:bg-roman-red/90"
               disabled={navigationPending}
               onClick={onNext}>
               Next page
@@ -136,7 +141,7 @@ export function TestTakingView({
             </Button>
           ) : (
             <Button
-              className="rounded-full bg-roman-red hover:bg-roman-red/90"
+              className="rounded-xl bg-roman-red hover:bg-roman-red/90"
               disabled={navigationPending}
               onClick={onReview}>
               Review answers
