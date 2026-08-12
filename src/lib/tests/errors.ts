@@ -13,6 +13,10 @@ export type TestServiceErrorCode =
   | 'ATTEMPT_NOT_FOUND'
   | 'ATTEMPT_NOT_IN_PROGRESS'
   | 'ATTEMPT_ANSWER_INVALID'
+  | 'ATTEMPT_TRANSLATION_ALREADY_GRADED'
+  | 'ATTEMPT_TRANSLATION_GRADING_IN_PROGRESS'
+  | 'ATTEMPT_TRANSLATION_GRADING_RATE_LIMITED'
+  | 'ATTEMPT_GRADING_UNAVAILABLE'
   | 'ATTEMPT_TOO_LARGE'
   | 'STALE_TEST_ATTEMPT_DATA'
   | 'MOCK_TEST_ALREADY_EXISTS'
@@ -24,7 +28,7 @@ export class TestServiceError extends Error {
   constructor(
     public readonly code: TestServiceErrorCode,
     message: string,
-    public readonly status: 400 | 404 | 409 | 422
+    public readonly status: 400 | 404 | 409 | 422 | 429 | 503
   ) {
     super(message);
     this.name = 'TestServiceError';

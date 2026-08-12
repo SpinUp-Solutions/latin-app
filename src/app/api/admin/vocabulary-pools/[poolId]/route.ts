@@ -4,7 +4,38 @@ import { FieldPath } from 'firebase-admin/firestore';
 import type { Word } from '@/src/types/admin-vocabulary';
 import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 import { buildPoolSearchTokens } from '@/src/utils/vocabularyPoolSummary';
-import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
+import { AdminAccessError, verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { scanVocabularyPoolUsages } from '@/src/lib/vocabulary-pools/usage.server';
+import {
+  deletionChallengeDocumentId,
+  poolUsagesForScan,
+  validateVocabularyPoolDeletionChallenge,
+  VocabularyPoolDeletionError,
+  vocabularyPoolContentFingerprint,
+  vocabularyPoolUsageFingerprint,
+} from '@/src/lib/vocabulary-pools/deletion.server';
+import {
+  DELETED_VOCABULARY_POOL_COLLECTION,
+  VOCABULARY_POOL_ARCHIVE_COLLECTION,
+  VOCABULARY_POOL_COLLECTION,
+  VOCABULARY_POOL_DELETION_CHALLENGE_COLLECTION,
+  VocabularyPoolArchiveIntegrityError,
+  writeVocabularyPoolWordArchive,
+} from '@/src/lib/vocabulary-pools/archive.server';
+import {
+  prepareVocabularyPoolWordMembership,
+  VocabularyPoolWordMembershipError,
+} from '@/src/lib/vocabulary-pools/word-membership.server';
+import {
+  runVocabularyContentExclusiveMutation,
+  runVocabularyContentMutation,
+  VocabularyContentSyncLockError,
+} from '@/src/lib/vocabulary-pools/sync-lock.server';
+import {
+  VOCABULARY_CONTENT_STATE_COLLECTION,
+  VOCABULARY_CONTENT_STATE_ID,
+  vocabularyContentRevision,
+} from '@/src/lib/vocabulary-pools/content-revision.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,11 +45,41 @@ const serializePoolMetadata = (metadata: FirebaseFirestore.DocumentData) => ({
   updatedAt: metadata.updatedAt?.toDate ? metadata.updatedAt.toDate() : metadata.updatedAt,
 });
 
+const routeErrorResponse = (error: unknown, action: string) => {
+  if (error instanceof AdminAccessError) {
+    return NextResponse.json({ success: false, error: error.message }, { status: error.status });
+  }
+  if (error instanceof VocabularyPoolDeletionError) {
+    return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
+  }
+  if (error instanceof VocabularyPoolArchiveIntegrityError) {
+    return NextResponse.json(
+      { success: false, error: error.message, code: 'VOCABULARY_POOL_ARCHIVE_INCOMPLETE' },
+      { status: 409 }
+    );
+  }
+  if (error instanceof VocabularyPoolWordMembershipError) {
+    return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
+  }
+  if (error instanceof VocabularyContentSyncLockError) {
+    return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
+  }
+
+  console.error(`Error ${action} vocabulary pool:`, error);
+  const notFound = error instanceof Error && error.message.includes('not found');
+  const status = notFound ? 404 : 500;
+  return NextResponse.json(
+    { success: false, error: notFound ? error.message : `Failed to ${action} vocabulary pool` },
+    { status }
+  );
+};
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ poolId: string }> }
 ): Promise<NextResponse> {
   try {
+    await verifyAdminAccess(request);
     const { poolId } = await params;
 
     const poolDoc = await adminDb.collection('vocabulary_pools').doc(poolId).get();
@@ -96,19 +157,6 @@ export async function GET(
         }
       });
 
-      if (missingWordIds.length > 0) {
-        // Fire-and-forget cleanup - don't block the response
-        adminDb
-          .collection('vocabulary_pools')
-          .doc(poolId)
-          .update({
-            wordDocIds: orderedWords.map(w => w.id),
-            'metadata.wordCount': orderedWords.length,
-            'metadata.updatedAt': new Date(),
-          })
-          .catch(err => console.error('Auto-cleanup of dangling word references failed:', err));
-      }
-
       return NextResponse.json({
         success: true,
         data: {
@@ -127,12 +175,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error('Error fetching vocabulary pool:', error);
-    const statusCode = error instanceof Error && error.message.includes('not found') ? 404 : 500;
-    return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: statusCode }
-    );
+    return routeErrorResponse(error, 'fetch');
   }
 }
 
@@ -141,6 +184,7 @@ export async function PUT(
   { params }: { params: Promise<{ poolId: string }> }
 ): Promise<NextResponse> {
   try {
+    const actor = await verifyAdminAccess(request);
     const { poolId } = await params;
     const updates = await request.json();
 
@@ -157,7 +201,7 @@ export async function PUT(
 
     const updateData: Record<string, unknown> = {
       'metadata.updatedAt': new Date(),
-      'metadata.updatedBy': 'admin',
+      'metadata.updatedBy': actor.uid,
     };
 
     if (updates.name !== undefined) updateData.name = updates.name;
@@ -178,7 +222,20 @@ export async function PUT(
     }
 
     const poolRef = adminDb.collection('vocabulary_pools').doc(poolId);
-    await poolRef.update(updateData);
+    await runVocabularyContentMutation(adminDb, async transaction => {
+      const poolDoc = await transaction.get(poolRef);
+      if (!poolDoc.exists) throw new Error('Pool not found');
+      const existingWordIds = Array.isArray(poolDoc.data()?.wordDocIds) ? poolDoc.data()!.wordDocIds : [];
+      const nextWordIds = updates.wordDocIds === undefined ? existingWordIds : updates.wordDocIds;
+      const applyWordReferenceRevisions = await prepareVocabularyPoolWordMembership(
+        transaction,
+        adminDb,
+        existingWordIds,
+        nextWordIds
+      );
+      applyWordReferenceRevisions();
+      transaction.update(poolRef, updateData as FirebaseFirestore.UpdateData<FirebaseFirestore.DocumentData>);
+    });
 
     const updatedDoc = await poolRef.get();
     const poolData = updatedDoc.data()!;
@@ -199,11 +256,7 @@ export async function PUT(
       },
     });
   } catch (error) {
-    console.error('Error updating vocabulary pool:', error);
-    return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    );
+    return routeErrorResponse(error, 'update');
   }
 }
 
@@ -212,43 +265,174 @@ export async function DELETE(
   { params }: { params: Promise<{ poolId: string }> }
 ): Promise<NextResponse> {
   try {
+    const actor = await verifyAdminAccess(request);
     const { poolId } = await params;
-
-    const lessonsQuery = await adminDb.collection('lessons').where('vocabulary_pool', '==', poolId).get();
-    const lessonUsingPool = lessonsQuery.docs.find(doc => isLessonDocumentData(doc.data()));
-
-    if (lessonUsingPool) {
-      const lessonData = lessonUsingPool.data();
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Cannot delete pool that is assigned to lessons. Found in lesson: ${lessonData.title}`,
-        },
-        { status: 400 }
+    const body = await request.json().catch(() => ({}));
+    const confirmationToken =
+      body && typeof body === 'object' ? (body as Record<string, unknown>).confirmationToken : undefined;
+    if (typeof confirmationToken !== 'string' || !confirmationToken) {
+      throw new VocabularyPoolDeletionError(
+        'Review the current assignments before deleting this pool.',
+        400,
+        'VOCABULARY_POOL_CONFIRMATION_REQUIRED'
       );
     }
 
-    await adminDb.runTransaction(async transaction => {
-      const poolRef = adminDb.collection('vocabulary_pools').doc(poolId);
-      const poolDoc = await transaction.get(poolRef);
-      if (!poolDoc.exists) {
-        throw new Error('Pool not found');
-      }
-      transaction.delete(poolRef);
-    });
+    const usageScan = await scanVocabularyPoolUsages(adminDb);
+    if (usageScan.status !== 'available') {
+      throw new VocabularyPoolDeletionError(
+        'Assignment checks are unavailable. The pool was not deleted.',
+        409,
+        'VOCABULARY_POOL_USAGE_UNAVAILABLE'
+      );
+    }
+    const currentUsages = poolUsagesForScan(usageScan, poolId);
+    if (currentUsages.length > 0) {
+      throw new VocabularyPoolDeletionError(
+        `Remove this pool from ${currentUsages.length} saved ${currentUsages.length === 1 ? 'assignment' : 'assignments'} before deleting it.`,
+        409,
+        'VOCABULARY_POOL_IN_USE'
+      );
+    }
+    const usageFingerprint = vocabularyPoolUsageFingerprint(usageScan, poolId);
+    const poolRef = adminDb.collection(VOCABULARY_POOL_COLLECTION).doc(poolId);
+    const tombstoneRef = adminDb.collection(DELETED_VOCABULARY_POOL_COLLECTION).doc(poolId);
+    const challengeRef = adminDb
+      .collection(VOCABULARY_POOL_DELETION_CHALLENGE_COLLECTION)
+      .doc(deletionChallengeDocumentId(poolId, actor.uid));
+    const contentStateRef = adminDb.collection(VOCABULARY_CONTENT_STATE_COLLECTION).doc(VOCABULARY_CONTENT_STATE_ID);
+    const [poolSnapshot, challengeSnapshot, contentStateSnapshot] = await Promise.all([
+      poolRef.get(),
+      challengeRef.get(),
+      contentStateRef.get(),
+    ]);
+    if (!poolSnapshot.exists) {
+      if (challengeSnapshot.exists) await challengeRef.delete();
+      throw new VocabularyPoolDeletionError('Pool not found', 404, 'VOCABULARY_POOL_NOT_FOUND');
+    }
 
-    console.log(`Vocabulary pool ${poolId} deleted successfully`);
+    const poolData = poolSnapshot.data() ?? {};
+    const poolFingerprint = vocabularyPoolContentFingerprint(poolData);
+    const wordContentRevision = vocabularyContentRevision(contentStateSnapshot.data());
+    const initialChallengeError = validateVocabularyPoolDeletionChallenge({
+      stored: challengeSnapshot.data(),
+      token: confirmationToken,
+      actorUid: actor.uid,
+      poolId,
+      usageFingerprint,
+      poolFingerprint,
+      wordContentRevision,
+    });
+    if (initialChallengeError) {
+      if (challengeSnapshot.exists) await challengeRef.delete();
+      throw initialChallengeError;
+    }
+
+    const archiveId = challengeSnapshot.data()?.archiveId;
+    if (typeof archiveId !== 'string' || !archiveId) {
+      await challengeRef.delete();
+      throw new VocabularyPoolDeletionError(
+        'Deletion confirmation is invalid. Review the current assignments and try again.',
+        409,
+        'VOCABULARY_POOL_CONFIRMATION_STALE'
+      );
+    }
+    let transactionError: VocabularyPoolDeletionError | null = null;
+    await runVocabularyContentExclusiveMutation(adminDb, async lockOwnerId => {
+      const archiveRef = adminDb.collection(VOCABULARY_POOL_ARCHIVE_COLLECTION).doc(archiveId);
+      const [lockedPool, lockedChallenge, lockedTombstone, lockedArchive, lockedContentState] = await Promise.all([
+        poolRef.get(),
+        challengeRef.get(),
+        tombstoneRef.get(),
+        archiveRef.get(),
+        contentStateRef.get(),
+      ]);
+      if (!lockedPool.exists) {
+        throw new VocabularyPoolDeletionError('Pool not found', 404, 'VOCABULARY_POOL_NOT_FOUND');
+      }
+      if (lockedTombstone.exists || lockedArchive.exists) {
+        throw new VocabularyPoolDeletionError(
+          'An immutable archive already exists for this pool.',
+          409,
+          'VOCABULARY_POOL_ARCHIVE_EXISTS'
+        );
+      }
+      const lockedChallengeError = validateVocabularyPoolDeletionChallenge({
+        stored: lockedChallenge.data(),
+        token: confirmationToken,
+        actorUid: actor.uid,
+        poolId,
+        usageFingerprint,
+        poolFingerprint: vocabularyPoolContentFingerprint(lockedPool.data() ?? {}),
+        wordContentRevision: vocabularyContentRevision(lockedContentState.data()),
+      });
+      if (lockedChallengeError) throw lockedChallengeError;
+      const archivedWordCount = await writeVocabularyPoolWordArchive(adminDb, archiveId, lockedPool.data() ?? {});
+      await runVocabularyContentMutation(
+        adminDb,
+        async transaction => {
+          const [poolDoc, currentChallenge, tombstone, existingArchive, contentState] = await transaction.getAll(
+            poolRef,
+            challengeRef,
+            tombstoneRef,
+            archiveRef,
+            contentStateRef
+          );
+          if (!poolDoc.exists) {
+            transactionError = new VocabularyPoolDeletionError('Pool not found', 404, 'VOCABULARY_POOL_NOT_FOUND');
+          } else if (tombstone.exists || existingArchive.exists) {
+            transactionError = new VocabularyPoolDeletionError(
+              'An immutable archive already exists for this pool.',
+              409,
+              'VOCABULARY_POOL_ARCHIVE_EXISTS'
+            );
+          } else {
+            transactionError = validateVocabularyPoolDeletionChallenge({
+              stored: currentChallenge.data(),
+              token: confirmationToken,
+              actorUid: actor.uid,
+              poolId,
+              usageFingerprint,
+              poolFingerprint: vocabularyPoolContentFingerprint(poolDoc.data() ?? {}),
+              wordContentRevision: vocabularyContentRevision(contentState.data()),
+            });
+          }
+
+          if (transactionError) {
+            if (currentChallenge.exists) transaction.delete(challengeRef);
+            return;
+          }
+
+          transaction.create(archiveRef, {
+            ...(poolDoc.data() ?? {}),
+            _archive: {
+              poolId,
+              deletedAt: new Date(),
+              deletedBy: actor.uid,
+              sourceCollection: VOCABULARY_POOL_COLLECTION,
+              archivedWordCount,
+            },
+          });
+          transaction.create(tombstoneRef, {
+            archiveId,
+            deletedAt: new Date(),
+            deletedBy: actor.uid,
+          });
+          transaction.delete(poolRef);
+          transaction.delete(challengeRef);
+        },
+        { lockOwnerId }
+      );
+    });
+    if (transactionError) throw transactionError;
+
+    console.log(`Vocabulary pool ${poolId} archived and deleted successfully by admin ${actor.uid}`);
 
     return NextResponse.json({
       success: true,
       message: 'Pool deleted successfully',
     });
   } catch (error) {
-    console.error('Error deleting vocabulary pool:', error);
-    const statusCode = error instanceof Error && error.message.includes('not found') ? 404 : 500;
-    return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: statusCode }
-    );
+    return routeErrorResponse(error, 'delete');
   }
 }

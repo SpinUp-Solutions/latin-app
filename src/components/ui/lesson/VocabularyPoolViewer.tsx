@@ -6,12 +6,11 @@ import { BookOpen } from 'lucide-react';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { useAppSelector } from '@/src/store/hooks';
-import { useGetPoolQuery } from '@/src/store/api/vocabularyPoolApi';
+import { useGetStudentPoolQuery } from '@/src/store/api/vocabularyPoolApi';
 import { useGetStudentLessonQuery } from '@/src/store/api/lessonApi';
 import { useAuth } from '@/src/hooks/useAuth';
 import type { VocabularyPoolContent, VocabularyPoolStudyData } from '@/src/types/vocabulary';
 import { VocabularyStudyView } from './VocabularyStudyView';
-import { toVocabularyPoolStudyItems } from '@/src/utils/vocabularyPoolStudy';
 
 interface VocabularyPoolViewerProps {
   content: VocabularyPoolContent;
@@ -44,7 +43,7 @@ export function VocabularyPoolViewer({ content, poolId, resolvedPool }: Vocabula
     data: vocabularyPool,
     isLoading: poolLoading,
     error: poolError,
-  } = useGetPoolQuery(poolIdToUse, { skip: Boolean(resolvedPool) || !poolIdToUse });
+  } = useGetStudentPoolQuery(poolIdToUse, { skip: Boolean(resolvedPool) || !poolIdToUse });
 
   if (resolvedPool) {
     if (resolvedPool.items.length === 0) {
@@ -124,8 +123,7 @@ export function VocabularyPoolViewer({ content, poolId, resolvedPool }: Vocabula
             <BookOpen className="h-12 w-12 mx-auto text-red-300 mb-4" />
             <p className="text-red-600 font-medium">Failed to load vocabulary pool</p>
             <p className="text-roman-stone text-sm mt-2">
-              The assigned vocabulary pool could not be loaded. It may have been removed or is temporarily
-              unavailable.
+              The assigned vocabulary pool could not be loaded. It may have been removed or is temporarily unavailable.
             </p>
           </RomanCardContent>
         </RomanCard>
@@ -152,7 +150,7 @@ export function VocabularyPoolViewer({ content, poolId, resolvedPool }: Vocabula
     );
   }
 
-  if (!vocabularyPool.words || vocabularyPool.words.length === 0) {
+  if (vocabularyPool.items.length === 0) {
     return (
       <div className="space-y-6">
         <div className="text-center space-y-2">
@@ -171,13 +169,11 @@ export function VocabularyPoolViewer({ content, poolId, resolvedPool }: Vocabula
     );
   }
 
-  const items = toVocabularyPoolStudyItems(vocabularyPool.words);
-
   return (
     <VocabularyStudyView
       title={content.title || vocabularyPool.name}
-      subtitle={`From: ${vocabularyPool.name} • ${items.length} words`}
-      items={items}
+      subtitle={`From: ${vocabularyPool.name} • ${vocabularyPool.items.length} words`}
+      items={vocabularyPool.items}
       audioPath={content.audioPath}
       defaultMode="flashcards"
       showPronunciation={false}

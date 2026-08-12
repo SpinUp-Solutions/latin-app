@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb, adminStorage } from '@/src/services/firebase-admin';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
-import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
+import { isLessonDocumentData, normalizeLessonDocumentForWrite } from '@/src/lib/learning-units/domain';
 import { PracticeCategoryError, practiceCategoryService } from '@/src/lib/practice-categories/service';
 import {
   assertLegacyNormalPlacementChangeAllowedInTransaction,
@@ -9,6 +9,11 @@ import {
 } from '@/src/lib/learning-units/learning-path-service';
 import type { Lesson } from '@/src/types/lesson';
 import { LearningPathServiceError } from '@/src/lib/learning-units/learning-path-errors';
+import {
+  assertVocabularyPoolAssignmentsAllowedInTransaction,
+  VocabularyPoolAssignmentError,
+} from '@/src/lib/vocabulary-pools/assignment.server';
+import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
 
 const SNAPSHOT_PREFIX = 'lesson-snapshots/';
 const BATCH_SIZE = 200;
@@ -71,18 +76,11 @@ function isSnapshotLesson(value: unknown): value is SnapshotLesson {
 }
 
 async function restoreSnapshotLesson(lesson: SnapshotLesson, actorId: string) {
-  const {
-    id,
-    practiceCategorySelections: _practiceCategorySelections,
-    practiceCategoryIds: _practiceCategoryIds,
-    practiceCategories: _practiceCategories,
-    practiceCategoryPlacements: _practiceCategoryPlacements,
-    ...lessonData
-  } = lesson;
-  lessonData.kind = 'lesson';
+  const { id } = lesson;
+  const lessonData = normalizeLessonDocumentForWrite(lesson, id);
   const lessonRef = adminDb.collection('lessons').doc(id);
 
-  await adminDb.runTransaction(async transaction => {
+  await runVocabularyContentMutation(adminDb, async transaction => {
     const existingLesson = await transaction.get(lessonRef);
     if (existingLesson.exists && !isLessonDocumentData(existingLesson.data())) {
       throw new Error(`Learning unit ${id} is not a lesson`);
@@ -97,11 +95,18 @@ async function restoreSnapshotLesson(lesson: SnapshotLesson, actorId: string) {
       type: (lessonData.type ?? 'normal') as Lesson['type'],
       pages: Array.isArray(lessonData.pages) ? (lessonData.pages as Lesson['pages']) : [],
     });
+    const applyVocabularyPoolAssignmentRevisions = await assertVocabularyPoolAssignmentsAllowedInTransaction(
+      transaction,
+      adminDb,
+      existingLesson.exists ? existingLesson.data() : undefined,
+      lessonData
+    );
     await practiceCategoryService.reconcileLessonCategoriesInTransaction(transaction, {
       lessonId: id,
       lesson: lessonData,
       actorId,
     });
+    applyVocabularyPoolAssignmentRevisions();
     transaction.set(lessonRef, lessonData);
   });
 }
@@ -183,7 +188,11 @@ export async function POST(request: NextRequest) {
     if (error instanceof SnapshotRestoreError) {
       const cause = error.failures[0].cause;
       const domainCause =
-        cause instanceof PracticeCategoryError || cause instanceof LearningPathServiceError ? cause : null;
+        cause instanceof PracticeCategoryError ||
+        cause instanceof LearningPathServiceError ||
+        cause instanceof VocabularyPoolAssignmentError
+          ? cause
+          : null;
       return NextResponse.json(
         {
           success: false,
@@ -204,6 +213,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
     }
     if (error instanceof LearningPathServiceError) {
+      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
+    }
+    if (error instanceof VocabularyPoolAssignmentError) {
       return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
     }
 

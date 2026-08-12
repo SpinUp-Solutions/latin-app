@@ -36,7 +36,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search')?.trim() ?? '';
-    if (!search || search.length < 2) {
+    if (!search) {
       return NextResponse.json({ success: true, data: { words: [] } });
     }
 
@@ -50,17 +50,34 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       .where('sort_key', '>=', searchKey)
       .where('sort_key', '<=', `${searchKey}\uf8ff`)
       .limit(limit)
-      .select('word', 'translation', 'part_of_speech', 'dictionary_entry')
+      .select(
+        'word',
+        'translation',
+        'pronunciation',
+        'part_of_speech',
+        'definitions',
+        'etymology',
+        'gender',
+        'declension',
+        'conjugation',
+        'dictionary_entry',
+        'principal_parts',
+        'dictionary_forms',
+        'pronoun_type',
+        'person',
+        'is_deponent'
+      )
       .get();
 
     const words = snapshot.docs.map(doc => {
       const data = doc.data();
       return {
         id: doc.id,
-        word: data.word ?? '',
-        translation: data.translation ?? '',
-        part_of_speech: data.part_of_speech ?? '',
-        dictionary_entry: data.dictionary_entry || null,
+        ...data,
+        word: typeof data.word === 'string' ? data.word : '',
+        translation: typeof data.translation === 'string' ? data.translation : '',
+        part_of_speech: typeof data.part_of_speech === 'string' ? data.part_of_speech : '',
+        dictionary_entry: typeof data.dictionary_entry === 'string' ? data.dictionary_entry : null,
       };
     });
 

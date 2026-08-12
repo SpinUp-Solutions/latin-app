@@ -82,10 +82,10 @@ beforeEach(() => {
 });
 
 describe('LessonPlayer preview mode', () => {
-  it('does not persist page, exercise, or completion progress', async () => {
+  it('preserves practice feedback mode without persisting progress', async () => {
     render(<LessonPlayer lesson={lesson} trackProgress={false} />);
 
-    expect(screen.getByText('Runtime mode: preview')).toBeInTheDocument();
+    expect(screen.getByText('Runtime mode: practice')).toBeInTheDocument();
     await waitFor(() => expect(mockUpdatePageProgress).not.toHaveBeenCalled());
     fireEvent.click(screen.getByRole('button', { name: 'Complete exercise' }));
     fireEvent.click(screen.getByRole('button', { name: 'Finish lesson' }));

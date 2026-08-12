@@ -6,6 +6,7 @@ import {
   assertUnitDeletionAllowedInTransaction,
 } from '@/src/lib/learning-units/learning-path-service';
 import { learningPathDocumentSchema, saveLearningPathInputSchema } from '@/src/lib/learning-units/schemas';
+import { testVersionDocumentSchema } from '@/src/lib/tests/schemas';
 
 jest.mock('@/src/services/firebase-admin', () => jest.requireActual('./helpers/routeMocks'));
 
@@ -142,6 +143,15 @@ const path = (overrides: Data = {}): Data => ({
   updatedBy: 'admin',
   ...overrides,
 });
+
+const readableLegacyInvalidVersion = {
+  name: 'Legacy version',
+  pages: [{ id: 'page-1', items: [{ id: 'question-1', type: 'multiple-choice', maxPoints: 1 }] }],
+  totalPages: 1,
+  totalItems: 1,
+  totalExercises: 1,
+  totalPoints: 1,
+};
 
 describe('Learning Path schemas', () => {
   it('requires unique bounded IDs and rejects unknown path fields', () => {
@@ -416,6 +426,43 @@ describe('LearningPathService', () => {
     await expect(
       assertPlacedTestRotationAllowedInTransaction(db.transaction as never, db as never, 'unplaced-test', [])
     ).resolves.toBeUndefined();
+
+    db.records.testVersions.version = readableLegacyInvalidVersion;
+    expect(testVersionDocumentSchema.safeParse({ id: 'version', ...readableLegacyInvalidVersion }).success).toBe(true);
+    await expect(
+      assertPlacedTestRotationAllowedInTransaction(db.transaction as never, db as never, 'test', [
+        { versionId: 'version' },
+      ])
+    ).rejects.toMatchObject({ code: 'PLACED_UNIT_INVALID' });
+    expect(db.writes).toHaveLength(0);
+  });
+
+  it('does not newly place a test backed by a readable legacy-invalid version', async () => {
+    const originalPath = path({ unitIds: [] });
+    const db = new FakeFirestore({
+      lessons: {
+        test: {
+          kind: 'test',
+          title: 'Test',
+          description: '',
+          rotationVersions: [{ versionId: 'version-1' }],
+          passingPercentage: null,
+        },
+      },
+      learningPaths: { default: originalPath },
+      testVersions: { 'version-1': readableLegacyInvalidVersion },
+      mockTests: {},
+    });
+    const service = new LearningPathService(db as never);
+
+    expect(testVersionDocumentSchema.safeParse({ id: 'version-1', ...readableLegacyInvalidVersion }).success).toBe(
+      true
+    );
+    await expect(service.save({ expectedRevision: 2, unitIds: ['test'] }, 'admin')).rejects.toMatchObject({
+      code: 'INELIGIBLE_LEARNING_UNIT',
+    });
+    expect(db.writes).toHaveLength(0);
+    expect(db.records.learningPaths.default).toEqual(originalPath);
   });
 
   it('validates every referenced version for mixed test placement', async () => {

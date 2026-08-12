@@ -21,6 +21,8 @@ import type {
   PracticeTag,
 } from '@/src/types/practice-category';
 import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
+import { assertVocabularyPoolAssignmentsAllowedInTransaction } from '@/src/lib/vocabulary-pools/assignment.server';
+import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
 import { assertUnitDeletionAllowedInTransaction } from '@/src/lib/learning-units/learning-path-service';
 import { toLessonSummary } from '@/src/utils/lessonSummary';
 import { isCategorisableLesson, normalizeCategoryName, normalizeTagName } from './domain';
@@ -254,7 +256,7 @@ export class PracticeCategoryService {
     const ref = this.categories.doc();
     const normalizedName = normalizeCategoryName(input.name);
 
-    return this.db.runTransaction(async transaction => {
+    return runVocabularyContentMutation(this.db, async transaction => {
       const conflictQuery = this.categories
         .where('lessonType', '==', input.lessonType)
         .where('normalizedName', '==', normalizedName)
@@ -305,7 +307,7 @@ export class PracticeCategoryService {
   async createTag(categoryId: string, input: CreatePracticeTagInput, actorId: string): Promise<PracticeTag> {
     const categoryRef = this.categories.doc(categoryId);
     const tagId = this.categories.doc().id;
-    return this.db.runTransaction(async transaction => {
+    return runVocabularyContentMutation(this.db, async transaction => {
       const snapshot = await transaction.get(categoryRef);
       if (!snapshot.exists) {
         throw new PracticeCategoryError('CATEGORY_NOT_FOUND', 'Practice category not found', 404);
@@ -358,7 +360,7 @@ export class PracticeCategoryService {
     actorId: string
   ): Promise<PracticeTag> {
     const categoryRef = this.categories.doc(categoryId);
-    return this.db.runTransaction(async transaction => {
+    return runVocabularyContentMutation(this.db, async transaction => {
       const snapshot = await transaction.get(categoryRef);
       if (!snapshot.exists) {
         throw new PracticeCategoryError('CATEGORY_NOT_FOUND', 'Practice category not found', 404);
@@ -416,7 +418,7 @@ export class PracticeCategoryService {
 
   async deleteTag(categoryId: string, tagId: string, actorId: string): Promise<void> {
     const categoryRef = this.categories.doc(categoryId);
-    await this.db.runTransaction(async transaction => {
+    await runVocabularyContentMutation(this.db, async transaction => {
       const [categorySnapshot, membershipSnapshot] = await Promise.all([
         transaction.get(categoryRef),
         transaction.get(this.categoryMembershipsQuery(categoryId)),
@@ -452,7 +454,7 @@ export class PracticeCategoryService {
 
   async reorderTags(categoryId: string, orderedTagIds: string[], actorId: string): Promise<PracticeTag[]> {
     const categoryRef = this.categories.doc(categoryId);
-    return this.db.runTransaction(async transaction => {
+    return runVocabularyContentMutation(this.db, async transaction => {
       const snapshot = await transaction.get(categoryRef);
       if (!snapshot.exists) {
         throw new PracticeCategoryError('CATEGORY_NOT_FOUND', 'Practice category not found', 404);
@@ -484,7 +486,7 @@ export class PracticeCategoryService {
     actorId: string
   ): Promise<PracticeCategory> {
     const ref = this.categories.doc(categoryId);
-    return this.db.runTransaction(async transaction => {
+    return runVocabularyContentMutation(this.db, async transaction => {
       const snapshot = await transaction.get(ref);
       if (!snapshot.exists) {
         throw new PracticeCategoryError('CATEGORY_NOT_FOUND', 'Practice category not found', 404);
@@ -563,7 +565,7 @@ export class PracticeCategoryService {
 
   async deleteCategory(categoryId: string): Promise<void> {
     const ref = this.categories.doc(categoryId);
-    await this.db.runTransaction(async transaction => {
+    await runVocabularyContentMutation(this.db, async transaction => {
       const [categorySnapshot, membershipSnapshot] = await Promise.all([
         transaction.get(ref),
         transaction.get(this.memberships.where('categoryId', '==', categoryId).limit(1)),
@@ -595,7 +597,7 @@ export class PracticeCategoryService {
     orderedCategoryIds: string[],
     actorId: string
   ): Promise<PracticeCategory[]> {
-    return this.db.runTransaction(async transaction => {
+    return runVocabularyContentMutation(this.db, async transaction => {
       const snapshot = await transaction.get(this.activeCategoriesQuery(lessonType));
       const categories = snapshot.docs.map(categoryFromSnapshot);
       assertExactScope(
@@ -706,7 +708,7 @@ export class PracticeCategoryService {
 
   async addLessons(categoryId: string, lessonIds: string[], actorId: string): Promise<PracticeCategoryMembership[]> {
     const categoryRef = this.categories.doc(categoryId);
-    return this.db.runTransaction(async transaction => {
+    return runVocabularyContentMutation(this.db, async transaction => {
       const [categorySnapshot, membershipSnapshot] = await Promise.all([
         transaction.get(categoryRef),
         transaction.get(this.categoryMembershipsQuery(categoryId)),
@@ -797,7 +799,7 @@ export class PracticeCategoryService {
 
   async removeLesson(categoryId: string, lessonId: string, actorId: string): Promise<boolean> {
     const categoryRef = this.categories.doc(categoryId);
-    return this.db.runTransaction(async transaction => {
+    return runVocabularyContentMutation(this.db, async transaction => {
       const [categorySnapshot, membershipSnapshot] = await Promise.all([
         transaction.get(categoryRef),
         transaction.get(this.categoryMembershipsQuery(categoryId)),
@@ -836,7 +838,7 @@ export class PracticeCategoryService {
     actorId: string
   ): Promise<PracticeCategoryMembership[]> {
     const categoryRef = this.categories.doc(categoryId);
-    return this.db.runTransaction(async transaction => {
+    return runVocabularyContentMutation(this.db, async transaction => {
       const [categorySnapshot, membershipSnapshot] = await Promise.all([
         transaction.get(categoryRef),
         transaction.get(this.categoryMembershipsQuery(categoryId)),
@@ -881,7 +883,7 @@ export class PracticeCategoryService {
   ): Promise<PracticeCategoryMembership> {
     const categoryRef = this.categories.doc(categoryId);
     const membershipRef = this.memberships.doc(getPracticeCategoryMembershipId(categoryId, lessonId));
-    return this.db.runTransaction(async transaction => {
+    return runVocabularyContentMutation(this.db, async transaction => {
       const [categorySnapshot, membershipSnapshot] = await Promise.all([
         transaction.get(categoryRef),
         transaction.get(membershipRef),
@@ -1018,7 +1020,7 @@ export class PracticeCategoryService {
     desiredCategories: PracticeCategorySelection[] | string[],
     actorId: string
   ): Promise<LessonCategoryAssignments> {
-    return this.db.runTransaction(async transaction => {
+    return runVocabularyContentMutation(this.db, async transaction => {
       const lessonSnapshot = await transaction.get(this.db.collection('lessons').doc(lessonId));
       if (!lessonSnapshot.exists) {
         throw new PracticeCategoryError('LESSON_NOT_FOUND', 'Lesson not found', 404);
@@ -1224,7 +1226,7 @@ export class PracticeCategoryService {
 
   async deleteLessonWithMemberships(lessonId: string, actorId: string): Promise<number> {
     const lessonRef = this.db.collection('lessons').doc(lessonId);
-    return this.db.runTransaction(async transaction => {
+    return runVocabularyContentMutation(this.db, async transaction => {
       const lessonSnapshot = await transaction.get(lessonRef);
       if (!lessonSnapshot.exists) {
         throw new PracticeCategoryError('LESSON_NOT_FOUND', 'Lesson not found', 404);
@@ -1232,6 +1234,12 @@ export class PracticeCategoryService {
       if (!isLessonDocumentData(lessonSnapshot.data())) {
         throw new PracticeCategoryError('LESSON_NOT_FOUND', 'Lesson not found', 404);
       }
+      const applyVocabularyPoolAssignmentRevisions = await assertVocabularyPoolAssignmentsAllowedInTransaction(
+        transaction,
+        this.db,
+        lessonSnapshot.data(),
+        {}
+      );
       await assertUnitDeletionAllowedInTransaction(transaction, this.db, lessonId);
       const lessonMembershipSnapshot = await transaction.get(this.memberships.where('lessonId', '==', lessonId));
       const lessonMembershipDocs = lessonMembershipSnapshot.docs.map(snapshot => ({
@@ -1244,6 +1252,7 @@ export class PracticeCategoryService {
       );
 
       const now = new Date().toISOString();
+      applyVocabularyPoolAssignmentRevisions();
       transaction.delete(lessonRef);
       lessonMembershipDocs.forEach(item => transaction.delete(item.snapshot.ref));
       categoryScopes.forEach(snapshot => {

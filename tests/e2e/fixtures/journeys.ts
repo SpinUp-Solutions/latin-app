@@ -13,8 +13,8 @@ export async function signIn(page: Page, user: SeededUser, destination: '/dashbo
 
 export function dashboardCard(page: Page, title: string) {
   return page
-    .getByRole('heading', { name: title, exact: true })
-    .locator('xpath=ancestor::div[contains(@class,"rounded-3xl")][1]');
+    .locator('[data-testid="dashboard-test-card"], [data-testid="mock-test-card"]')
+    .filter({ has: page.getByRole('heading', { name: title, exact: true }) });
 }
 
 export async function recordFillAnswer(page: Page, answer: string) {

@@ -2,6 +2,7 @@ import type { TestUnit } from './learning-unit';
 import type { Page } from './page';
 import type { ExerciseAnswer } from './runtime-mode';
 import type { VocabularyPoolStudyData } from './vocabulary';
+import type { TestTranslationGradingOutput } from '@/shared/openai/translation-grading';
 
 export interface RotationVersionReference {
   versionId: string;
@@ -84,11 +85,8 @@ export interface StudentMockTestSummary {
  * visibility change.
  */
 export interface StudentMockTestDetail {
-  mock: Pick<
-    MockTest,
-    'id' | 'title' | 'description' | 'passingPercentage' | 'status' | 'isLive'
-  >;
-  attempt: Omit<StudentInProgressTestAttempt, 'answers'> | null;
+  mock: Pick<MockTest, 'id' | 'title' | 'description' | 'passingPercentage' | 'status' | 'isLive'>;
+  attempt: Omit<StudentInProgressTestAttempt, 'answers' | 'translationGrades'> | null;
 }
 
 export type TestAttemptOrigin = { kind: 'normal-test'; testId: string } | { kind: 'mock-test'; mockTestId: string };
@@ -110,9 +108,34 @@ export interface TestAttemptBase {
   updatedAt: string;
 }
 
+export interface TestTranslationItemGrade extends TestTranslationGradingOutput {
+  translation: string;
+}
+
+export type TestTranslationGrades = Record<string, Record<string, TestTranslationItemGrade>>;
+
+export interface TestTranslationGradeReservation {
+  token: string;
+  expiresAt: string;
+}
+
+export type TestTranslationGradeReservations = Record<string, Record<string, TestTranslationGradeReservation>>;
+
+export interface TestTranslationGradeRequestWindow {
+  windowStartedAt: string;
+  count: number;
+}
+
+export type TestTranslationGradeRequestWindows = Record<string, Record<string, TestTranslationGradeRequestWindow>>;
+
 export interface InProgressTestAttempt extends TestAttemptBase {
   status: 'in-progress';
   answers: Record<string, ExerciseAnswer>;
+  translationGrades: TestTranslationGrades;
+  /** Server-only leases preventing concurrent AI grading of the same item. */
+  translationGradeReservations: TestTranslationGradeReservations;
+  /** Server-only fixed-window provider invocation budgets. */
+  translationGradeRequestWindows: TestTranslationGradeRequestWindows;
   deliveryState: TestAttemptDeliveryState;
 }
 
@@ -150,7 +173,10 @@ export interface StudentTestDelivery {
   vocabularyPool?: VocabularyPoolStudyData;
 }
 
-export type StudentInProgressTestAttempt = Omit<InProgressTestAttempt, 'studentId' | 'deliveryState'> & {
+export type StudentInProgressTestAttempt = Omit<
+  InProgressTestAttempt,
+  'studentId' | 'deliveryState' | 'translationGradeReservations' | 'translationGradeRequestWindows'
+> & {
   delivery: StudentTestDelivery;
 };
 

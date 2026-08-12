@@ -149,6 +149,58 @@ export function useBufferedAttemptAnswers() {
     [clearSaveTimer, flushPendingAnswers]
   );
 
+  const clearAnswer = useCallback(
+    (exerciseId: string) => {
+      const activeAttempt = activeAttemptRef.current;
+      if (!activeAttempt) return;
+
+      setAnswers(current => {
+        const next = { ...current };
+        delete next[exerciseId];
+        return next;
+      });
+      const queued = pendingAnswersRef.current;
+      pendingAnswersRef.current =
+        queued?.scope === activeAttempt.scope
+          ? {
+              scope: activeAttempt.scope,
+              answers: { ...queued.answers, [exerciseId]: null },
+            }
+          : {
+              scope: activeAttempt.scope,
+              answers: { [exerciseId]: null },
+            };
+      setSaveError(null);
+      setSaveStatus('recorded');
+
+      clearSaveTimer();
+      saveTimerRef.current = setTimeout(() => {
+        void flushPendingAnswers().catch(() => {
+          toast.error('An answer is still waiting to be saved. Try again before leaving.');
+        });
+      }, ANSWER_SAVE_DEBOUNCE_MS);
+    },
+    [clearSaveTimer, flushPendingAnswers]
+  );
+
+  const adoptPersistedAnswer = useCallback((event: ExerciseAnswerEvent) => {
+    const activeAttempt = activeAttemptRef.current;
+    if (!activeAttempt) return;
+
+    setAnswers(current => ({ ...current, [event.exerciseId]: event.answer }));
+    const queued = pendingAnswersRef.current;
+    if (queued?.scope === activeAttempt.scope && event.exerciseId in queued.answers) {
+      const remaining = { ...queued.answers };
+      delete remaining[event.exerciseId];
+      pendingAnswersRef.current =
+        Object.keys(remaining).length > 0 ? { scope: activeAttempt.scope, answers: remaining } : null;
+    }
+    if (!pendingAnswersRef.current && !saveInFlightRef.current) {
+      setSaveError(null);
+      setSaveStatus('saved');
+    }
+  }, []);
+
   useEffect(() => {
     const protectUnsavedAnswers = (event: BeforeUnloadEvent) => {
       if (!hasUnsavedAnswers()) return;
@@ -170,7 +222,9 @@ export function useBufferedAttemptAnswers() {
 
   return {
     activateAttempt,
+    adoptPersistedAnswer,
     answers,
+    clearAnswer,
     flushPendingAnswers,
     hasUnsavedAnswers,
     recordAnswer,

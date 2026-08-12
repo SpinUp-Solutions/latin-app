@@ -20,6 +20,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "test": "jest --config jest.config.mjs",
+    "test:firestore-rules": "firebase emulators:exec --only firestore --project demo-latin-app \"node tests/firestoreVocabularyRules.emulator.mjs\"",
     "test:watch": "jest --config jest.config.mjs --watch",
     "test:e2e": "node tests/e2e/preflight.mjs && playwright test --config=playwright.config.ts",
     "test:e2e:assessment": "node tests/e2e/preflight.mjs && playwright test tests/e2e/assessment-acceptance.spec.ts --config=playwright.config.ts",
@@ -33,7 +34,11 @@
     "functions:prod": "firebase use prod && firebase deploy --only functions",
     "functions:all": "npm run functions:dev && npm run functions:staging && npm run functions:prod",
     "functions:serve": "firebase emulators:start --only functions",
-    "firebase:emulators:e2e": "node tests/e2e/start-emulators.mjs"
+    "firebase:emulators:e2e": "node tests/e2e/start-emulators.mjs",
+    "sync:prod-content": "node scripts/sync-prod-content-to-dev.mjs",
+    "sync:prod-content:dry-run": "node scripts/sync-prod-content-to-dev.mjs",
+    "sync:prod-content:verify": "node scripts/sync-prod-content-to-dev.mjs --verify",
+    "sync:prod-content:rollback": "node scripts/sync-prod-content-to-dev.mjs --rollback"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",
@@ -41,6 +46,7 @@
     "@dnd-kit/modifiers": "^9.0.0",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@google-cloud/storage": "7.16.0",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-accordion": "^1.2.2",
     "@radix-ui/react-alert-dialog": "^1.1.5",
@@ -107,6 +113,7 @@
     "@commitlint/cli": "^19.0.0",
     "@commitlint/config-conventional": "^19.0.0",
     "@eslint/js": "^9.19.0",
+    "@firebase/rules-unit-testing": "3.0.4",
     "@playwright/test": "^1.53.1",
     "@tailwindcss/typography": "^0.5.16",
     "@testing-library/jest-dom": "^6.6.3",

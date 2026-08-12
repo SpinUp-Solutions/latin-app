@@ -8,6 +8,7 @@ import { Badge } from '@/src/components/ui/badge';
 import { X, BookOpen } from 'lucide-react';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { WordSelector } from './WordSelector';
+import { MAX_VOCABULARY_POOL_WORD_ADDITIONS } from '@/src/lib/vocabulary-pools/limits';
 import { useWordSelection } from '@/src/hooks/useWordSelection';
 import type { CreatePoolRequest, VocabularyPool, VocabularyPoolWithWords } from '@/src/types/vocabulary-pool';
 
@@ -191,7 +192,7 @@ export const PoolForm: React.FC<PoolFormProps> = ({ initialData, onSubmit, onCan
             </p>
 
             <WordSelector
-              maxSelection={undefined}
+              maxSelection={MAX_VOCABULARY_POOL_WORD_ADDITIONS}
               initialSelectedWords={initialData && 'words' in initialData ? initialData.words : undefined}
               initialSelectedIds={initialData?.wordDocIds}
             />

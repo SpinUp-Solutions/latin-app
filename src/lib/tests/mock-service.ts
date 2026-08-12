@@ -22,12 +22,16 @@ import type {
   TestVersionSummary,
 } from '@/src/types/test';
 import { regeneratePageIds } from '@/src/utils/idUtils';
+import { assertVocabularyPoolAssignmentsAllowedInTransaction } from '@/src/lib/vocabulary-pools/assignment.server';
+import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
 import { TestAttemptService } from './attempt-service';
 import { TestServiceError } from './errors';
 import {
+  assertVersionReadyForStudentVisibility,
   buildVersion,
   configurationError,
   getVersionSummaries,
+  isStoredVersionReadyForStudentVisibility,
   parseMockSnapshot,
   parseTestSnapshot,
   parseVersionSnapshot,
@@ -40,7 +44,6 @@ import {
   moveStandaloneMockToTestInputSchema,
   reactivateStandaloneMockInputSchema,
   reorderMockTestsInputSchema,
-  testVersionDocumentSchema,
   updateMockTestInputSchema,
   updateTestVersionInputSchema,
   type AssignVersionToMockInput,
@@ -103,7 +106,7 @@ export class MockTestService {
   async updateActiveMockVersion(mockId: string, input: UpdateTestVersionInput, actorId: string): Promise<TestVersion> {
     const changes = updateTestVersionInputSchema.parse(input);
     const mockRef = this.mocks.doc(mockId);
-    return this.db.runTransaction(async transaction => {
+    return runVocabularyContentMutation(this.db, async transaction => {
       const mock = parseMockSnapshot(await transaction.get(mockRef));
       if (mock.status !== 'active')
         throw new TestServiceError(
@@ -126,6 +129,13 @@ export class MockTestService {
           createdBy: current.createdBy,
         }
       );
+      const applyVocabularyPoolAssignmentRevisions = await assertVocabularyPoolAssignmentsAllowedInTransaction(
+        transaction,
+        this.db,
+        current,
+        version
+      );
+      applyVocabularyPoolAssignmentRevisions();
       transaction.set(versionRef, version);
       transaction.set(mockRef, this.buildMock({ ...mock }, actorId, mock));
       return version;
@@ -152,11 +162,10 @@ export class MockTestService {
       );
     }
     if (parsed.data.unitIds.includes(test.id)) {
-      const snapshots = await transaction.getAll(...rotationVersionIds.map(versionId => this.versions.doc(versionId)));
-      const invalid = snapshots.find(
-        snapshot =>
-          !snapshot.exists || !testVersionDocumentSchema.safeParse({ ...snapshot.data(), id: snapshot.id }).success
+      const snapshots = await Promise.all(
+        rotationVersionIds.map(versionId => transaction.get(this.versions.doc(versionId)))
       );
+      const invalid = snapshots.find(snapshot => !isStoredVersionReadyForStudentVisibility(snapshot));
       if (invalid) {
         throw new TestServiceError(
           'PLACED_TEST_REQUIRES_ROTATION_VERSION',
@@ -229,7 +238,7 @@ export class MockTestService {
       transaction.get(this.db.collection('lessons').where('kind', '==', 'test')),
       transaction.get(this.mocks.where('status', '==', 'active')),
     ]);
-    parseVersionSnapshot(versionSnapshot);
+    const version = parseVersionSnapshot(versionSnapshot);
     for (const snapshot of testSnapshots.docs) {
       const test = parseTestSnapshot(snapshot);
       if (test.rotationVersions.some(reference => reference.versionId === versionId) && test.id !== targetTestId) {
@@ -251,6 +260,7 @@ export class MockTestService {
         );
       }
     }
+    return version;
   }
 
   private buildMock(
@@ -314,7 +324,7 @@ export class MockTestService {
   }
 
   async getStudentMockDetail(mockId: string, studentId: string): Promise<StudentMockTestDetail> {
-    return this.db.runTransaction(async transaction => {
+    return runVocabularyContentMutation(this.db, async transaction => {
       const mock = parseMockSnapshot(await transaction.get(this.mocks.doc(mockId)));
       const activeAttempt = await this.attempts.getActiveAttempt(
         { kind: 'mock-test', mockTestId: mockId },
@@ -322,7 +332,9 @@ export class MockTestService {
         transaction
       );
       const attempt = activeAttempt
-        ? (({ answers: _answers, ...sanitizedAttempt }) => sanitizedAttempt)(activeAttempt)
+        ? (({ answers: _answers, translationGrades: _translationGrades, ...sanitizedAttempt }) => sanitizedAttempt)(
+            activeAttempt
+          )
         : null;
       if ((!mock.isLive || mock.status !== 'active') && !attempt) {
         throw new TestServiceError('MOCK_TEST_NOT_AVAILABLE', 'Mock test is not available', 404);
@@ -372,7 +384,7 @@ export class MockTestService {
     const mockRef = this.mocks.doc(parsed.mock.id);
     const versionRef = this.versions.doc(parsed.version.id);
     const draftRef = this.drafts.doc(parsed.version.id);
-    return this.db.runTransaction(async transaction => {
+    return runVocabularyContentMutation(this.db, async transaction => {
       const ordering = await transaction.get(this.mockOrdering);
       const [existingMock, existingVersion, existingDraft] = await Promise.all([
         transaction.get(mockRef),
@@ -394,6 +406,13 @@ export class MockTestService {
         },
         actorId
       );
+      const applyVocabularyPoolAssignmentRevisions = await assertVocabularyPoolAssignmentsAllowedInTransaction(
+        transaction,
+        this.db,
+        undefined,
+        version
+      );
+      applyVocabularyPoolAssignmentRevisions();
       transaction.create(versionRef, version);
       transaction.create(mockRef, mock);
       this.touchMockOrdering(transaction, actorId, ordering);
@@ -406,7 +425,7 @@ export class MockTestService {
     const testRef = this.units.doc(parsed.testId);
     const mockRef = this.mocks.doc(MockTestService.parentMockId(parsed.testId, parsed.versionId));
     const versionRef = this.versions.doc(parsed.versionId);
-    return this.db.runTransaction(async transaction => {
+    return runVocabularyContentMutation(this.db, async transaction => {
       const ordering = await transaction.get(this.mockOrdering);
       const [testSnapshot, versionSnapshot, priorMock] = await Promise.all([
         transaction.get(testRef),
@@ -414,7 +433,7 @@ export class MockTestService {
         transaction.get(mockRef),
       ]);
       const test = parseTestSnapshot(testSnapshot);
-      parseVersionSnapshot(versionSnapshot);
+      const version = parseVersionSnapshot(versionSnapshot);
       const existing = priorMock.exists ? parseMockSnapshot(priorMock) : undefined;
       if (
         existing &&
@@ -428,6 +447,7 @@ export class MockTestService {
       if (!inRotation && !existing)
         throw new TestServiceError('TEST_VERSION_NOT_IN_TEST', 'Test version is not assigned to this test', 409);
       await this.assertVersionClaim(transaction, parsed.versionId, parsed.testId, mockRef.id);
+      assertVersionReadyForStudentVisibility(version);
       const remainingRotationIds = test.rotationVersions
         .filter(reference => reference.versionId !== parsed.versionId)
         .map(reference => reference.versionId);
@@ -473,14 +493,15 @@ export class MockTestService {
 
   async archiveMock(mockId: string, actorId: string): Promise<MockTest> {
     const mockRef = this.mocks.doc(mockId);
-    return this.db.runTransaction(async transaction => {
+    return runVocabularyContentMutation(this.db, async transaction => {
       const ordering = await transaction.get(this.mockOrdering);
       const mock = parseMockSnapshot(await transaction.get(mockRef));
       if (mock.status === 'archived') return mock;
       let parent: TestUnit | undefined;
       if (mock.parent.kind === 'test')
         parent = parseTestSnapshot(await transaction.get(this.units.doc(mock.parent.testId)));
-      await this.assertVersionClaim(transaction, mock.versionId, parent?.id, mock.id);
+      const version = await this.assertVersionClaim(transaction, mock.versionId, parent?.id, mock.id);
+      if (parent) assertVersionReadyForStudentVisibility(version);
       const archived = this.buildMock({ ...mock, status: 'archived', isLive: false, mockOrder: null }, actorId, mock);
       const liveScope = await this.readLiveMockOrderScope(transaction);
       transaction.set(mockRef, archived);
@@ -506,7 +527,7 @@ export class MockTestService {
   ): Promise<MockTest> {
     const { isLive } = reactivateStandaloneMockInputSchema.parse(input);
     const mockRef = this.mocks.doc(mockId);
-    return this.db.runTransaction(async transaction => {
+    return runVocabularyContentMutation(this.db, async transaction => {
       const ordering = await transaction.get(this.mockOrdering);
       const mock = parseMockSnapshot(await transaction.get(mockRef));
       if (mock.parent.kind !== 'standalone') {
@@ -517,7 +538,8 @@ export class MockTestService {
         );
       }
       if (mock.status === 'active') return mock;
-      await this.assertVersionClaim(transaction, mock.versionId, undefined, mock.id);
+      const version = await this.assertVersionClaim(transaction, mock.versionId, undefined, mock.id);
+      assertVersionReadyForStudentVisibility(version);
       const reactivated = this.buildMock(
         {
           ...mock,
@@ -538,7 +560,7 @@ export class MockTestService {
     const { testId } = moveStandaloneMockToTestInputSchema.parse(input);
     const mockRef = this.mocks.doc(mockId);
     const testRef = this.units.doc(testId);
-    return this.db.runTransaction(async transaction => {
+    return runVocabularyContentMutation(this.db, async transaction => {
       const ordering = await transaction.get(this.mockOrdering);
       const [mockSnapshot, testSnapshot] = await Promise.all([transaction.get(mockRef), transaction.get(testRef)]);
       const mock = parseMockSnapshot(mockSnapshot);
@@ -549,7 +571,8 @@ export class MockTestService {
           'Only an active standalone mock can be moved to normal rotation',
           409
         );
-      await this.assertVersionClaim(transaction, mock.versionId, test.id, mock.id);
+      const version = await this.assertVersionClaim(transaction, mock.versionId, test.id, mock.id);
+      assertVersionReadyForStudentVisibility(version);
       if (test.rotationVersions.some(reference => reference.versionId === mock.versionId))
         throw new TestServiceError('VERSION_ALREADY_ASSIGNED', 'Version is already in this test rotation', 409);
       const archived = this.buildMock({ ...mock, status: 'archived', isLive: false, mockOrder: null }, actorId, mock);
@@ -580,7 +603,7 @@ export class MockTestService {
     const mockRef = this.mocks.doc(mockId);
     const targetVersionRef = this.versions.doc(versionId);
     const targetDraftRef = this.drafts.doc(versionId);
-    return this.db.runTransaction(async transaction => {
+    return runVocabularyContentMutation(this.db, async transaction => {
       await transaction.get(this.mockOrdering);
       const mockSnapshot = await transaction.get(mockRef);
       const mock = parseMockSnapshot(mockSnapshot);
@@ -628,6 +651,13 @@ export class MockTestService {
         updatedAt: this.now(),
         updatedBy: actorId,
       }) as TestUnit;
+      const applyVocabularyPoolAssignmentRevisions = await assertVocabularyPoolAssignmentsAllowedInTransaction(
+        transaction,
+        this.db,
+        undefined,
+        version
+      );
+      applyVocabularyPoolAssignmentRevisions();
       transaction.create(targetVersionRef, version);
       transaction.set(this.units.doc(testId), updatedTest);
       return { version, test: updatedTest, mock };
@@ -637,7 +667,7 @@ export class MockTestService {
   async updateMock(mockId: string, input: UpdateMockTestInput, actorId: string): Promise<MockTest> {
     const changes = updateMockTestInputSchema.parse(input);
     const ref = this.mocks.doc(mockId);
-    return this.db.runTransaction(async transaction => {
+    return runVocabularyContentMutation(this.db, async transaction => {
       const ordering = await transaction.get(this.mockOrdering);
       const current = parseMockSnapshot(await transaction.get(ref));
       if (current.status !== 'active' && changes.isLive)
@@ -647,7 +677,8 @@ export class MockTestService {
           409
         );
       const isLive = changes.isLive ?? current.isLive;
-      await this.assertVersionClaim(transaction, current.versionId, undefined, current.id);
+      const version = await this.assertVersionClaim(transaction, current.versionId, undefined, current.id);
+      if (!current.isLive && isLive) assertVersionReadyForStudentVisibility(version);
       const updated = this.buildMock(
         {
           ...current,
@@ -672,7 +703,7 @@ export class MockTestService {
 
   async reorderMocks(input: ReorderMockTestsInput, actorId: string): Promise<MockTest[]> {
     const { mockIds } = reorderMockTestsInputSchema.parse(input);
-    return this.db.runTransaction(async transaction => {
+    return runVocabularyContentMutation(this.db, async transaction => {
       const ordering = await transaction.get(this.mockOrdering);
       const scope = await transaction.get(this.mocks.where('status', '==', 'active').where('isLive', '==', true));
       const mocks = scope.docs.map(parseMockSnapshot);

@@ -5,10 +5,42 @@ import { VocabularyWordSchema } from '@/shared/types/vocabulary/schemas';
 import { parseFormPathFromString } from '@/src/utils/exerciseFormPaths';
 import { TABLE_TYPE_CONFIG, type TableType } from '@/src/utils/schema-helpers';
 import { scanTableForMatchingForms, categorizeMatchingPaths } from '@/src/utils/tableScanner';
-import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
+import { AdminAccessError, verifyAdminAccess, verifyAuthenticatedAccess } from '@/src/lib/verifyAdminAccess';
+import {
+  requireVocabularyWordsCollection,
+  VocabularyWordCollectionError,
+} from '@/src/lib/vocabulary/word-collection.server';
+import { getReadableVocabularyPool } from '@/src/lib/vocabulary-pools/archive.server';
+import { prepareVocabularyContentRevisionBump } from '@/src/lib/vocabulary-pools/content-revision.server';
+import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
 
-const DEFAULT_COLLECTION = VOCABULARY_WORDS_COLLECTION;
 const TABLE_FIELDS = ['word', 'conjugation_table', 'declension_table', 'degrees_table'] as const;
+const GENERATED_WORD_FIELDS = new Set([
+  'id',
+  'root_word',
+  'dictionary_entry',
+  'selected_form',
+  'part_of_speech',
+  'form_path',
+  'primary_form_paths',
+  'optional_form_paths',
+  'conjugation',
+  'declension',
+  'definitions',
+  'is_deponent',
+  'translation',
+  'gender',
+  'pronoun_type',
+  'person',
+]);
+const GENERATED_MAX_RESULTS = 200;
+const GENERATED_MAX_LIST_VALUES = 30;
+const GENERATED_MAX_CELL_PATHS = 100;
+
+const generatedRequestError = (error: string) => NextResponse.json({ success: false, error }, { status: 400 });
+
+const sanitizeGeneratedWord = (word: Record<string, unknown>) =>
+  Object.fromEntries(Object.entries(word).filter(([field]) => GENERATED_WORD_FIELDS.has(field)));
 
 const serializeTimestamp = (value: unknown): string | undefined => {
   if (value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function') {
@@ -107,27 +139,32 @@ const pickPoolWordIds = (
   wordDocIds: string[],
   limitCount: number,
   fetchAllWords: boolean,
-  sampleSeed: string | null
+  sampleSeed: string | null,
+  offset = 0
 ): string[] => {
-  if (fetchAllWords || limitCount >= wordDocIds.length) {
+  if (fetchAllWords) {
     return [...wordDocIds];
   }
-  const sampleSize = Math.max(1, Math.min(limitCount, wordDocIds.length));
-  const shuffled = sampleSeed ? shuffleArrayWithSeed(wordDocIds, sampleSeed) : shuffleArray(wordDocIds);
-  return shuffled.slice(0, sampleSize);
+  const ordered = sampleSeed ? shuffleArrayWithSeed(wordDocIds, sampleSeed) : shuffleArray(wordDocIds);
+  return ordered.slice(offset, offset + Math.max(1, limitCount));
 };
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: NextRequest): Promise<NextResponse> {
+export async function handleVocabularyWordsGET(
+  request: NextRequest,
+  audience: 'admin' | 'generated' = 'admin'
+): Promise<NextResponse> {
   try {
+    if (audience === 'admin') await verifyAdminAccess(request);
+    else await verifyAuthenticatedAccess(request);
     const { searchParams } = new URL(request.url);
     const wordType = searchParams.get('wordType');
     const limit = parseInt(searchParams.get('limit') || '20');
     const lastWordId = searchParams.get('lastWordId');
     const search = searchParams.get('search');
     const countsOnly = searchParams.get('countsOnly') === 'true';
-    const collection = searchParams.get('collection') || DEFAULT_COLLECTION;
+    const collection = requireVocabularyWordsCollection(searchParams.get('collection'));
     const verbConjugation = searchParams.get('verbConjugation');
     const isDeponent = searchParams.get('isDeponent');
     const nounDeclension = searchParams.get('nounDeclension');
@@ -142,7 +179,49 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const randomStart = searchParams.get('randomStart');
     const poolId = searchParams.get('poolId');
     const poolSampleSeed = searchParams.get('poolSampleSeed');
+    const poolOffset = Number(searchParams.get('poolOffset') ?? '0');
     const exerciseMode = searchParams.get('exerciseMode') === 'true';
+
+    if (audience === 'generated' && (!exerciseMode || countsOnly)) {
+      return NextResponse.json(
+        { success: false, error: 'Generated word requests must use exercise mode' },
+        { status: 400 }
+      );
+    }
+    if (audience === 'generated') {
+      const rawLimit = searchParams.get('limit') ?? '20';
+      const listParams = [verbConjugation, nounDeclension, adjectiveDeclension, pronounType, pronounPerson];
+      const selectValues = parseSelectFields(selectFields);
+      const pathValues = parseCellPaths(cellPaths);
+      if (fetchAll) return generatedRequestError('Generated word requests cannot use fetchAll');
+      if (!/^\d+$/.test(rawLimit) || limit < 1 || limit > GENERATED_MAX_RESULTS)
+        return generatedRequestError(`Generated word limit must be between 1 and ${GENERATED_MAX_RESULTS}`);
+      if (pathValues.length > GENERATED_MAX_CELL_PATHS || (cellPaths?.length ?? 0) > 10_000)
+        return generatedRequestError('Generated word cellPaths are too large');
+      if (
+        selectValues.length > GENERATED_MAX_LIST_VALUES ||
+        selectValues.some(field => field.length > 100 || !/^[A-Za-z0-9_.]+$/.test(field))
+      )
+        return generatedRequestError('Generated word select fields are invalid or too large');
+      if (
+        listParams.some(value => {
+          const entries = value?.split(',').filter(Boolean) ?? [];
+          return entries.length > GENERATED_MAX_LIST_VALUES || entries.some(entry => entry.length > 100);
+        })
+      )
+        return generatedRequestError('Generated word filters are too large');
+      if ((search?.length ?? 0) > 200 || (poolId?.length ?? 0) > 200 || (poolSampleSeed?.length ?? 0) > 200)
+        return generatedRequestError('Generated word request parameters are too large');
+      if (!Number.isSafeInteger(poolOffset) || poolOffset < 0)
+        return generatedRequestError('Generated word poolOffset must be a non-negative integer');
+      if ((lastWordId?.length ?? 0) > 200)
+        return generatedRequestError('Generated word pagination cursor is too large');
+      if (
+        randomStart !== null &&
+        (!Number.isFinite(Number(randomStart)) || Number(randomStart) < 0 || Number(randomStart) >= 1)
+      )
+        return generatedRequestError('Generated word randomStart must be between 0 and 1');
+    }
 
     if (countsOnly) {
       const wordTypeCounts = await getWordTypeCounts(collection);
@@ -156,11 +235,22 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     let snapshot;
     let fetchLimit = limit;
-    let poolSourceMeta: { totalIds: number; requestedCount: number } | null = null;
+    let poolSourceMeta: { totalIds: number; requestedCount: number; offset: number } | null = null;
 
     if (poolId) {
-      const poolDoc = await adminDb.collection('vocabulary_pools').doc(poolId).get();
-      if (!poolDoc.exists) {
+      const readablePool =
+        audience === 'generated'
+          ? await getReadableVocabularyPool(adminDb, poolId)
+          : await adminDb
+              .collection('vocabulary_pools')
+              .doc(poolId)
+              .get()
+              .then(poolDoc =>
+                poolDoc.exists
+                  ? { data: poolDoc.data() ?? {}, words: adminDb.collection(collection), source: 'active' as const }
+                  : null
+              );
+      if (!readablePool) {
         return NextResponse.json(
           {
             success: false,
@@ -170,15 +260,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         );
       }
 
-      const poolData = poolDoc.data();
-      const wordDocIds = (poolData?.wordDocIds || []) as string[];
+      const wordDocIds = (readablePool.data.wordDocIds || []) as string[];
 
       if (wordDocIds.length === 0) {
         snapshot = { docs: [], size: 0, empty: true };
-        poolSourceMeta = { totalIds: 0, requestedCount: 0 };
+        poolSourceMeta = { totalIds: 0, requestedCount: 0, offset: poolOffset };
       } else {
-        const idsToFetch = pickPoolWordIds(wordDocIds, limit, fetchAll, poolSampleSeed);
-        poolSourceMeta = { totalIds: wordDocIds.length, requestedCount: idsToFetch.length };
+        const idsToFetch = pickPoolWordIds(wordDocIds, limit, fetchAll, poolSampleSeed, poolOffset);
+        poolSourceMeta = { totalIds: wordDocIds.length, requestedCount: idsToFetch.length, offset: poolOffset };
 
         if (idsToFetch.length === 0) {
           snapshot = { docs: [], size: 0, empty: true };
@@ -187,7 +276,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           const batches = [];
           for (let i = 0; i < idsToFetch.length; i += 10) {
             const chunk = idsToFetch.slice(i, i + 10);
-            let batchQuery: Query = adminDb.collection(collection).where(FieldPath.documentId(), 'in', chunk);
+            let batchQuery: Query = readablePool.words.where(FieldPath.documentId(), 'in', chunk);
             if (fields.length > 0) {
               batchQuery = batchQuery.select(...fields);
             }
@@ -413,7 +502,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const hasMore = fetchAll
       ? false
       : poolId
-        ? !!poolSourceMeta && poolSourceMeta.requestedCount < poolSourceMeta.totalIds
+        ? !!poolSourceMeta && poolSourceMeta.offset + poolSourceMeta.requestedCount < poolSourceMeta.totalIds
         : randomize || useRandomOrder
           ? false
           : snapshot.docs.length === fetchLimit;
@@ -421,19 +510,29 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     console.log('[VOCAB API] Returning response with', words.length, 'words, hasMore:', hasMore);
 
+    const responseWords =
+      audience === 'generated' ? words.map(word => sanitizeGeneratedWord(word as Record<string, unknown>)) : words;
+
     return NextResponse.json({
       success: true,
       data: {
-        words,
+        words: responseWords,
         hasMore,
         lastWordId: lastDoc?.id || null,
         limit: fetchAll ? null : limit,
         filters: { wordType, search },
         collection,
         totalCount: fetchAll ? docs.length : undefined,
+        nextPoolOffset: poolSourceMeta ? poolSourceMeta.offset + poolSourceMeta.requestedCount : undefined,
       },
     });
   } catch (error) {
+    if (error instanceof AdminAccessError) {
+      return NextResponse.json({ success: false, error: error.message }, { status: error.status });
+    }
+    if (error instanceof VocabularyWordCollectionError) {
+      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
+    }
     console.error('Error fetching words:', error);
     return NextResponse.json(
       {
@@ -445,8 +544,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 }
 
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  return handleVocabularyWordsGET(request, 'admin');
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
+    await verifyAdminAccess(request);
     const body = await request.json();
     if (!body || typeof body !== 'object') {
       return NextResponse.json(
@@ -463,10 +567,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       id?: string;
     };
 
-    const collection =
-      typeof providedCollection === 'string' && providedCollection.trim() !== ''
-        ? providedCollection
-        : DEFAULT_COLLECTION;
+    const collection = requireVocabularyWordsCollection(providedCollection);
 
     const now = new Date();
     const isoTimestamp = now.toISOString();
@@ -506,7 +607,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       updatedAt: now,
     };
 
-    const docRef = await adminDb.collection(collection).add(firestorePayload);
+    const docRef = adminDb.collection(collection).doc();
+    await runVocabularyContentMutation(adminDb, async transaction => {
+      const applyContentRevision = await prepareVocabularyContentRevisionBump(transaction, adminDb);
+      applyContentRevision();
+      transaction.create(docRef, firestorePayload);
+    });
     const createdSnapshot = await docRef.get();
     const createdWord = {
       id: createdSnapshot.id,
@@ -520,6 +626,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
     });
   } catch (error) {
+    if (error instanceof AdminAccessError) {
+      return NextResponse.json({ success: false, error: error.message }, { status: error.status });
+    }
+    if (error instanceof VocabularyWordCollectionError) {
+      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
+    }
     console.error('Error creating word:', error);
     return NextResponse.json(
       {
@@ -533,8 +645,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
 export async function PUT(request: NextRequest): Promise<NextResponse> {
   try {
+    await verifyAdminAccess(request);
     const body = await request.json();
-    const { wordId, updates, collection = DEFAULT_COLLECTION } = body;
+    const { wordId, updates } = body;
+    const collection = requireVocabularyWordsCollection(body.collection);
 
     if (!wordId || !updates) {
       return NextResponse.json(
@@ -556,50 +670,46 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
     }
 
     const existingRef = adminDb.collection(collection).doc(wordId);
-    const existingSnapshot = await existingRef.get();
-    if (!existingSnapshot.exists) {
+    const updateResult = await runVocabularyContentMutation(adminDb, async transaction => {
+      const existingSnapshot = await transaction.get(existingRef);
+      if (!existingSnapshot.exists) return { status: 'not-found' as const };
+      if (existingSnapshot.data()?._deletionPending) return { status: 'deleting' as const };
+
+      const existingSerialized = serializeWord(existingSnapshot.data() as Record<string, unknown>);
+      const validationCandidate: Record<string, unknown> = {
+        ...existingSerialized,
+        ...updates,
+        ...(typeof updateData.sort_key === 'string' ? { sort_key: updateData.sort_key } : {}),
+        updatedAt: new Date().toISOString(),
+      };
+      const validationResult = VocabularyWordSchema.safeParse(validationCandidate);
+      if (!validationResult.success) {
+        return { status: 'invalid' as const, issues: validationResult.error.issues };
+      }
+
+      const applyContentRevision = await prepareVocabularyContentRevisionBump(transaction, adminDb);
+      transaction.update(existingRef, updateData as FirebaseFirestore.UpdateData<FirebaseFirestore.DocumentData>);
+      applyContentRevision();
+      return {
+        status: 'updated' as const,
+        data: { id: existingSnapshot.id, ...serializeWord({ ...existingSnapshot.data(), ...updateData }) },
+      };
+    });
+
+    if (updateResult.status === 'not-found') {
+      return NextResponse.json({ success: false, error: 'Word not found' }, { status: 404 });
+    }
+    if (updateResult.status === 'deleting') {
       return NextResponse.json(
-        {
-          success: false,
-          error: 'Word not found',
-        },
-        { status: 404 }
+        { success: false, error: 'Word deletion is already in progress', code: 'WORD_DELETE_IN_PROGRESS' },
+        { status: 409 }
       );
     }
-
-    const existingSerialized = serializeWord(existingSnapshot.data() as Record<string, unknown>);
-    const validationCandidate: Record<string, unknown> = {
-      ...existingSerialized,
-      ...updates,
-      ...(typeof updateData.sort_key === 'string' ? { sort_key: updateData.sort_key } : {}),
-      updatedAt: new Date().toISOString(),
-    };
-
-    const validationResult = VocabularyWordSchema.safeParse(validationCandidate);
-    if (!validationResult.success) {
-      console.error('[VOCAB API] Update validation failed', {
-        wordId,
-        collection,
-        part_of_speech: validationCandidate.part_of_speech,
-        issues: validationResult.error.issues.map(issue => ({
-          path: issue.path.join('.'),
-          message: issue.message,
-        })),
-      });
-
-      const errorMessage = validationResult.error.issues
-        .map(issue => `${issue.path.join('.')}: ${issue.message}`)
-        .join('; ');
+    if (updateResult.status === 'invalid') {
+      const errorMessage = updateResult.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).join('; ');
       return NextResponse.json({ success: false, error: `Invalid word data: ${errorMessage}` }, { status: 400 });
     }
-
-    await adminDb.collection(collection).doc(wordId).update(updateData);
-
-    const updatedDoc = await adminDb.collection(collection).doc(wordId).get();
-    const updatedData = {
-      id: updatedDoc.id,
-      ...serializeWord(updatedDoc.data() as Record<string, unknown>),
-    };
+    const updatedData = updateResult.data;
 
     return NextResponse.json({
       success: true,
@@ -607,6 +717,12 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
       updatedData,
     });
   } catch (error) {
+    if (error instanceof AdminAccessError) {
+      return NextResponse.json({ success: false, error: error.message }, { status: error.status });
+    }
+    if (error instanceof VocabularyWordCollectionError) {
+      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
+    }
     console.error('Error updating word:', error);
     return NextResponse.json(
       {

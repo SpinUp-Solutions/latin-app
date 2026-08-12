@@ -1,77 +1,63 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
-import { FieldPath } from 'firebase-admin/firestore';
-import type { VocabularyPool } from '@/src/types/vocabulary-pool';
 import type { Word } from '@/src/types/admin-vocabulary';
-import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
+import { AdminAccessError, verifyAuthenticatedAccess } from '@/src/lib/verifyAdminAccess';
+import { getReadableVocabularyPool, loadVocabularyPoolWords } from '@/src/lib/vocabulary-pools/archive.server';
+import { toVocabularyPoolStudyItems } from '@/src/utils/vocabularyPoolStudy';
 
 export const dynamic = 'force-dynamic';
+const MAX_STUDY_POOL_WORDS = 200;
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ poolId: string }> }
 ): Promise<NextResponse> {
   try {
+    await verifyAuthenticatedAccess(request);
     const { poolId } = await params;
-
-    // Get pool data
-    const poolDoc = await adminDb.collection('vocabulary_pools').doc(poolId).get();
-    if (!poolDoc.exists) {
+    const searchParams = new URL(request.url).searchParams;
+    const rawLimit = searchParams.get('limit') ?? String(MAX_STUDY_POOL_WORDS);
+    const rawOffset = searchParams.get('offset') ?? '0';
+    if (!/^\d+$/.test(rawLimit) || !/^\d+$/.test(rawOffset)) {
+      return NextResponse.json({ success: false, error: 'Invalid pagination parameters' }, { status: 400 });
+    }
+    const limit = Number(rawLimit);
+    const offset = Number(rawOffset);
+    if (limit < 1 || limit > MAX_STUDY_POOL_WORDS) {
+      return NextResponse.json(
+        { success: false, error: `Page size must be between 1 and ${MAX_STUDY_POOL_WORDS}` },
+        { status: 400 }
+      );
+    }
+    const pool = await getReadableVocabularyPool(adminDb, poolId);
+    if (!pool) {
       return NextResponse.json({ success: false, error: 'Pool not found' }, { status: 404 });
     }
 
-    const poolData = poolDoc.data();
-    if (!poolData) {
-      return NextResponse.json({ success: false, error: 'Pool data not found' }, { status: 404 });
-    }
-
-    const pool = poolData as VocabularyPool;
-
-    // If pool has no words, return empty array
-    if (!pool.wordDocIds || pool.wordDocIds.length === 0) {
-      return NextResponse.json({
-        success: true,
-        data: {
-          words: [],
-          poolName: pool.name,
-        },
-      });
-    }
-
-    const words: Word[] = [];
-    const batches = [];
-
-    for (let i = 0; i < pool.wordDocIds.length; i += 10) {
-      const batch = pool.wordDocIds.slice(i, i + 10);
-      batches.push(adminDb.collection(VOCABULARY_WORDS_COLLECTION).where(FieldPath.documentId(), 'in', batch).get());
-    }
-
-    const batchResults = await Promise.all(batches);
-    batchResults.forEach(snapshot => {
-      snapshot.docs.forEach(doc => {
-        const data = doc.data();
-        words.push({
-          id: doc.id,
-          ...data,
-          wordType: data.part_of_speech,
-          createdAt: data.createdAt?.toDate(),
-          updatedAt: data.updatedAt?.toDate(),
-        } as Word);
-      });
+    const poolWordIds = Array.isArray(pool.data.wordDocIds)
+      ? pool.data.wordDocIds.filter((id: unknown): id is string => typeof id === 'string' && Boolean(id))
+      : [];
+    const pageWordIds = poolWordIds.slice(offset, offset + limit);
+    const words = (await loadVocabularyPoolWords(pool, pageWordIds)).map(document => {
+      const data = document.data();
+      return { id: document.id, ...data, wordType: data.part_of_speech } as Word;
     });
-
-    // Sort words to match the original order in wordDocIds
-    const wordMap = new Map(words.map(word => [word.id, word]));
-    const orderedWords = pool.wordDocIds.map(id => wordMap.get(id)).filter(Boolean) as Word[];
 
     return NextResponse.json({
       success: true,
       data: {
-        words: orderedWords,
-        poolName: pool.name,
+        id: poolId,
+        name: typeof pool.data.name === 'string' && pool.data.name.trim() ? pool.data.name : 'Vocabulary Pool',
+        items: toVocabularyPoolStudyItems(words),
+        totalCount: poolWordIds.length,
+        hasMore: offset + pageWordIds.length < poolWordIds.length,
+        nextOffset: offset + pageWordIds.length,
       },
     });
   } catch (error) {
+    if (error instanceof AdminAccessError) {
+      return NextResponse.json({ success: false, error: error.message }, { status: error.status });
+    }
     console.error('Error fetching vocabulary pool words:', error);
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : 'Unknown error' },

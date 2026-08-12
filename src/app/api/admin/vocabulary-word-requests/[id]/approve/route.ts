@@ -7,6 +7,8 @@ import {
   serializeRequestSnapshot,
   wordCollection,
 } from '../../utils';
+import { adminDb } from '@/src/services/firebase-admin';
+import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -35,12 +37,19 @@ export async function POST(
       return NextResponse.json({ success: false, error: validated.error }, { status: 400 });
     }
 
-    const wordRef = await wordCollection().add(validated.data.firestorePayload);
-    await docRef.update({
-      status: 'approved',
-      approvedWordId: wordRef.id,
-      draftWord: validated.data.validatedWord,
-      updatedAt: new Date(),
+    const wordRef = wordCollection().doc();
+    await runVocabularyContentMutation(adminDb, async transaction => {
+      const currentRequest = await transaction.get(docRef);
+      if (!currentRequest.exists || currentRequest.data()?.status !== 'pending') {
+        throw new Error('Only a currently pending request can be approved');
+      }
+      transaction.create(wordRef, validated.data.firestorePayload);
+      transaction.update(docRef, {
+        status: 'approved',
+        approvedWordId: wordRef.id,
+        draftWord: validated.data.validatedWord,
+        updatedAt: new Date(),
+      });
     });
 
     const updated = await docRef.get();

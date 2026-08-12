@@ -1,4 +1,9 @@
-import { getTestAttemptSessionId, TestAttemptService } from '@/src/lib/tests/attempt-service';
+import {
+  getTestAttemptSessionId,
+  MAX_TRANSLATION_GRADING_REQUESTS_PER_WINDOW,
+  TestAttemptService,
+  TRANSLATION_GRADING_REQUEST_WINDOW_MS,
+} from '@/src/lib/tests/attempt-service';
 import { MockTestService } from '@/src/lib/tests/mock-service';
 import type { TestAttemptOrigin } from '@/src/types/test';
 
@@ -244,6 +249,9 @@ const versionDocument = (id: string, exercise: StoredDocument = fillExercise) =>
   totalPoints: 3,
 });
 
+const readableLegacyInvalidVersionDocument = (id: string) =>
+  versionDocument(id, { id: 'legacy-question', type: 'multiple-choice', maxPoints: 3 });
+
 const testDocument = (rotationVersions = ['version-a', 'version-b']) => ({
   id: 'test-1',
   kind: 'test',
@@ -293,6 +301,8 @@ describe('test attempt persistence service', () => {
     expect(db.readAll('testAttemptSessions')).toHaveLength(1);
     expect(first.attempt).not.toHaveProperty('studentId');
     expect(first.attempt).not.toHaveProperty('deliveryState');
+    expect(first.attempt).not.toHaveProperty('translationGradeReservations');
+    expect(first.attempt).not.toHaveProperty('translationGradeRequestWindows');
     expect(first.attempt.passingPercentage).toBe(70);
     expect(
       (first.attempt.delivery.pages[0] as { items: Array<{ data: { items: StoredDocument[] } }> }).items[0].data
@@ -332,6 +342,21 @@ describe('test attempt persistence service', () => {
     const db = new FakeFirestore();
     db.seed('lessons', 'test-1', testDocument(['version-a', 'missing-version']));
     db.seed('testVersions', 'version-a', versionDocument('version-a'));
+    const service = new TestAttemptService(db as never, () => timestamp, { random: () => 0 });
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await expect(
+      service.startAttempt({ origin: { kind: 'normal-test', testId: 'test-1' } }, 'student-1')
+    ).rejects.toMatchObject({ code: 'TEST_CONFIGURATION_ERROR', status: 409 });
+    expect(db.readAll('testAttempts')).toHaveLength(0);
+    expect(db.readAll('testAttemptSessions')).toHaveLength(0);
+    consoleError.mockRestore();
+  });
+
+  it('rejects a fresh attempt for a readable legacy-invalid version without writing session state', async () => {
+    const db = new FakeFirestore();
+    db.seed('lessons', 'test-1', testDocument(['version-a']));
+    db.seed('testVersions', 'version-a', readableLegacyInvalidVersionDocument('version-a'));
     const service = new TestAttemptService(db as never, () => timestamp, { random: () => 0 });
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
 
@@ -672,7 +697,7 @@ describe('test attempt persistence service', () => {
       feedbackConfig: { escalationLevels: [] },
       data: {
         generatorConfig: { collection: 'words', wordSource: 'filters', count: 1 },
-        posConfigs: {},
+        posConfigs: { verb: { enabled: true, filters: {} } },
       },
     };
     db.seed('lessons', 'test-1', testDocument(['generated-version']));
@@ -803,6 +828,19 @@ const fillExerciseWith = (id: string, items: Array<{ text: string; answer: strin
   data: { items },
 });
 
+const translationGradingExercise = {
+  id: 'translation-assessment',
+  type: 'translation-grading',
+  title: 'Translate',
+  instructions: '',
+  maxPoints: 8,
+  feedbackConfig: { escalationLevels: [] },
+  translationDirection: 'latin-to-english',
+  data: {
+    items: [{ latinText: '<p>Puella cantat.</p>' }, { latinText: 'Pueri currunt.' }],
+  },
+};
+
 const versionDocumentWith = (id: string, exercise: StoredDocument, totalPoints: number) => ({
   ...versionDocument(id, exercise),
   totalPoints,
@@ -856,6 +894,23 @@ const sessionDocument = (id: string, studentId: string, origin: TestAttemptOrigi
 describe('test attempt submission and sticky completion', () => {
   const normalOrigin: TestAttemptOrigin = { kind: 'normal-test', testId: 'test-1' };
   const startInput = { origin: normalOrigin };
+
+  it('resumes legacy in-progress attempts that predate translation grading leases and budgets', async () => {
+    const db = new FakeFirestore();
+    seedNormalTest(db, ['version-a']);
+    db.seed('testVersions', 'version-a', readableLegacyInvalidVersionDocument('version-a'));
+    const attemptId = 'legacy-in-progress';
+    const sessionId = getTestAttemptSessionId('student-1', normalOrigin);
+    db.seed('testAttempts', attemptId, inProgressAttemptDocument(attemptId));
+    db.seed('testAttemptSessions', sessionId, sessionDocument(sessionId, 'student-1', normalOrigin, attemptId));
+    const service = new TestAttemptService(db as never, () => timestamp);
+
+    const resumed = await service.startAttempt(startInput, 'student-1');
+
+    expect(resumed).toMatchObject({ resumed: true, attempt: { id: attemptId } });
+    expect(resumed.attempt).not.toHaveProperty('translationGradeReservations');
+    expect(resumed.attempt).not.toHaveProperty('translationGradeRequestWindows');
+  });
 
   const startAnswerSubmit = async (
     service: TestAttemptService,
@@ -919,6 +974,301 @@ describe('test attempt submission and sticky completion', () => {
       lastAccessedAt: timestamp,
       updatedAt: timestamp,
       progressSchemaVersion: 2,
+    });
+  });
+
+  it('grades and saves test translations immediately, then normalizes saved /10 scores to maxPoints', async () => {
+    const db = new FakeFirestore();
+    db.seed('lessons', 'test-1', testDocument(['version-a']));
+    db.seed('testVersions', 'version-a', versionDocumentWith('version-a', translationGradingExercise, 8));
+    const gradeTestTranslation = jest.fn(async ({ sourceText }: { sourceText: string }) => ({
+      score: sourceText === 'Puella cantat.' ? 9 : 6,
+      feedback: sourceText === 'Puella cantat.' ? 'Accurate and idiomatic.' : 'Check the subject and verb.',
+    }));
+    const service = new TestAttemptService(db as never, () => timestamp, { gradeTestTranslation });
+    const started = await service.startAttempt(startInput, 'student-1');
+    const firstGradedAttempt = await service.gradeTranslationItem(
+      started.attempt.id,
+      {
+        exerciseId: 'translation-assessment',
+        itemIndex: 0,
+        userTranslation: 'The girl sings.',
+      },
+      'student-1'
+    );
+    await service.gradeTranslationItem(
+      started.attempt.id,
+      {
+        exerciseId: 'translation-assessment',
+        itemIndex: 1,
+        userTranslation: 'The boys run.',
+      },
+      'student-1'
+    );
+
+    const result = await service.submitAttempt(started.attempt.id, 'student-1');
+
+    expect(firstGradedAttempt.translationGrades['translation-assessment']['0']).toEqual({
+      translation: 'The girl sings.',
+      score: 9,
+      feedback: 'Accurate and idiomatic.',
+    });
+    expect(firstGradedAttempt.answers['translation-assessment']).toEqual({
+      type: 'translation-grading',
+      translations: ['The girl sings.', ''],
+    });
+    expect(gradeTestTranslation).toHaveBeenCalledTimes(2);
+    expect(result.attempt).toMatchObject({ score: 6, maxScore: 8, percentage: 75, outcome: 'passed' });
+    expect(result.attempt.exerciseResults['translation-assessment']).toEqual({
+      title: 'Translate',
+      awardedPoints: 6,
+      maxPoints: 8,
+    });
+  });
+
+  it('returns an existing translation grade idempotently and rejects grade fishing or reset attempts', async () => {
+    const db = new FakeFirestore();
+    db.seed('lessons', 'test-1', testDocument(['version-a']));
+    db.seed('testVersions', 'version-a', versionDocumentWith('version-a', translationGradingExercise, 8));
+    const gradeTestTranslation = jest.fn(async () => ({ score: 9, feedback: 'Accurate and idiomatic.' }));
+    const service = new TestAttemptService(db as never, () => timestamp, { gradeTestTranslation });
+    const started = await service.startAttempt(startInput, 'student-1');
+    const input = {
+      exerciseId: 'translation-assessment',
+      itemIndex: 0,
+      userTranslation: 'The girl sings.',
+    };
+
+    const first = await service.gradeTranslationItem(started.attempt.id, input, 'student-1');
+    const retry = await service.gradeTranslationItem(started.attempt.id, input, 'student-1');
+
+    expect(retry.translationGrades).toEqual(first.translationGrades);
+    expect(gradeTestTranslation).toHaveBeenCalledTimes(1);
+    await expect(
+      service.gradeTranslationItem(started.attempt.id, { ...input, userTranslation: 'A girl is singing.' }, 'student-1')
+    ).rejects.toMatchObject({ code: 'ATTEMPT_TRANSLATION_ALREADY_GRADED', status: 409 });
+    await expect(
+      service.saveAttemptAnswers(started.attempt.id, { answers: { 'translation-assessment': null } }, 'student-1')
+    ).rejects.toMatchObject({ code: 'ATTEMPT_TRANSLATION_ALREADY_GRADED', status: 409 });
+    expect(gradeTestTranslation).toHaveBeenCalledTimes(1);
+    expect(db.read('testAttempts', started.attempt.id)?.translationGradeRequestWindows).toMatchObject({
+      'translation-assessment': { '0': { count: 1 } },
+    });
+    for (const studentAttempt of [started.attempt, first, retry]) {
+      expect(studentAttempt).not.toHaveProperty('translationGradeReservations');
+      expect(studentAttempt).not.toHaveProperty('translationGradeRequestWindows');
+    }
+  });
+
+  it('reserves translation items so concurrent requests cannot invoke the provider twice', async () => {
+    const db = new FakeFirestore();
+    db.seed('lessons', 'test-1', testDocument(['version-a']));
+    db.seed('testVersions', 'version-a', versionDocumentWith('version-a', translationGradingExercise, 8));
+    let providerStarted!: () => void;
+    let finishProvider!: (output: { score: number; feedback: string }) => void;
+    const startedProvider = new Promise<void>(resolve => {
+      providerStarted = resolve;
+    });
+    const providerOutput = new Promise<{ score: number; feedback: string }>(resolve => {
+      finishProvider = resolve;
+    });
+    const gradeTestTranslation = jest.fn(() => {
+      providerStarted();
+      return providerOutput;
+    });
+    const service = new TestAttemptService(db as never, () => timestamp, { gradeTestTranslation });
+    const started = await service.startAttempt(startInput, 'student-1');
+    const input = {
+      exerciseId: 'translation-assessment',
+      itemIndex: 0,
+      userTranslation: 'The girl sings.',
+    };
+
+    const firstRequest = service.gradeTranslationItem(started.attempt.id, input, 'student-1');
+    await startedProvider;
+
+    await expect(service.gradeTranslationItem(started.attempt.id, input, 'student-1')).rejects.toMatchObject({
+      code: 'ATTEMPT_TRANSLATION_GRADING_IN_PROGRESS',
+      status: 409,
+    });
+    await expect(service.submitAttempt(started.attempt.id, 'student-1')).rejects.toMatchObject({
+      code: 'ATTEMPT_TRANSLATION_GRADING_IN_PROGRESS',
+      status: 409,
+    });
+    expect(gradeTestTranslation).toHaveBeenCalledTimes(1);
+    expect(db.read('testAttempts', started.attempt.id)?.translationGradeRequestWindows).toMatchObject({
+      'translation-assessment': { '0': { count: 1 } },
+    });
+
+    finishProvider({ score: 9, feedback: 'Accurate and idiomatic.' });
+    await expect(firstRequest).resolves.toMatchObject({
+      translationGrades: {
+        'translation-assessment': {
+          '0': { translation: input.userTranslation, score: 9 },
+        },
+      },
+    });
+    expect(db.read('testAttempts', started.attempt.id)?.translationGradeReservations).toEqual({});
+  });
+
+  it('reclaims an expired translation reservation left by an interrupted request', async () => {
+    const db = new FakeFirestore();
+    db.seed('lessons', 'test-1', testDocument(['version-a']));
+    db.seed('testVersions', 'version-a', versionDocumentWith('version-a', translationGradingExercise, 8));
+    const gradeTestTranslation = jest.fn(async () => ({ score: 9, feedback: 'Accurate and idiomatic.' }));
+    const service = new TestAttemptService(db as never, () => timestamp, { gradeTestTranslation });
+    const started = await service.startAttempt(startInput, 'student-1');
+    const storedAttempt = db.read('testAttempts', started.attempt.id)!;
+    db.seed('testAttempts', started.attempt.id, {
+      ...storedAttempt,
+      translationGradeReservations: {
+        'translation-assessment': {
+          '0': {
+            token: '00000000-0000-4000-8000-000000000001',
+            expiresAt: '2026-07-20T11:59:59.000Z',
+          },
+        },
+      },
+    });
+
+    await expect(
+      service.gradeTranslationItem(
+        started.attempt.id,
+        {
+          exerciseId: 'translation-assessment',
+          itemIndex: 0,
+          userTranslation: 'The girl sings.',
+        },
+        'student-1'
+      )
+    ).resolves.toMatchObject({
+      translationGrades: {
+        'translation-assessment': {
+          '0': { translation: 'The girl sings.', score: 9 },
+        },
+      },
+    });
+    expect(gradeTestTranslation).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases the reservation and keeps a translation item retryable when AI grading is unavailable', async () => {
+    const db = new FakeFirestore();
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    db.seed('lessons', 'test-1', testDocument(['version-a']));
+    db.seed('testVersions', 'version-a', versionDocumentWith('version-a', translationGradingExercise, 8));
+    const gradeTestTranslation = jest
+      .fn()
+      .mockRejectedValueOnce(new Error('provider unavailable'))
+      .mockResolvedValueOnce({ score: 9, feedback: 'Accurate and idiomatic.' });
+    const service = new TestAttemptService(db as never, () => timestamp, {
+      gradeTestTranslation,
+    });
+    const started = await service.startAttempt(startInput, 'student-1');
+    const input = {
+      exerciseId: 'translation-assessment',
+      itemIndex: 0,
+      userTranslation: 'The girl sings.',
+    };
+    await expect(service.gradeTranslationItem(started.attempt.id, input, 'student-1')).rejects.toMatchObject({
+      code: 'ATTEMPT_GRADING_UNAVAILABLE',
+      status: 503,
+    });
+    expect(db.read('testAttempts', started.attempt.id)).toMatchObject({
+      status: 'in-progress',
+      answers: {},
+      translationGrades: {},
+      translationGradeReservations: {},
+    });
+    await expect(service.gradeTranslationItem(started.attempt.id, input, 'student-1')).resolves.toMatchObject({
+      translationGrades: {
+        'translation-assessment': {
+          '0': { translation: input.userTranslation, score: 9 },
+        },
+      },
+    });
+    expect(gradeTestTranslation).toHaveBeenCalledTimes(2);
+    consoleError.mockRestore();
+  });
+
+  it('enforces a durable provider request budget across failures and generic answer saves', async () => {
+    const db = new FakeFirestore();
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    db.seed('lessons', 'test-1', testDocument(['version-a']));
+    db.seed('testVersions', 'version-a', versionDocumentWith('version-a', translationGradingExercise, 8));
+    const gradeTestTranslation = jest.fn(async () => ({ score: Number.NaN, feedback: 'Malformed score.' }));
+    const service = new TestAttemptService(db as never, () => timestamp, { gradeTestTranslation });
+    const started = await service.startAttempt(startInput, 'student-1');
+    const input = {
+      exerciseId: 'translation-assessment',
+      itemIndex: 0,
+      userTranslation: 'The girl sings.',
+    };
+
+    for (let index = 0; index < MAX_TRANSLATION_GRADING_REQUESTS_PER_WINDOW - 1; index += 1) {
+      await expect(service.gradeTranslationItem(started.attempt.id, input, 'student-1')).rejects.toMatchObject({
+        code: 'ATTEMPT_GRADING_UNAVAILABLE',
+        status: 503,
+      });
+    }
+
+    // The generic answer endpoint must preserve the server-owned request window.
+    await service.saveAttemptAnswers(started.attempt.id, { answers: { 'translation-assessment': null } }, 'student-1');
+    await expect(service.gradeTranslationItem(started.attempt.id, input, 'student-1')).rejects.toMatchObject({
+      code: 'ATTEMPT_GRADING_UNAVAILABLE',
+      status: 503,
+    });
+    await expect(service.gradeTranslationItem(started.attempt.id, input, 'student-1')).rejects.toMatchObject({
+      code: 'ATTEMPT_TRANSLATION_GRADING_RATE_LIMITED',
+      status: 429,
+    });
+
+    expect(gradeTestTranslation).toHaveBeenCalledTimes(MAX_TRANSLATION_GRADING_REQUESTS_PER_WINDOW);
+    expect(db.read('testAttempts', started.attempt.id)?.translationGradeRequestWindows).toEqual({
+      'translation-assessment': {
+        '0': { windowStartedAt: timestamp, count: MAX_TRANSLATION_GRADING_REQUESTS_PER_WINDOW },
+      },
+    });
+    expect(await service.getActiveAttempt(startInput.origin, 'student-1')).not.toHaveProperty(
+      'translationGradeRequestWindows'
+    );
+    consoleError.mockRestore();
+  });
+
+  it('resets the provider request budget after the fixed window elapses', async () => {
+    const db = new FakeFirestore();
+    let now = timestamp;
+    db.seed('lessons', 'test-1', testDocument(['version-a']));
+    db.seed('testVersions', 'version-a', versionDocumentWith('version-a', translationGradingExercise, 8));
+    const gradeTestTranslation = jest.fn(async () => ({ score: 9, feedback: 'Accurate and idiomatic.' }));
+    const service = new TestAttemptService(db as never, () => now, { gradeTestTranslation });
+    const started = await service.startAttempt(startInput, 'student-1');
+    const storedAttempt = db.read('testAttempts', started.attempt.id)!;
+    db.seed('testAttempts', started.attempt.id, {
+      ...storedAttempt,
+      translationGradeRequestWindows: {
+        'translation-assessment': {
+          '0': { windowStartedAt: timestamp, count: MAX_TRANSLATION_GRADING_REQUESTS_PER_WINDOW },
+        },
+      },
+    });
+    now = new Date(Date.parse(timestamp) + TRANSLATION_GRADING_REQUEST_WINDOW_MS).toISOString();
+
+    await expect(
+      service.gradeTranslationItem(
+        started.attempt.id,
+        {
+          exerciseId: 'translation-assessment',
+          itemIndex: 0,
+          userTranslation: 'The girl sings.',
+        },
+        'student-1'
+      )
+    ).resolves.toMatchObject({
+      translationGrades: { 'translation-assessment': { '0': { score: 9 } } },
+    });
+    expect(gradeTestTranslation).toHaveBeenCalledTimes(1);
+    expect(db.read('testAttempts', started.attempt.id)?.translationGradeRequestWindows).toEqual({
+      'translation-assessment': { '0': { windowStartedAt: now, count: 1 } },
     });
   });
 
@@ -1129,6 +1479,21 @@ describe('test attempt submission and sticky completion', () => {
 
 describe('test attempt summaries', () => {
   const normalOrigin: TestAttemptOrigin = { kind: 'normal-test', testId: 'test-1' };
+
+  it('defaults missing server-only translation state on legacy attempts without exposing it', async () => {
+    const db = new FakeFirestore();
+    const attemptId = 'legacy-active-attempt';
+    const sessionId = getTestAttemptSessionId('student-1', normalOrigin);
+    db.seed('testAttempts', attemptId, inProgressAttemptDocument(attemptId));
+    db.seed('testAttemptSessions', sessionId, sessionDocument(sessionId, 'student-1', normalOrigin, attemptId));
+    const service = new TestAttemptService(db as never, () => timestamp);
+
+    const projected = await service.getActiveAttempt(normalOrigin, 'student-1');
+
+    expect(projected).toMatchObject({ id: attemptId, status: 'in-progress' });
+    expect(projected).not.toHaveProperty('translationGradeReservations');
+    expect(projected).not.toHaveProperty('translationGradeRequestWindows');
+  });
 
   it('derives best, latest, count, and in-progress state per student and origin', async () => {
     const db = new FakeFirestore();

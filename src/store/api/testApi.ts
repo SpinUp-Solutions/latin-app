@@ -192,6 +192,24 @@ export const testApi = appApi.injectEndpoints({
       transformResponse: (response: { attempt: StudentInProgressTestAttempt }) => response.attempt,
       invalidatesTags: (result, error, { attemptId }) => (result ? [{ type: 'TestAttempt', id: attemptId }] : []),
     }),
+    gradeTestTranslation: builder.mutation<
+      StudentInProgressTestAttempt,
+      {
+        uid: string;
+        attemptId: string;
+        exerciseId: string;
+        itemIndex: number;
+        userTranslation: string;
+      }
+    >({
+      query: ({ uid: _uid, attemptId, ...body }) => ({
+        url: `/test-attempts/${attemptId}/translation-grade`,
+        method: 'POST',
+        body,
+      }),
+      transformResponse: (response: { attempt: StudentInProgressTestAttempt }) => response.attempt,
+      invalidatesTags: (result, error, { attemptId }) => (result ? [{ type: 'TestAttempt', id: attemptId }] : []),
+    }),
     submitTestAttempt: builder.mutation<SubmitTestAttemptResult, { uid: string; attemptId: string }>({
       query: ({ attemptId }) => ({ url: `/test-attempts/${attemptId}/submit`, method: 'POST' }),
       invalidatesTags: (result, error, { uid, attemptId }) =>
@@ -231,5 +249,6 @@ export const {
   useDeactivateTestVersionMutation,
   useStartTestAttemptMutation,
   useSaveTestAttemptAnswersMutation,
+  useGradeTestTranslationMutation,
   useSubmitTestAttemptMutation,
 } = testApi;

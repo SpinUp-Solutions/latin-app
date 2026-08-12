@@ -8,6 +8,7 @@ const mockReplace = jest.fn();
 const mockBack = jest.fn();
 const mockStartAttempt = jest.fn();
 const mockSaveAnswers = jest.fn();
+const mockGradeTranslation = jest.fn();
 const mockSubmitAttempt = jest.fn();
 const mockUseGetStudentDashboardQuery = jest.fn();
 const mockUseGetStudentMockDetailQuery = jest.fn();
@@ -38,6 +39,7 @@ jest.mock('@/src/store/api/mockTestApi', () => ({
 jest.mock('@/src/store/api/testApi', () => ({
   useStartTestAttemptMutation: () => [mockStartAttempt, { isLoading: false }],
   useSaveTestAttemptAnswersMutation: () => [mockSaveAnswers],
+  useGradeTestTranslationMutation: () => [mockGradeTranslation, { isLoading: false }],
   useSubmitTestAttemptMutation: () => [mockSubmitAttempt, { isLoading: false }],
 }));
 
@@ -205,8 +207,8 @@ describe('student normal test flow', () => {
       </Suspense>
     );
 
-    expect(await screen.findByText('Passing requirement: 70%')).toBeInTheDocument();
-    expect(screen.getByText(/committed answers are saved and can be resumed/i)).toBeInTheDocument();
+    expect(await screen.findByText('Score 70% or higher to continue along your Learning Path')).toBeInTheDocument();
+    expect(screen.getByText(/answers save automatically/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Start Test' }));
     expect(await screen.findByRole('button', { name: 'Record two answers' })).toBeInTheDocument();
@@ -234,6 +236,90 @@ describe('student normal test flow', () => {
     expect(screen.getByText(/You need 70% — you reached 50%/)).toBeInTheDocument();
     expect(screen.getByText(/20 percentage points away/)).toBeInTheDocument();
     expect(screen.getByText('Results breakdown')).toBeInTheDocument();
+  });
+
+  it('reopens a recorded answer from review and clears its server-side value before editing', async () => {
+    const params = Promise.resolve({ testId: 'test-1' }) as Promise<{ testId: string }> & {
+      status: 'fulfilled';
+      value: { testId: string };
+    };
+    params.status = 'fulfilled';
+    params.value = { testId: 'test-1' };
+    render(
+      <Suspense fallback={<div>Loading route</div>}>
+        <StudentTestPage params={params} />
+      </Suspense>
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Start Test' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Record two answers' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Review answers' }));
+    expect(await screen.findByText('Every exercise has a recorded answer.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit First' }));
+
+    await waitFor(() =>
+      expect(mockSaveAnswers).toHaveBeenLastCalledWith({
+        uid: 'student-1',
+        attemptId: 'attempt-1',
+        answers: { 'fill-one': null },
+      })
+    );
+    expect(await screen.findByRole('button', { name: 'Record two answers' })).toBeInTheDocument();
+    expect(screen.getByText('1 of 2 answered')).toBeInTheDocument();
+  });
+
+  it('shows precise percentages and a visible deficit for a near-threshold failure', async () => {
+    mockUseGetStudentDashboardQuery.mockReturnValue({
+      data: {
+        ...dashboard,
+        learningPath: dashboard.learningPath.map(unit =>
+          unit.kind === 'test' ? { ...unit, passingPercentage: 80 } : unit
+        ),
+      },
+      isLoading: false,
+      isError: false,
+      refetch: mockRefetchDashboard,
+    });
+    mockSubmitAttempt.mockReturnValue({
+      unwrap: jest.fn().mockResolvedValue({
+        completionGranted: false,
+        attempt: {
+          id: 'attempt-1',
+          versionId: 'version-a',
+          passingPercentage: 80,
+          origin: { kind: 'normal-test', testId: 'test-1' },
+          status: 'submitted',
+          exerciseResults: {},
+          score: 79.999,
+          maxScore: 100,
+          percentage: 79.999,
+          outcome: 'not-passed',
+          startedAt: 'now',
+          updatedAt: 'later',
+          submittedAt: 'later',
+        },
+      }),
+    });
+    const params = Promise.resolve({ testId: 'test-1' }) as Promise<{ testId: string }> & {
+      status: 'fulfilled';
+      value: { testId: string };
+    };
+    params.status = 'fulfilled';
+    params.value = { testId: 'test-1' };
+    render(
+      <Suspense fallback={<div>Loading route</div>}>
+        <StudentTestPage params={params} />
+      </Suspense>
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Start Test' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Review answers' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Submit Test' }));
+
+    expect(await screen.findByText('79.99%')).toBeInTheDocument();
+    expect(screen.getByText(/You need 80% — you reached 79\.99%/)).toBeInTheDocument();
+    expect(screen.getByText(/<0\.01 percentage points away/)).toBeInTheDocument();
   });
 
   it('keeps partial multi-item answers out of the answered count and protects them before unload', async () => {
@@ -436,28 +522,64 @@ describe('student normal test flow', () => {
     mockUseGetStudentDashboardQuery.mockReturnValue({
       data: {
         ...dashboard,
-        mockTests: [{ id: 'test-1', title: 'Mock with same id', description: '', passingPercentage: null, totalPoints: 2, attemptSummary: { origin: { kind: 'mock-test', mockTestId: 'test-1' }, inProgressAttemptId: null, attemptCount: 0, best: null, latest: null }, scoreTrend: [] }],
+        mockTests: [
+          {
+            id: 'test-1',
+            title: 'Mock with same id',
+            description: '',
+            passingPercentage: null,
+            totalPoints: 2,
+            attemptSummary: {
+              origin: { kind: 'mock-test', mockTestId: 'test-1' },
+              inProgressAttemptId: null,
+              attemptCount: 0,
+              best: null,
+              latest: null,
+            },
+            scoreTrend: [],
+          },
+        ],
       },
       isLoading: false,
       isError: false,
     });
     mockUseGetStudentMockDetailQuery.mockReturnValue({
       data: {
-        mock: { id: 'test-1', title: 'Practice test', description: '', passingPercentage: 70, status: 'archived', isLive: false },
+        mock: {
+          id: 'test-1',
+          title: 'Practice test',
+          description: '',
+          passingPercentage: 70,
+          status: 'archived',
+          isLive: false,
+        },
         attempt: { ...startedAttempt, origin: { kind: 'mock-test', mockTestId: 'test-1' } },
       },
       isLoading: false,
       isError: false,
     });
-    const params = Promise.resolve({ testId: 'test-1' }) as Promise<{ testId: string }> & { status: 'fulfilled'; value: { testId: string } };
+    const params = Promise.resolve({ testId: 'test-1' }) as Promise<{ testId: string }> & {
+      status: 'fulfilled';
+      value: { testId: string };
+    };
     params.status = 'fulfilled';
     params.value = { testId: 'test-1' };
 
-    const rendered = render(<Suspense fallback={<div>Loading route</div>}><StudentTestPage params={params} /></Suspense>);
+    const rendered = render(
+      <Suspense fallback={<div>Loading route</div>}>
+        <StudentTestPage params={params} />
+      </Suspense>
+    );
 
+    expect(await screen.findByRole('button', { name: 'Continue Mock Test' })).toBeInTheDocument();
+    expect(screen.queryByText('Test in progress')).not.toBeInTheDocument();
+    expect(mockStartAttempt).toHaveBeenCalledWith({
+      uid: 'student-1',
+      origin: { kind: 'mock-test', mockTestId: 'test-1' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue Mock Test' }));
     expect(await screen.findByText('Test in progress')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Record two answers' })).toBeInTheDocument();
-    expect(mockStartAttempt).toHaveBeenCalledWith({ uid: 'student-1', origin: { kind: 'mock-test', mockTestId: 'test-1' } });
     fireEvent.click(screen.getByRole('button', { name: 'Record two answers' }));
     fireEvent.click(screen.getByRole('button', { name: 'Review answers' }));
     expect(await screen.findByText('Every exercise has a recorded answer.')).toBeInTheDocument();
@@ -465,8 +587,17 @@ describe('student normal test flow', () => {
     expect(await screen.findByText('Keep going')).toBeInTheDocument();
     expect(mockSaveAnswers).toHaveBeenCalledWith(expect.objectContaining({ attemptId: 'attempt-1' }));
     expect(mockSubmitAttempt).toHaveBeenCalledWith({ uid: 'student-1', attemptId: 'attempt-1' });
-    mockUseGetStudentMockDetailQuery.mockReturnValue({ data: undefined, isLoading: false, isError: true, refetch: mockRefetchMockDetail });
-    rendered.rerender(<Suspense fallback={<div>Loading route</div>}><StudentTestPage params={params} /></Suspense>);
+    mockUseGetStudentMockDetailQuery.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      refetch: mockRefetchMockDetail,
+    });
+    rendered.rerender(
+      <Suspense fallback={<div>Loading route</div>}>
+        <StudentTestPage params={params} />
+      </Suspense>
+    );
     expect(screen.getByText('Keep going')).toBeInTheDocument();
     expect(screen.getByText('This mock test is no longer available for another attempt.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Retake Mock Test' })).not.toBeInTheDocument();
@@ -474,40 +605,141 @@ describe('student normal test flow', () => {
 
   it('never offers a retake from the stale mock detail after submit when the refreshed live card is gone', async () => {
     mockSearchParams.mockReturnValue(new URLSearchParams('origin=mock'));
+    let resolveDashboardRefresh!: (value: unknown) => void;
+    let resolveMockDetailRefresh!: (value: unknown) => void;
+    const dashboardRefresh = new Promise<unknown>(resolve => {
+      resolveDashboardRefresh = resolve;
+    });
+    const mockDetailRefresh = new Promise<unknown>(resolve => {
+      resolveMockDetailRefresh = resolve;
+    });
     const liveMock = {
-      id: 'mock-1', title: 'Practice mock', description: '', passingPercentage: 70, totalPoints: 2,
-      attemptSummary: { origin: { kind: 'mock-test' as const, mockTestId: 'mock-1' }, inProgressAttemptId: null, attemptCount: 0, best: null, latest: null }, scoreTrend: [],
+      id: 'mock-1',
+      title: 'Practice mock',
+      description: '',
+      passingPercentage: 70,
+      totalPoints: 2,
+      attemptSummary: {
+        origin: { kind: 'mock-test' as const, mockTestId: 'mock-1' },
+        inProgressAttemptId: null,
+        attemptCount: 0,
+        best: null,
+        latest: null,
+      },
+      scoreTrend: [],
     };
-    mockUseGetStudentDashboardQuery.mockReturnValue({ data: { ...dashboard, mockTests: [liveMock] }, isLoading: false, isError: false, refetch: mockRefetchDashboard });
-    mockUseGetStudentMockDetailQuery.mockReturnValue({ data: { mock: { id: 'mock-1', title: 'Practice mock', description: '', passingPercentage: 70, status: 'active', isLive: true }, attempt: null }, isLoading: false, isError: false, refetch: mockRefetchMockDetail });
-    mockStartAttempt.mockReturnValue({ unwrap: jest.fn().mockResolvedValue({ attempt: { ...startedAttempt, origin: { kind: 'mock-test', mockTestId: 'mock-1' } }, resumed: false }) });
+    mockUseGetStudentDashboardQuery.mockReturnValue({
+      data: { ...dashboard, mockTests: [liveMock] },
+      isLoading: false,
+      isError: false,
+      refetch: mockRefetchDashboard,
+    });
+    mockUseGetStudentMockDetailQuery.mockReturnValue({
+      data: {
+        mock: {
+          id: 'mock-1',
+          title: 'Practice mock',
+          description: '',
+          passingPercentage: 70,
+          status: 'active',
+          isLive: true,
+        },
+        attempt: null,
+      },
+      isLoading: false,
+      isError: false,
+      refetch: mockRefetchMockDetail,
+    });
+    mockStartAttempt.mockReturnValue({
+      unwrap: jest.fn().mockResolvedValue({
+        attempt: { ...startedAttempt, origin: { kind: 'mock-test', mockTestId: 'mock-1' } },
+        resumed: false,
+      }),
+    });
     // Keep the result fixture explicit: a mock result is valid even after its card disappears.
-    mockSubmitAttempt.mockReturnValue({ unwrap: jest.fn().mockResolvedValue({ completionGranted: false, attempt: { id: 'attempt-1', versionId: 'version-a', passingPercentage: 70, origin: { kind: 'mock-test', mockTestId: 'mock-1' }, status: 'submitted', exerciseResults: {}, score: 1, maxScore: 2, percentage: 50, outcome: 'not-passed', startedAt: 'now', updatedAt: 'later', submittedAt: 'later' } }) });
-    mockRefetchDashboard.mockResolvedValue({ data: { ...dashboard, mockTests: [] } });
-    mockRefetchMockDetail.mockResolvedValue({ data: { mock: { id: 'mock-1', title: 'Practice mock', description: '', passingPercentage: 70, status: 'archived', isLive: false }, attempt: null } });
-    const params = Promise.resolve({ testId: 'mock-1' }) as Promise<{ testId: string }> & { status: 'fulfilled'; value: { testId: string } };
-    params.status = 'fulfilled'; params.value = { testId: 'mock-1' };
+    mockSubmitAttempt.mockReturnValue({
+      unwrap: jest.fn().mockResolvedValue({
+        completionGranted: false,
+        attempt: {
+          id: 'attempt-1',
+          versionId: 'version-a',
+          passingPercentage: 70,
+          origin: { kind: 'mock-test', mockTestId: 'mock-1' },
+          status: 'submitted',
+          exerciseResults: {},
+          score: 1,
+          maxScore: 2,
+          percentage: 50,
+          outcome: 'not-passed',
+          startedAt: 'now',
+          updatedAt: 'later',
+          submittedAt: 'later',
+        },
+      }),
+    });
+    mockRefetchDashboard.mockReturnValue(dashboardRefresh);
+    mockRefetchMockDetail.mockReturnValue(mockDetailRefresh);
+    const params = Promise.resolve({ testId: 'mock-1' }) as Promise<{ testId: string }> & {
+      status: 'fulfilled';
+      value: { testId: string };
+    };
+    params.status = 'fulfilled';
+    params.value = { testId: 'mock-1' };
 
-    render(<Suspense fallback={<div>Loading route</div>}><StudentTestPage params={params} /></Suspense>);
+    render(
+      <Suspense fallback={<div>Loading route</div>}>
+        <StudentTestPage params={params} />
+      </Suspense>
+    );
     fireEvent.click(await screen.findByRole('button', { name: 'Start Mock Test' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Begin Mock Test' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Record two answers' }));
     fireEvent.click(screen.getByRole('button', { name: 'Review answers' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Submit Test' }));
 
     expect(await screen.findByText('Keep going')).toBeInTheDocument();
-    await waitFor(() => expect(mockRefetchDashboard).toHaveBeenCalled());
-    expect(screen.getByText('This mock test is no longer available for another attempt.')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Loading retake options' })).toBeInTheDocument();
+    expect(screen.queryByText(/Checking whether this mock is still available/)).not.toBeInTheDocument();
+    resolveDashboardRefresh({ data: { ...dashboard, mockTests: [] } });
+    resolveMockDetailRefresh({
+      data: {
+        mock: {
+          id: 'mock-1',
+          title: 'Practice mock',
+          description: '',
+          passingPercentage: 70,
+          status: 'archived',
+          isLive: false,
+        },
+        attempt: null,
+      },
+    });
+    await waitFor(() =>
+      expect(screen.getByText('This mock test is no longer available for another attempt.')).toBeInTheDocument()
+    );
     expect(screen.queryByRole('button', { name: 'Retake Mock Test' })).not.toBeInTheDocument();
   });
 
   it('retries the failing mock-detail source', async () => {
     mockSearchParams.mockReturnValue(new URLSearchParams('origin=mock'));
-    mockUseGetStudentMockDetailQuery.mockReturnValue({ data: undefined, isLoading: false, isError: true, refetch: mockRefetchMockDetail });
-    const params = Promise.resolve({ testId: 'mock-1' }) as Promise<{ testId: string }> & { status: 'fulfilled'; value: { testId: string } };
+    mockUseGetStudentMockDetailQuery.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      refetch: mockRefetchMockDetail,
+    });
+    const params = Promise.resolve({ testId: 'mock-1' }) as Promise<{ testId: string }> & {
+      status: 'fulfilled';
+      value: { testId: string };
+    };
     params.status = 'fulfilled';
     params.value = { testId: 'mock-1' };
 
-    render(<Suspense fallback={<div>Loading route</div>}><StudentTestPage params={params} /></Suspense>);
+    render(
+      <Suspense fallback={<div>Loading route</div>}>
+        <StudentTestPage params={params} />
+      </Suspense>
+    );
     fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
 
     expect(mockRefetchMockDetail).toHaveBeenCalled();
@@ -515,11 +747,18 @@ describe('student normal test flow', () => {
   });
 
   it('resets local state and installs a distinct sentinel when the same id switches from normal to mock origin', async () => {
-    const params = Promise.resolve({ testId: 'test-1' }) as Promise<{ testId: string }> & { status: 'fulfilled'; value: { testId: string } };
+    const params = Promise.resolve({ testId: 'test-1' }) as Promise<{ testId: string }> & {
+      status: 'fulfilled';
+      value: { testId: string };
+    };
     params.status = 'fulfilled';
     params.value = { testId: 'test-1' };
     const pushState = jest.spyOn(window.history, 'pushState');
-    const rendered = render(<Suspense fallback={<div>Loading route</div>}><StudentTestPage params={params} /></Suspense>);
+    const rendered = render(
+      <Suspense fallback={<div>Loading route</div>}>
+        <StudentTestPage params={params} />
+      </Suspense>
+    );
 
     fireEvent.click(await screen.findByRole('button', { name: 'Start Test' }));
     expect(await screen.findByText('Test in progress')).toBeInTheDocument();
@@ -528,20 +767,54 @@ describe('student normal test flow', () => {
     mockUseGetStudentDashboardQuery.mockReturnValue({
       data: {
         ...dashboard,
-        mockTests: [{ id: 'test-1', title: 'Mock with same id', description: '', passingPercentage: null, totalPoints: 2, attemptSummary: { origin: { kind: 'mock-test', mockTestId: 'test-1' }, inProgressAttemptId: null, attemptCount: 0, best: null, latest: null }, scoreTrend: [] }],
+        mockTests: [
+          {
+            id: 'test-1',
+            title: 'Mock with same id',
+            description: '',
+            passingPercentage: null,
+            totalPoints: 2,
+            attemptSummary: {
+              origin: { kind: 'mock-test', mockTestId: 'test-1' },
+              inProgressAttemptId: null,
+              attemptCount: 0,
+              best: null,
+              latest: null,
+            },
+            scoreTrend: [],
+          },
+        ],
       },
       isLoading: false,
       isError: false,
     });
     mockUseGetStudentMockDetailQuery.mockReturnValue({
-      data: { mock: { id: 'test-1', title: 'Mock with same id', description: '', passingPercentage: null, status: 'active', isLive: true }, attempt: null },
+      data: {
+        mock: {
+          id: 'test-1',
+          title: 'Mock with same id',
+          description: '',
+          passingPercentage: null,
+          status: 'active',
+          isLive: true,
+        },
+        attempt: null,
+      },
       isLoading: false,
       isError: false,
     });
-    rendered.rerender(<Suspense fallback={<div>Loading route</div>}><StudentTestPage params={params} /></Suspense>);
+    rendered.rerender(
+      <Suspense fallback={<div>Loading route</div>}>
+        <StudentTestPage params={params} />
+      </Suspense>
+    );
 
     expect(await screen.findByRole('button', { name: 'Start Mock Test' })).toBeInTheDocument();
     expect(screen.queryByText('Test in progress')).not.toBeInTheDocument();
-    expect(pushState).toHaveBeenLastCalledWith(expect.objectContaining({ __latinTestHistoryGuard: 'test:mock-test:test-1' }), '', window.location.href);
+    expect(pushState).toHaveBeenLastCalledWith(
+      expect.objectContaining({ __latinTestHistoryGuard: 'test:mock-test:test-1' }),
+      '',
+      window.location.href
+    );
   });
 });

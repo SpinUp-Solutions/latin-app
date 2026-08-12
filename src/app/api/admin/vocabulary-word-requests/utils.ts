@@ -127,6 +127,12 @@ export const buildValidatedWordForApproval = (draftWord: VocabularyWord) => {
 
 export const routeError = (error: unknown) => {
   const message = error instanceof Error ? error.message : 'Unknown error';
+  if (error && typeof error === 'object' && 'status' in error && typeof error.status === 'number') {
+    return NextResponse.json(
+      { success: false, error: message, ...('code' in error ? { code: error.code } : {}) },
+      { status: error.status }
+    );
+  }
   const status = message === 'Unauthorized' ? 401 : message === 'Forbidden' ? 403 : 500;
   return NextResponse.json({ success: false, error: message }, { status });
 };

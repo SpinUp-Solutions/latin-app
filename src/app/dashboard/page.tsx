@@ -14,7 +14,7 @@ import {
 } from '@/src/types/lesson';
 import { Button } from '@/src/components/ui/button';
 import { toast } from 'sonner';
-import { BookOpen, FileCheck2, Lock, Trophy, User } from 'lucide-react';
+import { BookOpen, User } from 'lucide-react';
 import Image from 'next/image';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { CircularProgressButton } from '@/src/components/ui/CircularProgressButton';
@@ -55,7 +55,7 @@ const LessonCard = memo(
 
     return (
       <RomanCard
-        className={`group transition-all duration-300 cursor-pointer transform hover:-translate-y-2 hover:scale-[1.02] rounded-3xl shadow-xl hover:shadow-2xl ${config.card}`}
+        className={`group h-36 cursor-pointer rounded-3xl shadow-xl transition-all duration-300 transform hover:-translate-y-2 hover:scale-[1.02] hover:shadow-2xl ${config.card}`}
         onClick={handleClick}>
         <RomanCardContent className="relative p-6">
           <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-3xl"></div>
@@ -85,12 +85,6 @@ const LessonCard = memo(
 
 LessonCard.displayName = 'LessonCard';
 
-const formatPoints = (value: number) =>
-  value
-    .toFixed(2)
-    .replace(/\.00$/, '')
-    .replace(/(\.\d)0$/, '$1');
-
 export const TestCard = memo(
   ({ test, onTestClick }: { test: StudentTestSummary; onTestClick: (id: string) => void }) => {
     const summary = test.attemptSummary;
@@ -101,6 +95,7 @@ export const TestCard = memo(
         ? 'Retake Test'
         : 'Start Test';
     const locked = test.status === 'locked';
+    const progress = test.status === 'completed' ? 100 : summary.inProgressAttemptId ? 50 : 0;
     const latestOutcome =
       summary.latest?.outcome === 'not-passed'
         ? test.status === 'completed'
@@ -126,7 +121,8 @@ export const TestCard = memo(
 
     return (
       <RomanCard
-        className={`group cursor-pointer rounded-3xl border shadow-xl transition-all duration-300 hover:-translate-y-2 hover:scale-[1.02] hover:shadow-2xl ${
+        data-testid="dashboard-test-card"
+        className={`group h-36 cursor-pointer rounded-3xl border shadow-xl transition-all duration-300 hover:-translate-y-2 hover:scale-[1.02] hover:shadow-2xl ${
           locked
             ? 'border-gray-300 bg-gradient-to-br from-gray-100 to-gray-50'
             : test.passingPercentage === null
@@ -134,95 +130,58 @@ export const TestCard = memo(
               : 'border-indigo-300 bg-gradient-to-br from-indigo-100/90 via-violet-50 to-white'
         }`}
         onClick={handleClick}>
-        <RomanCardContent className="relative space-y-4 p-6">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-indigo-700 px-2.5 py-1 text-xs font-semibold tracking-wide text-white">
-                <FileCheck2 className="h-3.5 w-3.5" aria-hidden="true" />
-                Test
-              </div>
+        <RomanCardContent className="relative h-full p-6">
+          <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-white/20 to-transparent" />
+          <div className="relative flex h-full items-center justify-between">
+            <div className="min-w-0 flex-1 pr-4">
               <h3 className="truncate font-serif text-xl text-gray-950">{test.title}</h3>
-              <div className="mt-1 line-clamp-2 text-sm text-gray-600">
+              <div className="mt-1 line-clamp-1 text-sm text-gray-600">
                 <SimpleRichDisplay content={test.description || ''} />
               </div>
-            </div>
-            <div
-              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${
-                locked ? 'bg-gray-200 text-gray-500' : 'bg-indigo-700 text-white'
-              }`}>
-              {locked ? (
-                <Lock className="h-5 w-5" aria-hidden="true" />
-              ) : (
-                <FileCheck2 className="h-5 w-5" aria-hidden="true" />
-              )}
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-2 text-xs font-medium">
-            <span className="rounded-full bg-white/80 px-2.5 py-1 text-indigo-900 ring-1 ring-indigo-200">
-              {test.passingPercentage === null ? 'Score only · cannot fail' : `Pass ≥ ${test.passingPercentage}%`}
-            </span>
-            {summary.inProgressAttemptId && (
-              <span className="rounded-full bg-amber-100 px-2.5 py-1 text-amber-900">In progress</span>
-            )}
-          </div>
-
-          {locked ? (
-            <p className="text-sm font-medium text-gray-600">
-              {test.lockedReason || 'Complete the previous learning unit to unlock'}
-            </p>
-          ) : summary.best ? (
-            <div className="grid grid-cols-2 gap-3 rounded-xl border border-indigo-100 bg-white/70 p-3">
-              <div>
-                <div className="flex items-center gap-1 text-xs text-gray-500">
-                  <Trophy className="h-3.5 w-3.5" aria-hidden="true" />
-                  Best
-                </div>
-                <div className="text-2xl font-semibold text-indigo-800">{Math.round(summary.best.percentage)}%</div>
-              </div>
-              <div>
-                <div className="text-xs text-gray-500">Latest</div>
-                <div className="font-medium text-gray-900">
-                  {formatPoints(summary.latest?.score ?? 0)} / {formatPoints(summary.latest?.maxScore ?? 0)}
-                </div>
-                <div className="text-xs text-gray-600">{Math.round(summary.latest?.percentage ?? 0)}%</div>
-                {latestOutcome && (
-                  <div
-                    className={`mt-1 text-xs font-semibold ${
-                      summary.latest?.outcome === 'not-passed' ? 'text-amber-700' : 'text-emerald-700'
-                    }`}>
-                    {latestOutcome}
-                  </div>
+              <div className="mt-2 flex min-w-0 items-center gap-2 text-xs font-semibold text-indigo-800">
+                {locked ? (
+                  <span className="truncate">
+                    {test.lockedReason || 'Complete the previous learning unit to unlock'}
+                  </span>
+                ) : (
+                  <>
+                    {latestOutcome ? (
+                      <span
+                        className={`shrink-0 ${summary.latest?.outcome === 'not-passed' ? 'text-amber-700' : 'text-emerald-700'}`}>
+                        {latestOutcome}
+                      </span>
+                    ) : summary.inProgressAttemptId ? (
+                      <span className="shrink-0 text-amber-700">In progress</span>
+                    ) : (
+                      <span className="truncate">
+                        {test.passingPercentage === null
+                          ? 'Score only · cannot fail'
+                          : `Pass ≥ ${test.passingPercentage}%`}
+                      </span>
+                    )}
+                    {summary.latest?.outcome === 'not-passed' && test.relatedLiveMocks?.[0] && (
+                      <a
+                        className="min-w-0 truncate text-teal-800 underline-offset-2 hover:underline"
+                        href={`/test/${encodeURIComponent(test.relatedLiveMocks[0].id)}?origin=mock`}
+                        onClick={event => event.stopPropagation()}>
+                        Practice with the {test.relatedLiveMocks[0].title} Mock Test
+                      </a>
+                    )}
+                  </>
                 )}
               </div>
             </div>
-          ) : (
-            <p className="text-sm text-gray-600">
-              {test.minTotalPoints === test.maxTotalPoints
-                ? `${formatPoints(test.minTotalPoints)} total points`
-                : `${formatPoints(test.minTotalPoints)}–${formatPoints(test.maxTotalPoints)} total points`}
-            </p>
-          )}
-
-          {summary.latest?.outcome === 'not-passed' && test.relatedLiveMocks?.[0] && (
-            <a
-              className="block rounded-lg border border-teal-200 bg-teal-50 p-3 text-sm font-medium text-teal-950 underline-offset-2 hover:underline"
-              href={`/test/${encodeURIComponent(test.relatedLiveMocks[0].id)}?origin=mock`}
-              onClick={event => event.stopPropagation()}>
-              Practice with the {test.relatedLiveMocks[0].title} Mock Test before retaking.
-            </a>
-          )}
-
-          <Button
-            type="button"
-            className="w-full bg-indigo-700 text-white hover:bg-indigo-800"
-            disabled={locked || unavailable}
-            onClick={event => {
-              event.stopPropagation();
-              handleClick();
-            }}>
-            {unavailable ? 'Unavailable' : locked ? 'Locked' : action}
-          </Button>
+            <CircularProgressButton
+              progress={progress}
+              status={test.status}
+              disabled={unavailable}
+              ariaLabel={unavailable ? 'Test unavailable' : locked ? 'Test locked' : action}
+              onClick={(event?: React.MouseEvent) => {
+                event?.stopPropagation();
+                handleClick();
+              }}
+            />
+          </div>
         </RomanCardContent>
       </RomanCard>
     );
@@ -305,9 +264,12 @@ export default function DashboardPage() {
     [router, learningUnits, vocabLessons, diagrammingLessons, listeningLessons]
   );
 
-  const handleMockClick = useCallback((mockTestId: string) => {
-    router.push(`/test/${encodeURIComponent(mockTestId)}?origin=mock`);
-  }, [router]);
+  const handleMockClick = useCallback(
+    (mockTestId: string) => {
+      router.push(`/test/${encodeURIComponent(mockTestId)}?origin=mock`);
+    },
+    [router]
+  );
 
   useEffect(() => {
     if (!loading && !user) {

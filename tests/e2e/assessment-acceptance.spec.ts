@@ -14,7 +14,7 @@ test.describe('Assessment acceptance', () => {
     await expect(card).toContainText('Score only · cannot fail');
     await card.getByRole('button', { name: 'Start Test' }).click();
 
-    await expect(page.getByText('Score only — this test cannot be failed')).toBeVisible();
+    await expect(page.getByText('Complete this test to continue — any score counts')).toBeVisible();
     await page.getByRole('button', { name: 'Start Test' }).click();
     await recordFillAnswer(page, 'love');
     await submitCurrentTest(page);
@@ -28,7 +28,7 @@ test.describe('Assessment acceptance', () => {
   test('required-pass failure gates and nudges, then pass and a failed retake never relock', async ({ page }) => {
     await signIn(page, E2E_USERS.requiredPass);
     await dashboardCard(page, 'Required-pass checkpoint').getByRole('button', { name: 'Start Test' }).click();
-    await expect(page.getByText('Passing requirement: 100%')).toBeVisible();
+    await expect(page.getByText('Score 100% or higher to continue along your Learning Path')).toBeVisible();
     await page.getByRole('button', { name: 'Start Test' }).click();
     await recordFillAnswer(page, 'wrong');
     await submitCurrentTest(page);
@@ -102,7 +102,7 @@ test.describe('Assessment acceptance', () => {
     });
 
     await page.reload();
-    await expect(page.getByText('Score only — this test cannot be failed')).toBeVisible();
+    await expect(page.getByText('Complete this test to continue — any score counts')).toBeVisible();
     await page.getByRole('button', { name: 'Continue Test' }).click();
     await expect(page.getByText('amo, amare', { exact: true })).toBeVisible();
     await expect(page.getByPlaceholder('Type your answer...')).toHaveValue('love');
@@ -181,14 +181,16 @@ test.describe('Assessment acceptance', () => {
     const studentContext = await browser.newContext();
     const studentPage = await studentContext.newPage();
     await signIn(studentPage, E2E_USERS.mock);
-    const mockSection = studentPage.getByRole('region', { name: 'Mock Tests' });
-    await expect(mockSection.getByRole('heading', { level: 3 })).toHaveText([
+    const mockGrid = studentPage.getByTestId('mock-test-grid');
+    await expect(mockGrid.getByRole('heading', { level: 3 })).toHaveText([
       'Required-pass practice',
       'Ordered fixed-version mock',
     ]);
     const mockCard = dashboardCard(studentPage, 'Ordered fixed-version mock');
     await mockCard.getByRole('button', { name: 'Start Mock Test' }).click();
-    await expect(studentPage.getByText('Practice target: 80% — informational only')).toBeVisible();
+    await expect(
+      studentPage.getByText('Aim for 80% — this is practice and will not affect your Learning Path')
+    ).toBeVisible();
     await studentPage.getByRole('button', { name: 'Start Mock Test' }).click();
     await expect(studentPage.getByText('fixed-version-prompt')).toBeVisible();
     await recordFillAnswer(studentPage, 'fixed-answer');

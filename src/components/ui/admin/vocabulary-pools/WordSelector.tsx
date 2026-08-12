@@ -9,6 +9,10 @@ import { AdvancedFiltersPanel } from '@/src/components/ui/admin/vocabulary/Advan
 import { useWordSelection } from '@/src/hooks/useWordSelection';
 import { useInfiniteScroll } from '@/src/hooks/useInfiniteScroll';
 import type { Word } from '@/src/types/admin-vocabulary';
+import {
+  limitVocabularyPoolWordCandidates,
+  remainingVocabularyPoolWordAdditions,
+} from '@/src/lib/vocabulary-pools/limits';
 
 interface WordSelectorProps {
   maxSelection?: number;
@@ -55,7 +59,22 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
     rootMargin: '200px',
   });
 
-  const canAddMore = !maxSelection || selectedIds.length < maxSelection;
+  const initialIds = initialSelectedIds.length > 0 ? initialSelectedIds : initialSelectedWords.map(word => word.id);
+  const initialIdSet = new Set(initialIds);
+  const remainingAdditions = maxSelection
+    ? remainingVocabularyPoolWordAdditions(selectedIds, initialIds, maxSelection)
+    : Number.POSITIVE_INFINITY;
+  const canAddWord = (wordId: string) => initialIdSet.has(wordId) || remainingAdditions > 0;
+  const bulkWordIds = maxSelection
+    ? limitVocabularyPoolWordCandidates(
+        availableWords.map(word => word.id),
+        selectedIds,
+        initialIds,
+        maxSelection
+      )
+    : availableWords.map(word => word.id);
+  const bulkWordIdSet = new Set(bulkWordIds);
+  const bulkWords = availableWords.filter(word => bulkWordIdSet.has(word.id));
 
   return (
     <div className="space-y-6">
@@ -96,8 +115,8 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <Label className="text-base font-medium">Filtered Results ({availableWords.length})</Label>
-              {availableWords.length > 0 && canAddMore && (
-                <Button type="button" onClick={addAllVisible} size="sm" variant="outline">
+              {bulkWords.length > 0 && (
+                <Button type="button" onClick={() => addAllVisible(bulkWords)} size="sm" variant="outline">
                   Add All Results
                 </Button>
               )}
@@ -119,7 +138,7 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
                     <Card
                       key={word.id}
                       className="cursor-pointer hover:bg-gray-50 transition-colors"
-                      onClick={() => canAddMore && addWord(word)}>
+                      onClick={() => canAddWord(word.id) && addWord(word)}>
                       <CardContent className="p-3">
                         <div className="flex items-center justify-between">
                           <div className="flex-1 min-w-0">
@@ -135,9 +154,9 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
                             variant="ghost"
                             onClick={e => {
                               e.stopPropagation();
-                              if (canAddMore) addWord(word);
+                              if (canAddWord(word.id)) addWord(word);
                             }}
-                            disabled={!canAddMore}>
+                            disabled={!canAddWord(word.id)}>
                             <Plus className="h-3 w-3" />
                           </Button>
                         </div>

@@ -4,6 +4,8 @@ import {
   VocabularyPoolSummary,
   VocabularyPoolWithWords,
   CreatePoolRequest,
+  VocabularyPoolDeletionChallenge,
+  VocabularyPoolUsageResponse,
 } from '@/src/types/vocabulary-pool';
 import { Word } from '@/src/types/admin-vocabulary';
 import { createAuthenticatedBaseQuery } from './baseQuery';
@@ -11,6 +13,7 @@ import { buildAdvancedFilterParams, POOL_WORD_FIELDS } from '@/src/utils/wordFil
 import type { PoolFilters } from '@/src/types/pool-filters';
 import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 import type { FormParadigm } from '@/src/types/exercises/paradigm';
+import type { VocabularyPoolStudyData } from '@/src/types/vocabulary';
 
 interface POSSummaryData {
   summary: Record<PartOfSpeech, number>;
@@ -28,12 +31,18 @@ interface ParadigmSummaryData {
 export const vocabularyPoolApi = createApi({
   reducerPath: 'vocabularyPoolApi',
   baseQuery: createAuthenticatedBaseQuery(),
-  tagTypes: ['Pool', 'PoolList', 'AvailableWords'],
+  tagTypes: ['Pool', 'PoolList', 'PoolUsage', 'AvailableWords'],
   keepUnusedDataFor: 60 * 5,
   refetchOnMountOrArgChange: 300,
   refetchOnFocus: false,
   refetchOnReconnect: true,
   endpoints: builder => ({
+    getVocabularyPoolUsages: builder.query<VocabularyPoolUsageResponse, void>({
+      query: () => '/admin/vocabulary-pools/usages',
+      transformResponse: (response: { success: boolean; data: VocabularyPoolUsageResponse }) => response.data,
+      providesTags: [{ type: 'PoolUsage', id: 'MANAGEMENT' }],
+    }),
+
     getPools: builder.query<
       { pools: VocabularyPoolSummary[]; hasMore: boolean; lastPoolId: string | null },
       {
@@ -101,6 +110,34 @@ export const vocabularyPoolApi = createApi({
       providesTags: (result, error, poolId) => [{ type: 'Pool', id: poolId }],
     }),
 
+    getStudentPool: builder.query<VocabularyPoolStudyData, string>({
+      async queryFn(poolId, _api, _extraOptions, baseQuery) {
+        const items: VocabularyPoolStudyData['items'] = [];
+        let offset = 0;
+        let identity: Pick<VocabularyPoolStudyData, 'id' | 'name'> | null = null;
+        while (true) {
+          const result = await baseQuery(`/vocabulary-pools/${poolId}/words?limit=200&offset=${offset}`);
+          if (result.error) return { error: result.error };
+          const response = result.data as {
+            success: boolean;
+            data: VocabularyPoolStudyData & { hasMore: boolean; nextOffset: number };
+          };
+          identity ??= { id: response.data.id, name: response.data.name };
+          items.push(...response.data.items);
+          if (!response.data.hasMore) break;
+          if (!Number.isSafeInteger(response.data.nextOffset) || response.data.nextOffset <= offset) {
+            return { error: { status: 'CUSTOM_ERROR', error: 'Invalid vocabulary pool pagination response' } };
+          }
+          offset = response.data.nextOffset;
+        }
+        return { data: { id: identity?.id ?? poolId, name: identity?.name ?? 'Vocabulary Pool', items } };
+      },
+      providesTags: (result, error, poolId) => [
+        { type: 'Pool', id: `student-${poolId}` },
+        { type: 'Pool', id: 'STUDENT_LIST' },
+      ],
+    }),
+
     getPoolSummary: builder.query<VocabularyPoolSummary, string>({
       query: poolId => `/admin/vocabulary-pools/${poolId}/summary`,
       transformResponse: (response: { success: boolean; data: { pool: VocabularyPoolSummary } }) => response.data.pool,
@@ -138,20 +175,32 @@ export const vocabularyPoolApi = createApi({
       transformResponse: (response: { success: boolean; data: { pool: VocabularyPool } }) => response.data.pool,
       invalidatesTags: (result, error, { id }) => [
         { type: 'Pool', id },
+        { type: 'Pool', id: `student-${id}` },
         { type: 'Pool', id: `${id}-pos-summary` },
         { type: 'Pool', id: `${id}-paradigm-summary` },
         { type: 'PoolList', id: 'LIST' },
       ],
     }),
 
-    deletePool: builder.mutation<void, string>({
+    preparePoolDeletion: builder.mutation<VocabularyPoolDeletionChallenge, string>({
       query: poolId => ({
+        url: `/admin/vocabulary-pools/${poolId}/deletion-challenge`,
+        method: 'POST',
+      }),
+      transformResponse: (response: { success: boolean; data: VocabularyPoolDeletionChallenge }) => response.data,
+    }),
+
+    deletePool: builder.mutation<void, { poolId: string; confirmationToken: string }>({
+      query: ({ poolId, confirmationToken }) => ({
         url: `/admin/vocabulary-pools/${poolId}`,
         method: 'DELETE',
+        body: { confirmationToken },
       }),
-      invalidatesTags: (result, error, poolId) => [
+      invalidatesTags: (result, error, { poolId }) => [
         { type: 'Pool', id: poolId },
+        { type: 'Pool', id: `student-${poolId}` },
         { type: 'PoolList', id: 'LIST' },
+        { type: 'PoolUsage', id: 'MANAGEMENT' },
       ],
     }),
 
@@ -170,6 +219,7 @@ export const vocabularyPoolApi = createApi({
       }) => response.data,
       invalidatesTags: (result, error, { poolId }) => [
         { type: 'Pool', id: poolId },
+        { type: 'Pool', id: `student-${poolId}` },
         { type: 'Pool', id: `${poolId}-pos-summary` },
         { type: 'Pool', id: `${poolId}-paradigm-summary` },
         { type: 'AvailableWords', id: 'LIST' },
@@ -185,6 +235,7 @@ export const vocabularyPoolApi = createApi({
       transformResponse: (response: { success: boolean; data: { pool: VocabularyPool } }) => response.data,
       invalidatesTags: (result, error, { poolId }) => [
         { type: 'Pool', id: poolId },
+        { type: 'Pool', id: `student-${poolId}` },
         { type: 'Pool', id: `${poolId}-pos-summary` },
         { type: 'Pool', id: `${poolId}-paradigm-summary` },
         { type: 'AvailableWords', id: 'LIST' },
@@ -240,12 +291,15 @@ export const vocabularyPoolApi = createApi({
 });
 
 export const {
+  useGetVocabularyPoolUsagesQuery,
   useGetPoolsQuery,
   useGetPoolQuery,
+  useGetStudentPoolQuery,
   useGetPoolSummaryQuery,
   useGetPoolPOSSummaryQuery,
   useGetPoolParadigmSummaryQuery,
   useCreatePoolMutation,
+  usePreparePoolDeletionMutation,
   useUpdatePoolMutation,
   useDeletePoolMutation,
   useAddWordsToPoolMutation,

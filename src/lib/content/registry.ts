@@ -37,7 +37,7 @@ export const CONTENT_TYPE_METADATA = [
     type: 'translation-grading',
     label: 'Grade Translation',
     kind: 'exercise',
-    testEligible: false,
+    testEligible: true,
     creatable: true,
   },
   {

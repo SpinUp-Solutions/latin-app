@@ -15,6 +15,9 @@ import {
   assertLegacyNormalPlacementChangeAllowedInTransaction,
   assertPlacedLessonReplacementAllowedInTransaction,
 } from '@/src/lib/learning-units/learning-path-service';
+import { lessonAuthoringInputSchema, lessonUnitDocumentSchema } from '@/src/lib/learning-units/schemas';
+import { assertVocabularyPoolAssignmentsAllowedInTransaction } from '@/src/lib/vocabulary-pools/assignment.server';
+import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
 
 const LESSON_SUMMARY_FIELDS = [
   'title',
@@ -98,7 +101,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const rawLesson = (await request.json()) as Lesson;
+    const rawLesson = await request.json();
     if (!isLessonDocumentData(rawLesson)) {
       return NextResponse.json({ error: 'Only lesson documents can use the lesson endpoint' }, { status: 400 });
     }
@@ -109,21 +112,11 @@ export async function POST(request: NextRequest) {
       rawLesson.practiceCategorySelections
     );
     const practiceCategoryIds = optionalPracticeCategoryIdsSchema.parse(rawLesson.practiceCategoryIds);
-    const {
-      practiceCategorySelections: _practiceCategorySelections,
-      practiceCategoryIds: _practiceCategoryIds,
-      practiceCategories: _practiceCategories,
-      practiceCategoryPlacements: _practiceCategoryPlacements,
-      ...lesson
-    } = rawLesson;
-
-    if (!lesson.id || !lesson.title || !lesson.type) {
-      return NextResponse.json({ error: 'Lesson ID, title, and type are required' }, { status: 400 });
-    }
+    const lesson = lessonAuthoringInputSchema.parse(rawLesson);
 
     const { totalPages, totalItems, totalExercises } = getLessonContentCounts(lesson);
     const now = new Date().toISOString();
-    const lessonData = {
+    const lessonData = lessonUnitDocumentSchema.parse({
       ...lesson,
       kind: 'lesson' as const,
       totalPages,
@@ -139,14 +132,20 @@ export async function POST(request: NextRequest) {
       liveOrder: null,
       publishedAt: null,
       publishedBy: null,
-    };
+    });
 
     const lessonRef = adminDb.collection('lessons').doc(lesson.id);
-    const assignments = await adminDb.runTransaction(async transaction => {
+    const assignments = await runVocabularyContentMutation(adminDb, async transaction => {
       const existingLesson = await transaction.get(lessonRef);
       if (existingLesson.exists) {
         throw new PracticeCategoryError('LESSON_ALREADY_EXISTS', 'A lesson with this ID already exists', 409);
       }
+      const applyVocabularyPoolAssignmentRevisions = await assertVocabularyPoolAssignmentsAllowedInTransaction(
+        transaction,
+        adminDb,
+        undefined,
+        lessonData
+      );
       const reconciled = await practiceCategoryService.reconcileLessonCategoriesInTransaction(transaction, {
         lessonId: lesson.id,
         lesson: lessonData,
@@ -155,6 +154,7 @@ export async function POST(request: NextRequest) {
           : { desiredCategoryIds: practiceCategoryIds ?? [] }),
         actorId: user.uid,
       });
+      applyVocabularyPoolAssignmentRevisions();
       transaction.create(lessonRef, lessonData);
       return reconciled;
     });
@@ -184,7 +184,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const rawLesson = (await request.json()) as Lesson;
+    const rawLesson = await request.json();
     if (!isLessonDocumentData(rawLesson)) {
       return NextResponse.json({ error: 'Only lesson documents can use the lesson endpoint' }, { status: 400 });
     }
@@ -195,21 +195,11 @@ export async function PUT(request: NextRequest) {
       rawLesson.practiceCategorySelections
     );
     const practiceCategoryIds = optionalPracticeCategoryIdsSchema.parse(rawLesson.practiceCategoryIds);
-    const {
-      practiceCategorySelections: _practiceCategorySelections,
-      practiceCategoryIds: _practiceCategoryIds,
-      practiceCategories: _practiceCategories,
-      practiceCategoryPlacements: _practiceCategoryPlacements,
-      ...lesson
-    } = rawLesson;
-
-    if (!lesson.id || !lesson.title || !lesson.type) {
-      return NextResponse.json({ error: 'Lesson ID, title, and type are required' }, { status: 400 });
-    }
+    const lesson = lessonAuthoringInputSchema.parse(rawLesson);
 
     const { totalPages, totalItems, totalExercises } = getLessonContentCounts(lesson);
     const lessonRef = adminDb.collection('lessons').doc(lesson.id);
-    const result = await adminDb.runTransaction(async transaction => {
+    const result = await runVocabularyContentMutation(adminDb, async transaction => {
       const existingLessonDoc = await transaction.get(lessonRef);
       if (!existingLessonDoc.exists) {
         throw new PracticeCategoryError('LESSON_NOT_FOUND', 'Lesson not found', 404);
@@ -237,7 +227,7 @@ export async function PUT(request: NextRequest) {
         }
       }
 
-      const updatedLessonData = {
+      const updatedLessonData = lessonUnitDocumentSchema.parse({
         ...lesson,
         kind: 'lesson' as const,
         totalPages,
@@ -255,7 +245,13 @@ export async function PUT(request: NextRequest) {
         liveOrder: existingLesson?.liveOrder ?? null,
         publishedAt: existingLesson?.publishedAt || null,
         publishedBy: existingLesson?.publishedBy || null,
-      };
+      });
+      const applyVocabularyPoolAssignmentRevisions = await assertVocabularyPoolAssignmentsAllowedInTransaction(
+        transaction,
+        adminDb,
+        existingLessonData,
+        updatedLessonData
+      );
       const assignments = await practiceCategoryService.reconcileLessonCategoriesInTransaction(transaction, {
         lessonId: lesson.id,
         lesson: updatedLessonData,
@@ -264,6 +260,7 @@ export async function PUT(request: NextRequest) {
           : { desiredCategoryIds: practiceCategoryIds }),
         actorId: user.uid,
       });
+      applyVocabularyPoolAssignmentRevisions();
       transaction.set(lessonRef, updatedLessonData);
       return { updatedLessonData, assignments } as const;
     });

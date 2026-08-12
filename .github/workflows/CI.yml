@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, edge, production]
   pull_request:
-    branches: [main]
+    branches: [main, edge, production]
 
 jobs:
   build:
@@ -83,6 +83,9 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+
+      - name: Run Firestore vocabulary security rules tests
+        run: npm run test:firestore-rules
 
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium

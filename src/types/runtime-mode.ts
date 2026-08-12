@@ -14,6 +14,7 @@ export type ExerciseAnswer =
   | { type: 'click-on-multiple-words'; selectedWordIndices: number[] }
   | { type: 'generated-translation'; answers: string[] }
   | { type: 'generated-form-identification'; answers: Record<string, string> }
+  | { type: 'translation-grading'; translations: string[] }
   | { type: 'sentence-diagramming'; annotations: DiagramAnnotation[] };
 
 export interface ExerciseAnswerEvent {
@@ -24,6 +25,14 @@ export interface ExerciseAnswerEvent {
 }
 
 export type ExerciseAnswerHandler = (answer: ExerciseAnswer) => void;
+
+export interface TestTranslationGradeEvent {
+  exerciseId: string;
+  itemIndex: number;
+  userTranslation: string;
+}
+
+export type TestTranslationGradeHandler = (event: TestTranslationGradeEvent) => Promise<void>;
 
 export const TEST_RUNTIME_FEEDBACK_CONFIG: FeedbackConfig = {
   escalationLevels: [],

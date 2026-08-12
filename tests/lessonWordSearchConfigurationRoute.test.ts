@@ -42,21 +42,27 @@ jest.mock('@/src/lib/practice-categories/service', () => {
 
 jest.mock('@/src/services/firebase-admin', () => ({
   adminDb: {
-    collection: () => ({
-      doc: (id: string) => ({ id }),
+    collection: (collectionName: string) => ({
+      doc: (id: string) => ({ id, collectionName }),
     }),
     runTransaction: async (
       callback: (transaction: {
-        get: () => Promise<{ exists: boolean; data: () => Record<string, unknown> | undefined }>;
+        get: (ref: { collectionName?: string }) => Promise<{
+          exists: boolean;
+          data: () => Record<string, unknown> | undefined;
+        }>;
         create: typeof mockCreate;
         set: typeof mockSet;
       }) => unknown
     ) =>
       callback({
-        get: async () => ({
-          exists: existingLessonData !== undefined,
-          data: () => existingLessonData,
-        }),
+        get: async ref =>
+          ref.collectionName === 'content_sync_locks'
+            ? { exists: false, data: () => undefined }
+            : {
+                exists: existingLessonData !== undefined,
+                data: () => existingLessonData,
+              },
         create: mockCreate,
         set: mockSet,
       }),
@@ -120,5 +126,52 @@ describe('lesson word-search configuration routes', () => {
     expect(response.status).toBe(400);
     expect(response.body.error).toBe('showWordSearch must be a boolean');
     expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('cleans retired top-level fields on update while preserving nested authored content', async () => {
+    existingLessonData = {
+      kind: 'lesson',
+      isLive: false,
+      createdAt: '2026-01-01',
+      createdBy: 'admin-1',
+      version: 1,
+    };
+    await PUT({
+      json: async () =>
+        lessonInput({
+          pages: [
+            {
+              id: 'page-1',
+              items: [{ id: 'item-1', type: 'text', content: 'Keep me', rendererOwnedField: true }],
+              rendererOwnedPageField: true,
+            },
+          ],
+          published: true,
+          introduction: [{ legacy: true }],
+          introduction_backup: [{ legacy: true }],
+          exercises: [{ legacy: true }],
+          exercises_backup: [{ legacy: true }],
+          arbitraryClientField: 'must not persist',
+        }),
+    } as never);
+
+    const persistedLesson = mockSet.mock.calls[0][1] as Record<string, unknown>;
+    for (const field of [
+      'published',
+      'introduction',
+      'introduction_backup',
+      'exercises',
+      'exercises_backup',
+      'arbitraryClientField',
+    ]) {
+      expect(persistedLesson).not.toHaveProperty(field);
+    }
+    expect(persistedLesson.pages).toEqual([
+      expect.objectContaining({
+        id: 'page-1',
+        rendererOwnedPageField: true,
+        items: [expect.objectContaining({ id: 'item-1', content: 'Keep me', rendererOwnedField: true })],
+      }),
+    ]);
   });
 });

@@ -3,20 +3,27 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { AlertTriangle, ArrowLeft, CheckCircle2, FileCheck2, RotateCcw } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CheckCircle2, FileCheck2, Loader2, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
 import { TestTakingView } from '@/src/components/ui/test/test-taking-view';
+import { TestTranslationGradingProvider } from '@/src/components/ui/test/test-translation-grading-context';
 import { useAuth } from '@/src/hooks/useAuth';
 import { useBufferedAttemptAnswers } from '@/src/hooks/useBufferedAttemptAnswers';
 import { isExerciseType } from '@/src/lib/content/registry';
 import { isExerciseAnswerComplete } from '@/src/lib/tests/answer-completion';
+import { formatScorePercentage, formatScoreShortfall } from '@/src/lib/tests/formatting';
 import { getApiErrorCode, getApiErrorMessage } from '@/src/store/api/baseQuery';
 import { useGetStudentDashboardQuery } from '@/src/store/api/lessonApi';
 import { useGetStudentMockDetailQuery } from '@/src/store/api/mockTestApi';
-import { useStartTestAttemptMutation, useSubmitTestAttemptMutation } from '@/src/store/api/testApi';
+import {
+  useGradeTestTranslationMutation,
+  useStartTestAttemptMutation,
+  useSubmitTestAttemptMutation,
+} from '@/src/store/api/testApi';
 import type { StudentTestSummary } from '@/src/types/lesson';
+import type { TestTranslationGradeHandler } from '@/src/types/runtime-mode';
 import type { TestAttemptOrigin } from '@/src/types/test';
 import type { StudentInProgressTestAttempt, StudentSubmittedTestAttempt } from '@/src/types/test';
 
@@ -50,10 +57,13 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
     refetch: refetchMockDetail,
   } = useGetStudentMockDetailQuery({ uid: user?.uid ?? '', mockId: testId }, { skip: !user?.uid || !isMockTest });
   const [startAttempt, { isLoading: starting }] = useStartTestAttemptMutation();
+  const [gradeTestTranslation, { isLoading: translationGrading }] = useGradeTestTranslationMutation();
   const [submitAttempt, { isLoading: submitting }] = useSubmitTestAttemptMutation();
   const {
     activateAttempt,
+    adoptPersistedAnswer,
     answers,
+    clearAnswer,
     flushPendingAnswers,
     hasUnsavedAnswers,
     recordAnswer,
@@ -67,6 +77,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
   const [result, setResult] = useState<StudentSubmittedTestAttempt | null>(null);
   const [pageIndex, setPageIndex] = useState(0);
   const [mockRetakeAvailability, setMockRetakeAvailability] = useState<MockRetakeAvailability>('unchecked');
+  const [editingExerciseId, setEditingExerciseId] = useState<string | null>(null);
   const allowNextHistoryPopRef = useRef(false);
   const historyNavigationPendingRef = useRef(false);
   const historyEffectActiveRef = useRef(false);
@@ -130,7 +141,6 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
         });
         setAttempt(response.attempt);
         setPageIndex(0);
-        setScreen('taking');
       })
       .catch(error => {
         if (activeOriginKeyRef.current !== originKey) return;
@@ -236,6 +246,11 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
 
   const begin = async () => {
     if (!user || !test || (isMockTest && !mockTest) || normalTest?.status === 'locked') return;
+    if (isMockTest && attempt) {
+      setScreen('taking');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
     const requestedOriginKey = originKey;
     try {
       const response = await startAttempt({ uid: user.uid, origin }).unwrap();
@@ -248,7 +263,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
       });
       setAttempt(response.attempt);
       setPageIndex(0);
-      setScreen('taking');
+      if (!isMockTest) setScreen('taking');
     } catch (error) {
       const code = getApiErrorCode(error);
       if (code === 'TEST_CONFIGURATION_ERROR' || code === 'TEST_NOT_AVAILABLE') {
@@ -276,6 +291,27 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch {
       toast.error('Save the pending answer before reviewing your test.');
+    }
+  };
+
+  const gradeTranslation: TestTranslationGradeHandler = async event => {
+    if (!attempt || !user) throw new Error('This test attempt is not available.');
+    const requestedOriginKey = originKey;
+    try {
+      await flushPendingAnswers();
+      const updatedAttempt = await gradeTestTranslation({
+        uid: user.uid,
+        attemptId: attempt.id,
+        ...event,
+      }).unwrap();
+      if (activeOriginKeyRef.current !== requestedOriginKey) {
+        throw new Error('The active test changed while the translation was being graded.');
+      }
+      const savedAnswer = updatedAttempt.answers[event.exerciseId];
+      if (savedAnswer) adoptPersistedAnswer({ exerciseId: event.exerciseId, answer: savedAnswer });
+      setAttempt(updatedAttempt);
+    } catch (error) {
+      throw new Error(getApiErrorMessage(error, 'Unable to grade this translation'));
     }
   };
 
@@ -315,6 +351,38 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
         return;
       }
       toast.error(getApiErrorMessage(error, 'Unable to submit this test'));
+    }
+  };
+
+  const openExercise = async (exerciseId: string, exercisePageIndex: number, clearExisting: boolean) => {
+    if (!attempt) return;
+    if (!clearExisting) {
+      setPageIndex(exercisePageIndex);
+      setScreen('taking');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    const previousAnswer = answers[exerciseId];
+    setEditingExerciseId(exerciseId);
+    clearAnswer(exerciseId);
+    try {
+      await flushPendingAnswers();
+      setAttempt(current => {
+        if (!current) return current;
+        const nextAnswers = { ...current.answers };
+        const nextTranslationGrades = { ...current.translationGrades };
+        delete nextAnswers[exerciseId];
+        delete nextTranslationGrades[exerciseId];
+        return { ...current, answers: nextAnswers, translationGrades: nextTranslationGrades };
+      });
+      setPageIndex(exercisePageIndex);
+      setScreen('taking');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch {
+      if (previousAnswer) recordAnswer({ exerciseId, answer: previousAnswer });
+      toast.error('This answer could not be reopened. Try again.');
+    } finally {
+      setEditingExerciseId(null);
     }
   };
 
@@ -413,55 +481,69 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
       : normalTest && normalTest.minTotalPoints === normalTest.maxTotalPoints
         ? `${formatPoints(normalTest.minTotalPoints)} total points`
         : `${formatPoints(normalTest?.minTotalPoints ?? 0)}–${formatPoints(normalTest?.maxTotalPoints ?? 0)} total points, depending on the version selected`;
+    const mockAction = attempt
+      ? mockDetail?.attempt || attemptSummary?.inProgressAttemptId
+        ? 'Continue Mock Test'
+        : (attemptSummary?.attemptCount ?? 0) > 0
+          ? 'Begin Mock Retake'
+          : 'Begin Mock Test'
+      : attemptSummary?.inProgressAttemptId
+        ? 'Continue Mock Test'
+        : (attemptSummary?.attemptCount ?? 0) > 0
+          ? 'Start Mock Retake'
+          : 'Start Mock Test';
     return (
-      <div className="min-h-screen bg-gradient-to-br from-roman-marble via-white to-roman-parchment p-4 md:p-10">
-        <Card className="mx-auto max-w-2xl overflow-hidden border-roman-red/20 shadow-xl">
+      <div className="min-h-screen bg-gradient-to-b from-roman-marble via-white to-roman-parchment/60 p-4 sm:p-6 md:p-10">
+        <Card className="mx-auto max-w-3xl overflow-hidden rounded-2xl border-roman-red/15 shadow-lg">
           <div className="h-1.5 bg-roman-red" />
-          <CardHeader className="text-center">
+          <CardHeader className="px-6 pb-5 pt-7 text-center sm:px-8">
             <div className="mx-auto mb-2 rounded-full border-2 border-roman-gold/40 bg-roman-red p-3 text-white shadow-sm">
               <FileCheck2 className="h-7 w-7" aria-hidden="true" />
             </div>
             <CardTitle className="font-serif text-3xl text-roman-red">{test.title}</CardTitle>
             <p className="text-roman-stone">{test.description}</p>
           </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="rounded-xl border border-roman-gold/30 bg-roman-parchment/60 p-4">
+          <CardContent className="space-y-5 px-6 pb-7 sm:px-8">
+            <div className="rounded-xl border border-roman-gold/25 bg-roman-parchment/50 p-4 sm:flex sm:items-center sm:justify-between sm:gap-5">
               <div className="font-semibold text-roman-red">
                 {test.passingPercentage === null
                   ? isMockTest
-                    ? 'Score only — this mock is practice and never gates your Learning Path'
-                    : 'Score only — this test cannot be failed'
+                    ? 'Practice only — your score will not affect your Learning Path'
+                    : 'Complete this test to continue — any score counts'
                   : isMockTest
-                    ? `Practice target: ${test.passingPercentage}% — informational only`
-                    : `Passing requirement: ${test.passingPercentage}%`}
+                    ? `Aim for ${test.passingPercentage}% — this is practice and will not affect your Learning Path`
+                    : `Score ${test.passingPercentage}% or higher to continue along your Learning Path`}
               </div>
-              <div className="mt-1 text-sm text-roman-stone">{points}</div>
+              <div className="mt-1 shrink-0 text-sm text-roman-stone sm:mt-0">{points} · Untimed</div>
             </div>
-            <ul className="space-y-3 text-sm text-gray-700">
-              <li>Answer feedback is withheld until you submit.</li>
-              <li>Your committed answers are saved and can be resumed after a refresh.</li>
-              <li>This test is untimed. Review your answers before submitting.</li>
+            <ul className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-sm leading-6 text-slate-700">
+              <li className="flex gap-3 before:mt-2.5 before:h-1.5 before:w-1.5 before:shrink-0 before:rounded-full before:bg-roman-red">
+                For translations, you’ll get brief guidance as you go. Feedback on other questions appears after you
+                submit.
+              </li>
+              <li className="flex gap-3 before:mt-2.5 before:h-1.5 before:w-1.5 before:shrink-0 before:rounded-full before:bg-roman-red">
+                Your answers save automatically, so you can refresh or return later without losing your work.
+              </li>
+              <li className="flex gap-3 before:mt-2.5 before:h-1.5 before:w-1.5 before:shrink-0 before:rounded-full before:bg-roman-red">
+                Review your answers before submitting.
+              </li>
             </ul>
             <div className="flex flex-col gap-3 sm:flex-row">
-              <Button asChild variant="outline" className="sm:flex-1">
+              <Button asChild variant="outline" className="h-11 rounded-xl sm:flex-1">
                 <Link href="/dashboard">Not now</Link>
               </Button>
               <Button
-                className="bg-roman-red hover:bg-roman-red/90 sm:flex-1"
+                className="h-11 rounded-xl bg-roman-red hover:bg-roman-red/90 sm:flex-1"
                 disabled={starting || (isMockTest && !mockTest)}
                 onClick={begin}>
                 {starting
                   ? 'Preparing test…'
-                  : attemptSummary?.inProgressAttemptId
-                    ? isMockTest
-                      ? 'Continue Mock Test'
-                      : 'Continue Test'
-                    : (attemptSummary?.attemptCount ?? 0) > 0
-                      ? isMockTest
-                        ? 'Start Mock Retake'
-                        : 'Start Retake'
-                      : isMockTest
-                        ? 'Start Mock Test'
+                  : isMockTest
+                    ? mockAction
+                    : attemptSummary?.inProgressAttemptId
+                      ? 'Continue Test'
+                      : (attemptSummary?.attemptCount ?? 0) > 0
+                        ? 'Start Retake'
                         : 'Start Test'}
               </Button>
             </div>
@@ -501,14 +583,14 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
                       : 'Test complete'
                     : 'Keep going'}
               </h1>
-              <div className="text-5xl font-semibold text-roman-red">{Math.round(result.percentage)}%</div>
+              <div className="text-5xl font-semibold text-roman-red">{formatScorePercentage(result.percentage)}%</div>
               <p className="text-lg">
                 {formatPoints(result.score)} / {formatPoints(result.maxScore)} points
               </p>
               {result.outcome === 'not-passed' && result.passingPercentage !== null && (
                 <div className="rounded-lg bg-amber-50 p-3 text-amber-950">
-                  You need {result.passingPercentage}% — you reached {Math.round(result.percentage)}%. You are{' '}
-                  {shortfall.toFixed(1).replace(/\.0$/, '')} percentage points away.
+                  You need {result.passingPercentage}% — you reached {formatScorePercentage(result.percentage)}%. You
+                  are {formatScoreShortfall(shortfall)} percentage points away.
                 </div>
               )}
               {!isMockTest && result.outcome === 'not-passed' && normalTest?.relatedLiveMocks?.[0] && (
@@ -549,11 +631,18 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
               <Link href="/dashboard">Back to dashboard</Link>
             </Button>
             {isMockTest && mockRetakeAvailability !== 'available' ? (
-              <p className="self-center text-sm text-gray-600">
-                {mockRetakeAvailability === 'checking'
-                  ? 'Checking whether this mock is still available for another attempt…'
-                  : 'This mock test is no longer available for another attempt.'}
-              </p>
+              mockRetakeAvailability === 'checking' ? (
+                <div
+                  className="flex self-center items-center justify-center text-roman-red"
+                  role="status"
+                  aria-label="Loading retake options">
+                  <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+                </div>
+              ) : (
+                <p className="self-center text-sm text-gray-600">
+                  This mock test is no longer available for another attempt.
+                </p>
+              )
             ) : (
               <Button
                 className="bg-roman-red hover:bg-roman-red/90"
@@ -581,47 +670,112 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
       item => !isExerciseAnswerComplete(item.exercise, answers[item.id], item.resolvedItemCount)
     );
     return (
-      <div className="min-h-screen bg-roman-marble p-4 md:p-10">
-        <div className="mx-auto max-w-3xl space-y-6">
-          <Card className="overflow-hidden border-roman-red/15">
+      <div className="min-h-screen bg-gradient-to-b from-roman-marble via-white to-roman-parchment/50 p-4 md:p-10">
+        <div className="mx-auto max-w-4xl space-y-5">
+          <Card className="overflow-hidden rounded-2xl border-roman-red/15 shadow-md">
             <div className="h-1.5 bg-roman-red" />
-            <CardHeader>
+            <CardHeader className="px-6 pb-4 pt-6 sm:px-8">
               <CardTitle className="font-serif text-2xl text-roman-red">Review before submitting</CardTitle>
               <p className="text-sm text-roman-stone">
                 {answeredCount} of {exerciseItems.length} exercises answered
               </p>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-5 px-6 pb-7 sm:px-8">
               {unanswered.length === 0 ? (
-                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-900">
-                  Every exercise has a recorded answer.
+                <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-900">
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" aria-hidden="true" />
+                  <div>
+                    <p className="font-medium">Every exercise has a recorded answer.</p>
+                    <p className="mt-1 text-sm text-emerald-800">You can still make changes before submitting.</p>
+                  </div>
                 </div>
               ) : (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-                  <p className="font-medium text-amber-950">
-                    {unanswered.length} unanswered {unanswered.length === 1 ? 'exercise' : 'exercises'}
-                  </p>
-                  <ul className="mt-2 list-inside list-disc text-sm text-amber-900">
-                    {unanswered.map(item => (
-                      <li key={item.id}>
-                        Page {item.pageIndex + 1}: {item.title}
-                      </li>
-                    ))}
-                  </ul>
+                <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" aria-hidden="true" />
+                  <div>
+                    <p className="font-medium text-amber-950">
+                      {unanswered.length} unanswered {unanswered.length === 1 ? 'exercise' : 'exercises'}
+                    </p>
+                    <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-amber-900">
+                      {unanswered.map(item => (
+                        <li key={item.id}>
+                          Page {item.pageIndex + 1}: {item.title}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
               )}
-              <p className="text-sm text-gray-600">
+              <div className="space-y-3">
+                <h2 className="font-semibold text-slate-900">Review each exercise</h2>
+                <ul className="space-y-3">
+                  {exerciseItems.map(item => {
+                    const complete = isExerciseAnswerComplete(item.exercise, answers[item.id], item.resolvedItemCount);
+                    const hasRecordedAnswer = Boolean(answers[item.id]);
+                    const translationIsFinal =
+                      item.exercise.type === 'translation-grading' &&
+                      Object.keys(attempt.translationGrades[item.id] ?? {}).length > 0;
+                    const clearExisting = complete && !translationIsFinal;
+                    const actionLabel = translationIsFinal
+                      ? complete
+                        ? 'Review answer'
+                        : 'Continue exercise'
+                      : complete
+                        ? 'Edit answer'
+                        : hasRecordedAnswer
+                          ? 'Continue exercise'
+                          : 'Answer exercise';
+                    return (
+                      <li
+                        key={item.id}
+                        className={`flex flex-col gap-4 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between ${
+                          complete ? 'border-emerald-200 bg-emerald-50/70' : 'border-amber-200 bg-amber-50/70'
+                        }`}>
+                        <div className="min-w-0">
+                          <div className="font-medium text-slate-900">
+                            Page {item.pageIndex + 1}: {item.title}
+                          </div>
+                          <div
+                            className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                              complete ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                            }`}>
+                            {complete ? 'Answer recorded' : 'Needs an answer'}
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="shrink-0 rounded-xl border-slate-200 bg-white"
+                          disabled={editingExerciseId !== null}
+                          aria-label={`${actionLabel.replace(' answer', '').replace(' exercise', '')} ${item.title}`}
+                          onClick={() => void openExercise(item.id, item.pageIndex, clearExisting)}>
+                          {editingExerciseId === item.id ? 'Opening…' : actionLabel}
+                        </Button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+              <p className="border-t border-slate-100 pt-4 text-sm leading-6 text-gray-600">
                 Submission is final for this attempt. Exact questions and answers cannot be reopened afterward, but your
                 score breakdown will be retained.
               </p>
             </CardContent>
           </Card>
-          <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
-            <Button variant="outline" onClick={() => setScreen('taking')}>
+          <div className="flex flex-col gap-3 rounded-2xl border border-roman-red/15 bg-white p-3 shadow-sm sm:flex-row sm:justify-between">
+            <Button
+              variant="outline"
+              className="rounded-xl"
+              disabled={editingExerciseId !== null}
+              onClick={() => setScreen('taking')}>
               <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
               Return to test
             </Button>
-            <Button className="bg-roman-red hover:bg-roman-red/90" disabled={submitting} onClick={submit}>
+            <Button
+              className="rounded-xl bg-roman-red hover:bg-roman-red/90"
+              disabled={submitting || translationGrading || editingExerciseId !== null}
+              onClick={submit}>
               {submitting ? 'Submitting…' : 'Submit Test'}
             </Button>
           </div>
@@ -630,7 +784,9 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
     );
   }
 
-  const saveStatus = saveError ? (
+  const saveStatus = translationGrading ? (
+    <span>Grading and saving translation…</span>
+  ) : saveError ? (
     <span className="font-medium text-red-700">{saveError}</span>
   ) : answerSaveStatus === 'recorded' ? (
     <span>Answer recorded. Saving…</span>
@@ -643,21 +799,24 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
   );
 
   return (
-    <TestTakingView
-      title={test.title}
-      description={test.description}
-      pages={attempt.delivery.pages}
-      currentPageIndex={pageIndex}
-      answeredCount={answeredCount}
-      totalExercises={exerciseItems.length}
-      status={saveStatus}
-      answers={answers}
-      resolvedExerciseState={attempt.delivery.resolvedExercises}
-      resolvedVocabularyPool={attempt.delivery.vocabularyPool}
-      onAnswer={recordAnswer}
-      onPrevious={() => void moveToPage(pageIndex - 1)}
-      onNext={() => void moveToPage(pageIndex + 1)}
-      onReview={() => void openReview()}
-    />
+    <TestTranslationGradingProvider value={{ grades: attempt.translationGrades, grade: gradeTranslation }}>
+      <TestTakingView
+        title={test.title}
+        description={test.description}
+        pages={attempt.delivery.pages}
+        currentPageIndex={pageIndex}
+        answeredCount={answeredCount}
+        totalExercises={exerciseItems.length}
+        status={saveStatus}
+        answers={answers}
+        resolvedExerciseState={attempt.delivery.resolvedExercises}
+        resolvedVocabularyPool={attempt.delivery.vocabularyPool}
+        onAnswer={recordAnswer}
+        onPrevious={() => void moveToPage(pageIndex - 1)}
+        onNext={() => void moveToPage(pageIndex + 1)}
+        onReview={() => void openReview()}
+        navigationPending={translationGrading}
+      />
+    </TestTranslationGradingProvider>
   );
 }

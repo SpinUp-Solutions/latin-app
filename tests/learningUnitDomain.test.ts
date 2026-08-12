@@ -11,7 +11,19 @@ const versionPages = [
     id: 'page-1',
     items: [
       { id: 'instructions', type: 'text', content: 'Read carefully.' },
-      { id: 'question-1', type: 'multiple-choice', maxPoints: 3 },
+      {
+        id: 'question-1',
+        type: 'multiple-choice',
+        maxPoints: 3,
+        data: {
+          question: 'Which answer is correct?',
+          options: [
+            { id: 'answer-a', text: 'A', isCorrect: true },
+            { id: 'answer-b', text: 'B', isCorrect: false },
+          ],
+          allowMultipleSelections: false,
+        },
+      },
     ],
   },
 ];
@@ -135,7 +147,7 @@ describe('test-version boundaries', () => {
     expect(staleSummary.error?.issues.map(issue => issue.message)).toContain('totalPoints must be derived from pages');
   });
 
-  it('rejects duplicate stable IDs, scoring on content, and unsupported exercises', () => {
+  it('rejects duplicate stable IDs and scoring on content', () => {
     const result = testVersionInputSchema.safeParse({
       id: 'version-1',
       name: 'Broken version',
@@ -153,11 +165,7 @@ describe('test-version boundaries', () => {
 
     const messages = result.error?.issues.map(issue => issue.message) ?? [];
     expect(messages).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining('duplicate ID'),
-        'Non-exercise content cannot define maxPoints',
-        'Exercise type "translation-grading" is not eligible for tests',
-      ])
+      expect.arrayContaining([expect.stringContaining('duplicate ID'), 'Non-exercise content cannot define maxPoints'])
     );
   });
 
@@ -262,6 +270,6 @@ describe('mock assignment boundaries', () => {
     expect(isExerciseType('matching')).toBe(true);
     expect(isExerciseType('listening-passage')).toBe(false);
     expect(isTestEligibleExerciseType('matching')).toBe(true);
-    expect(isTestEligibleExerciseType('translation-grading')).toBe(false);
+    expect(isTestEligibleExerciseType('translation-grading')).toBe(true);
   });
 });

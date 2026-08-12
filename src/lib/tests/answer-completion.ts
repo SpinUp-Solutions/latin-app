@@ -70,6 +70,8 @@ export function isExerciseAnswerComplete(
         resolvedItemCount > 0 &&
         Object.values(answer.answers).filter(value => hasText(value)).length >= resolvedItemCount
       );
+    case 'translation-grading':
+      return answer.type === 'translation-grading' && hasCompleteArray(answer.translations, exercise.data.items.length);
     case 'sentence-diagramming':
       return answer.type === 'sentence-diagramming' && answer.annotations.length > 0;
     default:

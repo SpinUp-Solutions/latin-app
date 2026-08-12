@@ -36,31 +36,33 @@ jest.mock('@/src/services/firebase-admin', () => {
       runTransaction: async (callback: (transaction: unknown) => unknown) =>
         callback({
           get: async (ref: { collectionName: string }) =>
-            ref.collectionName === 'lesson_recovery'
-              ? {
-                  exists: true,
-                  data: () => ({
-                    userId: 'admin-1',
-                    status: mockRecoveryStatus,
-                    rawLessonData: mockRecoveryLessonData,
-                  }),
-                }
-              : ref.collectionName === 'learningPaths'
+            ref.collectionName === 'content_sync_locks'
+              ? { exists: false, data: () => undefined }
+              : ref.collectionName === 'lesson_recovery'
                 ? {
-                    id: 'default',
-                    exists: Boolean(mockLearningPathData),
-                    data: () => mockLearningPathData,
-                  }
-                : {
                     exists: true,
                     data: () => ({
-                      createdAt: '2026-01-01T00:00:00.000Z',
-                      createdBy: 'admin-1',
-                      version: 2,
-                      isLive: false,
-                      liveOrder: null,
+                      userId: 'admin-1',
+                      status: mockRecoveryStatus,
+                      rawLessonData: mockRecoveryLessonData,
                     }),
-                  },
+                  }
+                : ref.collectionName === 'learningPaths'
+                  ? {
+                      id: 'default',
+                      exists: Boolean(mockLearningPathData),
+                      data: () => mockLearningPathData,
+                    }
+                  : {
+                      exists: true,
+                      data: () => ({
+                        createdAt: '2026-01-01T00:00:00.000Z',
+                        createdBy: 'admin-1',
+                        version: 2,
+                        isLive: false,
+                        liveOrder: null,
+                      }),
+                    },
           set: mockTransactionSet,
           update: mockTransactionUpdate,
         }),
@@ -127,6 +129,35 @@ describe('practice category recovery retry', () => {
     const persistedLesson = mockTransactionSet.mock.calls[0][1] as Record<string, unknown>;
     expect(persistedLesson).not.toHaveProperty('practiceCategorySelections');
     expect(response.body.lesson.practiceCategorySelections).toEqual([{ categoryId: 'category-1', tagIds: [] }]);
+  });
+
+  it('strips retired and arbitrary top-level fields when retrying recovery', async () => {
+    mockRecoveryLessonData = {
+      ...mockRecoveryLessonData,
+      published: true,
+      introduction: [{ legacy: true }],
+      introduction_backup: [{ legacy: true }],
+      exercises: [{ legacy: true }],
+      exercises_backup: [{ legacy: true }],
+      arbitraryClientField: 'must not persist',
+    };
+
+    const response = (await POST({} as never, {
+      params: Promise.resolve({ id: 'recovery-1' }),
+    })) as unknown as { status: number };
+
+    expect(response.status).toBe(200);
+    const persistedLesson = mockTransactionSet.mock.calls[0][1] as Record<string, unknown>;
+    for (const field of [
+      'published',
+      'introduction',
+      'introduction_backup',
+      'exercises',
+      'exercises_backup',
+      'arbitraryClientField',
+    ]) {
+      expect(persistedLesson).not.toHaveProperty(field);
+    }
   });
 
   it('rejects replaying an item that has already left pending state', async () => {

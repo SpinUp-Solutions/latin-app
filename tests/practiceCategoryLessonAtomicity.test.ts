@@ -107,4 +107,29 @@ describe('atomic lesson and practice-category writes', () => {
     expect(persistedLesson).not.toHaveProperty('practiceCategories');
     expect(response.body.lesson.practiceCategorySelections).toEqual([{ categoryId: 'authors', tagIds: ['cicero'] }]);
   });
+
+  it('does not persist unknown or retired top-level lesson fields', async () => {
+    await POST({
+      json: async () => ({
+        id: 'lesson-1',
+        title: 'Vocabulary lesson',
+        type: 'vocab',
+        pages: [],
+        published: true,
+        introduction: [{ legacy: true }],
+        introduction_backup: [{ legacy: true }],
+        exercises: [{ legacy: true }],
+        exercises_backup: [{ legacy: true }],
+        arbitraryClientField: 'must not persist',
+      }),
+    } as never);
+
+    const persistedLesson = mockCreate.mock.calls[0][1] as Record<string, unknown>;
+    expect(persistedLesson).not.toHaveProperty('published');
+    expect(persistedLesson).not.toHaveProperty('introduction');
+    expect(persistedLesson).not.toHaveProperty('introduction_backup');
+    expect(persistedLesson).not.toHaveProperty('exercises');
+    expect(persistedLesson).not.toHaveProperty('exercises_backup');
+    expect(persistedLesson).not.toHaveProperty('arbitraryClientField');
+  });
 });

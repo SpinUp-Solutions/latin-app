@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
-import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
+import { AdminAccessError, verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import {
+  requireVocabularyWordsCollection,
+  VocabularyWordCollectionError,
+} from '@/src/lib/vocabulary/word-collection.server';
 
 const serializeTimestamp = (value: unknown): string | undefined => {
   if (value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function') {
@@ -30,8 +34,9 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
+    await verifyAdminAccess(request);
     const { searchParams } = new URL(request.url);
-    const collection = searchParams.get('collection') || VOCABULARY_WORDS_COLLECTION;
+    const collection = requireVocabularyWordsCollection(searchParams.get('collection'));
 
     const snapshot = await adminDb.collection(collection).get();
 
@@ -54,6 +59,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       },
     });
   } catch (error) {
+    if (error instanceof AdminAccessError) {
+      return NextResponse.json({ success: false, error: error.message }, { status: error.status });
+    }
+    if (error instanceof VocabularyWordCollectionError) {
+      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
+    }
     console.error('Error creating backup:', error);
     return NextResponse.json(
       {

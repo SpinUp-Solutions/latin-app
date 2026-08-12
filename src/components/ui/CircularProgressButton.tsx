@@ -9,6 +9,7 @@ interface CircularProgressButtonProps {
   onClick?: (e?: React.MouseEvent) => void;
   disabled?: boolean;
   size?: number;
+  ariaLabel?: string;
 }
 
 const statusConfig = {
@@ -48,6 +49,7 @@ export const CircularProgressButton: React.FC<CircularProgressButtonProps> = ({
   onClick,
   disabled = false,
   size = 56,
+  ariaLabel,
 }) => {
   const config = statusConfig[status];
   const Icon = config.icon;
@@ -86,6 +88,7 @@ export const CircularProgressButton: React.FC<CircularProgressButtonProps> = ({
       <button
         onClick={e => onClick?.(e)}
         disabled={isDisabled}
+        aria-label={ariaLabel}
         className={cn(
           'absolute inset-2 rounded-full flex items-center justify-center text-white transition-all duration-300 shadow-lg',
           config.backgroundColor,
