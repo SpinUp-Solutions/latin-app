@@ -48,3 +48,6 @@ public/*.pdf
 public/*.json
 
 firebase-debug.log
+
+# Local Netlify state and build artifacts
+.netlify/
