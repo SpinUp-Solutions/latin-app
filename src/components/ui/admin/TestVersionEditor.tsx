@@ -60,7 +60,9 @@ import { formatApiValidationIssues, getApiErrorMessage } from '@/src/store/api/b
 interface TestVersionEditorProps {
   initialTest?: TestUnit;
   initialVersion?: TestVersion;
-  onSave: (value: TestVersionEditorValue) => Promise<void> | void;
+  onSave: (
+    value: TestVersionEditorValue
+  ) => Promise<TestVersionEditorSaveResult | void> | TestVersionEditorSaveResult | void;
   saving?: boolean;
   /** Mock cards own their card settings outside the version editor. */
   hideTestSettings?: boolean;
@@ -84,6 +86,13 @@ interface TestVersionEditorProps {
 export interface TestVersionEditorValue {
   test: CreateTestUnitInput;
   version: TestVersionInput;
+}
+
+export interface TestVersionEditorSaveResult {
+  /** Keep the latest local draft when recovering an earlier successful create. */
+  preserveDraft?: boolean;
+  /** Runs after the editor has cleared or safely persisted its local state. */
+  afterSave?: (result: { draftPreserved: boolean }) => void;
 }
 
 interface TestEditorSettings {
@@ -155,6 +164,8 @@ export function TestVersionEditor({
   const [assignmentOpen, setAssignmentOpen] = useState(false);
   const [discardConfirmationOpen, setDiscardConfirmationOpen] = useState(false);
   const [saveErrors, setSaveErrors] = useState<string[]>([]);
+  const [savePending, setSavePending] = useState(false);
+  const savePendingRef = React.useRef(false);
   const initialSettings = React.useRef(settings);
   const latestDocument = React.useRef(document);
   const latestSettings = React.useRef(settings);
@@ -233,7 +244,7 @@ export function TestVersionEditor({
   );
 
   const save = () => {
-    if (!document) return;
+    if (!document || saving || savePendingRef.current) return;
     if (hasFormIdentificationIssues) {
       setSaveErrors(formIdentificationIssues.map(formatFormIdentificationConfigurationIssue));
       return;
@@ -271,27 +282,45 @@ export function TestVersionEditor({
     }
 
     setSaveErrors([]);
+    savePendingRef.current = true;
+    setSavePending(true);
     void Promise.resolve(onSave(value))
-      .then(() => {
+      .then(async result => {
         initialSettings.current = submittedSettings;
 
         const changedWhileSaving =
           latestDocument.current !== submittedDocument || !shallowEqual(latestSettings.current, submittedSettings);
-        if (changedWhileSaving) return false;
+        const preserveDraft = result?.preserveDraft === true || changedWhileSaving;
+        if (preserveDraft) {
+          const latestDraft = latestDocument.current;
+          if (latestDraft) await dispatch(savePageDocumentDraft(latestDraft)).unwrap();
+          sessionStorage.setItem(settingsKey, JSON.stringify(latestSettings.current));
+          clearCreationIdentity();
+          return { draftPreserved: true, afterSave: result?.afterSave };
+        }
 
-        dispatch(setTestVersion(version));
-        dispatch(clearPageDocumentDraft({ editorKind: 'test-version', ownerId: version.id }));
-        return true;
-      })
-      .then(fullySaved => {
-        if (!fullySaved) return;
+        await dispatch(clearPageDocumentDraft({ editorKind: 'test-version', ownerId: version.id })).unwrap();
         sessionStorage.removeItem(settingsKey);
         clearCreationIdentity();
+        return { draftPreserved: false, afterSave: result?.afterSave };
+      })
+      .then(async result => {
+        if (result.afterSave) {
+          await navigationGuard.replaceAfterSave(() => result.afterSave?.({ draftPreserved: result.draftPreserved }));
+        } else if (!result.draftPreserved) {
+          dispatch(setTestVersion(version));
+        }
       })
       .catch(error => {
         setSaveErrors([getApiErrorMessage(error, 'The test could not be saved. Please try again.')]);
+      })
+      .finally(() => {
+        savePendingRef.current = false;
+        setSavePending(false);
       });
   };
+
+  const saveInProgress = saving || savePending;
 
   const discard = () => {
     sessionStorage.removeItem(settingsKey);
@@ -402,16 +431,20 @@ export function TestVersionEditor({
                       size="sm"
                       className={cn(
                         'shadow-sm',
-                        dirty && !saving && 'shadow-md shadow-roman-red/25 ring-2 ring-roman-gold/50 ring-offset-1'
+                        dirty &&
+                          !saveInProgress &&
+                          'shadow-md shadow-roman-red/25 ring-2 ring-roman-gold/50 ring-offset-1'
                       )}
                       onClick={save}
-                      disabled={saving || hasFormIdentificationIssues || !testTitle.trim() || !document.title.trim()}>
-                      {saving ? (
+                      disabled={
+                        saveInProgress || hasFormIdentificationIssues || !testTitle.trim() || !document.title.trim()
+                      }>
+                      {saveInProgress ? (
                         <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden="true" />
                       ) : (
                         <Save className="mr-1.5 h-4 w-4" aria-hidden="true" />
                       )}
-                      {saving ? 'Saving...' : draftMode ? 'Save Draft' : 'Save Test'}
+                      {saveInProgress ? 'Saving...' : draftMode ? 'Save Draft' : 'Save Test'}
                     </Button>
                   </div>
                 </div>

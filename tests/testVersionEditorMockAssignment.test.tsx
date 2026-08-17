@@ -200,6 +200,65 @@ describe('normal version editor mock-assignment contract', () => {
     expect(screen.getByRole('button', { name: 'Discard changes' })).toBeEnabled();
   });
 
+  it('submits only once when Save is clicked repeatedly before rendering can disable it', async () => {
+    let resolveSave: (() => void) | undefined;
+    const onSave = jest.fn(
+      () =>
+        new Promise<void>(resolve => {
+          resolveSave = resolve;
+        })
+    );
+    renderEditor(<TestVersionEditor initialTest={test} initialVersion={version} onSave={onSave} />);
+
+    await screen.findByRole('heading', { name: 'Test Version Editor' });
+    fireEvent.change(screen.getByLabelText('Version name'), { target: { value: 'Submitted name' } });
+    const saveButton = screen.getByRole('button', { name: 'Save Test' });
+    act(() => {
+      saveButton.click();
+      saveButton.click();
+    });
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      resolveSave?.();
+      await Promise.resolve();
+    });
+  });
+
+  it('preserves the latest draft while recovering a test that was already created', async () => {
+    const back = jest.spyOn(window.history, 'back').mockImplementation(() => undefined);
+    const afterSave = jest.fn();
+    const onSave = jest.fn().mockResolvedValue({ preserveDraft: true, afterSave });
+    sessionStorage.setItem('test_editor_identity:normal-test-create:test', 'test-1');
+    sessionStorage.setItem('test_editor_identity:normal-test-create:version', 'version-1');
+    renderEditor(
+      <TestVersionEditor
+        initialTest={test}
+        initialVersion={version}
+        creationScope="normal-test-create"
+        onSave={onSave}
+      />
+    );
+
+    await screen.findByRole('heading', { name: 'Test Version Editor' });
+    fireEvent.change(screen.getByLabelText('Version name'), { target: { value: 'Recovered unsaved name' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Test' }));
+
+    await waitFor(() => expect(back).toHaveBeenCalledTimes(1));
+    expect(afterSave).not.toHaveBeenCalled();
+    const drafts = JSON.parse(sessionStorage.getItem('page_document_drafts') || '{}');
+    expect(drafts['test-version:version-1'].document.title).toBe('Recovered unsaved name');
+    expect(sessionStorage.getItem('test_editor_identity:normal-test-create:test')).toBeNull();
+    expect(sessionStorage.getItem('test_editor_identity:normal-test-create:version')).toBeNull();
+
+    window.history.replaceState({}, '', window.location.href);
+    await act(async () => {
+      fireEvent(window, new PopStateEvent('popstate'));
+      await Promise.resolve();
+    });
+    expect(afterSave).toHaveBeenCalledWith({ draftPreserved: true });
+  });
+
   it('explains invalid test content before sending a save request', async () => {
     const onSave = jest.fn();
     const store = configureStore({ reducer: { lessonEditor: lessonEditorReducer } });

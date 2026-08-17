@@ -2,6 +2,22 @@ import { act, render, screen } from '@testing-library/react';
 import CreateTestPage from '@/src/app/admin/(shell)/tests/create/page';
 import CreateMockPage from '@/src/app/admin/(shell)/mock-tests/create/page';
 import CreateVersionPage from '@/src/app/admin/(shell)/tests/edit/[id]/versions/create/page';
+import type { TestVersionEditorSaveResult, TestVersionEditorValue } from '@/src/components/ui/admin/TestVersionEditor';
+
+const mockRouterReplace = jest.fn();
+const mockCreateTest = jest.fn();
+const mockToastSuccess = jest.fn();
+const mockToastInfo = jest.fn();
+const mockToastError = jest.fn();
+let mockVersionEditorProps:
+  | {
+      creationScope?: string;
+      defaultVersionName?: string;
+      draftMode?: boolean;
+      hideTestSettings?: boolean;
+      onSave: (value: TestVersionEditorValue) => Promise<TestVersionEditorSaveResult | void>;
+    }
+  | undefined;
 
 jest.mock('@/src/components/auth/withAdminAuth', () => ({ withAdminAuth: (Component: unknown) => Component }));
 jest.mock('@/src/components/ui/admin', () => ({
@@ -10,20 +26,32 @@ jest.mock('@/src/components/ui/admin', () => ({
     defaultVersionName?: string;
     draftMode?: boolean;
     hideTestSettings?: boolean;
+    onSave: (value: TestVersionEditorValue) => Promise<TestVersionEditorSaveResult | void>;
   }) => (
-    <div
-      data-testid="version-editor"
-      data-scope={props.creationScope}
-      data-name={props.defaultVersionName}
-      data-draft={String(Boolean(props.draftMode))}
-      data-hide-settings={String(Boolean(props.hideTestSettings))}
-    />
+    (mockVersionEditorProps = props),
+    (
+      <div
+        data-testid="version-editor"
+        data-scope={props.creationScope}
+        data-name={props.defaultVersionName}
+        data-draft={String(Boolean(props.draftMode))}
+        data-hide-settings={String(Boolean(props.hideTestSettings))}
+      />
+    )
   ),
 }));
-jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
-jest.mock('sonner', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ push: jest.fn(), replace: mockRouterReplace }),
+}));
+jest.mock('sonner', () => ({
+  toast: {
+    success: (...args: unknown[]) => mockToastSuccess(...args),
+    info: (...args: unknown[]) => mockToastInfo(...args),
+    error: (...args: unknown[]) => mockToastError(...args),
+  },
+}));
 jest.mock('@/src/store/api/testApi', () => ({
-  useCreateTestMutation: () => [jest.fn(), { isLoading: false }],
+  useCreateTestMutation: () => [mockCreateTest, { isLoading: false }],
   useCreateTestVersionMutation: () => [jest.fn(), { isLoading: false }],
   useGetTestByIdQuery: () => ({ data: { test: { id: 'test-1', title: 'Test' } } }),
 }));
@@ -32,6 +60,14 @@ jest.mock('@/src/store/api/mockTestApi', () => ({
 }));
 
 describe('test create route editor identities', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockVersionEditorProps = undefined;
+    mockCreateTest.mockReturnValue({
+      unwrap: jest.fn().mockResolvedValue({ test: { id: 'test-1' }, version: { id: 'version-1' } }),
+    });
+  });
+
   it('scopes normal-test creation', () => {
     render(<CreateTestPage />);
     expect(screen.getByTestId('version-editor')).toHaveAttribute('data-scope', 'normal-test-create');
@@ -51,5 +87,58 @@ describe('test create route editor identities', () => {
     expect(screen.getByTestId('version-editor')).toHaveAttribute('data-name', 'New Version');
     expect(screen.getByTestId('version-editor')).toHaveAttribute('data-draft', 'true');
     expect(screen.getByTestId('version-editor')).toHaveAttribute('data-hide-settings', 'true');
+  });
+
+  it('replaces the create route after a successful save', async () => {
+    const value = {
+      test: { id: 'test-1', title: 'Test', description: '', passingPercentage: null },
+      version: { id: 'version-1', name: 'Version A', pages: [] },
+    } as TestVersionEditorValue;
+    render(<CreateTestPage />);
+
+    const result = await mockVersionEditorProps?.onSave(value);
+    expect(mockCreateTest).toHaveBeenCalledWith(value);
+    expect(mockRouterReplace).not.toHaveBeenCalled();
+
+    result?.afterSave?.({ draftPreserved: false });
+    expect(mockRouterReplace).toHaveBeenCalledWith('/admin/tests/edit/test-1');
+  });
+
+  it('reopens the exact version and preserves its draft after a confirmed create retry', async () => {
+    const value = {
+      test: { id: 'test-1', title: 'Test', description: '', passingPercentage: null },
+      version: { id: 'version-1', name: 'Version A', pages: [] },
+    } as TestVersionEditorValue;
+    mockCreateTest.mockReturnValue({
+      unwrap: jest.fn().mockRejectedValue({
+        status: 409,
+        data: { code: 'TEST_CREATE_RETRY', error: 'This test was already created.' },
+      }),
+    });
+    render(<CreateTestPage />);
+
+    const result = await mockVersionEditorProps?.onSave(value);
+    expect(result?.preserveDraft).toBe(true);
+    result?.afterSave?.({ draftPreserved: true });
+    expect(mockRouterReplace).toHaveBeenCalledWith('/admin/tests/edit/test-1/versions/version-1/edit');
+    expect(mockToastInfo).toHaveBeenCalledWith('This test was already created. Reopening your unsaved changes.');
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
+
+  it('does not recover an unrelated test ID collision', async () => {
+    const value = {
+      test: { id: 'test-1', title: 'Test', description: '', passingPercentage: null },
+      version: { id: 'version-1', name: 'Version A', pages: [] },
+    } as TestVersionEditorValue;
+    const collision = {
+      status: 409,
+      data: { code: 'TEST_ALREADY_EXISTS', error: 'A test with this ID already exists' },
+    };
+    mockCreateTest.mockReturnValue({ unwrap: jest.fn().mockRejectedValue(collision) });
+    render(<CreateTestPage />);
+
+    await expect(mockVersionEditorProps?.onSave(value)).rejects.toBe(collision);
+    expect(mockRouterReplace).not.toHaveBeenCalled();
+    expect(mockToastError).toHaveBeenCalledWith('A test with this ID already exists');
   });
 });

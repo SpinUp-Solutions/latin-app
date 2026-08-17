@@ -155,6 +155,25 @@ export class TestAuthoringService {
         transaction.get(draftRef),
       ]);
       if (existingTest.exists) {
+        const existingData = existingTest.data();
+        const sameTestVersionPair =
+          existingData?.kind === 'test' &&
+          existingVersion.exists &&
+          !existingDraft.exists &&
+          Array.isArray(existingData.rotationVersions) &&
+          existingData.rotationVersions.some(
+            (reference: unknown) =>
+              Boolean(reference) &&
+              typeof reference === 'object' &&
+              (reference as { versionId?: unknown }).versionId === parsed.version.id
+          );
+        if (sameTestVersionPair) {
+          throw new TestServiceError(
+            'TEST_CREATE_RETRY',
+            'This test was already created. Reopen it to continue editing.',
+            409
+          );
+        }
         throw new TestServiceError('TEST_ALREADY_EXISTS', 'A test with this ID already exists', 409);
       }
       if (existingVersion.exists || existingDraft.exists) {

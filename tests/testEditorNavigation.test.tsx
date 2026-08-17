@@ -15,6 +15,7 @@ function GuardHarness({ dirty = true, onNavigate = () => undefined }: { dirty?: 
         }}>
         Header back link
       </a>
+      <button onClick={() => void guard.replaceAfterSave(onNavigate)}>Replace after save</button>
       <UnsavedNavigationDialog guard={guard} />
     </>
   );
@@ -27,19 +28,18 @@ describe('test editor navigation and route identities', () => {
     jest.restoreAllMocks();
   });
 
-  it.each([
-    'normal-test-create',
-    'standalone-mock-create',
-    'normal-test-test-1-version-create',
-  ])('keeps the %s create identity stable across reloads until completion', scope => {
-    const testId = getStableTestEditorIdentity(scope, 'test', 'test');
-    const versionId = getStableTestEditorIdentity(scope, 'version', 'version');
-    expect(getStableTestEditorIdentity(scope, 'test', 'test')).toBe(testId);
-    expect(getStableTestEditorIdentity(scope, 'version', 'version')).toBe(versionId);
-    clearStableTestEditorIdentity(scope);
-    expect(sessionStorage.getItem(`test_editor_identity:${scope}:test`)).toBeNull();
-    expect(sessionStorage.getItem(`test_editor_identity:${scope}:version`)).toBeNull();
-  });
+  it.each(['normal-test-create', 'standalone-mock-create', 'normal-test-test-1-version-create'])(
+    'keeps the %s create identity stable across reloads until completion',
+    scope => {
+      const testId = getStableTestEditorIdentity(scope, 'test', 'test');
+      const versionId = getStableTestEditorIdentity(scope, 'version', 'version');
+      expect(getStableTestEditorIdentity(scope, 'test', 'test')).toBe(testId);
+      expect(getStableTestEditorIdentity(scope, 'version', 'version')).toBe(versionId);
+      clearStableTestEditorIdentity(scope);
+      expect(sessionStorage.getItem(`test_editor_identity:${scope}:test`)).toBeNull();
+      expect(sessionStorage.getItem(`test_editor_identity:${scope}:version`)).toBeNull();
+    }
+  );
 
   it('guards header links with an in-app dialog and lets Stay remain on the editor', () => {
     const onNavigate = jest.fn();
@@ -95,5 +95,19 @@ describe('test editor navigation and route identities', () => {
     window.dispatchEvent(clean);
     expect(clean.defaultPrevented).toBe(false);
     expect(back).toHaveBeenCalledTimes(1);
+  });
+
+  it('removes the guard sentinel before replacing a successfully saved create route', () => {
+    const back = jest.spyOn(window.history, 'back').mockImplementation(() => undefined);
+    const onNavigate = jest.fn();
+    render(<GuardHarness onNavigate={onNavigate} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Replace after save' }));
+    expect(back).toHaveBeenCalledTimes(1);
+    expect(onNavigate).not.toHaveBeenCalled();
+
+    window.history.replaceState({}, '', window.location.href);
+    fireEvent(window, new PopStateEvent('popstate'));
+    expect(onNavigate).toHaveBeenCalledTimes(1);
   });
 });

@@ -139,6 +139,68 @@ describe('test persistence service', () => {
     expect(result.test).not.toHaveProperty('isLive');
   });
 
+  it('classifies an existing matching test and version as a recoverable create retry', async () => {
+    const create = jest.fn();
+    const transaction = {
+      get: jest.fn(async (ref: { collection: string; id: string }) => {
+        if (ref.collection === 'content_sync_locks') return snapshot(ref.id);
+        if (ref.collection === 'lessons') return snapshot(ref.id, testDocument);
+        if (ref.collection === 'testVersions') return snapshot(ref.id, versionDocument);
+        return snapshot(ref.id);
+      }),
+      create,
+      update: jest.fn(),
+    };
+    const db = {
+      collection: (collection: string) => ({ doc: (id: string) => ({ collection, id }) }),
+      runTransaction: (callback: (value: typeof transaction) => unknown) => callback(transaction),
+    };
+    const service = new TestAuthoringService(db as never, () => timestamp);
+
+    await expect(
+      service.createTestWithVersion(
+        {
+          test: { id: 'test-1', title: 'Changed title', description: '', passingPercentage: 70 },
+          version: { id: 'version-1', name: 'Version A', pages },
+        },
+        'admin-1'
+      )
+    ).rejects.toMatchObject({ status: 409, code: 'TEST_CREATE_RETRY' });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('keeps a mismatched existing test ID as a hard collision', async () => {
+    const create = jest.fn();
+    const transaction = {
+      get: jest.fn(async (ref: { collection: string; id: string }) => {
+        if (ref.collection === 'content_sync_locks') return snapshot(ref.id);
+        if (ref.collection === 'lessons') {
+          return snapshot(ref.id, { ...testDocument, rotationVersions: [{ versionId: 'version-other' }] });
+        }
+        if (ref.collection === 'testVersions') return snapshot(ref.id, versionDocument);
+        return snapshot(ref.id);
+      }),
+      create,
+      update: jest.fn(),
+    };
+    const db = {
+      collection: (collection: string) => ({ doc: (id: string) => ({ collection, id }) }),
+      runTransaction: (callback: (value: typeof transaction) => unknown) => callback(transaction),
+    };
+    const service = new TestAuthoringService(db as never, () => timestamp);
+
+    await expect(
+      service.createTestWithVersion(
+        {
+          test: { id: 'test-1', title: 'Changed title', description: '', passingPercentage: 70 },
+          version: { id: 'version-1', name: 'Version A', pages },
+        },
+        'admin-1'
+      )
+    ).rejects.toMatchObject({ status: 409, code: 'TEST_ALREADY_EXISTS' });
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it('updates test settings and an assigned version in one transaction', async () => {
     const set = jest.fn();
     const transaction = {
