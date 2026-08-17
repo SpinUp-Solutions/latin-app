@@ -12,6 +12,7 @@ import { getParadigmPOS } from '@/src/utils/paradigm';
 import type { GeneratedFormIdentificationExercise } from '@/src/types/exercises/generated-form-identification';
 import type { FormParadigm, ParadigmConfig, ParadigmConfigs } from '@/src/types/exercises/paradigm';
 import type { GeneratorFilters, FormSelection } from '@/src/types/exercises/base';
+import { buildLegacyParadigmConfigs } from '@/src/utils/exercises/legacyExerciseCompat';
 
 export function useFormIdentificationEditor(editingContent: GeneratedFormIdentificationExercise) {
   const dispatch = useAppDispatch();
@@ -20,21 +21,29 @@ export function useFormIdentificationEditor(editingContent: GeneratedFormIdentif
   const rawConfig = editingContent.data?.generatorConfig;
   const config = useMemo(() => ensureGeneratorConfig(rawConfig), [rawConfig]);
   const isPoolWordSource = config.wordSource === 'pool';
+  const paradigmConfigs = useMemo(
+    () =>
+      editingContent.data.paradigmConfigs && Object.keys(editingContent.data.paradigmConfigs).length > 0
+        ? editingContent.data.paradigmConfigs
+        : buildLegacyParadigmConfigs(
+            editingContent.data.generatorConfig as Parameters<typeof buildLegacyParadigmConfigs>[0]
+          ),
+    [editingContent.data.paradigmConfigs, editingContent.data.generatorConfig]
+  );
 
   const paradigmInfo = useAvailableParadigms(config.wordSource, config.poolId, config.filters);
 
   const activeParadigm = useMemo(() => {
-    const paradigmConfigs = editingContent.data.paradigmConfigs ?? {};
     const enabledEntries = Object.entries(paradigmConfigs).filter(([, cfg]) => cfg?.enabled);
     if (enabledEntries.length === 1) {
       return enabledEntries[0][0] as FormParadigm;
     }
     return undefined;
-  }, [editingContent.data.paradigmConfigs]);
+  }, [paradigmConfigs]);
 
   const derivedFilters = useMemo((): GeneratorFilters => {
     if (config.wordSource === 'filters') {
-      const paradigmFilters = activeParadigm ? editingContent.data.paradigmConfigs?.[activeParadigm]?.filters : {};
+      const paradigmFilters = activeParadigm ? paradigmConfigs[activeParadigm]?.filters : {};
       return {
         ...config.filters,
         ...paradigmFilters,
@@ -47,17 +56,17 @@ export function useFormIdentificationEditor(editingContent: GeneratedFormIdentif
     const pos = getParadigmPOS(activeParadigm);
     return {
       partOfSpeech: pos,
-      ...editingContent.data.paradigmConfigs?.[activeParadigm]?.filters,
+      ...paradigmConfigs[activeParadigm]?.filters,
     };
-  }, [config.wordSource, config.filters, activeParadigm, editingContent.data.paradigmConfigs]);
+  }, [config.wordSource, config.filters, activeParadigm, paradigmConfigs]);
 
   const derivedFormSelection = useMemo(() => {
     if (!activeParadigm) return undefined;
-    return editingContent.data.paradigmConfigs?.[activeParadigm]?.formSelection;
-  }, [activeParadigm, editingContent.data.paradigmConfigs]);
+    return paradigmConfigs[activeParadigm]?.formSelection;
+  }, [activeParadigm, paradigmConfigs]);
 
   const previewResult = useGetMultiParadigmWordsQuery(
-    isPreviewOpen && editingContent.data.paradigmConfigs
+    isPreviewOpen && Object.keys(paradigmConfigs).length > 0
       ? {
           exerciseType: 'generated-form-identification',
           collection: config.collection,
@@ -65,7 +74,7 @@ export function useFormIdentificationEditor(editingContent: GeneratedFormIdentif
           poolId: config.poolId,
           poolWordLimit: config.poolWordLimit,
           count: config.count,
-          paradigmConfigs: editingContent.data.paradigmConfigs,
+          paradigmConfigs,
         }
       : skipToken
   );
@@ -93,8 +102,8 @@ export function useFormIdentificationEditor(editingContent: GeneratedFormIdentif
       const defaultSteps = PARADIGM_STEPS[paradigm];
 
       const nextContent = produce(editingContent, draft => {
-        if (!draft.data.paradigmConfigs) {
-          draft.data.paradigmConfigs = {};
+        if (!draft.data.paradigmConfigs || Object.keys(draft.data.paradigmConfigs).length === 0) {
+          draft.data.paradigmConfigs = { ...paradigmConfigs };
         }
 
         const currentConfig = draft.data.paradigmConfigs[paradigm] || {
@@ -108,7 +117,7 @@ export function useFormIdentificationEditor(editingContent: GeneratedFormIdentif
       });
       updateContent(nextContent);
     },
-    [editingContent, updateContent]
+    [editingContent, paradigmConfigs, updateContent]
   );
 
   const handleToggleParadigm = useCallback(
@@ -133,14 +142,14 @@ export function useFormIdentificationEditor(editingContent: GeneratedFormIdentif
         }
 
         if (Object.keys(paradigmFilterUpdates).length > 0) {
-          const currentFilters = editingContent.data.paradigmConfigs?.[activeParadigm]?.filters || {};
+          const currentFilters = paradigmConfigs[activeParadigm]?.filters || {};
           handleUpdateParadigmConfig(activeParadigm, {
             filters: { ...currentFilters, ...paradigmFilterUpdates },
           });
         }
       }
     },
-    [config.filters, updateConfig, activeParadigm, editingContent.data.paradigmConfigs, handleUpdateParadigmConfig]
+    [config.filters, updateConfig, activeParadigm, paradigmConfigs, handleUpdateParadigmConfig]
   );
 
   useEffect(() => {
@@ -148,7 +157,7 @@ export function useFormIdentificationEditor(editingContent: GeneratedFormIdentif
       return;
     }
 
-    const currentConfigs = editingContent.data.paradigmConfigs ?? {};
+    const currentConfigs = paradigmConfigs;
     const existingParadigms = Object.keys(currentConfigs);
     const newParadigms = paradigmInfo.availableParadigms.filter(p => !existingParadigms.includes(p));
     const shouldAutoEnable = paradigmInfo.availableParadigms.length === 1;
@@ -191,7 +200,7 @@ export function useFormIdentificationEditor(editingContent: GeneratedFormIdentif
       ...editingContent,
       data: { ...editingContent.data, paradigmConfigs: updatedConfigs },
     });
-  }, [paradigmInfo.availableParadigms, editingContent, updateContent]);
+  }, [paradigmInfo.availableParadigms, editingContent, paradigmConfigs, updateContent]);
 
   const formSelectionControls = useFormSelectionControls(
     activeParadigm ? getParadigmPOS(activeParadigm) : undefined,
@@ -208,6 +217,7 @@ export function useFormIdentificationEditor(editingContent: GeneratedFormIdentif
 
   return {
     editingContent,
+    paradigmConfigs,
     config,
     activeParadigm,
     derivedFilters,

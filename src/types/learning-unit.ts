@@ -54,12 +54,26 @@ export interface LearningPathDocument {
   updatedBy: string;
 }
 
+export type LearningPathLessonIssueCode = 'INVALID_LESSON_DATA' | 'INCOMPLETE_LESSON';
+
+export interface LearningPathLessonIssue {
+  code: LearningPathLessonIssueCode;
+  message: string;
+  path?: Array<string | number>;
+}
+
 export interface AdminLearningPathView {
   path: LearningPathDocument | null;
   effectiveUnitIds: string[];
   source: 'learning-path';
   canEdit: boolean;
   editBlockedReason?: string;
+  /**
+   * Non-blocking content warnings for the normal lessons currently in the
+   * canonical path. This is optional for compatibility with older clients;
+   * the admin endpoint always returns an object.
+   */
+  lessonIssuesById?: Record<string, LearningPathLessonIssue[]>;
 }
 
 export interface TestUnitCompletionProgress {
