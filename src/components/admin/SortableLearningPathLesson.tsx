@@ -6,6 +6,7 @@ import { BookOpen, FileCheck2, GripVertical, ShieldAlert, X } from 'lucide-react
 import Link from 'next/link';
 import type { LessonSummary } from '@/src/types/lesson';
 import type { TestUnitSummary } from '@/src/types/test';
+import type { LearningPathLessonIssue } from '@/src/types/learning-unit';
 import { Badge } from '@/src/components/ui/badge';
 import { Button } from '@/src/components/ui/button';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
@@ -16,18 +17,22 @@ export function SortableLearningPathLesson({
   disabled,
   onRemove,
   onNavigate,
+  issues = [],
 }: {
   unit: LessonSummary | TestUnitSummary;
   index: number;
   disabled: boolean;
   onRemove: () => void;
   onNavigate?: (href: string) => void;
+  issues?: LearningPathLessonIssue[];
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: unit.id,
     disabled,
   });
   const isTest = unit.kind === 'test';
+  const hasIssues = !isTest && issues.length > 0;
+  const editHref = isTest ? `/admin/tests/edit/${unit.id}` : `/admin/lessons/edit/${unit.id}`;
 
   return (
     <div
@@ -81,6 +86,14 @@ export function SortableLearningPathLesson({
               'Lesson'
             )}
           </Badge>
+          {hasIssues && (
+            <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-900">
+              <span className="inline-flex items-center gap-1">
+                <ShieldAlert className="h-3 w-3" aria-hidden="true" />
+                Needs attention
+              </span>
+            </Badge>
+          )}
         </div>
         {unit.description && (
           <div className="mb-2 line-clamp-1 text-sm text-gray-600">
@@ -104,17 +117,29 @@ export function SortableLearningPathLesson({
             </>
           )}
         </div>
+        {hasIssues && (
+          <div
+            role="alert"
+            className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+            <p className="font-medium">This lesson needs attention before students use it.</p>
+            <ul className="mt-1 list-disc space-y-1 pl-5">
+              {issues.map((issue, issueIndex) => (
+                <li key={`${issue.code}-${issue.message}-${issueIndex}`}>{issue.message}</li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
       <Button size="sm" variant="outline" asChild>
         <Link
-          href={isTest ? `/admin/tests/edit/${unit.id}` : `/admin/lessons/edit/${unit.id}`}
+          href={editHref}
           onClick={event => {
             if (!onNavigate) return;
             event.preventDefault();
-            onNavigate(isTest ? `/admin/tests/edit/${unit.id}` : `/admin/lessons/edit/${unit.id}`);
+            onNavigate(editHref);
           }}>
-          Edit
+          {hasIssues ? 'Fix lesson' : 'Edit'}
         </Link>
       </Button>
       <Button

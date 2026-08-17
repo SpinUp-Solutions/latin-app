@@ -4,6 +4,7 @@ import { getReadableVocabularyPool, loadVocabularyPoolWords } from '@/src/lib/vo
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
 import type { GeneratorFilters, FormSelection } from '@/src/types/exercises/base';
 import type { FormParadigm, ParadigmConfigs } from '@/src/types/exercises/paradigm';
+import type { FormIdentificationStep } from '@/src/types/exercises/schemas/form-identification';
 import { PARADIGM_POS_GROUP, PARADIGM_TABLE_TYPE } from '@/src/config/paradigmDefinitions';
 import { parseFormPathFromString } from '@/src/utils/exerciseFormPaths';
 import { TABLE_TYPE_CONFIG, type TableType } from '@/src/utils/schema-helpers';
@@ -11,6 +12,7 @@ import { categorizeMatchingPaths, scanTableForMatchingForms } from '@/src/utils/
 import { deriveTableTypeFromPOS } from '@/src/utils/generated/tableType';
 import { filterOverlappingPronounParadigms } from '@/src/utils/generated/pronounParadigmFiltering';
 import { stripMacrons } from '@/src/utils/exercises/helpers';
+import { getApplicableStepsForFormPath } from '@/src/utils/exercises/formIdentificationCompatibility';
 import {
   buildLegacyParadigmConfigs,
   buildLegacyPosConfigs,
@@ -23,6 +25,7 @@ interface WordQuerySpec {
   filters: Omit<GeneratorFilters, 'partOfSpeech'>;
   formSelection?: FormSelection;
   tableType?: TableType;
+  steps?: FormIdentificationStep[];
 }
 
 const shuffle = <T>(values: T[]): T[] => {
@@ -106,6 +109,7 @@ const getQuerySpecs = (exercise: GeneratedExercise): WordQuerySpec[] => {
         filters,
         formSelection: value.formSelection,
         tableType: PARADIGM_TABLE_TYPE[paradigm],
+        steps: value.steps,
       };
     });
 };
@@ -120,19 +124,28 @@ const getPathValues = (value: Record<string, unknown>, path: string): string[] =
   return Array.isArray(current) ? current.filter((entry): entry is string => typeof entry === 'string') : [];
 };
 
-function selectForm(word: Record<string, unknown>, tableType: TableType, selectedPaths: string[]) {
+function selectForm(
+  word: Record<string, unknown>,
+  tableType: TableType,
+  selectedPaths: string[],
+  steps?: readonly FormIdentificationStep[]
+) {
   const tableField = TABLE_TYPE_CONFIG[tableType];
   const table = word[tableField];
   if (!table) return null;
 
-  const candidates = selectedPaths.flatMap(path =>
+  const compatiblePaths =
+    steps && tableType
+      ? selectedPaths.filter(path => (getApplicableStepsForFormPath(path, tableType, steps)?.applicableSteps.length ?? 0) > 0)
+      : selectedPaths;
+  const candidates = compatiblePaths.flatMap(path =>
     getPathValues(word, `${tableField}.${path}`).map(form => ({ form, path }))
   );
   if (!candidates.length) return null;
 
   const selected = candidates[Math.floor(Math.random() * candidates.length)];
   const matchingPaths = scanTableForMatchingForms(table, selected.form, tableType);
-  const paths = categorizeMatchingPaths(matchingPaths, selectedPaths);
+  const paths = categorizeMatchingPaths(matchingPaths, compatiblePaths);
   if (!paths.primaryPaths.includes(selected.path)) paths.primaryPaths.unshift(selected.path);
   return { selected, ...paths };
 }
@@ -140,7 +153,8 @@ function selectForm(word: Record<string, unknown>, tableType: TableType, selecte
 function mapWord(doc: QueryDocumentSnapshot, spec: WordQuerySpec): ExerciseWordResponse | null {
   const data = doc.data() as Record<string, unknown>;
   const selectedPaths = spec.formSelection?.selectedCellPaths || [];
-  const selection = spec.tableType && selectedPaths.length ? selectForm(data, spec.tableType, selectedPaths) : null;
+  const selection =
+    spec.tableType && selectedPaths.length ? selectForm(data, spec.tableType, selectedPaths, spec.steps) : null;
   if (selectedPaths.length && !selection) return null;
 
   const parsedTableType = spec.tableType;

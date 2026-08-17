@@ -126,6 +126,45 @@ describe('student generated vocabulary route', () => {
     expect(archiveRef.collection).toHaveBeenCalledWith('words');
   });
 
+  it('filters incompatible selected verb forms before choosing a generated form', async () => {
+    mockVerifyAuthenticatedAccess.mockResolvedValue({ uid: 'student-1' });
+    mockCollection.mockReturnValue(query);
+    query.get.mockResolvedValue({
+      docs: [
+        {
+          id: 'word-1',
+          data: () => ({
+            word: 'amo',
+            part_of_speech: 'verb',
+            conjugation: '1',
+            conjugation_table: {
+              indicative: { active: { present: { singular: { first: ['amo'] } } } },
+              gerund: { genitive: ['amandi'] },
+            },
+          }),
+        },
+      ],
+      size: 1,
+      empty: false,
+    });
+
+    const response = await GET({
+      url: 'http://localhost/api/words/generated?collection=vocabulary_words_v5&exerciseMode=true&limit=1&tableType=conjugation&cellPaths=indicative.active.present.singular.first,gerund.genitive&steps=mood',
+      headers: new Headers({ authorization: 'Bearer student-token' }),
+    } as never);
+
+    expect(response.status).toBe(200);
+    const payload = (response as unknown as { body: { data: { words: Array<Record<string, unknown>> } } }).body;
+    expect(payload.data.words).toHaveLength(1);
+    expect(payload.data.words[0]).toMatchObject({
+      selected_form: 'amo',
+      form_path: { verb_form: 'finite' },
+    });
+    expect(payload.data.words[0].primary_form_paths).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ verb_form: 'gerund' })])
+    );
+  });
+
   it.each([
     ['fetchAll', 'exerciseMode=true&fetchAll=true'],
     ['oversized limit', 'exerciseMode=true&limit=201'],

@@ -4,7 +4,9 @@ import { Query, FieldPath } from 'firebase-admin/firestore';
 import { VocabularyWordSchema } from '@/shared/types/vocabulary/schemas';
 import { parseFormPathFromString } from '@/src/utils/exerciseFormPaths';
 import { TABLE_TYPE_CONFIG, type TableType } from '@/src/utils/schema-helpers';
+import type { FormIdentificationStep } from '@/src/types/exercises/schemas/form-identification';
 import { scanTableForMatchingForms, categorizeMatchingPaths } from '@/src/utils/tableScanner';
+import { getApplicableStepsForFormPath } from '@/src/utils/exercises/formIdentificationCompatibility';
 import { AdminAccessError, verifyAdminAccess, verifyAuthenticatedAccess } from '@/src/lib/verifyAdminAccess';
 import {
   requireVocabularyWordsCollection,
@@ -74,6 +76,11 @@ const parseCellPaths = (cellPaths: string | null): string[] => {
     .split(',')
     .map(p => p.trim())
     .filter(p => p.length > 0);
+};
+
+const parseSteps = (steps: string | null): FormIdentificationStep[] => {
+  if (!steps) return [];
+  return steps.split(',').map(step => step.trim()).filter(Boolean) as FormIdentificationStep[];
 };
 
 const parseSelectFields = (selectFields: string | null): string[] => {
@@ -172,6 +179,8 @@ export async function handleVocabularyWordsGET(
     const pronounType = searchParams.get('pronounType');
     const pronounPerson = searchParams.get('pronounPerson');
     const cellPaths = searchParams.get('cellPaths');
+    const steps = searchParams.get('steps');
+    const stepValues = parseSteps(steps);
     const tableType = searchParams.get('tableType');
     const selectFields = searchParams.get('select');
     const fetchAll = searchParams.get('fetchAll') === 'true';
@@ -198,6 +207,8 @@ export async function handleVocabularyWordsGET(
         return generatedRequestError(`Generated word limit must be between 1 and ${GENERATED_MAX_RESULTS}`);
       if (pathValues.length > GENERATED_MAX_CELL_PATHS || (cellPaths?.length ?? 0) > 10_000)
         return generatedRequestError('Generated word cellPaths are too large');
+      if (stepValues.length > 20 || (steps?.length ?? 0) > 2_000)
+        return generatedRequestError('Generated word steps are too large');
       if (
         selectValues.length > GENERATED_MAX_LIST_VALUES ||
         selectValues.some(field => field.length > 100 || !/^[A-Za-z0-9_.]+$/.test(field))
@@ -426,7 +437,7 @@ export async function handleVocabularyWordsGET(
           const paths = parseCellPaths(cellPaths);
 
           if (paths.length > 0 && tableType) {
-            const formResult = pickRandomFormServer(serialized, tableType as TableType, paths);
+            const formResult = pickRandomFormServer(serialized, tableType as TableType, paths, stepValues);
 
             if (!formResult) {
               return null;
@@ -771,7 +782,8 @@ interface FormSelectionResult {
 function pickRandomFormServer(
   word: Record<string, unknown>,
   tableType: TableType,
-  selectedPaths: string[]
+  selectedPaths: string[],
+  selectedSteps: readonly FormIdentificationStep[] = []
 ): FormSelectionResult | null {
   const rootField = TABLE_TYPE_CONFIG[tableType];
   if (!rootField) {
@@ -785,7 +797,13 @@ function pickRandomFormServer(
 
   const formsWithPaths: Array<{ form: string; path: string }> = [];
 
-  for (const path of selectedPaths) {
+  const compatiblePaths = selectedSteps.length
+    ? selectedPaths.filter(
+        path => (getApplicableStepsForFormPath(path, tableType, selectedSteps)?.applicableSteps.length ?? 0) > 0
+      )
+    : selectedPaths;
+
+  for (const path of compatiblePaths) {
     const fullPath = `${rootField}.${path}`;
     const forms = getCellValueAtPathServer(word, fullPath);
 
@@ -802,7 +820,7 @@ function pickRandomFormServer(
 
   const allMatchingPaths = scanTableForMatchingForms(table, selected.form, tableType);
 
-  const { primaryPaths, optionalPaths } = categorizeMatchingPaths(allMatchingPaths, selectedPaths);
+  const { primaryPaths, optionalPaths } = categorizeMatchingPaths(allMatchingPaths, compatiblePaths);
 
   if (!primaryPaths.includes(selected.path)) {
     primaryPaths.unshift(selected.path);

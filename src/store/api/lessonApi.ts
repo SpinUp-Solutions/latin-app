@@ -114,6 +114,7 @@ export const lessonApi = appApi.injectEndpoints({
               { type: 'Lesson', id: lesson.id },
               { type: 'LessonList', id: 'LIST' },
               { type: 'StudentLesson', id: lesson.id },
+              { type: 'LearningPath', id: 'default' },
               STUDENT_DASHBOARD_TAG,
             ],
     }),

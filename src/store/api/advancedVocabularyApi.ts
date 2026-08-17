@@ -540,6 +540,9 @@ export const advancedVocabularyApi = createApi({
             if (cfg.formSelection?.selectedCellPaths && cfg.formSelection.selectedCellPaths.length > 0) {
               params.append('cellPaths', cfg.formSelection.selectedCellPaths.join(','));
             }
+            if (cfg.steps?.length) {
+              params.append('steps', cfg.steps.join(','));
+            }
             if (tableType) {
               params.append('tableType', tableType);
             }

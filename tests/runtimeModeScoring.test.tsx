@@ -118,9 +118,9 @@ describe('exercise runtime-mode scoring', () => {
 
     fireEvent.change(screen.getByPlaceholderText(/type your answer/i), { target: { value: 'two' } });
     fireEvent.click(screen.getByRole('button', { name: /check/i }));
-    fireEvent.click(screen.getByRole('button', { name: /finish exercise/i }));
 
     expect(onComplete).toHaveBeenCalledWith(0);
+    expect(screen.queryByRole('button', { name: /finish exercise/i })).not.toBeInTheDocument();
   });
 
   it('emits a raw runtime-mode answer under the persisted exercise ID', () => {

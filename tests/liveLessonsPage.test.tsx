@@ -2,6 +2,7 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import LiveLessonsPage from '@/src/app/admin/(shell)/lessons/live/page';
 import type { AdminLearningPathView } from '@/src/types/learning-unit';
+import type { LearningPathLessonIssue } from '@/src/types/learning-unit';
 import type { LessonSummary } from '@/src/types/lesson';
 import type { TestUnitSummary } from '@/src/types/test';
 
@@ -88,13 +89,24 @@ jest.mock('@/src/components/admin/SortableLearningPathLesson', () => ({
     unit,
     onRemove,
     disabled,
+    issues = [],
   }: {
     unit: LessonSummary | TestUnitSummary;
     onRemove: () => void;
     disabled: boolean;
+    issues?: LearningPathLessonIssue[];
   }) => (
     <div>
       <span>{unit.title}</span>
+      {issues.length > 0 && (
+        <>
+          <span>Needs attention</span>
+          {issues.map(issue => (
+            <span key={issue.message}>{issue.message}</span>
+          ))}
+          <button>Fix lesson</button>
+        </>
+      )}
       <button onClick={onRemove} disabled={disabled} aria-label={`Remove ${unit.title} from Learning Path`}>
         Remove
       </button>
@@ -188,6 +200,53 @@ describe('Learning delivery organizer', () => {
         unitIds: ['lesson-1', 'lesson-2'],
       })
     );
+  });
+
+  it('shows non-blocking lesson issues and keeps path saving available', async () => {
+    const refetchPath = jest.fn().mockResolvedValue({ data: canonicalPathView() });
+    mockUseGetLearningPathQuery.mockReturnValue({
+      data: canonicalPathView({
+        lessonIssuesById: {
+          'lesson-1': [
+            {
+              code: 'INVALID_LESSON_DATA',
+              message: 'Morphology exercise 1 on page 1: Infinitive forms have no applicable selected questions.',
+            },
+          ],
+        },
+      }),
+      isLoading: false,
+      refetch: refetchPath,
+    });
+    mockSaveLearningPath.mockReturnValue({
+      unwrap: jest.fn().mockResolvedValue({
+        path: {
+          ...canonicalPathView().path,
+          revision: 4,
+          unitIds: ['lesson-1', 'lesson-2'],
+        },
+      }),
+    });
+
+    render(<LiveLessonsPage />);
+
+    expect(screen.getByText('1 lesson needs attention')).toBeInTheDocument();
+    expect(screen.getAllByText('Needs attention').length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText('Morphology exercise 1 on page 1: Infinitive forms have no applicable selected questions.')
+        .length
+    ).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Lesson one from Learning Path' }));
+    expect(screen.queryByText('1 lesson needs attention')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(screen.getByText('1 lesson needs attention')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Lesson two to Learning Path' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Learning Path' }));
+
+    await waitFor(() => expect(mockSaveLearningPath).toHaveBeenCalled());
+    expect(refetchPath).toHaveBeenCalled();
   });
 
   it('inserts an eligible test at an exact position and saves the mixed sequence', async () => {

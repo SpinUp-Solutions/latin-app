@@ -19,6 +19,7 @@ import {
   getSupportedVerbFormStepsForParsedPath,
   getVerbFormKindForParsedPath,
 } from './verbFormStepCompatibility';
+import { getSelectedFormPathCompatibility, getParsedFormPathStepSupport } from './formIdentificationCompatibility';
 
 type VerbWordResponse = Extract<ExerciseWordResponse, { part_of_speech: 'verb' }>;
 type NounWordResponse = Extract<ExerciseWordResponse, { part_of_speech: 'noun' }>;
@@ -158,11 +159,19 @@ export function getAnswerableStepsForWord(
   steps: FormIdentificationStep[],
   formPaths: Array<Record<string, string | undefined>>
 ): FormIdentificationStep[] {
-  if (!isVerb(word)) {
-    return steps;
-  }
-
   if (formPaths.length === 0) return [];
+
+  if (!isVerb(word)) {
+    const supports = formPaths.map(path => getParsedFormPathStepSupport(word.part_of_speech, path));
+    if (supports.some(support => support === null)) return [];
+
+    return steps.filter(step =>
+      supports.every(support => {
+        if (!support?.supportedSteps.includes(step)) return false;
+        return true;
+      })
+    );
+  }
 
   const supports = formPaths.map(path => getSupportedVerbFormStepsForParsedPath(path));
 
@@ -171,6 +180,23 @@ export function getAnswerableStepsForWord(
   const supportedStepSets = supports.map(support => new Set<FormIdentificationStep>(support!.supportedSteps));
 
   return steps.filter(step => supportedStepSets.every(supportedSteps => supportedSteps.has(step)));
+}
+
+/**
+ * Select one path's applicable questions when a word has no shared question
+ * across all of its syncretic interpretations. This keeps a selected form
+ * answerable while later path preparation removes incompatible alternatives.
+ */
+export function getFallbackAnswerableStepsForWord(
+  word: ExerciseWordResponse,
+  steps: FormIdentificationStep[],
+  preferredPath: Record<string, string | undefined> | null | undefined
+): FormIdentificationStep[] {
+  if (!preferredPath) return [];
+  if (isVerb(word)) {
+    return getSelectedFormPathCompatibility('verb', preferredPath, steps)?.applicableSteps ?? [];
+  }
+  return getSelectedFormPathCompatibility(word.part_of_speech, preferredPath, steps)?.applicableSteps ?? [];
 }
 
 /**

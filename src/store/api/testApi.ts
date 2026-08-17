@@ -39,7 +39,10 @@ export const testApi = appApi.injectEndpoints({
         { type: 'TestVersion', id: testVersionsForTestTag(id) },
       ],
     }),
-    createTest: builder.mutation<{ test: TestUnit; version: TestVersion }, CreateTestWithVersionInput>({
+    createTest: builder.mutation<
+      { test: TestUnit; version: TestVersion; recovered: boolean },
+      CreateTestWithVersionInput
+    >({
       query: input => ({ url: '/admin/tests', method: 'POST', body: input }),
       invalidatesTags: result => (result ? [{ type: 'LearningUnit', id: 'LIST' }] : []),
     }),

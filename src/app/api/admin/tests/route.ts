@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     const actor = await verifyAdminAccess(request);
     const input = createTestWithVersionSchema.parse(await request.json().catch(() => null));
     const result = await testAuthoringService.createTestWithVersion(input, actor.uid);
-    return NextResponse.json({ success: true, ...result }, { status: 201 });
+    return NextResponse.json({ success: true, ...result }, { status: result.recovered ? 200 : 201 });
   } catch (error) {
     return testRouteErrorResponse(error, 'create test');
   }

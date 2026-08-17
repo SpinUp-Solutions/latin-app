@@ -1,4 +1,4 @@
-import type { DocumentSnapshot, Firestore, Transaction } from 'firebase-admin/firestore';
+import type { DocumentReference, DocumentSnapshot, Firestore, Transaction } from 'firebase-admin/firestore';
 import {
   DEFAULT_LEARNING_PATH_ID,
   LEARNING_PATHS_COLLECTION,
@@ -7,16 +7,28 @@ import {
   TEST_VERSIONS_COLLECTION,
 } from '@/shared/constants/firestore';
 import { adminDb } from '@/src/services/firebase-admin';
-import type { AdminLearningPathView, LearningPathDocument, LearningUnit } from '@/src/types/learning-unit';
+import {
+  LESSON_UNIT_TYPES,
+  type AdminLearningPathView,
+  type LearningPathDocument,
+  type LearningPathLessonIssue,
+  type LearningUnit,
+  type LessonUnitType,
+} from '@/src/types/learning-unit';
 import type { RotationVersionReference } from '@/src/types/test';
 import { estimateFirestoreDocumentBytes } from '@/src/lib/tests/firestore-size';
 import { mockTestDocumentSchema } from '@/src/lib/tests/schemas';
 import { isStoredVersionReadyForStudentVisibility } from '@/src/lib/tests/persistence';
 import { validateTestAssignmentGraph } from '@/src/lib/tests/domain';
-import { normalizeLearningUnit } from './domain';
+import { isLessonDocumentData, normalizeLearningUnit } from './domain';
 import { validateLessonProgression } from '@/src/utils/lessonProgress';
 import type { Lesson } from '@/src/types/lesson';
-import { learningPathDocumentSchema, saveLearningPathInputSchema, type SaveLearningPathInput } from './schemas';
+import {
+  learningPathDocumentSchema,
+  learningUnitDocumentSchema,
+  saveLearningPathInputSchema,
+  type SaveLearningPathInput,
+} from './schemas';
 import { LearningPathServiceError } from './learning-path-errors';
 import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
 
@@ -58,6 +70,133 @@ function parseLearningUnitSnapshot(snapshot: DocumentSnapshot): LearningUnit {
       409
     );
   }
+}
+
+type LearningPathPlacementUnit =
+  | { id: string; kind: 'lesson'; type: LessonUnitType }
+  | Extract<LearningUnit, { kind: 'test' }>;
+
+/**
+ * Placement only needs to establish the unit's identity and delivery kind.
+ * Normal lesson content is deliberately not parsed here: legacy or damaged
+ * lesson content is surfaced by the admin audit and must not block reordering
+ * or removing units from the Learning Path. Tests remain strict because their
+ * version ownership directly controls delivery.
+ */
+function parseLearningPathPlacementUnit(snapshot: DocumentSnapshot): LearningPathPlacementUnit {
+  if (!snapshot.exists) {
+    throw new LearningPathServiceError('UNKNOWN_LEARNING_UNIT', `Learning unit ${snapshot.id} does not exist`, 400);
+  }
+
+  const data = snapshot.data();
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new LearningPathServiceError(
+      'INELIGIBLE_LEARNING_UNIT',
+      `Learning unit ${snapshot.id} contains invalid persisted data`,
+      409
+    );
+  }
+
+  const raw = data as Record<string, unknown>;
+  if (raw.kind === 'test') return parseLearningUnitSnapshot(snapshot) as Extract<LearningUnit, { kind: 'test' }>;
+  if (raw.kind !== undefined && raw.kind !== 'lesson') {
+    throw new LearningPathServiceError(
+      'INELIGIBLE_LEARNING_UNIT',
+      `Learning unit ${snapshot.id} has an unknown kind`,
+      400
+    );
+  }
+
+  const type = raw.type;
+  if (typeof type !== 'string' || !(LESSON_UNIT_TYPES as readonly string[]).includes(type)) {
+    throw new LearningPathServiceError(
+      'INELIGIBLE_LEARNING_UNIT',
+      `Lesson ${snapshot.id} has an unknown lesson type`,
+      400
+    );
+  }
+
+  return { id: snapshot.id, kind: 'lesson', type: type as LessonUnitType };
+}
+
+function isLessonProgressionIssue(message: string, path: readonly PropertyKey[] = []): boolean {
+  const isPageIdPath = path.length === 3 && path[0] === 'pages' && typeof path[1] === 'number' && path[2] === 'id';
+  const isItemIdPath =
+    path.length === 5 &&
+    path[0] === 'pages' &&
+    typeof path[1] === 'number' &&
+    path[2] === 'items' &&
+    typeof path[3] === 'number' &&
+    path[4] === 'id';
+  return (
+    message === 'Lesson must contain at least one page.' ||
+    /^Page \d+ (?:is missing an ID|has a duplicate ID)\.$/.test(message) ||
+    /^Item \d+ on page \d+ (?:is missing an ID|has a duplicate ID)\.$/.test(message) ||
+    isPageIdPath ||
+    isItemIdPath
+  );
+}
+
+function addLessonIssue(issues: LearningPathLessonIssue[], issue: LearningPathLessonIssue, seen: Set<string>): void {
+  const key = `${issue.code}:${issue.message}:${JSON.stringify(issue.path ?? [])}`;
+  if (seen.has(key)) return;
+  seen.add(key);
+  issues.push(issue);
+}
+
+function auditPlacedLessonSnapshot(snapshot: DocumentSnapshot): LearningPathLessonIssue[] {
+  if (!snapshot.exists || !isLessonDocumentData(snapshot.data())) return [];
+
+  const raw = snapshot.data() as Record<string, unknown>;
+  if (raw.type !== 'normal') return [];
+
+  const normalized = {
+    ...raw,
+    id: raw.id ?? snapshot.id,
+    kind: raw.kind ?? 'lesson',
+    description: raw.description ?? '',
+    isLive: raw.isLive ?? false,
+    liveOrder: raw.liveOrder ?? null,
+    publishedAt: raw.publishedAt ?? null,
+    publishedBy: raw.publishedBy ?? null,
+    showWordSearch: raw.showWordSearch ?? true,
+  };
+  const issues: LearningPathLessonIssue[] = [];
+  const seen = new Set<string>();
+  const parsed = learningUnitDocumentSchema.safeParse(normalized);
+
+  if (!parsed.success) {
+    for (const issue of parsed.error.issues) {
+      addLessonIssue(
+        issues,
+        {
+          code: isLessonProgressionIssue(issue.message, issue.path) ? 'INCOMPLETE_LESSON' : 'INVALID_LESSON_DATA',
+          message: issue.message,
+          ...(issue.path.length
+            ? {
+                path: issue.path.filter(
+                  (part): part is string | number => typeof part === 'string' || typeof part === 'number'
+                ),
+              }
+            : {}),
+        },
+        seen
+      );
+    }
+  }
+
+  if (Array.isArray(raw.pages)) {
+    try {
+      for (const message of validateLessonProgression({ pages: raw.pages as Lesson['pages'] })) {
+        addLessonIssue(issues, { code: 'INCOMPLETE_LESSON', message, path: ['pages'] }, seen);
+      }
+    } catch {
+      // The schema issues above contain the useful location for malformed
+      // page structures. A bad shape must never abort the whole audit.
+    }
+  }
+
+  return issues;
 }
 
 function assertDocumentSize(document: LearningPathDocument) {
@@ -252,14 +391,42 @@ export class LearningPathService {
     return learningPathFromSnapshot(await this.pathRef().get());
   }
 
+  private async auditCanonicalLessons(
+    path: LearningPathDocument | null
+  ): Promise<Record<string, LearningPathLessonIssue[]>> {
+    if (!path || path.unitIds.length === 0) return {};
+
+    const references = path.unitIds.map(unitId => this.units.doc(unitId) as unknown as DocumentReference);
+    const dbWithGetAll = this.db as Firestore & {
+      getAll?: (...refs: DocumentReference[]) => Promise<DocumentSnapshot[]>;
+    };
+    // The production Firestore client batches these reads. The fallback keeps
+    // lightweight service fakes useful in unit tests without changing the
+    // production read pattern.
+    const snapshots =
+      typeof dbWithGetAll.getAll === 'function'
+        ? await dbWithGetAll.getAll(...references)
+        : await Promise.all(references.map(reference => reference.get()));
+    const issuesById: Record<string, LearningPathLessonIssue[]> = {};
+
+    snapshots.forEach(snapshot => {
+      const issues = auditPlacedLessonSnapshot(snapshot);
+      if (issues.length > 0) issuesById[snapshot.id] = issues;
+    });
+
+    return issuesById;
+  }
+
   async getAdminView(): Promise<AdminLearningPathView> {
     const path = await this.getPath();
+    const lessonIssuesById = await this.auditCanonicalLessons(path);
 
     return {
       path,
       effectiveUnitIds: path?.unitIds ?? [],
       source: 'learning-path',
       canEdit: Boolean(path),
+      lessonIssuesById,
       ...(!path ? { editBlockedReason: 'The Learning Path is not available.' } : {}),
     };
   }
@@ -271,20 +438,12 @@ export class LearningPathService {
     const tests: Extract<LearningUnit, { kind: 'test' }>[] = [];
 
     for (const snapshot of snapshots) {
-      const unit = parseLearningUnitSnapshot(snapshot);
+      const unit = parseLearningPathPlacementUnit(snapshot);
       if (unit.kind === 'lesson') {
         if (unit.type !== 'normal') {
           throw new LearningPathServiceError(
             'INELIGIBLE_LEARNING_UNIT',
             `Lesson ${unit.id} is a practice lesson and cannot be placed in the Learning Path`,
-            400
-          );
-        }
-        const progressionErrors = validateLessonProgression(unit);
-        if (progressionErrors.length > 0) {
-          throw new LearningPathServiceError(
-            'INELIGIBLE_LEARNING_UNIT',
-            `Lesson ${unit.id} is incomplete: ${progressionErrors.join(' ')}`,
             400
           );
         }
@@ -339,6 +498,9 @@ export class LearningPathService {
     ]);
     try {
       const allTests = allTestSnapshots.docs
+        .filter(
+          snapshot => snapshot.exists && (snapshot.data() as Record<string, unknown> | undefined)?.kind === 'test'
+        )
         .map(parseLearningUnitSnapshot)
         .filter((unit): unit is Extract<LearningUnit, { kind: 'test' }> => unit.kind === 'test');
       const mocks = activeMockSnapshots.docs.map(snapshot =>
