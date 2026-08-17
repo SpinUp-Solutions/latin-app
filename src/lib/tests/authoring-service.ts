@@ -168,11 +168,30 @@ export class TestAuthoringService {
               (reference as { versionId?: unknown }).versionId === parsed.version.id
           );
         if (sameTestVersionPair) {
-          throw new TestServiceError(
-            'TEST_CREATE_RETRY',
-            'This test was already created. Reopen it to continue editing.',
-            409
+          const currentTest = parseTestSnapshot(existingTest);
+          const currentVersion = parseVersionSnapshot(existingVersion);
+          const timestamp = this.now();
+          const version = this.buildVersion(parsed.version, actorId, {
+            createdAt: currentVersion.createdAt,
+            createdBy: currentVersion.createdBy,
+          });
+          const test = testUnitSchema.parse({
+            ...currentTest,
+            ...parsed.test,
+            updatedAt: timestamp,
+            updatedBy: actorId,
+          }) as TestUnit;
+
+          const applyVocabularyPoolAssignmentRevisions = await assertVocabularyPoolAssignmentsAllowedInTransaction(
+            transaction,
+            this.db,
+            currentVersion,
+            version
           );
+          applyVocabularyPoolAssignmentRevisions();
+          transaction.set(versionRef, version);
+          transaction.set(testRef, test);
+          return { test, version, recovered: true };
         }
         throw new TestServiceError('TEST_ALREADY_EXISTS', 'A test with this ID already exists', 409);
       }
@@ -201,7 +220,7 @@ export class TestAuthoringService {
       applyVocabularyPoolAssignmentRevisions();
       transaction.create(versionRef, version);
       transaction.create(testRef, test);
-      return { test, version };
+      return { test, version, recovered: false };
     });
   }
 

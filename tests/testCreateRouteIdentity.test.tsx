@@ -7,7 +7,6 @@ import type { TestVersionEditorSaveResult, TestVersionEditorValue } from '@/src/
 const mockRouterReplace = jest.fn();
 const mockCreateTest = jest.fn();
 const mockToastSuccess = jest.fn();
-const mockToastInfo = jest.fn();
 const mockToastError = jest.fn();
 let mockVersionEditorProps:
   | {
@@ -46,7 +45,6 @@ jest.mock('next/navigation', () => ({
 jest.mock('sonner', () => ({
   toast: {
     success: (...args: unknown[]) => mockToastSuccess(...args),
-    info: (...args: unknown[]) => mockToastInfo(...args),
     error: (...args: unknown[]) => mockToastError(...args),
   },
 }));
@@ -64,7 +62,7 @@ describe('test create route editor identities', () => {
     jest.clearAllMocks();
     mockVersionEditorProps = undefined;
     mockCreateTest.mockReturnValue({
-      unwrap: jest.fn().mockResolvedValue({ test: { id: 'test-1' }, version: { id: 'version-1' } }),
+      unwrap: jest.fn().mockResolvedValue({ test: { id: 'test-1' }, version: { id: 'version-1' }, recovered: false }),
     });
   });
 
@@ -104,24 +102,20 @@ describe('test create route editor identities', () => {
     expect(mockRouterReplace).toHaveBeenCalledWith('/admin/tests/edit/test-1');
   });
 
-  it('reopens the exact version and preserves its draft after a confirmed create retry', async () => {
+  it('treats an exact repeated create as a successful backward-compatible save', async () => {
     const value = {
       test: { id: 'test-1', title: 'Test', description: '', passingPercentage: null },
       version: { id: 'version-1', name: 'Version A', pages: [] },
     } as TestVersionEditorValue;
     mockCreateTest.mockReturnValue({
-      unwrap: jest.fn().mockRejectedValue({
-        status: 409,
-        data: { code: 'TEST_CREATE_RETRY', error: 'This test was already created.' },
-      }),
+      unwrap: jest.fn().mockResolvedValue({ test: { id: 'test-1' }, version: { id: 'version-1' }, recovered: true }),
     });
     render(<CreateTestPage />);
 
     const result = await mockVersionEditorProps?.onSave(value);
-    expect(result?.preserveDraft).toBe(true);
-    result?.afterSave?.({ draftPreserved: true });
-    expect(mockRouterReplace).toHaveBeenCalledWith('/admin/tests/edit/test-1/versions/version-1/edit');
-    expect(mockToastInfo).toHaveBeenCalledWith('This test was already created. Reopening your unsaved changes.');
+    result?.afterSave?.({ draftPreserved: false });
+    expect(mockRouterReplace).toHaveBeenCalledWith('/admin/tests/edit/test-1');
+    expect(mockToastSuccess).toHaveBeenCalledWith('Test saved');
     expect(mockToastError).not.toHaveBeenCalled();
   });
 

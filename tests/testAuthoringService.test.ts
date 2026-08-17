@@ -139,8 +139,9 @@ describe('test persistence service', () => {
     expect(result.test).not.toHaveProperty('isLive');
   });
 
-  it('classifies an existing matching test and version as a recoverable create retry', async () => {
+  it('atomically saves a repeated create for the exact existing test and version pair', async () => {
     const create = jest.fn();
+    const set = jest.fn();
     const transaction = {
       get: jest.fn(async (ref: { collection: string; id: string }) => {
         if (ref.collection === 'content_sync_locks') return snapshot(ref.id);
@@ -149,6 +150,7 @@ describe('test persistence service', () => {
         return snapshot(ref.id);
       }),
       create,
+      set,
       update: jest.fn(),
     };
     const db = {
@@ -157,15 +159,20 @@ describe('test persistence service', () => {
     };
     const service = new TestAuthoringService(db as never, () => timestamp);
 
-    await expect(
-      service.createTestWithVersion(
-        {
-          test: { id: 'test-1', title: 'Changed title', description: '', passingPercentage: 70 },
-          version: { id: 'version-1', name: 'Version A', pages },
-        },
-        'admin-1'
-      )
-    ).rejects.toMatchObject({ status: 409, code: 'TEST_CREATE_RETRY' });
+    const result = await service.createTestWithVersion(
+      {
+        test: { id: 'test-1', title: 'Changed title', description: '', passingPercentage: 70 },
+        version: { id: 'version-1', name: 'Recovered Version', pages },
+      },
+      'admin-2'
+    );
+
+    expect(result).toMatchObject({
+      recovered: true,
+      test: { id: 'test-1', title: 'Changed title', createdBy: 'admin-1', updatedBy: 'admin-2' },
+      version: { id: 'version-1', name: 'Recovered Version', createdBy: 'admin-1', updatedBy: 'admin-2' },
+    });
+    expect(set).toHaveBeenCalledTimes(2);
     expect(create).not.toHaveBeenCalled();
   });
 

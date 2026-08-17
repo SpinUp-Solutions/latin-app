@@ -89,8 +89,6 @@ export interface TestVersionEditorValue {
 }
 
 export interface TestVersionEditorSaveResult {
-  /** Keep the latest local draft when recovering an earlier successful create. */
-  preserveDraft?: boolean;
   /** Runs after the editor has cleared or safely persisted its local state. */
   afterSave?: (result: { draftPreserved: boolean }) => void;
 }
@@ -290,8 +288,7 @@ export function TestVersionEditor({
 
         const changedWhileSaving =
           latestDocument.current !== submittedDocument || !shallowEqual(latestSettings.current, submittedSettings);
-        const preserveDraft = result?.preserveDraft === true || changedWhileSaving;
-        if (preserveDraft) {
+        if (changedWhileSaving) {
           const latestDraft = latestDocument.current;
           if (latestDraft) await dispatch(savePageDocumentDraft(latestDraft)).unwrap();
           sessionStorage.setItem(settingsKey, JSON.stringify(latestSettings.current));

@@ -228,7 +228,13 @@ describe('normal version editor mock-assignment contract', () => {
   it('preserves the latest draft while recovering a test that was already created', async () => {
     const back = jest.spyOn(window.history, 'back').mockImplementation(() => undefined);
     const afterSave = jest.fn();
-    const onSave = jest.fn().mockResolvedValue({ preserveDraft: true, afterSave });
+    let resolveSave: ((result: { afterSave: typeof afterSave }) => void) | undefined;
+    const onSave = jest.fn(
+      () =>
+        new Promise<{ afterSave: typeof afterSave }>(resolve => {
+          resolveSave = resolve;
+        })
+    );
     sessionStorage.setItem('test_editor_identity:normal-test-create:test', 'test-1');
     sessionStorage.setItem('test_editor_identity:normal-test-create:version', 'version-1');
     renderEditor(
@@ -241,8 +247,13 @@ describe('normal version editor mock-assignment contract', () => {
     );
 
     await screen.findByRole('heading', { name: 'Test Version Editor' });
-    fireEvent.change(screen.getByLabelText('Version name'), { target: { value: 'Recovered unsaved name' } });
+    fireEvent.change(screen.getByLabelText('Version name'), { target: { value: 'Submitted name' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save Test' }));
+    fireEvent.change(screen.getByLabelText('Version name'), { target: { value: 'Recovered unsaved name' } });
+    await act(async () => {
+      resolveSave?.({ afterSave });
+      await Promise.resolve();
+    });
 
     await waitFor(() => expect(back).toHaveBeenCalledTimes(1));
     expect(afterSave).not.toHaveBeenCalled();
