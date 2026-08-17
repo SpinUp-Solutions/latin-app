@@ -16,6 +16,7 @@ export interface UnsavedNavigationGuard {
   stayOnPage: () => void;
   leavePage: () => void;
   requestNavigation: (navigate: () => void) => void;
+  replaceAfterSave: (navigate: () => void) => Promise<void>;
 }
 
 /**
@@ -23,10 +24,7 @@ export interface UnsavedNavigationGuard {
  * Back. In-app navigation is resolved through a React dialog; refresh and tab
  * close continue to use the browser's required beforeunload prompt.
  */
-export function useUnsavedNavigationGuard(
-  dirty: boolean,
-  message = DEFAULT_MESSAGE
-): UnsavedNavigationGuard {
+export function useUnsavedNavigationGuard(dirty: boolean, message = DEFAULT_MESSAGE): UnsavedNavigationGuard {
   const bypassNextClick = useRef(false);
   const bypassNextBeforeUnload = useRef(false);
   const bypassNextPop = useRef(false);
@@ -70,6 +68,37 @@ export function useUnsavedNavigationGuard(
     setPending(null);
     pending?.proceed();
   }, [setPending]);
+
+  // The Back guard owns a synthetic duplicate history entry. Pop it before a
+  // successful create replaces the original route, otherwise Back can reopen
+  // a stale create form that still holds the already-persisted document ID.
+  const replaceAfterSave = useCallback(
+    (navigate: () => void) => {
+      setPending(null);
+      bypassNextBeforeUnload.current = true;
+      const marker = markerRef.current;
+      markerRef.current = null;
+
+      if (!marker || window.history.state?.[HISTORY_SENTINEL] !== marker) {
+        navigate();
+        bypassNextBeforeUnload.current = false;
+        return Promise.resolve();
+      }
+
+      return new Promise<void>(resolve => {
+        const completeNavigation = () => {
+          window.removeEventListener('popstate', completeNavigation);
+          navigate();
+          bypassNextBeforeUnload.current = false;
+          resolve();
+        };
+        window.addEventListener('popstate', completeNavigation);
+        bypassNextPop.current = true;
+        window.history.back();
+      });
+    },
+    [setPending]
+  );
 
   useEffect(() => {
     if (!dirty) {
@@ -173,5 +202,6 @@ export function useUnsavedNavigationGuard(
     stayOnPage,
     leavePage,
     requestNavigation,
+    replaceAfterSave,
   };
 }

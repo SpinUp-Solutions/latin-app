@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { TestVersionEditor } from '@/src/components/ui/admin';
-import type { TestVersionEditorValue } from '@/src/components/ui/admin/TestVersionEditor';
+import type { TestVersionEditorSaveResult, TestVersionEditorValue } from '@/src/components/ui/admin/TestVersionEditor';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 import { useCreateTestMutation } from '@/src/store/api/testApi';
 import { getApiErrorMessage } from '@/src/store/api/baseQuery';
@@ -11,11 +11,15 @@ import { toast } from 'sonner';
 function CreateTestPage() {
   const router = useRouter();
   const [createTest, { isLoading }] = useCreateTestMutation();
-  const save = async (value: TestVersionEditorValue) => {
+  const save = async (value: TestVersionEditorValue): Promise<TestVersionEditorSaveResult> => {
+    const editTest = () => router.replace(`/admin/tests/edit/${value.test.id}`);
+    const recoverDraft = () => router.replace(`/admin/tests/edit/${value.test.id}/versions/${value.version.id}/edit`);
     try {
       const result = await createTest(value).unwrap();
-      toast.success('Test created');
-      router.push(`/admin/tests/edit/${result.test.id}`);
+      toast.success(result.recovered ? 'Test saved' : 'Test created');
+      return {
+        afterSave: ({ draftPreserved }) => (draftPreserved ? recoverDraft() : editTest()),
+      };
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Failed to create test'));
       throw error;
