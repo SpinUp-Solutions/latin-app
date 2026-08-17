@@ -37,7 +37,12 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { restrictToVerticalAxis, restrictToParentElement } from '@dnd-kit/modifiers';
-import { GripVertical } from 'lucide-react';
+import { AlertTriangle, GripVertical } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/src/components/ui/alert';
+import {
+  getCompatibilityStepLabels,
+  getFormIdentificationCompatibilitySummary,
+} from '@/src/utils/exercises/formIdentificationCompatibility';
 
 interface MultiParadigmConfigSectionProps {
   availableParadigms: FormParadigm[];
@@ -80,6 +85,12 @@ const getFormSelectionProps = (paradigm: FormParadigm) => {
   }
   return { partOfSpeech: pos, pronounType: undefined, pronounPerson: undefined };
 };
+
+const getSkippedSelectionCount = (summary: ReturnType<typeof getFormIdentificationCompatibilitySummary> | null) =>
+  summary ? summary.skipped.length + summary.unknownPaths.length : 0;
+
+const getSkippedFormLabel = (label: string, count: number) =>
+  label.toLowerCase().replace(/ forms$/, count === 1 ? ' form' : ' forms');
 
 export const MultiParadigmConfigSection: React.FC<MultiParadigmConfigSectionProps> = ({
   availableParadigms,
@@ -178,6 +189,37 @@ export const MultiParadigmConfigSection: React.FC<MultiParadigmConfigSectionProp
   const currentSteps = currentConfig?.steps || [];
   const tableType = PARADIGM_TABLE_TYPE[activeParadigm];
   const relevantFilters = PARADIGM_RELEVANT_FILTERS[activeParadigm];
+  const getCompatibilitySummaryForParadigm = (paradigm: FormParadigm) => {
+    const config = paradigmConfigs[paradigm];
+    if (!config?.enabled || !config.formSelection) return null;
+    return getFormIdentificationCompatibilitySummary(
+      PARADIGM_TABLE_TYPE[paradigm],
+      config.formSelection.selectedCellPaths,
+      config.steps || []
+    );
+  };
+  const compatibilitySummary = getCompatibilitySummaryForParadigm(activeParadigm);
+  const answerableFormCount = (Object.keys(PARADIGM_TABLE_TYPE) as FormParadigm[]).reduce((total, paradigm) => {
+    return total + (getCompatibilitySummaryForParadigm(paradigm)?.answerableCount ?? 0);
+  }, 0);
+  const activeSkippedCount = getSkippedSelectionCount(compatibilitySummary);
+  const skippedGroups = compatibilitySummary
+    ? Array.from(
+        compatibilitySummary.skipped
+          .reduce((groups, selection) => {
+            const existing = groups.get(selection.support.label) ?? {
+              label: selection.support.label,
+              count: 0,
+              steps: new Set<FormIdentificationStep>(),
+            };
+            existing.count += 1;
+            selection.support.supportedSteps.forEach(step => existing.steps.add(step));
+            groups.set(selection.support.label, existing);
+            return groups;
+          }, new Map<string, { label: string; count: number; steps: Set<FormIdentificationStep> }>())
+          .values()
+      )
+    : [];
   const nonPronounAvailable = availableParadigms.filter(p => NON_PRONOUN_PARADIGMS.includes(p));
   const pronounAvailable = availableParadigms.filter(p => PRONOUN_PARADIGMS.includes(p));
 
@@ -197,6 +239,14 @@ export const MultiParadigmConfigSection: React.FC<MultiParadigmConfigSectionProp
         {wordCount !== undefined && (
           <Badge variant={isActive ? 'secondary' : 'outline'} className="text-xs">
             {wordCount}
+          </Badge>
+        )}
+        {getSkippedSelectionCount(getCompatibilitySummaryForParadigm(paradigm)) > 0 && (
+          <Badge
+            variant="outline"
+            className="border-amber-300 bg-amber-50 text-xs text-amber-800"
+            title="Selected forms that cannot be used with the current questions">
+            {getSkippedSelectionCount(getCompatibilitySummaryForParadigm(paradigm))} skipped
           </Badge>
         )}
       </Button>
@@ -356,6 +406,31 @@ export const MultiParadigmConfigSection: React.FC<MultiParadigmConfigSectionProp
 
           {currentConfig?.enabled && (
             <>
+              {compatibilitySummary && activeSkippedCount > 0 && answerableFormCount > 0 && (
+                <Alert role="status" className="border-amber-200 bg-amber-50 text-amber-900">
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  <AlertTitle>Some selected forms will be skipped</AlertTitle>
+                  <AlertDescription className="space-y-1">
+                    {compatibilitySummary.unknownPaths.length > 0 && (
+                      <p>
+                        <strong>{compatibilitySummary.unknownPaths.length}</strong>{' '}
+                        {compatibilitySummary.unknownPaths.length === 1
+                          ? 'unrecognized saved form will be skipped. Select a valid form or remove it from the selection.'
+                          : 'unrecognized saved forms will be skipped. Select valid forms or remove them from the selection.'}
+                      </p>
+                    )}
+                    {skippedGroups.map(group => (
+                      <p key={group.label}>
+                        <strong>{group.count}</strong> {getSkippedFormLabel(group.label, group.count)} will not appear
+                        because none of the selected questions apply. Add{' '}
+                        {getCompatibilityStepLabels(Array.from(group.steps))} to include{' '}
+                        {group.count === 1 ? 'it' : 'them'}.
+                      </p>
+                    ))}
+                  </AlertDescription>
+                </Alert>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-medium mb-3">Steps to Identify (in order)</label>
@@ -392,7 +467,6 @@ export const MultiParadigmConfigSection: React.FC<MultiParadigmConfigSectionProp
                         </DndContext>
                       </div>
                     )}
-
                   </div>
                 </div>
 

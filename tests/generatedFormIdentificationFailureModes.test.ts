@@ -173,10 +173,7 @@ describe('generated form-identification failure boundaries', () => {
     });
     const word = makeVerbWord({ id: 'infinitive', formPath: infinitivePath });
 
-    expect(stepsForWord(createGeneratedFormIdentificationItems(exercise, [word]), word.id)).toEqual([
-      'tense',
-      'voice',
-    ]);
+    expect(stepsForWord(createGeneratedFormIdentificationItems(exercise, [word]), word.id)).toEqual(['tense', 'voice']);
   });
 
   it('adapts mixed selections per generated form instead of taking a global intersection', () => {
@@ -206,6 +203,43 @@ describe('generated form-identification failure boundaries', () => {
       'case',
       'gender',
     ]);
+  });
+
+  it('excludes incompatible selected gerunds while retaining answerable finite forms', () => {
+    const exercise = makeExercise({
+      steps: ['mood'],
+      selectedCellPaths: [selectedFinitePath, 'gerund.genitive'],
+    });
+    const finite = makeVerbWord({ id: 'finite', formPath: finitePath });
+    const gerund = makeVerbWord({
+      id: 'gerund',
+      formPath: { verb_form: 'gerund', tense: '', voice: '', mood: '', person: '', number: '', case: 'genitive' },
+    });
+
+    const items = createGeneratedFormIdentificationItems(exercise, [finite, gerund]);
+
+    expect(items.map(item => item.wordId)).toEqual(['finite']);
+    expect(stepsForWord(items, 'finite')).toEqual(['mood']);
+  });
+
+  it('uses the selected gerund interpretation when a syncretic finite path is also present', () => {
+    const exercise = makeExercise({
+      steps: ['mood', 'case'],
+      selectedCellPaths: [selectedFinitePath, 'gerund.genitive'],
+    });
+    const gerund = makeVerbWord({
+      id: 'gerund-syncretic',
+      formPath: { verb_form: 'gerund', tense: '', voice: '', mood: '', person: '', number: '', case: 'genitive' },
+      primaryFormPaths: [
+        { verb_form: 'gerund', tense: '', voice: '', mood: '', person: '', number: '', case: 'genitive' },
+        finitePath,
+      ],
+    });
+
+    const items = createGeneratedFormIdentificationItems(exercise, [gerund]);
+
+    expect(stepsForWord(items, gerund.id)).toEqual(['case']);
+    expect(items[0]?.primaryFormPaths).toEqual([expect.objectContaining({ case: 'genitive' })]);
   });
 
   it('uses the shared steps when one spelling has finite and participle primary paths', () => {

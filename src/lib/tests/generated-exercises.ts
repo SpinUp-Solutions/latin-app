@@ -8,6 +8,7 @@ import type {
 import type { PartOfSpeech, PronounPerson, PronounType } from '@/shared/types/vocabulary/schemas/enums';
 import { deriveParadigm } from '@/src/utils/paradigm';
 import { hasSelectedForm, getExerciseDisplayForm } from '@/src/utils/exercises/formSelection';
+import { buildLegacyParadigmConfigs } from '@/src/utils/exercises/legacyExerciseCompat';
 import {
   splitTranslationAnswers,
   type GeneratedTranslationItem,
@@ -23,6 +24,7 @@ import {
   getAcceptedAnswersForStep,
   getAnswerableStepsForWord,
   getDisplayForm,
+  getFallbackAnswerableStepsForWord,
   getHintForStep,
 } from '@/src/utils/exercises/formIdentificationHelpers';
 
@@ -48,13 +50,40 @@ const getPreparedPaths = (exercise: GeneratedFormIdentificationExercise, word: E
     data.pronoun_type as PronounType | undefined,
     data.person as PronounPerson | undefined
   );
-  const config = paradigm ? exercise.data.paradigmConfigs?.[paradigm] : undefined;
+  const paradigmConfigs =
+    exercise.data.paradigmConfigs && Object.keys(exercise.data.paradigmConfigs).length > 0
+      ? exercise.data.paradigmConfigs
+      : buildLegacyParadigmConfigs(exercise.data.generatorConfig as Parameters<typeof buildLegacyParadigmConfigs>[0]);
+  const config = paradigm ? paradigmConfigs[paradigm] : undefined;
   const paths = getPaths(word);
-  const candidateSteps = getAnswerableStepsForWord(word, config?.steps || [], paths.primary);
-  const enrichedPrimary = enrichPathsWithSteps(paths.primary, word, candidateSteps);
+  const configuredSteps = config?.steps || [];
+  let candidateSteps = getAnswerableStepsForWord(word, configuredSteps, paths.primary);
+  const preferredPath = (word.form_path || paths.primary[0]) as Record<string, string | undefined> | undefined;
+
+  // A selected path can be answerable even when a syncretic alternative in
+  // `primary_form_paths` cannot answer any of the same questions (for example
+  // a finite form and a gerund with the same spelling). Fall back to the
+  // selected interpretation and discard incompatible alternatives below.
+  if (candidateSteps.length === 0) {
+    candidateSteps = getFallbackAnswerableStepsForWord(word, configuredSteps, preferredPath);
+  }
+
+  let enrichedPrimary = enrichPathsWithSteps(paths.primary, word, candidateSteps);
   const steps = candidateSteps.filter(
-    step => enrichedPrimary.length > 0 && enrichedPrimary.every(path => Boolean(path[step]))
+    step => enrichedPrimary.length > 0 && enrichedPrimary.some(path => Boolean(path[step]))
   );
+
+  if (steps.length > 0) {
+    enrichedPrimary = enrichedPrimary.filter(path => steps.every(step => Boolean(path[step])));
+  }
+
+  // Older responses may omit `primary_form_paths` while still carrying the
+  // selected `form_path`; preserve that selected path as the answer key.
+  if (enrichedPrimary.length === 0 && preferredPath && steps.length > 0) {
+    enrichedPrimary = enrichPathsWithSteps([preferredPath], word, steps).filter(path =>
+      steps.every(step => Boolean(path[step]))
+    );
+  }
 
   if (steps.length === 0) {
     return { steps, primary: [], optional: [] };

@@ -200,6 +200,7 @@ describe('LearningPathService', () => {
       effectiveUnitIds: [],
       source: 'learning-path',
       canEdit: false,
+      lessonIssuesById: {},
       editBlockedReason: 'The Learning Path is not available.',
     });
 
@@ -298,17 +299,6 @@ describe('LearningPathService', () => {
       code: 'INELIGIBLE_LEARNING_UNIT',
     },
     {
-      name: 'incomplete normal lesson',
-      records: {
-        lessons: {
-          incomplete: lesson({ isLive: false, liveOrder: null, pages: [] }),
-        },
-        learningPaths: { default: path() },
-      },
-      input: { expectedRevision: 2, unitIds: ['incomplete'] },
-      code: 'INELIGIBLE_LEARNING_UNIT',
-    },
-    {
       name: 'test before Phase 6',
       records: {
         lessons: {
@@ -331,6 +321,194 @@ describe('LearningPathService', () => {
 
     await expect(service.save(input, 'admin')).rejects.toMatchObject({ code });
     expect(db.writes).toHaveLength(0);
+  });
+
+  it('allows an incomplete normal lesson and reports its content issue in the admin audit', async () => {
+    const db = new FakeFirestore({
+      lessons: {
+        incomplete: lesson({ isLive: false, liveOrder: null, pages: [] }),
+      },
+      learningPaths: { default: path({ unitIds: ['incomplete'] }) },
+    });
+    const service = new LearningPathService(db as never);
+
+    await expect(service.save({ expectedRevision: 2, unitIds: ['incomplete'] }, 'admin')).resolves.toMatchObject({
+      revision: 3,
+      unitIds: ['incomplete'],
+    });
+    await expect(service.getAdminView()).resolves.toMatchObject({
+      effectiveUnitIds: ['incomplete'],
+      lessonIssuesById: {
+        incomplete: [
+          expect.objectContaining({
+            code: 'INCOMPLETE_LESSON',
+            message: 'Lesson must contain at least one page.',
+          }),
+        ],
+      },
+    });
+    expect(db.writes).toHaveLength(1);
+  });
+
+  it('allows a newly added incomplete normal lesson without blocking the path save', async () => {
+    const db = new FakeFirestore({
+      lessons: {
+        existing: lesson(),
+        newlyAdded: lesson({ isLive: false, liveOrder: null, pages: [] }),
+      },
+      learningPaths: { default: path({ unitIds: ['existing'] }) },
+    });
+    const service = new LearningPathService(db as never);
+
+    await expect(
+      service.save({ expectedRevision: 2, unitIds: ['existing', 'newlyAdded'] }, 'admin')
+    ).resolves.toMatchObject({
+      revision: 3,
+      unitIds: ['existing', 'newlyAdded'],
+    });
+    expect(db.writes).toHaveLength(1);
+  });
+
+  it.each([
+    {
+      name: 'a missing lesson type',
+      unit: { kind: 'lesson', title: 'Untyped lesson', pages: [] },
+    },
+    {
+      name: 'an unknown lesson type',
+      unit: { kind: 'lesson', type: 'unknown', title: 'Unknown lesson', pages: [] },
+    },
+    {
+      name: 'an unknown unit kind',
+      unit: { kind: 'mystery', type: 'normal', title: 'Mystery unit', pages: [] },
+    },
+  ])('keeps $name as a hard placement blocker', async ({ unit }) => {
+    const db = new FakeFirestore({
+      lessons: { invalid: unit },
+      learningPaths: { default: path({ unitIds: [] }) },
+    });
+    const service = new LearningPathService(db as never);
+
+    await expect(service.save({ expectedRevision: 2, unitIds: ['invalid'] }, 'admin')).rejects.toMatchObject({
+      code: 'INELIGIBLE_LEARNING_UNIT',
+    });
+    expect(db.writes).toHaveLength(0);
+  });
+
+  it('classifies page and item ID failures as incomplete lesson issues', async () => {
+    const db = new FakeFirestore({
+      lessons: {
+        ids: lesson({
+          isLive: false,
+          liveOrder: null,
+          pages: [
+            { id: '', items: [{ id: '', type: 'text' }] },
+            { id: 'page-1', items: [{ id: 'item-1', type: 'text' }] },
+            { id: 'page-1', items: [{ id: 'item-1', type: 'text' }] },
+          ],
+        }),
+      },
+      learningPaths: { default: path({ unitIds: ['ids'] }) },
+    });
+    const service = new LearningPathService(db as never);
+
+    const issues = (await service.getAdminView()).lessonIssuesById?.ids ?? [];
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'INCOMPLETE_LESSON', message: 'Page 1 is missing an ID.' }),
+        expect.objectContaining({ code: 'INCOMPLETE_LESSON', message: 'Item 1 on page 1 is missing an ID.' }),
+        expect.objectContaining({ code: 'INCOMPLETE_LESSON', message: 'Page 3 has a duplicate ID.' }),
+        expect.objectContaining({ code: 'INCOMPLETE_LESSON', message: 'Item 1 on page 3 has a duplicate ID.' }),
+      ])
+    );
+    expect(issues.filter(issue => issue.code === 'INVALID_LESSON_DATA')).toHaveLength(0);
+  });
+
+  it('surfaces morphology configuration failures with their page and item location', async () => {
+    const db = new FakeFirestore({
+      lessons: {
+        morphology: lesson({
+          pages: [
+            {
+              id: 'page-1',
+              items: [
+                {
+                  id: 'morphology-1',
+                  type: 'generated-form-identification',
+                  title: 'Morphology',
+                  data: {
+                    paradigmConfigs: {
+                      'verb-conjugation': {
+                        enabled: true,
+                        formSelection: {
+                          selectedCellPaths: ['nonFinite.infinitive.present.active'],
+                        },
+                        steps: ['mood'],
+                      },
+                    },
+                  },
+                },
+              ],
+            },
+          ],
+        }),
+      },
+      learningPaths: { default: path({ unitIds: ['morphology'] }) },
+    });
+    const service = new LearningPathService(db as never);
+
+    const view = await service.getAdminView();
+    expect(view.lessonIssuesById?.morphology).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'INVALID_LESSON_DATA',
+          message: 'Morphology exercise 1 on page 1: Infinitive forms have no applicable selected questions.',
+          path: ['pages', 0, 'items', 0, 'data', 'paradigmConfigs', 'verb-conjugation'],
+        }),
+      ])
+    );
+  });
+
+  it('does not surface a Learning Path issue for a partially incompatible morphology selection', async () => {
+    const db = new FakeFirestore({
+      lessons: {
+        morphology: lesson({
+          pages: [
+            {
+              id: 'page-1',
+              items: [
+                {
+                  id: 'morphology-1',
+                  type: 'generated-form-identification',
+                  title: 'Morphology',
+                  data: {
+                    paradigmConfigs: {
+                      'verb-conjugation': {
+                        enabled: true,
+                        formSelection: {
+                          selectedCellPaths: [
+                            'indicative.active.present.singular.first',
+                            'gerund.genitive',
+                          ],
+                        },
+                        steps: ['mood'],
+                      },
+                    },
+                  },
+                },
+              ],
+            },
+          ],
+        }),
+      },
+      learningPaths: { default: path({ unitIds: ['morphology'] }) },
+    });
+    const service = new LearningPathService(db as never);
+
+    const view = await service.getAdminView();
+    expect(view.lessonIssuesById?.morphology ?? []).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'INVALID_LESSON_DATA' })])
+    );
   });
 
   it('guards deletion whenever the canonical path contains the unit', async () => {

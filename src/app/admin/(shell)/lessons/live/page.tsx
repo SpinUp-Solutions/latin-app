@@ -46,6 +46,7 @@ import { useGetTestsQuery } from '@/src/store/api/testApi';
 import type { LessonSummary } from '@/src/types/lesson';
 import type { PracticeLessonType } from '@/src/types/practice-category';
 import type { TestUnitSummary } from '@/src/types/test';
+import type { LearningPathLessonIssue } from '@/src/types/learning-unit';
 
 type LessonType = 'normal' | PracticeLessonType;
 type FilterStatus = 'all' | 'live' | 'draft';
@@ -182,6 +183,15 @@ function LiveLessonsPage() {
   const pathUnits = pathUnitIds.map(id => pathUnitById.get(id)).filter(Boolean) as Array<
     LessonSummary | TestUnitSummary
   >;
+  const lessonIssuesById: Record<string, LearningPathLessonIssue[]> = pathView?.lessonIssuesById ?? {};
+  const affectedPathLessons = pathUnitIds
+    .map(id => {
+      const unit = pathUnitById.get(id);
+      if (!unit || unit.kind === 'test') return null;
+      const issues = lessonIssuesById[id] ?? [];
+      return issues.length > 0 ? { unit, issues } : null;
+    })
+    .filter((entry): entry is { unit: LessonSummary; issues: LearningPathLessonIssue[] } => entry !== null);
   const unplacedNormalLessons = normalLessons
     .filter(lesson => !pathUnitIds.includes(lesson.id))
     .sort((left, right) => left.title.localeCompare(right.title));
@@ -328,6 +338,7 @@ function LiveLessonsPage() {
         unitIds: [...result.path.unitIds],
       });
       setPathConflict(null);
+      await refetchPath();
       toast.success('Learning Path saved');
     } catch (error) {
       if (hasApiErrorStatus(error, 409) && getApiErrorCode(error) === 'STALE_LEARNING_PATH_REVISION') {
@@ -587,6 +598,40 @@ function LiveLessonsPage() {
                     {pathView.editBlockedReason}
                   </p>
                 )}
+                {affectedPathLessons.length > 0 && (
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                    <p className="font-medium">
+                      {affectedPathLessons.length} lesson{affectedPathLessons.length === 1 ? '' : 's'} need
+                      {affectedPathLessons.length === 1 ? 's' : ''} attention
+                    </p>
+                    <p className="mt-1">
+                      These warnings do not block Learning Path changes, but the affected lessons should be repaired
+                      before students use them.
+                    </p>
+                    <ul className="mt-2 space-y-2">
+                      {affectedPathLessons.map(({ unit, issues }) => (
+                        <li key={unit.id} className="flex flex-wrap items-center justify-between gap-2">
+                          <span>
+                            <strong>{unit.title}</strong> ({issues.length} {issues.length === 1 ? 'issue' : 'issues'})
+                          </span>
+                          <Button size="sm" variant="outline" asChild>
+                            <Link
+                              href={`/admin/lessons/edit/${unit.id}`}
+                              onClick={event => {
+                                event.preventDefault();
+                                navigateFromPathDraft(`/admin/lessons/edit/${unit.id}`);
+                              }}>
+                              Fix lesson
+                            </Link>
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 {pathConflict && (
                   <div className="mt-3 rounded-md border border-orange-200 bg-orange-50 px-3 py-3 text-sm text-orange-950">
                     <p className="font-medium">A newer canonical Learning Path is available.</p>
@@ -716,6 +761,7 @@ function LiveLessonsPage() {
                               <SortableLearningPathLesson
                                 unit={unit}
                                 index={index}
+                                issues={unit.kind === 'test' ? [] : (lessonIssuesById[unit.id] ?? [])}
                                 disabled={!pathView?.canEdit || pathSaving}
                                 onNavigate={navigateFromPathDraft}
                                 onRemove={() =>

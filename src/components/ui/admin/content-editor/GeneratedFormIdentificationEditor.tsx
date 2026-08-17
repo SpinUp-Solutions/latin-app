@@ -166,7 +166,7 @@ const GeneratedFormIdentificationEditorView: React.FC<{
     const basePrimaryPaths = (word.primary_form_paths || (word.form_path ? [word.form_path] : [])) as Array<
       Record<string, string | undefined>
     >;
-    return getAnswerableStepsForWord(word, editingContent.data.paradigmConfigs?.[paradigm]?.steps || [], basePrimaryPaths);
+    return getAnswerableStepsForWord(word, editor.paradigmConfigs[paradigm]?.steps || [], basePrimaryPaths);
   };
 
   return (
@@ -272,9 +272,9 @@ const GeneratedFormIdentificationEditorView: React.FC<{
       {configurationMessages.length > 0 && (
         <Alert className="border-amber-200 bg-amber-50 text-amber-900">
           <AlertTriangle className="h-4 w-4 text-amber-600" />
-          <AlertTitle>Selected form needs a question</AlertTitle>
+          <AlertTitle>No answerable morphology forms remain</AlertTitle>
           <AlertDescription>
-            <p>Choose at least one question that applies to every selected form before saving.</p>
+            <p>Add a compatible question or select a different form before saving.</p>
             <ul className="list-disc pl-4">
               {configurationMessages.map(message => (
                 <li key={message}>{message}</li>
@@ -295,7 +295,7 @@ const GeneratedFormIdentificationEditorView: React.FC<{
         <MultiParadigmConfigSection
           availableParadigms={editor.paradigmInfo.availableParadigms}
           paradigmWordCounts={editor.paradigmInfo.paradigmWordCounts}
-          paradigmConfigs={editingContent.data.paradigmConfigs ?? {}}
+          paradigmConfigs={editor.paradigmConfigs}
           onUpdateParadigmConfig={editor.handleUpdateParadigmConfig}
           onToggleParadigm={editor.handleToggleParadigm}
         />
