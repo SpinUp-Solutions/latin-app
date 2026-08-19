@@ -8,6 +8,7 @@ import { updateEditingContent } from '@/src/store/slices/lessonEditorSlice';
 import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
 import { SimpleRichEditor } from '../../core/simple-rich-editor';
+import { SimpleRichDisplay } from '../../core/simple-rich-display';
 import { MultiClickableRichDisplay } from '../../core/multi-clickable-rich-display';
 import { splitHtmlIntoWords } from '@/src/utils/htmlWordSplitter';
 
@@ -54,11 +55,11 @@ export const ClickOnMultipleWordsEditor: React.FC = () => {
 
   const getSelectedWords = () => {
     if (!editingContent.data.passage) return [];
-    const words = splitHtmlIntoWords(editingContent.data.passage).map(w => w.replace(/<[^>]*>/g, ''));
+    const words = splitHtmlIntoWords(editingContent.data.passage);
 
     return editingContent.data.correctWordIndices
-      .map(index => ({ index, word: words[index] || `Index ${index}` }))
-      .filter(item => item.word !== `Index ${item.index}`);
+      .map(index => ({ index, wordHtml: words[index] }))
+      .filter(item => item.wordHtml);
   };
 
   return (
@@ -169,13 +170,14 @@ export const ClickOnMultipleWordsEditor: React.FC = () => {
                 Selected Words ({editingContent.data.correctWordIndices.length}):
               </div>
               <div className="flex flex-wrap gap-2">
-                {getSelectedWords().map(({ index, word }) => (
+                {getSelectedWords().map(({ index, wordHtml }) => (
                   <span
                     key={index}
                     className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded cursor-pointer hover:bg-blue-200"
                     onClick={() => handleWordClick(index)}
                     title={`Click to deselect word at index ${index}`}>
-                    {word} <span className="ml-1 text-blue-600">#{index}</span>
+                    <SimpleRichDisplay content={wordHtml!} className="inline not-prose" />{' '}
+                    <span className="ml-1 text-blue-600">#{index}</span>
                   </span>
                 ))}
               </div>

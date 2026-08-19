@@ -1,12 +1,7 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/src/components/ui/accordion';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/src/components/ui/accordion';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { AudioPlayer } from '@/src/components/ui/core/AudioPlayer';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
@@ -14,8 +9,13 @@ import ConjugationTable from '@/src/components/ui/lesson/conjugation-table';
 import { VocabularyViewer } from '@/src/components/ui/lesson/VocabularyViewer';
 import { VocabularyPoolViewer } from '@/src/components/ui/lesson/VocabularyPoolViewer';
 import { cn } from '@/src/lib/utils';
-import type { StudentTestResult, TestResultReviewExerciseItem, TestResultReviewSupportingItem } from '@/src/types/test-results';
+import type {
+  StudentTestResult,
+  TestResultReviewExerciseItem,
+  TestResultReviewSupportingItem,
+} from '@/src/types/test-results';
 import type { VocabularyContent, VocabularyPoolContent } from '@/src/types/lesson';
+import { stripHtmlTags } from '@/src/utils/exercises/helpers';
 import { ExerciseReviewView } from './exercise-review-views';
 
 const formatPoints = (value: number) =>
@@ -28,7 +28,15 @@ const formatPoints = (value: number) =>
 // Supporting content (passages, tables, vocabulary, audio)
 // ---------------------------------------------------------------------------
 
-const SupportingContentView = ({ item, poolId, resolvedPool }: { item: TestResultReviewSupportingItem; poolId?: string; resolvedPool?: unknown }) => {
+const SupportingContentView = ({
+  item,
+  poolId,
+  resolvedPool,
+}: {
+  item: TestResultReviewSupportingItem;
+  poolId?: string;
+  resolvedPool?: unknown;
+}) => {
   switch (item.type) {
     case 'text':
     case 'emphasis':
@@ -169,8 +177,7 @@ export function TestResultReviewView({ result }: { result: StudentTestResult }) 
   const { attempt, review } = result;
   const entries = useMemo(() => buildAccordionEntries(result), [result]);
 
-  const defaultOpenEntry =
-    entries.find(entry => !entry.correct) ?? entries[0];
+  const defaultOpenEntry = entries.find(entry => !entry.correct) ?? entries[0];
 
   return (
     <div className="min-h-screen bg-roman-marble p-4 md:p-8" data-testid="test-result-review">
@@ -187,9 +194,7 @@ export function TestResultReviewView({ result }: { result: StudentTestResult }) 
             <p className="text-slate-700">
               {formatPoints(attempt.score)} / {formatPoints(attempt.maxScore)} points
             </p>
-            <p className="text-sm text-slate-500">
-              Submitted {new Date(attempt.submittedAt).toLocaleString()}
-            </p>
+            <p className="text-sm text-slate-500">Submitted {new Date(attempt.submittedAt).toLocaleString()}</p>
           </div>
         </div>
 
@@ -221,8 +226,8 @@ export function TestResultReviewView({ result }: { result: StudentTestResult }) 
                 data-testid={`review-exercise-${entry.id}`}>
                 <AccordionTrigger
                   className="gap-4 px-5 py-4 text-left hover:no-underline data-[state=open]:border-b data-[state=open]:border-slate-100"
-                  aria-label={`Exercise ${entry.number}: ${entry.title}`}>
-                  <span className="flex min-w-0 flex-1 items-center gap-3">
+                  aria-label={`Exercise ${entry.number}: ${stripHtmlTags(entry.title)}`}>
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
                     <span
                       className={cn(
                         'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold',
@@ -230,8 +235,10 @@ export function TestResultReviewView({ result }: { result: StudentTestResult }) 
                       )}>
                       {entry.number}
                     </span>
-                    <span className="min-w-0 truncate font-medium text-slate-900">{entry.title}</span>
-                  </span>
+                    <div className="min-w-0 truncate font-medium text-slate-900">
+                      <SimpleRichDisplay content={entry.title} className="truncate" />
+                    </div>
+                  </div>
                   <span className="shrink-0 text-sm tabular-nums text-slate-500">
                     {formatPoints(entry.awardedPoints)} / {formatPoints(entry.maxPoints)} points
                   </span>

@@ -8,9 +8,12 @@ import { SentenceDiagramSurface } from '@/src/features/sentence-diagramming';
 import { SentenceDiagramFeedbackView } from '@/src/features/sentence-diagramming';
 import { cn } from '@/src/lib/utils';
 import type { ReviewPartPoints, TestResultReviewExerciseItem } from '@/src/types/test-results';
-import { stripHtmlTags } from '@/src/utils/exercises/helpers';
+import { splitHtmlIntoWords } from '@/src/utils/htmlWordSplitter';
 
-type ExerciseOfType<T extends TestResultReviewExerciseItem['type']> = Extract<TestResultReviewExerciseItem, { type: T }>;
+type ExerciseOfType<T extends TestResultReviewExerciseItem['type']> = Extract<
+  TestResultReviewExerciseItem,
+  { type: T }
+>;
 
 const formatPoints = (value: number) =>
   value
@@ -28,18 +31,18 @@ export const CorrectBadge = ({ correct, points }: { correct: boolean; points?: R
   const partlyCorrect = !correct && Boolean(points && points.awardedPoints > 0);
   const label = correct ? 'Correct' : partlyCorrect ? 'Partly correct' : 'Incorrect';
   return (
-  <span
-    className={cn(
-      'inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold',
-      correct
-        ? 'bg-emerald-100 text-emerald-800'
-        : partlyCorrect
-          ? 'bg-amber-100 text-amber-800'
-          : 'bg-rose-100 text-rose-800'
-    )}>
-    {correct ? <Check className="h-3 w-3" aria-hidden="true" /> : <X className="h-3 w-3" aria-hidden="true" />}
-    {label}
-  </span>
+    <span
+      className={cn(
+        'inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold',
+        correct
+          ? 'bg-emerald-100 text-emerald-800'
+          : partlyCorrect
+            ? 'bg-amber-100 text-amber-800'
+            : 'bg-rose-100 text-rose-800'
+      )}>
+      {correct ? <Check className="h-3 w-3" aria-hidden="true" /> : <X className="h-3 w-3" aria-hidden="true" />}
+      {label}
+    </span>
   );
 };
 
@@ -104,8 +107,7 @@ export const MatchingExerciseReview = ({ item }: { item: ExerciseOfType<'matchin
           <ul className="space-y-1.5">
             {answerKey.pairs.map(pair => {
               const selection = round[pair.leftId];
-              const rightValue =
-                item.question.rightColumn.find(right => right.id === selection?.rightId)?.value ?? '—';
+              const rightValue = item.question.rightColumn.find(right => right.id === selection?.rightId)?.value ?? '—';
               const correct = selection?.correct ?? false;
               return (
                 <li key={pair.leftId} className="flex flex-wrap items-center gap-2 text-sm">
@@ -174,7 +176,9 @@ export const FillExerciseReview = ({ item }: { item: ExerciseOfType<'fill'> }) =
                 <PartPoints points={result.points} />
               </div>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                <span className="text-slate-500">Accepted {keyItem.acceptedAnswers.length > 1 ? 'answers' : 'answer'}:</span>
+                <span className="text-slate-500">
+                  Accepted {keyItem.acceptedAnswers.length > 1 ? 'answers' : 'answer'}:
+                </span>
                 <span className="font-semibold text-emerald-800">{keyItem.acceptedAnswers.join(' or ')}</span>
               </div>
               {keyItem.explanation ? (
@@ -208,7 +212,11 @@ export const MultipleChoiceExerciseReview = ({ item }: { item: ExerciseOfType<'m
                 key={option.id}
                 className={cn(
                   'flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm',
-                  option.isCorrect ? 'border-emerald-200 bg-emerald-50/70' : selected ? 'border-rose-200 bg-rose-50/70' : 'border-slate-100'
+                  option.isCorrect
+                    ? 'border-emerald-200 bg-emerald-50/70'
+                    : selected
+                      ? 'border-rose-200 bg-rose-50/70'
+                      : 'border-slate-100'
                 )}>
                 <span className="min-w-0 flex-1">
                   <SimpleRichDisplay content={option.text} />
@@ -273,16 +281,14 @@ export const OddOneOutExerciseReview = ({ item }: { item: ExerciseOfType<'odd-on
       </ReviewBlock>
       {item.question.requireExplanation ? (
         <ReviewBlock label="Your explanation" tone="student">
-          {item.itemResults.explanation.trim() ? (
-            <PlainValue value={item.itemResults.explanation} />
-          ) : (
-            <EmptyAnswer />
-          )}
+          {item.itemResults.explanation.trim() ? <PlainValue value={item.itemResults.explanation} /> : <EmptyAnswer />}
         </ReviewBlock>
       ) : null}
       <ReviewBlock label="Result" tone="student">
         <div className="flex items-center gap-3">
-          <span className="text-sm text-slate-700">{item.itemResults.selectedItemId ? 'Your choice is marked above.' : 'No answer was recorded.'}</span>
+          <span className="text-sm text-slate-700">
+            {item.itemResults.selectedItemId ? 'Your choice is marked above.' : 'No answer was recorded.'}
+          </span>
           <CorrectBadge correct={item.itemResults.correct} points={item.itemResults.points} />
           <PartPoints points={item.itemResults.points} />
         </div>
@@ -301,7 +307,7 @@ export const OddOneOutExerciseReview = ({ item }: { item: ExerciseOfType<'odd-on
 // ---------------------------------------------------------------------------
 
 export const TextSelectionExerciseReview = ({ item }: { item: ExerciseOfType<'text-selection'> }) => {
-  const passageWords = stripHtmlTags(item.question.passage).split(/\s+/).filter(word => word.trim());
+  const passageWords = splitHtmlIntoWords(item.question.passage);
   return (
     <div className="space-y-4">
       <ReviewBlock label="Passage">
@@ -309,7 +315,7 @@ export const TextSelectionExerciseReview = ({ item }: { item: ExerciseOfType<'te
       </ReviewBlock>
       {item.answerKey.questions.map((question, index) => {
         const result = item.itemResults.selections[index];
-        const selectedWord = result && result.wordIndex >= 0 ? (passageWords[result.wordIndex] ?? '—') : '—';
+        const selectedWord = result && result.wordIndex >= 0 ? (passageWords[result.wordIndex] ?? null) : null;
         const correctWord = passageWords[question.correctWordIndex] ?? '';
         return (
           <ReviewBlock key={question.id} label={`Question ${index + 1}`}>
@@ -317,13 +323,17 @@ export const TextSelectionExerciseReview = ({ item }: { item: ExerciseOfType<'te
               <RichValue value={question.text} className="font-medium" />
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                 <span className="text-slate-500">Your word:</span>
-                <span className={cn('font-medium', selectedWord === '—' && 'italic text-slate-400')}>{selectedWord}</span>
+                <div className={cn('font-medium', !selectedWord && 'italic text-slate-400')}>
+                  {selectedWord ? <SimpleRichDisplay content={selectedWord} className="inline not-prose" /> : '—'}
+                </div>
                 <CorrectBadge correct={result?.correct ?? false} points={result?.points} />
                 {result ? <PartPoints points={result.points} /> : null}
               </div>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                 <span className="text-slate-500">Correct word:</span>
-                <span className="font-semibold text-emerald-800">{correctWord}</span>
+                <div className="font-semibold text-emerald-800">
+                  {correctWord ? <SimpleRichDisplay content={correctWord} className="inline not-prose" /> : '—'}
+                </div>
               </div>
               {question.explanation ? (
                 <ReviewBlock label="Explanation" tone="explanation">
@@ -388,7 +398,9 @@ export const SentenceDiagrammingExerciseReview = ({ item }: { item: ExerciseOfTy
   return (
     <div className="space-y-4" data-testid="sentence-diagramming-review">
       <RichValue value={answerKey.latin} className="font-serif text-base" />
-      {answerKey.translation ? <p className="text-sm italic text-slate-500">&ldquo;{answerKey.translation}&rdquo;</p> : null}
+      {answerKey.translation ? (
+        <p className="text-sm italic text-slate-500">&ldquo;{answerKey.translation}&rdquo;</p>
+      ) : null}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2" data-testid="diagram-review-comparison">
         <ReviewBlock label="Your diagram" tone="student" className="min-w-0">
           {itemResults.annotations.length > 0 ? (
@@ -438,12 +450,15 @@ export const TableFillExerciseReview = ({ item }: { item: ExerciseOfType<'table-
   const resultsByCell = new Map(itemResults.cells.map(cell => [`${cell.rowId}-${cell.columnId}`, cell]));
   return (
     <div className="space-y-4 overflow-x-auto">
+      {question.title ? <RichValue value={question.title} className="font-medium" /> : null}
       <table className="w-full min-w-[28rem] border-collapse text-sm" data-testid="table-fill-review">
         <thead>
           <tr>
             {question.columns.map(column => (
-              <th key={column.id} className="border border-slate-200 bg-slate-50 px-3 py-2 text-left font-semibold text-slate-700">
-                {column.header}
+              <th
+                key={column.id}
+                className="border border-slate-200 bg-slate-50 px-3 py-2 text-left font-semibold text-slate-700">
+                <SimpleRichDisplay content={column.header} className="inline not-prose" />
               </th>
             ))}
           </tr>
@@ -487,7 +502,9 @@ export const TableFillExerciseReview = ({ item }: { item: ExerciseOfType<'table-
       {question.footnotes && question.footnotes.length > 0 ? (
         <ul className="space-y-1 text-xs text-slate-500">
           {question.footnotes.map((footnote, index) => (
-            <li key={index}>{footnote}</li>
+            <li key={index}>
+              <SimpleRichDisplay content={footnote} className="inline not-prose" />
+            </li>
           ))}
         </ul>
       ) : null}
@@ -505,19 +522,21 @@ export const TableFillExerciseReview = ({ item }: { item: ExerciseOfType<'table-
 // ---------------------------------------------------------------------------
 
 export const ClickOnMultipleWordsExerciseReview = ({ item }: { item: ExerciseOfType<'click-on-multiple-words'> }) => {
-  const words = stripHtmlTags(item.question.passage).split(/\s+/).filter(word => word.trim());
+  const words = splitHtmlIntoWords(item.question.passage);
   const selected = new Set(item.itemResults.selectedWordIndices);
   const correct = new Set(item.answerKey.correctWordIndices);
   return (
     <div className="space-y-4">
+      {item.question.title ? <RichValue value={item.question.title} className="font-medium" /> : null}
+      {item.question.instructions ? <RichValue value={item.question.instructions} /> : null}
       <ReviewBlock label="Passage" tone="student">
-        <p className="text-sm leading-7">
-          {words.map((word, index) => {
+        <div className="text-sm leading-7">
+          {words.map((wordHtml, index) => {
             const isCorrectWord = correct.has(index);
             const isSelected = selected.has(index);
             return (
-              <span key={index} className="mr-1.5 inline-block">
-                <span
+              <div key={`${index}-${wordHtml.slice(0, 10)}`} className="mr-1.5 inline-block">
+                <div
                   className={cn(
                     'rounded px-1 py-0.5',
                     isCorrectWord && isSelected
@@ -528,28 +547,33 @@ export const ClickOnMultipleWordsExerciseReview = ({ item }: { item: ExerciseOfT
                           ? 'bg-rose-100 font-semibold text-rose-900 ring-1 ring-rose-300'
                           : undefined
                   )}>
-                  {word}
-                </span>
-              </span>
+                  <SimpleRichDisplay content={wordHtml} className="inline not-prose" />
+                </div>
+              </div>
             );
           })}
-        </p>
+        </div>
         <p className="mt-2 text-xs text-slate-500">
           <span className="mr-3 inline-flex items-center gap-1">
-            <span className="inline-block h-2.5 w-2.5 rounded bg-emerald-200 ring-1 ring-emerald-300" /> correct &amp; selected
+            <span className="inline-block h-2.5 w-2.5 rounded bg-emerald-200 ring-1 ring-emerald-300" /> correct &amp;
+            selected
           </span>
           <span className="mr-3 inline-flex items-center gap-1">
-            <span className="inline-block h-2.5 w-2.5 rounded bg-amber-100 ring-1 ring-amber-300" /> correct &amp; missed
+            <span className="inline-block h-2.5 w-2.5 rounded bg-amber-100 ring-1 ring-amber-300" /> correct &amp;
+            missed
           </span>
           <span className="inline-flex items-center gap-1">
-            <span className="inline-block h-2.5 w-2.5 rounded bg-rose-100 ring-1 ring-rose-300" /> selected &amp; not required
+            <span className="inline-block h-2.5 w-2.5 rounded bg-rose-100 ring-1 ring-rose-300" /> selected &amp; not
+            required
           </span>
         </p>
       </ReviewBlock>
       <ReviewBlock label="Result" tone="student">
         <div className="flex items-center gap-3 text-sm">
           <span className="text-slate-700">
-            {selected.size > 0 ? `${selected.size} word${selected.size === 1 ? '' : 's'} selected.` : 'No words were selected.'}
+            {selected.size > 0
+              ? `${selected.size} word${selected.size === 1 ? '' : 's'} selected.`
+              : 'No words were selected.'}
           </span>
           <CorrectBadge correct={item.itemResults.correct} points={item.itemResults.points} />
           <PartPoints points={item.itemResults.points} />
@@ -586,7 +610,9 @@ export const GeneratedTranslationExerciseReview = ({ item }: { item: ExerciseOfT
                 <PartPoints points={result.points} />
               </div>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                <span className="text-slate-500">Accepted {keyItem.acceptedAnswers.length > 1 ? 'answers' : 'answer'}:</span>
+                <span className="text-slate-500">
+                  Accepted {keyItem.acceptedAnswers.length > 1 ? 'answers' : 'answer'}:
+                </span>
                 <span className="font-semibold text-emerald-800">{keyItem.acceptedAnswers.join(' or ')}</span>
               </div>
             </div>
@@ -629,7 +655,11 @@ export const GeneratedFormIdentificationExerciseReview = ({
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                 <span className="text-slate-500">{accepted ? 'Accepted answers:' : 'Correct answer:'}</span>
                 <span className="font-semibold text-emerald-800">
-                  {accepted ? accepted.join(' or ') : 'correctAnswerDisplay' in keyItem ? keyItem.correctAnswerDisplay : ''}
+                  {accepted
+                    ? accepted.join(' or ')
+                    : 'correctAnswerDisplay' in keyItem
+                      ? keyItem.correctAnswerDisplay
+                      : ''}
                 </span>
               </div>
             </div>

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ArrowRight, ClipboardCheck, Trophy } from 'lucide-react';
 import type { StudentMockTestSummary } from '@/src/types/test';
 import { RomanCardContent } from '@/src/components/ui/core/roman-card';
+import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { cn } from '@/src/lib/utils';
 import { formatScorePercentage } from '@/src/lib/tests/formatting';
 import { stripHtmlTags } from '@/src/utils/exercises/helpers';
@@ -74,12 +75,16 @@ export const MockTestCard = memo(
               <ClipboardCheck className="h-5 w-5" aria-hidden="true" />
             </div>
             <h3 className="min-w-0 flex-1 line-clamp-2 text-xl font-serif leading-6 text-slate-950 transition-colors group-hover:text-roman-red">
-              {title}
+              <SimpleRichDisplay content={mock.title} className="line-clamp-2" />
             </h3>
           </div>
 
           <div className="relative mt-3 min-h-0 flex-1 overflow-hidden">
-            {description && <p className="line-clamp-1 text-sm leading-5 text-slate-600">{description}</p>}
+            {description && (
+              <div className="line-clamp-1 text-sm leading-5 text-slate-600">
+                <SimpleRichDisplay content={mock.description ?? ''} />
+              </div>
+            )}
 
             <div
               className={cn(
