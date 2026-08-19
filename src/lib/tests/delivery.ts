@@ -59,16 +59,15 @@ export async function createFrozenTestDeliveryState(
 ): Promise<FrozenTestDeliveryState> {
   const pages = cloneSerializable(version.pages);
   const resolvedExercises: FrozenTestDeliveryState['resolvedExercises'] = {};
-  const usesVocabularyPoolContent = pages.some(page =>
-    page.items.some(item => item.type === 'vocabulary-pool')
-  );
-  const vocabularyPool = version.vocabularyPoolId && usesVocabularyPoolContent
-    ? cloneSerializable(
-        await (loadVocabularyPool
-          ? loadVocabularyPool(version.vocabularyPoolId)
-          : Promise.reject(new Error(`No vocabulary pool loader was provided for ${version.vocabularyPoolId}`)))
-      )
-    : undefined;
+  const usesVocabularyPoolContent = pages.some(page => page.items.some(item => item.type === 'vocabulary-pool'));
+  const vocabularyPool =
+    version.vocabularyPoolId && usesVocabularyPoolContent
+      ? cloneSerializable(
+          await (loadVocabularyPool
+            ? loadVocabularyPool(version.vocabularyPoolId)
+            : Promise.reject(new Error(`No vocabulary pool loader was provided for ${version.vocabularyPoolId}`)))
+        )
+      : undefined;
 
   for (const page of pages) {
     for (const item of page.items) {
@@ -530,8 +529,9 @@ function gradeSavedTranslationExercise(
   return gradeTranslationAssessment(exercise, scores);
 }
 
-// Review snapshots reuse the exact student-safe projections shown during the
-// attempt so the post-submission review can never drift from what was taken.
+// Detailed-review snapshots reuse the exact student-safe projections shown
+// during the attempt so the post-submission review can never drift from what
+// was taken.
 export {
   projectClickOnMultipleWordsExercise,
   projectFillEmboldedTextExercise,

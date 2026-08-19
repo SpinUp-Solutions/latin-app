@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FileCheck2 } from 'lucide-react';
 import { TestTakingView } from '@/src/components/ui/test/test-taking-view';
 import { isExerciseType } from '@/src/lib/content/registry';
@@ -8,8 +8,8 @@ import type { Page } from '@/src/types/page';
 import type { ExerciseAnswer, ExerciseAnswerEvent } from '@/src/types/runtime-mode';
 
 interface TestVersionPreviewProps {
-  title: ReactNode;
-  description?: ReactNode;
+  title: string;
+  description?: string;
   pages: Page[];
   vocabularyPoolId?: string | null;
 }

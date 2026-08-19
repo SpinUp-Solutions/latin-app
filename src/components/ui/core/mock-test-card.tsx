@@ -5,27 +5,12 @@ import Link from 'next/link';
 import { ArrowRight, ClipboardCheck, Trophy } from 'lucide-react';
 import type { StudentMockTestSummary } from '@/src/types/test';
 import { RomanCardContent } from '@/src/components/ui/core/roman-card';
-import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { cn } from '@/src/lib/utils';
-import { formatScorePercentage } from '@/src/lib/tests/formatting';
+import { formatScorePercentage, formatScorePoints } from '@/src/lib/tests/formatting';
 import { stripHtmlTags } from '@/src/utils/exercises/helpers';
 
-const formatPoints = (value: number) =>
-  value
-    .toFixed(2)
-    .replace(/\.00$/, '')
-    .replace(/(\.\d)0$/, '$1');
-
 export const MockTestCard = memo(
-  ({
-    mock,
-    onMockClick,
-    onReviewClick,
-  }: {
-    mock: StudentMockTestSummary;
-    onMockClick: (id: string) => void;
-    onReviewClick?: (attemptId: string) => void;
-  }) => {
+  ({ mock, onMockClick }: { mock: StudentMockTestSummary; onMockClick: (id: string) => void }) => {
     const summary = mock.attemptSummary;
     const action = summary.inProgressAttemptId
       ? 'Continue Mock Test'
@@ -75,16 +60,12 @@ export const MockTestCard = memo(
               <ClipboardCheck className="h-5 w-5" aria-hidden="true" />
             </div>
             <h3 className="min-w-0 flex-1 line-clamp-2 text-xl font-serif leading-6 text-slate-950 transition-colors group-hover:text-roman-red">
-              <SimpleRichDisplay content={mock.title} className="line-clamp-2" />
+              {title}
             </h3>
           </div>
 
           <div className="relative mt-3 min-h-0 flex-1 overflow-hidden">
-            {description && (
-              <div className="line-clamp-1 text-sm leading-5 text-slate-600">
-                <SimpleRichDisplay content={mock.description ?? ''} />
-              </div>
-            )}
+            {description && <p className="line-clamp-1 text-sm leading-5 text-slate-600">{description}</p>}
 
             <div
               className={cn(
@@ -101,7 +82,7 @@ export const MockTestCard = memo(
                   <span className="font-semibold text-teal-800">{formatScorePercentage(summary.best.percentage)}%</span>
                 </span>
               ) : (
-                <span className="min-w-0 truncate">Not attempted · {formatPoints(mock.totalPoints)} points</span>
+                <span className="min-w-0 truncate">Not attempted · {formatScorePoints(mock.totalPoints)} points</span>
               )}
             </div>
 
@@ -111,7 +92,7 @@ export const MockTestCard = memo(
                 {latest && (
                   <>
                     {' · Latest '}
-                    {formatPoints(latest.score)} / {formatPoints(latest.maxScore)} (
+                    {formatScorePoints(latest.score)} / {formatScorePoints(latest.maxScore)} (
                     {formatScorePercentage(latest.percentage)}%)
                   </>
                 )}
@@ -126,11 +107,6 @@ export const MockTestCard = memo(
                 {latestOutcome}
               </p>
             )}
-            {mock.scoreTrend.length > 0 && (
-              <p className="mt-0.5 truncate text-xs text-slate-500">
-                Recent {mock.scoreTrend.map(score => `${formatScorePercentage(score.percentage)}%`).join(' → ')}
-              </p>
-            )}
             {latest ? (
               <p className="mt-0.5 truncate text-xs">
                 <Link
@@ -138,17 +114,16 @@ export const MockTestCard = memo(
                   data-testid="mock-review-latest-link"
                   aria-label={`Review latest result for ${title}`}
                   className="pointer-events-auto relative z-20 font-semibold text-indigo-700 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-roman-red focus-visible:ring-offset-2"
-                  onClick={event => {
-                    event.stopPropagation();
-                    if (onReviewClick) {
-                      event.preventDefault();
-                      onReviewClick(latest.attemptId);
-                    }
-                  }}>
+                  onClick={event => event.stopPropagation()}>
                   Review latest result
                 </Link>
               </p>
             ) : null}
+            {mock.scoreTrend.length > 0 && (
+              <p className="mt-0.5 truncate text-xs text-slate-500">
+                Recent {mock.scoreTrend.map(score => `${formatScorePercentage(score.percentage)}%`).join(' → ')}
+              </p>
+            )}
 
             <p
               className="sr-only"
@@ -163,7 +138,7 @@ export const MockTestCard = memo(
           </div>
 
           <div className="relative mt-3 border-t border-slate-100 pt-3">
-            <div className="flex min-w-0 items-center gap-2">
+            <div className="pointer-events-none flex min-w-0 items-center gap-2">
               <span
                 className={cn(
                   'shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]',

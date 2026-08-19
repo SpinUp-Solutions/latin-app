@@ -14,7 +14,6 @@ import { TestVersionEditor } from '@/src/components/ui/admin';
 import type { TestVersionEditorValue } from '@/src/components/ui/admin/TestVersionEditor';
 import { PassingRequirementControl } from '@/src/components/ui/admin/test-version/PassingRequirementControl';
 import { TestVersionPreview } from '@/src/components/ui/admin/test-version/TestVersionPreview';
-import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { useAppSelector } from '@/src/store/hooks';
 import { useGetTestsQuery, useGetTestVersionByIdQuery } from '@/src/store/api/testApi';
 import {
@@ -234,7 +233,7 @@ function MockOverviewPage({ params }: { params: Promise<{ mockId: string }> }) {
     <AdminPage>
       <div className="mx-auto max-w-6xl space-y-6">
         <AdminPageHeader
-          title={<SimpleRichDisplay content={mock.title} />}
+          title={mock.title}
           description={
             mock.status === 'archived'
               ? 'Assignment ended.'
@@ -467,8 +466,8 @@ function MockOverviewPage({ params }: { params: Promise<{ mockId: string }> }) {
           ) : (
             <div className="mx-auto max-w-3xl p-5">
               <TestVersionPreview
-                title={<SimpleRichDisplay content={mock.title} />}
-                description={mock.description ? <SimpleRichDisplay content={mock.description} /> : undefined}
+                title={mock.title}
+                description={mock.description}
                 pages={version.pages}
                 vocabularyPoolId={version.vocabularyPoolId}
               />

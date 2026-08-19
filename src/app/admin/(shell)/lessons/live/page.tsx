@@ -614,13 +614,8 @@ function LiveLessonsPage() {
                     <ul className="mt-2 space-y-2">
                       {affectedPathLessons.map(({ unit, issues }) => (
                         <li key={unit.id} className="flex flex-wrap items-center justify-between gap-2">
-                          <span className="flex min-w-0 flex-wrap items-center gap-1">
-                            <span className="font-semibold text-gray-900">
-                              <SimpleRichDisplay content={unit.title} className="inline not-prose" />
-                            </span>
-                            <span>
-                              ({issues.length} {issues.length === 1 ? 'issue' : 'issues'})
-                            </span>
+                          <span>
+                            <strong>{unit.title}</strong> ({issues.length} {issues.length === 1 ? 'issue' : 'issues'})
                           </span>
                           <Button size="sm" variant="outline" asChild>
                             <Link
@@ -649,9 +644,7 @@ function LiveLessonsPage() {
                         <p className="font-medium">Canonical revision {pathConflict.revision}</p>
                         <ol className="mt-2 list-inside list-decimal space-y-1">
                           {pathConflict.canonicalUnitIds.map(id => (
-                            <li key={id}>
-                              <SimpleRichDisplay content={pathUnitById.get(id)?.title ?? id} />
-                            </li>
+                            <li key={id}>{pathUnitById.get(id)?.title ?? id}</li>
                           ))}
                         </ol>
                       </div>
@@ -659,9 +652,7 @@ function LiveLessonsPage() {
                         <p className="font-medium">Your proposal</p>
                         <ol className="mt-2 list-inside list-decimal space-y-1">
                           {pathConflict.proposedUnitIds.map(id => (
-                            <li key={id}>
-                              <SimpleRichDisplay content={pathUnitById.get(id)?.title ?? id} />
-                            </li>
+                            <li key={id}>{pathUnitById.get(id)?.title ?? id}</li>
                           ))}
                         </ol>
                       </div>
@@ -689,17 +680,9 @@ function LiveLessonsPage() {
                                   )
                                 }
                               />
-                              <span className="flex flex-wrap items-center gap-1">
-                                <span className="font-medium">{included ? 'Include' : 'Exclude'}</span>
-                                <span className="font-semibold">
-                                  <SimpleRichDisplay
-                                    content={pathUnitById.get(id)?.title ?? id}
-                                    className="inline not-prose"
-                                  />
-                                </span>
-                                <span>
-                                  ({addedElsewhere ? 'added in the canonical path' : 'removed from the canonical path'})
-                                </span>
+                              <span>
+                                {included ? 'Include' : 'Exclude'} <strong>{pathUnitById.get(id)?.title ?? id}</strong>{' '}
+                                ({addedElsewhere ? 'added in the canonical path' : 'removed from the canonical path'})
                               </span>
                             </label>
                           );

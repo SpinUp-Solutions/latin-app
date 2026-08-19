@@ -6,16 +6,6 @@ import { isExerciseType } from '@/src/lib/content/registry';
 import type { ExerciseAnswer } from '@/src/types/runtime-mode';
 import type { RenderableContentItem } from '@/src/types/page';
 import type { TestAttemptExerciseResult, TestAttemptOrigin, TestTranslationGrades } from '@/src/types/test';
-import type {
-  FillReviewResults,
-  MatchingReviewResults,
-  StudentTestResultReview,
-  TestResultReview,
-  TestResultReviewContent,
-  TestResultReviewItem,
-  TestResultReviewPage,
-  TestResultReviewSupportingItem,
-} from '@/src/types/test-results';
 import { compareDiagramAnnotationSets } from '@/src/features/sentence-diagramming/model';
 import { normalizeSentenceDiagramFeedbackContent } from '@/src/features/sentence-diagramming/model';
 import type { GeneratedTranslationItem } from '@/src/utils/exercises/generatedTranslationExercise';
@@ -65,10 +55,17 @@ import type {
 import { estimateFirestoreDocumentBytes } from './firestore-size';
 import { testAttemptOriginSchema } from './schemas';
 import { EXERCISE_ANSWER_SCHEMAS } from './answer-schemas';
-import { ANNOTATION_SPECS } from '@/src/features/sentence-diagramming/annotation-spec';
+import { ANNOTATION_SPECS, type AnnotationKind } from '@/src/features/sentence-diagramming/annotation-spec';
 
 export const TEST_RESULT_REVIEW_VERSION = 1;
 export const MAX_TEST_RESULT_REVIEW_DOCUMENT_BYTES = 900 * 1024;
+
+const isoTimestampSchema = z
+  .string()
+  .refine(
+    value => Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value,
+    'Expected a canonical ISO-8601 timestamp'
+  );
 
 const reviewPointsSchema = z
   .object({
@@ -165,7 +162,10 @@ const diagramSpanSchema = z
 const diagramAnnotationSchema = z
   .object({
     id: nonEmptyIdSchema,
-    kind: z.string().refine(kind => kind in ANNOTATION_SPECS, 'Invalid sentence-diagram annotation kind'),
+    kind: z.custom<AnnotationKind>(
+      value => typeof value === 'string' && value in ANNOTATION_SPECS,
+      'Invalid sentence-diagram annotation kind'
+    ),
     span: diagramSpanSchema,
   })
   .strict();
@@ -176,11 +176,16 @@ const diagramFeedbackSchema = z
   .object({ text: z.string(), tokens: z.array(diagramTokenSchema), annotations: z.array(diagramAnnotationSchema) })
   .strict();
 
-const reviewExerciseSchema = <Type extends ExerciseAnswer['type']>(
+const reviewExerciseSchema = <
+  Type extends ExerciseAnswer['type'],
+  Question extends z.ZodType,
+  AnswerKey extends z.ZodType,
+  ItemResults extends z.ZodType,
+>(
   type: Type,
-  question: z.ZodTypeAny,
-  answerKey: z.ZodTypeAny,
-  itemResults: z.ZodTypeAny
+  question: Question,
+  answerKey: AnswerKey,
+  itemResults: ItemResults
 ) =>
   z
     .object({
@@ -259,9 +264,7 @@ const fillReviewSchema = reviewExerciseSchema(
     .strict(),
   z
     .object({
-      answers: z.array(
-        z.object({ value: z.string(), correct: z.boolean(), points: reviewPointsSchema }).strict()
-      ),
+      answers: z.array(z.object({ value: z.string(), correct: z.boolean(), points: reviewPointsSchema }).strict()),
     })
     .strict()
 );
@@ -277,14 +280,10 @@ const multipleChoiceReviewSchema = reviewExerciseSchema(
     .strict(),
   z
     .object({
-      options: z.array(
-        z.object({ id: nonEmptyIdSchema, text: z.string(), isCorrect: z.boolean() }).strict()
-      ),
+      options: z.array(z.object({ id: nonEmptyIdSchema, text: z.string(), isCorrect: z.boolean() }).strict()),
     })
     .strict(),
-  z
-    .object({ selectedOptionIds: z.array(z.string()), correct: z.boolean(), points: reviewPointsSchema })
-    .strict()
+  z.object({ selectedOptionIds: z.array(z.string()), correct: z.boolean(), points: reviewPointsSchema }).strict()
 );
 
 const oddOneOutReviewSchema = reviewExerciseSchema(
@@ -298,9 +297,7 @@ const oddOneOutReviewSchema = reviewExerciseSchema(
     .strict(),
   z
     .object({
-      items: z.array(
-        z.object({ id: nonEmptyIdSchema, text: z.string(), isOddOneOut: z.boolean() }).strict()
-      ),
+      items: z.array(z.object({ id: nonEmptyIdSchema, text: z.string(), isOddOneOut: z.boolean() }).strict()),
     })
     .strict(),
   z
@@ -356,9 +353,7 @@ const fillEmboldedTextReviewSchema = reviewExerciseSchema(
   z
     .object({
       passage: z.string(),
-      words: z.array(
-        z.object({ wordIndex: z.number().int().nonnegative(), question: z.string().optional() }).strict()
-      ),
+      words: z.array(z.object({ wordIndex: z.number().int().nonnegative(), question: z.string().optional() }).strict()),
     })
     .strict(),
   z
@@ -377,9 +372,7 @@ const fillEmboldedTextReviewSchema = reviewExerciseSchema(
     .strict(),
   z
     .object({
-      answers: z.array(
-        z.object({ value: z.string(), correct: z.boolean(), points: reviewPointsSchema }).strict()
-      ),
+      answers: z.array(z.object({ value: z.string(), correct: z.boolean(), points: reviewPointsSchema }).strict()),
     })
     .strict()
 );
@@ -424,10 +417,7 @@ const tableFillReviewSchema = reviewExerciseSchema(
         z
           .object({
             id: nonEmptyIdSchema,
-            cells: z.record(
-              z.string(),
-              z.object({ content: z.string(), isBlank: z.boolean() }).strict()
-            ),
+            cells: z.record(z.string(), z.object({ content: z.string(), isBlank: z.boolean() }).strict()),
           })
           .strict()
       ),
@@ -442,9 +432,7 @@ const tableFillReviewSchema = reviewExerciseSchema(
             id: nonEmptyIdSchema,
             cells: z.record(
               z.string(),
-              z
-                .object({ content: z.string(), isBlank: z.boolean(), answer: z.string().optional() })
-                .strict()
+              z.object({ content: z.string(), isBlank: z.boolean(), answer: z.string().optional() }).strict()
             ),
           })
           .strict()
@@ -470,12 +458,14 @@ const tableFillReviewSchema = reviewExerciseSchema(
 
 const clickOnMultipleWordsReviewSchema = reviewExerciseSchema(
   'click-on-multiple-words',
-  z
-    .object({ title: z.string().optional(), passage: z.string(), instructions: z.string().optional() })
-    .strict(),
+  z.object({ title: z.string().optional(), passage: z.string(), instructions: z.string().optional() }).strict(),
   z.object({ correctWordIndices: z.array(z.number().int().nonnegative()) }).strict(),
   z
-    .object({ selectedWordIndices: z.array(z.number().int().nonnegative()), correct: z.boolean(), points: reviewPointsSchema })
+    .object({
+      selectedWordIndices: z.array(z.number().int().nonnegative()),
+      correct: z.boolean(),
+      points: reviewPointsSchema,
+    })
     .strict()
 );
 
@@ -484,16 +474,12 @@ const generatedTranslationReviewSchema = reviewExerciseSchema(
   z.object({}).strict(),
   z
     .object({
-      items: z.array(
-        z.object({ text: z.string(), acceptedAnswers: z.array(z.string()).min(1) }).strict()
-      ),
+      items: z.array(z.object({ text: z.string(), acceptedAnswers: z.array(z.string()).min(1) }).strict()),
     })
     .strict(),
   z
     .object({
-      answers: z.array(
-        z.object({ value: z.string(), correct: z.boolean(), points: reviewPointsSchema }).strict()
-      ),
+      answers: z.array(z.object({ value: z.string(), correct: z.boolean(), points: reviewPointsSchema }).strict()),
     })
     .strict()
 );
@@ -562,16 +548,12 @@ const translationGradingReviewSchema = reviewExerciseSchema(
   'translation-grading',
   z
     .object({
-      items: z.array(
-        z.object({ latinText: z.string(), instructions: z.string().optional() }).strict()
-      ),
+      items: z.array(z.object({ latinText: z.string(), instructions: z.string().optional() }).strict()),
     })
     .strict(),
   z
     .object({
-      items: z.array(
-        z.object({ latinText: z.string(), instructions: z.string().optional() }).strict()
-      ),
+      items: z.array(z.object({ latinText: z.string(), instructions: z.string().optional() }).strict()),
     })
     .strict(),
   z
@@ -614,8 +596,7 @@ export const testResultReviewDocumentSchema = z
     attemptId: firestoreDocumentIdSchema,
     versionId: firestoreDocumentIdSchema,
     origin: testAttemptOriginSchema,
-    submittedAt: z.string().min(1),
-    createdAt: z.string().min(1),
+    submittedAt: isoTimestampSchema,
     content: z
       .object({
         pages: z
@@ -641,20 +622,37 @@ export const testResultReviewDocumentSchema = z
       })
       .strict(),
   })
-  .strict();
+  .strict()
+  .superRefine((review, context) => {
+    if (review.id !== review.attemptId) {
+      context.addIssue({ code: 'custom', path: ['attemptId'], message: 'Review ID must match attemptId' });
+    }
+  });
 
-export type TestResultReviewDocument = TestResultReview;
+export type ReviewPartPoints = z.infer<typeof reviewPointsSchema>;
+export type TestResultReviewSupportingItem = z.infer<typeof reviewSupportingItemSchema>;
+export type TestResultReviewExerciseItem = z.infer<typeof reviewExerciseItemSchema>;
+export type TestResultReviewItem = TestResultReviewSupportingItem | TestResultReviewExerciseItem;
+export type TestResultReview = z.infer<typeof testResultReviewDocumentSchema>;
+export type TestResultReviewContent = TestResultReview['content'];
+export type TestResultReviewPage = TestResultReviewContent['pages'][number];
+export type StudentTestResultReview = Omit<TestResultReview, 'studentId'>;
+type MatchingReviewResults = Extract<TestResultReviewExerciseItem, { type: 'matching' }>['itemResults'];
+type FillReviewResults = Extract<TestResultReviewExerciseItem, { type: 'fill' }>['itemResults'];
 
 export function toStudentTestResultReview(review: TestResultReview): StudentTestResultReview {
   const { studentId: _studentId, ...studentReview } = review;
   return studentReview;
 }
 
-export function assertTestResultReviewDocumentSize(review: TestResultReview) {
-  const estimatedBytes = estimateFirestoreDocumentBytes(review as unknown as Record<string, unknown>);
-  if (estimatedBytes > MAX_TEST_RESULT_REVIEW_DOCUMENT_BYTES) {
+export function isTestResultReviewDocumentWithinSizeLimit(
+  review: TestResultReview,
+  maxBytes = MAX_TEST_RESULT_REVIEW_DOCUMENT_BYTES
+) {
+  const estimatedBytes = estimateFirestoreDocumentBytes({ ...review });
+  if (estimatedBytes > maxBytes) {
     console.error(
-      `Review for attempt ${review.attemptId} is approximately ${estimatedBytes} bytes, above the ${MAX_TEST_RESULT_REVIEW_DOCUMENT_BYTES}-byte safety limit`
+      `Review for attempt ${review.attemptId} is approximately ${estimatedBytes} bytes, above the ${maxBytes}-byte safety limit`
     );
     return false;
   }
@@ -683,8 +681,7 @@ const pointsForPart = (
   maxPoints: totalAvailableUnits > 0 ? (maxPoints * partAvailableUnits) / totalAvailableUnits : maxPoints,
 });
 
-const projectedQuestion = <Question>(projection: unknown): Question =>
-  (projection as { data: Question }).data;
+const projectedQuestion = <Question>(projection: unknown): Question => (projection as { data: Question }).data;
 
 export interface BuildSubmittedReviewInput {
   attemptId: string;
@@ -692,7 +689,6 @@ export interface BuildSubmittedReviewInput {
   versionId: string;
   origin: TestAttemptOrigin;
   submittedAt: string;
-  createdAt: string;
   deliveryState: FrozenTestDeliveryState;
   answers: Record<string, ExerciseAnswer | unknown>;
   translationGrades: TestTranslationGrades;
@@ -854,7 +850,10 @@ function buildFillEmboldedTextReview(exercise: ExerciseOfType<'fill-embolded-tex
   };
 }
 
-function buildSentenceDiagrammingReview(exercise: ExerciseOfType<'sentence-diagramming'>, answer: ExerciseAnswer | unknown) {
+function buildSentenceDiagrammingReview(
+  exercise: ExerciseOfType<'sentence-diagramming'>,
+  answer: ExerciseAnswer | unknown
+) {
   const student = savedAnswer('sentence-diagramming', answer);
   const annotations = student?.annotations ?? [];
   const solution = exercise.data.solutionAnnotations ?? [];
@@ -920,7 +919,10 @@ function buildTableFillReview(exercise: ExerciseOfType<'table-fill'>, answer: Ex
   };
 }
 
-function buildClickOnMultipleWordsReview(exercise: ExerciseOfType<'click-on-multiple-words'>, answer: ExerciseAnswer | unknown) {
+function buildClickOnMultipleWordsReview(
+  exercise: ExerciseOfType<'click-on-multiple-words'>,
+  answer: ExerciseAnswer | unknown
+) {
   const student = savedAnswer('click-on-multiple-words', answer);
   const validation = student ? validateClickOnMultipleWords(new Set(student.selectedWordIndices), exercise) : null;
   return {
@@ -1088,12 +1090,7 @@ function buildGeneratedFormIdentificationReview(
       id: item.id,
       value,
       correct: score.availableUnits > 0 && score.earnedUnits === score.availableUnits,
-      points: pointsForPart(
-        score.earnedUnits,
-        score.availableUnits,
-        totalAvailableUnits,
-        maxPointsFor(exercise)
-      ),
+      points: pointsForPart(score.earnedUnits, score.availableUnits, totalAvailableUnits, maxPointsFor(exercise)),
     };
   });
   return {
@@ -1126,12 +1123,7 @@ function buildTranslationGradingReview(
           translation: userTranslation,
           score: savedGrade?.score ?? null,
           feedback: savedGrade?.feedback ?? null,
-          points: pointsForPart(
-            savedGrade?.score ?? 0,
-            10,
-            exercise.data.items.length * 10,
-            maxPointsFor(exercise)
-          ),
+          points: pointsForPart(savedGrade?.score ?? 0, 10, exercise.data.items.length * 10, maxPointsFor(exercise)),
         };
       }),
     },
@@ -1142,15 +1134,15 @@ function buildReviewSupportingItem(item: RenderableContentItem): TestResultRevie
   switch (item.type) {
     case 'text':
     case 'emphasis':
-      return projectTextContent(item as never) as unknown as TestResultReviewSupportingItem;
+      return reviewSupportingItemSchema.parse(projectTextContent(item));
     case 'table':
-      return projectTableContent(item as never) as unknown as TestResultReviewSupportingItem;
+      return reviewSupportingItemSchema.parse(projectTableContent(item));
     case 'vocabulary':
-      return projectVocabularyContent(item as never) as unknown as TestResultReviewSupportingItem;
+      return reviewSupportingItemSchema.parse(projectVocabularyContent(item));
     case 'vocabulary-pool':
-      return projectVocabularyPoolContent(item as never) as unknown as TestResultReviewSupportingItem;
+      return reviewSupportingItemSchema.parse(projectVocabularyPoolContent(item));
     case 'listening-passage':
-      return projectListeningPassageContent(item as never) as unknown as TestResultReviewSupportingItem;
+      return reviewSupportingItemSchema.parse(projectListeningPassageContent(item));
     default:
       throw new Error(`Content type ${item.type} is not eligible for test review`);
   }
@@ -1182,61 +1174,61 @@ function buildReviewExerciseItem(
 
   switch (exercise.type) {
     case 'matching':
-      return {
+      return matchingReviewSchema.parse({
         ...base,
         type: 'matching',
         ...buildMatchingReview(exercise as ExerciseOfType<'matching'>, answer),
-      } as unknown as TestResultReviewItem;
+      });
     case 'fill':
-      return {
+      return fillReviewSchema.parse({
         ...base,
         type: 'fill',
         ...buildFillReview(exercise as ExerciseOfType<'fill'>, answer),
-      } as unknown as TestResultReviewItem;
+      });
     case 'multiple-choice':
-      return {
+      return multipleChoiceReviewSchema.parse({
         ...base,
         type: 'multiple-choice',
         ...buildMultipleChoiceReview(exercise as ExerciseOfType<'multiple-choice'>, answer),
-      } as unknown as TestResultReviewItem;
+      });
     case 'odd-one-out':
-      return {
+      return oddOneOutReviewSchema.parse({
         ...base,
         type: 'odd-one-out',
         ...buildOddOneOutReview(exercise as ExerciseOfType<'odd-one-out'>, answer),
-      } as unknown as TestResultReviewItem;
+      });
     case 'text-selection':
-      return {
+      return textSelectionReviewSchema.parse({
         ...base,
         type: 'text-selection',
         ...buildTextSelectionReview(exercise as ExerciseOfType<'text-selection'>, answer),
-      } as unknown as TestResultReviewItem;
+      });
     case 'fill-embolded-text':
-      return {
+      return fillEmboldedTextReviewSchema.parse({
         ...base,
         type: 'fill-embolded-text',
         ...buildFillEmboldedTextReview(exercise as ExerciseOfType<'fill-embolded-text'>, answer),
-      } as unknown as TestResultReviewItem;
+      });
     case 'sentence-diagramming':
-      return {
+      return sentenceDiagrammingReviewSchema.parse({
         ...base,
         type: 'sentence-diagramming',
         ...buildSentenceDiagrammingReview(exercise as ExerciseOfType<'sentence-diagramming'>, answer),
-      } as unknown as TestResultReviewItem;
+      });
     case 'table-fill':
-      return {
+      return tableFillReviewSchema.parse({
         ...base,
         type: 'table-fill',
         ...buildTableFillReview(exercise as ExerciseOfType<'table-fill'>, answer),
-      } as unknown as TestResultReviewItem;
+      });
     case 'click-on-multiple-words':
-      return {
+      return clickOnMultipleWordsReviewSchema.parse({
         ...base,
         type: 'click-on-multiple-words',
         ...buildClickOnMultipleWordsReview(exercise as ExerciseOfType<'click-on-multiple-words'>, answer),
-      } as unknown as TestResultReviewItem;
+      });
     case 'generated-translation':
-      return {
+      return generatedTranslationReviewSchema.parse({
         ...base,
         type: 'generated-translation',
         ...buildGeneratedTranslationReview(
@@ -1244,9 +1236,9 @@ function buildReviewExerciseItem(
           answer,
           resolvedItems as GeneratedTranslationItem[]
         ),
-      } as unknown as TestResultReviewItem;
+      });
     case 'generated-form-identification':
-      return {
+      return generatedFormIdentificationReviewSchema.parse({
         ...base,
         type: 'generated-form-identification',
         ...buildGeneratedFormIdentificationReview(
@@ -1256,9 +1248,9 @@ function buildReviewExerciseItem(
             FormIdentificationItem | SingleFieldFormIdentificationItem | MultiAnswerFormIdentificationItem
           >
         ),
-      } as unknown as TestResultReviewItem;
+      });
     case 'translation-grading':
-      return {
+      return translationGradingReviewSchema.parse({
         ...base,
         type: 'translation-grading',
         ...buildTranslationGradingReview(
@@ -1266,21 +1258,22 @@ function buildReviewExerciseItem(
           answer,
           input.translationGrades[exercise.id]
         ),
-      } as unknown as TestResultReviewItem;
+      });
     default:
       throw new Error(`Exercise type ${(exercise as Exercise).type} is not eligible for test review`);
   }
 }
 
-function buildReviewPage(page: FrozenTestDeliveryState['pages'][number]): TestResultReviewPage {
-  const items: TestResultReviewItem[] = [];
-  for (const item of page.items) {
-    if (!isExerciseType(item.type)) {
-      items.push(buildReviewSupportingItem(item as RenderableContentItem));
-      continue;
-    }
-    items.push(item as unknown as TestResultReviewItem);
-  }
+function buildReviewPage(
+  page: FrozenTestDeliveryState['pages'][number],
+  input: Pick<BuildSubmittedReviewInput, 'answers' | 'translationGrades' | 'exerciseResults'>,
+  resolvedExercises: FrozenTestDeliveryState['resolvedExercises']
+): TestResultReviewPage {
+  const items = page.items.map(item => {
+    if (!isExerciseType(item.type)) return buildReviewSupportingItem(item);
+    const exercise = item as Exercise;
+    return buildReviewExerciseItem(exercise, input, resolvedExercises[exercise.id]?.items ?? []);
+  });
   return {
     id: page.id,
     ...(page.title ? { title: page.title } : {}),
@@ -1296,21 +1289,9 @@ function buildReviewPage(page: FrozenTestDeliveryState['pages'][number]): TestRe
  * active or unsubmitted attempts.
  */
 export function buildSubmittedReview(input: BuildSubmittedReviewInput): TestResultReview {
-  const pages = input.deliveryState.pages.map(page => {
-    const reviewPage = buildReviewPage(page);
-    const items: TestResultReviewItem[] = [];
-    for (const item of page.items) {
-      if (!isExerciseType(item.type)) continue;
-      const exercise = item as Exercise;
-      const resolvedItems = input.deliveryState.resolvedExercises[exercise.id]?.items ?? [];
-      items.push(buildReviewExerciseItem(exercise, input, resolvedItems));
-    }
-    let exerciseIndex = 0;
-    return {
-      ...reviewPage,
-      items: reviewPage.items.map(item => (isExerciseType(item.type) ? items[exerciseIndex++] : item)),
-    };
-  });
+  const pages = input.deliveryState.pages.map(page =>
+    buildReviewPage(page, input, input.deliveryState.resolvedExercises)
+  );
 
   const content: TestResultReviewContent = {
     pages,
@@ -1336,22 +1317,19 @@ export function buildSubmittedReview(input: BuildSubmittedReviewInput): TestResu
 
   // Firestore documents cannot carry `undefined` fields; JSON round-tripping
   // drops them exactly like the frozen delivery builder does.
-  const document: TestResultReview = JSON.parse(
-    JSON.stringify({
-      id: input.attemptId,
-      reviewVersion: TEST_RESULT_REVIEW_VERSION,
-      studentId: input.studentId,
-      attemptId: input.attemptId,
-      versionId: input.versionId,
-      origin: input.origin,
-      submittedAt: input.submittedAt,
-      createdAt: input.createdAt,
-      content,
-    })
-  ) as TestResultReview;
-
-  // The zod schema is the durable format contract; the parse is a
-  // validation-only gate on the hand-written persisted shape.
-  testResultReviewDocumentSchema.parse(document);
+  const document = testResultReviewDocumentSchema.parse(
+    JSON.parse(
+      JSON.stringify({
+        id: input.attemptId,
+        reviewVersion: TEST_RESULT_REVIEW_VERSION,
+        studentId: input.studentId,
+        attemptId: input.attemptId,
+        versionId: input.versionId,
+        origin: input.origin,
+        submittedAt: input.submittedAt,
+        content,
+      })
+    )
+  );
   return document;
 }

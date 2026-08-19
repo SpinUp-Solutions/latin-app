@@ -179,7 +179,6 @@ describe('student dashboard test card', () => {
 
   it('opens the latest mock review without retaking the mock', () => {
     const onMockClick = jest.fn();
-    const onReviewClick = jest.fn();
     const mock: StudentMockTestSummary = {
       id: 'mock-1',
       title: 'Chapter 4 rehearsal',
@@ -195,7 +194,7 @@ describe('student dashboard test card', () => {
       },
       scoreTrend: [],
     };
-    render(<MockTestCard mock={mock} onMockClick={onMockClick} onReviewClick={onReviewClick} />);
+    render(<MockTestCard mock={mock} onMockClick={onMockClick} />);
 
     const reviewLink = screen.getByTestId('mock-review-latest-link');
     expect(reviewLink).toBeInTheDocument();
@@ -204,7 +203,6 @@ describe('student dashboard test card', () => {
       reviewLink
     );
     fireEvent.click(reviewLink);
-    expect(onReviewClick).toHaveBeenCalledWith('attempt-1');
     expect(onMockClick).not.toHaveBeenCalled();
   });
 });

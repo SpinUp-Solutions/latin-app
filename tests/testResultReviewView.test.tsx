@@ -33,7 +33,7 @@ const fillItem = (
   }
 ): TestResultReviewItem => {
   const correctSecond = options.correctSecond ?? options.correctFirst;
-  return ({
+  return {
     id,
     type: 'fill',
     title: `Fill ${id}`,
@@ -70,7 +70,7 @@ const fillItem = (
         },
       ],
     },
-  }) as TestResultReviewItem;
+  } as TestResultReviewItem;
 };
 
 const diagramItem = (): TestResultReviewItem =>
@@ -146,7 +146,6 @@ const buildResult = (
     versionId: 'version-1',
     origin: { kind: 'normal-test', testId: 'test-1' },
     submittedAt,
-    createdAt: submittedAt,
     content: {
       pages: items.map((pageItems, index) => ({
         id: `page-${index}`,
@@ -180,10 +179,7 @@ describe('submitted test result review view', () => {
   it('opens the first exercise when every exercise is correct', () => {
     render(
       <TestResultReviewView
-        result={buildResult([
-          [fillItem('ex-fill-1', { awardedPoints: 10, correctFirst: true })],
-          [diagramItem()],
-        ])}
+        result={buildResult([[fillItem('ex-fill-1', { awardedPoints: 10, correctFirst: true })], [diagramItem()]])}
       />
     );
 
@@ -261,10 +257,7 @@ describe('submitted test result review view', () => {
   it('keeps supporting-only pages with the next reviewable exercise', () => {
     render(
       <TestResultReviewView
-        result={buildResult([
-          [listeningItem()],
-          [fillItem('ex-fill-1', { awardedPoints: 10, correctFirst: true })],
-        ])}
+        result={buildResult([[listeningItem()], [fillItem('ex-fill-1', { awardedPoints: 10, correctFirst: true })]])}
       />
     );
 

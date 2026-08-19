@@ -8,21 +8,16 @@ import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display'
 import ConjugationTable from '@/src/components/ui/lesson/conjugation-table';
 import { VocabularyViewer } from '@/src/components/ui/lesson/VocabularyViewer';
 import { VocabularyPoolViewer } from '@/src/components/ui/lesson/VocabularyPoolViewer';
+import { formatScorePoints } from '@/src/lib/tests/formatting';
 import { cn } from '@/src/lib/utils';
 import type {
   StudentTestResult,
   TestResultReviewExerciseItem,
+  TestResultReviewItem,
   TestResultReviewSupportingItem,
 } from '@/src/types/test-results';
-import type { VocabularyContent, VocabularyPoolContent } from '@/src/types/lesson';
-import { stripHtmlTags } from '@/src/utils/exercises/helpers';
+import type { VocabularyPoolStudyData } from '@/src/types/vocabulary';
 import { ExerciseReviewView } from './exercise-review-views';
-
-const formatPoints = (value: number) =>
-  value
-    .toFixed(2)
-    .replace(/\.00$/, '')
-    .replace(/(\.\d)0$/, '$1');
 
 // ---------------------------------------------------------------------------
 // Supporting content (passages, tables, vocabulary, audio)
@@ -35,7 +30,7 @@ const SupportingContentView = ({
 }: {
   item: TestResultReviewSupportingItem;
   poolId?: string;
-  resolvedPool?: unknown;
+  resolvedPool?: VocabularyPoolStudyData;
 }) => {
   switch (item.type) {
     case 'text':
@@ -62,17 +57,21 @@ const SupportingContentView = ({
     case 'vocabulary':
       return (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <VocabularyViewer content={item as unknown as VocabularyContent} />
+          <VocabularyViewer
+            content={{
+              ...item,
+              vocabularyItems: item.vocabularyItems.map(word => ({
+                ...word,
+                pronunciation: word.pronunciation ?? undefined,
+              })),
+            }}
+          />
         </div>
       );
     case 'vocabulary-pool':
       return (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <VocabularyPoolViewer
-            content={item as unknown as VocabularyPoolContent}
-            poolId={poolId}
-            resolvedPool={resolvedPool as never}
-          />
+          <VocabularyPoolViewer content={item} poolId={poolId} resolvedPool={resolvedPool} />
         </div>
       );
     case 'listening-passage':
@@ -125,6 +124,8 @@ interface ReviewAccordionEntry {
   exercise: TestResultReviewExerciseItem;
 }
 
+const isExerciseReviewItem = (item: TestResultReviewItem): item is TestResultReviewExerciseItem => 'answerKey' in item;
+
 const buildAccordionEntries = (result: StudentTestResult): ReviewAccordionEntry[] => {
   const entries: ReviewAccordionEntry[] = [];
   let number = 0;
@@ -136,11 +137,11 @@ const buildAccordionEntries = (result: StudentTestResult): ReviewAccordionEntry[
     }
     let lastExerciseIndex: number | null = null;
     for (const item of page.items) {
-      if (!('answerKey' in item)) {
-        pendingSupporting.push(item as TestResultReviewSupportingItem);
+      if (!isExerciseReviewItem(item)) {
+        pendingSupporting.push(item);
         continue;
       }
-      const exercise = item as TestResultReviewExerciseItem;
+      const exercise = item;
       number += 1;
       lastExerciseIndex = entries.length;
       entries.push({
@@ -190,9 +191,9 @@ export function TestResultReviewView({ result }: { result: StudentTestResult }) 
           <div className="h-1.5 bg-roman-red" />
           <div className="space-y-4 p-6 text-center sm:p-8">
             <h1 className="font-serif text-2xl text-slate-900 sm:text-3xl">Test result review</h1>
-            <div className="text-4xl font-semibold text-roman-red">{formatPoints(attempt.percentage)}%</div>
+            <div className="text-4xl font-semibold text-roman-red">{formatScorePoints(attempt.percentage)}%</div>
             <p className="text-slate-700">
-              {formatPoints(attempt.score)} / {formatPoints(attempt.maxScore)} points
+              {formatScorePoints(attempt.score)} / {formatScorePoints(attempt.maxScore)} points
             </p>
             <p className="text-sm text-slate-500">Submitted {new Date(attempt.submittedAt).toLocaleString()}</p>
           </div>
@@ -202,8 +203,8 @@ export function TestResultReviewView({ result }: { result: StudentTestResult }) 
           <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
             <h2 className="font-serif text-xl text-slate-900">Detailed review unavailable</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              This attempt was submitted before detailed reviews were introduced. Its frozen score summary above is
-              still available, but the question-by-question review cannot be reconstructed.
+              The frozen score summary is still available, but the question-by-question review could not be loaded for
+              this attempt.
             </p>
           </div>
         ) : entries.length === 0 ? (
@@ -226,8 +227,8 @@ export function TestResultReviewView({ result }: { result: StudentTestResult }) 
                 data-testid={`review-exercise-${entry.id}`}>
                 <AccordionTrigger
                   className="gap-4 px-5 py-4 text-left hover:no-underline data-[state=open]:border-b data-[state=open]:border-slate-100"
-                  aria-label={`Exercise ${entry.number}: ${stripHtmlTags(entry.title)}`}>
-                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                  aria-label={`Exercise ${entry.number}: ${entry.title}`}>
+                  <span className="flex min-w-0 flex-1 items-center gap-3">
                     <span
                       className={cn(
                         'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold',
@@ -235,12 +236,10 @@ export function TestResultReviewView({ result }: { result: StudentTestResult }) 
                       )}>
                       {entry.number}
                     </span>
-                    <div className="min-w-0 truncate font-medium text-slate-900">
-                      <SimpleRichDisplay content={entry.title} className="truncate" />
-                    </div>
-                  </div>
+                    <span className="min-w-0 truncate font-medium text-slate-900">{entry.title}</span>
+                  </span>
                   <span className="shrink-0 text-sm tabular-nums text-slate-500">
-                    {formatPoints(entry.awardedPoints)} / {formatPoints(entry.maxPoints)} points
+                    {formatScorePoints(entry.awardedPoints)} / {formatScorePoints(entry.maxPoints)} points
                   </span>
                 </AccordionTrigger>
                 <AccordionContent className="space-y-4 px-5 py-5">

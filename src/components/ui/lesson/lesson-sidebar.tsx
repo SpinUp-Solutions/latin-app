@@ -7,7 +7,7 @@ import { LessonStatus, type StudentLearningUnitSummary } from '@/src/types/lesso
 import { BookOpen, CheckCircle, Lock, Play, ChevronLeft, FileCheck2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/src/hooks/useAuth';
-import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
+import { stripHtmlTags } from '@/src/utils/exercises';
 import { cn } from '@/src/lib/utils';
 
 interface LessonSidebarProps {
@@ -185,7 +185,7 @@ export default function LessonSidebar({ currentLessonId, isCollapsed = false, on
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <h4 className="min-w-0 flex-1 truncate text-base font-serif text-gray-900">
-                                <SimpleRichDisplay content={unit.title} className="truncate" />
+                                {unit.title}
                               </h4>
                               {isTest && (
                                 <span className="rounded-full bg-indigo-700 px-2 py-0.5 text-[10px] font-bold tracking-wide text-white">
@@ -194,9 +194,9 @@ export default function LessonSidebar({ currentLessonId, isCollapsed = false, on
                               )}
                             </div>
                             {unit.description && (
-                              <div className="mt-1 line-clamp-2 text-sm text-roman-stone">
-                                <SimpleRichDisplay content={unit.description} />
-                              </div>
+                              <p className="text-sm text-roman-stone mt-1 line-clamp-2">
+                                {stripHtmlTags(unit.description)}
+                              </p>
                             )}
 
                             <div className="flex items-center gap-2 mt-2 text-xs text-roman-stone font-medium">

@@ -1,7 +1,6 @@
 'use client';
 
 import React, { memo, useEffect, useCallback, useMemo } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/src/services/firebase';
@@ -62,9 +61,7 @@ const LessonCard = memo(
           <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-3xl"></div>
           <div className="relative flex items-center justify-between">
             <div className="flex-1 pr-4 min-w-0">
-              <h3 className="min-w-0 text-xl font-serif mb-2 text-gray-900 truncate">
-                <SimpleRichDisplay content={lesson.title} className="truncate" />
-              </h3>
+              <h3 className="text-xl font-serif mb-2 text-gray-900 truncate">{lesson.title}</h3>
               <div className="text-sm text-roman-stone line-clamp-2">
                 <SimpleRichDisplay content={lesson.description || ''} />
               </div>
@@ -137,9 +134,7 @@ export const TestCard = memo(
           <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-white/20 to-transparent" />
           <div className="relative flex h-full items-center justify-between">
             <div className="min-w-0 flex-1 pr-4">
-              <h3 className="min-w-0 truncate font-serif text-xl text-gray-950">
-                <SimpleRichDisplay content={test.title} className="truncate" />
-              </h3>
+              <h3 className="truncate font-serif text-xl text-gray-950">{test.title}</h3>
               <div className="mt-1 line-clamp-1 text-sm text-gray-600">
                 <SimpleRichDisplay content={test.description || ''} />
               </div>
@@ -177,13 +172,13 @@ export const TestCard = memo(
               </div>
               {summary.latest ? (
                 <div className="mt-1 flex min-w-0 items-center gap-1.5">
-                  <Link
+                  <a
                     data-testid="test-review-latest-link"
                     className="truncate text-xs font-semibold text-indigo-700 underline-offset-2 hover:underline"
                     href={`/test-results/${summary.latest.attemptId}`}
                     onClick={event => event.stopPropagation()}>
                     Review latest result
-                  </Link>
+                  </a>
                 </div>
               ) : null}
             </div>
@@ -240,6 +235,7 @@ export default function DashboardPage() {
     [vocabLessons, diagrammingLessons, listeningLessons]
   );
   const mockTests = useMemo(() => studentDashboard?.mockTests ?? [], [studentDashboard]);
+  const pastMockResults = useMemo(() => studentDashboard?.pastMockResults ?? [], [studentDashboard]);
 
   const completionStats = useMemo(() => {
     if (learningUnits.length === 0) return { percentage: 0, completed: 0, total: 0 };
@@ -283,13 +279,6 @@ export default function DashboardPage() {
   const handleMockClick = useCallback(
     (mockTestId: string) => {
       router.push(`/test/${encodeURIComponent(mockTestId)}?origin=mock`);
-    },
-    [router]
-  );
-
-  const handleReviewResultClick = useCallback(
-    (attemptId: string) => {
-      router.push(`/test-results/${attemptId}`);
     },
     [router]
   );
@@ -463,8 +452,7 @@ export default function DashboardPage() {
                 onLessonClick={handleLessonClick}
                 mockTests={mockTests}
                 onMockTestClick={handleMockClick}
-                pastMockResults={studentDashboard?.pastMockResults ?? []}
-                onReviewResultClick={handleReviewResultClick}
+                pastMockResults={pastMockResults}
               />
             </section>
           </div>

@@ -16,7 +16,6 @@ import { Card, CardContent } from '@/src/components/ui/card';
 import { useGetLearningPathQuery } from '@/src/store/api/lessonApi';
 import { useGetMocksQuery } from '@/src/store/api/mockTestApi';
 import { useGetTestsQuery } from '@/src/store/api/testApi';
-import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import type { TestUnitSummary } from '@/src/types/test';
 
 type Filter = 'all' | 'in-path' | 'unplaced';
@@ -59,11 +58,11 @@ function TestCard({ item }: { item: TestInventoryItem }) {
             </div>
 
             <h2 className="break-words font-serif text-2xl leading-tight tracking-tight text-foreground sm:text-[1.7rem]">
-              <SimpleRichDisplay content={test.title} />
+              {test.title}
             </h2>
-            <div className="mt-1.5 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-              <SimpleRichDisplay content={test.description || 'No description yet'} />
-            </div>
+            <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+              {test.description || 'No description yet'}
+            </p>
           </div>
 
           <Button asChild size="sm" className="shrink-0 self-start">

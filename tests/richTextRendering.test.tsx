@@ -5,12 +5,6 @@ import { SentenceDiagramStudent } from '@/src/features/sentence-diagramming/Sent
 import { createEmptySentenceDiagramDocument } from '@/src/features/sentence-diagramming/model';
 import type { LessonSummary } from '@/src/types/lesson';
 import type { SentenceDiagrammingExercise } from '@/src/types/exercises/sentence-diagramming';
-import {
-  ClickOnMultipleWordsExerciseReview,
-  TableFillExerciseReview,
-  TextSelectionExerciseReview,
-} from '@/src/components/ui/test-results/exercise-review-views';
-import { splitHtmlIntoWords } from '@/src/utils/htmlWordSplitter';
 
 jest.mock('@dnd-kit/sortable', () => ({
   useSortable: () => ({
@@ -60,85 +54,5 @@ describe('rich-text display regressions', () => {
 
     expect(screen.getByRole('heading', { name: 'Sentence Diagramming' })).toBeInTheDocument();
     expect(screen.getByText('Latin').tagName).toBe('STRONG');
-  });
-
-  it('keeps formatting attached when rich passages are split into selectable words', () => {
-    expect(splitHtmlIntoWords('amo <strong>puellam</strong> videt')).toEqual([
-      'amo',
-      '<strong>puellam</strong>',
-      'videt',
-    ]);
-  });
-
-  it('renders rich text for text-selection review answers', () => {
-    const item = {
-      id: 'text-selection-1',
-      type: 'text-selection',
-      title: 'Select the word',
-      question: {
-        passage: 'amo <strong>puellam</strong> videt',
-        questions: [{ id: 'question-1', text: 'Who is seen?' }],
-      },
-      answerKey: {
-        questions: [{ id: 'question-1', text: 'Who is seen?', correctWordIndex: 1 }],
-      },
-      itemResults: {
-        selections: [
-          { questionId: 'question-1', wordIndex: 1, correct: true, points: { awardedPoints: 1, maxPoints: 1 } },
-        ],
-      },
-    } as never;
-
-    const { container } = render(<TextSelectionExerciseReview item={item} />);
-
-    expect(container.querySelector('strong')).toHaveTextContent('puellam');
-  });
-
-  it('renders rich text for click-multiple-words passages and metadata', () => {
-    const item = {
-      id: 'click-1',
-      type: 'click-on-multiple-words',
-      title: 'Click the word',
-      question: {
-        title: '<p><em>Verb passage</em></p>',
-        instructions: '<p>Click the <strong>verb</strong>.</p>',
-        passage: 'amo <strong>et</strong> ambulo',
-      },
-      answerKey: { correctWordIndices: [0] },
-      itemResults: { selectedWordIndices: [0], correct: true, points: { awardedPoints: 1, maxPoints: 1 } },
-    } as never;
-
-    const { container } = render(<ClickOnMultipleWordsExerciseReview item={item} />);
-
-    expect(container.querySelector('em')).toHaveTextContent('Verb passage');
-    expect(Array.from(container.querySelectorAll('strong')).map(element => element.textContent)).toEqual(
-      expect.arrayContaining(['verb', 'et'])
-    );
-  });
-
-  it('renders rich table titles, headers, and footnotes in review', () => {
-    const item = {
-      id: 'table-1',
-      type: 'table-fill',
-      title: 'Complete the table',
-      question: {
-        title: '<p><strong>Conjugation</strong></p>',
-        columns: [{ id: 'latin', header: '<em>Latin</em>' }],
-        rows: [{ id: 'row-1', cells: { latin: { content: '<strong>amo</strong>', isBlank: false } } }],
-        footnotes: ['Note: <strong>present tense</strong>'],
-      },
-      answerKey: {
-        rows: [{ id: 'row-1', cells: { latin: { content: '<strong>amo</strong>', isBlank: false } } }],
-      },
-      itemResults: { cells: [] },
-    } as never;
-
-    const { container } = render(<TableFillExerciseReview item={item} />);
-
-    expect(container.querySelector('strong')).toHaveTextContent('Conjugation');
-    expect(container.querySelector('em')).toHaveTextContent('Latin');
-    expect(Array.from(container.querySelectorAll('strong')).map(element => element.textContent)).toEqual(
-      expect.arrayContaining(['Conjugation', 'amo', 'present tense'])
-    );
   });
 });

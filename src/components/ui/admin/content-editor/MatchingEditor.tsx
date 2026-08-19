@@ -312,18 +312,8 @@ export const MatchingEditor: React.FC = () => {
                   }));
                 return (
                   multiUse.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-1 text-blue-600">
-                      <span>ℹ️ Many-to-one:</span>
-                      {multiUse.map((m, index) => (
-                        <React.Fragment key={`${m.value}-${m.count}`}>
-                          {index > 0 ? <span aria-hidden="true">,</span> : null}
-                          <div className="inline-flex items-center gap-1">
-                            <span aria-hidden="true">&quot;</span>
-                            <SimpleRichDisplay content={m.value || ''} className="inline not-prose" />
-                            <span>&quot; ({m.count}x)</span>
-                          </div>
-                        </React.Fragment>
-                      ))}
+                    <div className="text-blue-600">
+                      ℹ️ Many-to-one: {multiUse.map(m => `"${m.value}" (${m.count}x)`).join(', ')}
                     </div>
                   )
                 );

@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useId, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { BookOpen, Check, ClipboardCheck, Headphones, Layers3, Pencil, Search } from 'lucide-react';
 import { Input } from '@/src/components/ui/input';
 import { PracticeLessonCard, type PracticeCardTheme } from '@/src/components/ui/core/practice-lesson-card';
 import { MockTestCard } from '@/src/components/ui/core/mock-test-card';
-import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { cn } from '@/src/lib/utils';
 import type { LessonWithProgress, StudentLessonSummary } from '@/src/types/lesson';
@@ -14,13 +14,7 @@ import type { StudentMockTestSummary } from '@/src/types/test';
 import type { StudentPastMockResult } from '@/src/types/test-results';
 import { stripHtmlTags } from '@/src/utils/exercises/helpers';
 import { lessonMatchesTextSearch } from '@/src/utils/practiceCategoryLessons';
-import { formatScorePercentage } from '@/src/lib/tests/formatting';
-
-const formatPoints = (value: number) =>
-  value
-    .toFixed(2)
-    .replace(/\.00$/, '')
-    .replace(/(\.\d)0$/, '$1');
+import { formatScorePercentage, formatScorePoints } from '@/src/lib/tests/formatting';
 
 type PracticeTab = PracticeLessonType | 'mock-tests';
 type PracticeTabConfig = PracticeCardTheme & {
@@ -42,7 +36,6 @@ interface PracticeSectionProps {
   onMockTestClick?: (mockTestId: string) => void;
   /** Review-only entries for hidden/archived mocks with submitted attempts. */
   pastMockResults?: StudentPastMockResult[];
-  onReviewResultClick?: (attemptId: string) => void;
 }
 
 const tabOrder: PracticeTab[] = ['vocab', 'sentence-diagramming', 'listening', 'mock-tests'];
@@ -159,7 +152,6 @@ export const PracticeSection: React.FC<PracticeSectionProps> = ({
   mockTests = [],
   onMockTestClick,
   pastMockResults = [],
-  onReviewResultClick,
 }) => {
   const panelId = useId();
   const [activeTab, setActiveTab] = useState<PracticeTab>(() => getDefaultTab(lessons, mockTests, pastMockResults));
@@ -420,7 +412,7 @@ export const PracticeSection: React.FC<PracticeSectionProps> = ({
                   <h5 className="text-lg font-serif text-slate-800">Nothing here just yet</h5>
                   <p className="mt-1 text-sm text-slate-500">{config.emptyLabel}</p>
                 </div>
-              ) : mockTests.length > 0 && visibleMockTests.length === 0 ? (
+              ) : visibleMockTests.length === 0 && visiblePastMockResults.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 px-6 py-14 text-center">
                   <Search className="mx-auto mb-4 h-8 w-8 text-slate-300" />
                   <h5 className="text-lg font-serif text-slate-800">No matching mock tests</h5>
@@ -435,12 +427,7 @@ export const PracticeSection: React.FC<PracticeSectionProps> = ({
               ) : (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3" data-testid="mock-test-grid">
                   {visibleMockTests.map(mock => (
-                    <MockTestCard
-                      key={mock.id}
-                      mock={mock}
-                      onMockClick={onMockTestClick ?? (() => undefined)}
-                      onReviewClick={onReviewResultClick}
-                    />
+                    <MockTestCard key={mock.id} mock={mock} onMockClick={onMockTestClick ?? (() => undefined)} />
                   ))}
                 </div>
               )}
@@ -458,23 +445,22 @@ export const PracticeSection: React.FC<PracticeSectionProps> = ({
                         data-testid={`past-mock-result-${mock.id}`}
                         className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3">
                         <div className="min-w-0">
-                          <div className="truncate text-sm font-medium text-slate-800">
-                            <SimpleRichDisplay content={mock.title} className="truncate" />
-                          </div>
+                          <div className="truncate text-sm font-medium text-slate-800">{stripHtmlTags(mock.title)}</div>
                           <div className="mt-0.5 truncate text-xs text-slate-500">
-                            Latest: {formatPoints(mock.latest.score)} / {formatPoints(mock.latest.maxScore)} (
-                            {formatScorePercentage(mock.latest.percentage)}%) · {mock.latest.outcome === 'passed'
+                            Latest: {formatScorePoints(mock.latest.score)} / {formatScorePoints(mock.latest.maxScore)} (
+                            {formatScorePercentage(mock.latest.percentage)}%) ·{' '}
+                            {mock.latest.outcome === 'passed'
                               ? 'passed'
                               : mock.latest.outcome === 'not-passed'
                                 ? 'not passed'
                                 : 'completed'}
                           </div>
                         </div>
-                        <a
+                        <Link
                           className="shrink-0 rounded-lg px-2 py-1 text-sm font-semibold text-roman-red underline-offset-2 hover:bg-roman-red/5 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-roman-red"
                           href={`/test-results/${mock.latest.attemptId}`}>
                           Review result
-                        </a>
+                        </Link>
                       </li>
                     ))}
                   </ul>

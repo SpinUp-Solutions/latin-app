@@ -1,4 +1,8 @@
-import { buildSubmittedReview, testResultReviewDocumentSchema, toStudentTestResultReview } from '@/src/lib/tests/review';
+import {
+  buildSubmittedReview,
+  testResultReviewDocumentSchema,
+  toStudentTestResultReview,
+} from '@/src/lib/tests/review';
 import type { Exercise } from '@/src/types/exercises';
 import type { ExerciseAnswer } from '@/src/types/runtime-mode';
 import type { TestResultReviewExerciseItem } from '@/src/types/test-results';
@@ -84,8 +88,16 @@ const sentenceDiagrammingExercise = () =>
 const tableFillExercise = () =>
   baseExercise('table-fill', {
     title: 'Conjugation',
-    columns: [{ id: 'col-1', header: 'Verb' }, { id: 'col-2', header: 'Meaning' }],
-    rows: [{ id: 'row-1', cells: { 'col-1': { content: 'amo', isBlank: false }, 'col-2': { content: '', isBlank: true, answer: 'love' } } }],
+    columns: [
+      { id: 'col-1', header: 'Verb' },
+      { id: 'col-2', header: 'Meaning' },
+    ],
+    rows: [
+      {
+        id: 'row-1',
+        cells: { 'col-1': { content: 'amo', isBlank: false }, 'col-2': { content: '', isBlank: true, answer: 'love' } },
+      },
+    ],
     footnotes: ['Present tense'],
     explanation: 'amo means love',
   });
@@ -188,7 +200,6 @@ const buildReview = (
     versionId: 'version-1',
     origin,
     submittedAt: '2026-08-19T12:00:00.000Z',
-    createdAt: '2026-08-19T12:00:00.000Z',
     deliveryState: {
       versionId: 'version-1',
       pages: pages.map((page, index) => ({
@@ -213,10 +224,7 @@ describe('submitted test review snapshot', () => {
         {
           title: 'Page one',
           audioPath: 'audio/page.mp3',
-          items: [
-            { id: 'text-1', type: 'text', title: 'Passage', content: 'Some context' },
-            fillExercise(),
-          ],
+          items: [{ id: 'text-1', type: 'text', title: 'Passage', content: 'Some context' }, fillExercise()],
         },
       ],
       {
@@ -248,29 +256,29 @@ describe('submitted test review snapshot', () => {
       [
         {
           items: [
-          { id: 'text-1', type: 'text', content: 'Passage', audioPath: 'audio/passage.mp3' },
-          { id: 'em-1', type: 'emphasis', content: 'Emphasis' },
-          {
-            id: 'table-1',
-            type: 'table',
-            tableData: {
-              title: 'Table',
-              columns: [{ id: 'c1', header: 'A' }],
-              rows: [{ id: 'r1', cells: { c1: 'value' } }],
-              footnotes: ['note'],
+            { id: 'text-1', type: 'text', content: 'Passage', audioPath: 'audio/passage.mp3' },
+            { id: 'em-1', type: 'emphasis', content: 'Emphasis' },
+            {
+              id: 'table-1',
+              type: 'table',
+              tableData: {
+                title: 'Table',
+                columns: [{ id: 'c1', header: 'A' }],
+                rows: [{ id: 'r1', cells: { c1: 'value' } }],
+                footnotes: ['note'],
+              },
             },
-          },
-          {
-            id: 'vocab-1',
-            type: 'vocabulary',
-            vocabularyItems: [{ id: 'v1', latin: 'amo', english: 'love', audioPath: 'audio/amo.mp3' }],
-          },
-          { id: 'pool-1', type: 'vocabulary-pool', title: 'Pool' },
-          {
-            id: 'listen-1',
-            type: 'listening-passage',
-            data: { latinText: 'amo', translation: 'I love', passageAudioPath: 'audio/listen.mp3' },
-          },
+            {
+              id: 'vocab-1',
+              type: 'vocabulary',
+              vocabularyItems: [{ id: 'v1', latin: 'amo', english: 'love', audioPath: 'audio/amo.mp3' }],
+            },
+            { id: 'pool-1', type: 'vocabulary-pool', title: 'Pool' },
+            {
+              id: 'listen-1',
+              type: 'listening-passage',
+              data: { latinText: 'amo', translation: 'I love', passageAudioPath: 'audio/listen.mp3' },
+            },
             fillExercise(),
           ],
         },
@@ -283,7 +291,10 @@ describe('submitted test review snapshot', () => {
     expect(supporting[0]).toMatchObject({ type: 'text', audioPath: 'audio/passage.mp3' });
     expect(supporting[1]).toMatchObject({ type: 'emphasis', content: 'Emphasis' });
     expect(supporting[2]).toMatchObject({ type: 'table' });
-    expect(supporting[3]).toMatchObject({ type: 'vocabulary', vocabularyItems: [{ latin: 'amo', audioPath: 'audio/amo.mp3' }] });
+    expect(supporting[3]).toMatchObject({
+      type: 'vocabulary',
+      vocabularyItems: [{ latin: 'amo', audioPath: 'audio/amo.mp3' }],
+    });
     expect(supporting[4]).toMatchObject({ type: 'vocabulary-pool' });
     expect(supporting[5]).toMatchObject({ type: 'listening-passage', data: { passageAudioPath: 'audio/listen.mp3' } });
     for (const item of supporting) expect(item).not.toHaveProperty('answerKey');
@@ -298,7 +309,11 @@ describe('submitted test review snapshot', () => {
 
     expect(item.result).toEqual({ awardedPoints: 5, maxPoints: 10 });
     expect(item.studentAnswer).toEqual({ type: 'fill', answers: ['love', 'wrong'] });
-    expect(item.answerKey.items[0]).toMatchObject({ text: 'amo', acceptedAnswers: ['love'], explanation: 'First person singular' });
+    expect(item.answerKey.items[0]).toMatchObject({
+      text: 'amo',
+      acceptedAnswers: ['love'],
+      explanation: 'First person singular',
+    });
     expect(item.answerKey.items[1]).toMatchObject({ text: 'ambulo', acceptedAnswers: ['walk'] });
     expect(item.itemResults.answers).toEqual([
       { value: 'love', correct: true, points: { awardedPoints: 5, maxPoints: 5 } },
@@ -342,7 +357,10 @@ describe('submitted test review snapshot', () => {
       answers: { 'ex-multiple-choice': { type: 'multiple-choice', selectedOptionIds: ['opt-2'] } },
       exerciseResults: { 'ex-multiple-choice': { awardedPoints: 0, maxPoints: 10 } },
     });
-    const item = exerciseItem(review, 'multiple-choice') as Extract<TestResultReviewExerciseItem, { type: 'multiple-choice' }>;
+    const item = exerciseItem(review, 'multiple-choice') as Extract<
+      TestResultReviewExerciseItem,
+      { type: 'multiple-choice' }
+    >;
 
     expect(item.explanation).toBe('amo means love');
     expect(item.answerKey.options).toEqual([
@@ -378,7 +396,10 @@ describe('submitted test review snapshot', () => {
       answers: { 'ex-text-selection': { type: 'text-selection', selectedWordIndices: [0] } },
       exerciseResults: { 'ex-text-selection': { awardedPoints: 0, maxPoints: 10 } },
     });
-    const item = exerciseItem(review, 'text-selection') as Extract<TestResultReviewExerciseItem, { type: 'text-selection' }>;
+    const item = exerciseItem(review, 'text-selection') as Extract<
+      TestResultReviewExerciseItem,
+      { type: 'text-selection' }
+    >;
 
     expect(item.answerKey.questions[0]).toMatchObject({ id: 'q-1', correctWordIndex: 2, explanation: 'ambulo' });
     expect(item.itemResults.selections).toEqual([
@@ -396,7 +417,10 @@ describe('submitted test review snapshot', () => {
       answers: { 'ex-fill-embolded-text': { type: 'fill-embolded-text', answers: ['love'] } },
       exerciseResults: { 'ex-fill-embolded-text': { awardedPoints: 10, maxPoints: 10 } },
     });
-    const item = exerciseItem(review, 'fill-embolded-text') as Extract<TestResultReviewExerciseItem, { type: 'fill-embolded-text' }>;
+    const item = exerciseItem(review, 'fill-embolded-text') as Extract<
+      TestResultReviewExerciseItem,
+      { type: 'fill-embolded-text' }
+    >;
 
     expect(item.answerKey.words[0]).toMatchObject({ wordIndex: 2, correctAnswer: 'love', explanation: 'love' });
     expect(item.itemResults.answers).toEqual([
@@ -485,7 +509,9 @@ describe('submitted test review snapshot', () => {
   it('captures step-by-step generated-form-identification accepted answers', () => {
     const review = buildReview([{ items: [generatedFormIdentificationExercise('step-by-step')] }], {
       resolvedExercises: { 'ex-generated-form-identification': { items: [stepFormItem] } },
-      answers: { 'ex-generated-form-identification': { type: 'generated-form-identification', answers: { 'form-1': 'present' } } },
+      answers: {
+        'ex-generated-form-identification': { type: 'generated-form-identification', answers: { 'form-1': 'present' } },
+      },
       exerciseResults: { 'ex-generated-form-identification': { awardedPoints: 10, maxPoints: 10 } },
     });
     const item = exerciseItem(review, 'generated-form-identification') as Extract<
@@ -528,7 +554,11 @@ describe('submitted test review snapshot', () => {
       { type: 'generated-form-identification' }
     >;
 
-    expect(item.answerKey.items[0]).toMatchObject({ id: 'form-2', steps: ['case', 'number'], correctAnswerDisplay: 'nominative, singular' });
+    expect(item.answerKey.items[0]).toMatchObject({
+      id: 'form-2',
+      steps: ['case', 'number'],
+      correctAnswerDisplay: 'nominative, singular',
+    });
     expect(item.itemResults.answers).toEqual([
       {
         id: 'form-2',
@@ -644,16 +674,13 @@ describe('submitted test review snapshot', () => {
   });
 
   it('copies the resolved vocabulary pool for pool-backed delivery', () => {
-    const review = buildReview(
-      [{ items: [{ id: 'pool-1', type: 'vocabulary-pool', title: 'Pool' }] }],
-      {
-        vocabularyPool: {
-          id: 'pool-a',
-          name: 'Chapter one',
-          items: [{ id: 'v1', latin: 'amo', english: 'love', pronunciation: 'AH-mo', audioPath: 'audio/v1.mp3' }],
-        },
-      }
-    );
+    const review = buildReview([{ items: [{ id: 'pool-1', type: 'vocabulary-pool', title: 'Pool' }] }], {
+      vocabularyPool: {
+        id: 'pool-a',
+        name: 'Chapter one',
+        items: [{ id: 'v1', latin: 'amo', english: 'love', pronunciation: 'AH-mo', audioPath: 'audio/v1.mp3' }],
+      },
+    });
 
     expect(review.content.vocabularyPool).toMatchObject({
       id: 'pool-a',

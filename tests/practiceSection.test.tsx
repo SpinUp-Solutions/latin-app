@@ -5,6 +5,7 @@ import { PracticeSection } from '@/src/components/ui/core/PracticeSection';
 import type { LessonWithProgress } from '@/src/types/lesson';
 import type { PracticeCategory } from '@/src/types/practice-category';
 import type { StudentMockTestSummary } from '@/src/types/test';
+import type { StudentPastMockResult } from '@/src/types/test-results';
 
 const makeCategory = (
   id: string,
@@ -277,5 +278,34 @@ describe('PracticeSection', () => {
     expect(screen.getByRole('heading', { name: 'Mock Tests' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Start Mock Test: Chapter rehearsal' }));
     expect(onMockTestClick).toHaveBeenCalledWith('mock-1');
+  });
+
+  it('searches live and past mock results as one result set', async () => {
+    const user = userEvent.setup();
+    const past: StudentPastMockResult = {
+      id: 'past-1',
+      title: 'Archived Caesar rehearsal',
+      description: '',
+      passingPercentage: 70,
+      latest: {
+        attemptId: 'attempt-1',
+        score: 8,
+        maxScore: 10,
+        percentage: 80,
+        outcome: 'passed',
+        submittedAt: '2026-08-01T00:00:00.000Z',
+      },
+    };
+
+    render(<PracticeSection lessons={[]} mockTests={[]} pastMockResults={[past]} onLessonClick={jest.fn()} />);
+
+    const search = screen.getByRole('textbox', { name: 'Search Mock Tests' });
+    await user.type(search, 'Caesar');
+    expect(screen.getByTestId('past-mock-result-past-1')).toBeInTheDocument();
+    expect(screen.queryByText('No matching mock tests')).not.toBeInTheDocument();
+
+    await user.clear(search);
+    await user.type(search, 'Cicero');
+    expect(screen.getByText('No matching mock tests')).toBeInTheDocument();
   });
 });

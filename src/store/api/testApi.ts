@@ -6,7 +6,6 @@ import type {
   UpdateTestWithVersionInput,
   UpdateTestUnitInput,
 } from '@/src/lib/tests/schemas';
-import type { StudentTestResult } from '@/src/types/test-results';
 import type { TestUnit } from '@/src/types/learning-unit';
 import type {
   StartTestAttemptResult,
@@ -17,6 +16,7 @@ import type {
   TestVersion,
   TestVersionDraft,
 } from '@/src/types/test';
+import type { StudentTestResult } from '@/src/types/test-results';
 import type { ExerciseAnswer } from '@/src/types/runtime-mode';
 import { appApi } from './appApi';
 import { getAttemptSummaryTagId, STUDENT_DASHBOARD_TAG } from './tags';

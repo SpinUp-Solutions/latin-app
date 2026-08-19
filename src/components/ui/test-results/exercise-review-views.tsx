@@ -6,24 +6,19 @@ import { Badge } from '@/src/components/ui/badge';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { SentenceDiagramSurface } from '@/src/features/sentence-diagramming';
 import { SentenceDiagramFeedbackView } from '@/src/features/sentence-diagramming';
+import { formatScorePoints } from '@/src/lib/tests/formatting';
 import { cn } from '@/src/lib/utils';
 import type { ReviewPartPoints, TestResultReviewExerciseItem } from '@/src/types/test-results';
-import { splitHtmlIntoWords } from '@/src/utils/htmlWordSplitter';
+import { stripHtmlTags } from '@/src/utils/exercises/helpers';
 
 type ExerciseOfType<T extends TestResultReviewExerciseItem['type']> = Extract<
   TestResultReviewExerciseItem,
   { type: T }
 >;
 
-const formatPoints = (value: number) =>
-  value
-    .toFixed(2)
-    .replace(/\.00$/, '')
-    .replace(/(\.\d)0$/, '$1');
-
 const PartPoints = ({ points }: { points: ReviewPartPoints }) => (
   <span className="text-xs tabular-nums text-slate-500">
-    {formatPoints(points.awardedPoints)} / {formatPoints(points.maxPoints)} points
+    {formatScorePoints(points.awardedPoints)} / {formatScorePoints(points.maxPoints)} points
   </span>
 );
 
@@ -307,7 +302,9 @@ export const OddOneOutExerciseReview = ({ item }: { item: ExerciseOfType<'odd-on
 // ---------------------------------------------------------------------------
 
 export const TextSelectionExerciseReview = ({ item }: { item: ExerciseOfType<'text-selection'> }) => {
-  const passageWords = splitHtmlIntoWords(item.question.passage);
+  const passageWords = stripHtmlTags(item.question.passage)
+    .split(/\s+/)
+    .filter(word => word.trim());
   return (
     <div className="space-y-4">
       <ReviewBlock label="Passage">
@@ -315,7 +312,7 @@ export const TextSelectionExerciseReview = ({ item }: { item: ExerciseOfType<'te
       </ReviewBlock>
       {item.answerKey.questions.map((question, index) => {
         const result = item.itemResults.selections[index];
-        const selectedWord = result && result.wordIndex >= 0 ? (passageWords[result.wordIndex] ?? null) : null;
+        const selectedWord = result && result.wordIndex >= 0 ? (passageWords[result.wordIndex] ?? '—') : '—';
         const correctWord = passageWords[question.correctWordIndex] ?? '';
         return (
           <ReviewBlock key={question.id} label={`Question ${index + 1}`}>
@@ -323,17 +320,15 @@ export const TextSelectionExerciseReview = ({ item }: { item: ExerciseOfType<'te
               <RichValue value={question.text} className="font-medium" />
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                 <span className="text-slate-500">Your word:</span>
-                <div className={cn('font-medium', !selectedWord && 'italic text-slate-400')}>
-                  {selectedWord ? <SimpleRichDisplay content={selectedWord} className="inline not-prose" /> : '—'}
-                </div>
+                <span className={cn('font-medium', selectedWord === '—' && 'italic text-slate-400')}>
+                  {selectedWord}
+                </span>
                 <CorrectBadge correct={result?.correct ?? false} points={result?.points} />
                 {result ? <PartPoints points={result.points} /> : null}
               </div>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                 <span className="text-slate-500">Correct word:</span>
-                <div className="font-semibold text-emerald-800">
-                  {correctWord ? <SimpleRichDisplay content={correctWord} className="inline not-prose" /> : '—'}
-                </div>
+                <span className="font-semibold text-emerald-800">{correctWord}</span>
               </div>
               {question.explanation ? (
                 <ReviewBlock label="Explanation" tone="explanation">
@@ -450,7 +445,6 @@ export const TableFillExerciseReview = ({ item }: { item: ExerciseOfType<'table-
   const resultsByCell = new Map(itemResults.cells.map(cell => [`${cell.rowId}-${cell.columnId}`, cell]));
   return (
     <div className="space-y-4 overflow-x-auto">
-      {question.title ? <RichValue value={question.title} className="font-medium" /> : null}
       <table className="w-full min-w-[28rem] border-collapse text-sm" data-testid="table-fill-review">
         <thead>
           <tr>
@@ -458,7 +452,7 @@ export const TableFillExerciseReview = ({ item }: { item: ExerciseOfType<'table-
               <th
                 key={column.id}
                 className="border border-slate-200 bg-slate-50 px-3 py-2 text-left font-semibold text-slate-700">
-                <SimpleRichDisplay content={column.header} className="inline not-prose" />
+                {column.header}
               </th>
             ))}
           </tr>
@@ -502,9 +496,7 @@ export const TableFillExerciseReview = ({ item }: { item: ExerciseOfType<'table-
       {question.footnotes && question.footnotes.length > 0 ? (
         <ul className="space-y-1 text-xs text-slate-500">
           {question.footnotes.map((footnote, index) => (
-            <li key={index}>
-              <SimpleRichDisplay content={footnote} className="inline not-prose" />
-            </li>
+            <li key={index}>{footnote}</li>
           ))}
         </ul>
       ) : null}
@@ -522,21 +514,21 @@ export const TableFillExerciseReview = ({ item }: { item: ExerciseOfType<'table-
 // ---------------------------------------------------------------------------
 
 export const ClickOnMultipleWordsExerciseReview = ({ item }: { item: ExerciseOfType<'click-on-multiple-words'> }) => {
-  const words = splitHtmlIntoWords(item.question.passage);
+  const words = stripHtmlTags(item.question.passage)
+    .split(/\s+/)
+    .filter(word => word.trim());
   const selected = new Set(item.itemResults.selectedWordIndices);
   const correct = new Set(item.answerKey.correctWordIndices);
   return (
     <div className="space-y-4">
-      {item.question.title ? <RichValue value={item.question.title} className="font-medium" /> : null}
-      {item.question.instructions ? <RichValue value={item.question.instructions} /> : null}
       <ReviewBlock label="Passage" tone="student">
-        <div className="text-sm leading-7">
-          {words.map((wordHtml, index) => {
+        <p className="text-sm leading-7">
+          {words.map((word, index) => {
             const isCorrectWord = correct.has(index);
             const isSelected = selected.has(index);
             return (
-              <div key={`${index}-${wordHtml.slice(0, 10)}`} className="mr-1.5 inline-block">
-                <div
+              <span key={index} className="mr-1.5 inline-block">
+                <span
                   className={cn(
                     'rounded px-1 py-0.5',
                     isCorrectWord && isSelected
@@ -547,12 +539,12 @@ export const ClickOnMultipleWordsExerciseReview = ({ item }: { item: ExerciseOfT
                           ? 'bg-rose-100 font-semibold text-rose-900 ring-1 ring-rose-300'
                           : undefined
                   )}>
-                  <SimpleRichDisplay content={wordHtml} className="inline not-prose" />
-                </div>
-              </div>
+                  {word}
+                </span>
+              </span>
             );
           })}
-        </div>
+        </p>
         <p className="mt-2 text-xs text-slate-500">
           <span className="mr-3 inline-flex items-center gap-1">
             <span className="inline-block h-2.5 w-2.5 rounded bg-emerald-200 ring-1 ring-emerald-300" /> correct &amp;

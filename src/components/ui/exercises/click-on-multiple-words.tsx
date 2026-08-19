@@ -14,7 +14,6 @@ import { MultiClickableRichDisplay } from '../core/multi-clickable-rich-display'
 import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 import type { ExerciseAnswer, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
-import { splitHtmlIntoWords } from '@/src/utils/htmlWordSplitter';
 
 interface Props {
   exercise: ClickOnMultipleWordsExercise;
@@ -34,7 +33,6 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({
   const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
-  const passageWords = splitHtmlIntoWords(exercise.data.passage);
   const restoredIndices = initialAnswer?.type === 'click-on-multiple-words' ? initialAnswer.selectedWordIndices : [];
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set(restoredIndices));
   const [hasSubmitted, setHasSubmitted] = useState(restoredIndices.length > 0);
@@ -252,21 +250,10 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({
             message={message}
             level={level}
             hint={exercise.data.hint}
-            correctAnswer={
-              <div className="flex flex-wrap items-center gap-1">
-                {exercise.data.correctWordIndices.map(index => {
-                  const word = passageWords[index];
-                  if (!word) return null;
-                  return (
-                    <SimpleRichDisplay
-                      key={`${index}-${word.slice(0, 10)}`}
-                      content={word}
-                      className="inline not-prose"
-                    />
-                  );
-                })}
-              </div>
-            }
+            correctAnswer={exercise.data.passage
+              .split(' ')
+              .filter((_, i) => exercise.data.correctWordIndices.includes(i))
+              .join(', ')}
             explanation={exercise.data.explanation}
             showExplanation={showExplanation}
             onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}

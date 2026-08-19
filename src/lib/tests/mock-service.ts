@@ -7,6 +7,8 @@ import {
   MOCK_TEST_ORDERING_COLLECTION,
   MOCK_TEST_ORDERING_DOCUMENT_ID,
   MOCK_TESTS_COLLECTION,
+  STUDENT_MOCK_RESULT_MIGRATIONS_COLLECTION,
+  STUDENT_MOCK_RESULTS_COLLECTION,
   TEST_ATTEMPTS_COLLECTION,
   TEST_VERSION_DRAFTS_COLLECTION,
   TEST_VERSIONS_COLLECTION,
@@ -27,7 +29,7 @@ import type { StudentPastMockResult } from '@/src/types/test-results';
 import { regeneratePageIds } from '@/src/utils/idUtils';
 import { assertVocabularyPoolAssignmentsAllowedInTransaction } from '@/src/lib/vocabulary-pools/assignment.server';
 import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
-import { TestAttemptService } from './attempt-service';
+import { getStudentMockResultId, TestAttemptService } from './attempt-service';
 import { TestServiceError } from './errors';
 import {
   assertVersionReadyForStudentVisibility,
@@ -48,6 +50,8 @@ import {
   reactivateStandaloneMockInputSchema,
   reorderMockTestsInputSchema,
   submittedAttemptResultProjectionSchema,
+  studentMockResultDocumentSchema,
+  studentMockResultMigrationDocumentSchema,
   updateMockTestInputSchema,
   updateTestVersionInputSchema,
   type AssignVersionToMockInput,
@@ -93,6 +97,79 @@ export class MockTestService {
 
   private get mockOrdering() {
     return this.db.collection(MOCK_TEST_ORDERING_COLLECTION).doc(MOCK_TEST_ORDERING_DOCUMENT_ID);
+  }
+
+  private legacyMockResultMigrationRef(studentId: string) {
+    const id = createHash('sha256')
+      .update(JSON.stringify(['mock-results', studentId]))
+      .digest('hex');
+    return this.db.collection(STUDENT_MOCK_RESULT_MIGRATIONS_COLLECTION).doc(id);
+  }
+
+  private async materializeLegacyMockResults(studentId: string, latestByMockId: Map<string, TestAttemptResultSummary>) {
+    const snapshot = await this.db
+      .collection(TEST_ATTEMPTS_COLLECTION)
+      .where('studentId', '==', studentId)
+      .where('origin.kind', '==', 'mock-test')
+      .where('status', '==', 'submitted')
+      .select('origin', 'score', 'maxScore', 'percentage', 'outcome', 'submittedAt')
+      .get();
+
+    const legacyLatest = new Map<string, TestAttemptResultSummary>();
+    for (const document of snapshot.docs) {
+      const data = document.data();
+      const origin = data.origin as { kind?: string; mockTestId?: string } | undefined;
+      if (origin?.kind !== 'mock-test' || typeof origin.mockTestId !== 'string') continue;
+      const parsed = submittedAttemptResultProjectionSchema.safeParse({
+        score: data.score,
+        maxScore: data.maxScore,
+        percentage: data.percentage,
+        outcome: data.outcome,
+        submittedAt: data.submittedAt,
+      });
+      if (!parsed.success) {
+        console.error(`Submitted attempt ${document.id} contains invalid summary fields; skipping review entry`);
+        continue;
+      }
+      const summary: TestAttemptResultSummary = { attemptId: document.id, ...parsed.data };
+      const existing = legacyLatest.get(origin.mockTestId);
+      if (!existing || summary.submittedAt > existing.submittedAt) legacyLatest.set(origin.mockTestId, summary);
+    }
+
+    for (const [mockTestId, legacy] of legacyLatest) {
+      const ref = this.db
+        .collection(STUDENT_MOCK_RESULTS_COLLECTION)
+        .doc(getStudentMockResultId(studentId, mockTestId));
+      const latest = await this.db.runTransaction(async transaction => {
+        const currentSnapshot = await transaction.get(ref);
+        const current = currentSnapshot.exists
+          ? studentMockResultDocumentSchema.safeParse({ ...currentSnapshot.data(), id: currentSnapshot.id })
+          : null;
+        if (current?.success && current.data.latest.submittedAt >= legacy.submittedAt) return current.data.latest;
+
+        const materialized = studentMockResultDocumentSchema.parse({
+          id: ref.id,
+          studentId,
+          mockTestId,
+          latest: legacy,
+        });
+        transaction.set(ref, materialized);
+        return materialized.latest;
+      });
+      latestByMockId.set(mockTestId, latest);
+    }
+
+    const markerRef = this.legacyMockResultMigrationRef(studentId);
+    await this.db.runTransaction(async transaction => {
+      transaction.set(
+        markerRef,
+        studentMockResultMigrationDocumentSchema.parse({
+          id: markerRef.id,
+          studentId,
+          completedAt: this.now(),
+        })
+      );
+    });
   }
 
   private getVersionSummaries(versionIds: readonly string[]): Promise<TestVersionSummary[]> {
@@ -336,35 +413,33 @@ export class MockTestService {
     studentId: string,
     excludedMockIds: ReadonlySet<string> = new Set()
   ): Promise<StudentPastMockResult[]> {
-    const snapshot = await this.db
-      .collection(TEST_ATTEMPTS_COLLECTION)
-      .where('studentId', '==', studentId)
-      .where('origin.kind', '==', 'mock-test')
-      .where('status', '==', 'submitted')
-      .select('origin', 'score', 'maxScore', 'percentage', 'outcome', 'submittedAt')
-      .get();
+    const markerRef = this.legacyMockResultMigrationRef(studentId);
+    const [materializedSnapshot, markerSnapshot] = await Promise.all([
+      this.db.collection(STUDENT_MOCK_RESULTS_COLLECTION).where('studentId', '==', studentId).get(),
+      markerRef.get(),
+    ]);
 
     const latestByMockId = new Map<string, TestAttemptResultSummary>();
-    for (const document of snapshot.docs) {
-      const data = document.data();
-      const origin = data.origin as { kind?: string; mockTestId?: string } | undefined;
-      if (origin?.kind !== 'mock-test' || typeof origin.mockTestId !== 'string') continue;
-      if (excludedMockIds.has(origin.mockTestId)) continue;
-      const parsed = submittedAttemptResultProjectionSchema.safeParse({
-        score: data.score,
-        maxScore: data.maxScore,
-        percentage: data.percentage,
-        outcome: data.outcome,
-        submittedAt: data.submittedAt,
-      });
+    for (const document of materializedSnapshot.docs) {
+      const parsed = studentMockResultDocumentSchema.safeParse({ ...document.data(), id: document.id });
       if (!parsed.success) {
-        console.error(`Submitted attempt ${document.id} contains invalid summary fields; skipping review entry`);
+        console.error(`Student mock result ${document.id} contains invalid data; skipping review entry`);
         continue;
       }
-      const summary: TestAttemptResultSummary = { attemptId: document.id, ...parsed.data };
-      const existing = latestByMockId.get(origin.mockTestId);
-      if (!existing || summary.submittedAt > existing.submittedAt) latestByMockId.set(origin.mockTestId, summary);
+      latestByMockId.set(parsed.data.mockTestId, parsed.data.latest);
     }
+
+    const marker = markerSnapshot.exists
+      ? studentMockResultMigrationDocumentSchema.safeParse({ ...markerSnapshot.data(), id: markerSnapshot.id })
+      : null;
+    if (!marker?.success || marker.data.studentId !== studentId) {
+      if (markerSnapshot.exists) {
+        console.error(`Student mock-result migration ${markerSnapshot.id} contains invalid data; rebuilding it`);
+      }
+      await this.materializeLegacyMockResults(studentId, latestByMockId);
+    }
+
+    for (const mockId of excludedMockIds) latestByMockId.delete(mockId);
 
     if (latestByMockId.size === 0) return [];
 

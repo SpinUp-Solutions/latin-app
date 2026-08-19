@@ -11,8 +11,6 @@ import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
 import { SimpleRichEditor } from '../../core/simple-rich-editor';
 import { SimpleRichDisplay } from '../../core/simple-rich-display';
-import { splitHtmlIntoWords } from '@/src/utils/htmlWordSplitter';
-import { richTextToPlainText } from '@/src/utils/exercises/helpers';
 
 export const FillEmboldedTextEditor: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -37,17 +35,15 @@ export const FillEmboldedTextEditor: React.FC = () => {
   const passageRef = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
 
-  const passageWordFragments = useMemo(() => splitHtmlIntoWords(passage), [passage]);
-  const passageWords = useMemo(
-    () => passageWordFragments.map(wordHtml => richTextToPlainText(wordHtml)),
-    [passageWordFragments]
-  );
+  const passageWords = useMemo(() => {
+    return passage ? passage.trim().split(/\s+/) : [];
+  }, [passage]);
 
   const handleWordClickInPreview = useCallback(
-    (wordIndex: number, event: React.SyntheticEvent<HTMLElement>) => {
+    (wordIndex: number, event: React.MouseEvent) => {
       if (!editingContent) return;
 
-      const rect = event.currentTarget.getBoundingClientRect();
+      const rect = (event.target as HTMLElement).getBoundingClientRect();
       const passageRect = passageRef.current?.getBoundingClientRect();
 
       if (!passageRect) return;
@@ -127,7 +123,7 @@ export const FillEmboldedTextEditor: React.FC = () => {
 
   const handlePassageChange = (newPassage: string) => {
     const newWords = words.filter(w => {
-      const wordCount = splitHtmlIntoWords(newPassage).length;
+      const wordCount = newPassage.trim().split(/\s+/).length;
       return w.wordIndex < wordCount;
     });
 
@@ -205,29 +201,19 @@ export const FillEmboldedTextEditor: React.FC = () => {
 
     return (
       <div ref={passageRef} className="font-serif text-lg leading-relaxed p-4 bg-gray-50 rounded border">
-        {passageWordFragments.map((wordHtml, index) => {
-          const word = passageWords[index] || '';
+        {passageWords.map((word, index) => {
           const isExistingWord = words.some(v => v.wordIndex === index);
 
           return (
-            <div
+            <span
               key={index}
               onClick={e => handleWordClickInPreview(index, e)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={e => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  handleWordClickInPreview(index, e);
-                }
-              }}
-              aria-label={`${isExistingWord ? 'Edit' : 'Add'} word ${index + 1}: ${word}`}
               className={`inline-block px-1 py-0.5 mx-0.5 rounded transition-colors relative group cursor-pointer ${
                 isExistingWord ? 'bg-red-100 font-bold text-red-700 border border-red-200' : 'hover:bg-blue-100'
               }`}
               title={isExistingWord ? `Click to edit word: ${word}` : `Click to add word: ${word} (index: ${index})`}>
-              <SimpleRichDisplay content={wordHtml} className="inline not-prose" />
-            </div>
+              {word}
+            </span>
           );
         })}
       </div>
@@ -321,15 +307,8 @@ export const FillEmboldedTextEditor: React.FC = () => {
                   <div>
                     <label className="block text-xs font-medium mb-1">Selected Word</label>
                     <div className="w-full p-2 border rounded text-sm bg-gray-50">
-                      {passageWordFragments[word.wordIndex] ? (
-                        <SimpleRichDisplay
-                          content={passageWordFragments[word.wordIndex]}
-                          className="inline not-prose font-mono"
-                        />
-                      ) : (
-                        'Invalid index'
-                      )}{' '}
-                      (index: {word.wordIndex})
+                      <span className="font-mono">{passageWords[word.wordIndex] || 'Invalid index'}</span> (index:{' '}
+                      {word.wordIndex})
                     </div>
                   </div>
 
@@ -426,12 +405,7 @@ export const FillEmboldedTextEditor: React.FC = () => {
               <div className="flex items-center justify-between">
                 <h4 className="font-medium text-sm">
                   {wordPopup.isEditing ? 'Edit Word' : 'Add Word'}:
-                  <span className="ml-1 rounded bg-gray-100 px-1 font-mono">
-                    <SimpleRichDisplay
-                      content={passageWordFragments[wordPopup.wordIndex] || ''}
-                      className="inline not-prose"
-                    />
-                  </span>
+                  <span className="font-mono ml-1 bg-gray-100 px-1 rounded">{passageWords[wordPopup.wordIndex]}</span>
                 </h4>
                 <Button onClick={closeWordPopup} size="sm" variant="ghost" className="p-1 h-6 w-6">
                   <X className="h-3 w-3" />

@@ -423,8 +423,22 @@ export const submittedTestAttemptDocumentSchema = z
     percentage: z.number().finite().min(0).max(100),
     outcome: z.enum(['score-only', 'passed', 'not-passed']),
     submittedAt: isoTimestampSchema,
+    // Legacy-only review fields. New submissions store this data in the
+    // private testResultReviews collection.
+    answers: z.record(z.string(), z.unknown()).optional(),
+    translationGrades: z.record(z.string(), z.record(z.string(), testTranslationItemGradeSchema)).optional(),
+    deliveryState: testAttemptDeliveryStateSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.deliveryState && value.versionId !== value.deliveryState.versionId) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Attempt versionId must match deliveryState.versionId',
+        path: ['deliveryState', 'versionId'],
+      });
+    }
+  });
 
 /** Slim projection used by best/latest dashboard summary queries. */
 export const submittedAttemptResultProjectionSchema = z
@@ -442,6 +456,23 @@ export const submittedAttemptTrendProjectionSchema = z
   .object({
     percentage: z.number().finite().min(0).max(100),
     submittedAt: isoTimestampSchema,
+  })
+  .strict();
+
+export const studentMockResultDocumentSchema = z
+  .object({
+    id: firestoreDocumentIdSchema,
+    studentId: z.string().min(1),
+    mockTestId: firestoreDocumentIdSchema,
+    latest: submittedAttemptResultProjectionSchema.extend({ attemptId: firestoreDocumentIdSchema }).strict(),
+  })
+  .strict();
+
+export const studentMockResultMigrationDocumentSchema = z
+  .object({
+    id: firestoreDocumentIdSchema,
+    studentId: z.string().min(1),
+    completedAt: isoTimestampSchema,
   })
   .strict();
 

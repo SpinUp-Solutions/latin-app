@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
@@ -14,8 +14,6 @@ import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 import type { ExerciseAnswer, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
 import { RecordedAnswerControls } from './recorded-answer-controls';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
-import { splitHtmlIntoWords } from '@/src/utils/htmlWordSplitter';
-import { richTextToPlainText } from '@/src/utils/exercises/helpers';
 
 interface Props {
   exercise: FillEmboldedTextExercise;
@@ -35,7 +33,6 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
   const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
-  const passageWords = useMemo(() => splitHtmlIntoWords(exercise.data.passage), [exercise.data.passage]);
   const restoredAnswers = initialAnswer?.type === 'fill-embolded-text' ? initialAnswer.answers : [];
   const firstIncompleteIndex = exercise.data.words.findIndex((_, index) => !restoredAnswers[index]?.trim());
   const restoredIndex = firstIncompleteIndex >= 0 ? firstIncompleteIndex : Math.max(exercise.data.words.length - 1, 0);
@@ -217,19 +214,10 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
       <div className="p-6 bg-white rounded-lg border border-gray-200">
         <div className="overflow-x-auto">
           <div className="font-serif text-lg leading-relaxed min-w-[300px] mb-6">
-            {passageWords.map((wordHtml, index) => (
-              <div
-                key={`${index}-${wordHtml.slice(0, 10)}`}
+            {exercise.data.passage.split(' ').map((word, index) => (
+              <span
+                key={index}
                 onClick={() => handleWordClick(index)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={event => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    handleWordClick(index);
-                  }
-                }}
-                aria-label={`Word ${index + 1}: ${richTextToPlainText(wordHtml)}`}
                 className={`cursor-pointer inline-block px-1 py-0.5 mx-0.5 rounded transition-colors ${
                   index === currentWord.wordIndex
                     ? 'bg-roman-red text-white font-bold'
@@ -237,8 +225,8 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
                       ? 'bg-roman-parchment text-roman-red'
                       : 'hover:bg-roman-parchment hover:text-roman-red'
                 }`}>
-                <SimpleRichDisplay content={wordHtml} className="inline not-prose" />
-              </div>
+                {word}
+              </span>
             ))}
           </div>
         </div>
