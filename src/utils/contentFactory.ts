@@ -76,7 +76,16 @@ export const createNewContent = (
         type: 'vocabulary-pool',
         title: 'Vocabulary Pool',
       });
-    case 'matching':
+    case 'matching': {
+      const leftColumn = [
+        { id: generateId('left'), value: 'Item 1' },
+        { id: generateId('left'), value: 'Item 2' },
+      ];
+      const rightColumn = [
+        { id: generateId('right'), value: 'Match A' },
+        { id: generateId('right'), value: 'Match B' },
+      ];
+
       return withScoring({
         id: baseId,
         type: 'matching',
@@ -86,20 +95,15 @@ export const createNewContent = (
         itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
         feedbackConfig: createDefaultFeedbackConfig(),
         data: {
-          leftColumn: [
-            { id: `left-${Date.now()}-1`, value: 'Item 1' },
-            { id: `left-${Date.now()}-2`, value: 'Item 2' },
-          ],
-          rightColumn: [
-            { id: `right-${Date.now()}-1`, value: 'Match A' },
-            { id: `right-${Date.now()}-2`, value: 'Match B' },
-          ],
+          leftColumn,
+          rightColumn,
           answers: {
-            [`left-${Date.now()}-1`]: `right-${Date.now()}-1`,
-            [`left-${Date.now()}-2`]: `right-${Date.now()}-2`,
+            [leftColumn[0].id]: rightColumn[0].id,
+            [leftColumn[1].id]: rightColumn[1].id,
           },
         },
       });
+    }
     case 'fill':
       return withScoring({
         id: baseId,
