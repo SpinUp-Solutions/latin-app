@@ -6,6 +6,7 @@ import { BookOpen, Check, ClipboardCheck, Headphones, Layers3, Pencil, Search } 
 import { Input } from '@/src/components/ui/input';
 import { PracticeLessonCard, type PracticeCardTheme } from '@/src/components/ui/core/practice-lesson-card';
 import { MockTestCard } from '@/src/components/ui/core/mock-test-card';
+import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { cn } from '@/src/lib/utils';
 import type { LessonWithProgress, StudentLessonSummary } from '@/src/types/lesson';
@@ -445,7 +446,9 @@ export const PracticeSection: React.FC<PracticeSectionProps> = ({
                         data-testid={`past-mock-result-${mock.id}`}
                         className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3">
                         <div className="min-w-0">
-                          <div className="truncate text-sm font-medium text-slate-800">{stripHtmlTags(mock.title)}</div>
+                          <div className="truncate text-sm font-medium text-slate-800">
+                            <SimpleRichDisplay content={mock.title} className="truncate" />
+                          </div>
                           <div className="mt-0.5 truncate text-xs text-slate-500">
                             Latest: {formatScorePoints(mock.latest.score)} / {formatScorePoints(mock.latest.maxScore)} (
                             {formatScorePercentage(mock.latest.percentage)}%) ·{' '}

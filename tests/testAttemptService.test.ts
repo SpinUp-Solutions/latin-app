@@ -1391,6 +1391,60 @@ describe('test attempt submission and sticky completion', () => {
     });
   });
 
+  it('rejects review documents that do not match the submitted attempt identity', async () => {
+    const db = new FakeFirestore();
+    seedNormalTest(db, ['version-a']);
+    const errors = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const service = new TestAttemptService(db as never, () => timestamp);
+    const submitted = await startAnswerSubmit(service, db, { type: 'fill', answers: ['love'] });
+    const attemptId = submitted.attempt.id;
+    const review = db.read('testResultReviews', attemptId)!;
+
+    for (const mismatch of [
+      { studentId: 'student-2' },
+      { versionId: 'version-b' },
+      { origin: { kind: 'normal-test', testId: 'test-2' } },
+    ]) {
+      db.seed('testResultReviews', attemptId, { ...review, ...mismatch });
+      await expect(service.getSubmittedResult(attemptId, 'student-1')).resolves.toMatchObject({ review: null });
+    }
+
+    errors.mockRestore();
+  });
+
+  it('rebuilds legacy embedded reviews while keeping summary-only attempts readable', async () => {
+    const db = new FakeFirestore();
+    seedNormalTest(db, ['version-a']);
+    const service = new TestAttemptService(db as never, () => timestamp);
+    const started = await service.startAttempt(startInput, 'student-1');
+    await service.saveAttemptAnswers(
+      started.attempt.id,
+      { answers: { 'fill.with.punctuation': { type: 'fill', answers: ['love'] } } },
+      'student-1'
+    );
+    const working = db.read('testAttempts', started.attempt.id)!;
+    await service.submitAttempt(started.attempt.id, 'student-1');
+    const summary = db.read('testAttempts', started.attempt.id)!;
+
+    db.seed('testAttempts', 'legacy-detailed', {
+      ...summary,
+      id: 'legacy-detailed',
+      answers: working.answers,
+      translationGrades: working.translationGrades,
+      deliveryState: working.deliveryState,
+    });
+    db.seed('testAttempts', 'legacy-summary', { ...summary, id: 'legacy-summary' });
+
+    await expect(service.getSubmittedResult('legacy-detailed', 'student-1')).resolves.toMatchObject({
+      review: {
+        content: {
+          pages: [{ items: [expect.objectContaining({ studentAnswer: { type: 'fill', answers: ['love'] } })] }],
+        },
+      },
+    });
+    await expect(service.getSubmittedResult('legacy-summary', 'student-1')).resolves.toMatchObject({ review: null });
+  });
+
   it('does not clear a session pointer that belongs to a newer active attempt', async () => {
     const db = new FakeFirestore();
     seedNormalTest(db, ['version-a']);

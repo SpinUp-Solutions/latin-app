@@ -15,6 +15,7 @@ import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 import type { ExerciseAnswer, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
 import { RecordedAnswerControls } from './recorded-answer-controls';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
+import { splitHtmlIntoWords } from '@/src/utils/htmlWordSplitter';
 
 interface Props {
   exercise: TextSelectionExercise;
@@ -34,6 +35,7 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({
   const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
+  const passageWords = splitHtmlIntoWords(exercise.data.passage);
   const restoredIndices = initialAnswer?.type === 'text-selection' ? initialAnswer.selectedWordIndices : [];
   const restoredIndex = Math.min(restoredIndices.length, Math.max(exercise.data.questions.length - 1, 0));
   const [selectedWordIndex, setSelectedWordIndex] = useState<number | null>(restoredIndices[restoredIndex] ?? null);
@@ -205,7 +207,9 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({
             level={assessmentMode ? null : level}
             hint={assessmentMode ? undefined : currentQuestion.hint}
             correctAnswer={
-              assessmentMode ? undefined : exercise.data.passage.split(' ')[currentQuestion.correctWordIndex]
+              assessmentMode || !passageWords[currentQuestion.correctWordIndex] ? undefined : (
+                <SimpleRichDisplay content={passageWords[currentQuestion.correctWordIndex]} />
+              )
             }
             explanation={assessmentMode ? undefined : currentQuestion.explanation}
             showExplanation={!assessmentMode && showExplanation}

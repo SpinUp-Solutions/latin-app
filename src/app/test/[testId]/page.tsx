@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
 import { TestTakingView } from '@/src/components/ui/test/test-taking-view';
+import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { TestTranslationGradingProvider } from '@/src/components/ui/test/test-translation-grading-context';
 import { useAuth } from '@/src/hooks/useAuth';
 import { useBufferedAttemptAnswers } from '@/src/hooks/useBufferedAttemptAnswers';
@@ -436,7 +437,9 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
         <Card className="max-w-lg border-gray-300">
           <CardContent className="space-y-4 p-8 text-center">
             <FileCheck2 className="mx-auto h-10 w-10 text-gray-500" />
-            <h1 className="font-serif text-2xl">{test.title}</h1>
+            <h1 className="font-serif text-2xl">
+              <SimpleRichDisplay content={test.title} />
+            </h1>
             <p className="text-gray-600">
               {normalTest.lockedReason || 'Complete the previous learning unit to unlock this test.'}
             </p>
@@ -494,8 +497,12 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
             <div className="mx-auto mb-2 rounded-full border-2 border-roman-gold/40 bg-roman-red p-3 text-white shadow-sm">
               <FileCheck2 className="h-7 w-7" aria-hidden="true" />
             </div>
-            <CardTitle className="font-serif text-3xl text-roman-red">{test.title}</CardTitle>
-            <p className="text-roman-stone">{test.description}</p>
+            <CardTitle className="font-serif text-3xl text-roman-red">
+              <SimpleRichDisplay content={test.title} />
+            </CardTitle>
+            <div className="text-roman-stone">
+              <SimpleRichDisplay content={test.description} />
+            </div>
           </CardHeader>
           <CardContent className="space-y-5 px-6 pb-7 sm:px-8">
             <div className="rounded-xl border border-roman-gold/25 bg-roman-parchment/50 p-4 sm:flex sm:items-center sm:justify-between sm:gap-5">
@@ -609,8 +616,9 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
             <CardContent className="space-y-2">
               {Object.entries(result.exerciseResults).map(([exerciseId, exerciseResult], index) => (
                 <div key={exerciseId} className="flex items-center justify-between gap-4 rounded-lg border p-3 text-sm">
-                  <span>
-                    {index + 1}. {exerciseResult.title || 'Exercise'}
+                  <span className="flex min-w-0 items-center gap-1">
+                    <span className="shrink-0">{index + 1}.</span>
+                    <SimpleRichDisplay content={exerciseResult.title || 'Exercise'} />
                   </span>
                   <strong>
                     {formatScorePoints(exerciseResult.awardedPoints)} / {formatScorePoints(exerciseResult.maxPoints)}
@@ -695,8 +703,9 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
                     </p>
                     <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-amber-900">
                       {unanswered.map(item => (
-                        <li key={item.id}>
-                          Page {item.pageIndex + 1}: {item.title}
+                        <li key={item.id} className="flex items-center gap-1">
+                          <span className="shrink-0">Page {item.pageIndex + 1}:</span>
+                          <SimpleRichDisplay content={item.title} />
                         </li>
                       ))}
                     </ul>
@@ -729,8 +738,9 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
                           complete ? 'border-emerald-200 bg-emerald-50/70' : 'border-amber-200 bg-amber-50/70'
                         }`}>
                         <div className="min-w-0">
-                          <div className="font-medium text-slate-900">
-                            Page {item.pageIndex + 1}: {item.title}
+                          <div className="flex items-center gap-1 font-medium text-slate-900">
+                            <span className="shrink-0">Page {item.pageIndex + 1}:</span>
+                            <SimpleRichDisplay content={item.title} />
                           </div>
                           <div
                             className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
@@ -798,8 +808,8 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
   return (
     <TestTranslationGradingProvider value={{ grades: attempt.translationGrades, grade: gradeTranslation }}>
       <TestTakingView
-        title={test.title}
-        description={test.description}
+        title={<SimpleRichDisplay content={test.title} />}
+        description={test.description ? <SimpleRichDisplay content={test.description} /> : undefined}
         pages={attempt.delivery.pages}
         currentPageIndex={pageIndex}
         answeredCount={answeredCount}

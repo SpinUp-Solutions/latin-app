@@ -28,6 +28,7 @@ import { Label } from '@/src/components/ui/label';
 import { Textarea } from '@/src/components/ui/textarea';
 import { UnsavedNavigationDialog } from '@/src/components/ui/core/UnsavedNavigationDialog';
 import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
+import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { useUnsavedNavigationGuard } from '@/src/hooks/useUnsavedNavigationGuard';
 import { getApiErrorMessage } from '@/src/store/api/baseQuery';
 import {
@@ -408,8 +409,10 @@ function TestOverviewPage({ params }: { params: Promise<{ id: string }> }) {
     <AdminPage>
       <div className="mx-auto max-w-5xl space-y-7">
         <AdminPageHeader
-          title={detail.test.title}
-          description={detail.test.description || 'No description'}
+          title={<SimpleRichDisplay content={detail.test.title} />}
+          description={
+            detail.test.description ? <SimpleRichDisplay content={detail.test.description} /> : 'No description'
+          }
           actions={
             <Button asChild>
               <Link href={`/admin/tests/edit/${id}/versions/create`}>

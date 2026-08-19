@@ -1183,8 +1183,13 @@ export class TestAttemptService {
     if (reviewSnapshot.exists) {
       try {
         const parsed = testResultReviewDocumentSchema.parse({ ...reviewSnapshot.data(), id: reviewSnapshot.id });
-        if (parsed.studentId !== studentId || parsed.attemptId !== attempt.id) {
-          throw new Error('Review ownership does not match its submitted attempt');
+        if (
+          parsed.studentId !== studentId ||
+          parsed.attemptId !== attempt.id ||
+          parsed.versionId !== attempt.versionId ||
+          !sameOrigin(parsed.origin, attempt.origin)
+        ) {
+          throw new Error('Review identity does not match its submitted attempt');
         }
         review = toStudentTestResultReview(parsed);
       } catch (error) {

@@ -17,6 +17,7 @@ import type {
   TestResultReviewSupportingItem,
 } from '@/src/types/test-results';
 import type { VocabularyPoolStudyData } from '@/src/types/vocabulary';
+import { stripHtmlTags } from '@/src/utils/exercises/helpers';
 import { ExerciseReviewView } from './exercise-review-views';
 
 // ---------------------------------------------------------------------------
@@ -227,8 +228,8 @@ export function TestResultReviewView({ result }: { result: StudentTestResult }) 
                 data-testid={`review-exercise-${entry.id}`}>
                 <AccordionTrigger
                   className="gap-4 px-5 py-4 text-left hover:no-underline data-[state=open]:border-b data-[state=open]:border-slate-100"
-                  aria-label={`Exercise ${entry.number}: ${entry.title}`}>
-                  <span className="flex min-w-0 flex-1 items-center gap-3">
+                  aria-label={`Exercise ${entry.number}: ${stripHtmlTags(entry.title)}`}>
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
                     <span
                       className={cn(
                         'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold',
@@ -236,8 +237,10 @@ export function TestResultReviewView({ result }: { result: StudentTestResult }) 
                       )}>
                       {entry.number}
                     </span>
-                    <span className="min-w-0 truncate font-medium text-slate-900">{entry.title}</span>
-                  </span>
+                    <div className="min-w-0 truncate font-medium text-slate-900">
+                      <SimpleRichDisplay content={entry.title} className="truncate" />
+                    </div>
+                  </div>
                   <span className="shrink-0 text-sm tabular-nums text-slate-500">
                     {formatScorePoints(entry.awardedPoints)} / {formatScorePoints(entry.maxPoints)} points
                   </span>
