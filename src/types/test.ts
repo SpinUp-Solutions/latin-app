@@ -153,6 +153,13 @@ export interface SubmittedTestAttempt extends TestAttemptBase {
   percentage: number;
   outcome: 'score-only' | 'passed' | 'not-passed';
   submittedAt: string;
+  /**
+   * Legacy-only review data. New submissions store this in the private
+   * testResultReviews collection.
+   */
+  answers?: Record<string, ExerciseAnswer>;
+  translationGrades?: TestTranslationGrades;
+  deliveryState?: TestAttemptDeliveryState;
 }
 
 export type TestAttempt = InProgressTestAttempt | SubmittedTestAttempt;
@@ -180,7 +187,10 @@ export type StudentInProgressTestAttempt = Omit<
   delivery: StudentTestDelivery;
 };
 
-export type StudentSubmittedTestAttempt = Omit<SubmittedTestAttempt, 'studentId'>;
+export type StudentSubmittedTestAttempt = Omit<
+  SubmittedTestAttempt,
+  'studentId' | 'answers' | 'translationGrades' | 'deliveryState'
+>;
 export type StudentTestAttempt = StudentInProgressTestAttempt | StudentSubmittedTestAttempt;
 
 export interface StartTestAttemptResult {

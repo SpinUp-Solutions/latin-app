@@ -10,6 +10,7 @@ import { AudioUploadSection } from './AudioUploadSection';
 import { SimpleRichEditor } from '../../core/simple-rich-editor';
 import { SimpleRichDisplay } from '../../core/simple-rich-display';
 import { ClickableRichDisplay } from '../../core/clickable-rich-display';
+import { splitHtmlIntoWords } from '@/src/utils/htmlWordSplitter';
 
 export const TextSelectionEditor: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -18,6 +19,8 @@ export const TextSelectionEditor: React.FC = () => {
   if (!editingContent) {
     return <div>No content selected for editing</div>;
   }
+
+  const passageWords = splitHtmlIntoWords(editingContent.data.passage);
 
   const updateContent = (updates: Partial<TextSelectionExercise>) => {
     dispatch(updateEditingContent({ ...editingContent, ...updates }));
@@ -207,10 +210,15 @@ export const TextSelectionEditor: React.FC = () => {
                     {editingContent.data.passage && renderPassagePreview(index)}
                     <div className="mt-2 text-sm">
                       <strong>Selected word:</strong>{' '}
-                      <span className="font-mono bg-blue-100 px-1 rounded">
-                        {editingContent.data.passage
-                          ? editingContent.data.passage.split(' ')[question.correctWordIndex] || 'None'
-                          : 'None'}
+                      <span className="inline-flex max-w-full items-center rounded bg-blue-100 px-1 font-mono">
+                        {passageWords[question.correctWordIndex] ? (
+                          <SimpleRichDisplay
+                            content={passageWords[question.correctWordIndex]}
+                            className="inline not-prose"
+                          />
+                        ) : (
+                          'None'
+                        )}
                       </span>{' '}
                       (index: {question.correctWordIndex})
                     </div>
@@ -246,15 +254,24 @@ export const TextSelectionEditor: React.FC = () => {
                     <label className="block text-xs font-medium mb-2">Preview:</label>
                     <div className="text-sm space-y-2">
                       <div>
-                        <strong>Prompt:</strong> {question.text || 'Question will appear here'}
+                        <strong>Prompt:</strong>{' '}
+                        {question.text ? (
+                          <SimpleRichDisplay content={question.text} className="inline not-prose" />
+                        ) : (
+                          'Question will appear here'
+                        )}
                       </div>
                       <div>
                         <strong>Target Word:</strong>{' '}
                         <span className="font-mono bg-blue-100 px-1 rounded">
-                          {editingContent.data.passage
-                            ? editingContent.data.passage.split(' ')[question.correctWordIndex] ||
-                              `Index ${question.correctWordIndex}`
-                            : `Index ${question.correctWordIndex}`}
+                          {passageWords[question.correctWordIndex] ? (
+                            <SimpleRichDisplay
+                              content={passageWords[question.correctWordIndex]}
+                              className="inline not-prose"
+                            />
+                          ) : (
+                            `Index ${question.correctWordIndex}`
+                          )}
                         </span>
                       </div>
                       {question.explanation && (
@@ -286,7 +303,7 @@ export const TextSelectionEditor: React.FC = () => {
             <div className="text-sm space-y-2">
               <div>
                 <strong>Passage Length:</strong>{' '}
-                {editingContent.data.passage ? `${editingContent.data.passage.split(' ').length} words` : '0 words'}
+                {editingContent.data.passage ? `${passageWords.length} words` : '0 words'}
               </div>
               <div>
                 <strong>Total Questions:</strong> {editingContent.data.questions.length}

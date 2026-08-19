@@ -150,4 +150,59 @@ describe('student dashboard test card', () => {
 
     expect(container.firstChild).toHaveClass('h-36');
   });
+
+  it('links to the latest submitted review from the test card', () => {
+    render(<TestCard test={testSummary()} onTestClick={jest.fn()} />);
+
+    expect(screen.getByTestId('test-review-latest-link')).toHaveAttribute('href', '/test-results/attempt-1');
+    expect(screen.getByText('Review latest result')).toBeInTheDocument();
+  });
+
+  it('omits the review link while no attempt has been submitted', () => {
+    render(
+      <TestCard
+        test={testSummary({
+          attemptSummary: {
+            origin: { kind: 'normal-test', testId: 'test-1' },
+            inProgressAttemptId: 'attempt-2',
+            attemptCount: 0,
+            best: null,
+            latest: null,
+          },
+        })}
+        onTestClick={jest.fn()}
+      />
+    );
+
+    expect(screen.queryByTestId('test-review-latest-link')).not.toBeInTheDocument();
+  });
+
+  it('opens the latest mock review without retaking the mock', () => {
+    const onMockClick = jest.fn();
+    const mock: StudentMockTestSummary = {
+      id: 'mock-1',
+      title: 'Chapter 4 rehearsal',
+      description: '',
+      passingPercentage: 70,
+      totalPoints: 10,
+      attemptSummary: {
+        origin: { kind: 'mock-test', mockTestId: 'mock-1' },
+        inProgressAttemptId: null,
+        attemptCount: 1,
+        best: result,
+        latest: result,
+      },
+      scoreTrend: [],
+    };
+    render(<MockTestCard mock={mock} onMockClick={onMockClick} />);
+
+    const reviewLink = screen.getByTestId('mock-review-latest-link');
+    expect(reviewLink).toBeInTheDocument();
+    expect(reviewLink).toHaveAttribute('href', '/test-results/attempt-1');
+    expect(screen.getByRole('button', { name: 'Retake Mock Test: Chapter 4 rehearsal' })).not.toContainElement(
+      reviewLink
+    );
+    fireEvent.click(reviewLink);
+    expect(onMockClick).not.toHaveBeenCalled();
+  });
 });

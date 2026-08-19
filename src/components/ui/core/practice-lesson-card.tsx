@@ -2,6 +2,7 @@ import { ArrowRight, CheckCircle2, Play } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import type { LessonWithProgress, StudentLessonSummary } from '@/src/types/lesson';
 import type { PracticeTagSummary } from '@/src/types/practice-category';
+import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { stripHtmlTags } from '@/src/utils/exercises/helpers';
 
 export interface PracticeCardTheme {
@@ -90,7 +91,7 @@ export function PracticeLessonCard({
           {isCompleted ? <CheckCircle2 className="h-5 w-5" /> : <Play className="ml-0.5 h-5 w-5" />}
         </div>
         <h5 className="min-w-0 flex-1 line-clamp-2 text-xl font-serif leading-6 text-slate-950 transition-colors group-hover:text-roman-red">
-          {title}
+          <SimpleRichDisplay content={lesson.title} className="line-clamp-2" />
         </h5>
       </div>
 
@@ -140,7 +141,11 @@ export function PracticeLessonCard({
             )}
           </div>
         )}
-        {description && <p className="line-clamp-2 text-sm leading-5 text-slate-600">{description}</p>}
+        {description && (
+          <div className="line-clamp-2 text-sm leading-5 text-slate-600">
+            <SimpleRichDisplay content={lesson.description ?? ''} />
+          </div>
+        )}
       </div>
 
       <div className="relative mt-3 border-t border-slate-100 pt-3">

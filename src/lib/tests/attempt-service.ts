@@ -5,8 +5,10 @@ import {
   LEARNING_PATHS_COLLECTION,
   LEARNING_UNITS_COLLECTION,
   MOCK_TESTS_COLLECTION,
+  STUDENT_MOCK_RESULTS_COLLECTION,
   TEST_ATTEMPTS_COLLECTION,
   TEST_ATTEMPT_SESSIONS_COLLECTION,
+  TEST_RESULT_REVIEWS_COLLECTION,
   TEST_VERSIONS_COLLECTION,
   USER_PROGRESS_COLLECTION,
 } from '@/shared/constants/firestore';
@@ -69,6 +71,7 @@ import {
   startTestAttemptInputSchema,
   submittedAttemptResultProjectionSchema,
   submittedAttemptTrendProjectionSchema,
+  studentMockResultDocumentSchema,
   submittedTestAttemptDocumentSchema,
   testAttemptDocumentSchema,
   testAttemptSessionDocumentSchema,
@@ -76,6 +79,14 @@ import {
   type GradeTestTranslationInput,
   type StartTestAttemptInput,
 } from './schemas';
+import {
+  isTestResultReviewDocumentWithinSizeLimit,
+  buildSubmittedReview,
+  testResultReviewDocumentSchema,
+  toStudentTestResultReview,
+  type TestResultReview,
+} from './review';
+import type { StudentTestResult } from '@/src/types/test-results';
 
 export const MAX_TEST_ATTEMPT_DOCUMENT_BYTES = 900 * 1024;
 
@@ -100,6 +111,12 @@ const sameOrigin = (left: TestAttemptOrigin, right: TestAttemptOrigin) =>
 export function getTestAttemptSessionId(studentId: string, origin: TestAttemptOrigin): string {
   return createHash('sha256')
     .update(JSON.stringify([studentId, origin.kind, originId(origin)]))
+    .digest('hex');
+}
+
+export function getStudentMockResultId(studentId: string, mockTestId: string): string {
+  return createHash('sha256')
+    .update(JSON.stringify([studentId, mockTestId]))
     .digest('hex');
 }
 
@@ -147,7 +164,13 @@ function parseSessionSnapshot(snapshot: DocumentSnapshot): TestAttemptSession {
 
 function toStudentAttempt(attempt: TestAttempt): StudentTestAttempt {
   if (attempt.status === 'submitted') {
-    const { studentId: _studentId, ...studentAttempt } = attempt;
+    const {
+      studentId: _studentId,
+      answers: _answers,
+      translationGrades: _translationGrades,
+      deliveryState: _deliveryState,
+      ...studentAttempt
+    } = attempt;
     return studentAttempt;
   }
 
@@ -204,6 +227,7 @@ export interface TestAttemptServiceOptions {
   loadGeneratedWords?: GeneratedWordLoader;
   loadVocabularyPool?: VocabularyPoolLoader;
   maxAttemptDocumentBytes?: number;
+  maxReviewDocumentBytes?: number;
   gradeTestTranslation?: TestTranslationGrader;
 }
 
@@ -212,6 +236,7 @@ export class TestAttemptService {
   private readonly loadGeneratedWords: GeneratedWordLoader;
   private readonly loadVocabularyPool: VocabularyPoolLoader;
   private readonly maxAttemptDocumentBytes: number;
+  private readonly maxReviewDocumentBytes?: number;
   private readonly gradeTestTranslation: TestTranslationGrader;
 
   constructor(
@@ -223,6 +248,7 @@ export class TestAttemptService {
     this.loadGeneratedWords = options.loadGeneratedWords ?? createFirestoreGeneratedWordLoader(db);
     this.loadVocabularyPool = options.loadVocabularyPool ?? createFirestoreVocabularyPoolLoader(db);
     this.maxAttemptDocumentBytes = options.maxAttemptDocumentBytes ?? MAX_TEST_ATTEMPT_DOCUMENT_BYTES;
+    this.maxReviewDocumentBytes = options.maxReviewDocumentBytes;
     this.gradeTestTranslation =
       options.gradeTestTranslation ??
       (async request => {
@@ -250,6 +276,14 @@ export class TestAttemptService {
 
   private get attemptSessions() {
     return this.db.collection(TEST_ATTEMPT_SESSIONS_COLLECTION);
+  }
+
+  private get reviews() {
+    return this.db.collection(TEST_RESULT_REVIEWS_COLLECTION);
+  }
+
+  private get studentMockResults() {
+    return this.db.collection(STUDENT_MOCK_RESULTS_COLLECTION);
   }
 
   private get progress() {
@@ -364,10 +398,10 @@ export class TestAttemptService {
     return path;
   }
 
-  private assertAttemptDocumentSize(attempt: InProgressTestAttempt) {
+  private assertAttemptDocumentSize(attempt: InProgressTestAttempt | SubmittedTestAttempt) {
     let estimatedBytes: number;
     try {
-      estimatedBytes = estimateFirestoreDocumentBytes(attempt as unknown as Record<string, unknown>);
+      estimatedBytes = estimateFirestoreDocumentBytes({ ...attempt });
     } catch (error) {
       throw configurationError(`Could not serialize attempt ${attempt.id}`, error);
     }
@@ -381,6 +415,48 @@ export class TestAttemptService {
         'This test attempt is too large to save safely. Please ask an administrator to review its content size.',
         422
       );
+    }
+  }
+
+  private buildReviewForAttempt(attempt: InProgressTestAttempt, submittedAt: string) {
+    const frozenScore = gradeFrozenTestDelivery(
+      attempt.deliveryState as FrozenTestDeliveryState,
+      attempt.answers,
+      attempt.translationGrades
+    );
+    const exerciseResults = Object.fromEntries(
+      frozenScore.exerciseResults.map(result => [
+        result.exerciseId,
+        { title: result.title, awardedPoints: result.awardedPoints, maxPoints: result.maxPoints },
+      ])
+    );
+    const review = buildSubmittedReview({
+      attemptId: attempt.id,
+      studentId: attempt.studentId,
+      versionId: attempt.versionId,
+      origin: attempt.origin,
+      submittedAt,
+      deliveryState: attempt.deliveryState as FrozenTestDeliveryState,
+      answers: attempt.answers,
+      translationGrades: attempt.translationGrades,
+      exerciseResults,
+    });
+    return { frozenScore, exerciseResults, review };
+  }
+
+  private assertAttemptCanBeSubmitted(attempt: InProgressTestAttempt) {
+    try {
+      const { review } = this.buildReviewForAttempt(attempt, attempt.updatedAt);
+      if (!isTestResultReviewDocumentWithinSizeLimit(review, this.maxReviewDocumentBytes)) {
+        throw new TestServiceError(
+          'ATTEMPT_TOO_LARGE',
+          'This test attempt is too large to save safely. Please ask an administrator to review its content size.',
+          422
+        );
+      }
+    } catch (error) {
+      if (error instanceof TestServiceError) throw error;
+      throw configurationError(`Could not prepare a review for attempt ${attempt.id}`, error);
     }
   }
 
@@ -565,6 +641,7 @@ export class TestAttemptService {
         throw configurationError(`Could not build attempt for version ${version.id}`, error);
       }
       this.assertAttemptDocumentSize(attempt);
+      this.assertAttemptCanBeSubmitted(attempt);
 
       const session = testAttemptSessionDocumentSchema.parse({
         id: sessionId,
@@ -664,6 +741,7 @@ export class TestAttemptService {
         updatedAt: timestamp,
       }) as InProgressTestAttempt;
       this.assertAttemptDocumentSize(updated);
+      this.assertAttemptCanBeSubmitted(updated);
       transaction.set(attemptRef, updated);
       return toStudentAttempt(updated) as StudentInProgressTestAttempt;
     });
@@ -823,6 +901,7 @@ export class TestAttemptService {
           updatedAt: this.now(),
         }) as InProgressTestAttempt;
         this.assertAttemptDocumentSize(updated);
+        this.assertAttemptCanBeSubmitted(updated);
         transaction.set(attemptRef, updated);
 
         return toStudentAttempt(updated) as StudentInProgressTestAttempt;
@@ -860,17 +939,23 @@ export class TestAttemptService {
       }
 
       let frozenScore: FrozenDeliveryScore;
+      let exerciseResults: SubmittedTestAttempt['exerciseResults'];
+      let review: TestResultReview;
       try {
-        frozenScore = gradeFrozenTestDelivery(
-          attempt.deliveryState as FrozenTestDeliveryState,
-          attempt.answers,
-          attempt.translationGrades
-        );
+        ({ frozenScore, exerciseResults, review } = this.buildReviewForAttempt(attempt, this.now()));
+        if (!isTestResultReviewDocumentWithinSizeLimit(review, this.maxReviewDocumentBytes)) {
+          throw new TestServiceError(
+            'ATTEMPT_TOO_LARGE',
+            'This test attempt is too large to submit safely. Please ask an administrator to review its content size.',
+            422
+          );
+        }
       } catch (error) {
+        if (error instanceof TestServiceError) throw error;
         throw configurationError(`Could not grade attempt ${attempt.id} from its frozen delivery state`, error);
       }
 
-      const timestamp = this.now();
+      const timestamp = review.submittedAt;
       const percentage = (frozenScore.awardedPoints / frozenScore.maxPoints) * 100;
       const outcome =
         attempt.passingPercentage === null
@@ -890,12 +975,7 @@ export class TestAttemptService {
           startedAt: attempt.startedAt,
           updatedAt: timestamp,
           status: 'submitted',
-          exerciseResults: Object.fromEntries(
-            frozenScore.exerciseResults.map(result => [
-              result.exerciseId,
-              { title: result.title, awardedPoints: result.awardedPoints, maxPoints: result.maxPoints },
-            ])
-          ),
+          exerciseResults,
           score: frozenScore.awardedPoints,
           maxScore: frozenScore.maxPoints,
           percentage,
@@ -905,6 +985,7 @@ export class TestAttemptService {
       } catch (error) {
         throw configurationError(`Could not freeze the result of attempt ${attempt.id}`, error);
       }
+      this.assertAttemptDocumentSize(submitted);
 
       // All transaction reads must precede writes: read the completion record
       // before freezing the attempt, clearing the session pointer, and granting
@@ -913,9 +994,14 @@ export class TestAttemptService {
       const completionTestId = origin.kind === 'normal-test' && outcome !== 'not-passed' ? origin.testId : null;
       const completionRef = completionTestId ? this.progress.doc(`${studentId}_${completionTestId}`) : null;
       const sessionRef = this.attemptSessions.doc(getTestAttemptSessionId(studentId, origin));
-      const [sessionSnapshot, completionSnapshot] = await Promise.all([
+      const mockResultRef =
+        origin.kind === 'mock-test'
+          ? this.studentMockResults.doc(getStudentMockResultId(studentId, origin.mockTestId))
+          : null;
+      const [sessionSnapshot, completionSnapshot, mockResultSnapshot] = await Promise.all([
         transaction.get(sessionRef),
         completionRef ? transaction.get(completionRef) : Promise.resolve(null),
+        mockResultRef ? transaction.get(mockResultRef) : Promise.resolve(null),
       ]);
 
       let shouldClearSession = false;
@@ -930,7 +1016,32 @@ export class TestAttemptService {
       }
 
       transaction.set(attemptRef, submitted);
+      transaction.set(this.reviews.doc(attempt.id), review);
       if (shouldClearSession) transaction.delete(sessionRef);
+
+      if (mockResultRef && origin.kind === 'mock-test') {
+        const existing = mockResultSnapshot?.exists
+          ? studentMockResultDocumentSchema.safeParse({ ...mockResultSnapshot.data(), id: mockResultSnapshot.id })
+          : null;
+        if (!existing?.success || existing.data.latest.submittedAt <= timestamp) {
+          transaction.set(
+            mockResultRef,
+            studentMockResultDocumentSchema.parse({
+              id: mockResultRef.id,
+              studentId,
+              mockTestId: origin.mockTestId,
+              latest: {
+                attemptId: attempt.id,
+                score: submitted.score,
+                maxScore: submitted.maxScore,
+                percentage: submitted.percentage,
+                outcome: submitted.outcome,
+                submittedAt: submitted.submittedAt,
+              },
+            })
+          );
+        }
+      }
 
       let completionGranted = false;
       if (completionRef && completionSnapshot && completionTestId) {
@@ -1057,6 +1168,56 @@ export class TestAttemptService {
     const sessionSnapshot = transaction ? await transaction.get(sessionRef) : await sessionRef.get();
     const attempt = await this.activeAttemptForSession(sessionSnapshot, studentId, origin, transaction);
     return attempt ? (toStudentAttempt(attempt) as StudentInProgressTestAttempt) : null;
+  }
+
+  /** Active attempts are reported as not found so answer keys cannot leak. */
+  async getSubmittedResult(attemptId: string, studentId: string): Promise<StudentTestResult> {
+    const attempt = parseAttemptSnapshot(await this.attempts.doc(attemptId).get());
+    assertAttemptOwner(attempt, studentId);
+    if (attempt.status !== 'submitted') {
+      throw new TestServiceError('ATTEMPT_NOT_FOUND', 'Test result not found', 404);
+    }
+
+    let review: StudentTestResult['review'] = null;
+    const reviewSnapshot = await this.reviews.doc(attemptId).get();
+    if (reviewSnapshot.exists) {
+      try {
+        const parsed = testResultReviewDocumentSchema.parse({ ...reviewSnapshot.data(), id: reviewSnapshot.id });
+        if (
+          parsed.studentId !== studentId ||
+          parsed.attemptId !== attempt.id ||
+          parsed.versionId !== attempt.versionId ||
+          !sameOrigin(parsed.origin, attempt.origin)
+        ) {
+          throw new Error('Review identity does not match its submitted attempt');
+        }
+        review = toStudentTestResultReview(parsed);
+      } catch (error) {
+        console.error(`Could not read the question review for submitted attempt ${attempt.id}`, error);
+      }
+    } else if (attempt.deliveryState && attempt.answers) {
+      // Compatibility for attempts submitted before reviews moved to their own
+      // document. The public attempt DTO still omits these legacy internals.
+      try {
+        review = toStudentTestResultReview(
+          buildSubmittedReview({
+            attemptId: attempt.id,
+            studentId: attempt.studentId,
+            versionId: attempt.versionId,
+            origin: attempt.origin,
+            submittedAt: attempt.submittedAt,
+            deliveryState: attempt.deliveryState as FrozenTestDeliveryState,
+            answers: attempt.answers,
+            translationGrades: attempt.translationGrades ?? {},
+            exerciseResults: attempt.exerciseResults,
+          })
+        );
+      } catch (error) {
+        console.error(`Could not build the legacy question review for submitted attempt ${attempt.id}`, error);
+      }
+    }
+
+    return { attempt: toStudentAttempt(attempt) as StudentSubmittedTestAttempt, review };
   }
 }
 

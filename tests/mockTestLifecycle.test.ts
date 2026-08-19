@@ -36,6 +36,7 @@ function mockDb(seed: Record<string, Record<string, Record<string, unknown>>>, e
   const versions = new Map<string, number>();
   let conflicts = 0;
   let retries = 0;
+  const queryCounts = new Map<string, number>();
   const keyFor = (ref: Pick<Ref, 'collection' | 'id'>) => `${ref.collection}/${ref.id}`;
   const docs = (collection: string) => {
     let values = data.get(collection);
@@ -78,6 +79,7 @@ function mockDb(seed: Record<string, Record<string, Record<string, unknown>>>, e
         }),
       }),
       get: async (): Promise<{ docs: Snapshot[] }> => {
+        queryCounts.set(name, (queryCounts.get(name) ?? 0) + 1);
         let entries = [...docs(name)].filter(([, value]) =>
           filters.every(([field, expected]) => valueAt(value, field) === expected)
         );
@@ -178,7 +180,7 @@ function mockDb(seed: Record<string, Record<string, Record<string, unknown>>>, e
   return {
     db,
     get: (collection: string, id: string) => docs(collection).get(id),
-    stats: () => ({ conflicts, retries }),
+    stats: () => ({ conflicts, retries, queryCounts: Object.fromEntries(queryCounts) }),
   };
 }
 
@@ -1138,5 +1140,88 @@ describe('mock transactional lifecycle', () => {
       { id: 'good', title: 'M', passingPercentage: null },
     ]);
     errors.mockRestore();
+  });
+
+  it('returns only the latest review-only result for each hidden or archived mock', async () => {
+    const hidden = { ...mock, id: 'hidden', title: 'Hidden mock', isLive: false, mockOrder: null };
+    const archived = {
+      ...mock,
+      id: 'archived',
+      title: 'Archived mock',
+      status: 'archived' as const,
+      isLive: false,
+      mockOrder: null,
+    };
+    const live = { ...mock, id: 'live', title: 'Live mock' };
+    const materialOnly = { ...mock, id: 'material-only', title: 'Materialized mock', isLive: false, mockOrder: null };
+    const submitted = (mockTestId: string, submittedAt: string, score: number, studentId = 'student') => ({
+      studentId,
+      status: 'submitted',
+      origin: { kind: 'mock-test', mockTestId },
+      score,
+      maxScore: 10,
+      percentage: score * 10,
+      outcome: score >= 7 ? 'passed' : 'not-passed',
+      submittedAt,
+    });
+    const memory = mockDb({
+      lessons: {},
+      testVersions: { v1: version },
+      mockTests: { hidden, archived, live, 'material-only': materialOnly },
+      studentMockResults: {
+        materialized: {
+          id: 'materialized',
+          studentId: 'student',
+          mockTestId: 'material-only',
+          latest: {
+            attemptId: 'material-attempt',
+            score: 9,
+            maxScore: 10,
+            percentage: 90,
+            outcome: 'passed',
+            submittedAt: '2026-07-04T00:00:00.000Z',
+          },
+        },
+      },
+      testAttempts: {
+        'hidden-old': submitted('hidden', '2026-07-01T00:00:00.000Z', 3),
+        'hidden-latest': submitted('hidden', '2026-07-03T00:00:00.000Z', 8),
+        'archived-latest': submitted('archived', '2026-07-02T00:00:00.000Z', 6),
+        'live-latest': submitted('live', '2026-07-04T00:00:00.000Z', 9),
+        'other-student': submitted('hidden', '2026-07-05T00:00:00.000Z', 10, 'other'),
+        ...Object.fromEntries(
+          Array.from({ length: 101 }, (_, index) => [
+            `live-noise-${index}`,
+            submitted('live', new Date(Date.UTC(2026, 7, index + 1)).toISOString(), 9),
+          ])
+        ),
+      },
+      mockTestOrdering: {},
+      learningPaths: {},
+    });
+
+    const service = new MockTestService(memory.db as never, () => at);
+    const results = await service.listPastStudentMockResults('student', new Set(['live']));
+
+    expect(results).toEqual([
+      expect.objectContaining({
+        id: 'material-only',
+        latest: expect.objectContaining({ attemptId: 'material-attempt', score: 9 }),
+      }),
+      expect.objectContaining({
+        id: 'hidden',
+        title: 'Hidden mock',
+        latest: expect.objectContaining({ attemptId: 'hidden-latest', score: 8 }),
+      }),
+      expect.objectContaining({
+        id: 'archived',
+        title: 'Archived mock',
+        latest: expect.objectContaining({ attemptId: 'archived-latest', score: 6 }),
+      }),
+    ]);
+
+    expect(memory.stats().queryCounts.testAttempts).toBe(1);
+    await service.listPastStudentMockResults('student', new Set(['live']));
+    expect(memory.stats().queryCounts.testAttempts).toBe(1);
   });
 });

@@ -9,7 +9,11 @@ jest.mock('@/src/lib/tests/attempt-service', () => ({
   testAttemptService: { getAttemptSummary: jest.fn() },
 }));
 jest.mock('@/src/lib/tests/mock-service', () => ({
-  mockTestService: { listStudentLiveMocks: jest.fn(), getRelatedLiveMocks: jest.fn() },
+  mockTestService: {
+    listStudentLiveMocks: jest.fn(async () => []),
+    listPastStudentMockResults: jest.fn(async () => []),
+    getRelatedLiveMocks: jest.fn(),
+  },
 }));
 
 type RecordData = Record<string, unknown>;
@@ -699,7 +703,11 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
           },
         })),
       } as never,
-      { listStudentLiveMocks: jest.fn(async () => []), getRelatedLiveMocks } as never
+      {
+        listStudentLiveMocks: jest.fn(async () => []),
+        listPastStudentMockResults: jest.fn(async () => []),
+        getRelatedLiveMocks,
+      } as never
     );
 
     expect((await service.getDashboard('user')).learningPath[1]).toMatchObject({

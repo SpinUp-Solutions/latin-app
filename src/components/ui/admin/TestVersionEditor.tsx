@@ -45,6 +45,7 @@ import { PageSection } from './lesson-builder/PageSection';
 import { ClipboardProvider } from '@/src/components/ui/core/clipboard';
 import { PassingRequirementControl } from './test-version/PassingRequirementControl';
 import { TestVersionPreview } from './test-version/TestVersionPreview';
+import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { useUnsavedNavigationGuard } from '@/src/hooks/useUnsavedNavigationGuard';
 import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
 import { UnsavedNavigationDialog } from '@/src/components/ui/core/UnsavedNavigationDialog';
@@ -359,17 +360,21 @@ export function TestVersionEditor({
                   </div>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-roman-stone">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-roman-stone">
                     <span className="text-roman-red">Tests</span>
                     <span aria-hidden="true" className="text-roman-gold">
                       •
                     </span>
-                    <span className="max-w-64 truncate">{testTitle || 'Untitled test'}</span>
+                    <span className="flex min-w-0 max-w-64 items-center truncate">
+                      <SimpleRichDisplay content={testTitle || 'Untitled test'} className="min-w-0 truncate" />
+                    </span>
                     <span aria-hidden="true" className="text-roman-gold">
                       •
                     </span>
-                    <span className="max-w-48 truncate text-gray-600">{document.title}</span>
-                  </p>
+                    <span className="flex min-w-0 max-w-48 items-center truncate text-gray-600">
+                      <SimpleRichDisplay content={document.title} className="min-w-0 truncate" />
+                    </span>
+                  </div>
                   <div className="mt-0.5 flex items-center gap-2.5">
                     <h1 className="font-serif text-lg tracking-tight text-gray-900 sm:text-xl">Test Version Editor</h1>
                     <span aria-hidden="true" className="hidden items-center gap-1.5 md:flex">
@@ -596,8 +601,8 @@ export function TestVersionEditor({
           </div>
           <div className="mx-auto w-full max-w-3xl p-3 pb-8 sm:p-4 md:p-5">
             <TestVersionPreview
-              title={testTitle}
-              description={description}
+              title={<SimpleRichDisplay content={testTitle || 'Untitled test'} />}
+              description={description ? <SimpleRichDisplay content={description} /> : undefined}
               pages={document.pages}
               vocabularyPoolId={vocabularyPoolId}
             />

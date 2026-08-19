@@ -6,7 +6,7 @@ import { useGetStudentDashboardQuery } from '@/src/store/api/lessonApi';
 import { BookOpen, Pencil, Headphones, CheckCircle, Play, ChevronDown, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/src/hooks/useAuth';
 import { cn } from '@/src/lib/utils';
-import { stripHtmlTags } from '@/src/utils/exercises/helpers';
+import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import WordSearchPanel from './word-search-panel';
 
 type PracticeView = 'vocab' | 'sentence-diagramming' | 'listening';
@@ -231,14 +231,20 @@ export default function PracticeSidebar({
                                             ? 'bg-roman-green/15 text-roman-green'
                                             : `bg-gray-100 ${config.iconColor}`
                                         )}>
-                                        {isCompleted ? <CheckCircle className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                        {isCompleted ? (
+                                          <CheckCircle className="h-4 w-4" />
+                                        ) : (
+                                          <Play className="h-4 w-4" />
+                                        )}
                                       </div>
                                       <div className="flex-1 min-w-0">
-                                        <h4 className="text-sm font-serif text-gray-900 truncate">{lesson.title}</h4>
+                                        <h4 className="text-sm font-serif text-gray-900 truncate">
+                                          <SimpleRichDisplay content={lesson.title} className="truncate" />
+                                        </h4>
                                         {lesson.description && (
-                                          <p className="text-xs text-roman-stone mt-0.5 line-clamp-1">
-                                            {stripHtmlTags(lesson.description)}
-                                          </p>
+                                          <div className="mt-0.5 line-clamp-1 text-xs text-roman-stone">
+                                            <SimpleRichDisplay content={lesson.description} />
+                                          </div>
                                         )}
                                       </div>
                                     </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { type ReactNode } from 'react';
 import { ArrowLeft, ArrowRight, Eye, FileCheck2, Save } from 'lucide-react';
 import { Button } from '@/src/components/ui/button';
 import { Progress } from '@/src/components/ui/progress';
@@ -13,8 +13,8 @@ import type { ResolvedGeneratedExerciseState } from '@/src/components/ui/lesson/
 import type { VocabularyPoolStudyData } from '@/src/types/vocabulary';
 
 export interface TestTakingViewProps {
-  title: string;
-  description?: string;
+  title: ReactNode;
+  description?: ReactNode;
   pages: Page[];
   currentPageIndex: number;
   answeredCount: number;

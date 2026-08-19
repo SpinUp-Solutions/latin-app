@@ -1,5 +1,6 @@
 import {
   getTestAttemptSessionId,
+  getStudentMockResultId,
   MAX_TRANSLATION_GRADING_REQUESTS_PER_WINDOW,
   TestAttemptService,
   TRANSLATION_GRADING_REQUEST_WINDOW_MS,
@@ -957,12 +958,33 @@ describe('test attempt submission and sticky completion', () => {
       submittedAt: timestamp,
     });
     expect(result.attempt).not.toHaveProperty('studentId');
+    expect(result.attempt).not.toHaveProperty('answers');
+    expect(result.attempt).not.toHaveProperty('translationGrades');
+    expect(result.attempt).not.toHaveProperty('delivery');
     expect(result.attempt.exerciseResults['fill-ten']).toEqual({ title: 'Fill', awardedPoints: 3.5, maxPoints: 5 });
 
     const stored = db.read('testAttempts', started.attempt.id)!;
     expect(stored.status).toBe('submitted');
     expect(stored).not.toHaveProperty('answers');
+    expect(stored).not.toHaveProperty('translationGrades');
     expect(stored).not.toHaveProperty('deliveryState');
+    expect(db.read('testResultReviews', started.attempt.id)).toMatchObject({
+      content: {
+        pages: [
+          {
+            items: [
+              expect.objectContaining({
+                id: 'fill-ten',
+                studentAnswer: {
+                  type: 'fill',
+                  answers: ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'x', 'y', 'z'],
+                },
+              }),
+            ],
+          },
+        ],
+      },
+    });
     expect(db.readAll('testAttemptSessions')).toHaveLength(0);
 
     expect(db.read('userProgress', 'student-1_test-1')).toEqual({
@@ -1298,6 +1320,11 @@ describe('test attempt submission and sticky completion', () => {
     const stored = db.read('testAttempts', result.attempt.id)!;
     expect(stored).not.toHaveProperty('answers');
     expect(stored).not.toHaveProperty('deliveryState');
+    expect(db.read('testResultReviews', result.attempt.id)).toMatchObject({
+      content: {
+        pages: [{ items: [expect.objectContaining({ studentAnswer: { type: 'fill', answers: ['wrong'] } })] }],
+      },
+    });
     expect(db.readAll('testAttemptSessions')).toHaveLength(0);
   });
 
@@ -1346,6 +1373,76 @@ describe('test attempt submission and sticky completion', () => {
     expect(duplicate.attempt).toEqual(first.attempt);
     expect(duplicate.completionGranted).toBe(false);
     expect(db.writeLog).toHaveLength(writesBefore);
+  });
+
+  it('loads a separately frozen review without exposing its grading inputs in the attempt DTO', async () => {
+    const db = new FakeFirestore();
+    seedNormalTest(db, ['version-a']);
+    const service = new TestAttemptService(db as never, () => timestamp);
+    const submitted = await startAnswerSubmit(service, db, { type: 'fill', answers: ['love'] });
+
+    const result = await service.getSubmittedResult(submitted.attempt.id, 'student-1');
+
+    expect(result.attempt).not.toHaveProperty('answers');
+    expect(result.attempt).not.toHaveProperty('translationGrades');
+    expect(result.attempt).not.toHaveProperty('delivery');
+    expect(result.review?.content.pages[0].items[0]).toMatchObject({
+      studentAnswer: { type: 'fill', answers: ['love'] },
+    });
+  });
+
+  it('rejects review documents that do not match the submitted attempt identity', async () => {
+    const db = new FakeFirestore();
+    seedNormalTest(db, ['version-a']);
+    const errors = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const service = new TestAttemptService(db as never, () => timestamp);
+    const submitted = await startAnswerSubmit(service, db, { type: 'fill', answers: ['love'] });
+    const attemptId = submitted.attempt.id;
+    const review = db.read('testResultReviews', attemptId)!;
+
+    for (const mismatch of [
+      { studentId: 'student-2' },
+      { versionId: 'version-b' },
+      { origin: { kind: 'normal-test', testId: 'test-2' } },
+    ]) {
+      db.seed('testResultReviews', attemptId, { ...review, ...mismatch });
+      await expect(service.getSubmittedResult(attemptId, 'student-1')).resolves.toMatchObject({ review: null });
+    }
+
+    errors.mockRestore();
+  });
+
+  it('rebuilds legacy embedded reviews while keeping summary-only attempts readable', async () => {
+    const db = new FakeFirestore();
+    seedNormalTest(db, ['version-a']);
+    const service = new TestAttemptService(db as never, () => timestamp);
+    const started = await service.startAttempt(startInput, 'student-1');
+    await service.saveAttemptAnswers(
+      started.attempt.id,
+      { answers: { 'fill.with.punctuation': { type: 'fill', answers: ['love'] } } },
+      'student-1'
+    );
+    const working = db.read('testAttempts', started.attempt.id)!;
+    await service.submitAttempt(started.attempt.id, 'student-1');
+    const summary = db.read('testAttempts', started.attempt.id)!;
+
+    db.seed('testAttempts', 'legacy-detailed', {
+      ...summary,
+      id: 'legacy-detailed',
+      answers: working.answers,
+      translationGrades: working.translationGrades,
+      deliveryState: working.deliveryState,
+    });
+    db.seed('testAttempts', 'legacy-summary', { ...summary, id: 'legacy-summary' });
+
+    await expect(service.getSubmittedResult('legacy-detailed', 'student-1')).resolves.toMatchObject({
+      review: {
+        content: {
+          pages: [{ items: [expect.objectContaining({ studentAnswer: { type: 'fill', answers: ['love'] } })] }],
+        },
+      },
+    });
+    await expect(service.getSubmittedResult('legacy-summary', 'student-1')).resolves.toMatchObject({ review: null });
   });
 
   it('does not clear a session pointer that belongs to a newer active attempt', async () => {
@@ -1424,6 +1521,11 @@ describe('test attempt submission and sticky completion', () => {
     expect(result.completionGranted).toBe(false);
     expect(db.readAll('userProgress')).toHaveLength(0);
     expect(db.readAll('testAttemptSessions')).toHaveLength(0);
+    expect(db.read('studentMockResults', getStudentMockResultId('student-1', 'mock-1'))).toMatchObject({
+      studentId: 'student-1',
+      mockTestId: 'mock-1',
+      latest: { attemptId: started.attempt.id, percentage: 100, submittedAt: timestamp },
+    });
   });
 
   it('keeps the in-progress attempt intact when frozen grading fails', async () => {
@@ -1637,6 +1739,27 @@ describe('attempt size message and rotation validation cost', () => {
       .catch((error: unknown) => error);
     expect(saveFailure).toMatchObject({ code: 'ATTEMPT_TOO_LARGE', status: 422 });
     expect((saveFailure as Error).message).toContain('too large to save safely');
+    consoleError.mockRestore();
+  });
+
+  it('rejects review growth while saving instead of accepting an attempt that cannot be submitted', async () => {
+    const db = new FakeFirestore();
+    seedNormalTest(db, ['version-a']);
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const service = new TestAttemptService(db as never, () => timestamp, { maxReviewDocumentBytes: 10_000 });
+    const started = await service.startAttempt({ origin: normalOrigin }, 'student-1');
+
+    await expect(
+      service.saveAttemptAnswers(
+        started.attempt.id,
+        { answers: { 'fill.with.punctuation': { type: 'fill', answers: ['x'.repeat(20_000)] } } },
+        'student-1'
+      )
+    ).rejects.toMatchObject({ code: 'ATTEMPT_TOO_LARGE', status: 422 });
+
+    await expect(service.submitAttempt(started.attempt.id, 'student-1')).resolves.toMatchObject({
+      attempt: { status: 'submitted' },
+    });
     consoleError.mockRestore();
   });
 

@@ -17,6 +17,15 @@ export function formatScorePercentage(value: number): string {
     .replace(/(\.\d)0$/, '$1');
 }
 
+export function formatScorePoints(value: number): string {
+  if (!Number.isFinite(value)) return '0';
+
+  return value
+    .toFixed(DISPLAY_PERCENTAGE_DECIMALS)
+    .replace(/\.00$/, '')
+    .replace(/(\.\d)0$/, '$1');
+}
+
 export function formatScoreShortfall(value: number): string {
   if (Number.isFinite(value) && value > 0 && value < 0.01) return '<0.01';
   return formatScorePercentage(value);
