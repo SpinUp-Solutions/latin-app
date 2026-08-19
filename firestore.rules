@@ -48,6 +48,12 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Detailed submitted-test review snapshots contain frozen answer keys and
+    // are read exclusively through the authenticated result API.
+    match /testAttemptReviews/{document=**} {
+      allow read, write: if false;
+    }
+
     match /mockTests/{document=**} {
       allow read, write: if false;
     }
@@ -148,6 +154,7 @@ service cloud.firestore {
         && collection != 'testVersionDrafts'
         && collection != 'testAttempts'
         && collection != 'testAttemptSessions'
+        && collection != 'testAttemptReviews'
         && collection != 'mockTests'
         && collection != 'mockTestOrdering'
         && collection != 'userProgress'

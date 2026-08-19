@@ -184,7 +184,10 @@ export class StudentDashboardService {
     private readonly db: Firestore = adminDb,
     private readonly categories: Pick<PracticeCategoryService, 'getAssignmentsForLessonIds'> = practiceCategoryService,
     private readonly attempts: Pick<TestAttemptService, 'getAttemptSummary'> = testAttemptService,
-    private readonly mocks: Pick<MockTestService, 'listStudentLiveMocks' | 'getRelatedLiveMocks'> = mockTestService
+    private readonly mocks: Pick<
+      MockTestService,
+      'listStudentLiveMocks' | 'getRelatedLiveMocks' | 'listPastStudentMockResults'
+    > = mockTestService
   ) {}
 
   private get units() {
@@ -554,6 +557,10 @@ export class StudentDashboardService {
     );
     const practiceLessons = await this.enrichPracticeLessons(rawPracticeLessons);
     const mockTests = (await this.mocks.listStudentLiveMocks(userId)) ?? [];
+    const pastMockResults = await this.mocks.listPastStudentMockResults(
+      userId,
+      new Set(mockTests.map(mock => mock.id))
+    );
 
     const learningPath = this.processNormalUnits(normalUnits, progressByLessonId, attemptSummaries);
     await Promise.all(
@@ -569,6 +576,7 @@ export class StudentDashboardService {
       learningPath,
       practiceLessons: this.processPracticeLessons(practiceLessons, progressByLessonId),
       ...(mockTests.length ? { mockTests } : {}),
+      ...(pastMockResults.length ? { pastMockResults } : {}),
     };
   }
 

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { memo } from 'react';
+import Link from 'next/link';
 import { ArrowRight, ClipboardCheck, Trophy } from 'lucide-react';
 import type { StudentMockTestSummary } from '@/src/types/test';
 import { RomanCardContent } from '@/src/components/ui/core/roman-card';
@@ -15,7 +16,15 @@ const formatPoints = (value: number) =>
     .replace(/(\.\d)0$/, '$1');
 
 export const MockTestCard = memo(
-  ({ mock, onMockClick }: { mock: StudentMockTestSummary; onMockClick: (id: string) => void }) => {
+  ({
+    mock,
+    onMockClick,
+    onReviewClick,
+  }: {
+    mock: StudentMockTestSummary;
+    onMockClick: (id: string) => void;
+    onReviewClick?: (attemptId: string) => void;
+  }) => {
     const summary = mock.attemptSummary;
     const action = summary.inProgressAttemptId
       ? 'Continue Mock Test'
@@ -44,18 +53,22 @@ export const MockTestCard = memo(
     const description = stripHtmlTags(mock.description ?? '');
 
     return (
-      <button
-        type="button"
-        aria-label={`${action}: ${title}`}
+      <div
         onClick={() => onMockClick(mock.id)}
         data-testid="mock-test-card"
         className="group relative flex h-[16rem] min-h-0 w-full flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-5 text-left shadow-[0_12px_35px_-24px_rgba(30,41,59,0.55)] transition duration-300 hover:-translate-y-1 hover:border-teal-300/70 hover:shadow-[0_20px_45px_-24px_rgba(30,41,59,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-roman-red focus-visible:ring-offset-2">
+        <button
+          type="button"
+          aria-label={`${action}: ${title}`}
+          className="absolute inset-0 z-0 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-roman-red focus-visible:ring-inset">
+          <span className="sr-only">{action}</span>
+        </button>
         <div
           aria-hidden="true"
-          className="absolute inset-x-0 top-0 h-24 bg-gradient-to-br from-teal-300/35 via-cyan-100/30 to-transparent opacity-80"
+          className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-br from-teal-300/35 via-cyan-100/30 to-transparent opacity-80"
         />
 
-        <RomanCardContent className="relative flex h-full flex-col p-0">
+        <RomanCardContent className="pointer-events-none relative z-10 flex h-full flex-col p-0">
           <div className="flex min-h-11 items-center gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-teal-100 text-teal-700 ring-1 ring-black/5">
               <ClipboardCheck className="h-5 w-5" aria-hidden="true" />
@@ -113,6 +126,24 @@ export const MockTestCard = memo(
                 Recent {mock.scoreTrend.map(score => `${formatScorePercentage(score.percentage)}%`).join(' → ')}
               </p>
             )}
+            {latest ? (
+              <p className="mt-0.5 truncate text-xs">
+                <Link
+                  href={`/test-results/${latest.attemptId}`}
+                  data-testid="mock-review-latest-link"
+                  aria-label={`Review latest result for ${title}`}
+                  className="pointer-events-auto relative z-20 font-semibold text-indigo-700 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-roman-red focus-visible:ring-offset-2"
+                  onClick={event => {
+                    event.stopPropagation();
+                    if (onReviewClick) {
+                      event.preventDefault();
+                      onReviewClick(latest.attemptId);
+                    }
+                  }}>
+                  Review latest result
+                </Link>
+              </p>
+            ) : null}
 
             <p
               className="sr-only"
@@ -145,7 +176,7 @@ export const MockTestCard = memo(
             </div>
           </div>
         </RomanCardContent>
-      </button>
+      </div>
     );
   }
 );

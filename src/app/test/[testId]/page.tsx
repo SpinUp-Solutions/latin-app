@@ -630,6 +630,9 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
             <Button asChild variant="outline">
               <Link href="/dashboard">Back to dashboard</Link>
             </Button>
+            <Button asChild className="bg-roman-red hover:bg-roman-red/90">
+              <Link href={`/test-results/${result.id}`}>Review answers in detail</Link>
+            </Button>
             {isMockTest && mockRetakeAvailability !== 'available' ? (
               mockRetakeAvailability === 'checking' ? (
                 <div

@@ -7,6 +7,7 @@ import {
   MOCK_TEST_ORDERING_COLLECTION,
   MOCK_TEST_ORDERING_DOCUMENT_ID,
   MOCK_TESTS_COLLECTION,
+  TEST_ATTEMPTS_COLLECTION,
   TEST_VERSION_DRAFTS_COLLECTION,
   TEST_VERSIONS_COLLECTION,
 } from '@/shared/constants/firestore';
@@ -18,9 +19,11 @@ import type {
   MockTestSummary,
   StudentMockTestDetail,
   StudentMockTestSummary,
+  TestAttemptResultSummary,
   TestVersion,
   TestVersionSummary,
 } from '@/src/types/test';
+import type { StudentPastMockResult } from '@/src/types/test-results';
 import { regeneratePageIds } from '@/src/utils/idUtils';
 import { assertVocabularyPoolAssignmentsAllowedInTransaction } from '@/src/lib/vocabulary-pools/assignment.server';
 import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
@@ -44,6 +47,7 @@ import {
   moveStandaloneMockToTestInputSchema,
   reactivateStandaloneMockInputSchema,
   reorderMockTestsInputSchema,
+  submittedAttemptResultProjectionSchema,
   updateMockTestInputSchema,
   updateTestVersionInputSchema,
   type AssignVersionToMockInput,
@@ -321,6 +325,68 @@ export class MockTestService {
       })
     );
     return cards.filter((card): card is StudentMockTestSummary => card !== null);
+  }
+
+  /**
+   * Projects the latest submitted result for mocks that are hidden, archived,
+   * or otherwise absent from the live card list. These small entries remain
+   * reviewable through their frozen attempt but never offer a retake.
+   */
+  async listPastStudentMockResults(
+    studentId: string,
+    excludedMockIds: ReadonlySet<string> = new Set()
+  ): Promise<StudentPastMockResult[]> {
+    const snapshot = await this.db
+      .collection(TEST_ATTEMPTS_COLLECTION)
+      .where('studentId', '==', studentId)
+      .where('origin.kind', '==', 'mock-test')
+      .where('status', '==', 'submitted')
+      .select('origin', 'score', 'maxScore', 'percentage', 'outcome', 'submittedAt')
+      .get();
+
+    const latestByMockId = new Map<string, TestAttemptResultSummary>();
+    for (const document of snapshot.docs) {
+      const data = document.data();
+      const origin = data.origin as { kind?: string; mockTestId?: string } | undefined;
+      if (origin?.kind !== 'mock-test' || typeof origin.mockTestId !== 'string') continue;
+      if (excludedMockIds.has(origin.mockTestId)) continue;
+      const parsed = submittedAttemptResultProjectionSchema.safeParse({
+        score: data.score,
+        maxScore: data.maxScore,
+        percentage: data.percentage,
+        outcome: data.outcome,
+        submittedAt: data.submittedAt,
+      });
+      if (!parsed.success) {
+        console.error(`Submitted attempt ${document.id} contains invalid summary fields; skipping review entry`);
+        continue;
+      }
+      const summary: TestAttemptResultSummary = { attemptId: document.id, ...parsed.data };
+      const existing = latestByMockId.get(origin.mockTestId);
+      if (!existing || summary.submittedAt > existing.submittedAt) latestByMockId.set(origin.mockTestId, summary);
+    }
+
+    if (latestByMockId.size === 0) return [];
+
+    const mockSnapshots = await this.db.getAll(...[...latestByMockId.keys()].map(mockId => this.mocks.doc(mockId)));
+    const results: StudentPastMockResult[] = [];
+    for (const mockSnapshot of mockSnapshots) {
+      const latest = latestByMockId.get(mockSnapshot.id);
+      if (!latest) continue;
+      try {
+        const mock = parseMockSnapshot(mockSnapshot);
+        results.push({
+          id: mock.id,
+          title: mock.title,
+          description: mock.description,
+          passingPercentage: mock.passingPercentage,
+          latest,
+        });
+      } catch (error) {
+        console.error(`Past mock ${mockSnapshot.id} could not be projected safely; skipping review entry`, error);
+      }
+    }
+    return results.sort((left, right) => right.latest.submittedAt.localeCompare(left.latest.submittedAt));
   }
 
   async getStudentMockDetail(mockId: string, studentId: string): Promise<StudentMockTestDetail> {

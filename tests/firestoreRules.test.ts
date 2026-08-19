@@ -20,6 +20,7 @@ describe('Firestore server-only collection rules', () => {
     'vocabulary_word_deletion_challenges',
     'content_sync_locks',
     'vocabulary_content_state',
+    'testAttemptReviews',
   ])('keeps %s inaccessible to direct clients', collection => {
     expect(rules).toMatch(
       new RegExp(

@@ -12,6 +12,7 @@ export const MOCK_TEST_ORDERING_COLLECTION = 'mockTestOrdering';
 export const MOCK_TEST_ORDERING_DOCUMENT_ID = 'default';
 export const TEST_ATTEMPTS_COLLECTION = 'testAttempts';
 export const TEST_ATTEMPT_SESSIONS_COLLECTION = 'testAttemptSessions';
+export const TEST_RESULT_REVIEWS_COLLECTION = 'testAttemptReviews';
 export const USER_PROGRESS_COLLECTION = 'userProgress';
 export const AI_EVALUATION_CASES_COLLECTION = 'aiEvaluationCases';
 export const AI_EVALUATION_RESULT_CACHE_COLLECTION = 'aiEvaluationResultCache';

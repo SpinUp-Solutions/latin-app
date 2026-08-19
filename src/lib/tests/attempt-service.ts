@@ -7,6 +7,7 @@ import {
   MOCK_TESTS_COLLECTION,
   TEST_ATTEMPTS_COLLECTION,
   TEST_ATTEMPT_SESSIONS_COLLECTION,
+  TEST_RESULT_REVIEWS_COLLECTION,
   TEST_VERSIONS_COLLECTION,
   USER_PROGRESS_COLLECTION,
 } from '@/shared/constants/firestore';
@@ -76,6 +77,13 @@ import {
   type GradeTestTranslationInput,
   type StartTestAttemptInput,
 } from './schemas';
+import {
+  assertTestResultReviewDocumentSize,
+  buildSubmittedReview,
+  testResultReviewDocumentSchema,
+  toStudentTestResultReview,
+} from './review';
+import type { StudentTestResult, TestResultReview } from '@/src/types/test-results';
 
 export const MAX_TEST_ATTEMPT_DOCUMENT_BYTES = 900 * 1024;
 
@@ -250,6 +258,10 @@ export class TestAttemptService {
 
   private get attemptSessions() {
     return this.db.collection(TEST_ATTEMPT_SESSIONS_COLLECTION);
+  }
+
+  private get reviews() {
+    return this.db.collection(TEST_RESULT_REVIEWS_COLLECTION);
   }
 
   private get progress() {
@@ -906,17 +918,48 @@ export class TestAttemptService {
         throw configurationError(`Could not freeze the result of attempt ${attempt.id}`, error);
       }
 
-      // All transaction reads must precede writes: read the completion record
-      // before freezing the attempt, clearing the session pointer, and granting
-      // sticky normal-flow completion.
+      // Freeze the detailed review from the already-frozen delivery so the
+      // post-submission answer key can never drift from what was graded.
+      const review = buildSubmittedReview({
+        attemptId: attempt.id,
+        studentId: attempt.studentId,
+        versionId: attempt.versionId,
+        origin: attempt.origin,
+        submittedAt: timestamp,
+        createdAt: timestamp,
+        deliveryState: attempt.deliveryState as FrozenTestDeliveryState,
+        answers: attempt.answers,
+        translationGrades: attempt.translationGrades,
+        exerciseResults: submitted.exerciseResults,
+      });
+      if (!assertTestResultReviewDocumentSize(review)) {
+        throw new TestServiceError(
+          'ATTEMPT_TOO_LARGE',
+          'This test attempt is too large to save safely. Please ask an administrator to review its content size.',
+          422
+        );
+      }
+
+      // All transaction reads must precede writes: read the completion record,
+      // the session pointer, and the previous submitted attempt (whose detailed
+      // review is superseded by this one) before freezing the attempt, writing
+      // the review, clearing the session pointer, and granting sticky
+      // normal-flow completion.
       const origin = attempt.origin;
       const completionTestId = origin.kind === 'normal-test' && outcome !== 'not-passed' ? origin.testId : null;
       const completionRef = completionTestId ? this.progress.doc(`${studentId}_${completionTestId}`) : null;
       const sessionRef = this.attemptSessions.doc(getTestAttemptSessionId(studentId, origin));
-      const [sessionSnapshot, completionSnapshot] = await Promise.all([
+      const previousSubmittedQuery = this.submittedAttemptsQuery(studentId, origin)
+        .orderBy('submittedAt', 'desc')
+        .limit(1);
+      const [sessionSnapshot, completionSnapshot, previousSubmittedSnapshot] = await Promise.all([
         transaction.get(sessionRef),
         completionRef ? transaction.get(completionRef) : Promise.resolve(null),
+        transaction.get(previousSubmittedQuery),
       ]);
+      const previousReviewRef =
+        previousSubmittedSnapshot.docs.length > 0 ? this.reviews.doc(previousSubmittedSnapshot.docs[0].id) : null;
+      const previousReviewSnapshot = previousReviewRef ? await transaction.get(previousReviewRef) : null;
 
       let shouldClearSession = false;
       if (sessionSnapshot.exists) {
@@ -930,6 +973,10 @@ export class TestAttemptService {
       }
 
       transaction.set(attemptRef, submitted);
+      transaction.set(this.reviews.doc(attempt.id), review);
+      // Only the newest detailed review for an origin is retained. Older
+      // attempt documents keep their frozen score summaries.
+      if (previousReviewSnapshot?.exists) transaction.delete(previousReviewRef!);
       if (shouldClearSession) transaction.delete(sessionRef);
 
       let completionGranted = false;
@@ -1057,6 +1104,42 @@ export class TestAttemptService {
     const sessionSnapshot = transaction ? await transaction.get(sessionRef) : await sessionRef.get();
     const attempt = await this.activeAttemptForSession(sessionSnapshot, studentId, origin, transaction);
     return attempt ? (toStudentAttempt(attempt) as StudentInProgressTestAttempt) : null;
+  }
+
+  /**
+   * Serves a submitted attempt's frozen result summary plus its detailed
+   * review snapshot when one exists. Attempts that predate review snapshots
+   * continue to work with `review: null`. Active or unsubmitted attempts are
+   * reported as not found so answer keys can never be retrieved for them.
+   */
+  async getSubmittedResult(attemptId: string, studentId: string): Promise<StudentTestResult> {
+    const attemptRef = this.attempts.doc(attemptId);
+    const attempt = parseAttemptSnapshot(await attemptRef.get());
+    assertAttemptOwner(attempt, studentId);
+    if (attempt.status !== 'submitted') {
+      throw new TestServiceError('ATTEMPT_NOT_FOUND', 'Test result not found', 404);
+    }
+
+    let review: StudentTestResult['review'] = null;
+    const reviewSnapshot = await this.reviews.doc(attemptId).get();
+    if (reviewSnapshot.exists) {
+      const parsed = testResultReviewDocumentSchema.safeParse({ ...reviewSnapshot.data(), id: reviewSnapshot.id });
+      if (
+        parsed.success &&
+        parsed.data.studentId === studentId &&
+        parsed.data.attemptId === attemptId &&
+        parsed.data.versionId === attempt.versionId &&
+        sameOrigin(parsed.data.origin, attempt.origin)
+      ) {
+        review = toStudentTestResultReview(parsed.data as TestResultReview);
+      } else {
+        console.error(
+          `Review snapshot ${attemptId} contains invalid persisted data; serving the frozen result summary only`
+        );
+      }
+    }
+
+    return { attempt: toStudentAttempt(attempt) as StudentSubmittedTestAttempt, review };
   }
 }
 

@@ -7,6 +7,7 @@ import type {
 import type { LessonUnit } from './learning-unit';
 import type { TestAttemptOriginSummary, TestUnitSummary } from './test';
 import type { StudentMockTestSummary } from './test';
+import type { StudentPastMockResult } from './test-results';
 
 /**
  * Temporary compatibility shape for callers that still create legacy lesson
@@ -62,6 +63,8 @@ export interface StudentDashboard {
   learningPath: StudentLearningUnitSummary[];
   practiceLessons: StudentLessonSummary[];
   mockTests?: StudentMockTestSummary[];
+  /** Latest submitted results for hidden/archived mocks; review-only entries. */
+  pastMockResults?: StudentPastMockResult[];
 }
 
 export type LessonWithVocabularyPool = Lesson & {

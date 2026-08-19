@@ -1139,4 +1139,64 @@ describe('mock transactional lifecycle', () => {
     ]);
     errors.mockRestore();
   });
+
+  it('returns only the latest review-only result for each hidden or archived mock', async () => {
+    const hidden = { ...mock, id: 'hidden', title: 'Hidden mock', isLive: false, mockOrder: null };
+    const archived = {
+      ...mock,
+      id: 'archived',
+      title: 'Archived mock',
+      status: 'archived' as const,
+      isLive: false,
+      mockOrder: null,
+    };
+    const live = { ...mock, id: 'live', title: 'Live mock' };
+    const submitted = (
+      mockTestId: string,
+      submittedAt: string,
+      score: number,
+      studentId = 'student'
+    ) => ({
+      studentId,
+      status: 'submitted',
+      origin: { kind: 'mock-test', mockTestId },
+      score,
+      maxScore: 10,
+      percentage: score * 10,
+      outcome: score >= 7 ? 'passed' : 'not-passed',
+      submittedAt,
+    });
+    const memory = mockDb({
+      lessons: {},
+      testVersions: { v1: version },
+      mockTests: { hidden, archived, live },
+      testAttempts: {
+        'hidden-old': submitted('hidden', '2026-07-01T00:00:00.000Z', 3),
+        'hidden-latest': submitted('hidden', '2026-07-03T00:00:00.000Z', 8),
+        'archived-latest': submitted('archived', '2026-07-02T00:00:00.000Z', 6),
+        'live-latest': submitted('live', '2026-07-04T00:00:00.000Z', 9),
+        'other-student': submitted('hidden', '2026-07-05T00:00:00.000Z', 10, 'other'),
+      },
+      mockTestOrdering: {},
+      learningPaths: {},
+    });
+
+    const results = await new MockTestService(memory.db as never, () => at).listPastStudentMockResults(
+      'student',
+      new Set(['live'])
+    );
+
+    expect(results).toEqual([
+      expect.objectContaining({
+        id: 'hidden',
+        title: 'Hidden mock',
+        latest: expect.objectContaining({ attemptId: 'hidden-latest', score: 8 }),
+      }),
+      expect.objectContaining({
+        id: 'archived',
+        title: 'Archived mock',
+        latest: expect.objectContaining({ attemptId: 'archived-latest', score: 6 }),
+      }),
+    ]);
+  });
 });

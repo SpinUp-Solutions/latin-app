@@ -6,6 +6,7 @@ import type {
   UpdateTestWithVersionInput,
   UpdateTestUnitInput,
 } from '@/src/lib/tests/schemas';
+import type { StudentTestResult } from '@/src/types/test-results';
 import type { TestUnit } from '@/src/types/learning-unit';
 import type {
   StartTestAttemptResult,
@@ -235,6 +236,11 @@ export const testApi = appApi.injectEndpoints({
             ]
           : [],
     }),
+    getTestResult: builder.query<StudentTestResult, string>({
+      query: attemptId => `/test-results/${attemptId}`,
+      transformResponse: (response: { result: StudentTestResult }) => response.result,
+      providesTags: (result, error, attemptId) => (result ? [{ type: 'TestAttempt', id: attemptId }] : []),
+    }),
   }),
 });
 
@@ -254,4 +260,5 @@ export const {
   useSaveTestAttemptAnswersMutation,
   useGradeTestTranslationMutation,
   useSubmitTestAttemptMutation,
+  useGetTestResultQuery,
 } = testApi;

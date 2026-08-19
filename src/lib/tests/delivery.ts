@@ -529,3 +529,25 @@ function gradeSavedTranslationExercise(
   });
   return gradeTranslationAssessment(exercise, scores);
 }
+
+// Review snapshots reuse the exact student-safe projections shown during the
+// attempt so the post-submission review can never drift from what was taken.
+export {
+  projectClickOnMultipleWordsExercise,
+  projectFillEmboldedTextExercise,
+  projectFillExercise,
+  projectGeneratedFormIdentificationExercise,
+  projectGeneratedTranslationExercise,
+  projectListeningPassageContent,
+  projectMatchingExercise,
+  projectMultipleChoiceExercise,
+  projectOddOneOutExercise,
+  projectSentenceDiagrammingExercise,
+  projectTableContent,
+  projectTableFillExercise,
+  projectTextContent,
+  projectTextSelectionExercise,
+  projectTranslationGradingExercise,
+  projectVocabularyContent,
+  projectVocabularyPoolContent,
+};

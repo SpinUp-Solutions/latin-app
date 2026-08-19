@@ -1,6 +1,7 @@
 'use client';
 
 import React, { memo, useEffect, useCallback, useMemo } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/src/services/firebase';
@@ -170,6 +171,17 @@ export const TestCard = memo(
                   </>
                 )}
               </div>
+              {summary.latest ? (
+                <div className="mt-1 flex min-w-0 items-center gap-1.5">
+                  <Link
+                    data-testid="test-review-latest-link"
+                    className="truncate text-xs font-semibold text-indigo-700 underline-offset-2 hover:underline"
+                    href={`/test-results/${summary.latest.attemptId}`}
+                    onClick={event => event.stopPropagation()}>
+                    Review latest result
+                  </Link>
+                </div>
+              ) : null}
             </div>
             <CircularProgressButton
               progress={progress}
@@ -267,6 +279,13 @@ export default function DashboardPage() {
   const handleMockClick = useCallback(
     (mockTestId: string) => {
       router.push(`/test/${encodeURIComponent(mockTestId)}?origin=mock`);
+    },
+    [router]
+  );
+
+  const handleReviewResultClick = useCallback(
+    (attemptId: string) => {
+      router.push(`/test-results/${attemptId}`);
     },
     [router]
   );
@@ -440,6 +459,8 @@ export default function DashboardPage() {
                 onLessonClick={handleLessonClick}
                 mockTests={mockTests}
                 onMockTestClick={handleMockClick}
+                pastMockResults={studentDashboard?.pastMockResults ?? []}
+                onReviewResultClick={handleReviewResultClick}
               />
             </section>
           </div>
