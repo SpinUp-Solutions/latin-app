@@ -90,4 +90,90 @@ describe('vocabulary pool list usage status', () => {
     expect(screen.getByText('Dictionary Entries').tagName).toBe('STRONG');
     expect(screen.queryByText(/<p>/)).not.toBeInTheDocument();
   });
+
+  it('renders duplicate button and triggers onDuplicate callback when clicked', async () => {
+    const user = userEvent.setup();
+    const onDuplicate = jest.fn();
+    const { rerender } = render(
+      <PoolList
+        pools={[pool]}
+        loading={false}
+        loadingMore={false}
+        hasMore={false}
+        onLoadMore={jest.fn()}
+        onEdit={jest.fn()}
+        onDuplicate={onDuplicate}
+        onDelete={jest.fn()}
+        usagesByPoolId={{}}
+      />
+    );
+
+    const duplicateBtn = screen.getByRole('button', { name: /duplicate/i });
+    expect(duplicateBtn).toBeInTheDocument();
+    expect(duplicateBtn).toBeEnabled();
+
+    await user.click(duplicateBtn);
+    expect(onDuplicate).toHaveBeenCalledWith(pool);
+
+    rerender(
+      <PoolList
+        pools={[pool]}
+        loading={false}
+        loadingMore={false}
+        hasMore={false}
+        onLoadMore={jest.fn()}
+        onEdit={jest.fn()}
+        onDuplicate={onDuplicate}
+        duplicatingPoolIds={new Set(['pool-1'])}
+        onDelete={jest.fn()}
+        usagesByPoolId={{}}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /duplicate/i })).toBeDisabled();
+  });
+
+  it('tracks concurrent duplications independently with duplicatingPoolIds set', async () => {
+    const poolA = { ...pool, id: 'pool-a', name: 'Pool A' };
+    const poolB = { ...pool, id: 'pool-b', name: 'Pool B' };
+    const onDuplicate = jest.fn();
+
+    const { rerender } = render(
+      <PoolList
+        pools={[poolA, poolB]}
+        loading={false}
+        loadingMore={false}
+        hasMore={false}
+        onLoadMore={jest.fn()}
+        onEdit={jest.fn()}
+        onDuplicate={onDuplicate}
+        duplicatingPoolIds={new Set(['pool-a'])}
+        onDelete={jest.fn()}
+        usagesByPoolId={{}}
+      />
+    );
+
+    const duplicateButtons = screen.getAllByRole('button', { name: /duplicate/i });
+    expect(duplicateButtons[0]).toBeDisabled(); // Pool A is disabled
+    expect(duplicateButtons[1]).toBeEnabled(); // Pool B remains enabled
+
+    rerender(
+      <PoolList
+        pools={[poolA, poolB]}
+        loading={false}
+        loadingMore={false}
+        hasMore={false}
+        onLoadMore={jest.fn()}
+        onEdit={jest.fn()}
+        onDuplicate={onDuplicate}
+        duplicatingPoolIds={new Set(['pool-a', 'pool-b'])}
+        onDelete={jest.fn()}
+        usagesByPoolId={{}}
+      />
+    );
+
+    const updatedButtons = screen.getAllByRole('button', { name: /duplicate/i });
+    expect(updatedButtons[0]).toBeDisabled();
+    expect(updatedButtons[1]).toBeDisabled();
+  });
 });

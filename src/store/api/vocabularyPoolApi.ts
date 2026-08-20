@@ -28,6 +28,19 @@ interface ParadigmSummaryData {
   poolId: string;
 }
 
+interface GetPoolsArgs {
+  reset?: boolean;
+  filters?: {
+    search?: string;
+    difficulty?: string;
+    tags?: string[];
+    isActive?: boolean | null;
+    sortBy?: 'name' | 'createdAt' | 'wordCount';
+    sortOrder?: 'asc' | 'desc';
+  };
+  lastPoolId?: string | null;
+}
+
 export const vocabularyPoolApi = createApi({
   reducerPath: 'vocabularyPoolApi',
   baseQuery: createAuthenticatedBaseQuery(),
@@ -45,18 +58,7 @@ export const vocabularyPoolApi = createApi({
 
     getPools: builder.query<
       { pools: VocabularyPoolSummary[]; hasMore: boolean; lastPoolId: string | null },
-      {
-        reset?: boolean;
-        filters?: {
-          search?: string;
-          difficulty?: string;
-          tags?: string[];
-          isActive?: boolean | null;
-          sortBy?: 'name' | 'createdAt' | 'wordCount';
-          sortOrder?: 'asc' | 'desc';
-        };
-        lastPoolId?: string | null;
-      }
+      GetPoolsArgs
     >({
       query: ({ filters, lastPoolId }) => {
         const params = new URLSearchParams({ limit: '20' });
@@ -164,6 +166,47 @@ export const vocabularyPoolApi = createApi({
       }),
       transformResponse: (response: { success: boolean; data: { pool: VocabularyPool } }) => response.data.pool,
       invalidatesTags: [{ type: 'PoolList', id: 'LIST' }],
+    }),
+
+    duplicatePool: builder.mutation<VocabularyPool, { poolId: string; name?: string }>({
+      query: ({ poolId, name }) => ({
+        url: `/admin/vocabulary-pools/${poolId}/duplicate`,
+        method: 'POST',
+        body: name ? { name } : {},
+      }),
+      transformResponse: (response: { success: boolean; data: { pool: VocabularyPool } }) => response.data.pool,
+      async onQueryStarted(_arg, { dispatch, queryFulfilled, getState }) {
+        try {
+          await queryFulfilled;
+          const cachedPoolQueries = vocabularyPoolApi.util.selectInvalidatedBy(getState(), [
+            { type: 'PoolList', id: 'LIST' },
+          ]);
+
+          await Promise.all(
+            cachedPoolQueries.map(async query => {
+              if (query.endpointName !== 'getPools') return;
+              const originalArgs = query.originalArgs as GetPoolsArgs;
+
+              let runningQuery = dispatch(
+                vocabularyPoolApi.util.getRunningQueryThunk('getPools', originalArgs)
+              );
+              while (runningQuery) {
+                await runningQuery;
+                runningQuery = dispatch(vocabularyPoolApi.util.getRunningQueryThunk('getPools', originalArgs));
+              }
+
+              await dispatch(
+                vocabularyPoolApi.endpoints.getPools.initiate(
+                  { ...originalArgs, lastPoolId: null },
+                  { subscribe: false, forceRefetch: true }
+                )
+              );
+            })
+          );
+        } catch {
+          // ignore query failure handled by caller
+        }
+      },
     }),
 
     updatePool: builder.mutation<VocabularyPool, { id: string; data: Partial<VocabularyPool> }>({
@@ -299,6 +342,7 @@ export const {
   useGetPoolPOSSummaryQuery,
   useGetPoolParadigmSummaryQuery,
   useCreatePoolMutation,
+  useDuplicatePoolMutation,
   usePreparePoolDeletionMutation,
   useUpdatePoolMutation,
   useDeletePoolMutation,

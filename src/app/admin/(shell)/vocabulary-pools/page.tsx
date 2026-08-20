@@ -10,6 +10,7 @@ import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 import {
   useGetPoolsQuery,
   useDeletePoolMutation,
+  useDuplicatePoolMutation,
   useGetVocabularyPoolUsagesQuery,
   usePreparePoolDeletionMutation,
 } from '@/src/store/api/vocabularyPoolApi';
@@ -20,12 +21,14 @@ import { PoolFilters } from '@/src/components/ui/admin/vocabulary-pools/PoolFilt
 import { PoolList } from '@/src/components/ui/admin/vocabulary-pools/PoolList';
 import { AdminPage, AdminPageHeader } from '@/src/components/admin/shell';
 import { buildVocabularyPoolDeleteConfirmation } from '@/src/lib/vocabulary-pools/delete-confirmation';
+import type { VocabularyPoolSummary } from '@/src/types/vocabulary-pool';
 
 function VocabularyPoolsPage() {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const filters = useAppSelector(state => state.vocabularyPools.filters);
   const [lastPoolId, setLastPoolId] = useState<string | null>(null);
+  const [duplicatingPoolIds, setDuplicatingPoolIds] = useState<Set<string>>(() => new Set());
   const { data, isLoading, isFetching, error } = useGetPoolsQuery({ filters, lastPoolId });
   const {
     data: usageData,
@@ -34,6 +37,7 @@ function VocabularyPoolsPage() {
   } = useGetVocabularyPoolUsagesQuery(undefined, { refetchOnMountOrArgChange: true });
   const [preparePoolDeletion] = usePreparePoolDeletionMutation();
   const [deletePoolMutation] = useDeletePoolMutation();
+  const [duplicatePoolMutation] = useDuplicatePoolMutation();
 
   const pools = data?.pools ?? [];
   const hasMore = data?.hasMore ?? false;
@@ -85,6 +89,29 @@ function VocabularyPoolsPage() {
     }
   };
 
+  const handleDuplicatePool = async (pool: VocabularyPoolSummary) => {
+    if (duplicatingPoolIds.has(pool.id)) return;
+    setDuplicatingPoolIds(prev => new Set(prev).add(pool.id));
+    try {
+      const duplicated = await duplicatePoolMutation({ poolId: pool.id }).unwrap();
+      setLastPoolId(null);
+      toast.success('Vocabulary pool duplicated successfully', {
+        action: {
+          label: 'Edit',
+          onClick: () => router.push(`/admin/vocabulary-pools/${duplicated.id}/edit`),
+        },
+      });
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to duplicate vocabulary pool'));
+    } finally {
+      setDuplicatingPoolIds(prev => {
+        const next = new Set(prev);
+        next.delete(pool.id);
+        return next;
+      });
+    }
+  };
+
   const handleUpdateFilters = (newFilters: Partial<typeof filters>) => {
     dispatch(updateFilters(newFilters));
   };
@@ -129,6 +156,8 @@ function VocabularyPoolsPage() {
             if (data?.lastPoolId) setLastPoolId(data.lastPoolId);
           }}
           onEdit={pool => router.push(`/admin/vocabulary-pools/${pool.id}/edit`)}
+          onDuplicate={handleDuplicatePool}
+          duplicatingPoolIds={duplicatingPoolIds}
           onDelete={handleDeletePool}
           usagesByPoolId={usageData?.usagesByPoolId ?? {}}
         />

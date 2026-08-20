@@ -3,7 +3,7 @@ import { Button } from '@/src/components/ui/button';
 import { Badge } from '@/src/components/ui/badge';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
-import { Edit, Trash2, Library, Calendar, Hash, Loader2 } from 'lucide-react';
+import { Edit, Trash2, Copy, Library, Calendar, Hash, Loader2 } from 'lucide-react';
 import { useInfiniteScroll } from '@/src/hooks/useInfiniteScroll';
 import type { VocabularyPoolSummary, VocabularyPoolUsage } from '@/src/types/vocabulary-pool';
 
@@ -14,6 +14,8 @@ interface PoolListProps {
   hasMore: boolean;
   onLoadMore: () => void;
   onEdit: (pool: VocabularyPoolSummary) => void;
+  onDuplicate?: (pool: VocabularyPoolSummary) => void;
+  duplicatingPoolIds?: Set<string>;
   onDelete: (poolId: string, poolName: string) => void;
   usagesByPoolId: Record<string, VocabularyPoolUsage[]>;
 }
@@ -25,6 +27,8 @@ export const PoolList: React.FC<PoolListProps> = ({
   hasMore,
   onLoadMore,
   onEdit,
+  onDuplicate,
+  duplicatingPoolIds,
   onDelete,
   usagesByPoolId,
 }) => {
@@ -64,6 +68,7 @@ export const PoolList: React.FC<PoolListProps> = ({
         const assigned = usages.length > 0;
         const expanded = expandedPoolIds.has(pool.id);
         const visibleUsages = expanded ? usages : usages.slice(0, 2);
+        const isDuplicating = duplicatingPoolIds?.has(pool.id) ?? false;
         return (
           <RomanCard key={pool.id} className="hover:shadow-lg transition-shadow">
             <RomanCardContent className="p-6">
@@ -148,6 +153,22 @@ export const PoolList: React.FC<PoolListProps> = ({
                     <Edit className="h-4 w-4 mr-1" />
                     Edit
                   </Button>
+                  {onDuplicate && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onDuplicate(pool)}
+                      disabled={isDuplicating}
+                      title="Duplicate pool"
+                      className="text-gray-700 hover:bg-gray-100">
+                      {isDuplicating ? (
+                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                      ) : (
+                        <Copy className="h-4 w-4 mr-1" />
+                      )}
+                      Duplicate
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"
