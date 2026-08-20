@@ -36,13 +36,12 @@ describe('AI evaluation admin workspace', () => {
     mockedDeleteEvaluationCaseInFirebase.mockReset();
   });
 
-  it('keeps the workspace route labeled while marking its navigation entry as WIP', () => {
+  it('links the workspace route from the admin navigation', () => {
     expect(getAdminBreadcrumbs('/admin/ai-evaluations')).toEqual(['Admin', 'AI Evaluations']);
     render(<AdminSidebar />);
-    const disabledItem = screen.getByText('AI Evaluations').closest('[aria-disabled="true"]');
-    expect(disabledItem).toBeInTheDocument();
-    expect(disabledItem).toHaveTextContent('WIP');
-    expect(screen.queryByRole('link', { name: 'AI Evaluations' })).not.toBeInTheDocument();
+    const link = screen.getByRole('link', { name: 'AI Evaluations' });
+    expect(link).toHaveAttribute('href', '/admin/ai-evaluations');
+    expect(screen.queryByText('WIP')).not.toBeInTheDocument();
   });
 
   it('asks before a load retry replaces edits made after the initial request failed', async () => {

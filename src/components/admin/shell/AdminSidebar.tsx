@@ -58,7 +58,7 @@ const navigationGroups: NavigationGroup[] = [
   {
     label: 'System',
     items: [
-      { href: '/admin/ai-evaluations', label: 'AI Evaluations', icon: Sparkles, disabled: true },
+      { href: '/admin/ai-evaluations', label: 'AI Evaluations', icon: Sparkles },
       { href: '/admin/diagramming-attempts', label: 'Diagramming Attempts', icon: ClipboardList },
     ],
   },
