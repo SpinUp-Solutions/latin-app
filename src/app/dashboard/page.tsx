@@ -41,9 +41,27 @@ const statusConfig: Record<LessonStatus, { card: string }> = {
   },
 };
 
-const LessonCard = memo(
+export const LessonCard = memo(
   ({ lesson, onLessonClick }: { lesson: StudentLessonSummary; onLessonClick: (id: string) => void }) => {
     const config = statusConfig[lesson.status || 'available'] || statusConfig.available;
+    const progress = typeof lesson.progress === 'number' ? lesson.progress : 0;
+    const statusLabel =
+      lesson.status === 'completed'
+        ? 'Completed'
+        : lesson.status === 'in-progress'
+          ? `${Math.round(progress)}% complete`
+          : lesson.status === 'locked'
+            ? lesson.lockedReason || 'Complete the previous learning unit to unlock'
+            : 'Ready to begin';
+    const description = lesson.description?.trim()
+      ? lesson.description
+      : lesson.status === 'completed'
+        ? 'Review the material from this lesson.'
+        : lesson.status === 'in-progress'
+          ? 'Continue from where you left off.'
+          : lesson.status === 'locked'
+            ? 'Finish the previous learning unit to unlock this lesson.'
+            : 'Start this lesson when you are ready.';
 
     const handleClick = () => {
       if (lesson.status === 'locked') {
@@ -55,23 +73,57 @@ const LessonCard = memo(
 
     return (
       <RomanCard
-        className={`group h-36 cursor-pointer rounded-3xl shadow-xl transition-all duration-300 transform hover:-translate-y-2 hover:scale-[1.02] hover:shadow-2xl ${config.card}`}
+        className={`group h-40 cursor-pointer overflow-hidden rounded-3xl shadow-xl transition-all duration-300 transform hover:-translate-y-2 hover:scale-[1.02] hover:shadow-2xl ${config.card}`}
         onClick={handleClick}>
-        <RomanCardContent className="relative p-6">
-          <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-3xl"></div>
-          <div className="relative flex items-center justify-between">
-            <div className="flex-1 pr-4 min-w-0">
-              <h3 className="min-w-0 text-xl font-serif mb-2 text-gray-900 truncate">
-                <SimpleRichDisplay content={lesson.title} className="truncate" />
+        <RomanCardContent className="relative h-full p-5 sm:p-6">
+          <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-white/25 to-transparent" />
+          <div className="relative flex h-full items-center gap-4">
+            <div className="flex h-full min-w-0 flex-1 flex-col">
+              <div className="text-[0.68rem] font-bold uppercase tracking-[0.18em] text-roman-stone/80">Lesson</div>
+              <h3 className="mt-2 min-w-0 truncate font-serif text-xl text-gray-950">
+                <SimpleRichDisplay content={lesson.title} className="truncate [&_p]:truncate" />
               </h3>
-              <div className="text-sm text-roman-stone line-clamp-2">
-                <SimpleRichDisplay content={lesson.description || ''} />
+              <div className="mt-1 min-h-5 text-sm text-roman-stone">
+                <SimpleRichDisplay content={description} className="line-clamp-1 [&_p]:line-clamp-1" />
+              </div>
+              <div
+                className={`mt-auto min-w-0 truncate text-xs font-semibold ${
+                  lesson.status === 'completed'
+                    ? 'text-emerald-700'
+                    : lesson.status === 'in-progress'
+                      ? 'text-roman-red'
+                      : lesson.status === 'locked'
+                        ? 'text-gray-500'
+                        : 'text-roman-stone'
+                }`}>
+                {statusLabel}
+              </div>
+              <div aria-hidden="true" className="mt-2 h-1 overflow-hidden rounded-full bg-gray-900/10">
+                <div
+                  className={`h-full rounded-full transition-[width] duration-500 ${
+                    lesson.status === 'completed'
+                      ? 'bg-roman-green'
+                      : lesson.status === 'locked'
+                        ? 'bg-gray-300'
+                        : 'bg-roman-red'
+                  }`}
+                  style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}
+                />
               </div>
             </div>
-            <div className="flex-shrink-0">
+            <div className="shrink-0 self-center">
               <CircularProgressButton
-                progress={typeof lesson.progress === 'number' ? lesson.progress : 0}
+                progress={progress}
                 status={lesson.status}
+                ariaLabel={
+                  lesson.status === 'locked'
+                    ? 'Lesson locked'
+                    : lesson.status === 'completed'
+                      ? 'Review lesson'
+                      : lesson.status === 'in-progress'
+                        ? 'Continue lesson'
+                        : 'Start lesson'
+                }
                 onClick={(e?: React.MouseEvent) => {
                   e?.stopPropagation();
                   handleClick();
@@ -108,6 +160,19 @@ export const TestCard = memo(
           : summary.latest?.outcome === 'score-only'
             ? 'Latest: Completed'
             : null;
+    const description = test.description?.trim()
+      ? test.description
+      : unavailable
+        ? 'This test is temporarily unavailable.'
+        : locked
+          ? 'Complete the previous learning unit to unlock this test.'
+          : summary.inProgressAttemptId
+            ? 'Continue your current test attempt.'
+            : summary.attemptCount > 0
+              ? 'Review your result or try for a new score.'
+              : test.passingPercentage === null
+                ? 'Check your understanding with a score-only review.'
+                : 'Check your understanding before moving on.';
 
     const handleClick = () => {
       if (unavailable) {
@@ -124,7 +189,7 @@ export const TestCard = memo(
     return (
       <RomanCard
         data-testid="dashboard-test-card"
-        className={`group h-36 cursor-pointer rounded-3xl border shadow-xl transition-all duration-300 hover:-translate-y-2 hover:scale-[1.02] hover:shadow-2xl ${
+        className={`group h-40 cursor-pointer overflow-hidden rounded-3xl border shadow-xl transition-all duration-300 hover:-translate-y-2 hover:scale-[1.02] hover:shadow-2xl ${
           locked
             ? 'border-gray-300 bg-gradient-to-br from-gray-100 to-gray-50'
             : test.passingPercentage === null
@@ -132,18 +197,26 @@ export const TestCard = memo(
               : 'border-indigo-300 bg-gradient-to-br from-indigo-100/90 via-violet-50 to-white'
         }`}
         onClick={handleClick}>
-        <RomanCardContent className="relative h-full p-6">
-          <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-white/20 to-transparent" />
-          <div className="relative flex h-full items-center justify-between">
-            <div className="min-w-0 flex-1 pr-4">
-              <h3 className="min-w-0 truncate font-serif text-xl text-gray-950">
-                <SimpleRichDisplay content={test.title} className="truncate" />
-              </h3>
-              <div className="mt-1 line-clamp-1 text-sm text-gray-600">
-                <SimpleRichDisplay content={test.description || ''} />
+        <RomanCardContent className="relative h-full p-5 sm:p-6">
+          <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-white/25 to-transparent" />
+          <div className="relative flex h-full items-center gap-4">
+            <div className="flex h-full min-w-0 flex-1 flex-col">
+              <div
+                className={`text-[0.68rem] font-bold uppercase tracking-[0.18em] ${
+                  locked ? 'text-gray-500' : 'text-indigo-700/75'
+                }`}>
+                Review test
               </div>
-              <div className="mt-2 flex min-w-0 items-center gap-2 text-xs font-semibold text-indigo-800">
-                {locked ? (
+              <h3 className="mt-2 min-w-0 truncate font-serif text-xl text-gray-950">
+                <SimpleRichDisplay content={test.title} className="truncate [&_p]:truncate" />
+              </h3>
+              <div className="mt-1 min-h-5 text-sm text-gray-600">
+                <SimpleRichDisplay content={description} className="line-clamp-1 [&_p]:line-clamp-1" />
+              </div>
+              <div className="mt-auto flex min-w-0 items-center gap-2 text-xs font-semibold text-indigo-800">
+                {unavailable ? (
+                  <span className="truncate text-gray-500">Temporarily unavailable</span>
+                ) : locked ? (
                   <span className="truncate">
                     {test.lockedReason || 'Complete the previous learning unit to unlock'}
                   </span>
@@ -163,39 +236,47 @@ export const TestCard = memo(
                           : `Pass ≥ ${test.passingPercentage}%`}
                       </span>
                     )}
-                    {summary.latest?.outcome === 'not-passed' && test.relatedLiveMocks?.[0] && (
-                      <a
-                        className="min-w-0 truncate text-teal-800 underline-offset-2 hover:underline"
-                        href={`/test/${encodeURIComponent(test.relatedLiveMocks[0].id)}?origin=mock`}
-                        onClick={event => event.stopPropagation()}>
-                        Practice with the {test.relatedLiveMocks[0].title} Mock Test
-                      </a>
-                    )}
                   </>
                 )}
               </div>
-              {summary.latest ? (
-                <div className="mt-1 flex min-w-0 items-center gap-1.5">
+              <div className="mt-1 flex min-h-4 min-w-0 items-center gap-2">
+                {summary.latest ? (
                   <a
                     data-testid="test-review-latest-link"
-                    className="truncate text-xs font-semibold text-indigo-700 underline-offset-2 hover:underline"
+                    className="shrink-0 truncate text-xs font-semibold text-indigo-700 underline-offset-2 hover:underline"
                     href={`/test-results/${summary.latest.attemptId}`}
                     onClick={event => event.stopPropagation()}>
                     Review latest result
                   </a>
-                </div>
-              ) : null}
+                ) : null}
+                {summary.latest?.outcome === 'not-passed' && test.relatedLiveMocks?.[0] ? (
+                  <>
+                    <span aria-hidden="true" className="text-gray-300">
+                      ·
+                    </span>
+                    <a
+                      className="min-w-0 truncate text-xs font-semibold text-teal-800 underline-offset-2 hover:underline"
+                      href={`/test/${encodeURIComponent(test.relatedLiveMocks[0].id)}?origin=mock`}
+                      aria-label={`Practice with the ${test.relatedLiveMocks[0].title} Mock Test`}
+                      onClick={event => event.stopPropagation()}>
+                      Practice mock test
+                    </a>
+                  </>
+                ) : null}
+              </div>
             </div>
-            <CircularProgressButton
-              progress={progress}
-              status={test.status}
-              disabled={unavailable}
-              ariaLabel={unavailable ? 'Test unavailable' : locked ? 'Test locked' : action}
-              onClick={(event?: React.MouseEvent) => {
-                event?.stopPropagation();
-                handleClick();
-              }}
-            />
+            <div className="shrink-0 self-center">
+              <CircularProgressButton
+                progress={progress}
+                status={test.status}
+                disabled={unavailable}
+                ariaLabel={unavailable ? 'Test unavailable' : locked ? 'Test locked' : action}
+                onClick={(event?: React.MouseEvent) => {
+                  event?.stopPropagation();
+                  handleClick();
+                }}
+              />
+            </div>
           </div>
         </RomanCardContent>
       </RomanCard>
@@ -434,7 +515,7 @@ export default function DashboardPage() {
                         {({ isActive }) => (
                           <div
                             className={`transform-gpu transition-transform duration-300 ${
-                              isActive ? 'scale-100 sm:scale-110 xl:scale-125' : 'scale-95'
+                              isActive ? 'scale-100 sm:scale-105 xl:scale-110' : 'scale-[0.98]'
                             }`}>
                             {unit.kind === 'test' ? (
                               <TestCard test={unit} onTestClick={handleLessonClick} />

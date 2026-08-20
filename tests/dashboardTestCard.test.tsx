@@ -1,7 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { MockTestCard, TestCard } from '@/src/app/dashboard/page';
-import type { StudentTestSummary } from '@/src/types/lesson';
+import { LessonCard, MockTestCard, TestCard } from '@/src/app/dashboard/page';
+import type { StudentLessonSummary, StudentTestSummary } from '@/src/types/lesson';
 import type { StudentMockTestSummary } from '@/src/types/test';
 
 jest.mock('swiper/react', () => ({
@@ -39,7 +39,38 @@ const testSummary = (overrides: Partial<StudentTestSummary> = {}): StudentTestSu
   ...overrides,
 });
 
+const lessonSummary = (overrides: Partial<StudentLessonSummary> = {}): StudentLessonSummary => ({
+  id: 'lesson-1',
+  kind: 'lesson',
+  title: 'Latin foundations',
+  description: '',
+  type: 'normal',
+  isLive: true,
+  liveOrder: 1,
+  publishedAt: 'now',
+  publishedBy: 'teacher-1',
+  totalPages: 3,
+  totalItems: 3,
+  totalExercises: 1,
+  status: 'in-progress',
+  progress: 35,
+  furthestPageIndex: 0,
+  currentPageIndex: 0,
+  exerciseProgress: [],
+  ...overrides,
+});
+
 describe('student dashboard test card', () => {
+  it('keeps lessons without descriptions in the shared card structure', () => {
+    const { container } = render(<LessonCard lesson={lessonSummary()} onLessonClick={jest.fn()} />);
+
+    expect(container.firstChild).toHaveClass('h-40');
+    expect(screen.getByText('Lesson')).toBeInTheDocument();
+    expect(screen.getByText('Continue from where you left off.')).toBeInTheDocument();
+    expect(screen.getByText('35% complete')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Continue lesson' })).toBeInTheDocument();
+  });
+
   it('communicates an unsuccessful required-pass result and retake gate', () => {
     render(<TestCard test={testSummary()} onTestClick={jest.fn()} />);
 
@@ -145,10 +176,11 @@ describe('student dashboard test card', () => {
     );
   });
 
-  it('uses the same fixed-height footprint as lesson cards', () => {
+  it('uses the shared fixed-height learning-unit footprint', () => {
     const { container } = render(<TestCard test={testSummary()} onTestClick={jest.fn()} />);
 
-    expect(container.firstChild).toHaveClass('h-36');
+    expect(container.firstChild).toHaveClass('h-40');
+    expect(screen.getByText('Review test')).toBeInTheDocument();
   });
 
   it('links to the latest submitted review from the test card', () => {
