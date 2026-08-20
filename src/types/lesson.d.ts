@@ -42,7 +42,12 @@ export type StudentLessonSummary = Omit<LessonSummary, 'kind'> & {
   furthestPageIndex: number;
   /** @deprecated Schema-v1 cursor mirrored during migration. Prefer furthestPageIndex. */
   currentPageIndex: number;
-  exerciseProgress: ExerciseProgress[];
+  /**
+   * Per-exercise history for lesson playback. The dashboard projection no
+   * longer ships this (it reads progress with a summary field mask); the
+   * per-lesson endpoint still returns it.
+   */
+  exerciseProgress?: ExerciseProgress[];
   completedAt?: string;
   score?: number;
   lastAccessedAt?: string;

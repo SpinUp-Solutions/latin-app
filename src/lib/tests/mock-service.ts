@@ -36,6 +36,7 @@ import {
   buildVersion,
   configurationError,
   getVersionSummaries,
+  getVersionSummariesById,
   isStoredVersionReadyForStudentVisibility,
   parseMockSnapshot,
   parseTestSnapshot,
@@ -174,6 +175,11 @@ export class MockTestService {
 
   private getVersionSummaries(versionIds: readonly string[]): Promise<TestVersionSummary[]> {
     return getVersionSummaries(this.db, versionIds);
+  }
+
+  /** One batched getAll replaces the per-mock version round trips. */
+  private getVersionSummariesById(versionIds: readonly string[]): Promise<Map<string, TestVersionSummary>> {
+    return getVersionSummariesById(this.db, versionIds);
   }
 
   private buildVersion(
@@ -376,11 +382,25 @@ export class MockTestService {
       .where('isLive', '==', true)
       .orderBy('mockOrder', 'asc')
       .get();
+
+    const mocks = snapshot.docs.flatMap(document => {
+      try {
+        return [parseMockSnapshot(document)];
+      } catch (error) {
+        console.error(`Live mock ${document.id} could not be projected safely; skipping card`, error);
+        return [];
+      }
+    });
+
+    // A single batched lookup validates every live card's version and reads
+    // its total points, instead of one Firestore round trip per mock.
+    const versionsById = await this.getVersionSummariesById(mocks.map(mock => mock.versionId));
+
     const cards = await Promise.all(
-      snapshot.docs.map(async document => {
+      mocks.map(async mock => {
+        const version = versionsById.get(mock.versionId);
+        if (!version) return null;
         try {
-          const mock = parseMockSnapshot(document);
-          const version = (await this.getVersionSummaries([mock.versionId]))[0];
           const origin = { kind: 'mock-test' as const, mockTestId: mock.id };
           const [attemptSummary, scoreTrend] = await Promise.all([
             this.attempts.getAttemptSummary(origin, studentId),
@@ -396,7 +416,7 @@ export class MockTestService {
             scoreTrend,
           };
         } catch (error) {
-          console.error(`Live mock ${document.id} could not be projected safely; skipping card`, error);
+          console.error(`Live mock ${mock.id} could not be projected safely; skipping card`, error);
           return null;
         }
       })
@@ -501,19 +521,23 @@ export class MockTestService {
       .where('isLive', '==', true)
       .orderBy('mockOrder', 'asc')
       .get();
-    const cards = await Promise.all(
-      snapshots.docs.map(async document => {
-        try {
-          const mock = parseMockSnapshot(document);
-          await this.getVersionSummaries([mock.versionId]);
-          return { id: mock.id, title: mock.title, passingPercentage: mock.passingPercentage };
-        } catch (error) {
-          console.error(`Related live mock ${document.id} is unavailable; omitting nudge`, error);
-          return null;
-        }
-      })
-    );
-    return cards.filter((card): card is Pick<MockTest, 'id' | 'title' | 'passingPercentage'> => card !== null);
+
+    const mocks = snapshots.docs.flatMap(document => {
+      try {
+        return [parseMockSnapshot(document)];
+      } catch (error) {
+        console.error(`Related live mock ${document.id} is unavailable; omitting nudge`, error);
+        return [];
+      }
+    });
+
+    // The versions are fetched only to keep unavailable mocks out of the
+    // nudge; one batched getAll validates them all without a round trip per mock.
+    const versionsById = await this.getVersionSummariesById(mocks.map(mock => mock.versionId));
+
+    return mocks
+      .filter(mock => versionsById.has(mock.versionId))
+      .map(mock => ({ id: mock.id, title: mock.title, passingPercentage: mock.passingPercentage }));
   }
 
   async getMock(mockId: string): Promise<MockTest> {

@@ -304,8 +304,14 @@ describe('StudentDashboardService summary projection', () => {
       { id: 'tag-cicero', name: 'Cicero', status: 'active', tagOrder: 0 },
     ]);
     expect(JSON.stringify(dashboard)).not.toContain('"pages"');
-    expect(selectedFieldLog).toHaveLength(2);
+    expect(selectedFieldLog).toHaveLength(3);
     expect(selectedFieldLog.every(fields => !fields.includes('pages'))).toBe(true);
+    // The dashboard reads progress with a summary mask: per-exercise history
+    // (which grows without bound) stays out of the projection.
+    const progressFields = selectedFieldLog.find(fields => fields.includes('lessonId'));
+    expect(progressFields).toBeDefined();
+    expect(progressFields).not.toContain('exerciseProgress');
+    expect(JSON.stringify(dashboard)).not.toContain('"exerciseProgress"');
   });
 
   it('keeps a later reached lesson unlocked when the path changes behind it', async () => {
@@ -875,5 +881,99 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
     );
 
     await expect(service.getDashboard('user')).rejects.toThrow('index unavailable');
+  });
+
+  it('runs attempt summaries, practice enrichment, and mock listing concurrently', async () => {
+    const collections = {
+      lessons: {
+        first: lesson({ isLive: false, liveOrder: null }),
+        test: testUnit(),
+        practice: lesson({ type: 'vocab', title: 'Practice', liveOrder: 1 }),
+      },
+      testVersions: { 'version-a': versionSummary },
+      learningPaths: {
+        default: {
+          id: 'default',
+          revision: 1,
+          unitIds: ['first', 'test'],
+          updatedAt: 'now',
+          updatedBy: 'admin',
+        },
+      },
+      userProgress: {},
+    };
+    const { db } = createFakeDb(collections);
+
+    // Attempt summaries stay pending: if the phases still ran serially, the
+    // practice/mock/past-result work could never have started by now.
+    let releaseAttempts!: () => void;
+    const attemptsHeld = new Promise<void>(resolve => {
+      releaseAttempts = resolve;
+    });
+    const getAttemptSummary = jest.fn(
+      () =>
+        attemptsHeld.then(() => ({
+          origin: { kind: 'normal-test' as const, testId: 'test' },
+          inProgressAttemptId: null,
+          attemptCount: 0,
+          best: null,
+          latest: null,
+        }))
+    );
+    const getAssignmentsForLessonIds = jest.fn(async () => new Map());
+    const listStudentLiveMocks = jest.fn(async () => []);
+    const listPastStudentMockResults = jest.fn(async () => []);
+    const service = new StudentDashboardService(
+      db as never,
+      { getAssignmentsForLessonIds } as never,
+      { getAttemptSummary } as never,
+      { listStudentLiveMocks, listPastStudentMockResults, getRelatedLiveMocks: jest.fn() } as never
+    );
+
+    const dashboardPromise = service.getDashboard('user');
+    // One macrotask tick drains the fake db's promise chains, so every
+    // independent phase has been started by now if they truly run in parallel.
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(getAttemptSummary).toHaveBeenCalledTimes(1);
+    expect(getAssignmentsForLessonIds).toHaveBeenCalledTimes(1);
+    expect(listStudentLiveMocks).toHaveBeenCalledWith('user');
+    expect(listPastStudentMockResults).toHaveBeenCalledWith('user');
+
+    releaseAttempts();
+    await expect(dashboardPromise).resolves.toBeDefined();
+  });
+
+  it('reconciles past mock results against the live cards after both resolve', async () => {
+    const collections = {
+      lessons: { first: lesson({ isLive: false, liveOrder: null }) },
+      learningPaths: {
+        default: {
+          id: 'default',
+          revision: 1,
+          unitIds: ['first'],
+          updatedAt: 'now',
+          updatedBy: 'admin',
+        },
+      },
+      userProgress: {},
+    };
+    const { db } = createFakeDb(collections);
+    const listStudentLiveMocks = jest.fn(async () => [{ id: 'live-mock' }]);
+    const listPastStudentMockResults = jest.fn(async () => [
+      { id: 'live-mock', title: 'Live' },
+      { id: 'past-mock', title: 'Past' },
+    ]);
+    const service = new StudentDashboardService(
+      db as never,
+      { getAssignmentsForLessonIds: jest.fn(async () => new Map()) } as never,
+      { getAttemptSummary: jest.fn(async () => ({})) } as never,
+      { listStudentLiveMocks, listPastStudentMockResults, getRelatedLiveMocks: jest.fn() } as never
+    );
+
+    const dashboard = await service.getDashboard('user');
+
+    expect(dashboard.mockTests).toEqual([{ id: 'live-mock' }]);
+    expect(dashboard.pastMockResults).toEqual([{ id: 'past-mock', title: 'Past' }]);
   });
 });

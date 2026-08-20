@@ -61,6 +61,23 @@ const LESSON_SUMMARY_FIELDS = [
 
 const LEARNING_UNIT_SUMMARY_FIELDS = [...LESSON_SUMMARY_FIELDS, 'rotationVersions', 'passingPercentage'] as const;
 
+/**
+ * The dashboard projection never consumes per-exercise history, so the
+ * progress read excludes the unbounded `exerciseProgress` arrays that grow
+ * with student activity. `getLesson` still reads full progress documents.
+ */
+const PROGRESS_SUMMARY_FIELDS = [
+  'userId',
+  'lessonId',
+  'status',
+  'completedAt',
+  'furthestPageIndex',
+  'currentPageIndex',
+  'score',
+  'lastAccessedAt',
+  'progressSchemaVersion',
+] as const;
+
 const PRACTICE_TYPE_ORDER: LessonUnitType[] = ['vocab', 'sentence-diagramming', 'listening'];
 
 type CanonicalLessonSummary = LessonSummary & { kind: 'lesson' };
@@ -340,8 +357,11 @@ export class StudentDashboardService {
     return summaries;
   }
 
-  private async getProgressByLessonId(userId: string): Promise<Map<string, UserProgress>> {
-    const snapshot = await this.progress.where('userId', '==', userId).get();
+  private async getProgressByLessonId(userId: string, fields?: readonly string[]): Promise<Map<string, UserProgress>> {
+    const query = fields
+      ? this.progress.where('userId', '==', userId).select(...fields)
+      : this.progress.where('userId', '==', userId);
+    const snapshot = await query.get();
     const progressByLessonId = new Map<string, UserProgress>();
 
     for (const document of snapshot.docs) {
@@ -370,7 +390,6 @@ export class StudentDashboardService {
       ...(lockedReason ? { lockedReason } : {}),
       furthestPageIndex,
       currentPageIndex: Math.max(furthestPageIndex, 0),
-      exerciseProgress: storedProgress?.exerciseProgress || [],
       completedAt: storedProgress?.completedAt,
       score: storedProgress?.score,
       lastAccessedAt: storedProgress?.lastAccessedAt,
@@ -545,22 +564,24 @@ export class StudentDashboardService {
   async getDashboard(userId: string): Promise<StudentDashboard> {
     const [{ normalUnits, rawPracticeLessons }, progressByLessonId] = await Promise.all([
       this.getProjectedLessonSummaries(),
-      this.getProgressByLessonId(userId),
+      this.getProgressByLessonId(userId, PROGRESS_SUMMARY_FIELDS),
     ]);
     const testUnits = normalUnits.filter((unit): unit is TestUnitSummary => unit.kind === 'test');
-    const attemptSummaries = new Map<string, TestAttemptOriginSummary>();
-    await Promise.all(
-      testUnits.map(async test => {
-        const origin = { kind: 'normal-test' as const, testId: test.id };
-        attemptSummaries.set(test.id, await this.getAttemptSummary(origin, userId));
-      })
-    );
-    const practiceLessons = await this.enrichPracticeLessons(rawPracticeLessons);
-    const mockTests = (await this.mocks.listStudentLiveMocks(userId)) ?? [];
-    const pastMockResults = await this.mocks.listPastStudentMockResults(
-      userId,
-      new Set(mockTests.map(mock => mock.id))
-    );
+
+    // Attempt summaries, practice enrichment, and mock listing are independent
+    // of each other, so they all run concurrently instead of one-after-another.
+    // The past-result projection runs unfiltered here and is reconciled against
+    // the live cards below, which keeps it off the mock listing's critical path.
+    const [attemptSummaries, practiceLessons, mockTests, pastMockResults] = await Promise.all([
+      this.getAttemptSummaries(testUnits, userId),
+      this.enrichPracticeLessons(rawPracticeLessons),
+      this.mocks.listStudentLiveMocks(userId),
+      this.mocks.listPastStudentMockResults(userId),
+    ]);
+
+    const liveMockTests = mockTests ?? [];
+    const liveMockIds = new Set(liveMockTests.map(mock => mock.id));
+    const reviewablePastMockResults = pastMockResults.filter(result => !liveMockIds.has(result.id));
 
     const learningPath = this.processNormalUnits(normalUnits, progressByLessonId, attemptSummaries);
     await Promise.all(
@@ -575,9 +596,23 @@ export class StudentDashboardService {
     return {
       learningPath,
       practiceLessons: this.processPracticeLessons(practiceLessons, progressByLessonId),
-      ...(mockTests.length ? { mockTests } : {}),
-      ...(pastMockResults.length ? { pastMockResults } : {}),
+      ...(liveMockTests.length ? { mockTests: liveMockTests } : {}),
+      ...(reviewablePastMockResults.length ? { pastMockResults: reviewablePastMockResults } : {}),
     };
+  }
+
+  private async getAttemptSummaries(
+    testUnits: TestUnitSummary[],
+    userId: string
+  ): Promise<Map<string, TestAttemptOriginSummary>> {
+    const attemptSummaries = new Map<string, TestAttemptOriginSummary>();
+    await Promise.all(
+      testUnits.map(async test => {
+        const origin = { kind: 'normal-test' as const, testId: test.id };
+        attemptSummaries.set(test.id, await this.getAttemptSummary(origin, userId));
+      })
+    );
+    return attemptSummaries;
   }
 
   /**

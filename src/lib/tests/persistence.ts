@@ -178,6 +178,36 @@ export async function getVersionSummaries(db: Firestore, versionIds: readonly st
   });
 }
 
+/**
+ * Batched, tolerant variant of {@link getVersionSummaries}: one getAll per
+ * chunk returns every requested version keyed by ID, while missing or invalid
+ * versions are logged and skipped instead of failing the whole lookup. Callers
+ * isolate the affected mock per version, so one dangling version cannot take
+ * down an entire card list.
+ */
+export async function getVersionSummariesById(
+  db: Firestore,
+  versionIds: readonly string[]
+): Promise<Map<string, TestVersionSummary>> {
+  const summariesById = new Map<string, TestVersionSummary>();
+  if (versionIds.length === 0) return summariesById;
+
+  const versions = db.collection(TEST_VERSIONS_COLLECTION);
+  const snapshots = await Promise.all(
+    chunk([...new Set(versionIds)], 100).map(ids =>
+      db.getAll(...ids.map(id => versions.doc(id)), { fieldMask: [...TEST_VERSION_SUMMARY_FIELDS] })
+    )
+  );
+  for (const document of snapshots.flat()) {
+    try {
+      summariesById.set(document.id, parseVersionSummarySnapshot(document));
+    } catch (error) {
+      console.error(`Test version ${document.id} could not be projected safely; skipping its mocks`, error);
+    }
+  }
+  return summariesById;
+}
+
 export function buildVersion(
   now: () => string,
   input: TestVersionInput,

@@ -5,7 +5,7 @@ import { RootState } from '@/src/store';
 import { toast } from 'sonner';
 
 export function useAuth() {
-  const { user, loading } = useSelector((state: RootState) => state.auth);
+  const { user, loading, authUid } = useSelector((state: RootState) => state.auth);
 
   const getDisplayName = (): string => {
     if (!user) return '';
@@ -20,6 +20,7 @@ export function useAuth() {
   return {
     user,
     loading,
+    authUid,
     isAuthenticated: !!user,
     isAdmin: user?.role === 'admin',
     isTeacher: user?.role === 'teacher',

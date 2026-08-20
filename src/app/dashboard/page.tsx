@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/src/services/firebase';
 import { useGetStudentDashboardQuery } from '@/src/store/api/lessonApi';
+import { persistStudentDashboard } from '@/src/store/api/dashboardCache';
 import { useAuth } from '@/src/hooks/useAuth';
 import {
   LessonStatus,
@@ -288,16 +289,24 @@ TestCard.displayName = 'TestCard';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, loading, displayName } = useAuth();
+  const { user, loading, displayName, authUid } = useAuth();
 
+  // The query starts from the uid Firebase auth already resolved, without
+  // waiting for the Firestore profile snapshot; returning students also paint
+  // instantly from the persisted cache while it revalidates in the background.
+  const uid = authUid ?? user?.uid ?? '';
   const {
     data: studentDashboard,
     isLoading: lessonsLoading,
     isError: dashboardError,
     refetch: refetchDashboard,
-  } = useGetStudentDashboardQuery(user?.uid ?? '', {
-    skip: !user?.uid,
+  } = useGetStudentDashboardQuery(uid, {
+    skip: !uid,
   });
+
+  useEffect(() => {
+    if (uid && studentDashboard) persistStudentDashboard(uid, studentDashboard);
+  }, [uid, studentDashboard]);
 
   const learningUnits = useMemo(() => {
     return studentDashboard?.learningPath ?? [];
@@ -384,7 +393,10 @@ export default function DashboardPage() {
     }
   };
 
-  if (loading || !user || lessonsLoading) {
+  // The page renders as soon as an authenticated uid has dashboard data —
+  // profile loading no longer holds the learning path hostage — and a failed
+  // background revalidation keeps the last good projection on screen.
+  if (!uid || (lessonsLoading && !studentDashboard)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-roman-marble">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>
@@ -392,7 +404,7 @@ export default function DashboardPage() {
     );
   }
 
-  if (dashboardError) {
+  if (dashboardError && !studentDashboard) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-roman-marble p-6">
         <RomanCard className="w-full max-w-lg">
@@ -433,7 +445,9 @@ export default function DashboardPage() {
             />
             <div>
               <h1 className="text-3xl font-serif tracking-wide text-gray-900 mb-1">Wake Forest University Latin</h1>
-              <p className="text-lg text-roman-stone leading-relaxed">Welcome back, {displayName}</p>
+              <p className="text-lg text-roman-stone leading-relaxed">
+                {displayName ? `Welcome back, ${displayName}` : 'Welcome back'}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-4">
