@@ -263,6 +263,13 @@ describe('active test exercise validation', () => {
     expect(messagesFor(morphology)).toContain('Enabled morphology paradigms require at least one selected form');
   });
 
+  it('rejects generated word counts above the shared authoring ceiling', () => {
+    const translation = copyItem(validItems['generated-translation']);
+    (translation.data.generatorConfig as { count: number }).count = 201;
+
+    expect(activeVersionResult(translation).success).toBe(false);
+  });
+
   it('accepts legacy generated configurations when they still resolve scorable items', () => {
     const translation = copyItem(validItems['generated-translation']);
     delete translation.data.posConfigs;

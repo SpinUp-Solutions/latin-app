@@ -15,6 +15,7 @@ jest.mock('@/src/components/ui/core/simple-rich-editor', () => ({ SimpleRichEdit
 jest.mock('@/src/hooks/useTranslationGrading', () => ({ useTranslationGrading: () => ({}) }));
 const mockUseGetMultiPosWordsQuery = jest.fn();
 jest.mock('@/src/store/api/advancedVocabularyApi', () => ({
+  useGetGeneratedExerciseWordsQuery: (...args: unknown[]) => mockUseGetMultiPosWordsQuery(...args),
   useGetMultiPosWordsQuery: (...args: unknown[]) => mockUseGetMultiPosWordsQuery(...args),
   useGetMultiParadigmWordsQuery: () => ({ data: undefined, isLoading: false, isError: false }),
 }));

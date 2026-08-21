@@ -14,7 +14,7 @@ import {
 } from '@/src/lib/tests/grading';
 import { estimateFirestoreDocumentBytes } from '@/src/lib/tests/firestore-size';
 import { applyValueFilter } from '@/src/lib/tests/generated-word-loader.server';
-import { filterOverlappingPronounParadigms } from '@/src/utils/generated/pronounParadigmFiltering';
+import { filterOverlappingPronounParadigms, isRejectedBySpecAwarePronounOverlap } from '@/src/utils/generated/pronounParadigmFiltering';
 import type {
   FillExercise,
   Exercise,
@@ -124,6 +124,13 @@ describe('test grading foundation', () => {
     expect(query.where).not.toHaveBeenCalled();
   });
 
+  it('ignores non-string filter values instead of throwing', () => {
+    const query = { where: jest.fn() } as unknown as Parameters<typeof applyValueFilter>[0];
+
+    expect(applyValueFilter(query, 'conjugation', 3 as never)).toBe(query);
+    expect(query.where).not.toHaveBeenCalled();
+  });
+
   it('uses a conservative Firestore-aware document size estimate', () => {
     const document = { numericValues: Array.from({ length: 20 }, (_, index) => index) };
 
@@ -145,6 +152,12 @@ describe('test grading foundation', () => {
 
     expect(filterOverlappingPronounParadigms(words, broad).map(word => word.id)).toEqual(['third', 'relative']);
     expect(filterOverlappingPronounParadigms(words, personalOnly)).toEqual(words);
+    expect(
+      isRejectedBySpecAwarePronounOverlap(words[0], 'pronoun-personal', broad as Parameters<typeof isRejectedBySpecAwarePronounOverlap>[2])
+    ).toBe(false);
+    expect(
+      isRejectedBySpecAwarePronounOverlap(words[0], 'pronoun-gendered', broad as Parameters<typeof isRejectedBySpecAwarePronounOverlap>[2])
+    ).toBe(true);
   });
 
   it('normalizes single-field morphology credit to the authored max points', () => {
