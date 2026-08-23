@@ -86,6 +86,13 @@ export async function collectWordsForGeneratedExerciseRequest(
   const collection = requireGeneratedVocabularyCollection(
     normalizeCollection(config.collection || VOCABULARY_WORDS_COLLECTION)
   );
+  if (config.wordSource === 'pool' && !config.poolId) {
+    throw new GeneratedVocabularySourceError(
+      'Pool-backed generated exercises require a vocabulary pool',
+      400,
+      'POOL_ID_REQUIRED'
+    );
+  }
   const poolId = config.wordSource === 'pool' ? config.poolId : null;
   return collectGeneratedExerciseWords({
     db,

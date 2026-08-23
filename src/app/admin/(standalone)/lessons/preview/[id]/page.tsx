@@ -85,7 +85,11 @@ function AdminLessonPreviewPage() {
           <h2 className="text-2xl font-serif text-gray-800 mb-6">
             <SimpleRichDisplay content={previewLesson.title} />
           </h2>
-          <LessonPlayer lesson={previewLesson} trackProgress={false} />
+          <LessonPlayer
+            lesson={previewLesson}
+            trackProgress={false}
+            generatedExerciseContext={{ kind: 'admin-preview' }}
+          />
         </div>
       </main>
     </div>

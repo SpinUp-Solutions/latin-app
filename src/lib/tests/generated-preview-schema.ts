@@ -12,6 +12,7 @@ import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-respons
 import type { GeneratedFormIdentificationExercise } from '@/src/types/exercises/generated-form-identification';
 import type { GeneratedTranslationExercise } from '@/src/types/exercises/generated-translation';
 import { FormIdentificationStepSchema } from '@/src/types/exercises/schemas/form-identification';
+import { firestoreDocumentIdSchema } from '@/src/lib/learning-units/schemas';
 
 export const generatedWordCountSchema = z.union([
   z.literal('all'),
@@ -123,6 +124,15 @@ export const GeneratedExercisePreviewRequestSchema = z.discriminatedUnion('type'
     .passthrough(),
 ]);
 
+export const GeneratedExercisePlaybackRequestSchema = z
+  .object({
+    lessonId: firestoreDocumentIdSchema,
+    pageIndex: z.number().int().nonnegative(),
+    itemIndex: z.number().int().nonnegative(),
+    exerciseId: firestoreDocumentIdSchema,
+  })
+  .strict();
+
 export type GeneratedExercisePreviewRequest =
   | Pick<GeneratedFormIdentificationExercise, 'type' | 'data'>
   | {
@@ -130,6 +140,8 @@ export type GeneratedExercisePreviewRequest =
       translationDirection?: GeneratedTranslationExercise['translationDirection'];
       data: GeneratedTranslationExercise['data'];
     };
+
+export type GeneratedExercisePlaybackRequest = z.infer<typeof GeneratedExercisePlaybackRequestSchema>;
 
 export type GeneratedExercisePreviewDiagnostics = {
   specId: string;

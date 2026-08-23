@@ -16,6 +16,10 @@ jest.mock('@/src/lib/verifyAdminAccess', () => ({
   ...jest.requireActual('@/src/lib/verifyAdminAccess'),
   verifyAdminAccess: (...args: unknown[]) => mockVerifyAdminAccess(...args),
 }));
+jest.mock('@/src/lib/verifyRequestAuth', () => ({ verifyRequestAuth: jest.fn() }));
+jest.mock('@/src/lib/learning-units/student-dashboard-service', () => ({
+  studentDashboardService: { getLesson: jest.fn() },
+}));
 
 import { POST } from '@/src/app/api/admin/exercises/generated-preview/route';
 import { createFakeGeneratedWordDb } from './helpers/fakeGeneratedWordFirestore';
@@ -126,6 +130,25 @@ describe('admin generated exercise preview route', () => {
       }),
     } as never);
     expect(response.status).toBe(404);
+  });
+
+  it('rejects a pool source without a selected pool instead of querying the full collection', async () => {
+    const response = await POST({
+      json: async () => ({
+        ...translationBody,
+        data: {
+          ...translationBody.data,
+          generatorConfig: {
+            ...translationBody.data.generatorConfig,
+            wordSource: 'pool',
+            poolId: null,
+          },
+        },
+      }),
+    } as never);
+
+    expect(response.status).toBe(400);
+    expect((response as unknown as { body: { code?: string } }).body.code).toBe('POOL_ID_REQUIRED');
   });
 
   it('rejects counts above the authorable ceiling', async () => {

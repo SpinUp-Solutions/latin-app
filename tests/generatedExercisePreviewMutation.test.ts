@@ -73,14 +73,59 @@ describe('generated exercise preview mutation', () => {
       },
     };
 
-    const result = await store.dispatch(advancedVocabularyApi.endpoints.getGeneratedExerciseWords.initiate(body));
+    const source = {
+      kind: 'lesson' as const,
+      lessonId: 'lesson-1',
+      pageIndex: 2,
+      itemIndex: 3,
+      exerciseId: 'exercise-1',
+    };
+    const result = await store.dispatch(
+      advancedVocabularyApi.endpoints.getGeneratedExerciseWords.initiate({ exercise: body, source })
+    );
 
     expect('data' in result && result.data?.collected).toBe(1);
     expect(mockBaseQuery).toHaveBeenCalledWith(
       expect.objectContaining({
         url: '/words/generated-exercise',
         method: 'POST',
-        body,
+        body: {
+          lessonId: 'lesson-1',
+          pageIndex: 2,
+          itemIndex: 3,
+          exerciseId: 'exercise-1',
+        },
+      }),
+      expect.anything(),
+      undefined
+    );
+  });
+
+  it('routes generated exercise rendering in admin previews through the admin endpoint', async () => {
+    mockBaseQuery.mockResolvedValue({
+      data: { words: [], diagnostics: [], requestedCount: 1, collected: 0, globalScanLimitReached: false },
+    });
+    const store = createStore();
+    const exercise = {
+      type: 'generated-translation' as const,
+      data: {
+        generatorConfig: { collection: 'vocabulary_words_v5', wordSource: 'filters' as const, count: 1 },
+        posConfigs: { noun: { enabled: true, filters: {} } },
+      },
+    };
+
+    await store.dispatch(
+      advancedVocabularyApi.endpoints.getGeneratedExerciseWords.initiate({
+        exercise,
+        source: { kind: 'admin-preview' },
+      })
+    );
+
+    expect(mockBaseQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: '/admin/exercises/generated-preview',
+        method: 'POST',
+        body: exercise,
       }),
       expect.anything(),
       undefined

@@ -22,7 +22,7 @@ import { DiagramAuditSubmission } from '@/src/features/sentence-diagramming';
 import { RequiredExercise } from '@/src/utils/lessonProgress';
 import { stripHtmlTags } from '@/src/utils/exercises';
 import type { ExerciseAnswerEvent, RuntimeMode } from '@/src/types/runtime-mode';
-import type { ResolvedGeneratedExerciseState } from './content-renderer';
+import type { GeneratedExerciseRenderContext, ResolvedGeneratedExerciseState } from './content-renderer';
 
 interface LessonPlayerProps {
   lesson: LessonWithProgress;
@@ -32,6 +32,7 @@ interface LessonPlayerProps {
   onAnswer?: (event: ExerciseAnswerEvent) => void;
   resolvedExerciseState?: Record<string, ResolvedGeneratedExerciseState>;
   testAttemptId?: string;
+  generatedExerciseContext?: GeneratedExerciseRenderContext;
 }
 
 export const LessonPlayer: React.FC<LessonPlayerProps> = ({
@@ -42,6 +43,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   onAnswer,
   resolvedExerciseState,
   testAttemptId,
+  generatedExerciseContext,
 }) => {
   // Lesson previews should preserve the normal student feedback experience.
   // `trackProgress` controls persistence independently; assessment callers pass
@@ -61,6 +63,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
 
   const currentPage = lesson.pages[currentPageIndex];
   const totalPages = lesson.pages.length;
+  const resolvedGeneratedExerciseContext = generatedExerciseContext ?? { kind: 'lesson' as const, lessonId: lesson.id };
 
   useEffect(() => {
     if (!shouldTrackProgress || !user?.uid || !currentPage?.id || lastVisitedPageId.current === currentPage.id) return;
@@ -209,6 +212,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
                 runtimeMode={effectiveRuntimeMode}
                 onAnswer={onAnswer}
                 resolvedExerciseState={resolvedExerciseState}
+                generatedExerciseContext={resolvedGeneratedExerciseContext}
                 onExerciseComplete={handleExerciseComplete}
                 onPageComplete={handlePageComplete}
                 onDiagrammingAttempt={handleDiagrammingAttempt}

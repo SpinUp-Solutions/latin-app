@@ -602,6 +602,58 @@ describe('generated exercise word replenishment', () => {
     expect(new Set(result.words.map(word => word.id)).size).toBeLessThanOrEqual(5);
   });
 
+  it('keeps the unused portion of a pool chunk available for cross-spec borrowing', async () => {
+    const words = Array.from({ length: 10 }, (_, index) => nounDoc(`noun-${index}`));
+    const db = createFakeGeneratedWordDb({
+      words,
+      pools: [{ id: 'noun-pool', wordDocIds: words.map(word => word.id) }],
+    });
+    const result = await collectGeneratedExerciseWords({
+      db: db as never,
+      collection: 'vocabulary_words_v5',
+      specs: [
+        { id: 'noun', partOfSpeech: 'noun', filters: {} },
+        { id: 'verb', partOfSpeech: 'verb', filters: {} },
+      ],
+      count: 10,
+      exercise: translationExercise(['noun', 'verb'], 10, {
+        wordSource: 'pool',
+        poolId: 'noun-pool',
+      }),
+      poolId: 'noun-pool',
+      rng: createGeneratedExerciseRng(18),
+    });
+
+    expect(result.words).toHaveLength(10);
+    expect(result.words.every(word => word.part_of_speech === 'noun')).toBe(true);
+    expect(result.diagnostics.find(entry => entry.specId === 'noun')?.collected).toBe(10);
+  });
+
+  it('charges non-matching pool documents against the global scan budget', async () => {
+    const words = Array.from({ length: 2100 }, (_, index) => verbDoc(`verb-${index}`));
+    const db = createFakeGeneratedWordDb({
+      words,
+      pools: [{ id: 'verb-pool', wordDocIds: words.map(word => word.id) }],
+    });
+    const result = await collectGeneratedExerciseWords({
+      db: db as never,
+      collection: 'vocabulary_words_v5',
+      specs: [{ id: 'noun', partOfSpeech: 'noun', filters: {} }],
+      count: 100,
+      exercise: translationExercise(['noun'], 100, {
+        wordSource: 'pool',
+        poolId: 'verb-pool',
+      }),
+      poolId: 'verb-pool',
+      rng: createGeneratedExerciseRng(19),
+    });
+
+    expect(result.words).toHaveLength(0);
+    expect(result.diagnostics[0]?.scanned).toBe(2000);
+    expect(result.diagnostics[0]?.scanLimitReached).toBe(false);
+    expect(result.globalScanLimitReached).toBe(true);
+  });
+
   it('stops a sparse pool POS scan at the per-spec ceiling instead of walking the whole ID list', async () => {
     const nouns = Array.from({ length: 600 }, (_, index) => nounDoc(`noun-${index}`));
     const verbs = Array.from({ length: 4 }, (_, index) => verbDoc(`verb-${index}`));

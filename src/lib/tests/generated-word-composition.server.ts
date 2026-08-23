@@ -253,7 +253,7 @@ interface CandidateStream {
   scanLimitReached: boolean;
   unread: QueryDocumentSnapshot[];
   fetchedOnce: boolean;
-  nextBatch(limit: number): Promise<QueryDocumentSnapshot[]>;
+  nextBatch(limit: number, scanAllowance: number): Promise<QueryDocumentSnapshot[]>;
 }
 
 const canStreamContinue = (stream: CandidateStream, globalBudgetRemaining: number) =>
@@ -280,8 +280,8 @@ class QueryCandidateStream implements CandidateStream {
     private readonly unbounded: boolean
   ) {}
 
-  async nextBatch(limit: number): Promise<QueryDocumentSnapshot[]> {
-    if (this.exhausted || this.scanLimitReached || limit <= 0) return [];
+  async nextBatch(limit: number, scanAllowance: number): Promise<QueryDocumentSnapshot[]> {
+    if (this.exhausted || this.scanLimitReached || limit <= 0 || scanAllowance <= 0) return [];
     const remainingCeiling = this.unbounded
       ? limit
       : Math.max(0, this.scanCeiling - this.totalScanned);
@@ -289,7 +289,7 @@ class QueryCandidateStream implements CandidateStream {
       this.scanLimitReached = true;
       return [];
     }
-    const fetchLimit = Math.min(limit, remainingCeiling);
+    const fetchLimit = Math.min(limit, remainingCeiling, scanAllowance);
     this.ensureInitialized();
     if (this.spec.filters.search) return this.nextSearchBatch(fetchLimit);
     if (this.unbounded) return this.nextUnboundedRandomBatch(fetchLimit);
@@ -403,25 +403,28 @@ class PoolCandidateStream implements CandidateStream {
     private readonly unbounded: boolean
   ) {}
 
-  async nextBatch(limit: number): Promise<QueryDocumentSnapshot[]> {
-    if (this.exhausted || this.scanLimitReached || limit <= 0) return [];
+  async nextBatch(limit: number, scanAllowance: number): Promise<QueryDocumentSnapshot[]> {
+    if (this.exhausted || this.scanLimitReached || limit <= 0 || scanAllowance <= 0) return [];
     if (!this.unbounded && this.totalScanned >= this.scanCeiling) {
       this.scanLimitReached = true;
       return [];
     }
 
     const docs: QueryDocumentSnapshot[] = [];
+    const initialScanned = this.totalScanned;
     while (docs.length < limit && this.cursor < this.ids.length) {
-      const remainingScan = this.unbounded
+      const remainingAllowance = this.unbounded
         ? POOL_STREAM_CHUNK
-        : Math.max(0, this.scanCeiling - this.totalScanned);
+        : scanAllowance - (this.totalScanned - initialScanned);
+      if (!this.unbounded && remainingAllowance <= 0) break;
+      const remainingScan = this.unbounded ? POOL_STREAM_CHUNK : Math.max(0, this.scanCeiling - this.totalScanned);
       if (!this.unbounded && remainingScan <= 0) {
         this.scanLimitReached = true;
         break;
       }
       // Examine up to a chunk (or remaining ceiling), not only the remaining
       // match quota — sparse POS still needs to scan mixed IDs to find hits.
-      const sliceSize = Math.min(POOL_STREAM_CHUNK, remainingScan);
+      const sliceSize = Math.min(POOL_STREAM_CHUNK, remainingScan, remainingAllowance);
       if (sliceSize <= 0) break;
 
       const slice = this.ids.slice(this.cursor, this.cursor + sliceSize);
@@ -435,7 +438,6 @@ class PoolCandidateStream implements CandidateStream {
         if (this.spec.partOfSpeech && doc.data().part_of_speech !== this.spec.partOfSpeech) continue;
         this.seenIds.add(doc.id);
         docs.push(doc);
-        if (docs.length >= limit) break;
       }
       if (this.scanLimitReached) break;
     }
@@ -473,7 +475,6 @@ async function takeEligible(
   const accepted: ExerciseWordResponse[] = [];
   while (
     accepted.length < target &&
-    (unbounded || budget.remaining > 0) &&
     (stream.unread.length > 0 || canStreamContinue(stream, unbounded ? 1 : budget.remaining))
   ) {
     if (stream.unread.length === 0) {
@@ -481,20 +482,17 @@ async function takeEligible(
       const batchSize = unbounded
         ? Math.min(MAX_ADAPTIVE_BATCH, Math.max(remaining, MIN_ADAPTIVE_BATCH))
         : Math.min(adaptiveBatchSize(remaining, !stream.fetchedOnce, deficit), budget.remaining);
-      const docs = await stream.nextBatch(batchSize);
+      const scannedBefore = stream.totalScanned;
+      const docs = await stream.nextBatch(batchSize, unbounded ? Number.POSITIVE_INFINITY : budget.remaining);
+      if (!unbounded) {
+        budget.remaining = Math.max(0, budget.remaining - (stream.totalScanned - scannedBefore));
+      }
       stream.fetchedOnce = true;
       stream.unread.push(...docs);
       if (docs.length === 0) break;
     }
     const doc = stream.unread.shift();
     if (!doc) break;
-    if (!unbounded) {
-      if (budget.remaining <= 0) {
-        stream.unread.unshift(doc);
-        break;
-      }
-      budget.remaining -= 1;
-    }
     const word = evaluateCandidate(doc, stream.spec, exercise, formRng, paradigmConfigs);
     if (word) accepted.push(word);
   }

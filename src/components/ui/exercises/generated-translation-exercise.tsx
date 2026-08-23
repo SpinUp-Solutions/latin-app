@@ -9,7 +9,10 @@ import { ExerciseInput, FeedbackDisplay } from '../feedback';
 import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
-import { useGetGeneratedExerciseWordsQuery } from '@/src/store/api/advancedVocabularyApi';
+import {
+  useGetGeneratedExerciseWordsQuery,
+  type GeneratedExerciseQuerySource,
+} from '@/src/store/api/advancedVocabularyApi';
 import { Card, CardContent } from '../card';
 import {
   validateGeneratedTranslationExercise,
@@ -29,6 +32,7 @@ interface Props {
   initialAnswer?: ExerciseAnswer;
   resolvedItems?: GeneratedTranslationItem[];
   allowGeneratedExerciseQueries?: boolean;
+  generatedExerciseSource?: GeneratedExerciseQuerySource;
 }
 
 const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
@@ -39,6 +43,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
   initialAnswer,
   resolvedItems,
   allowGeneratedExerciseQueries = false,
+  generatedExerciseSource,
 }) => {
   const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
@@ -48,11 +53,19 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
 
   const { data, isLoading, isError } = useGetGeneratedExerciseWordsQuery(
     {
-      type: 'generated-translation',
-      translationDirection,
-      data: exercise.data,
+      exercise: {
+        type: 'generated-translation',
+        translationDirection,
+        data: exercise.data,
+      },
+      source: generatedExerciseSource ?? { kind: 'admin-preview' },
     },
-    { skip: (mode === 'test' && !allowGeneratedExerciseQueries) || resolvedItems !== undefined }
+    {
+      skip:
+        (!generatedExerciseSource && !allowGeneratedExerciseQueries) ||
+        (mode === 'test' && !allowGeneratedExerciseQueries) ||
+        resolvedItems !== undefined,
+    }
   );
 
   const items: GeneratedTranslationItem[] = useMemo(() => {

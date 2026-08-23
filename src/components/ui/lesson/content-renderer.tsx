@@ -50,10 +50,13 @@ import type {
   SingleFieldFormIdentificationItem,
 } from '@/src/types/exercises/schemas/form-identification';
 import type { VocabularyPoolStudyData } from '@/src/types/vocabulary';
+import type { GeneratedExerciseQuerySource } from '@/src/store/api/advancedVocabularyApi';
 
 export interface ResolvedGeneratedExerciseState {
   items: unknown[];
 }
+
+export type GeneratedExerciseRenderContext = { kind: 'admin-preview' } | { kind: 'lesson'; lessonId: string };
 
 interface ContentRendererProps {
   content: ContentItem;
@@ -63,6 +66,7 @@ interface ContentRendererProps {
   initialAnswer?: ExerciseAnswer;
   resolvedExerciseState?: ResolvedGeneratedExerciseState;
   allowGeneratedExerciseQueries?: boolean;
+  generatedExerciseContext?: GeneratedExerciseRenderContext;
   vocabularyPoolId?: string | null;
   resolvedVocabularyPool?: VocabularyPoolStudyData;
   pageIndex?: number;
@@ -80,6 +84,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
   initialAnswer,
   resolvedExerciseState,
   allowGeneratedExerciseQueries = false,
+  generatedExerciseContext,
   vocabularyPoolId,
   resolvedVocabularyPool,
   onDiagrammingAttempt,
@@ -93,6 +98,18 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
     ? answer => onAnswer({ exerciseId: content.id, answer, pageIndex, itemIndex })
     : undefined;
   const modeProps = { runtimeMode: mode, onAnswer: handleAnswer, initialAnswer };
+  const generatedExerciseSource: GeneratedExerciseQuerySource | undefined =
+    generatedExerciseContext?.kind === 'lesson' && pageIndex !== undefined && itemIndex !== undefined
+      ? {
+          kind: 'lesson',
+          lessonId: generatedExerciseContext.lessonId,
+          pageIndex,
+          itemIndex,
+          exerciseId: content.id,
+        }
+      : generatedExerciseContext?.kind === 'admin-preview' || allowGeneratedExerciseQueries
+        ? { kind: 'admin-preview' }
+        : undefined;
 
   switch (renderedContent.type) {
     case 'text':
@@ -203,6 +220,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
           onComplete={onComplete}
           {...modeProps}
           allowGeneratedExerciseQueries={allowGeneratedExerciseQueries}
+          generatedExerciseSource={generatedExerciseSource}
           resolvedItems={resolvedExerciseState?.items as GeneratedTranslationItem[] | undefined}
         />
       );
@@ -214,6 +232,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
           onComplete={onComplete}
           {...modeProps}
           allowGeneratedExerciseQueries={allowGeneratedExerciseQueries}
+          generatedExerciseSource={generatedExerciseSource}
           resolvedItems={
             resolvedExerciseState?.items as
               | Array<FormIdentificationItem | MultiAnswerFormIdentificationItem | SingleFieldFormIdentificationItem>

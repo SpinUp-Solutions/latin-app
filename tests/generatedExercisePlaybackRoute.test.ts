@@ -11,22 +11,33 @@ jest.mock('@/src/services/firebase-admin', () => ({
   adminDb: { collection: (name: string) => dbState.collection(name) },
 }));
 
-const mockVerifyAuthenticatedAccess = jest.fn();
-jest.mock('@/src/lib/verifyAdminAccess', () => ({
-  ...jest.requireActual('@/src/lib/verifyAdminAccess'),
-  verifyAuthenticatedAccess: (...args: unknown[]) => mockVerifyAuthenticatedAccess(...args),
+const mockVerifyRequestAuth = jest.fn();
+jest.mock('@/src/lib/verifyRequestAuth', () => ({
+  verifyRequestAuth: (...args: unknown[]) => mockVerifyRequestAuth(...args),
+}));
+
+const mockGetLesson = jest.fn();
+jest.mock('@/src/lib/learning-units/student-dashboard-service', () => ({
+  studentDashboardService: { getLesson: (...args: unknown[]) => mockGetLesson(...args) },
 }));
 
 import { POST } from '@/src/app/api/words/generated-exercise/route';
 import { createFakeGeneratedWordDb } from './helpers/fakeGeneratedWordFirestore';
-import { AdminAccessError } from '@/src/lib/admin-access-error';
 
-const translationBody = {
+const translationExercise = {
+  id: 'exercise-1',
   type: 'generated-translation',
   data: {
     generatorConfig: { collection: 'vocabulary_words_v5', wordSource: 'filters', count: 10 },
     posConfigs: { noun: { enabled: true, filters: {} }, verb: { enabled: true, filters: {} } },
   },
+};
+
+const playbackBody = {
+  lessonId: 'lesson-1',
+  pageIndex: 0,
+  itemIndex: 0,
+  exerciseId: 'exercise-1',
 };
 
 describe('student generated exercise playback route', () => {
@@ -57,20 +68,45 @@ describe('student generated exercise playback route', () => {
       ],
     });
     dbState.collection = db.collection;
-    mockVerifyAuthenticatedAccess.mockResolvedValue({ uid: 'student-1' });
+    mockVerifyRequestAuth.mockResolvedValue({ uid: 'student-1' });
+    mockGetLesson.mockResolvedValue({ id: 'lesson-1', pages: [{ id: 'page-1', items: [translationExercise] }] });
   });
 
   it('rejects unauthenticated playback requests', async () => {
-    mockVerifyAuthenticatedAccess.mockRejectedValue(new AdminAccessError('Unauthorized', 401));
-    const response = await POST({ json: async () => translationBody } as never);
+    mockVerifyRequestAuth.mockResolvedValue(null);
+    const response = await POST({ json: async () => playbackBody } as never);
     expect(response.status).toBe(401);
   });
 
-  it('returns exactly count usable words from the shared collector', async () => {
-    const response = await POST({ json: async () => translationBody } as never);
+  it('loads the authorized persisted exercise and returns exactly count usable words', async () => {
+    const response = await POST({ json: async () => playbackBody } as never);
     expect(response.status).toBe(200);
+    expect(mockGetLesson).toHaveBeenCalledWith('student-1', 'lesson-1');
     const payload = (response as unknown as { body: { words: unknown[]; collected: number } }).body;
     expect(payload.words).toHaveLength(10);
     expect(payload.collected).toBe(10);
+  });
+
+  it('preserves lesson access failures from the ownership check', async () => {
+    mockGetLesson.mockRejectedValue(
+      Object.assign(new Error('Lesson is locked'), { status: 403, code: 'LESSON_LOCKED' })
+    );
+
+    const response = await POST({ json: async () => playbackBody } as never);
+
+    expect(response.status).toBe(403);
+  });
+
+  it('rejects a stale exercise location instead of trusting client-authored content', async () => {
+    const response = await POST({ json: async () => ({ ...playbackBody, exerciseId: 'other-exercise' }) } as never);
+
+    expect(response.status).toBe(404);
+  });
+
+  it('rejects the old caller-authored exercise body', async () => {
+    const response = await POST({ json: async () => translationExercise } as never);
+
+    expect(response.status).toBe(400);
+    expect(mockGetLesson).not.toHaveBeenCalled();
   });
 });
