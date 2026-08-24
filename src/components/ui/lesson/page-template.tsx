@@ -15,6 +15,7 @@ import type { VocabularyPoolStudyData } from '@/src/types/vocabulary';
 interface PageTemplateProps {
   page: Page;
   pageIndex?: number;
+  lessonId?: string;
   onExerciseComplete?: (exerciseId: string, score: number) => void;
   runtimeMode?: RuntimeMode;
   onAnswer?: (event: ExerciseAnswerEvent) => void;
@@ -31,6 +32,7 @@ interface PageTemplateProps {
 export const PageTemplate: React.FC<PageTemplateProps> = ({
   page,
   pageIndex,
+  lessonId,
   onExerciseComplete,
   runtimeMode = 'practice',
   onAnswer,
@@ -93,7 +95,13 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: index * 0.1 }}
           className="space-y-4">
-          <ExerciseErrorBoundary key={item.id}>
+          <ExerciseErrorBoundary
+            key={item.id}
+            lessonId={lessonId}
+            exerciseId={item.id}
+            contentType={item.type}
+            pageIndex={pageIndex}
+            itemIndex={index}>
             <ContentRenderer
               content={item}
               pageIndex={pageIndex}

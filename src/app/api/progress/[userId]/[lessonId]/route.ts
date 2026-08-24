@@ -14,6 +14,7 @@ import {
   PROGRESS_SCHEMA_VERSION,
   resolveExerciseId,
 } from '@/src/utils/lessonProgress';
+import { reportServerUnexpectedError } from '@/src/lib/report-unexpected-error';
 
 const progressRequestSchema = z.discriminatedUnion('action', [
   z.object({
@@ -44,6 +45,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json(progressDoc.exists ? progressDoc.data() : null);
   } catch (error) {
     console.error('Error fetching user progress:', error);
+    reportServerUnexpectedError(error, {
+      tags: { surface: 'progress_get' },
+    });
     return NextResponse.json({ error: 'Failed to fetch progress' }, { status: 500 });
   }
 }
@@ -290,6 +294,9 @@ export async function POST(
     if (message === 'EXERCISE_NOT_FOUND') return NextResponse.json({ error: 'Exercise not found' }, { status: 400 });
 
     console.error('Error updating user progress:', error);
+    reportServerUnexpectedError(error, {
+      tags: { surface: 'progress_post' },
+    });
     return NextResponse.json({ error: 'Failed to update progress' }, { status: 500 });
   }
 }

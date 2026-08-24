@@ -25,6 +25,7 @@ import { SwiperNavigation } from '@/src/components/ui/core/swiper-nav';
 import { PracticeSection } from '@/src/components/ui/core/PracticeSection';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { FeedbackBanner } from '@/src/components/ui/core/feedback-banner';
+import { shouldReportClientHardFail, reportUnexpectedError } from '@/src/lib/report-unexpected-error';
 export { MockTestCard } from '@/src/components/ui/core/mock-test-card';
 
 const statusConfig: Record<LessonStatus, { card: string }> = {
@@ -299,6 +300,7 @@ export default function DashboardPage() {
     data: studentDashboard,
     isLoading: lessonsLoading,
     isError: dashboardError,
+    error: dashboardQueryError,
     refetch: refetchDashboard,
   } = useGetStudentDashboardQuery(uid, {
     skip: !uid,
@@ -307,6 +309,14 @@ export default function DashboardPage() {
   useEffect(() => {
     if (uid && studentDashboard) persistStudentDashboard(uid, studentDashboard);
   }, [uid, studentDashboard]);
+
+  useEffect(() => {
+    if (!dashboardError || studentDashboard || !dashboardQueryError) return;
+    if (!shouldReportClientHardFail(dashboardQueryError)) return;
+    reportUnexpectedError(dashboardQueryError, {
+      tags: { surface: 'dashboard_load' },
+    });
+  }, [dashboardError, dashboardQueryError, studentDashboard]);
 
   const learningUnits = useMemo(() => {
     return studentDashboard?.learningPath ?? [];

@@ -12,6 +12,7 @@ import {
   normalizeExerciseProgress,
   PROGRESS_SCHEMA_VERSION,
 } from '@/src/utils/lessonProgress';
+import { reportServerUnexpectedError } from '@/src/lib/report-unexpected-error';
 
 const finishRequestSchema = z.object({ finalPageId: z.string().min(1) });
 
@@ -126,6 +127,9 @@ export async function POST(
       );
     }
     console.error('Error completing lesson:', error);
+    reportServerUnexpectedError(error, {
+      tags: { surface: 'finish_lesson' },
+    });
     return NextResponse.json({ error: 'Failed to complete lesson' }, { status: 500 });
   }
 }

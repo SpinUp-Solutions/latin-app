@@ -4,9 +4,15 @@ import React from 'react';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/src/components/ui/button';
+import { reportUnexpectedError } from '@/src/lib/report-unexpected-error';
 
 interface ExerciseErrorBoundaryProps {
   children: React.ReactNode;
+  exerciseId?: string;
+  contentType?: string;
+  pageIndex?: number;
+  itemIndex?: number;
+  lessonId?: string;
 }
 
 interface ExerciseErrorBoundaryState {
@@ -25,6 +31,19 @@ export class ExerciseErrorBoundary extends React.Component<ExerciseErrorBoundary
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('Exercise rendering error:', error, errorInfo);
+    reportUnexpectedError(error, {
+      tags: {
+        surface: 'exercise_error_boundary',
+        ...(this.props.lessonId ? { lessonId: this.props.lessonId } : {}),
+        ...(this.props.exerciseId ? { exerciseId: this.props.exerciseId } : {}),
+        ...(this.props.contentType ? { contentType: this.props.contentType } : {}),
+        ...(this.props.pageIndex !== undefined ? { pageIndex: String(this.props.pageIndex) } : {}),
+        ...(this.props.itemIndex !== undefined ? { itemIndex: String(this.props.itemIndex) } : {}),
+      },
+      extra: {
+        componentStack: errorInfo.componentStack,
+      },
+    });
   }
 
   handleReset = () => {

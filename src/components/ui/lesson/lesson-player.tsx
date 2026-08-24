@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
+import * as Sentry from '@sentry/nextjs';
 import { AnimatePresence } from 'framer-motion';
 import { LessonWithProgress } from '@/src/types/lesson';
 import { BookOpen, Headphones, CheckCircle } from 'lucide-react';
@@ -23,6 +24,8 @@ import { RequiredExercise } from '@/src/utils/lessonProgress';
 import { stripHtmlTags } from '@/src/utils/exercises';
 import type { ExerciseAnswerEvent, RuntimeMode } from '@/src/types/runtime-mode';
 import type { GeneratedExerciseRenderContext, ResolvedGeneratedExerciseState } from './content-renderer';
+import { hasApiErrorStatus } from '@/src/store/api/baseQuery';
+import { reportUnexpectedError } from '@/src/lib/report-unexpected-error';
 
 interface LessonPlayerProps {
   lesson: LessonWithProgress;
@@ -66,11 +69,33 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   const resolvedGeneratedExerciseContext = generatedExerciseContext ?? { kind: 'lesson' as const, lessonId: lesson.id };
 
   useEffect(() => {
+    Sentry.setTag('lessonId', lesson.id);
+    Sentry.setTag('runtimeMode', effectiveRuntimeMode);
+    return () => {
+      Sentry.setTag('lessonId', '');
+      Sentry.setTag('runtimeMode', '');
+      Sentry.setTag('pageId', '');
+      Sentry.setTag('pageIndex', '');
+    };
+  }, [effectiveRuntimeMode, lesson.id]);
+
+  useEffect(() => {
+    if (!currentPage?.id) return;
+    Sentry.setTag('pageId', currentPage.id);
+    Sentry.setTag('pageIndex', String(currentPageIndex));
+  }, [currentPage?.id, currentPageIndex]);
+
+  useEffect(() => {
     if (!shouldTrackProgress || !user?.uid || !currentPage?.id || lastVisitedPageId.current === currentPage.id) return;
     lastVisitedPageId.current = currentPage.id;
     updatePageProgress({ userId: user.uid, lessonId: lesson.id, pageId: currentPage.id })
       .unwrap()
-      .catch(() => toast.error('Unable to save your page progress.'));
+      .catch(error => {
+        reportUnexpectedError(error, {
+          tags: { surface: 'page_progress', lessonId: lesson.id, pageId: currentPage.id },
+        });
+        toast.error('Unable to save your page progress.');
+      });
   }, [currentPage?.id, lesson.id, shouldTrackProgress, updatePageProgress, user?.uid]);
 
   const handleNext = useCallback(() => {
@@ -118,7 +143,12 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
         score,
       })
         .unwrap()
-        .catch(() => toast.error('Unable to save your exercise progress. Please try again.'));
+        .catch(error => {
+          reportUnexpectedError(error, {
+            tags: { surface: 'exercise_progress', lessonId: lesson.id, exerciseId },
+          });
+          toast.error('Unable to save your exercise progress. Please try again.');
+        });
     },
     [markExerciseComplete, user?.uid, lesson.id, shouldTrackProgress]
   );
@@ -170,6 +200,11 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
     } catch (error) {
       const data = (error as { data?: { error?: string; missingExercises?: RequiredExercise[] } }).data;
       setMissingExercises(data?.missingExercises || []);
+      if (!hasApiErrorStatus(error, 422) && !data?.missingExercises) {
+        reportUnexpectedError(error, {
+          tags: { surface: 'finish_lesson', lessonId: lesson.id },
+        });
+      }
       toast.error(data?.error || 'Failed to finish the lesson.');
     }
   }, [currentPage?.id, finishLesson, lesson.id, shouldTrackProgress, user?.uid]);
@@ -209,6 +244,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
                 key={currentPage.id}
                 page={currentPage}
                 pageIndex={currentPageIndex}
+                lessonId={lesson.id}
                 runtimeMode={effectiveRuntimeMode}
                 onAnswer={onAnswer}
                 resolvedExerciseState={resolvedExerciseState}
