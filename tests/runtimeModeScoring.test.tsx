@@ -15,6 +15,7 @@ jest.mock('@/src/components/ui/core/simple-rich-editor', () => ({ SimpleRichEdit
 jest.mock('@/src/hooks/useTranslationGrading', () => ({ useTranslationGrading: () => ({}) }));
 const mockUseGetMultiPosWordsQuery = jest.fn();
 jest.mock('@/src/store/api/advancedVocabularyApi', () => ({
+  useGetGeneratedExerciseWordsQuery: (...args: unknown[]) => mockUseGetMultiPosWordsQuery(...args),
   useGetMultiPosWordsQuery: (...args: unknown[]) => mockUseGetMultiPosWordsQuery(...args),
   useGetMultiParadigmWordsQuery: () => ({ data: undefined, isLoading: false, isError: false }),
 }));
@@ -292,7 +293,50 @@ describe('exercise runtime-mode scoring', () => {
 
     render(<ContentRenderer content={exercise} runtimeMode="test" allowGeneratedExerciseQueries />);
 
-    expect(mockUseGetMultiPosWordsQuery).toHaveBeenCalled();
+    expect(mockUseGetMultiPosWordsQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        exercise: expect.objectContaining({ type: 'generated-translation' }),
+        source: { kind: 'admin-preview' },
+      }),
+      expect.objectContaining({ skip: false })
+    );
     expect(screen.getByText('No vocabulary found')).toBeInTheDocument();
+  });
+
+  it('scopes generated lesson queries to the rendered lesson item', () => {
+    mockUseGetMultiPosWordsQuery.mockReturnValue({ data: { words: [] }, isLoading: false, isError: false });
+    const exercise: GeneratedTranslationExercise = {
+      id: 'generated-lesson-exercise',
+      type: 'generated-translation',
+      title: 'Generated translation',
+      instructions: '',
+      feedbackConfig: manualProgression,
+      data: {
+        generatorConfig: { collection: 'words', wordSource: 'filters', count: 1 },
+        posConfigs: {},
+      },
+    };
+
+    render(
+      <ContentRenderer
+        content={exercise}
+        pageIndex={2}
+        itemIndex={3}
+        generatedExerciseContext={{ kind: 'lesson', lessonId: 'lesson-1' }}
+      />
+    );
+
+    expect(mockUseGetMultiPosWordsQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: {
+          kind: 'lesson',
+          lessonId: 'lesson-1',
+          pageIndex: 2,
+          itemIndex: 3,
+          exerciseId: 'generated-lesson-exercise',
+        },
+      }),
+      expect.objectContaining({ skip: false })
+    );
   });
 });

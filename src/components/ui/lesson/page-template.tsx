@@ -9,7 +9,7 @@ import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { isExerciseType } from '@/src/utils/lessonUtils';
 import { DiagramAuditSubmission } from '@/src/features/sentence-diagramming';
 import type { ExerciseAnswer, ExerciseAnswerEvent, RuntimeMode } from '@/src/types/runtime-mode';
-import type { ResolvedGeneratedExerciseState } from './content-renderer';
+import type { GeneratedExerciseRenderContext, ResolvedGeneratedExerciseState } from './content-renderer';
 import type { VocabularyPoolStudyData } from '@/src/types/vocabulary';
 
 interface PageTemplateProps {
@@ -21,6 +21,7 @@ interface PageTemplateProps {
   answers?: Record<string, ExerciseAnswer>;
   resolvedExerciseState?: Record<string, ResolvedGeneratedExerciseState>;
   allowGeneratedExerciseQueries?: boolean;
+  generatedExerciseContext?: GeneratedExerciseRenderContext;
   vocabularyPoolId?: string | null;
   resolvedVocabularyPool?: VocabularyPoolStudyData;
   onPageComplete?: () => void;
@@ -36,6 +37,7 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({
   answers,
   resolvedExerciseState,
   allowGeneratedExerciseQueries = false,
+  generatedExerciseContext,
   vocabularyPoolId,
   resolvedVocabularyPool,
   onPageComplete,
@@ -101,6 +103,7 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({
               initialAnswer={answers?.[item.id]}
               resolvedExerciseState={resolvedExerciseState?.[item.id]}
               allowGeneratedExerciseQueries={allowGeneratedExerciseQueries}
+              generatedExerciseContext={generatedExerciseContext}
               vocabularyPoolId={vocabularyPoolId}
               resolvedVocabularyPool={resolvedVocabularyPool}
               onComplete={(score: number) => handleItemComplete(index, score)}

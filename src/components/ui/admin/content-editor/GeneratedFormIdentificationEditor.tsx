@@ -12,23 +12,21 @@ import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
 import { AdvancedFiltersPanel } from '../vocabulary/AdvancedFiltersPanel';
 import { VocabularyPoolSelector } from '../vocabulary-pools/VocabularyPoolSelector';
-import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
-import {
-  extractStepValue,
-  getAcceptedAnswersForStep,
-  getDisplayForm,
-  enrichPathsWithSteps,
-  getAnswerableStepsForWord,
-} from '@/src/utils/exercises/formIdentificationHelpers';
 import { WordSourceSection } from './WordSourceSection';
 import { MultiParadigmConfigSection } from './MultiParadigmConfigSection';
 import { useFormIdentificationEditor } from '@/src/hooks/useFormIdentificationEditor';
 import type { PartOfSpeech, PronounType, PronounPerson } from '@/shared/types/vocabulary/schemas/enums';
 import { parseMultiFilterValue, serializeMultiFilterValue } from '@/src/utils/wordFilters';
-import { deriveParadigm } from '@/src/utils/paradigm';
-import type { FormIdentificationStep } from '@/src/types/exercises/schemas/form-identification';
+import {
+  extractStepValue,
+  getAcceptedAnswersForStep,
+  getDisplayForm,
+} from '@/src/utils/exercises/formIdentificationHelpers';
 import { getExerciseDisplayForm, hasSelectedForm } from '@/src/utils/exercises/formSelection';
 import { getGeneratedFormIdentificationConfigurationMessages } from '@/src/utils/exercises/formIdentificationConfiguration';
+import { prepareGeneratedFormIdentificationWord } from '@/src/utils/exercises/formIdentificationPreparation';
+import { formatGeneratedPreviewDiagnostics } from '@/src/utils/generated/generatedExercisePreview';
+import { getApiErrorMessage } from '@/src/store/api/baseQuery';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 
 export const GeneratedFormIdentificationEditor: React.FC = () => {
@@ -156,18 +154,7 @@ const GeneratedFormIdentificationEditorView: React.FC<{
     </div>
   );
 
-  const previewWords = editor.previewData?.words as ExerciseWordResponse[] | undefined;
-
-  const getWordSteps = (word: ExerciseWordResponse): FormIdentificationStep[] => {
-    const pronounType = word.part_of_speech === 'pronoun' ? (word.pronoun_type as PronounType | undefined) : undefined;
-    const pronounPerson = word.part_of_speech === 'pronoun' ? (word.person as PronounPerson | undefined) : undefined;
-    const paradigm = deriveParadigm(word.part_of_speech as PartOfSpeech, pronounType, pronounPerson);
-    if (!paradigm) return [];
-    const basePrimaryPaths = (word.primary_form_paths || (word.form_path ? [word.form_path] : [])) as Array<
-      Record<string, string | undefined>
-    >;
-    return getAnswerableStepsForWord(word, editor.paradigmConfigs[paradigm]?.steps || [], basePrimaryPaths);
-  };
+  const previewWords = editor.previewData?.words;
 
   return (
     <div className="space-y-6">
@@ -321,52 +308,37 @@ const GeneratedFormIdentificationEditorView: React.FC<{
                 : `Preview Sample Items${editor.config.count !== 'all' ? ` (${editor.config.count})` : ''}`}
             </Button>
 
+            {editor.isPreviewOpen && editor.previewError ? (
+              <div className="text-sm text-red-600 mt-4">
+                {getApiErrorMessage(editor.previewError, 'Failed to load preview')}
+              </div>
+            ) : null}
+
+            {editor.isPreviewOpen && editor.previewData?.diagnostics?.length ? (
+              <p className="text-xs text-gray-500 mt-2">
+                {formatGeneratedPreviewDiagnostics(editor.previewData)}
+              </p>
+            ) : null}
+
             {editor.isPreviewOpen && previewWords && previewWords.length > 0 && (
               <div className="space-y-2 mt-4">
                 <label className="block text-sm font-medium">Preview ({previewWords.length} items)</label>
                 {previewWords.map((word, index) => {
-                  const wordWithPath = word;
-                  const wordSteps = getWordSteps(word);
+                  const prepared = prepareGeneratedFormIdentificationWord(editingContent, word);
+                  const wordSteps = prepared?.steps ?? [];
 
                   let primaryAnswersDisplay = '';
                   let optionalAnswersDisplay = '';
 
-                  if (isSingleField) {
-                    const basePrimaryPaths = (word.primary_form_paths ||
-                      (word.form_path ? [word.form_path] : [])) as Array<Record<string, string | undefined>>;
-                    const baseOptionalPaths = (word.optional_form_paths || []) as Array<
-                      Record<string, string | undefined>
-                    >;
+                  if (isSingleField && prepared) {
+                    const formatPath = (path: Record<string, string | undefined>) =>
+                      wordSteps
+                        .map(step => (path[step] ? getDisplayForm(path[step]) : null))
+                        .filter(Boolean)
+                        .join(',');
 
-                    const enrichedPrimaryPaths = enrichPathsWithSteps(basePrimaryPaths, wordWithPath, wordSteps);
-                    const enrichedOptionalPaths = enrichPathsWithSteps(baseOptionalPaths, wordWithPath, wordSteps);
-
-                    const primaryDisplays = enrichedPrimaryPaths
-                      .map(path => {
-                        const pathValues = wordSteps
-                          .map(step => {
-                            const val = path[step];
-                            return val ? getDisplayForm(val) : null;
-                          })
-                          .filter(Boolean);
-                        return pathValues.join(',');
-                      })
-                      .filter(display => display.length > 0);
-
-                    const optionalDisplays = enrichedOptionalPaths
-                      .map(path => {
-                        const pathValues = wordSteps
-                          .map(step => {
-                            const val = path[step];
-                            return val ? getDisplayForm(val) : null;
-                          })
-                          .filter(Boolean);
-                        return pathValues.join(',');
-                      })
-                      .filter(display => display.length > 0);
-
-                    primaryAnswersDisplay = primaryDisplays.join(';');
-                    optionalAnswersDisplay = optionalDisplays.join(';');
+                    primaryAnswersDisplay = prepared.primary.map(formatPath).filter(Boolean).join(';');
+                    optionalAnswersDisplay = prepared.optional.map(formatPath).filter(Boolean).join(';');
                   }
 
                   const displayWord = getExerciseDisplayForm(word);
@@ -391,50 +363,42 @@ const GeneratedFormIdentificationEditorView: React.FC<{
                               )}
                             </>
                           ) : (
-                            (() => {
-                              const basePrimaryPaths = (word.primary_form_paths ||
-                                (word.form_path ? [word.form_path] : [])) as Array<Record<string, string | undefined>>;
-                              const baseOptionalPaths = (word.optional_form_paths || []) as Array<
-                                Record<string, string | undefined>
-                              >;
+                            wordSteps.map(step => {
+                              const primaryValues = (prepared?.primary ?? [])
+                                .map(path => path[step])
+                                .filter((value): value is string => Boolean(value));
+                              const optionalValues = (prepared?.optional ?? [])
+                                .map(path => path[step])
+                                .filter((value): value is string => Boolean(value));
 
-                              return wordSteps.map(step => {
-                                const primaryValues = basePrimaryPaths
-                                  .map(path => path[step])
-                                  .filter((v): v is string => !!v);
-                                const optionalValues = baseOptionalPaths
-                                  .map(path => path[step])
-                                  .filter((v): v is string => !!v);
+                              const uniquePrimaryValues = Array.from(new Set(primaryValues));
+                              const uniqueOptionalValues = Array.from(
+                                new Set(optionalValues.filter(value => !uniquePrimaryValues.includes(value)))
+                              );
 
-                                const uniquePrimaryValues = Array.from(new Set(primaryValues));
-                                const uniqueOptionalValues = Array.from(
-                                  new Set(optionalValues.filter(v => !uniquePrimaryValues.includes(v)))
-                                );
+                              const displayValue =
+                                uniquePrimaryValues.length > 0
+                                  ? uniquePrimaryValues.join(' OR ')
+                                  : extractStepValue(word, step);
 
-                                const displayValue =
-                                  uniquePrimaryValues.length > 0
-                                    ? uniquePrimaryValues.join(' OR ')
-                                    : extractStepValue(wordWithPath, step);
+                              if (!displayValue) return null;
 
-                                if (!displayValue) return null;
+                              const answers = getAcceptedAnswersForStep(
+                                uniquePrimaryValues.length > 0 ? uniquePrimaryValues[0] : displayValue
+                              );
 
-                                const answers = getAcceptedAnswersForStep(
-                                  uniquePrimaryValues.length > 0 ? uniquePrimaryValues[0] : displayValue
-                                );
-
-                                return (
-                                  <div key={step} className="text-gray-600">
-                                    <strong className="capitalize">{step.replace(/_/g, ' ')}:</strong> {displayValue}{' '}
-                                    {answers.length > 1 && `(or ${answers.slice(1).join(', ')})`}
-                                    {uniqueOptionalValues.length > 0 && (
-                                      <span className="text-gray-400 text-xs ml-1">
-                                        [optional: {uniqueOptionalValues.join(' OR ')}]
-                                      </span>
-                                    )}
-                                  </div>
-                                );
-                              });
-                            })()
+                              return (
+                                <div key={step} className="text-gray-600">
+                                  <strong className="capitalize">{step.replace(/_/g, ' ')}:</strong> {displayValue}{' '}
+                                  {answers.length > 1 && `(or ${answers.slice(1).join(', ')})`}
+                                  {uniqueOptionalValues.length > 0 && (
+                                    <span className="text-gray-400 text-xs ml-1">
+                                      [optional: {uniqueOptionalValues.join(' OR ')}]
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })
                           )}
                         </div>
                       </CardContent>

@@ -5,26 +5,20 @@ import type {
   MultiAnswerFormIdentificationItem,
   SingleFieldFormIdentificationItem,
 } from '@/src/types/exercises/schemas/form-identification';
-import type { PartOfSpeech, PronounPerson, PronounType } from '@/shared/types/vocabulary/schemas/enums';
-import { deriveParadigm } from '@/src/utils/paradigm';
 import { hasSelectedForm, getExerciseDisplayForm } from '@/src/utils/exercises/formSelection';
-import { buildLegacyParadigmConfigs } from '@/src/utils/exercises/legacyExerciseCompat';
 import {
   splitTranslationAnswers,
   type GeneratedTranslationItem,
 } from '@/src/utils/exercises/generatedTranslationExercise';
+import { prepareGeneratedFormIdentificationWord } from '@/src/utils/exercises/formIdentificationPreparation';
 import {
-  deduplicatePathsBySteps,
-  enrichPathsWithSteps,
   extractStepValue,
   extractStepValuesFromPaths,
   filterPathsByPreviousAnswers,
   formatPrimaryAnswersDisplay,
   getAcceptedAnswersForMultipleValues,
   getAcceptedAnswersForStep,
-  getAnswerableStepsForWord,
   getDisplayForm,
-  getFallbackAnswerableStepsForWord,
   getHintForStep,
 } from '@/src/utils/exercises/formIdentificationHelpers';
 
@@ -36,69 +30,17 @@ export type ResolvedFormIdentificationItem =
 
 export type GeneratedWordLoader = (exercise: GeneratedExercise) => Promise<ExerciseWordResponse[]>;
 
-const getPaths = (word: ExerciseWordResponse) => ({
-  primary: (word.primary_form_paths || (word.form_path ? [word.form_path] : [])) as Array<
-    Record<string, string | undefined>
-  >,
-  optional: (word.optional_form_paths || []) as Array<Record<string, string | undefined>>,
-});
-
-const getPreparedPaths = (exercise: GeneratedFormIdentificationExercise, word: ExerciseWordResponse) => {
-  const data = word as Record<string, unknown>;
-  const paradigm = deriveParadigm(
-    word.part_of_speech as PartOfSpeech,
-    data.pronoun_type as PronounType | undefined,
-    data.person as PronounPerson | undefined
-  );
-  const paradigmConfigs =
-    exercise.data.paradigmConfigs && Object.keys(exercise.data.paradigmConfigs).length > 0
-      ? exercise.data.paradigmConfigs
-      : buildLegacyParadigmConfigs(exercise.data.generatorConfig as Parameters<typeof buildLegacyParadigmConfigs>[0]);
-  const config = paradigm ? paradigmConfigs[paradigm] : undefined;
-  const paths = getPaths(word);
-  const configuredSteps = config?.steps || [];
-  let candidateSteps = getAnswerableStepsForWord(word, configuredSteps, paths.primary);
-  const preferredPath = (word.form_path || paths.primary[0]) as Record<string, string | undefined> | undefined;
-
-  // A selected path can be answerable even when a syncretic alternative in
-  // `primary_form_paths` cannot answer any of the same questions (for example
-  // a finite form and a gerund with the same spelling). Fall back to the
-  // selected interpretation and discard incompatible alternatives below.
-  if (candidateSteps.length === 0) {
-    candidateSteps = getFallbackAnswerableStepsForWord(word, configuredSteps, preferredPath);
+export function isUsableGeneratedTranslationWord(
+  exercise: GeneratedTranslationExercise,
+  word: ExerciseWordResponse
+): boolean {
+  const translations = splitTranslationAnswers(word.translation);
+  if (translations.length === 0) return false;
+  if (exercise.translationDirection === 'english-to-latin') {
+    return Boolean(word.root_word);
   }
-
-  let enrichedPrimary = enrichPathsWithSteps(paths.primary, word, candidateSteps);
-  const steps = candidateSteps.filter(
-    step => enrichedPrimary.length > 0 && enrichedPrimary.some(path => Boolean(path[step]))
-  );
-
-  if (steps.length > 0) {
-    enrichedPrimary = enrichedPrimary.filter(path => steps.every(step => Boolean(path[step])));
-  }
-
-  // Older responses may omit `primary_form_paths` while still carrying the
-  // selected `form_path`; preserve that selected path as the answer key.
-  if (enrichedPrimary.length === 0 && preferredPath && steps.length > 0) {
-    enrichedPrimary = enrichPathsWithSteps([preferredPath], word, steps).filter(path =>
-      steps.every(step => Boolean(path[step]))
-    );
-  }
-
-  if (steps.length === 0) {
-    return { steps, primary: [], optional: [] };
-  }
-
-  const enrichedOptional = enrichPathsWithSteps(paths.optional, word, steps).filter(path =>
-    steps.every(step => Boolean(path[step]))
-  );
-
-  return {
-    steps,
-    primary: deduplicatePathsBySteps(enrichedPrimary, steps),
-    optional: deduplicatePathsBySteps(enrichedOptional, steps),
-  };
-};
+  return getExerciseDisplayForm(word).trim().length > 0;
+}
 
 export function createGeneratedTranslationItems(
   exercise: GeneratedTranslationExercise,
@@ -107,11 +49,11 @@ export function createGeneratedTranslationItems(
   const direction = exercise.translationDirection || 'latin-to-english';
 
   return words.flatMap<GeneratedTranslationItem>(word => {
+    if (!isUsableGeneratedTranslationWord(exercise, word)) return [];
     const translations = splitTranslationAnswers(word.translation);
     const hint = word.definitions?.length ? word.definitions.join(', ') : undefined;
 
     if (direction === 'english-to-latin') {
-      if (translations.length === 0 || !word.root_word) return [];
       return [
         {
           text: translations.join(', '),
@@ -123,7 +65,6 @@ export function createGeneratedTranslationItems(
       ];
     }
 
-    if (translations.length === 0) return [];
     return [{ text: getExerciseDisplayForm(word), acceptedAnswers: translations, hint, stripInfinitive: true }];
   });
 }
@@ -137,8 +78,8 @@ export function createGeneratedFormIdentificationItems(
 
   if (exercise.data.mode === 'single-field') {
     return usableWords.flatMap<SingleFieldFormIdentificationItem>(word => {
-      const paths = getPreparedPaths(exercise, word);
-      if (paths.steps.length === 0 || paths.primary.length === 0) return [];
+      const paths = prepareGeneratedFormIdentificationWord(exercise, word);
+      if (!paths) return [];
 
       const correctAnswerDisplay = paths.primary
         .map(path => paths.steps.map(step => (path[step] ? getDisplayForm(path[step]!) : '')).join(','))
@@ -166,7 +107,8 @@ export function createGeneratedFormIdentificationItems(
 
   if (exercise.data.requireAllPrimaryAnswers) {
     return usableWords.flatMap(word => {
-      const paths = getPreparedPaths(exercise, word);
+      const paths = prepareGeneratedFormIdentificationWord(exercise, word);
+      if (!paths) return [];
       return paths.steps.map((step, stepIndex) => ({
         id: `${word.id}-${step}`,
         wordId: word.id,
@@ -192,7 +134,8 @@ export function createGeneratedFormIdentificationItems(
   }
 
   return usableWords.flatMap(word => {
-    const paths = getPreparedPaths(exercise, word);
+    const paths = prepareGeneratedFormIdentificationWord(exercise, word);
+    if (!paths) return [];
     const answered = previousAnswers[word.id] || {};
 
     return paths.steps.map(step => {

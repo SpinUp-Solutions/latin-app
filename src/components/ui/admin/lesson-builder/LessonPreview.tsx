@@ -21,7 +21,12 @@ export const LessonPreview: React.FC<LessonPreviewProps> = ({ lesson }) => {
       </div>
       <div className="p-4 pb-6">
         {hasContent ? (
-          <LessonPlayer lesson={lesson} navigationPlacement="contained" trackProgress={false} />
+          <LessonPlayer
+            lesson={lesson}
+            navigationPlacement="contained"
+            trackProgress={false}
+            generatedExerciseContext={{ kind: 'admin-preview' }}
+          />
         ) : (
           <div className="flex items-center justify-center h-64 border-2 border-dashed border-gray-300 rounded-lg">
             <div className="text-center">

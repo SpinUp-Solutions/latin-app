@@ -17,8 +17,9 @@ import { splitTranslationAnswers } from '@/src/utils/exercises/generatedTranslat
 import type { TranslationDirection } from '@/src/types/exercises/generated-translation';
 import type { PartOfSpeech, PronounType, PronounPerson } from '@/shared/types/vocabulary/schemas/enums';
 import { parseMultiFilterValue, serializeMultiFilterValue } from '@/src/utils/wordFilters';
-import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
 import { getExerciseDisplayForm, hasSelectedForm } from '@/src/utils/exercises/formSelection';
+import { formatGeneratedPreviewDiagnostics } from '@/src/utils/generated/generatedExercisePreview';
+import { getApiErrorMessage } from '@/src/store/api/baseQuery';
 
 export const GeneratedTranslationEditor: React.FC = () => {
   const editingContent = useAppSelector(
@@ -134,7 +135,7 @@ const GeneratedTranslationEditorView: React.FC<{ editingContent: GeneratedTransl
     </div>
   );
 
-  const previewWords = editor.previewData?.words as ExerciseWordResponse[] | undefined;
+  const previewWords = editor.previewData?.words;
 
   return (
     <div className="space-y-6">
@@ -217,6 +218,18 @@ const GeneratedTranslationEditorView: React.FC<{ editingContent: GeneratedTransl
             <Button type="button" onClick={() => editor.setIsPreviewOpen(true)} disabled={editor.isPreviewFetching}>
               {editor.isPreviewFetching ? 'Loading Preview...' : 'Preview Sample Items'}
             </Button>
+
+            {editor.isPreviewOpen && editor.previewError ? (
+              <div className="text-sm text-red-600 mt-4">
+                {getApiErrorMessage(editor.previewError, 'Failed to load preview')}
+              </div>
+            ) : null}
+
+            {editor.isPreviewOpen && editor.previewData?.diagnostics?.length ? (
+              <p className="text-xs text-gray-500 mt-2">
+                {formatGeneratedPreviewDiagnostics(editor.previewData)}
+              </p>
+            ) : null}
 
             {editor.isPreviewOpen && previewWords && previewWords.length > 0 && (
               <div className="space-y-2 mt-4">

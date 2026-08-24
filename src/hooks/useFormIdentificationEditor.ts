@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { skipToken } from '@reduxjs/toolkit/query';
+import { useCallback, useEffect, useMemo } from 'react';
 import { produce } from 'immer';
 import { useAppDispatch } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonEditorSlice';
-import { useGetMultiParadigmWordsQuery } from '@/src/store/api/advancedVocabularyApi';
 import { useAvailableParadigms } from '@/src/hooks/useAvailableParadigms';
 import { useFormSelectionControls } from '@/src/hooks/useFormSelection';
+import { useGeneratedExercisePreview } from '@/src/hooks/useGeneratedExercisePreview';
 import { ensureGeneratorConfig, DEFAULT_POS_FILTERS } from '@/src/utils/exercises/generatorConfigDefaults';
 import { PARADIGM_STEPS, PARADIGM_TABLE_TYPE, PARADIGM_RELEVANT_FILTERS } from '@/src/config/paradigmDefinitions';
 import { getParadigmPOS } from '@/src/utils/paradigm';
@@ -16,7 +15,6 @@ import { buildLegacyParadigmConfigs } from '@/src/utils/exercises/legacyExercise
 
 export function useFormIdentificationEditor(editingContent: GeneratedFormIdentificationExercise) {
   const dispatch = useAppDispatch();
-  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   const rawConfig = editingContent.data?.generatorConfig;
   const config = useMemo(() => ensureGeneratorConfig(rawConfig), [rawConfig]);
@@ -65,19 +63,15 @@ export function useFormIdentificationEditor(editingContent: GeneratedFormIdentif
     return paradigmConfigs[activeParadigm]?.formSelection;
   }, [activeParadigm, paradigmConfigs]);
 
-  const previewResult = useGetMultiParadigmWordsQuery(
-    isPreviewOpen && Object.keys(paradigmConfigs).length > 0
-      ? {
-          exerciseType: 'generated-form-identification',
-          collection: config.collection,
-          wordSource: config.wordSource,
-          poolId: config.poolId,
-          poolWordLimit: config.poolWordLimit,
-          count: config.count,
-          paradigmConfigs,
-        }
-      : skipToken
+  const previewRequest = useMemo(
+    () => ({
+      type: 'generated-form-identification' as const,
+      data: editingContent.data,
+    }),
+    [editingContent.data]
   );
+  const { isPreviewOpen, setIsPreviewOpen, previewData, isPreviewFetching, previewError } =
+    useGeneratedExercisePreview(previewRequest);
 
   const updateContent = useCallback(
     (updates: Partial<GeneratedFormIdentificationExercise>) => {
@@ -232,7 +226,8 @@ export function useFormIdentificationEditor(editingContent: GeneratedFormIdentif
     handleToggleParadigm,
     handleGlobalFiltersChange,
     formSelectionControls,
-    previewData: previewResult.data,
-    isPreviewFetching: previewResult.isFetching,
+    previewData,
+    isPreviewFetching,
+    previewError,
   };
 }
