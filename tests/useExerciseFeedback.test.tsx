@@ -142,4 +142,31 @@ describe('useExerciseFeedback', () => {
     expect(result.current.level).toBeNull();
     expect(result.current.shouldResetExercise).toBe(true);
   });
+
+  it('predicts whether the next incorrect answer will reach the reset threshold', () => {
+    const { result } = renderHook(() =>
+      useExerciseFeedback(
+        createConfig({
+          escalationLevels: [{ message: 'Level 1' }],
+          maxLevelFailures: 2,
+        })
+      )
+    );
+
+    expect(result.current.willResetOnNextIncorrect).toBe(false);
+
+    act(() => {
+      result.current.handleIncorrect();
+    });
+
+    expect(result.current.willResetOnNextIncorrect).toBe(true);
+    expect(result.current.shouldResetExercise).toBe(false);
+
+    act(() => {
+      result.current.handleIncorrect();
+    });
+
+    expect(result.current.shouldResetExercise).toBe(true);
+    expect(result.current.willResetOnNextIncorrect).toBe(true);
+  });
 });

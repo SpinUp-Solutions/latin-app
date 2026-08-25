@@ -4,10 +4,12 @@ import React from 'react';
 import { ListeningPassageExercise as ListeningPassageExerciseType } from '@/src/types/exercises/listening-passage';
 import { AudioPlayer } from '@/src/components/ui/core/AudioPlayer';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
+import type { ExerciseCompletionHandler } from '@/src/types/runtime-mode';
 
 interface ListeningPassageExerciseProps {
   exercise: ListeningPassageExerciseType;
   onComplete?: (score: number) => void;
+  onCompletionAccepted?: ExerciseCompletionHandler;
 }
 
 const ListeningPassageExercise: React.FC<ListeningPassageExerciseProps> = ({ exercise }) => {

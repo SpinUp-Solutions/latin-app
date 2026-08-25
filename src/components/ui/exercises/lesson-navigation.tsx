@@ -129,7 +129,7 @@ export const LessonNavigation: React.FC<LessonNavigationProps> = ({
           <Button
             variant="outline"
             onClick={canGoNext ? onNext : onFinish}
-            disabled={isFinishing}
+            disabled={!canGoNext && isFinishing}
             className="rounded-full gap-1 px-3 sm:px-4">
             {canGoNext ? (
               <>

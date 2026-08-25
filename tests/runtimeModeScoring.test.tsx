@@ -66,6 +66,40 @@ describe('exercise runtime-mode scoring', () => {
     await waitFor(() => expect(onComplete).toHaveBeenCalledWith(67));
   });
 
+  it('does not emit accepted completion from preview or test runtime modes', () => {
+    const exercise: MultipleChoiceExerciseType = {
+      id: 'mode-gated-completion',
+      type: 'multiple-choice',
+      title: 'Question',
+      instructions: '',
+      feedbackConfig: manualProgression,
+      data: {
+        question: 'Choose one',
+        allowMultipleSelections: false,
+        options: [{ id: 'right', text: 'Right', isCorrect: true }],
+      },
+    };
+
+    const previewAccepted = jest.fn();
+    const { unmount } = render(
+      <MultipleChoiceExercise
+        exercise={exercise}
+        runtimeMode="preview"
+        onCompletionAccepted={previewAccepted}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: /right/i }));
+    fireEvent.click(screen.getByRole('button', { name: /submit answer/i }));
+    expect(previewAccepted).not.toHaveBeenCalled();
+    unmount();
+
+    const testAccepted = jest.fn();
+    render(<MultipleChoiceExercise exercise={exercise} runtimeMode="test" onCompletionAccepted={testAccepted} />);
+    fireEvent.click(screen.getByRole('button', { name: /right/i }));
+    fireEvent.click(screen.getByRole('button', { name: /submit answer/i }));
+    expect(testAccepted).not.toHaveBeenCalled();
+  });
+
   it('scores a multiple-choice exercise on its first submission', () => {
     const onComplete = jest.fn();
     const exercise: MultipleChoiceExerciseType = {

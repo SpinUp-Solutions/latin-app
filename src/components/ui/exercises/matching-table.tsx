@@ -1,16 +1,20 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Button } from '@/src/components/ui/button';
 import { X, Shuffle } from 'lucide-react';
 import { MatchingExercise } from '@/src/types/exercise';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
-import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
 import { FeedbackDisplay } from '../feedback';
 import FieldSelect from '../core/field-select';
 import { validateMatchingExercise } from '@/src/utils/exercises/matchingExercise';
 import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
-import type { ExerciseAnswer, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
+import type {
+  ExerciseAnswer,
+  ExerciseAnswerHandler,
+  ExerciseCompletionHandler,
+  RuntimeMode,
+} from '@/src/types/runtime-mode';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
 interface MatchingItem {
@@ -21,6 +25,7 @@ interface MatchingItem {
 interface MatchingTableProps {
   exercise: MatchingExercise;
   onComplete?: (score: number) => void;
+  onCompletionAccepted?: ExerciseCompletionHandler;
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
   initialAnswer?: ExerciseAnswer;
@@ -29,6 +34,7 @@ interface MatchingTableProps {
 export const MatchingTable: React.FC<MatchingTableProps> = ({
   exercise,
   onComplete,
+  onCompletionAccepted,
   runtimeMode,
   onAnswer,
   initialAnswer,
@@ -79,28 +85,43 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({
     clearFeedback,
     reset,
     shouldResetExercise,
+    willResetOnNextIncorrect,
     resetExercise,
   } = useExerciseFeedback(exercise.feedbackConfig);
 
-  useDelayedExerciseReset({
-    shouldReset: !assessmentMode && shouldResetExercise,
-    delayMs: exercise.itemProgressionDelay,
-    onReset: () => {
-      setShuffledLeftColumn(leftColumn);
-      setShuffledRightColumn(rightColumn);
-      setSelectedLeft(null);
-      setSelectedRight(null);
-      setMatches({});
-      setMatchedLeftIds(new Set());
-      setShowIncorrectFlash(false);
-      setCurrentRound(1);
-      setTestRounds([]);
-      resetExercise();
-    },
-  });
+  const resetRequired = mode === 'practice' && shouldResetExercise;
+  const incorrectFlashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearIncorrectFlashTimeout = () => {
+    if (incorrectFlashTimeoutRef.current) {
+      clearTimeout(incorrectFlashTimeoutRef.current);
+      incorrectFlashTimeoutRef.current = null;
+    }
+  };
+
+  const handleExerciseReset = () => {
+    clearIncorrectFlashTimeout();
+    setShuffledLeftColumn(leftColumn);
+    setShuffledRightColumn(rightColumn);
+    setSelectedLeft(null);
+    setSelectedRight(null);
+    setMatches({});
+    setMatchedLeftIds(new Set());
+    setShowIncorrectFlash(false);
+    setCurrentRound(1);
+    setTestRounds([]);
+    resetExercise();
+  };
+
+  useEffect(() => {
+    return () => {
+      clearIncorrectFlashTimeout();
+    };
+  }, []);
 
   // this is for the live preview :/
   useEffect(() => {
+    clearIncorrectFlashTimeout();
     setShuffledLeftColumn(leftColumn);
     setShuffledRightColumn(rightColumn);
     setSelectedLeft(null);
@@ -114,6 +135,8 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({
   }, [leftColumn, rightColumn, finalAnswer, reset, restoredMatches, restoredRound, restoredRounds]);
 
   const handleLeftSelect = (item: string, index?: number) => {
+    if (resetRequired) return;
+
     const matchingItem = shuffledLeftColumn[index!];
     if (matchedLeftIds.has(matchingItem?.id)) {
       return;
@@ -128,6 +151,8 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({
   };
 
   const handleRightSelect = (item: string, index?: number) => {
+    if (resetRequired) return;
+
     const matchingItem = shuffledRightColumn[index!];
     if (selectedRight?.id === matchingItem?.id) {
       setSelectedRight(null);
@@ -169,6 +194,8 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({
       const validation = validateMatchingExercise(selectedLeft, matchingItem, exercise);
 
       if (validation.isCorrect) {
+        clearIncorrectFlashTimeout();
+        setShowIncorrectFlash(false);
         const newMatches = { ...matches, [selectedLeft.id]: matchingItem.id };
         const nextRounds = [...testRounds];
         nextRounds[currentRound - 1] = newMatches;
@@ -187,7 +214,9 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({
 
         if (isLastMatch) {
           if (isLastRound) {
-            onComplete?.(Math.round(gradeExercisePercentage({ exercise }, { type: 'matching', rounds: nextRounds })));
+            const score = Math.round(gradeExercisePercentage({ exercise }, { type: 'matching', rounds: nextRounds }));
+            onCompletionAccepted?.(score);
+            onComplete?.(score);
           } else {
             // Start next round: reset state and reshuffle
             setCurrentRound(prev => prev + 1);
@@ -199,17 +228,22 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({
           }
         }
       } else {
+        const reachesResetThreshold = willResetOnNextIncorrect;
         handleIncorrect();
 
         setShowIncorrectFlash(!assessmentMode);
 
-        // Clear selections after showing red flash
-        setTimeout(() => {
-          setSelectedLeft(null);
-          setSelectedRight(null);
-          setShowIncorrectFlash(false);
-          clearFeedback();
-        }, 1000);
+        clearIncorrectFlashTimeout();
+
+        if (!reachesResetThreshold) {
+          incorrectFlashTimeoutRef.current = setTimeout(() => {
+            incorrectFlashTimeoutRef.current = null;
+            setSelectedLeft(null);
+            setSelectedRight(null);
+            setShowIncorrectFlash(false);
+            clearFeedback();
+          }, 1000);
+        }
       }
     }
   };
@@ -224,6 +258,7 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({
   };
 
   const handleShuffle = () => {
+    if (resetRequired) return;
     setShuffledLeftColumn(shuffleArray(leftColumn));
     setShuffledRightColumn(shuffleArray(rightColumn));
     setSelectedLeft(null);
@@ -231,6 +266,7 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({
   };
 
   const clearSelection = () => {
+    if (resetRequired) return;
     setSelectedLeft(null);
     setSelectedRight(null);
   };
@@ -272,11 +308,11 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({
         {/* Controls */}
         <div className="flex justify-between items-center mb-6">
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={handleShuffle}>
+            <Button variant="outline" size="sm" onClick={handleShuffle} disabled={resetRequired}>
               <Shuffle className="h-4 w-4 mr-2" />
               Shuffle
             </Button>
-            <Button variant="outline" size="sm" onClick={clearSelection}>
+            <Button variant="outline" size="sm" onClick={clearSelection} disabled={resetRequired}>
               <X className="h-4 w-4 mr-2" />
               Clear Selection
             </Button>
@@ -335,6 +371,7 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({
             level={level}
             hint={exercise.data.hint}
             showExplanation={showExplanation}
+            onStartOver={resetRequired ? handleExerciseReset : undefined}
           />
         )}
       </div>

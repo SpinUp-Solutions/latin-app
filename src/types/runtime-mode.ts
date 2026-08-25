@@ -26,6 +26,16 @@ export interface ExerciseAnswerEvent {
 
 export type ExerciseAnswerHandler = (answer: ExerciseAnswer) => void;
 
+/**
+ * Called when an exercise has been successfully completed in practice mode.
+ *
+ * This is intentionally separate from the visual/progression completion
+ * callback: progression may be delayed while an explanation is visible, but
+ * accepted completion needs to be emitted as soon as the terminal answer is
+ * accepted.
+ */
+export type ExerciseCompletionHandler = (score: number) => void;
+
 export interface TestTranslationGradeEvent {
   exerciseId: string;
   itemIndex: number;

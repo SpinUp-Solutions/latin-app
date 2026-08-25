@@ -3,7 +3,6 @@
 import React, { useState, useMemo } from 'react';
 import { GeneratedTranslationExercise } from '@/src/types/exercises';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
-import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { ExerciseInput, FeedbackDisplay } from '../feedback';
 import { ExerciseProgress } from './exercise-progress';
@@ -18,7 +17,12 @@ import {
   validateGeneratedTranslationExercise,
   type GeneratedTranslationItem,
 } from '@/src/utils/exercises/generatedTranslationExercise';
-import type { ExerciseAnswer, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
+import type {
+  ExerciseAnswer,
+  ExerciseAnswerHandler,
+  ExerciseCompletionHandler,
+  RuntimeMode,
+} from '@/src/types/runtime-mode';
 import { getContentTypeLabel } from '@/src/lib/content/registry';
 import { createGeneratedTranslationItems } from '@/src/lib/tests/generated-exercises';
 import { RecordedAnswerControls } from './recorded-answer-controls';
@@ -27,6 +31,7 @@ import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 interface Props {
   exercise: GeneratedTranslationExercise;
   onComplete?: (score: number) => void;
+  onCompletionAccepted?: ExerciseCompletionHandler;
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
   initialAnswer?: ExerciseAnswer;
@@ -38,6 +43,7 @@ interface Props {
 const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
   exercise,
   onComplete,
+  onCompletionAccepted,
   runtimeMode,
   onAnswer,
   initialAnswer,
@@ -89,6 +95,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
     confirmAdvance,
     resetIndex,
     nextItem,
+    cancelPendingAdvance,
   } = useExerciseProgression({
     totalItems: items.length,
     initialIndex: restoredIndex,
@@ -108,21 +115,20 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
     resetExercise,
   } = useExerciseFeedback(exercise.feedbackConfig);
 
-  useDelayedExerciseReset({
-    shouldReset: !assessmentMode && shouldResetExercise,
-    delayMs: exercise.itemProgressionDelay,
-    onReset: () => {
-      setUserAnswer('');
-      setIsProcessing(false);
-      setTestSubmitted(false);
-      setSubmittedAnswers([]);
-      resetIndex();
-      resetExercise();
-    },
-  });
+  const resetRequired = mode === 'practice' && shouldResetExercise;
+
+  const handleExerciseReset = () => {
+    cancelPendingAdvance();
+    setUserAnswer('');
+    setIsProcessing(false);
+    setTestSubmitted(false);
+    setSubmittedAnswers([]);
+    resetIndex();
+    resetExercise();
+  };
 
   const handleSubmit = () => {
-    if (isProcessing || items.length === 0 || !userAnswer.trim()) return;
+    if (isProcessing || items.length === 0 || !userAnswer.trim() || resetRequired) return;
 
     const currentItem = items[currentIndex];
     const nextAnswers = [...submittedAnswers];
@@ -150,6 +156,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
       handleCorrect(isLastItem);
 
       if (isLastItem) {
+        if (!assessmentMode) onCompletionAccepted?.(finalScore!);
         autoAdvanceIfEnabled(() => {
           setUserAnswer('');
           reset();
@@ -270,7 +277,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
             onChange={handleAnswerChange}
             onSubmit={handleSubmit}
             placeholder={inputPlaceholder}
-            disabled={isProcessing}
+            disabled={isProcessing || resetRequired}
           />
 
           {testAnswerMode ? (
@@ -285,6 +292,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
               showExplanation={!assessmentMode && showExplanation}
               onContinue={(isCorrect || assessmentMode) && isAwaitingConfirmation ? confirmAdvance : undefined}
               allowContinueOnIncorrect={assessmentMode}
+              onStartOver={resetRequired ? handleExerciseReset : undefined}
             />
           )}
         </CardContent>

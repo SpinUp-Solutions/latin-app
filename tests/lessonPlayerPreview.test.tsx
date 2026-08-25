@@ -34,15 +34,15 @@ jest.mock('sonner', () => ({
 jest.mock('@/src/components/ui/lesson/page-template', () => ({
   __esModule: true,
   default: ({
-    onExerciseComplete,
+    onCompletionAccepted,
     runtimeMode,
   }: {
-    onExerciseComplete: (exerciseId: string, score: number) => void;
+    onCompletionAccepted?: (exerciseId: string, score: number) => void;
     runtimeMode: string;
   }) => (
     <>
       <span>Runtime mode: {runtimeMode}</span>
-      <button type="button" onClick={() => onExerciseComplete('exercise-1', 100)}>
+      <button type="button" onClick={() => onCompletionAccepted?.('exercise-1', 100)}>
         Complete exercise
       </button>
     </>

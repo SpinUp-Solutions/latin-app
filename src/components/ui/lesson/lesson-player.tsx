@@ -56,9 +56,12 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   const { user } = useAuth();
   const [markExerciseComplete] = useMarkExerciseCompleteMutation();
   const [updatePageProgress] = useUpdatePageProgressMutation();
-  const [finishLesson, { isLoading: isFinishing }] = useFinishLessonMutation();
+  const [finishLesson, { isLoading: isFinishMutationLoading }] = useFinishLessonMutation();
   const [missingExercises, setMissingExercises] = useState<RequiredExercise[]>([]);
   const lastVisitedPageId = useRef<string | null>(null);
+  const pendingExerciseWritesRef = useRef<Set<Promise<unknown>>>(new Set());
+  const finishInProgressRef = useRef(false);
+  const [isFinishPending, setIsFinishPending] = useState(false);
 
   const [currentPageIndex, setCurrentPageIndex] = useState(
     Math.max(0, Math.min(lesson.furthestPageIndex ?? lesson.currentPageIndex ?? 0, lesson.pages.length - 1))
@@ -132,25 +135,40 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
 
   const { audioRef, isPlaying, togglePlay } = useAudio(currentPage?.audioPath, handleAudioEnded);
 
-  const handleExerciseComplete = useCallback(
+  const trackPendingExerciseWrite = useCallback((write: Promise<unknown>) => {
+    pendingExerciseWritesRef.current.add(write);
+    void write.then(
+      () => pendingExerciseWritesRef.current.delete(write),
+      () => pendingExerciseWritesRef.current.delete(write)
+    );
+  }, []);
+
+  const drainPendingExerciseWrites = useCallback(async () => {
+    while (pendingExerciseWritesRef.current.size > 0) {
+      await Promise.allSettled(Array.from(pendingExerciseWritesRef.current));
+    }
+  }, []);
+
+  const handleCompletionAccepted = useCallback(
     (exerciseId: string, score: number) => {
       if (!shouldTrackProgress || !user?.uid) return;
 
-      markExerciseComplete({
+      const write = markExerciseComplete({
         userId: user.uid,
         lessonId: lesson.id,
         exerciseId,
         score,
       })
-        .unwrap()
-        .catch(error => {
-          reportUnexpectedError(error, {
-            tags: { surface: 'exercise_progress', lessonId: lesson.id, exerciseId },
-          });
-          toast.error('Unable to save your exercise progress. Please try again.');
+        .unwrap();
+      trackPendingExerciseWrite(write);
+      void write.catch(error => {
+        reportUnexpectedError(error, {
+          tags: { surface: 'exercise_progress', lessonId: lesson.id, exerciseId },
         });
+        toast.error('Unable to save your exercise progress. Please try again.');
+      });
     },
-    [markExerciseComplete, user?.uid, lesson.id, shouldTrackProgress]
+    [lesson.id, markExerciseComplete, shouldTrackProgress, trackPendingExerciseWrite, user?.uid]
   );
 
   const handleDiagrammingAttempt = useCallback(
@@ -193,8 +211,15 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
       return;
     }
     if (!user?.uid || !currentPage?.id) return;
+
+    if (finishInProgressRef.current) return;
+    finishInProgressRef.current = true;
+    setIsFinishPending(true);
+    const finalPageId = currentPage.id;
+
     try {
-      await finishLesson({ userId: user.uid, lessonId: lesson.id, finalPageId: currentPage.id }).unwrap();
+      await drainPendingExerciseWrites();
+      await finishLesson({ userId: user.uid, lessonId: lesson.id, finalPageId }).unwrap();
       setMissingExercises([]);
       toast.success('Lesson completed!');
     } catch (error) {
@@ -206,8 +231,11 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
         });
       }
       toast.error(data?.error || 'Failed to finish the lesson.');
+    } finally {
+      finishInProgressRef.current = false;
+      setIsFinishPending(false);
     }
-  }, [currentPage?.id, finishLesson, lesson.id, shouldTrackProgress, user?.uid]);
+  }, [currentPage?.id, drainPendingExerciseWrites, finishLesson, lesson.id, shouldTrackProgress, user?.uid]);
 
   if (!lesson || !currentPage) {
     return (
@@ -249,7 +277,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
                 onAnswer={onAnswer}
                 resolvedExerciseState={resolvedExerciseState}
                 generatedExerciseContext={resolvedGeneratedExerciseContext}
-                onExerciseComplete={handleExerciseComplete}
+                onCompletionAccepted={handleCompletionAccepted}
                 onPageComplete={handlePageComplete}
                 onDiagrammingAttempt={handleDiagrammingAttempt}
               />
@@ -290,7 +318,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
           onTogglePlay={togglePlay}
           isPlaying={isPlaying}
           hasAudio={hasAudio}
-          isFinishing={isFinishing}
+          isFinishing={isFinishPending || isFinishMutationLoading}
         />
       </RomanPlayerShell>
     </div>
