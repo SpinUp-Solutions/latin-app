@@ -4,13 +4,15 @@ import {
   isExpectedApiError,
   reportServerUnexpectedError,
   reportUnexpectedError,
+  reportWatchedEvent,
   shouldReportClientHardFail,
 } from '@/src/lib/report-unexpected-error';
-import { captureException } from '@sentry/nextjs';
+import { captureException, captureMessage } from '@sentry/nextjs';
 
 describe('report-unexpected-error', () => {
   beforeEach(() => {
     (captureException as jest.Mock).mockClear();
+    (captureMessage as jest.Mock).mockClear();
   });
 
   describe('isExpectedApiError', () => {
@@ -58,6 +60,37 @@ describe('report-unexpected-error', () => {
         error,
         expect.objectContaining({
           tags: { surface: 'exercise_error_boundary', lessonId: 'lesson-1' },
+        })
+      );
+    });
+
+    it('captures expected errors as warnings when includeExpected is set', () => {
+      reportUnexpectedError(
+        { status: 422, data: { error: 'Complete all required exercises before finishing the lesson.' } },
+        { tags: { surface: 'finish_lesson', lessonId: 'lesson-1' }, includeExpected: true }
+      );
+      expect(captureException).toHaveBeenCalledWith(
+        expect.any(Error),
+        expect.objectContaining({
+          level: 'warning',
+          tags: { surface: 'finish_lesson', lessonId: 'lesson-1' },
+        })
+      );
+    });
+  });
+
+  describe('reportWatchedEvent', () => {
+    it('captures a warning message for control-flow telemetry', () => {
+      reportWatchedEvent('Lesson finish proceeded after pending-write timeout', {
+        tags: { surface: 'finish_lesson_timeout', lessonId: 'lesson-1' },
+        extra: { graceMs: 8000 },
+      });
+      expect(captureMessage).toHaveBeenCalledWith(
+        'Lesson finish proceeded after pending-write timeout',
+        expect.objectContaining({
+          level: 'warning',
+          tags: { surface: 'finish_lesson_timeout', lessonId: 'lesson-1' },
+          extra: { graceMs: 8000 },
         })
       );
     });

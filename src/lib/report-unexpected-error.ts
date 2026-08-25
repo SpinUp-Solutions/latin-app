@@ -14,6 +14,12 @@ export type ReportErrorContext = {
   tags?: Record<string, string>;
   extra?: Record<string, unknown>;
   level?: Sentry.SeverityLevel;
+  /**
+   * Report even when the failure is an expected 4xx / domain code.
+   * Use for watched student flows (progress saves, finish timeout/422) where
+   * the event is valid control-flow but we still want telemetry.
+   */
+  includeExpected?: boolean;
 };
 
 const isObject = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object';
@@ -73,11 +79,21 @@ function toError(error: unknown): Error {
   }
 }
 
-/** Report an unexpected failure, skipping known expected API/domain errors. */
+/** Report an unexpected failure, skipping known expected API/domain errors unless asked. */
 export function reportUnexpectedError(error: unknown, context?: ReportErrorContext): void {
-  if (isExpectedApiError(error)) return;
+  const expected = isExpectedApiError(error);
+  if (expected && !context?.includeExpected) return;
   Sentry.captureException(toError(error), {
-    level: context?.level ?? 'error',
+    level: context?.level ?? (expected ? 'warning' : 'error'),
+    tags: context?.tags,
+    extra: context?.extra,
+  });
+}
+
+/** Report a watched control-flow event that has no thrown error (e.g. a timeout). */
+export function reportWatchedEvent(message: string, context?: ReportErrorContext): void {
+  Sentry.captureMessage(message, {
+    level: context?.level ?? 'warning',
     tags: context?.tags,
     extra: context?.extra,
   });

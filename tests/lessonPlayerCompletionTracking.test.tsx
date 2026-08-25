@@ -8,6 +8,7 @@ import {
   useUpdatePageProgressMutation,
 } from '@/src/store/api/lessonApi';
 import { toast } from 'sonner';
+import { captureException, captureMessage } from '@sentry/nextjs';
 
 let audioEndedHandler: (() => void) | undefined;
 
@@ -465,6 +466,13 @@ describe('LessonPlayer mutation summaries and retries', () => {
     expect(toast.info).toHaveBeenCalledWith(
       'Some exercise progress is still saving. Checking lesson completion now.'
     );
+    expect(captureMessage).toHaveBeenCalledWith(
+      'Lesson finish proceeded after pending-write timeout',
+      expect.objectContaining({
+        level: 'warning',
+        tags: { surface: 'finish_lesson_timeout', lessonId: 'lesson-1' },
+      })
+    );
 
     await act(async () => {
       markWrites[0].resolve({ success: true, progress: 50, lessonCompleted: false });
@@ -501,6 +509,14 @@ describe('LessonPlayer mutation summaries and retries', () => {
       });
     });
     expect(screen.getByText(/complete 1 remaining exercise before finishing/i)).toBeInTheDocument();
+    expect(captureException).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        level: 'warning',
+        tags: { surface: 'finish_lesson', lessonId: 'lesson-1' },
+        extra: { missingExerciseCount: 1 },
+      })
+    );
 
     await act(async () => {
       markWrites[0].resolve({

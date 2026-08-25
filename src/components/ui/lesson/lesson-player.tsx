@@ -25,8 +25,8 @@ import { isExerciseType } from '@/src/utils/lessonUtils';
 import { stripHtmlTags } from '@/src/utils/exercises';
 import type { ExerciseAnswerEvent, RuntimeMode } from '@/src/types/runtime-mode';
 import type { GeneratedExerciseRenderContext, ResolvedGeneratedExerciseState } from './content-renderer';
-import { getApiErrorMessage, hasApiErrorStatus, isRetryableApiError } from '@/src/store/api/baseQuery';
-import { reportUnexpectedError } from '@/src/lib/report-unexpected-error';
+import { getApiErrorMessage, isRetryableApiError } from '@/src/store/api/baseQuery';
+import { reportUnexpectedError, reportWatchedEvent } from '@/src/lib/report-unexpected-error';
 import ExerciseCompletionRing from './exercise-completion-ring';
 
 const RETRY_DELAYS_MS = [1000, 3000];
@@ -251,6 +251,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
         if (!mountedRef.current || requestLessonId !== lessonIdRef.current) return;
         reportUnexpectedError(error, {
           tags: { surface: 'page_progress', lessonId: requestLessonId, pageId },
+          includeExpected: true,
         });
         toast.error(getApiErrorMessage(error, 'Unable to save your page progress.'));
       }
@@ -348,6 +349,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
           if (!mountedRef.current || requestLessonId !== lessonIdRef.current) return;
           reportUnexpectedError(error, {
             tags: { surface: 'exercise_progress', lessonId: requestLessonId, exerciseId },
+            includeExpected: true,
           });
           toast.error(getApiErrorMessage(error, 'Unable to save your exercise progress. Please try again.'));
         }
@@ -382,7 +384,10 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
         });
       } catch (error) {
         // Auditing must never block a student from receiving exercise feedback.
-        console.warn('Unable to record diagramming attempt', error);
+        reportUnexpectedError(error, {
+          tags: { surface: 'diagramming_attempt', lessonId: lesson.id, exerciseId },
+          includeExpected: true,
+        });
       }
     },
     [currentPageIndex, effectiveRuntimeMode, lesson.id, shouldTrackProgress, testAttemptId]
@@ -406,6 +411,10 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
       const timedOut = await drainPendingExerciseWrites();
       if (!mountedRef.current || requestLessonId !== lessonIdRef.current) return;
       if (timedOut && requestLessonId === lessonIdRef.current) {
+        reportWatchedEvent('Lesson finish proceeded after pending-write timeout', {
+          tags: { surface: 'finish_lesson_timeout', lessonId: requestLessonId },
+          extra: { graceMs: PENDING_WRITE_FINISH_GRACE_MS },
+        });
         toast.info('Some exercise progress is still saving. Checking lesson completion now.');
       }
       const result = await finishLesson({ userId: user.uid, lessonId: requestLessonId, finalPageId }).unwrap();
@@ -417,11 +426,11 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
       if (!mountedRef.current || requestLessonId !== lessonIdRef.current) return;
       const data = (error as { data?: { error?: string; missingExercises?: RequiredExercise[] } }).data;
       setMissingExercises(data?.missingExercises || []);
-      if (!hasApiErrorStatus(error, 422) && !data?.missingExercises) {
-        reportUnexpectedError(error, {
-          tags: { surface: 'finish_lesson', lessonId: requestLessonId },
-        });
-      }
+      reportUnexpectedError(error, {
+        tags: { surface: 'finish_lesson', lessonId: requestLessonId },
+        extra: data?.missingExercises ? { missingExerciseCount: data.missingExercises.length } : undefined,
+        includeExpected: true,
+      });
       toast.error(data?.error || getApiErrorMessage(error, 'Failed to finish the lesson.'));
     } finally {
       if (requestLessonId === lessonIdRef.current) {
