@@ -175,6 +175,8 @@ describe('exercise start over flow', () => {
 
     expect(screen.getByText(/try again/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /start over/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Alpha' })).toBeDisabled();
+    expect(screen.getByText('Correct answer')).toBeInTheDocument();
 
     act(() => {
       jest.advanceTimersByTime(1500);
@@ -476,5 +478,95 @@ describe('exercise start over flow', () => {
       type: 'generated-form-identification',
       answers: { 'form-1': 'present' },
     });
+  });
+
+  it('uses Continue for matching practice completion when auto-advance is disabled', () => {
+    const onComplete = jest.fn();
+    const onCompletionAccepted = jest.fn();
+    const exercise: MatchingExercise = {
+      id: 'matching-continue',
+      type: 'matching',
+      title: 'Match',
+      instructions: '',
+      feedbackConfig: {
+        ...resetFeedbackConfig,
+        progressionRules: {
+          autoAdvanceOnCorrect: false,
+          pauseForExplanation: true,
+          showProgress: true,
+        },
+      },
+      data: {
+        leftColumn: [
+          { id: 'left-a', value: 'Alpha' },
+          { id: 'left-b', value: 'Beta' },
+        ],
+        rightColumn: [
+          { id: 'right-a', value: 'One' },
+          { id: 'right-b', value: 'Two' },
+        ],
+        answers: { 'left-a': 'right-a', 'left-b': 'right-b' },
+      },
+    };
+
+    render(
+      <MatchingTable exercise={exercise} onComplete={onComplete} onCompletionAccepted={onCompletionAccepted} />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Alpha' }));
+    fireEvent.click(screen.getByRole('button', { name: 'One' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Beta' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Two' }));
+
+    expect(onCompletionAccepted).toHaveBeenCalledWith(100);
+    expect(onComplete).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+    expect(onComplete).toHaveBeenCalledWith(100);
+  });
+
+  it('auto-advances matching practice completion from authored delay', () => {
+    const onComplete = jest.fn();
+    const onCompletionAccepted = jest.fn();
+    const exercise: MatchingExercise = {
+      id: 'matching-auto-advance',
+      type: 'matching',
+      title: 'Match',
+      instructions: '',
+      itemProgressionDelay: 400,
+      feedbackConfig: {
+        ...resetFeedbackConfig,
+        progressionRules: {
+          autoAdvanceOnCorrect: true,
+          pauseForExplanation: false,
+          showProgress: true,
+        },
+      },
+      data: {
+        leftColumn: [
+          { id: 'left-a', value: 'Alpha' },
+          { id: 'left-b', value: 'Beta' },
+        ],
+        rightColumn: [
+          { id: 'right-a', value: 'One' },
+          { id: 'right-b', value: 'Two' },
+        ],
+        answers: { 'left-a': 'right-a', 'left-b': 'right-b' },
+      },
+    };
+
+    render(
+      <MatchingTable exercise={exercise} onComplete={onComplete} onCompletionAccepted={onCompletionAccepted} />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Alpha' }));
+    fireEvent.click(screen.getByRole('button', { name: 'One' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Beta' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Two' }));
+
+    expect(onCompletionAccepted).toHaveBeenCalledWith(100);
+    expect(onComplete).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /continue/i })).not.toBeInTheDocument();
+    act(() => {
+      jest.advanceTimersByTime(400);
+    });
+    expect(onComplete).toHaveBeenCalledWith(100);
   });
 });

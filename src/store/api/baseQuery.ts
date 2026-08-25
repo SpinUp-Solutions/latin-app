@@ -69,7 +69,19 @@ export const getApiErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
-export const hasApiErrorStatus = (error: unknown, status: number) => isObject(error) && error.status === status;
+export const hasApiErrorStatus = (error: unknown, status: number | string) =>
+  isObject(error) && error.status === status;
+
+export const isRetryableApiError = (error: unknown) => {
+  if (!isObject(error)) return false;
+  if (error.status === 'FETCH_ERROR' || error.status === 'TIMEOUT_ERROR') return true;
+  const status = error.status;
+  const originalStatus = error.originalStatus;
+  return (
+    (typeof status === 'number' && Number.isFinite(status) && status >= 500) ||
+    (typeof originalStatus === 'number' && Number.isFinite(originalStatus) && originalStatus >= 500)
+  );
+};
 
 export const getApiErrorCode = (error: unknown): string | undefined => {
   if (!isObject(error) || !isObject(error.data)) return undefined;

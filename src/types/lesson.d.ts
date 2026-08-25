@@ -46,7 +46,7 @@ export type StudentLessonSummary = Omit<LessonSummary, 'kind'> & {
    * Per-exercise history for lesson playback. The dashboard projection no
    * longer ships this (it reads progress with a summary field mask); the
    * per-lesson endpoint still returns it.
-   */
+  */
   exerciseProgress?: ExerciseProgress[];
   completedAt?: string;
   score?: number;
@@ -85,6 +85,8 @@ export type LessonWithProgress = Lesson & {
   /** @deprecated Schema-v1 cursor mirrored during migration. Prefer furthestPageIndex. */
   currentPageIndex?: number;
   exerciseProgress?: ExerciseProgress[];
+  completedExerciseCount?: number;
+  requiredExerciseCount?: number;
   completedAt?: string;
   score?: number;
   lastAccessedAt?: string;
@@ -106,6 +108,8 @@ export interface UserProgress {
   /** @deprecated Schema-v1 cursor mirrored during migration. Prefer furthestPageIndex. */
   currentPageIndex?: number;
   exerciseProgress: ExerciseProgress[];
+  completedExerciseCount?: number;
+  requiredExerciseCount?: number;
   score?: number;
   lastAccessedAt: string;
   progress?: number;

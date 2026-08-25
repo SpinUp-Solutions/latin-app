@@ -181,7 +181,13 @@ export const lessonApi = appApi.injectEndpoints({
     }),
 
     markExerciseComplete: builder.mutation<
-      { success: boolean; lessonCompleted: boolean },
+      {
+        success: boolean;
+        lessonCompleted: boolean;
+        progress: number;
+        completedExerciseCount: number;
+        requiredExerciseCount: number;
+      },
       { userId: string; lessonId: string; exerciseId: string; score: number }
     >({
       query: ({ userId, lessonId, exerciseId, score }) => ({
@@ -203,7 +209,14 @@ export const lessonApi = appApi.injectEndpoints({
     }),
 
     updatePageProgress: builder.mutation<
-      { success: boolean; furthestPageIndex: number },
+      {
+        success: boolean;
+        furthestPageIndex: number;
+        lessonCompleted: boolean;
+        progress: number;
+        completedExerciseCount: number;
+        requiredExerciseCount: number;
+      },
       { userId: string; lessonId: string; pageId: string }
     >({
       query: ({ userId, lessonId, pageId }) => ({
@@ -224,7 +237,14 @@ export const lessonApi = appApi.injectEndpoints({
     }),
 
     finishLesson: builder.mutation<
-      { success: boolean; lessonCompleted: boolean; alreadyCompleted: boolean },
+      {
+        success: boolean;
+        lessonCompleted: boolean;
+        alreadyCompleted: boolean;
+        progress: number;
+        completedExerciseCount: number;
+        requiredExerciseCount: number;
+      },
       { userId: string; lessonId: string; finalPageId: string }
     >({
       query: ({ userId, lessonId, finalPageId }) => ({

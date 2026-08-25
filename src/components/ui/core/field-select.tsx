@@ -11,6 +11,7 @@ interface FieldSelectProps {
   label: string;
   matchedIndices?: Set<number>;
   showIncorrect?: boolean;
+  disabled?: boolean;
   className?: string;
 }
 
@@ -24,6 +25,7 @@ const FieldSelect: React.FC<FieldSelectProps> = ({
   label,
   matchedIndices,
   showIncorrect = false,
+  disabled = false,
   className = '',
 }) => {
   return (
@@ -53,8 +55,8 @@ const FieldSelect: React.FC<FieldSelectProps> = ({
                     ? 'bg-roman-gold/10 border border-roman-gold'
                     : 'bg-white border border-gray-200 hover:border-roman-red/50'
             }`}
-            onClick={() => !isMatched && onSelect(item, index)}
-            disabled={isMatched}>
+            onClick={() => !isMatched && !disabled && onSelect(item, index)}
+            disabled={isMatched || disabled}>
             <SimpleRichDisplay content={item} />
           </button>
         );

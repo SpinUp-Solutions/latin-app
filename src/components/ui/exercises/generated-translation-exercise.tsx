@@ -261,7 +261,8 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
       )}
 
       <ExerciseProgress
-        current={currentIndex}
+        currentIndex={currentIndex}
+        completed={mode === 'practice' ? currentIndex + (isCorrect === true ? 1 : 0) : submittedAnswers.filter(answer => Boolean(answer?.trim())).length}
         total={items.length}
         showProgress={exercise.feedbackConfig.progressionRules?.showProgress !== false}
       />

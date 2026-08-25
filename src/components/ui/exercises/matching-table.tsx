@@ -3,6 +3,7 @@ import { Button } from '@/src/components/ui/button';
 import { X, Shuffle } from 'lucide-react';
 import { MatchingExercise } from '@/src/types/exercise';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
+import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { FeedbackDisplay } from '../feedback';
 import FieldSelect from '../core/field-select';
 import { validateMatchingExercise } from '@/src/utils/exercises/matchingExercise';
@@ -91,6 +92,12 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({
 
   const resetRequired = mode === 'practice' && shouldResetExercise;
   const incorrectFlashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance, cancelPendingAdvance, resetIndex } =
+    useExerciseProgression({
+      totalItems: 1,
+      itemProgressionDelay: exercise.itemProgressionDelay,
+      progressionRules: exercise.feedbackConfig.progressionRules,
+    });
 
   const clearIncorrectFlashTimeout = () => {
     if (incorrectFlashTimeoutRef.current) {
@@ -101,6 +108,8 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({
 
   const handleExerciseReset = () => {
     clearIncorrectFlashTimeout();
+    cancelPendingAdvance();
+    resetIndex();
     setShuffledLeftColumn(leftColumn);
     setShuffledRightColumn(rightColumn);
     setSelectedLeft(null);
@@ -216,7 +225,9 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({
           if (isLastRound) {
             const score = Math.round(gradeExercisePercentage({ exercise }, { type: 'matching', rounds: nextRounds }));
             onCompletionAccepted?.(score);
-            onComplete?.(score);
+            autoAdvanceIfEnabled(() => {
+              onComplete?.(score);
+            }, false);
           } else {
             // Start next round: reset state and reshuffle
             setCurrentRound(prev => prev + 1);
@@ -234,6 +245,9 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({
         setShowIncorrectFlash(!assessmentMode);
 
         clearIncorrectFlashTimeout();
+        if (reachesResetThreshold) {
+          cancelPendingAdvance();
+        }
 
         if (!reachesResetThreshold) {
           incorrectFlashTimeoutRef.current = setTimeout(() => {
@@ -271,6 +285,12 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({
     setSelectedRight(null);
   };
 
+  const matchingTotal = totalMatches * totalRounds;
+  const matchingCompleted = (currentRound - 1) * totalMatches + Object.keys(matches).length;
+  const selectedCorrectAnswer = selectedLeft
+    ? rightColumn.find(item => item.id === finalAnswer[selectedLeft.id])?.value
+    : undefined;
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-start">
@@ -302,7 +322,12 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({
       )}
 
       {/* Progress indicator */}
-      <ExerciseProgress current={Object.keys(matches).length} total={totalMatches} label="Match" />
+      <ExerciseProgress
+        currentIndex={Math.min(matchingCompleted, Math.max(matchingTotal - 1, 0))}
+        completed={matchingCompleted}
+        total={matchingTotal}
+        label="Match"
+      />
 
       <div className="p-6 bg-white rounded-lg border border-gray-200">
         {/* Controls */}
@@ -343,6 +368,7 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({
                 )
               }
               showIncorrect={showIncorrectFlash}
+              disabled={resetRequired}
             />
           </div>
 
@@ -359,6 +385,7 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({
               label=""
               matchedIndices={new Set()}
               showIncorrect={showIncorrectFlash}
+              disabled={resetRequired}
             />
           </div>
         </div>
@@ -371,6 +398,10 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({
             level={level}
             hint={exercise.data.hint}
             showExplanation={showExplanation}
+            correctAnswer={
+              selectedCorrectAnswer ? <SimpleRichDisplay content={selectedCorrectAnswer} /> : undefined
+            }
+            onContinue={isAwaitingConfirmation ? confirmAdvance : undefined}
             onStartOver={resetRequired ? handleExerciseReset : undefined}
           />
         )}

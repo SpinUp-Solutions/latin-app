@@ -188,7 +188,8 @@ const FillExerciseComponent: React.FC<Props> = ({
 
       {/* Progress indicator */}
       <ExerciseProgress
-        current={currentIndex}
+        currentIndex={currentIndex}
+        completed={mode === 'practice' ? currentIndex + (isCorrect === true ? 1 : 0) : submittedAnswers.filter(answer => Boolean(answer?.trim())).length}
         total={exercise.data.items.length}
         showProgress={exercise.feedbackConfig.progressionRules?.showProgress !== false}
       />

@@ -440,7 +440,12 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
       )}
 
       <ExerciseProgress
-        current={safeIndex}
+        currentIndex={safeIndex}
+        completed={
+          mode === 'practice'
+            ? safeIndex + (isCorrect === true ? 1 : 0)
+            : validatedItems.filter(item => Boolean(submittedAnswers[item.id]?.trim())).length
+        }
         total={validatedItems.length}
         showProgress={exercise.feedbackConfig.progressionRules?.showProgress !== false}
       />

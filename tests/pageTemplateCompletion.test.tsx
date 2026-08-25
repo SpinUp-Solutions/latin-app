@@ -67,4 +67,14 @@ describe('PageTemplate completion progression', () => {
     });
     expect(onPageComplete).not.toHaveBeenCalled();
   });
+
+  it('forwards exercise onComplete scores through onExerciseComplete for test accounting', () => {
+    const onExerciseComplete = jest.fn();
+    render(<PageTemplate page={page} onExerciseComplete={onExerciseComplete} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Complete exercise-1' }));
+    expect(onExerciseComplete).toHaveBeenCalledWith('exercise-1', 100);
+    fireEvent.click(screen.getByRole('button', { name: 'Complete exercise-2' }));
+    expect(onExerciseComplete).toHaveBeenCalledWith('exercise-2', 100);
+  });
 });

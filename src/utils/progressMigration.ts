@@ -1,13 +1,14 @@
 import { Lesson, UserProgress } from '@/src/types/lesson';
 import {
   getFurthestPageIndex,
+  isValidExerciseScore,
   isStoredLessonComplete,
-  PROGRESS_SCHEMA_VERSION,
   resolveExerciseId,
+  STABLE_ID_PROGRESS_SCHEMA_VERSION,
 } from './lessonProgress';
 
 export interface ProgressMigrationResult {
-  progress: Partial<UserProgress> & { progressSchemaVersion: 2 };
+  progress: Partial<UserProgress> & { progressSchemaVersion: typeof STABLE_ID_PROGRESS_SCHEMA_VERSION };
   mappedExerciseRecords: number;
   unmappedExerciseRecords: number;
   deduplicatedExerciseRecords: number;
@@ -24,7 +25,18 @@ export function migrateUserProgress(
   let unmappedExerciseRecords = 0;
   let deduplicatedExerciseRecords = 0;
 
-  for (const record of existing.exerciseProgress || []) {
+  for (const candidate of Array.isArray(existing.exerciseProgress) ? existing.exerciseProgress : []) {
+    if (
+      !candidate ||
+      typeof candidate !== 'object' ||
+      typeof candidate.exerciseId !== 'string' ||
+      !isValidExerciseScore(candidate.score)
+    ) {
+      unmappedExerciseRecords++;
+      continue;
+    }
+
+    const record = candidate;
     const stableId = resolveExerciseId(lesson, record.exerciseId);
     if (!stableId) {
       unmappedExerciseRecords++;
@@ -51,7 +63,7 @@ export function migrateUserProgress(
       exerciseProgress: [...normalizedRecords.values()],
       status: isCompleted ? 'completed' : 'in-progress',
       ...(isCompleted ? { completedAt: existing.completedAt || now } : {}),
-      progressSchemaVersion: PROGRESS_SCHEMA_VERSION,
+      progressSchemaVersion: STABLE_ID_PROGRESS_SCHEMA_VERSION,
     },
     mappedExerciseRecords,
     unmappedExerciseRecords,

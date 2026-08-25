@@ -94,4 +94,15 @@ describe('LessonPlayer preview mode', () => {
     expect(mockFinishLesson).not.toHaveBeenCalled();
     expect(toast.info).toHaveBeenCalledWith('Preview mode: progress is not tracked.');
   });
+
+  it('does not persist progress in test runtime even when trackProgress is true', async () => {
+    render(<LessonPlayer lesson={lesson} trackProgress runtimeMode="test" />);
+
+    await waitFor(() => expect(mockUpdatePageProgress).not.toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: 'Complete exercise' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Finish lesson' }));
+
+    expect(mockMarkExerciseComplete).not.toHaveBeenCalled();
+    expect(mockFinishLesson).not.toHaveBeenCalled();
+  });
 });

@@ -185,7 +185,12 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({
 
       {/* Progress indicator */}
       <ExerciseProgress
-        current={currentIndex}
+        currentIndex={currentIndex}
+        completed={
+          mode === 'practice'
+            ? currentIndex + (isCorrect === true ? 1 : 0)
+            : submittedIndices.filter(index => typeof index === 'number').length
+        }
         total={exercise.data.questions.length}
         showProgress={exercise.feedbackConfig.progressionRules?.showProgress !== false}
       />
