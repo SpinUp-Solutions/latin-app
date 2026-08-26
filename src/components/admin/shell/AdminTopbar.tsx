@@ -53,7 +53,7 @@ export function AdminTopbar({ onOpenMenu, appVersion }: AdminTopbarProps) {
       </ol>
       {appVersion ? (
         <p
-          className="ml-auto shrink-0 pl-3 font-sans text-xs tabular-nums text-roman-stone"
+          className="ml-auto inline-flex h-7 shrink-0 items-center rounded-md border border-border/70 bg-roman-parchment/90 px-2 font-mono text-[11px] leading-none text-roman-stone"
           aria-label={`App version ${appVersion}`}
           title={`App version ${appVersion}`}>
           v{appVersion}
