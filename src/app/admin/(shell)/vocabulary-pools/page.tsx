@@ -160,6 +160,7 @@ function VocabularyPoolsPage() {
           duplicatingPoolIds={duplicatingPoolIds}
           onDelete={handleDeletePool}
           usagesByPoolId={usageData?.usagesByPoolId ?? {}}
+          usagesLoading={usageLoading}
         />
       </div>
     </AdminPage>

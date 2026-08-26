@@ -129,7 +129,8 @@ describe('admin shell routing and accessibility', () => {
       </AdminShell>
     );
 
-    expect(screen.getByText('v1.0.0')).toHaveAttribute('aria-label', 'App version 1.0.0');
+    expect(screen.getByLabelText('App version 1.0.0')).toHaveTextContent('v1.0.0');
+    expect(screen.getByLabelText('App version 1.0.0')).toHaveClass('font-mono');
   });
 
   it('forwards focus attributes to a page heading', () => {

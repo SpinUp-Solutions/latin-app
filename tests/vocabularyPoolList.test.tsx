@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PoolList } from '@/src/components/ui/admin/vocabulary-pools/PoolList';
 
@@ -175,5 +175,105 @@ describe('vocabulary pool list usage status', () => {
     const updatedButtons = screen.getAllByRole('button', { name: /duplicate/i });
     expect(updatedButtons[0]).toBeDisabled();
     expect(updatedButtons[1]).toBeDisabled();
+  });
+
+  it('shows assignment skeletons while usages are loading', () => {
+    render(
+      <PoolList
+        pools={[pool]}
+        loading={false}
+        loadingMore={false}
+        hasMore={false}
+        onLoadMore={jest.fn()}
+        onEdit={jest.fn()}
+        onDelete={jest.fn()}
+        usagesByPoolId={{}}
+        usagesLoading
+      />
+    );
+
+    expect(screen.getByLabelText('Loading assignments')).toBeInTheDocument();
+    expect(screen.getByText('Loading assigned lessons')).toBeInTheDocument();
+    expect(screen.queryByText('Assigned to')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Assigned \(/)).not.toBeInTheDocument();
+  });
+
+  it('replaces assignment skeletons with assigned lessons once usages load', async () => {
+    const { rerender } = render(
+      <PoolList
+        pools={[pool]}
+        loading={false}
+        loadingMore={false}
+        hasMore={false}
+        onLoadMore={jest.fn()}
+        onEdit={jest.fn()}
+        onDelete={jest.fn()}
+        usagesByPoolId={{}}
+        usagesLoading
+      />
+    );
+
+    expect(screen.getByLabelText('Loading assignments')).toBeInTheDocument();
+
+    rerender(
+      <PoolList
+        pools={[pool]}
+        loading={false}
+        loadingMore={false}
+        hasMore={false}
+        onLoadMore={jest.fn()}
+        onEdit={jest.fn()}
+        onDelete={jest.fn()}
+        usagesLoading={false}
+        usagesByPoolId={{
+          'pool-1': [
+            { id: '1', poolId: 'pool-1', kind: 'lesson', label: 'Lesson: One', editorUrl: '/admin/lessons/edit/one' },
+          ],
+        }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText('Loading assignments')).not.toBeInTheDocument();
+    });
+    expect(screen.getByText('Assigned (1)')).toBeInTheDocument();
+    expect(screen.getByText('Assigned to')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Lesson: One' })).toBeInTheDocument();
+  });
+
+  it('hides assignment placeholders when loaded usages are empty', async () => {
+    const { rerender } = render(
+      <PoolList
+        pools={[pool]}
+        loading={false}
+        loadingMore={false}
+        hasMore={false}
+        onLoadMore={jest.fn()}
+        onEdit={jest.fn()}
+        onDelete={jest.fn()}
+        usagesByPoolId={{}}
+        usagesLoading
+      />
+    );
+
+    rerender(
+      <PoolList
+        pools={[pool]}
+        loading={false}
+        loadingMore={false}
+        hasMore={false}
+        onLoadMore={jest.fn()}
+        onEdit={jest.fn()}
+        onDelete={jest.fn()}
+        usagesByPoolId={{}}
+        usagesLoading={false}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText('Loading assignments')).not.toBeInTheDocument();
+    });
+    expect(screen.queryByText('Assigned to')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Assigned \(/)).not.toBeInTheDocument();
   });
 });
