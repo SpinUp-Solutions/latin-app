@@ -1,6 +1,6 @@
 {
-  "name": "nextjs-fullstack-boilerplate",
-  "version": "0.1.0",
+  "name": "latin-app",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",

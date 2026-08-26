@@ -113,6 +113,25 @@ describe('admin shell routing and accessibility', () => {
     expect(sessionStorage.getItem('admin-sidebar-collapse')).toBe('true');
   });
 
+  it('shows the app version only when the shell is given one', () => {
+    pathname = '/admin';
+    const { rerender } = render(
+      <AdminShell>
+        <div>Page content</div>
+      </AdminShell>
+    );
+
+    expect(screen.queryByText('v1.0.0')).not.toBeInTheDocument();
+
+    rerender(
+      <AdminShell appVersion="1.0.0">
+        <div>Page content</div>
+      </AdminShell>
+    );
+
+    expect(screen.getByText('v1.0.0')).toHaveAttribute('aria-label', 'App version 1.0.0');
+  });
+
   it('forwards focus attributes to a page heading', () => {
     render(
       <AdminPageHeader
