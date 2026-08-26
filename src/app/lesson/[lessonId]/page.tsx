@@ -23,7 +23,7 @@ export default function DynamicLessonPage() {
   const { user, loading: authLoading } = useAuth();
 
   const {
-    data: currentLesson,
+    currentData: currentLesson,
     isLoading: lessonsLoading,
     error,
   } = useGetStudentLessonQuery(

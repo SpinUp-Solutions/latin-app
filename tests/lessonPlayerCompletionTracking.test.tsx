@@ -82,6 +82,7 @@ jest.mock('@/src/components/ui/exercises/lesson-navigation', () => ({
     onNext,
     onFinish,
     isFinishing,
+    isFinishBlocked,
   }: {
     currentPageIndex: number;
     totalPages: number;
@@ -90,6 +91,7 @@ jest.mock('@/src/components/ui/exercises/lesson-navigation', () => ({
     onNext: () => void;
     onFinish: () => void;
     isFinishing?: boolean;
+    isFinishBlocked?: boolean;
   }) => {
     const canGoNext = currentPageIndex < totalPages - 1;
     const progressPercentage = Math.round(((currentPageIndex + 1) / totalPages) * 100);
@@ -106,7 +108,12 @@ jest.mock('@/src/components/ui/exercises/lesson-navigation', () => ({
         <button type="button" onClick={onPrevious}>
           Previous page
         </button>
-        <button type="button" onClick={canGoNext ? onNext : onFinish} disabled={!canGoNext && (Boolean(isFinishing) || Boolean(isLessonCompleted))}>
+        <button
+          type="button"
+          onClick={canGoNext ? onNext : onFinish}
+          disabled={
+            !canGoNext && (Boolean(isFinishing) || Boolean(isLessonCompleted) || Boolean(isFinishBlocked))
+          }>
           {label}
         </button>
       </nav>
@@ -125,7 +132,7 @@ const createLesson = (
     type: 'normal',
     pages: Array.from({ length: pageCount }, (_, index) => ({
       id: `page-${index + 1}`,
-      items: pageItems?.[index] ?? [{ id: 'exercise-1', type: 'fill', title: 'Exercise' }],
+      items: pageItems?.[index] ?? [{ id: `exercise-${index + 1}`, type: 'fill', title: 'Exercise' }],
     })),
     isLive: false,
     liveOrder: null,
@@ -345,6 +352,91 @@ describe('LessonPlayer accepted completion tracking', () => {
 });
 
 describe('LessonPlayer mutation summaries and retries', () => {
+  it('updates the missing-exercise gate after each successful exercise write', async () => {
+    render(
+      <LessonPlayer
+        lesson={createLesson(1, {
+          status: 'in-progress',
+          completedExerciseCount: 0,
+          requiredExerciseCount: 2,
+          pageItems: [[
+            { id: 'exercise-1', type: 'fill', title: 'First exercise' },
+            { id: 'exercise-2', type: 'fill', title: 'Second exercise' },
+          ]],
+        })}
+      />
+    );
+
+    expect(screen.getByText(/complete 2 remaining exercises before finishing/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /finish lesson/i })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept exercise' }));
+    await act(async () => {
+      markWrites[0].resolve({
+        success: true,
+        lessonCompleted: false,
+        completedExerciseCount: 1,
+        requiredExerciseCount: 2,
+      });
+    });
+
+    expect(screen.getByText(/complete 1 remaining exercise before finishing/i)).toBeInTheDocument();
+    expect(screen.queryByText(/complete 2 remaining exercises/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /finish lesson/i })).toBeDisabled();
+  });
+
+  it('does not start an untouched exercise lesson until the student advances', async () => {
+    render(
+      <LessonPlayer
+        lesson={createLesson(2, {
+          status: 'available',
+          furthestPageIndex: -1,
+          currentPageIndex: 0,
+          pageItems: [
+            [{ id: 'exercise-1', type: 'fill', title: 'First exercise' }],
+            [{ id: 'exercise-2', type: 'fill', title: 'Second exercise' }],
+          ],
+        })}
+      />
+    );
+
+    expect(mockUpdatePageProgress).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    await waitFor(() => expect(mockUpdatePageProgress).toHaveBeenCalledTimes(1));
+    expect(mockUpdatePageProgress).toHaveBeenCalledWith({
+      userId: 'student-1',
+      lessonId: 'lesson-1',
+      pageId: 'page-2',
+    });
+    expect(screen.getByText(/complete 2 remaining exercises before finishing/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /finish lesson/i })).toBeDisabled();
+  });
+
+  it('does not start an untouched multi-page passive lesson until the student advances', async () => {
+    render(
+      <LessonPlayer
+        lesson={createLesson(2, {
+          status: 'available',
+          furthestPageIndex: -1,
+          currentPageIndex: 0,
+          pageItems: [
+            [{ id: 'text-1', type: 'text', title: 'Read' }],
+            [{ id: 'text-2', type: 'text', title: 'Continue reading' }],
+          ],
+        })}
+      />
+    );
+
+    expect(mockUpdatePageProgress).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    await waitFor(() => expect(mockUpdatePageProgress).toHaveBeenCalledTimes(1));
+    expect(mockUpdatePageProgress).toHaveBeenCalledWith({
+      userId: 'student-1',
+      lessonId: 'lesson-1',
+      pageId: 'page-2',
+    });
+  });
+
   it('updates the exercise ring monotonically from successful mutation summaries', async () => {
     render(
       <LessonPlayer
@@ -387,7 +479,17 @@ describe('LessonPlayer mutation summaries and retries', () => {
 
   it('does not complete locally after a failed final-page visit, then completes on retry success', async () => {
     jest.useFakeTimers();
-    render(<LessonPlayer lesson={createLesson(1, { progress: 0, status: 'in-progress' })} />);
+    render(
+      <LessonPlayer
+        lesson={createLesson(1, {
+          progress: 0,
+          status: 'available',
+          furthestPageIndex: -1,
+          currentPageIndex: 0,
+          pageItems: [[{ id: 'text-1', type: 'text', title: 'Read' }]],
+        })}
+      />
+    );
 
     await act(async () => {
       pageWrites[0].reject({ status: 500 });
@@ -538,7 +640,9 @@ describe('LessonPlayer mutation summaries and retries', () => {
       <LessonPlayer
         lesson={createLesson(1, {
           progress: 0,
-          status: 'in-progress',
+          status: 'available',
+          furthestPageIndex: -1,
+          currentPageIndex: 0,
           pageItems: [[{ id: 'text-1', type: 'text', title: 'Read' }]],
         })}
       />
@@ -609,7 +713,7 @@ describe('LessonPlayer mutation summaries and retries', () => {
       />
     );
     await waitFor(() => expect(pageWrites).toHaveLength(2));
-    expect(screen.getByRole('button', { name: 'Finish lesson' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Finish lesson' })).toBeDisabled();
     expect(screen.getByRole('progressbar', { name: /exercise progress/i })).toHaveAttribute('aria-valuenow', '0');
 
     await act(async () => {
@@ -621,7 +725,7 @@ describe('LessonPlayer mutation summaries and retries', () => {
         requiredExerciseCount: 1,
       });
     });
-    expect(screen.getByRole('button', { name: 'Finish lesson' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Finish lesson' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: /lesson complete/i })).not.toBeInTheDocument();
     expect(screen.getByRole('progressbar', { name: /exercise progress/i })).toHaveAttribute('aria-valuenow', '0');
   });

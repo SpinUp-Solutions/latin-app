@@ -40,11 +40,14 @@ describe('LessonNavigation completion action', () => {
     expect(baseProps.onFinish).toHaveBeenCalledTimes(1);
   });
 
-  it('only disables Finish while its request is in flight', () => {
+  it('disables Finish while its request is in flight or required exercises are missing', () => {
     const { rerender } = render(<LessonNavigation {...baseProps} currentPageIndex={2} isFinishing />);
     expect(screen.getByRole('button', { name: /finishing/i })).toBeDisabled();
 
-    rerender(<LessonNavigation {...baseProps} currentPageIndex={2} isFinishing={false} />);
+    rerender(<LessonNavigation {...baseProps} currentPageIndex={2} isFinishing={false} isFinishBlocked />);
+    expect(screen.getByRole('button', { name: /finish lesson/i })).toBeDisabled();
+
+    rerender(<LessonNavigation {...baseProps} currentPageIndex={2} isFinishBlocked={false} />);
     expect(screen.getByRole('button', { name: /finish lesson/i })).toBeEnabled();
   });
 

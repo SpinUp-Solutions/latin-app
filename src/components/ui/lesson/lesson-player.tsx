@@ -20,7 +20,7 @@ import { useAuth } from '@/src/hooks/useAuth';
 import { toast } from 'sonner';
 import { auth } from '@/src/services/firebase';
 import { DiagramAuditSubmission } from '@/src/features/sentence-diagramming';
-import { getRequiredExercises, RequiredExercise } from '@/src/utils/lessonProgress';
+import { getMissingExercises, getRequiredExercises, RequiredExercise } from '@/src/utils/lessonProgress';
 import { isExerciseType } from '@/src/utils/lessonUtils';
 import { stripHtmlTags } from '@/src/utils/exercises';
 import type { ExerciseAnswerEvent, RuntimeMode } from '@/src/types/runtime-mode';
@@ -42,6 +42,11 @@ interface ProgressMutationSummary {
 interface RetryController {
   cancelled: boolean;
   waiters: Set<() => void>;
+}
+
+interface ExerciseCompletionState {
+  confirmed: boolean;
+  pending: number;
 }
 
 const createRetryController = (): RetryController => ({ cancelled: false, waiters: new Set() });
@@ -124,16 +129,19 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   const [markExerciseComplete] = useMarkExerciseCompleteMutation();
   const [updatePageProgress] = useUpdatePageProgressMutation();
   const [finishLesson, { isLoading: isFinishMutationLoading }] = useFinishLessonMutation();
-  const [missingExercises, setMissingExercises] = useState<RequiredExercise[]>([]);
+  const requiredExercises = getRequiredExercises(lesson);
+  const [missingExercises, setMissingExercises] = useState<RequiredExercise[]>(() =>
+    lesson.status === 'completed' ? [] : getMissingExercises(requiredExercises, lesson.exerciseProgress)
+  );
   const savedPageIdsRef = useRef<Set<string>>(new Set());
   const pagePipelinesRef = useRef<Map<string, RetryController>>(new Map());
   const pendingExerciseWritesRef = useRef<Set<Promise<unknown>>>(new Set());
   const exercisePipelinesRef = useRef<Set<RetryController>>(new Set());
+  const exerciseCompletionStateRef = useRef<Map<string, ExerciseCompletionState>>(new Map());
   const mountedRef = useRef(true);
   const finishInProgressRef = useRef(false);
   const [isFinishPending, setIsFinishPending] = useState(false);
   const [lessonCompleted, setLessonCompleted] = useState(lesson.status === 'completed');
-  const requiredExercises = getRequiredExercises(lesson);
   const shouldShowExerciseRing = shouldTrackProgress && Boolean(user?.uid) && requiredExercises.length > 0;
   const [completedExerciseCount, setCompletedExerciseCount] = useState(() =>
     Math.max(
@@ -174,6 +182,16 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
 
   useEffect(() => {
     setLessonCompleted(lesson.status === 'completed');
+    const nextMissingExercises =
+      lesson.status === 'completed' ? [] : getMissingExercises(requiredExercises, lesson.exerciseProgress);
+    const missingExerciseIds = new Set(nextMissingExercises.map(exercise => exercise.exerciseId));
+    exerciseCompletionStateRef.current = new Map(
+      requiredExercises.map(exercise => [
+        exercise.exerciseId,
+        { confirmed: !missingExerciseIds.has(exercise.exerciseId), pending: 0 },
+      ])
+    );
+    setMissingExercises(nextMissingExercises);
     savedPageIdsRef.current = new Set();
     finishInProgressRef.current = false;
     setIsFinishPending(false);
@@ -229,6 +247,12 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
 
   useEffect(() => {
     if (!shouldTrackProgress || !user?.uid || !currentPage?.id) return;
+    const isUntouchedLesson =
+      lesson.status === 'available' &&
+      (lesson.furthestPageIndex === undefined || lesson.furthestPageIndex < 0) &&
+      currentPageIndex === 0;
+    const shouldAutoCompleteSinglePassivePage = requiredExercises.length === 0 && totalPages === 1;
+    if (isUntouchedLesson && !shouldAutoCompleteSinglePassivePage) return;
     const pageId = currentPage.id;
     if (savedPageIdsRef.current.has(pageId) || pagePipelinesRef.current.has(pageId)) return;
 
@@ -256,13 +280,24 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
         toast.error(getApiErrorMessage(error, 'Unable to save your page progress.'));
       }
     );
-  }, [applyProgressMutation, currentPage?.id, lesson.id, shouldTrackProgress, updatePageProgress, user?.uid]);
+  }, [
+    applyProgressMutation,
+    currentPage?.id,
+    currentPageIndex,
+    lesson.furthestPageIndex,
+    lesson.id,
+    lesson.status,
+    requiredExercises.length,
+    shouldTrackProgress,
+    totalPages,
+    updatePageProgress,
+    user?.uid,
+  ]);
 
   const handleNext = useCallback(() => {
     if (currentPageIndex < totalPages - 1) {
       const newPageIndex = currentPageIndex + 1;
       setCurrentPageIndex(newPageIndex);
-      setMissingExercises([]);
     }
   }, [currentPageIndex, totalPages]);
 
@@ -273,7 +308,6 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   const handlePrevious = useCallback(() => {
     if (currentPageIndex > 0) {
       setCurrentPageIndex(currentPageIndex - 1);
-      setMissingExercises([]);
     }
   }, [currentPageIndex]);
 
@@ -281,7 +315,6 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
     (newPageIndex: number) => {
       if (newPageIndex < 0 || newPageIndex >= totalPages || newPageIndex === currentPageIndex) return;
       setCurrentPageIndex(newPageIndex);
-      setMissingExercises([]);
     },
     [currentPageIndex, totalPages]
   );
@@ -324,6 +357,14 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
       if (!shouldTrackProgress || !user?.uid) return;
 
       const requestLessonId = lesson.id;
+      const requiredExercise = requiredExercises.find(exercise => exercise.exerciseId === exerciseId);
+      const completionState = exerciseCompletionStateRef.current.get(exerciseId) ?? {
+        confirmed: false,
+        pending: 0,
+      };
+      completionState.pending += 1;
+      exerciseCompletionStateRef.current.set(exerciseId, completionState);
+      setMissingExercises(current => current.filter(exercise => exercise.exerciseId !== exerciseId));
       const controller = createRetryController();
       exercisePipelinesRef.current.add(controller);
       const write = runWithBoundedRetries(
@@ -343,10 +384,28 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
       trackPendingExerciseWrite(write);
       void write.then(
         result => {
-          if (result) applyProgressMutation(result, requestLessonId);
+          if (result) {
+            const latestState = exerciseCompletionStateRef.current.get(exerciseId);
+            if (latestState) {
+              latestState.confirmed = true;
+              latestState.pending = Math.max(0, latestState.pending - 1);
+            }
+            applyProgressMutation(result, requestLessonId);
+          }
         },
         error => {
           if (!mountedRef.current || requestLessonId !== lessonIdRef.current) return;
+          const latestState = exerciseCompletionStateRef.current.get(exerciseId);
+          if (latestState) {
+            latestState.pending = Math.max(0, latestState.pending - 1);
+            if (!latestState.confirmed && latestState.pending === 0 && requiredExercise) {
+              setMissingExercises(current =>
+                current.some(exercise => exercise.exerciseId === exerciseId)
+                  ? current
+                  : [...current, requiredExercise].sort((left, right) => left.pageIndex - right.pageIndex)
+              );
+            }
+          }
           reportUnexpectedError(error, {
             tags: { surface: 'exercise_progress', lessonId: requestLessonId, exerciseId },
             includeExpected: true,
@@ -355,7 +414,15 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
         }
       );
     },
-    [applyProgressMutation, lesson.id, markExerciseComplete, shouldTrackProgress, trackPendingExerciseWrite, user?.uid]
+    [
+      applyProgressMutation,
+      lesson.id,
+      markExerciseComplete,
+      requiredExercises,
+      shouldTrackProgress,
+      trackPendingExerciseWrite,
+      user?.uid,
+    ]
   );
 
   const handleDiagrammingAttempt = useCallback(
@@ -400,6 +467,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
       return;
     }
     if (!user?.uid || !currentPage?.id) return;
+    if (missingExercises.length > 0) return;
 
     if (finishInProgressRef.current) return;
     finishInProgressRef.current = true;
@@ -444,6 +512,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
     drainPendingExerciseWrites,
     finishLesson,
     lesson.id,
+    missingExercises.length,
     shouldTrackProgress,
     user?.uid,
   ]);
@@ -504,7 +573,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
           </div>
         </div>
 
-        {currentPageIndex === totalPages - 1 && missingExercises.length > 0 && (
+        {shouldTrackProgress && currentPageIndex === totalPages - 1 && missingExercises.length > 0 && (
           <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4">
             <p className="font-medium text-amber-900">
               Complete {missingExercises.length} remaining {missingExercises.length === 1 ? 'exercise' : 'exercises'}{' '}
@@ -539,6 +608,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
           isPlaying={isPlaying}
           hasAudio={hasAudio}
           isFinishing={isFinishPending || isFinishMutationLoading}
+          isFinishBlocked={shouldTrackProgress && missingExercises.length > 0}
         />
       </RomanPlayerShell>
     </div>

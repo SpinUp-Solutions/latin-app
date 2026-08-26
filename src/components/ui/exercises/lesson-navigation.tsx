@@ -21,6 +21,7 @@ interface LessonNavigationProps {
   isPlaying: boolean;
   hasAudio: boolean;
   isFinishing?: boolean;
+  isFinishBlocked?: boolean;
 }
 
 export const LessonNavigation: React.FC<LessonNavigationProps> = ({
@@ -37,6 +38,7 @@ export const LessonNavigation: React.FC<LessonNavigationProps> = ({
   isPlaying,
   hasAudio,
   isFinishing = false,
+  isFinishBlocked = false,
 }) => {
   const [jumpOpen, setJumpOpen] = useState(false);
 
@@ -45,7 +47,7 @@ export const LessonNavigation: React.FC<LessonNavigationProps> = ({
   const progressPercentage = totalPages > 0 ? Math.round(((currentPageIndex + 1) / totalPages) * 100) : 0;
   const isContained = placement === 'contained';
   const clampedProgress = Math.max(0, Math.min(100, Number.isFinite(progressPercentage) ? progressPercentage : 0));
-  const isFinalActionDisabled = !canGoNext && (isFinishing || isLessonCompleted);
+  const isFinalActionDisabled = !canGoNext && (isFinishing || isLessonCompleted || isFinishBlocked);
 
   const handleSelectPage = (index: number) => {
     onGoToPage(index);
