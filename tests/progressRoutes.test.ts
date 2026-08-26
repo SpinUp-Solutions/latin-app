@@ -51,6 +51,15 @@ const lesson = {
   ],
 };
 
+const passiveLesson = {
+  title: 'Passive',
+  type: 'normal',
+  pages: [
+    { id: 'page-1', items: [{ id: 'text-1', type: 'text', content: 'Read' }] },
+    { id: 'page-2', items: [{ id: 'text-2', type: 'text', content: 'End' }] },
+  ],
+};
+
 function request(body: unknown) {
   return {
     headers: { get: () => 'Bearer token' },
@@ -58,12 +67,15 @@ function request(body: unknown) {
   } as never;
 }
 
-function configureTransaction(progressData: Record<string, unknown> | undefined) {
+function configureTransaction(
+  progressData: Record<string, unknown> | undefined,
+  lessonData: Record<string, unknown> = lesson
+) {
   mockRunTransaction.mockImplementation(async callback =>
     callback({
       get: async (ref: { collection: string; id: string }) =>
         ref.collection === 'lessons'
-          ? { exists: true, id: ref.id, data: () => lesson }
+          ? { exists: true, id: ref.id, data: () => lessonData }
           : { exists: Boolean(progressData), id: ref.id, data: () => progressData },
       set: mockTransactionSet,
     })
@@ -141,10 +153,143 @@ describe('progress update route', () => {
     };
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ success: true, lessonCompleted: true });
+    expect(response.body).toEqual({
+      success: true,
+      lessonCompleted: true,
+      progress: 100,
+      completedExerciseCount: 1,
+      requiredExerciseCount: 1,
+    });
     expect(mockTransactionSet).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ status: 'completed', progressSchemaVersion: 2 }),
+      expect.objectContaining({
+        status: 'completed',
+        progressSchemaVersion: 3,
+        progress: 100,
+        completedExerciseCount: 1,
+        requiredExerciseCount: 1,
+      }),
+      { merge: true }
+    );
+  });
+
+  it('counts a zero score as a recorded exercise completion', async () => {
+    configureTransaction({
+      status: 'in-progress',
+      exerciseProgress: [],
+      progressSchemaVersion: 2,
+    });
+
+    const response = (await updateProgress(
+      request({ action: 'complete-exercise', exerciseId: 'exercise-1', score: 0 }),
+      { params: Promise.resolve({ userId: 'user-1', lessonId: 'lesson-1' }) }
+    )) as unknown as { body: { lessonCompleted: boolean; progress: number }; status: number };
+
+    expect(response.status).toBe(200);
+    expect(response.body.lessonCompleted).toBe(true);
+    expect(response.body.progress).toBe(100);
+  });
+
+  it('rejects scores outside 0-100 before starting a transaction', async () => {
+    const tooLow = (await updateProgress(
+      request({ action: 'complete-exercise', exerciseId: 'exercise-1', score: -1 }),
+      { params: Promise.resolve({ userId: 'user-1', lessonId: 'lesson-1' }) }
+    )) as unknown as { status: number };
+    const tooHigh = (await updateProgress(
+      request({ action: 'complete-exercise', exerciseId: 'exercise-1', score: 101 }),
+      { params: Promise.resolve({ userId: 'user-1', lessonId: 'lesson-1' }) }
+    )) as unknown as { status: number };
+
+    expect(tooLow.status).toBe(400);
+    expect(tooHigh.status).toBe(400);
+    expect(mockRunTransaction).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['NaN', Number.NaN],
+    ['Infinity', Number.POSITIVE_INFINITY],
+    ['non-number', '80'],
+    ['missing', undefined],
+  ])('rejects malformed score (%s) before starting a transaction', async (_label, score) => {
+    const response = (await updateProgress(
+      request({ action: 'complete-exercise', exerciseId: 'exercise-1', score }),
+      { params: Promise.resolve({ userId: 'user-1', lessonId: 'lesson-1' }) }
+    )) as unknown as { status: number };
+
+    expect(response.status).toBe(400);
+    expect(mockRunTransaction).not.toHaveBeenCalled();
+  });
+
+  it('completes a passive-only lesson when the final page is visited', async () => {
+    configureTransaction({ status: 'in-progress', furthestPageIndex: 0, progressSchemaVersion: 2 }, passiveLesson);
+
+    const response = (await updateProgress(request({ action: 'visit-page', pageId: 'page-2' }), {
+      params: Promise.resolve({ userId: 'user-1', lessonId: 'lesson-1' }),
+    })) as unknown as {
+      body: {
+        success: boolean;
+        lessonCompleted: boolean;
+        progress: number;
+        furthestPageIndex: number;
+        completedExerciseCount: number;
+        requiredExerciseCount: number;
+      };
+    };
+
+    expect(response.body).toEqual({
+      success: true,
+      lessonCompleted: true,
+      progress: 100,
+      furthestPageIndex: 1,
+      completedExerciseCount: 0,
+      requiredExerciseCount: 0,
+    });
+    expect(mockTransactionSet).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ status: 'completed', progressSchemaVersion: 3, progress: 100 }),
+      { merge: true }
+    );
+  });
+
+  it('lazily upgrades an old record that already contains every required exercise', async () => {
+    configureTransaction({
+      status: 'in-progress',
+      furthestPageIndex: 0,
+      progressSchemaVersion: 2,
+      exerciseProgress: [{ exerciseId: 'exercise-1', score: 80, completedAt: '2026-01-01T00:00:00.000Z' }],
+    });
+
+    const response = (await updateProgress(request({ action: 'visit-page', pageId: 'page-1' }), {
+      params: Promise.resolve({ userId: 'user-1', lessonId: 'lesson-1' }),
+    })) as unknown as { body: { lessonCompleted: boolean; progress: number } };
+
+    expect(response.body.lessonCompleted).toBe(true);
+    expect(response.body.progress).toBe(100);
+    expect(mockTransactionSet).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ status: 'completed', progressSchemaVersion: 3 }),
+      { merge: true }
+    );
+  });
+
+  it('does not lazily complete from malformed persisted exercise scores', async () => {
+    configureTransaction({
+      status: 'in-progress',
+      furthestPageIndex: 0,
+      progressSchemaVersion: 2,
+      exerciseProgress: [{ exerciseId: 'exercise-1', score: 101, completedAt: '2026-01-01T00:00:00.000Z' }],
+    });
+
+    const response = (await updateProgress(request({ action: 'visit-page', pageId: 'page-1' }), {
+      params: Promise.resolve({ userId: 'user-1', lessonId: 'lesson-1' }),
+    })) as unknown as { body: { lessonCompleted: boolean; progress: number }; status: number };
+
+    expect(response.status).toBe(200);
+    expect(response.body.lessonCompleted).toBe(false);
+    expect(response.body.progress).toBe(50);
+    expect(mockTransactionSet).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ status: 'in-progress', progressSchemaVersion: 3, progress: 50 }),
       { merge: true }
     );
   });
@@ -159,7 +304,7 @@ describe('progress update route', () => {
     expect(response.body.furthestPageIndex).toBe(1);
     expect(mockTransactionSet).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ furthestPageIndex: 1 }),
+      expect.objectContaining({ furthestPageIndex: 1, progressSchemaVersion: 3 }),
       { merge: true }
     );
   });
@@ -206,10 +351,17 @@ describe('finish route', () => {
     })) as unknown as { body: { success: boolean; alreadyCompleted: boolean }; status: number };
 
     expect(response.status).toBe(200);
-    expect(response.body.alreadyCompleted).toBe(true);
+    expect(response.body).toEqual({
+      success: true,
+      lessonCompleted: true,
+      alreadyCompleted: true,
+      progress: 100,
+      completedExerciseCount: 0,
+      requiredExerciseCount: 1,
+    });
     expect(mockTransactionSet).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ status: 'completed', completedAt: '2026-01-01' }),
+      expect.objectContaining({ status: 'completed', completedAt: '2026-01-01', progressSchemaVersion: 3 }),
       { merge: true }
     );
   });

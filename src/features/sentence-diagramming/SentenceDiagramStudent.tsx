@@ -22,17 +22,22 @@ import { SentenceDiagramToolbar } from './SentenceDiagramToolbar';
 import { Badge } from '@/src/components/ui/badge';
 import { Button } from '@/src/components/ui/button';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
-import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import type { FeedbackLevel } from '@/src/types/exercises/base';
 import { SentenceDiagrammingExercise } from '@/src/types/exercises/sentence-diagramming';
-import type { ExerciseAnswer, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
+import type {
+  ExerciseAnswer,
+  ExerciseAnswerHandler,
+  ExerciseCompletionHandler,
+  RuntimeMode,
+} from '@/src/types/runtime-mode';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
 export interface SentenceDiagramStudentProps {
   exercise: SentenceDiagrammingExercise;
   onComplete?: (score: number) => void;
+  onCompletionAccepted?: ExerciseCompletionHandler;
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
   initialAnswer?: ExerciseAnswer;
@@ -48,6 +53,7 @@ interface SentenceDiagramFeedbackPanelProps {
   explanation?: React.ReactNode;
   showExplanation?: boolean;
   onContinue?: () => void;
+  onStartOver?: () => void;
   comparison?: DiagramComparisonResult;
 }
 
@@ -62,6 +68,7 @@ const SentenceDiagramFeedbackPanel: React.FC<SentenceDiagramFeedbackPanelProps> 
   explanation,
   showExplanation = false,
   onContinue,
+  onStartOver,
   comparison,
 }) => {
   const shouldShowHint = isCorrect === false && Boolean(level?.showHint) && Boolean(hint);
@@ -69,11 +76,10 @@ const SentenceDiagramFeedbackPanel: React.FC<SentenceDiagramFeedbackPanelProps> 
   const shouldShowExplanation = isCorrect === true && Boolean(showExplanation) && Boolean(explanation);
   const hasMessage = Boolean(message);
   const hasDifferences = isCorrect === false && Boolean(comparison?.differences.length);
+  const hasFeedbackContent =
+    hasMessage || hasDifferences || shouldShowHint || shouldShowAnswer || shouldShowExplanation || Boolean(onContinue);
 
-  if (
-    isCorrect === null ||
-    (!hasMessage && !hasDifferences && !shouldShowHint && !shouldShowAnswer && !shouldShowExplanation)
-  ) {
+  if (!onStartOver && (isCorrect === null || !hasFeedbackContent)) {
     return null;
   }
 
@@ -157,6 +163,16 @@ const SentenceDiagramFeedbackPanel: React.FC<SentenceDiagramFeedbackPanelProps> 
           Continue
         </Button>
       ) : null}
+
+      {onStartOver ? (
+        <div className="space-y-2">
+          <p className="text-sm text-stone-600 text-center">Too many mistakes on this question.</p>
+          <Button onClick={onStartOver} className="w-full gap-2">
+            <RotateCcw className="h-4 w-4" />
+            Start over
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 };
@@ -164,6 +180,7 @@ const SentenceDiagramFeedbackPanel: React.FC<SentenceDiagramFeedbackPanelProps> 
 export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
   exercise,
   onComplete,
+  onCompletionAccepted,
   runtimeMode,
   onAnswer,
   initialAnswer,
@@ -178,7 +195,9 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
   const [selection, setSelection] = useState<DiagramSelection | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [surfaceResetKey, setSurfaceResetKey] = useState(0);
-  const [testSubmitted, setTestSubmitted] = useState(initialAnswer?.type === 'sentence-diagramming');
+  const [testSubmitted, setTestSubmitted] = useState(
+    testAnswerMode && initialAnswer?.type === 'sentence-diagramming'
+  );
   const historyRef = useRef<DiagramAnnotation[][]>([]);
   const normalizedTools = normalizeAnnotationTools(exercise.data.availableStudentTools);
   const availableTools = normalizedTools.length ? normalizedTools : DEFAULT_STUDENT_TOOLS;
@@ -217,19 +236,18 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
     }
   );
 
-  useDelayedExerciseReset({
-    shouldReset: !assessmentMode && shouldResetExercise,
-    delayMs: exercise.itemProgressionDelay,
-    onReset: () => {
-      historyRef.current = [];
-      setAnnotations([]);
-      setSelection(null);
-      setMessage(null);
-      setSurfaceResetKey(key => key + 1);
-      cancelPendingAdvance();
-      resetExercise();
-    },
-  });
+  const resetRequired = mode === 'practice' && shouldResetExercise;
+  const interactionLocked = resetRequired || isCorrect === true || testSubmitted;
+
+  const handleExerciseReset = () => {
+    historyRef.current = [];
+    setAnnotations([]);
+    setSelection(null);
+    setMessage(null);
+    setSurfaceResetKey(key => key + 1);
+    cancelPendingAdvance();
+    resetExercise();
+  };
 
   const activeKinds = useMemo(
     () => getActiveAnnotationKindsForSelection(selection, annotations, availableTools, exercise.data.tokens),
@@ -246,6 +264,8 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
   }, []);
 
   const handleUndo = useCallback(() => {
+    if (interactionLocked) return;
+
     const prev = historyRef.current.pop();
 
     if (prev !== undefined) {
@@ -253,9 +273,11 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
       setMessage(null);
       clearFeedback();
     }
-  }, [clearFeedback]);
+  }, [clearFeedback, interactionLocked]);
 
   const applyTool = (kind: AnnotationKind) => {
+    if (interactionLocked) return;
+
     const span = getSelectionSpanForKind(selection, kind, exercise.data.tokens);
 
     if (!span) {
@@ -284,7 +306,7 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
   };
 
   const handleSubmit = () => {
-    if (testSubmitted) return;
+    if (testSubmitted || resetRequired) return;
     onAttempt?.({ studentAnnotations: annotations });
 
     if (testAnswerMode) {
@@ -312,6 +334,7 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
       autoAdvanceIfEnabled(() => {
         onComplete?.(score);
       }, hasVisibleExplanation);
+      onCompletionAccepted?.(score);
       return;
     }
 
@@ -319,7 +342,7 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
   };
 
   const handleReset = () => {
-    if (isCorrect === true) {
+    if (interactionLocked) {
       return;
     }
 
@@ -376,11 +399,12 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
             annotations={annotations}
             selection={selection}
             onSelectionChange={nextSelection => {
+              if (interactionLocked) return;
               setSelection(nextSelection);
               setMessage(null);
             }}
             message={message}
-            disabled={isCorrect === true || testSubmitted}
+            disabled={interactionLocked}
             resetKey={surfaceResetKey}
           />
           {selection ? (
@@ -406,10 +430,10 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
           <SentenceDiagramToolbar
             availableTools={availableTools}
             activeKinds={activeKinds}
-            disabled={isCorrect === true || testSubmitted}
+            disabled={interactionLocked}
             onToolClick={applyTool}
             onResetColors={() => {
-              if (isCorrect === true || testSubmitted) return;
+              if (interactionLocked) return;
               pushHistory(annotations);
               setAnnotations(currentAnnotations =>
                 resetDiagramColorAnnotations(currentAnnotations, exercise.data.tokens)
@@ -418,7 +442,7 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
               clearFeedback();
             }}
             onClear={() => {
-              if (isCorrect === true || testSubmitted) {
+              if (interactionLocked) {
                 return;
               }
 
@@ -464,7 +488,7 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
           <Button
             size="sm"
             onClick={handleSubmit}
-            disabled={isCorrect === true || testSubmitted || annotations.length === 0}
+            disabled={interactionLocked || annotations.length === 0}
             className="gap-1.5">
             <CheckCircle className="h-3.5 w-3.5" />
             Check
@@ -473,7 +497,7 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
             size="sm"
             onClick={handleUndo}
             variant="ghost"
-            disabled={isCorrect === true || testSubmitted || historyRef.current.length === 0}
+            disabled={interactionLocked || historyRef.current.length === 0}
             className="gap-1.5 text-stone-500">
             <Undo2 className="h-3.5 w-3.5" />
             Undo
@@ -482,7 +506,7 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
             size="sm"
             onClick={handleReset}
             variant="ghost"
-            disabled={isCorrect === true || testSubmitted}
+            disabled={interactionLocked}
             className="gap-1.5 text-stone-500">
             <RotateCcw className="h-3.5 w-3.5" />
             Reset
@@ -500,6 +524,7 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
           explanation={explanationBody}
           showExplanation={showExplanation}
           onContinue={isCorrect === true && isAwaitingConfirmation ? confirmAdvance : undefined}
+          onStartOver={resetRequired ? handleExerciseReset : undefined}
           comparison={isCorrect === false ? comparison : undefined}
         />
       )}

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { ZodError } from 'zod';
 import { AdminAccessError } from '@/src/lib/admin-access-error';
+import { reportServerUnexpectedError } from '@/src/lib/report-unexpected-error';
 
 interface RouteDomainError extends Error {
   readonly code: string;
@@ -37,6 +38,9 @@ export function createRouteErrorResponse(...domainErrorClasses: Array<new (...ar
       }
     }
     console.error(`Error ${action}:`, error);
+    reportServerUnexpectedError(error, {
+      tags: { surface: 'route_error_response', action },
+    });
     return NextResponse.json({ error: `Failed to ${action}` }, { status: 500 });
   };
 }

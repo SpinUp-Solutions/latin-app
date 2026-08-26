@@ -10,6 +10,7 @@ const customJestConfig = {
   moduleNameMapper: {
     '^@/src/(.*)$': '<rootDir>/src/$1',
     '^@/shared/(.*)$': '<rootDir>/shared/$1',
+    '^@sentry/nextjs$': '<rootDir>/tests/helpers/sentryMock.ts',
   },
   testMatch: ['<rootDir>/tests/**/*.test.{js,jsx,ts,tsx}'],
   testEnvironmentOptions: {

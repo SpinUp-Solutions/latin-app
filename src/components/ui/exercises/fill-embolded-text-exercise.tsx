@@ -2,7 +2,6 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
-import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { FillEmboldedTextExercise } from '@/src/types/exercise';
 import { ExerciseInput, FeedbackDisplay } from '../feedback';
@@ -11,7 +10,12 @@ import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
-import type { ExerciseAnswer, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
+import type {
+  ExerciseAnswer,
+  ExerciseAnswerHandler,
+  ExerciseCompletionHandler,
+  RuntimeMode,
+} from '@/src/types/runtime-mode';
 import { RecordedAnswerControls } from './recorded-answer-controls';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 import { splitHtmlIntoWords } from '@/src/utils/htmlWordSplitter';
@@ -20,6 +24,7 @@ import { richTextToPlainText } from '@/src/utils/exercises/helpers';
 interface Props {
   exercise: FillEmboldedTextExercise;
   onComplete?: (score: number) => void;
+  onCompletionAccepted?: ExerciseCompletionHandler;
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
   initialAnswer?: ExerciseAnswer;
@@ -28,6 +33,7 @@ interface Props {
 const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
   exercise,
   onComplete,
+  onCompletionAccepted,
   runtimeMode,
   onAnswer,
   initialAnswer,
@@ -53,6 +59,7 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
     confirmAdvance,
     resetIndex,
     nextItem,
+    cancelPendingAdvance,
   } = useExerciseProgression({
     totalItems: exercise.data.words.length,
     initialIndex: restoredIndex,
@@ -73,19 +80,18 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
     resetExercise,
   } = useExerciseFeedback(exercise.feedbackConfig);
 
-  useDelayedExerciseReset({
-    shouldReset: !assessmentMode && shouldResetExercise,
-    delayMs: exercise.itemProgressionDelay,
-    onReset: () => {
-      setUserAnswer('');
-      setSelectedWordIndex(null);
-      setIsProcessing(false);
-      setTestSubmitted(false);
-      setSubmittedAnswers([]);
-      resetIndex();
-      resetExercise();
-    },
-  });
+  const resetRequired = mode === 'practice' && shouldResetExercise;
+
+  const handleExerciseReset = () => {
+    cancelPendingAdvance();
+    setUserAnswer('');
+    setSelectedWordIndex(null);
+    setIsProcessing(false);
+    setTestSubmitted(false);
+    setSubmittedAnswers([]);
+    resetIndex();
+    resetExercise();
+  };
 
   const currentWord = exercise.data.words[currentIndex];
 
@@ -106,7 +112,7 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
   }
 
   const handleSubmit = () => {
-    if (isProcessing || !userAnswer.trim()) return;
+    if (isProcessing || !userAnswer.trim() || resetRequired) return;
 
     const nextAnswers = [...submittedAnswers];
     nextAnswers[currentIndex] = userAnswer;
@@ -132,6 +138,7 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
         hasVisibleFeedbackContent(currentWord.explanation);
 
       if (isLastItem) {
+        if (!assessmentMode) onCompletionAccepted?.(finalScore!);
         autoAdvanceIfEnabled(() => {
           setUserAnswer('');
           setSelectedWordIndex(null);
@@ -208,7 +215,8 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
       )}
 
       <ExerciseProgress
-        current={currentIndex}
+        currentIndex={currentIndex}
+        completed={mode === 'practice' ? currentIndex + (isCorrect === true ? 1 : 0) : submittedAnswers.filter(answer => Boolean(answer?.trim())).length}
         total={exercise.data.words.length}
         label="Word"
         showProgress={exercise.feedbackConfig.progressionRules?.showProgress !== false}
@@ -252,7 +260,7 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
             onChange={handleAnswerChange}
             onSubmit={handleSubmit}
             placeholder="Enter your answer..."
-            disabled={isProcessing}
+            disabled={isProcessing || resetRequired}
           />
         </div>
 
@@ -269,6 +277,7 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
             showExplanation={!assessmentMode && showExplanation}
             onContinue={(isCorrect || assessmentMode) && isAwaitingConfirmation ? confirmAdvance : undefined}
             allowContinueOnIncorrect={assessmentMode}
+            onStartOver={resetRequired ? handleExerciseReset : undefined}
           />
         )}
       </div>

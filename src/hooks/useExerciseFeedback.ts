@@ -131,6 +131,11 @@ export function useExerciseFeedback(config: FeedbackConfig) {
     machineConfig.maxLevelFailures > 0 &&
     state.currentAttempt >= machineConfig.maxLevelFailures;
 
+  const willResetOnNextIncorrect =
+    machineConfig.maxLevelFailures != null &&
+    machineConfig.maxLevelFailures > 0 &&
+    state.currentAttempt + 1 >= machineConfig.maxLevelFailures;
+
   return {
     // New state machine interface
     feedbackState: state,
@@ -147,6 +152,7 @@ export function useExerciseFeedback(config: FeedbackConfig) {
 
     // Exercise reset on repeated question failures
     shouldResetExercise,
+    willResetOnNextIncorrect,
     resetExercise,
   };
 }

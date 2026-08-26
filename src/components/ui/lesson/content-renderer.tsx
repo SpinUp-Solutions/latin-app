@@ -40,6 +40,7 @@ import {
   type ExerciseAnswerEvent,
   type ExerciseAnswerHandler,
   type ExerciseAnswer,
+  type ExerciseCompletionHandler,
   type RuntimeMode,
 } from '@/src/types/runtime-mode';
 import { isExerciseType } from '@/src/lib/content/registry';
@@ -61,6 +62,7 @@ export type GeneratedExerciseRenderContext = { kind: 'admin-preview' } | { kind:
 interface ContentRendererProps {
   content: ContentItem;
   onComplete?: (score: number) => void;
+  onCompletionAccepted?: ExerciseCompletionHandler;
   runtimeMode?: RuntimeMode;
   onAnswer?: (event: ExerciseAnswerEvent) => void;
   initialAnswer?: ExerciseAnswer;
@@ -77,6 +79,7 @@ interface ContentRendererProps {
 export const ContentRenderer: React.FC<ContentRendererProps> = ({
   content,
   onComplete,
+  onCompletionAccepted,
   runtimeMode,
   pageIndex,
   itemIndex,
@@ -90,6 +93,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
   onDiagrammingAttempt,
 }) => {
   const mode = runtimeMode ?? 'practice';
+  const acceptedCompletionHandler = mode === 'practice' ? onCompletionAccepted : undefined;
   const renderedContent =
     mode === 'test' && isExerciseType(content.type)
       ? ({ ...content, feedbackConfig: TEST_RUNTIME_FEEDBACK_CONFIG } as ContentItem)
@@ -97,7 +101,12 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
   const handleAnswer: ExerciseAnswerHandler | undefined = onAnswer
     ? answer => onAnswer({ exerciseId: content.id, answer, pageIndex, itemIndex })
     : undefined;
-  const modeProps = { runtimeMode: mode, onAnswer: handleAnswer, initialAnswer };
+  const modeProps = {
+    runtimeMode: mode,
+    onAnswer: handleAnswer,
+    initialAnswer,
+    onCompletionAccepted: acceptedCompletionHandler,
+  };
   const generatedExerciseSource: GeneratedExerciseQuerySource | undefined =
     generatedExerciseContext?.kind === 'lesson' && pageIndex !== undefined && itemIndex !== undefined
       ? {
@@ -246,6 +255,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
         <TranslationGradingExercise
           exercise={renderedContent as TranslationGradingExerciseType}
           onComplete={onComplete}
+          onCompletionAccepted={acceptedCompletionHandler}
           runtimeMode={mode}
           initialAnswer={initialAnswer}
         />
@@ -253,7 +263,11 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
 
     case 'listening-passage':
       return (
-        <ListeningPassageExercise exercise={renderedContent as ListeningPassageExerciseType} onComplete={onComplete} />
+        <ListeningPassageExercise
+          exercise={renderedContent as ListeningPassageExerciseType}
+          onComplete={onComplete}
+          onCompletionAccepted={acceptedCompletionHandler}
+        />
       );
 
     default:

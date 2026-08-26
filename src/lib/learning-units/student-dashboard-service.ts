@@ -20,7 +20,12 @@ import type {
 } from '@/src/types/lesson';
 import type { LearningUnit, LessonUnitType } from '@/src/types/learning-unit';
 import type { TestAttemptOriginSummary, TestUnitSummary, TestVersionSummary } from '@/src/types/test';
-import { calculateStoredProgress, getFurthestPageIndex, isStoredLessonComplete } from '@/src/utils/lessonProgress';
+import {
+  calculateStoredProgress,
+  getFurthestPageIndex,
+  isStoredLessonComplete,
+  summarizeLessonCompletion,
+} from '@/src/utils/lessonProgress';
 import { toLessonSummary } from '@/src/utils/lessonSummary';
 import type { PracticeCategoryService } from '@/src/lib/practice-categories/service';
 import { practiceCategoryService } from '@/src/lib/practice-categories/service';
@@ -380,7 +385,10 @@ export class StudentDashboardService {
   ): StudentLessonSummary {
     const storedProgress = progressByLessonId.get(lesson.id);
     const furthestPageIndex = getFurthestPageIndex(storedProgress, lesson.totalPages);
-    const progress = status === 'locked' ? 0 : calculateStoredProgress(storedProgress, lesson.totalPages);
+    const progress =
+      status === 'locked'
+        ? 0
+        : calculateStoredProgress(storedProgress, lesson.totalPages);
 
     return {
       ...lesson,
@@ -684,17 +692,16 @@ export class StudentDashboardService {
   ): LessonWithProgress {
     const totalPages = lesson.pages.length;
     const furthestPageIndex = getFurthestPageIndex(storedProgress, totalPages);
+    const summary = summarizeLessonCompletion(lesson, storedProgress);
     return {
       ...lesson,
-      progress: calculateStoredProgress(storedProgress, totalPages),
-      status: !storedProgress
-        ? 'available'
-        : isStoredLessonComplete(storedProgress, totalPages)
-          ? 'completed'
-          : 'in-progress',
+      progress: summary.progress,
+      status: !storedProgress ? 'available' : summary.isCompleted ? 'completed' : 'in-progress',
       furthestPageIndex,
       currentPageIndex: Math.max(furthestPageIndex, 0),
-      exerciseProgress: storedProgress?.exerciseProgress || [],
+      exerciseProgress: summary.exerciseProgress,
+      completedExerciseCount: summary.completedExerciseCount,
+      requiredExerciseCount: summary.requiredExerciseCount,
       completedAt: storedProgress?.completedAt,
       score: storedProgress?.score,
       lastAccessedAt: storedProgress?.lastAccessedAt,

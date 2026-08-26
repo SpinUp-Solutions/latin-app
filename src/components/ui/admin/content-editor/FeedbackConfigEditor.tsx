@@ -235,9 +235,9 @@ export const FeedbackConfigEditor: React.FC<FeedbackConfigEditorProps> = ({
                 disabled={!questionResetEnabled}
               />
               <div className="text-xs text-gray-500 mt-1">
-                After this many wrong submissions on one question, the exercise restarts from the beginning. This is
-                independent of escalation levels; if the threshold is higher than the number of levels, the last level
-                repeats until reset.
+                After this many wrong submissions on one question, the student is asked to start over. They can read the
+                last hint or answer first. This is independent of escalation levels; if the threshold is higher than the
+                number of levels, the last level repeats until reset.
               </div>
             </div>
           </CardContent>

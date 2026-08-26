@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { LEARNING_UNITS_COLLECTION, USER_PROGRESS_COLLECTION } from '@/shared/constants/firestore';
 import { adminDb } from '@/src/services/firebase-admin';
 import { AdminAccessError, verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 import { Lesson, UserProgress } from '@/src/types/lesson';
 import { migrateUserProgress } from '@/src/utils/progressMigration';
+import { STABLE_ID_PROGRESS_SCHEMA_VERSION } from '@/src/utils/lessonProgress';
 
 const BATCH_SIZE = 200;
 
@@ -31,8 +33,8 @@ export async function POST(request: NextRequest) {
     }
 
     const [progressSnapshot, lessonSnapshot] = await Promise.all([
-      adminDb.collection('userProgress').get(),
-      adminDb.collection('lessons').get(),
+      adminDb.collection(USER_PROGRESS_COLLECTION).get(),
+      adminDb.collection(LEARNING_UNITS_COLLECTION).get(),
     ]);
     const lessons = new Map(
       lessonSnapshot.docs
@@ -59,7 +61,7 @@ export async function POST(request: NextRequest) {
 
     for (const progressDoc of progressSnapshot.docs) {
       const existing = progressDoc.data() as Partial<UserProgress>;
-      if (existing.progressSchemaVersion === 2) {
+      if ((existing.progressSchemaVersion ?? 1) >= STABLE_ID_PROGRESS_SCHEMA_VERSION) {
         summary.documentsAlreadyMigrated++;
         continue;
       }

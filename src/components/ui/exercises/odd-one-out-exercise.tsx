@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import { OddOneOutExercise } from '@/src/types/exercise';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
-import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { FeedbackDisplay } from '../feedback';
 import { validateOddOneOutExercise } from '@/src/utils/exercises/oddOneOutExercise';
@@ -13,12 +12,18 @@ import { SimpleRichEditor } from '../core/simple-rich-editor';
 import { Button } from '../button';
 import { CheckCircle2 } from 'lucide-react';
 import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
-import type { ExerciseAnswer, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
+import type {
+  ExerciseAnswer,
+  ExerciseAnswerHandler,
+  ExerciseCompletionHandler,
+  RuntimeMode,
+} from '@/src/types/runtime-mode';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
 interface Props {
   exercise: OddOneOutExercise;
   onComplete?: (score: number) => void;
+  onCompletionAccepted?: ExerciseCompletionHandler;
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
   initialAnswer?: ExerciseAnswer;
@@ -27,6 +32,7 @@ interface Props {
 const OddOneOutExerciseComponent: React.FC<Props> = ({
   exercise,
   onComplete,
+  onCompletionAccepted,
   runtimeMode,
   onAnswer,
   initialAnswer,
@@ -43,7 +49,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({
   const [hasSubmitted, setHasSubmitted] = useState(
     Boolean(restoredAnswer?.selectedItemId && hasRequiredExplanation(restoredAnswer.explanation))
   );
-  const { isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance } = useExerciseProgression({
+  const { isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance, cancelPendingAdvance } = useExerciseProgression({
     totalItems: 1,
     itemProgressionDelay: exercise.itemProgressionDelay,
     progressionRules: exercise.feedbackConfig.progressionRules,
@@ -61,25 +67,24 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({
     resetExercise,
   } = useExerciseFeedback(exercise.feedbackConfig);
 
-  useDelayedExerciseReset({
-    shouldReset: !assessmentMode && shouldResetExercise,
-    delayMs: exercise.itemProgressionDelay,
-    onReset: () => {
-      setSelectedItemId(null);
-      setUserExplanation('');
-      setHasSubmitted(false);
-      setIsProcessing(false);
-      resetExercise();
-    },
-  });
+  const resetRequired = mode === 'practice' && shouldResetExercise;
+
+  const handleExerciseReset = () => {
+    cancelPendingAdvance();
+    setSelectedItemId(null);
+    setUserExplanation('');
+    setHasSubmitted(false);
+    setIsProcessing(false);
+    resetExercise();
+  };
 
   const handleItemSelect = (itemId: string) => {
-    if (hasSubmitted) return;
+    if (hasSubmitted || resetRequired) return;
     setSelectedItemId(itemId);
   };
 
   const handleSubmit = () => {
-    if (isProcessing || !selectedItemId || !hasRequiredExplanation(userExplanation)) return;
+    if (isProcessing || !selectedItemId || !hasRequiredExplanation(userExplanation) || resetRequired) return;
 
     setIsProcessing(true);
     setHasSubmitted(true);
@@ -104,6 +109,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({
         setIsProcessing(false);
         onComplete?.(score);
       }, hasVisibleExplanation);
+      if (!assessmentMode) onCompletionAccepted?.(score);
     } else {
       handleIncorrect();
       setIsProcessing(false);
@@ -169,7 +175,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({
               <button
                 key={item.id}
                 onClick={() => handleItemSelect(item.id)}
-                disabled={hasSubmitted}
+                disabled={hasSubmitted || resetRequired}
                 className={`
                   relative p-4 rounded-lg border-2 transition-all duration-200 text-left
                   ${
@@ -218,21 +224,21 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({
               placeholder="Explain your reasoning..."
               rows={3}
               className="w-full"
-              disabled={hasSubmitted}
+              disabled={hasSubmitted || resetRequired}
             />
           </div>
         )}
 
         {/* Submit/Reset buttons */}
         <div className="flex gap-3 mb-4">
-          {!hasSubmitted ? (
+          {!hasSubmitted && !resetRequired ? (
             <Button
               onClick={handleSubmit}
               disabled={!selectedItemId || isProcessing || !hasRequiredExplanation(userExplanation)}
               className="bg-roman-terracotta hover:bg-roman-terracotta/90 text-white">
               {isProcessing ? 'Checking...' : 'Submit Answer'}
             </Button>
-          ) : !assessmentMode ? (
+          ) : hasSubmitted && !assessmentMode && !resetRequired ? (
             <Button
               onClick={handleReset}
               variant="outline"
@@ -253,6 +259,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({
             explanation={exercise.data.explanation}
             showExplanation={showExplanation}
             onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
+            onStartOver={resetRequired ? handleExerciseReset : undefined}
           />
         )}
       </div>

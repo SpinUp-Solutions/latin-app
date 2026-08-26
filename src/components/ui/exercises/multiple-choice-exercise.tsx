@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import { MultipleChoiceExercise } from '@/src/types/exercise';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
-import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { FeedbackDisplay } from '../feedback';
 import { validateMultipleChoiceExercise } from '@/src/utils/exercises/multipleChoiceExercise';
@@ -12,12 +11,18 @@ import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { cn } from '@/src/lib/utils';
 import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
-import type { ExerciseAnswer, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
+import type {
+  ExerciseAnswer,
+  ExerciseAnswerHandler,
+  ExerciseCompletionHandler,
+  RuntimeMode,
+} from '@/src/types/runtime-mode';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
 interface Props {
   exercise: MultipleChoiceExercise;
   onComplete?: (score: number) => void;
+  onCompletionAccepted?: ExerciseCompletionHandler;
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
   initialAnswer?: ExerciseAnswer;
@@ -27,6 +32,7 @@ interface Props {
 const MultipleChoiceExerciseComponent: React.FC<Props> = ({
   exercise,
   onComplete,
+  onCompletionAccepted,
   runtimeMode,
   onAnswer,
   initialAnswer,
@@ -38,7 +44,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({
   const [selectedOptionIds, setSelectedOptionIds] = useState<string[]>(restoredOptionIds);
   const [hasSubmitted, setHasSubmitted] = useState(restoredOptionIds.length > 0);
   const [isProcessing, setIsProcessing] = useState(false);
-  const { isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance } = useExerciseProgression({
+  const { isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance, cancelPendingAdvance } = useExerciseProgression({
     totalItems: 1,
     itemProgressionDelay: exercise.itemProgressionDelay,
     progressionRules: exercise.feedbackConfig.progressionRules,
@@ -56,19 +62,18 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({
     resetExercise,
   } = useExerciseFeedback(exercise.feedbackConfig);
 
-  useDelayedExerciseReset({
-    shouldReset: !assessmentMode && shouldResetExercise,
-    delayMs: exercise.itemProgressionDelay,
-    onReset: () => {
-      setSelectedOptionIds([]);
-      setHasSubmitted(false);
-      setIsProcessing(false);
-      resetExercise();
-    },
-  });
+  const resetRequired = mode === 'practice' && shouldResetExercise;
+
+  const handleExerciseReset = () => {
+    cancelPendingAdvance();
+    setSelectedOptionIds([]);
+    setHasSubmitted(false);
+    setIsProcessing(false);
+    resetExercise();
+  };
 
   const handleOptionSelect = (optionId: string) => {
-    if (hasSubmitted || isProcessing) return;
+    if (hasSubmitted || isProcessing || resetRequired) return;
 
     const hasMultipleCorrect = exercise.data.options.filter(opt => opt.isCorrect).length > 1;
     const allowMultiple = hasMultipleCorrect || exercise.data.allowMultipleSelections;
@@ -83,7 +88,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({
   };
 
   const handleSubmit = () => {
-    if (selectedOptionIds.length === 0 || isProcessing) return;
+    if (selectedOptionIds.length === 0 || isProcessing || resetRequired) return;
 
     setIsProcessing(true);
     setHasSubmitted(true);
@@ -107,6 +112,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({
         setIsProcessing(false);
         onComplete?.(score);
       }, hasVisibleExplanation);
+      if (!assessmentMode) onCompletionAccepted?.(score);
     } else {
       handleIncorrect();
       setIsProcessing(false);
@@ -176,13 +182,13 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({
             <button
               key={option.id}
               onClick={() => handleOptionSelect(option.id)}
-              disabled={hasSubmitted || isProcessing}
+              disabled={hasSubmitted || isProcessing || resetRequired}
               className={cn(
                 'w-full p-4 text-left rounded-lg border-2 transition-all duration-200',
                 'flex items-center gap-3',
                 getOptionClassName(option.id),
-                !hasSubmitted && !isProcessing && 'cursor-pointer',
-                (hasSubmitted || isProcessing) && 'cursor-not-allowed'
+                !hasSubmitted && !isProcessing && !resetRequired && 'cursor-pointer',
+                (hasSubmitted || isProcessing || resetRequired) && 'cursor-not-allowed'
               )}>
               <div
                 className={cn(
@@ -198,7 +204,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({
           ))}
         </div>
 
-        {!hasSubmitted && (
+        {!hasSubmitted && !resetRequired && (
           <div className="flex justify-center">
             <Button onClick={handleSubmit} disabled={selectedOptionIds.length === 0 || isProcessing} className="px-8">
               {isProcessing ? 'Submitting...' : 'Submit Answer'}
@@ -207,7 +213,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({
         )}
 
         {/* Try Again Button */}
-        {hasSubmitted && isCorrect === false && !assessmentMode && (
+        {hasSubmitted && isCorrect === false && !assessmentMode && !resetRequired && (
           <div className="flex justify-center">
             <Button onClick={handleReset} variant="outline" disabled={isProcessing} className="px-8">
               Try Again
@@ -228,6 +234,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({
             explanation={exercise.data.explanation}
             showExplanation={showExplanation}
             onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
+            onStartOver={resetRequired ? handleExerciseReset : undefined}
           />
         )}
       </div>

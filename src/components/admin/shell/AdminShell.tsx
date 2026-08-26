@@ -7,7 +7,7 @@ import { AdminTopbar } from './AdminTopbar';
 
 const ADMIN_SIDEBAR_COLLAPSE_KEY = 'admin-sidebar-collapse';
 
-export function AdminShell({ children }: { children: ReactNode }) {
+export function AdminShell({ children, appVersion }: { children: ReactNode; appVersion?: string }) {
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
   const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(false);
 
@@ -47,7 +47,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
         </SheetContent>
       </Sheet>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <AdminTopbar onOpenMenu={() => setMobileNavigationOpen(true)} />
+        <AdminTopbar appVersion={appVersion} onOpenMenu={() => setMobileNavigationOpen(true)} />
         {children}
       </div>
     </div>

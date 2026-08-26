@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import { TextSelectionExercise } from '@/src/types/exercise';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
-import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { FeedbackDisplay } from '../feedback';
 import { validateTextSelectionExercise } from '@/src/utils/exercises/textSelectionExercise';
@@ -12,7 +11,12 @@ import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { ClickableRichDisplay } from '../core/clickable-rich-display';
 import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
-import type { ExerciseAnswer, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
+import type {
+  ExerciseAnswer,
+  ExerciseAnswerHandler,
+  ExerciseCompletionHandler,
+  RuntimeMode,
+} from '@/src/types/runtime-mode';
 import { RecordedAnswerControls } from './recorded-answer-controls';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 import { splitHtmlIntoWords } from '@/src/utils/htmlWordSplitter';
@@ -20,6 +24,7 @@ import { splitHtmlIntoWords } from '@/src/utils/htmlWordSplitter';
 interface Props {
   exercise: TextSelectionExercise;
   onComplete?: (score: number) => void;
+  onCompletionAccepted?: ExerciseCompletionHandler;
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
   initialAnswer?: ExerciseAnswer;
@@ -28,6 +33,7 @@ interface Props {
 const TextSelectionExerciseComponent: React.FC<Props> = ({
   exercise,
   onComplete,
+  onCompletionAccepted,
   runtimeMode,
   onAnswer,
   initialAnswer,
@@ -51,6 +57,7 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({
     confirmAdvance,
     resetIndex,
     nextItem,
+    cancelPendingAdvance,
   } = useExerciseProgression({
     totalItems: exercise.data.questions.length,
     initialIndex: restoredIndex,
@@ -70,21 +77,20 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({
     resetExercise,
   } = useExerciseFeedback(exercise.feedbackConfig);
 
-  useDelayedExerciseReset({
-    shouldReset: !assessmentMode && shouldResetExercise,
-    delayMs: exercise.itemProgressionDelay,
-    onReset: () => {
-      setSelectedWordIndex(null);
-      setIsProcessing(false);
-      setTestSubmitted(false);
-      setSubmittedIndices([]);
-      resetIndex();
-      resetExercise();
-    },
-  });
+  const resetRequired = mode === 'practice' && shouldResetExercise;
+
+  const handleExerciseReset = () => {
+    cancelPendingAdvance();
+    setSelectedWordIndex(null);
+    setIsProcessing(false);
+    setTestSubmitted(false);
+    setSubmittedIndices([]);
+    resetIndex();
+    resetExercise();
+  };
 
   const handleWordClick = (wordIndex: number) => {
-    if (isProcessing) return; // Prevent multiple rapid clicks
+    if (isProcessing || resetRequired) return;
 
     setSelectedWordIndex(wordIndex);
     const nextIndices = [...submittedIndices];
@@ -111,6 +117,7 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({
         hasVisibleFeedbackContent(currentQuestion.explanation);
 
       if (isLastItem) {
+        if (!assessmentMode) onCompletionAccepted?.(finalScore!);
         autoAdvanceIfEnabled(() => {
           setSelectedWordIndex(null);
           reset();
@@ -178,7 +185,12 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({
 
       {/* Progress indicator */}
       <ExerciseProgress
-        current={currentIndex}
+        currentIndex={currentIndex}
+        completed={
+          mode === 'practice'
+            ? currentIndex + (isCorrect === true ? 1 : 0)
+            : submittedIndices.filter(index => typeof index === 'number').length
+        }
         total={exercise.data.questions.length}
         showProgress={exercise.feedbackConfig.progressionRules?.showProgress !== false}
       />
@@ -215,6 +227,7 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({
             showExplanation={!assessmentMode && showExplanation}
             onContinue={(isCorrect || assessmentMode) && isAwaitingConfirmation ? confirmAdvance : undefined}
             allowContinueOnIncorrect={assessmentMode}
+            onStartOver={resetRequired ? handleExerciseReset : undefined}
           />
         )}
       </div>

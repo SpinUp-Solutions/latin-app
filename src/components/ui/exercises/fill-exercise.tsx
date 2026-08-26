@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import { FillExercise } from '@/src/types/exercise';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
-import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { ExerciseInput, FeedbackDisplay } from '../feedback';
 import { validateFillExercise } from '@/src/utils/exercises/fillExercise';
@@ -11,19 +10,32 @@ import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
-import type { ExerciseAnswer, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
+import type {
+  ExerciseAnswer,
+  ExerciseAnswerHandler,
+  ExerciseCompletionHandler,
+  RuntimeMode,
+} from '@/src/types/runtime-mode';
 import { RecordedAnswerControls } from './recorded-answer-controls';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
 interface Props {
   exercise: FillExercise;
   onComplete?: (score: number) => void;
+  onCompletionAccepted?: ExerciseCompletionHandler;
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
   initialAnswer?: ExerciseAnswer;
 }
 
-const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete, runtimeMode, onAnswer, initialAnswer }) => {
+const FillExerciseComponent: React.FC<Props> = ({
+  exercise,
+  onComplete,
+  onCompletionAccepted,
+  runtimeMode,
+  onAnswer,
+  initialAnswer,
+}) => {
   const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
@@ -43,6 +55,7 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete, runtimeM
     confirmAdvance,
     resetIndex,
     nextItem,
+    cancelPendingAdvance,
   } = useExerciseProgression({
     totalItems: exercise.data.items.length,
     initialIndex: restoredIndex,
@@ -62,21 +75,20 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete, runtimeM
     resetExercise,
   } = useExerciseFeedback(exercise.feedbackConfig);
 
-  useDelayedExerciseReset({
-    shouldReset: !assessmentMode && shouldResetExercise,
-    delayMs: exercise.itemProgressionDelay,
-    onReset: () => {
-      setUserAnswer('');
-      setIsProcessing(false);
-      setTestSubmitted(false);
-      setSubmittedAnswers([]);
-      resetIndex();
-      resetExercise();
-    },
-  });
+  const resetRequired = mode === 'practice' && shouldResetExercise;
+
+  const handleExerciseReset = () => {
+    cancelPendingAdvance();
+    setUserAnswer('');
+    setIsProcessing(false);
+    setTestSubmitted(false);
+    setSubmittedAnswers([]);
+    resetIndex();
+    resetExercise();
+  };
 
   const handleSubmit = () => {
-    if (isProcessing || !userAnswer.trim()) return;
+    if (isProcessing || !userAnswer.trim() || resetRequired) return;
 
     const nextAnswers = [...submittedAnswers];
     nextAnswers[currentIndex] = userAnswer;
@@ -103,6 +115,7 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete, runtimeM
         hasVisibleFeedbackContent(currentItem.explanation);
 
       if (isLastItem) {
+        if (!assessmentMode) onCompletionAccepted?.(finalScore!);
         autoAdvanceIfEnabled(() => {
           setUserAnswer('');
           reset();
@@ -175,7 +188,8 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete, runtimeM
 
       {/* Progress indicator */}
       <ExerciseProgress
-        current={currentIndex}
+        currentIndex={currentIndex}
+        completed={mode === 'practice' ? currentIndex + (isCorrect === true ? 1 : 0) : submittedAnswers.filter(answer => Boolean(answer?.trim())).length}
         total={exercise.data.items.length}
         showProgress={exercise.feedbackConfig.progressionRules?.showProgress !== false}
       />
@@ -187,7 +201,7 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete, runtimeM
           onChange={handleAnswerChange}
           onSubmit={handleSubmit}
           placeholder="Type your answer"
-          disabled={isProcessing}
+          disabled={isProcessing || resetRequired}
         />
 
         {testAnswerMode ? (
@@ -203,6 +217,7 @@ const FillExerciseComponent: React.FC<Props> = ({ exercise, onComplete, runtimeM
             showExplanation={!assessmentMode && showExplanation}
             onContinue={(isCorrect || assessmentMode) && isAwaitingConfirmation ? confirmAdvance : undefined}
             allowContinueOnIncorrect={assessmentMode}
+            onStartOver={resetRequired ? handleExerciseReset : undefined}
           />
         )}
       </div>

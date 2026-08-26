@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
+import * as Sentry from '@sentry/nextjs';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '@/src/services/firebase';
@@ -49,6 +50,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       dispatch(setAuthUid(nextUid));
 
       if (firebaseUser) {
+        Sentry.setUser({ id: firebaseUser.uid });
+
         // The persisted dashboard is rehydrated now and revalidated in the
         // background, giving returning students an instant dashboard paint.
         dispatch(seedStudentDashboardCache(firebaseUser.uid));
@@ -83,6 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           dispatch(setUser(customUser));
         });
       } else {
+        Sentry.setUser(null);
         dispatch(setUser(null));
       }
     });

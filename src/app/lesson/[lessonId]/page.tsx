@@ -10,6 +10,7 @@ import LessonSidebar from '@/src/components/ui/lesson/lesson-sidebar';
 import PracticeSidebar from '@/src/components/ui/lesson/practice-sidebar';
 import { FeedbackBanner } from '@/src/components/ui/core/feedback-banner';
 import { useAuth } from '@/src/hooks/useAuth';
+import { shouldReportClientHardFail, reportUnexpectedError } from '@/src/lib/report-unexpected-error';
 
 const SIDEBAR_COLLAPSE_KEY = 'lesson-sidebar-collapse';
 
@@ -70,6 +71,14 @@ export default function DynamicLessonPage() {
         'code' in error.data &&
         error.data.code === 'LESSON_LOCKED'
     );
+
+  useEffect(() => {
+    if (!error || isLockedError) return;
+    if (!shouldReportClientHardFail(error)) return;
+    reportUnexpectedError(error, {
+      tags: { surface: 'lesson_load', lessonId },
+    });
+  }, [error, isLockedError, lessonId]);
 
   if (authLoading || !user || lessonsLoading) {
     return (
