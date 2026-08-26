@@ -321,7 +321,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
     }
 
     return (
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
         {lessonsList.map(lesson => (
           <Card
             key={lesson.id}
@@ -471,7 +471,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
               These lessons failed to save previously. You can retry saving them or discard them if no longer needed.
             </p>
           </div>
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
             {filteredRecoveryItems.map(item => (
               <Card
                 key={item.id}
@@ -559,7 +559,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
             <div className="h-8 w-1 rounded-full bg-roman-gold" aria-hidden="true" />
             <h2 className="font-serif text-xl text-foreground">Drafts ({filteredDrafts.length})</h2>
           </div>
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
             {filteredDrafts
               .sort(([, a], [, b]) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime())
               .map(([draftKey, draft]) => {
