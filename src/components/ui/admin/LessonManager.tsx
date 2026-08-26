@@ -55,7 +55,6 @@ import {
   AdminSearchInput,
   AdminStatusBadge,
 } from '@/src/components/admin/shell';
-import { cn } from '@/src/lib/utils';
 
 type LessonTab = LessonSummary['type'];
 type LessonType = LessonSummary['type'];
@@ -138,12 +137,8 @@ function LessonDescription({ content }: { content?: string }) {
 
 function LessonTitle({ content }: { content: string }) {
   return (
-    <h3 className="relative min-w-0 flex-1 pr-10 font-serif text-xl leading-5 tracking-tight text-foreground">
+    <h3 className="min-w-0 flex-1 font-serif text-xl leading-5 tracking-tight text-foreground">
       <SimpleRichDisplay content={content} className="!block break-words whitespace-normal" />
-      <div
-        className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-white via-white/95 to-transparent"
-        aria-hidden="true"
-      />
     </h3>
   );
 }
@@ -332,18 +327,18 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
             key={lesson.id}
             className="group flex h-full flex-col overflow-hidden border-border/80 bg-white/95 shadow-sm transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-primary/20 hover:shadow-lg motion-reduce:transition-none">
             <CardContent className="flex min-h-0 flex-1 flex-col !p-0">
-              <div className="relative flex flex-1 flex-col gap-5 p-5 sm:p-6">
-                {lesson.isLive && (
-                  <div className="absolute right-5 top-5 z-10 sm:right-6 sm:top-6">
-                    <AdminStatusBadge tone="success">Live</AdminStatusBadge>
-                  </div>
-                )}
-                <div className={cn('flex items-start gap-3', lesson.isLive && 'pr-20 sm:pr-24')}>
+              <div className="flex flex-1 flex-col gap-5 p-5 sm:p-6">
+                <div className="flex items-start gap-3">
                   <AdminIconChip
                     icon={lessonTypeConfig[lesson.type].icon}
                     className={lessonTypeConfig[lesson.type].iconChip}
                   />
                   <div className="min-w-0 flex-1">
+                    {lesson.isLive && (
+                      <div className="mb-2 flex">
+                        <AdminStatusBadge tone="success">Live</AdminStatusBadge>
+                      </div>
+                    )}
                     <LessonTitle content={lesson.title} />
                   </div>
                 </div>
