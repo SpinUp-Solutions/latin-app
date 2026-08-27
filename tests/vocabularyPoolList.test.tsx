@@ -276,4 +276,27 @@ describe('vocabulary pool list usage status', () => {
     expect(screen.queryByText('Assigned to')).not.toBeInTheDocument();
     expect(screen.queryByText(/Assigned \(/)).not.toBeInTheDocument();
   });
+
+  it('renders one row when pagination returns the same pool twice', () => {
+    render(
+      <PoolList
+        pools={[pool, { ...pool, metadata: { ...pool.metadata, isActive: false } }]}
+        loading={false}
+        loadingMore={false}
+        hasMore={false}
+        onLoadMore={jest.fn()}
+        onEdit={jest.fn()}
+        onDelete={jest.fn()}
+        usagesByPoolId={{
+          'pool-1': [
+            { id: '1', poolId: 'pool-1', kind: 'lesson', label: 'Lesson: One', editorUrl: '/admin/lessons/edit/one' },
+          ],
+        }}
+      />
+    );
+
+    expect(screen.getAllByText('Chapter 1 words')).toHaveLength(1);
+    expect(screen.getByText('Assigned (1)')).toBeInTheDocument();
+    expect(screen.queryByText('Inactive')).not.toBeInTheDocument();
+  });
 });

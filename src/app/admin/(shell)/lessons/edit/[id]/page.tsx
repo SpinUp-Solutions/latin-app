@@ -232,7 +232,7 @@ function EditLessonPage({ params }: EditLessonPageProps) {
           )}
         </header>
 
-        <div className="flex-1 overflow-hidden">
+        <div className="flex min-h-0 flex-1 overflow-hidden">
           <ClipboardProvider>
             <LessonBuilder initialLesson={initialLesson ?? undefined} onSave={handleSaveLesson} saving={saving} />
           </ClipboardProvider>

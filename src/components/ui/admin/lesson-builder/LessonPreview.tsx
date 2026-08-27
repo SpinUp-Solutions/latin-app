@@ -11,7 +11,7 @@ export const LessonPreview: React.FC<LessonPreviewProps> = ({ lesson }) => {
   const hasContent = lesson.pages.length > 0;
 
   return (
-    <div className="w-1/2 border-l border-border bg-white overflow-y-auto">
+    <div className="flex min-h-0 w-1/2 flex-col overflow-y-auto border-l border-border bg-white">
       <div className="sticky top-0 bg-white border-b border-border p-4 z-10">
         <h2 className="text-xl font-serif text-gray-800 flex items-center gap-2">
           <BookOpen className="h-5 w-5" />

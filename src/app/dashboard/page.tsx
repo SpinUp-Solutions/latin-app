@@ -401,35 +401,37 @@ export default function DashboardPage() {
       </div>
 
       <div className="relative">
-        <header className="bg-white/80 backdrop-blur-sm border-b border-roman-red/20 px-8 py-6 flex items-center justify-between shadow-xl">
-          <div className="flex items-center gap-4">
+        <header className="relative flex flex-col gap-4 bg-white/80 px-4 py-4 shadow-xl backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between sm:px-8 sm:py-6">
+          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
             <Image
               src="/assets/logos/wakeforest_shield.png"
               alt="Wake Forest University"
               width={1000}
               height={736}
-              className="h-14 w-auto"
+              className="h-10 w-auto shrink-0 sm:h-14"
               priority
             />
-            <div>
-              <h1 className="text-3xl font-serif tracking-wide text-gray-900 mb-1">Wake Forest University Latin</h1>
-              <p className="text-lg text-roman-stone leading-relaxed">
+            <div className="min-w-0">
+              <h1 className="mb-1 font-serif text-xl tracking-wide text-gray-900 sm:text-3xl">
+                Wake Forest University Latin
+              </h1>
+              <p className="text-sm leading-relaxed text-roman-stone sm:text-lg">
                 {displayName ? `Welcome back, ${displayName}` : 'Welcome back'}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-4">
             <Button
               variant="ghost"
-              className="text-roman-stone hover:text-roman-red px-6 py-3 rounded-xl text-lg font-medium flex items-center hover:bg-roman-red/5 transition-all"
+              className="flex items-center rounded-xl px-4 py-2 text-base font-medium text-roman-stone transition-all hover:bg-roman-red/5 hover:text-roman-red sm:px-6 sm:py-3 sm:text-lg"
               onClick={() => router.push('/profile')}>
-              <User className="h-5 w-5 mr-2" />
+              <User className="mr-2 h-5 w-5" />
               Profile
             </Button>
             <Button
               onClick={handleSignOut}
               size="lg"
-              className="bg-gradient-to-r from-gray-900 to-gray-800 hover:from-gray-800 hover:to-gray-700 text-white px-8 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5 hover:scale-105">
+              className="rounded-xl bg-gradient-to-r from-gray-900 to-gray-800 px-4 py-2 text-white shadow-lg transition-all hover:-translate-y-0.5 hover:from-gray-800 hover:to-gray-700 hover:shadow-xl sm:px-8 sm:py-3">
               Sign Out
             </Button>
           </div>

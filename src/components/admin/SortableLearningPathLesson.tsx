@@ -43,7 +43,7 @@ export function SortableLearningPathLesson({
         opacity: isDragging ? 0.7 : 1,
         zIndex: isDragging ? 10 : 'auto',
       }}
-      className={`flex items-center gap-4 rounded-lg border p-4 transition-shadow hover:shadow-sm ${
+      className={`flex min-w-0 flex-col gap-3 rounded-lg border p-4 transition-shadow hover:shadow-sm sm:flex-row sm:items-center sm:gap-4 ${
         isTest ? 'border-roman-gold/35 bg-roman-gold/[0.08]' : 'bg-white'
       }`}>
       <button
@@ -66,16 +66,16 @@ export function SortableLearningPathLesson({
       </div>
 
       <div className="min-w-0 flex-1">
-        <div className="mb-1 flex items-center gap-2">
-          <div className="min-w-0 flex-1 truncate font-medium text-gray-900" role="heading" aria-level={3}>
-            <SimpleRichDisplay content={unit.title} />
+        <div className="mb-1 flex min-w-0 items-start gap-2">
+          <div className="min-w-0 flex-1 font-medium text-gray-900" role="heading" aria-level={3}>
+            <SimpleRichDisplay content={unit.title} className="break-words [&_p]:break-words" />
           </div>
           <Badge
             variant="outline"
             className={
               isTest
-                ? 'border-roman-gold/35 bg-roman-gold/15 text-foreground'
-                : 'border-primary/15 bg-primary/[0.08] text-primary'
+                ? 'shrink-0 border-roman-gold/35 bg-roman-gold/15 text-foreground'
+                : 'shrink-0 border-primary/15 bg-primary/[0.08] text-primary'
             }>
             {isTest ? (
               <span className="inline-flex items-center gap-1">
@@ -87,7 +87,7 @@ export function SortableLearningPathLesson({
             )}
           </Badge>
           {hasIssues && (
-            <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-900">
+            <Badge variant="outline" className="shrink-0 border-amber-300 bg-amber-50 text-amber-900">
               <span className="inline-flex items-center gap-1">
                 <ShieldAlert className="h-3 w-3" aria-hidden="true" />
                 Needs attention
@@ -131,6 +131,7 @@ export function SortableLearningPathLesson({
         )}
       </div>
 
+      <div className="flex shrink-0 items-center gap-2">
       <Button size="sm" variant="outline" asChild>
         <Link
           href={editHref}
@@ -159,6 +160,7 @@ export function SortableLearningPathLesson({
           Gate
         </div>
       )}
+      </div>
     </div>
   );
 }

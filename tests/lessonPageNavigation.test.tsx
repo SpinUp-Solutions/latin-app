@@ -96,4 +96,18 @@ describe('lesson route navigation', () => {
     expect(screen.getByText('Player lesson-2')).toBeInTheDocument();
     expect(screen.queryByText('Player lesson-1')).not.toBeInTheDocument();
   });
+
+  it('keeps sidebar open controls available in the lesson header', () => {
+    mockUseGetStudentLessonQuery.mockReturnValue({
+      data: lesson('lesson-2'),
+      currentData: lesson('lesson-2'),
+      isLoading: false,
+      error: undefined,
+    });
+
+    render(<DynamicLessonPage />);
+
+    expect(screen.getByRole('button', { name: 'Open lessons sidebar' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open practice sidebar' })).toBeInTheDocument();
+  });
 });
