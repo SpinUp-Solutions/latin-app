@@ -2,10 +2,23 @@
 
 import { useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowDown, ArrowUp, Eye, EyeOff, PackageOpen } from 'lucide-react';
-import { AdminErrorState, AdminLoadingState } from '@/src/components/admin/shell';
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpRight,
+  CalendarDays,
+  ClipboardCheck,
+  Eye,
+  EyeOff,
+  Layers3,
+  Link2,
+  PackageOpen,
+} from 'lucide-react';
+import { AdminErrorState, AdminLoadingState, AdminMetric } from '@/src/components/admin/shell';
+import { Badge } from '@/src/components/ui/badge';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent } from '@/src/components/ui/card';
+import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { useGetMocksQuery, useReorderMocksMutation } from '@/src/store/api/mockTestApi';
 import type { MockTestSummary } from '@/src/types/test';
 
@@ -28,49 +41,97 @@ function MockCard({
   onMove?: (from: number, to: number) => void;
   reorderPending?: boolean;
 }) {
+  const canReorder = onMove !== undefined && index !== undefined && count !== undefined;
+
   return (
-    <Card className={mock.status === 'archived' ? 'border-border bg-roman-marble/70' : 'border-roman-gold/35'}>
-      <CardContent className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
-        <div>
-          <div className="mb-1 flex flex-wrap items-center gap-2">
-            <span className="rounded-full border border-roman-gold/35 bg-roman-gold/15 px-2.5 py-1 text-xs font-semibold leading-none text-foreground shadow-[0_1px_2px_rgb(15_23_42/0.04)]">
-              MOCK TEST
-            </span>
-            <span className="text-xs text-gray-600">{state(mock)}</span>
+    <Card className="overflow-hidden transition-shadow hover:shadow-md">
+      <CardContent className="p-0">
+        <div className="flex flex-col gap-5 p-5 sm:p-6 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <Badge
+                variant="outline"
+                className="gap-1.5 border-roman-gold/45 bg-roman-gold/[0.12] px-2.5 py-1 text-[11px] uppercase tracking-[0.08em] text-foreground">
+                <ClipboardCheck className="h-3.5 w-3.5 text-roman-gold" aria-hidden="true" />
+                Mock test
+              </Badge>
+              <span className="text-xs font-medium text-roman-stone" aria-hidden="true">
+                /
+              </span>
+              <span className="text-sm font-medium text-roman-stone">{state(mock)}</span>
+            </div>
+
+            <h2 className="break-words font-serif text-2xl leading-tight tracking-tight text-foreground sm:text-[1.7rem]">
+              <SimpleRichDisplay content={mock.title} />
+            </h2>
+            <div className="mt-1.5 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+              <SimpleRichDisplay content={mock.description || 'No description yet'} />
+            </div>
           </div>
-          <h2 className="font-serif text-lg">{mock.title}</h2>
-          <p className="text-sm text-gray-500">{mock.description || 'No description'}</p>
-          <p className="mt-2 text-xs text-gray-600">
-            One version · {mock.totalPoints} points ·{' '}
-            {mock.passingPercentage === null ? 'Score only' : `Pass ≥ ${mock.passingPercentage}%`}
-          </p>
+
+          <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">
+            {canReorder && (
+              <>
+                <Button
+                  aria-label={`Move ${mock.title} up`}
+                  size="icon"
+                  variant="outline"
+                  disabled={reorderPending || index === 0}
+                  onClick={() => onMove(index, index - 1)}>
+                  <ArrowUp className="h-4 w-4" />
+                </Button>
+                <Button
+                  aria-label={`Move ${mock.title} down`}
+                  size="icon"
+                  variant="outline"
+                  disabled={reorderPending || index === count - 1}
+                  onClick={() => onMove(index, index + 1)}>
+                  <ArrowDown className="h-4 w-4" />
+                </Button>
+              </>
+            )}
+            <Button asChild size="sm" className="shrink-0">
+              <Link href={`/admin/mock-tests/${mock.id}`}>
+                {mock.isLive ? (
+                  <Eye className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <EyeOff className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                )}
+                Manage
+                <ArrowUpRight className="ml-1.5 h-3.5 w-3.5" aria-hidden="true" />
+              </Link>
+            </Button>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {onMove !== undefined && index !== undefined && count !== undefined && (
-            <>
-              <Button
-                aria-label={`Move ${mock.title} up`}
-                size="icon"
-                variant="outline"
-                disabled={reorderPending || index === 0}
-                onClick={() => onMove(index, index - 1)}>
-                <ArrowUp className="h-4 w-4" />
-              </Button>
-              <Button
-                aria-label={`Move ${mock.title} down`}
-                size="icon"
-                variant="outline"
-                disabled={reorderPending || index === count - 1}
-                onClick={() => onMove(index, index + 1)}>
-                <ArrowDown className="h-4 w-4" />
-              </Button>
-            </>
-          )}
-          <Button asChild size="sm" variant="outline">
-            <Link href={`/admin/mock-tests/${mock.id}`}>
-              {mock.isLive ? <Eye className="mr-1 h-4 w-4" /> : <EyeOff className="mr-1 h-4 w-4" />}Manage
-            </Link>
-          </Button>
+
+        <div className="grid border-t bg-muted/30 sm:grid-cols-2 lg:grid-cols-4">
+          <AdminMetric
+            icon={Layers3}
+            label="Versions"
+            value="1 version"
+            className="border-b sm:border-r lg:border-b-0"
+          />
+          <AdminMetric
+            icon={ClipboardCheck}
+            label="Points"
+            value={mock.totalPoints}
+            className="border-b lg:border-b-0 lg:border-r"
+          />
+          <AdminMetric
+            icon={Link2}
+            label="Source"
+            value={mock.parent.kind === 'test' ? 'Assigned from a test' : 'Standalone'}
+            className="border-b sm:border-r lg:border-b-0"
+          />
+          <AdminMetric
+            icon={CalendarDays}
+            label="Requirement"
+            value={mock.passingPercentage === null ? 'Score only' : `Pass ≥ ${mock.passingPercentage}%`}
+          />
+        </div>
+
+        <div className="border-t px-5 py-3 text-xs text-roman-stone sm:px-6">
+          Last edited {mock.updatedAt ? new Date(mock.updatedAt).toLocaleDateString() : 'unknown'}
         </div>
       </CardContent>
     </Card>

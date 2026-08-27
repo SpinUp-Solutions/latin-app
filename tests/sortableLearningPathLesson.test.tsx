@@ -55,6 +55,7 @@ describe('SortableLearningPathLesson', () => {
     render(<SortableLearningPathLesson unit={lesson} index={0} disabled={false} onRemove={jest.fn()} />);
 
     const edit = screen.getByRole('link', { name: 'Edit' });
+    expect(edit).toHaveClass('h-9', 'font-sans');
     const actions = edit.parentElement;
     expect(actions).toHaveClass('items-center');
     expect(actions).toContainElement(screen.getByText('Lesson'));

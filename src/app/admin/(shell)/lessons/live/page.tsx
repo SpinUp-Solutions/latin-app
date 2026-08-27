@@ -16,7 +16,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { BookOpen, CheckCircle, Clock, FileCheck2, Filter, Globe, Plus, Search } from 'lucide-react';
+import { BookOpen, CheckCircle, Clock, Edit, FileCheck2, Filter, Globe, Plus, Search } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -631,13 +631,14 @@ function LiveLessonsPage() {
                               ({issues.length} {issues.length === 1 ? 'issue' : 'issues'})
                             </span>
                           </span>
-                          <Button size="sm" variant="outline" asChild>
+                          <Button size="sm" asChild className="h-9 font-sans">
                             <Link
                               href={`/admin/lessons/edit/${unit.id}`}
                               onClick={event => {
                                 event.preventDefault();
                                 navigateFromPathDraft(`/admin/lessons/edit/${unit.id}`);
                               }}>
+                              <Edit className="mr-1.5 h-4 w-4" aria-hidden="true" />
                               Fix lesson
                             </Link>
                           </Button>
@@ -821,7 +822,9 @@ function LiveLessonsPage() {
                   <p className="py-4 text-center text-sm text-gray-500">Every normal lesson is placed.</p>
                 ) : (
                   unplacedNormalLessons.map(lesson => (
-                    <div key={lesson.id} className="flex min-w-0 flex-col gap-3 rounded-lg border bg-white p-4 sm:flex-row sm:items-center sm:gap-4">
+                    <div
+                      key={lesson.id}
+                      className="flex min-w-0 flex-col gap-3 rounded-lg border bg-white p-4 sm:flex-row sm:items-center sm:gap-4">
                       <div className="min-w-0 flex-1">
                         <div className="font-medium">
                           <SimpleRichDisplay content={lesson.title} className="break-words [&_p]:break-words" />
@@ -991,13 +994,14 @@ function LiveLessonsPage() {
                             />
                           ) : null}
                         </div>
-                        <Button size="sm" variant="outline" asChild>
+                        <Button size="sm" asChild className="h-9 font-sans">
                           <Link
                             href={`/admin/lessons/edit/${lesson.id}`}
                             onClick={event => {
                               event.preventDefault();
                               navigateFromPathDraft(`/admin/lessons/edit/${lesson.id}`);
                             }}>
+                            <Edit className="mr-1.5 h-4 w-4" aria-hidden="true" />
                             Edit
                           </Link>
                         </Button>

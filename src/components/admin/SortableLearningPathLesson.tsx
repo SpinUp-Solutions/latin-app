@@ -2,7 +2,7 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { BookOpen, FileCheck2, GripVertical, ShieldAlert, X } from 'lucide-react';
+import { BookOpen, Edit, FileCheck2, GripVertical, ShieldAlert, X } from 'lucide-react';
 import Link from 'next/link';
 import type { LessonSummary } from '@/src/types/lesson';
 import type { TestUnitSummary } from '@/src/types/test';
@@ -130,7 +130,7 @@ export function SortableLearningPathLesson({
             </span>
           </Badge>
         )}
-        <Button size="sm" variant="outline" asChild>
+        <Button size="sm" asChild className="h-9 font-sans">
           <Link
             href={editHref}
             onClick={event => {
@@ -138,6 +138,7 @@ export function SortableLearningPathLesson({
               event.preventDefault();
               onNavigate(editHref);
             }}>
+            <Edit className="mr-1.5 h-4 w-4" aria-hidden="true" />
             {hasIssues ? 'Fix lesson' : 'Edit'}
           </Link>
         </Button>
@@ -147,7 +148,8 @@ export function SortableLearningPathLesson({
           variant="ghost"
           disabled={disabled}
           onClick={onRemove}
-          aria-label={`Remove ${unit.title} from Learning Path`}>
+          aria-label={`Remove ${unit.title} from Learning Path`}
+          className="h-9 w-9 shrink-0 border border-border bg-white p-0 font-sans text-roman-stone hover:bg-primary/10 hover:text-primary">
           <X className="h-4 w-4" />
         </Button>
         {isTest && unit.passingPercentage !== null && (

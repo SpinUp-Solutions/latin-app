@@ -2,7 +2,7 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, BookOpen } from 'lucide-react';
+import { GripVertical, BookOpen, Edit } from 'lucide-react';
 import { Badge } from '@/src/components/ui/badge';
 import { Button } from '@/src/components/ui/button';
 import { LessonSummary } from '@/src/types/lesson';
@@ -72,7 +72,7 @@ export function SortableLessonItem({ lesson, id, onNavigate }: SortableLessonIte
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
-        <Button size="sm" variant="outline" asChild>
+        <Button size="sm" asChild className="h-9 font-sans">
           <Link
             href={`/admin/lessons/edit/${lesson.id}`}
             onClick={event => {
@@ -80,6 +80,7 @@ export function SortableLessonItem({ lesson, id, onNavigate }: SortableLessonIte
               event.preventDefault();
               onNavigate(`/admin/lessons/edit/${lesson.id}`);
             }}>
+            <Edit className="mr-1.5 h-4 w-4" aria-hidden="true" />
             Edit
           </Link>
         </Button>
