@@ -47,7 +47,7 @@ export const VocabularyFiltersComponent: React.FC<VocabularyFiltersProps> = ({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="wordType" className="text-sm font-medium text-gray-700">
               Word Type
@@ -83,7 +83,7 @@ export const VocabularyFiltersComponent: React.FC<VocabularyFiltersProps> = ({
                 placeholder="Search words..."
                 value={filters.search}
                 onChange={e => onFiltersChange({ search: e.target.value })}
-                className="h-9 flex-1 bg-white"
+                className="h-9 min-w-0 flex-1 bg-white"
               />
               <Button type="submit" size="sm" variant="outline" className="px-3" title="Search">
                 <Search className="h-4 w-4" />
@@ -91,7 +91,7 @@ export const VocabularyFiltersComponent: React.FC<VocabularyFiltersProps> = ({
             </form>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2 xl:col-span-2">
             <Label className="text-sm font-medium text-gray-700 opacity-0">Actions</Label>
             <Button
               variant="ghost"

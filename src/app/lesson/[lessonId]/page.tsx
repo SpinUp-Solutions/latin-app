@@ -80,7 +80,9 @@ export default function DynamicLessonPage() {
     });
   }, [error, isLockedError, lessonId]);
 
-  if (authLoading || !user || lessonsLoading) {
+  const isRequestedLessonLoading = lessonsLoading || Boolean(currentLesson && currentLesson.id !== lessonId);
+
+  if (authLoading || !user || isRequestedLessonLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-roman-marble">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>
@@ -194,7 +196,7 @@ export default function DynamicLessonPage() {
           isCollapsed={collapsed.left}
           onToggleCollapse={toggleLeft}
         />
-        <main className="flex-1 overflow-y-auto px-6 pt-6 pb-28">
+        <main className="min-w-0 flex-1 overflow-y-auto px-3 pb-6 pt-4 sm:px-6 sm:pt-6">
           <div className="max-w-3xl mx-auto">
             <LessonPlayer key={currentLesson.id} lesson={currentLesson} />
           </div>

@@ -100,6 +100,7 @@ const SortablePage: React.FC<SortablePageProps> = ({
             variant="ghost"
             size="sm"
             className="cursor-grab active:cursor-grabbing p-0.5 h-6 w-6 text-gray-400 hover:text-gray-600"
+            aria-label={`Reorder page ${pageIndex + 1}`}
             {...attributes}
             {...listeners}>
             <GripVertical className="h-3.5 w-3.5" />
@@ -116,10 +117,20 @@ const SortablePage: React.FC<SortablePageProps> = ({
           />
         </div>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => onDuplicatePage(pageIndex)}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0"
+            onClick={() => onDuplicatePage(pageIndex)}
+            aria-label={`Duplicate page ${pageIndex + 1}`}>
             <Copy className="h-3.5 w-3.5" />
           </Button>
-          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => onRemovePage(pageIndex)}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0"
+            onClick={() => onRemovePage(pageIndex)}
+            aria-label={`Remove page ${pageIndex + 1}`}>
             <Trash2 className="h-3.5 w-3.5" />
           </Button>
         </div>

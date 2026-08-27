@@ -69,6 +69,20 @@ describe('lesson route navigation', () => {
     expect(screen.queryByText('Player lesson-2')).not.toBeInTheDocument();
   });
 
+  it('does not flash stale currentData while the route argument changes', () => {
+    mockUseGetStudentLessonQuery.mockReturnValue({
+      data: lesson('lesson-1'),
+      currentData: lesson('lesson-1'),
+      isLoading: false,
+      error: undefined,
+    });
+
+    render(<DynamicLessonPage />);
+
+    expect(screen.queryByText('Player lesson-1')).not.toBeInTheDocument();
+    expect(screen.queryByText('Player lesson-2')).not.toBeInTheDocument();
+  });
+
   it('renders the data belonging to the current route argument', () => {
     mockUseGetStudentLessonQuery.mockReturnValue({
       data: lesson('lesson-1'),

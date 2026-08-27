@@ -471,7 +471,7 @@ export default function DashboardPage() {
                   </RomanCardContent>
                 </RomanCard>
               ) : (
-                <div className="relative ">
+                <div className="relative overflow-hidden">
                   <Swiper
                     spaceBetween={0}
                     slidesPerView={1}
@@ -483,7 +483,7 @@ export default function DashboardPage() {
                       1024: { slidesPerView: 2 },
                       1280: { slidesPerView: 3 },
                     }}
-                    className="lesson-cards-carousel overflow-visible px-0 py-8 sm:p-8"
+                    className="lesson-cards-carousel overflow-hidden px-0 py-8 sm:p-8"
                     centeredSlides={true}
                     effect="slide">
                     <div slot="container-end">

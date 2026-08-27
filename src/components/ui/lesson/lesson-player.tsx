@@ -537,6 +537,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
         totalPages={totalPages}
         title={<SimpleRichDisplay content={lesson.title} />}
         description={lesson.description ? <SimpleRichDisplay content={lesson.description} /> : undefined}
+        contentClassName={navigationPlacement === 'fixed' ? 'pb-28 sm:pb-24' : undefined}
         headerAside={
           shouldShowExerciseRing ? (
             <ExerciseCompletionRing
