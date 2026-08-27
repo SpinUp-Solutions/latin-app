@@ -54,9 +54,11 @@ const ExpandableDefinitions: React.FC<{ definitions: string[] }> = ({ definition
           </Button>
         )}
       </div>
-      <ul className="space-y-1">
+      <ul className="divide-y divide-gray-100">
         {visibleDefinitions.map((def, idx) => (
-          <li key={idx} className="text-sm text-gray-600 leading-relaxed flex items-start gap-2">
+          <li
+            key={idx}
+            className="flex items-start gap-2 py-1.5 text-sm leading-relaxed text-gray-600 first:pt-0 last:pb-0">
             <span className="text-gray-400 mt-1 text-xs">{idx + 1}.</span>
             <span className="flex-1">{def}</span>
           </li>

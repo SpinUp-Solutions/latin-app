@@ -83,14 +83,22 @@ export const vocabularyPoolApi = createApi({
       },
       merge: (currentCache, newData, { arg }) => {
         if (!arg.lastPoolId) return newData;
-        const existingIds = new Set(currentCache.pools.map(p => p.id));
-        const newPools = newData.pools.filter(p => !existingIds.has(p.id));
+        const pools: VocabularyPoolSummary[] = [];
+        const seen = new Set<string>();
+        for (const pool of [...currentCache.pools, ...newData.pools]) {
+          if (seen.has(pool.id)) continue;
+          seen.add(pool.id);
+          pools.push(pool);
+        }
         return {
           ...newData,
-          pools: [...currentCache.pools, ...newPools],
+          pools,
         };
       },
       forceRefetch: ({ currentArg, previousArg }) => {
+        if (!previousArg) return true;
+        const filtersChanged = JSON.stringify(currentArg?.filters) !== JSON.stringify(previousArg?.filters);
+        if (filtersChanged) return true;
         return currentArg?.lastPoolId !== previousArg?.lastPoolId;
       },
       providesTags: result =>

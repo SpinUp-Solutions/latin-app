@@ -31,6 +31,7 @@ import { PartOfSpeechSchema, type PartOfSpeech } from '@/shared/types/vocabulary
 import { buildEmptyWord, isPlaceholderWord } from '@/src/utils/vocabulary-defaults';
 import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 import { fetchVocabularyBackup } from '@/src/services/vocabularyBackupService';
+import { shouldFetchNextSearchPage } from '@/src/lib/paginated-search';
 
 const EMPTY_WORDS: VocabularyWordWithId[] = [];
 const PART_OF_SPEECH_OPTIONS = PartOfSpeechSchema.options;
@@ -50,11 +51,11 @@ function AdminVocabularyPage() {
     confirmationToken: string;
   } | null>(null);
   const TARGET_COLLECTION = VOCABULARY_WORDS_COLLECTION;
-
+  const searchPending = filters.search !== debouncedSearch;
   const queryArgs = {
     wordType: filters.wordType,
     search: debouncedSearch,
-    lastWordId,
+    lastWordId: searchPending ? null : lastWordId,
     collection: TARGET_COLLECTION,
   };
 
@@ -184,16 +185,26 @@ function AdminVocabularyPage() {
   };
 
   const handleLoadMore = () => {
-    if (data?.lastWordId) {
-      setLastWordId(data.lastWordId);
+    const nextCursor = data?.lastWordId ?? null;
+    if (
+      !shouldFetchNextSearchPage({
+        hasCursor: Boolean(nextCursor),
+        isFetching,
+        searchPending,
+      })
+    ) {
+      return;
     }
+    setLastWordId(nextCursor);
   };
 
   const handleUpdateFilters = (newFilters: Partial<typeof filters>) => {
+    setLastWordId(null);
     dispatch(updateFiltersAction(newFilters));
   };
 
   const handleResetFilters = () => {
+    setLastWordId(null);
     dispatch(resetFiltersAction());
   };
 

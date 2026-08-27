@@ -513,7 +513,12 @@ function PracticeCategoriesPage() {
           }
         />
         <Tabs value={lessonType} onValueChange={value => guardContextChange(value as PracticeLessonType, status)}>
-          <LessonTypeTabs lessonTypes={PRACTICE_LESSON_TYPE_TABS} disabled={orderPending} />
+          <LessonTypeTabs
+            value={lessonType}
+            onValueChange={value => guardContextChange(value as PracticeLessonType, status)}
+            lessonTypes={PRACTICE_LESSON_TYPE_TABS}
+            disabled={orderPending}
+          />
         </Tabs>
 
         <section className="rounded-xl border bg-white/70 p-4 shadow-sm sm:p-6" aria-labelledby="category-list-heading">

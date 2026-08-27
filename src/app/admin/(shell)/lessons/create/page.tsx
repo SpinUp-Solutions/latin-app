@@ -351,7 +351,7 @@ function CreateLessonPage() {
         </div>
       </header>
 
-      <div className="flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         <ClipboardProvider>
           <LessonBuilder onSave={handleSaveLesson} saving={saving} />
         </ClipboardProvider>

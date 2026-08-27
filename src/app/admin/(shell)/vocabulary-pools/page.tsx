@@ -113,6 +113,7 @@ function VocabularyPoolsPage() {
   };
 
   const handleUpdateFilters = (newFilters: Partial<typeof filters>) => {
+    setLastPoolId(null);
     dispatch(updateFilters(newFilters));
   };
 
@@ -151,6 +152,7 @@ function VocabularyPoolsPage() {
           pools={pools}
           loading={isLoading}
           loadingMore={loadingMore}
+          fetching={isFetching && lastPoolId === null}
           hasMore={hasMore}
           onLoadMore={() => {
             if (data?.lastPoolId) setLastPoolId(data.lastPoolId);

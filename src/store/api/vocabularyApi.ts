@@ -101,7 +101,16 @@ export const vocabularyApi = createApi({
         };
       },
       forceRefetch: ({ currentArg, previousArg }) => {
-        return currentArg?.lastWordId !== previousArg?.lastWordId;
+        if (!previousArg) return true;
+        if (currentArg?.search !== previousArg.search) return true;
+        if (currentArg?.wordType !== previousArg.wordType) return true;
+        if (
+          (currentArg?.collection || VOCABULARY_WORDS_COLLECTION) !==
+          (previousArg.collection || VOCABULARY_WORDS_COLLECTION)
+        ) {
+          return true;
+        }
+        return currentArg?.lastWordId !== previousArg.lastWordId;
       },
       providesTags: result =>
         result

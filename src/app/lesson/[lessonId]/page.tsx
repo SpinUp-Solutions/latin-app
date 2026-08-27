@@ -10,11 +10,13 @@ import LessonSidebar from '@/src/components/ui/lesson/lesson-sidebar';
 import PracticeSidebar from '@/src/components/ui/lesson/practice-sidebar';
 import { FeedbackBanner } from '@/src/components/ui/core/feedback-banner';
 import { useAuth } from '@/src/hooks/useAuth';
+import { BookOpen, Pencil } from 'lucide-react';
 import { shouldReportClientHardFail, reportUnexpectedError } from '@/src/lib/report-unexpected-error';
 
 const SIDEBAR_COLLAPSE_KEY = 'lesson-sidebar-collapse';
 
-const defaultCollapseState = { left: false, right: false };
+const defaultCollapseState = { left: true, right: true };
+const desktopCollapseState = { left: false, right: false };
 
 export default function DynamicLessonPage() {
   const params = useParams();
@@ -35,13 +37,16 @@ export default function DynamicLessonPage() {
 
   const [collapsed, setCollapsed] = useState<{ left: boolean; right: boolean }>(() => {
     if (typeof window === 'undefined') return defaultCollapseState;
+    if (typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 900px)').matches) {
+      return defaultCollapseState;
+    }
     try {
       const stored = sessionStorage.getItem(SIDEBAR_COLLAPSE_KEY);
-      if (stored) return { ...defaultCollapseState, ...JSON.parse(stored) };
+      if (stored) return { ...desktopCollapseState, ...JSON.parse(stored) };
     } catch {
       /* ignore */
     }
-    return defaultCollapseState;
+    return desktopCollapseState;
   });
 
   useEffect(() => {
@@ -80,7 +85,9 @@ export default function DynamicLessonPage() {
     });
   }, [error, isLockedError, lessonId]);
 
-  if (authLoading || !user || lessonsLoading) {
+  const isRequestedLessonLoading = lessonsLoading || Boolean(currentLesson && currentLesson.id !== lessonId);
+
+  if (authLoading || !user || isRequestedLessonLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-roman-marble">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>
@@ -169,21 +176,37 @@ export default function DynamicLessonPage() {
 
   return (
     <div className="h-screen flex flex-col bg-roman-marble">
-      <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between flex-shrink-0">
+      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-white px-4 py-3">
         <Link
           href="/dashboard"
           aria-label="Back to dashboard"
-          className="flex items-center gap-3 rounded hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-roman-red">
+          className="flex min-w-0 items-center gap-3 rounded hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-roman-red">
           <Image
             src="/assets/logos/wakeforest_shield.png"
             alt="Wake Forest University"
             width={1000}
             height={736}
-            className="h-10 w-auto"
+            className="h-10 w-auto shrink-0"
             priority
           />
-          <h1 className="text-xl font-serif tracking-wide">Wake Forest University Latin</h1>
+          <h1 className="truncate font-serif text-lg tracking-wide sm:text-xl">Wake Forest University Latin</h1>
         </Link>
+        <div className="flex shrink-0 items-center gap-2 min-[901px]:hidden">
+          <button
+            type="button"
+            onClick={toggleLeft}
+            aria-label="Open lessons sidebar"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-roman-red/20 bg-white text-roman-red">
+            <BookOpen className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            onClick={toggleRight}
+            aria-label="Open practice sidebar"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-roman-red/20 bg-white text-roman-red">
+            <Pencil className="h-5 w-5" />
+          </button>
+        </div>
       </header>
 
       <FeedbackBanner />
@@ -194,7 +217,7 @@ export default function DynamicLessonPage() {
           isCollapsed={collapsed.left}
           onToggleCollapse={toggleLeft}
         />
-        <main className="flex-1 overflow-y-auto px-6 pt-6 pb-28">
+        <main className="min-w-0 flex-1 overflow-y-auto px-3 pb-6 pt-4 sm:px-6 sm:pt-6">
           <div className="max-w-3xl mx-auto">
             <LessonPlayer key={currentLesson.id} lesson={currentLesson} />
           </div>

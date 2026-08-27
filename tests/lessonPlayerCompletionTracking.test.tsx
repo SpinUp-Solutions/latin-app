@@ -32,6 +32,19 @@ const mockMarkExerciseComplete = jest.fn();
 const mockUpdatePageProgress = jest.fn();
 const mockFinishLesson = jest.fn();
 
+jest.mock('framer-motion', () => {
+  const React = jest.requireActual<typeof import('react')>('react');
+
+  return {
+    AnimatePresence: ({ children, mode }: { children: React.ReactNode; mode?: string }) => {
+      // Model the exit window where wait mode retains the previous page body.
+      const renderedChild = React.useRef(children);
+      if (mode !== 'wait') renderedChild.current = children;
+      return renderedChild.current;
+    },
+  };
+});
+
 jest.mock('@/src/store/api/lessonApi', () => ({
   useMarkExerciseCompleteMutation: jest.fn(),
   useUpdatePageProgressMutation: jest.fn(),
@@ -184,6 +197,18 @@ afterEach(() => {
 });
 
 describe('LessonPlayer accepted completion tracking', () => {
+  it('replaces the page body immediately when navigation advances the counter', () => {
+    render(<LessonPlayer lesson={createLesson(2)} trackProgress={false} />);
+
+    expect(screen.getByText('Page content: page-1')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+
+    expect(screen.getByText('Progress 100%')).toBeInTheDocument();
+    expect(screen.getByText('Page content: page-2')).toBeInTheDocument();
+    expect(screen.queryByText('Page content: page-1')).not.toBeInTheDocument();
+  });
+
   it('renders a noninteractive ring from server counts and applies successful updates', async () => {
     render(
       <LessonPlayer
