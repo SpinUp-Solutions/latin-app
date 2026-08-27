@@ -47,5 +47,17 @@ describe('PracticeSidebar word-search visibility', () => {
 
     expect(screen.getByPlaceholderText('Search Latin words...')).toBeInTheDocument();
     expect(mockUseSearchWordsQuery).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('heading', { name: 'Practice' })).toBeVisible();
+    expect(screen.getByText('Practice', { selector: 'span' })).not.toBeVisible();
+  });
+
+  it('renders only the compact practice rail while collapsed', () => {
+    render(<PracticeSidebar currentLessonId="lesson-1" showWordSearch isCollapsed />);
+
+    expect(screen.getByText('Practice', { selector: 'span' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Practice', hidden: true })).not.toBeVisible();
+    expect(screen.getByPlaceholderText('Search Latin words...')).not.toBeVisible();
+    expect(screen.getByText('Vocabulary')).not.toBeVisible();
+    expect(screen.getByRole('button', { name: 'Expand practice sidebar' })).toBeInTheDocument();
   });
 });

@@ -158,6 +158,7 @@ export default function PracticeSidebar({
 
         <div
           hidden={isCollapsed}
+          style={{ display: isCollapsed ? 'none' : undefined }}
           className={cn(
             'absolute inset-0 flex flex-col',
             isCollapsed && 'pointer-events-none'
@@ -280,6 +281,7 @@ export default function PracticeSidebar({
 
         <div
           hidden={!isCollapsed}
+          style={{ display: isCollapsed ? undefined : 'none' }}
           className="absolute inset-0 hidden flex-col items-center pt-5 min-[901px]:flex">
           <div className="relative h-10 w-10 bg-gradient-to-br from-roman-red/20 to-roman-terracotta/10 rounded-xl flex items-center justify-center shadow-lg border border-roman-red/20">
             <Pencil className="h-5 w-5 text-roman-red" />

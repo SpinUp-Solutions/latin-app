@@ -133,7 +133,16 @@ describe('lesson sidebar mixed Learning Path', () => {
     render(<LessonSidebar currentLessonId="lesson-1" isCollapsed />);
 
     expect(screen.queryByRole('button', { name: /^Chapter test TEST Pass/ })).not.toBeInTheDocument();
+    expect(screen.getByText('Your Learning Path')).not.toBeVisible();
+    expect(screen.getByText('Path')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Close lessons sidebar' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Expand lessons sidebar' })).toBeInTheDocument();
+  });
+
+  it('does not paint the collapsed path rail over the expanded sidebar', () => {
+    render(<LessonSidebar currentLessonId="lesson-1" />);
+
+    expect(screen.getByText('Your Learning Path')).toBeInTheDocument();
+    expect(screen.getByText('Path')).not.toBeVisible();
   });
 });
