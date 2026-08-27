@@ -2,7 +2,6 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import * as Sentry from '@sentry/nextjs';
-import { AnimatePresence } from 'framer-motion';
 import { LessonWithProgress } from '@/src/types/lesson';
 import { BookOpen, Headphones, CheckCircle } from 'lucide-react';
 import { RomanPlayerShell } from '@/src/components/ui/core/roman-player-shell';
@@ -555,21 +554,19 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
         }>
         <div className="mb-6">
           <div className="lesson-content">
-            <AnimatePresence mode="wait">
-              <PageTemplate
-                key={currentPage.id}
-                page={currentPage}
-                pageIndex={currentPageIndex}
-                lessonId={lesson.id}
-                runtimeMode={effectiveRuntimeMode}
-                onAnswer={onAnswer}
-                resolvedExerciseState={resolvedExerciseState}
-                generatedExerciseContext={resolvedGeneratedExerciseContext}
-                onCompletionAccepted={handleCompletionAccepted}
-                onPageComplete={handlePageComplete}
-                onDiagrammingAttempt={handleDiagrammingAttempt}
-              />
-            </AnimatePresence>
+            <PageTemplate
+              key={currentPage.id}
+              page={currentPage}
+              pageIndex={currentPageIndex}
+              lessonId={lesson.id}
+              runtimeMode={effectiveRuntimeMode}
+              onAnswer={onAnswer}
+              resolvedExerciseState={resolvedExerciseState}
+              generatedExerciseContext={resolvedGeneratedExerciseContext}
+              onCompletionAccepted={handleCompletionAccepted}
+              onPageComplete={handlePageComplete}
+              onDiagrammingAttempt={handleDiagrammingAttempt}
+            />
           </div>
         </div>
 
