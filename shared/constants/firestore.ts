@@ -16,6 +16,7 @@ export const TEST_RESULT_REVIEWS_COLLECTION = 'testResultReviews';
 export const STUDENT_MOCK_RESULTS_COLLECTION = 'studentMockResults';
 export const STUDENT_MOCK_RESULT_MIGRATIONS_COLLECTION = 'studentMockResultMigrations';
 export const USER_PROGRESS_COLLECTION = 'userProgress';
+export const USER_PROGRESS_V4_BACKUPS_COLLECTION = 'userProgressMigrationV4Backups';
 export const AI_EVALUATION_CASES_COLLECTION = 'aiEvaluationCases';
 export const AI_EVALUATION_RESULT_CACHE_COLLECTION = 'aiEvaluationResultCache';
 export const AI_EVALUATION_RUN_THROTTLES_COLLECTION = 'aiEvaluationRunThrottles';

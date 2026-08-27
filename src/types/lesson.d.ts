@@ -52,6 +52,7 @@ export type StudentLessonSummary = Omit<LessonSummary, 'kind'> & {
   score?: number;
   lastAccessedAt?: string;
   progressSchemaVersion?: number;
+  progressLessonVersion?: number;
 };
 
 export type StudentTestSummary = TestUnitSummary & {
@@ -91,6 +92,7 @@ export type LessonWithProgress = Lesson & {
   score?: number;
   lastAccessedAt?: string;
   progressSchemaVersion?: number;
+  progressLessonVersion?: number;
 };
 
 export interface ExerciseProgress {
@@ -114,6 +116,10 @@ export interface UserProgress {
   lastAccessedAt: string;
   progress?: number;
   progressSchemaVersion?: number;
+  progressLessonVersion?: number;
+  progressMigrationId?: string;
+  progressMigratedAt?: string;
+  progressMigratedBy?: string;
 }
 
 export type { Page } from './page';

@@ -5,6 +5,8 @@ import {
   isStoredLessonComplete,
   resolveExerciseId,
   STABLE_ID_PROGRESS_SCHEMA_VERSION,
+  summarizeLessonCompletion,
+  toPersistedProgressSummary,
 } from './lessonProgress';
 
 export interface ProgressMigrationResult {
@@ -44,10 +46,11 @@ export function migrateUserProgress(
     }
 
     mappedExerciseRecords++;
+    const completedAt = typeof record.completedAt === 'string' ? record.completedAt : '';
     const previous = normalizedRecords.get(stableId);
     if (previous) deduplicatedExerciseRecords++;
-    if (!previous || record.completedAt >= previous.completedAt) {
-      normalizedRecords.set(stableId, { ...record, exerciseId: stableId });
+    if (!previous || completedAt >= previous.completedAt) {
+      normalizedRecords.set(stableId, { ...record, exerciseId: stableId, completedAt });
     }
   }
 
@@ -69,5 +72,33 @@ export function migrateUserProgress(
     unmappedExerciseRecords,
     deduplicatedExerciseRecords,
     derivedCompletion: isCompleted && !wasExplicitlyCompleted,
+  };
+}
+
+export interface ExerciseProgressV4MigrationResult extends Omit<ProgressMigrationResult, 'progress'> {
+  progress: Partial<UserProgress>;
+  resetIncompleteProgressToZero: boolean;
+}
+
+export function migrateUserProgressToExerciseBasis(
+  lesson: Lesson,
+  existing: Partial<UserProgress>,
+  now: string
+): ExerciseProgressV4MigrationResult {
+  const stable = migrateUserProgress(lesson, existing, now);
+  const summary = summarizeLessonCompletion(lesson, stable.progress);
+  const furthestPageIndex = getFurthestPageIndex(stable.progress, lesson.pages.length);
+  const persisted = toPersistedProgressSummary(summary, existing, now, lesson.version);
+
+  return {
+    ...stable,
+    progress: {
+      ...existing,
+      furthestPageIndex,
+      currentPageIndex: furthestPageIndex,
+      ...persisted,
+    },
+    resetIncompleteProgressToZero:
+      !summary.isCompleted && summary.requiredExerciseCount > 0 && summary.completedExerciseCount === 0,
   };
 }

@@ -22,7 +22,9 @@ import type { LearningUnit, LessonUnitType } from '@/src/types/learning-unit';
 import type { TestAttemptOriginSummary, TestUnitSummary, TestVersionSummary } from '@/src/types/test';
 import {
   calculateStoredProgress,
+  canonicalizeLessonProgressForRead,
   getFurthestPageIndex,
+  hasTrustedExerciseProgressSummary,
   isStoredLessonComplete,
   summarizeLessonCompletion,
 } from '@/src/utils/lessonProgress';
@@ -67,9 +69,9 @@ const LESSON_SUMMARY_FIELDS = [
 const LEARNING_UNIT_SUMMARY_FIELDS = [...LESSON_SUMMARY_FIELDS, 'rotationVersions', 'passingPercentage'] as const;
 
 /**
- * The dashboard projection never consumes per-exercise history, so the
- * progress read excludes the unbounded `exerciseProgress` arrays that grow
- * with student activity. `getLesson` still reads full progress documents.
+ * The normal dashboard path consumes only bounded progress summaries. Legacy
+ * or lesson-version-stale records are canonically recomputed from full history
+ * by `hydrateCanonicalProgressSummaries` below.
  */
 const PROGRESS_SUMMARY_FIELDS = [
   'userId',
@@ -80,7 +82,11 @@ const PROGRESS_SUMMARY_FIELDS = [
   'currentPageIndex',
   'score',
   'lastAccessedAt',
+  'progress',
+  'completedExerciseCount',
+  'requiredExerciseCount',
   'progressSchemaVersion',
+  'progressLessonVersion',
 ] as const;
 
 const PRACTICE_TYPE_ORDER: LessonUnitType[] = ['vocab', 'sentence-diagramming', 'listening'];
@@ -388,7 +394,11 @@ export class StudentDashboardService {
     const progress =
       status === 'locked'
         ? 0
-        : calculateStoredProgress(storedProgress, lesson.totalPages);
+        : calculateStoredProgress(storedProgress, {
+            totalPages: lesson.totalPages,
+            totalExercises: lesson.totalExercises,
+            lessonVersion: lesson.version,
+          });
 
     return {
       ...lesson,
@@ -402,7 +412,79 @@ export class StudentDashboardService {
       score: storedProgress?.score,
       lastAccessedAt: storedProgress?.lastAccessedAt,
       progressSchemaVersion: storedProgress?.progressSchemaVersion,
+      progressLessonVersion: storedProgress?.progressLessonVersion,
     };
+  }
+
+  private async hydrateCanonicalProgressSummaries(
+    userId: string,
+    lessons: LessonSummary[],
+    projectedProgress: Map<string, UserProgress>,
+    progressDocumentsAreFull = false
+  ): Promise<Map<string, UserProgress>> {
+    const staleLessons = lessons.filter(lesson => {
+      const progress = projectedProgress.get(lesson.id);
+      if (!progress || progress.status === 'completed' || lesson.totalExercises === 0) return false;
+      return !hasTrustedExerciseProgressSummary(progress, {
+        totalPages: lesson.totalPages,
+        totalExercises: lesson.totalExercises,
+        lessonVersion: lesson.version,
+      });
+    });
+    if (staleLessons.length === 0) return projectedProgress;
+
+    const [lessonSnapshots, fullProgressSnapshots] = await Promise.all([
+      this.db.getAll(...staleLessons.map(lesson => this.units.doc(lesson.id))),
+      progressDocumentsAreFull
+        ? Promise.resolve([])
+        : this.db.getAll(...staleLessons.map(lesson => this.progress.doc(`${userId}_${lesson.id}`))),
+    ]);
+    const fullProgressByLessonId = progressDocumentsAreFull ? projectedProgress : new Map<string, UserProgress>();
+    if (!progressDocumentsAreFull) {
+      for (const document of fullProgressSnapshots) {
+        const lessonId = progressLessonId(document);
+        if (lessonId) fullProgressByLessonId.set(lessonId, document.data() as UserProgress);
+      }
+    }
+
+    const hydrated = new Map(projectedProgress);
+    for (const snapshot of lessonSnapshots) {
+      const fullProgress = fullProgressByLessonId.get(snapshot.id);
+      const data = snapshot.data();
+      if (!fullProgress || !snapshot.exists || !isLessonDocumentData(data) || data._deletionPending === true) {
+        continue;
+      }
+      try {
+        const lesson = fullLessonFromSnapshot(snapshot);
+        hydrated.set(snapshot.id, canonicalizeLessonProgressForRead(lesson, fullProgress) as UserProgress);
+      } catch (error) {
+        console.error(`Unable to canonicalize progress for invalid lesson ${snapshot.id}; skipping it`, error);
+      }
+    }
+
+    for (const lesson of staleLessons) {
+      const progress = hydrated.get(lesson.id);
+      if (!progress || progress.status === 'completed' || lesson.totalExercises === 0) continue;
+      if (
+        hasTrustedExerciseProgressSummary(progress, {
+          totalPages: lesson.totalPages,
+          totalExercises: lesson.totalExercises,
+          lessonVersion: lesson.version,
+        })
+      ) {
+        continue;
+      }
+      console.error(
+        `Unable to trust hydrated progress for lesson ${lesson.id}; dashboard will show 0% until the lesson summary matches authored exercises`,
+        {
+          requiredExerciseCount: progress.requiredExerciseCount,
+          totalExercises: lesson.totalExercises,
+          progressLessonVersion: progress.progressLessonVersion,
+          lessonVersion: lesson.version,
+        }
+      );
+    }
+    return hydrated;
   }
 
   private unlockedStatus(
@@ -575,23 +657,28 @@ export class StudentDashboardService {
       this.getProgressByLessonId(userId, PROGRESS_SUMMARY_FIELDS),
     ]);
     const testUnits = normalUnits.filter((unit): unit is TestUnitSummary => unit.kind === 'test');
+    const lessonSummaries = [
+      ...normalUnits.filter((unit): unit is CanonicalLessonSummary => unit.kind === 'lesson'),
+      ...rawPracticeLessons,
+    ];
 
     // Attempt summaries, practice enrichment, and mock listing are independent
     // of each other, so they all run concurrently instead of one-after-another.
     // The past-result projection runs unfiltered here and is reconciled against
     // the live cards below, which keeps it off the mock listing's critical path.
-    const [attemptSummaries, practiceLessons, mockTests, pastMockResults] = await Promise.all([
+    const [attemptSummaries, practiceLessons, mockTests, pastMockResults, canonicalProgressByLessonId] = await Promise.all([
       this.getAttemptSummaries(testUnits, userId),
       this.enrichPracticeLessons(rawPracticeLessons),
       this.mocks.listStudentLiveMocks(userId),
       this.mocks.listPastStudentMockResults(userId),
+      this.hydrateCanonicalProgressSummaries(userId, lessonSummaries, progressByLessonId),
     ]);
 
     const liveMockTests = mockTests ?? [];
     const liveMockIds = new Set(liveMockTests.map(mock => mock.id));
     const reviewablePastMockResults = pastMockResults.filter(result => !liveMockIds.has(result.id));
 
-    const learningPath = this.processNormalUnits(normalUnits, progressByLessonId, attemptSummaries);
+    const learningPath = this.processNormalUnits(normalUnits, canonicalProgressByLessonId, attemptSummaries);
     await Promise.all(
       learningPath.map(async unit => {
         // The frozen attempt outcome, rather than the test's current settings,
@@ -603,7 +690,7 @@ export class StudentDashboardService {
     );
     return {
       learningPath,
-      practiceLessons: this.processPracticeLessons(practiceLessons, progressByLessonId),
+      practiceLessons: this.processPracticeLessons(practiceLessons, canonicalProgressByLessonId),
       ...(liveMockTests.length ? { mockTests: liveMockTests } : {}),
       ...(reviewablePastMockResults.length ? { pastMockResults: reviewablePastMockResults } : {}),
     };
@@ -657,13 +744,26 @@ export class StudentDashboardService {
     lessonId: string,
     progressByLessonId: Map<string, UserProgress>
   ): Promise<void> {
-    const units = (await this.getNormalUnitSummaries()).map(toProgressionUnit);
+    const unitSummaries = await this.getNormalUnitSummaries();
+    const lessonSummaries = unitSummaries.filter(
+      (unit): unit is CanonicalLessonSummary => unit.kind === 'lesson'
+    );
+    const canonicalProgressByLessonId = await this.hydrateCanonicalProgressSummaries(
+      userId,
+      lessonSummaries,
+      progressByLessonId,
+      true
+    );
+    const units = unitSummaries.map(toProgressionUnit);
     const targetIndex = units.findIndex(unit => unit.id === lessonId);
     if (targetIndex < 0) {
       throw new StudentDashboardServiceError('LESSON_NOT_FOUND', 'Lesson not found', 404);
     }
 
-    const activity: ProgressionActivity = { progressByUnitId: progressByLessonId, attemptedTestIds: new Set() };
+    const activity: ProgressionActivity = {
+      progressByUnitId: canonicalProgressByLessonId,
+      attemptedTestIds: new Set(),
+    };
     const isUnlocked =
       isProgressionUnitUnlocked(units, targetIndex, activity) ||
       (units.some(unit => unit.kind === 'test') &&
@@ -693,6 +793,7 @@ export class StudentDashboardService {
     const totalPages = lesson.pages.length;
     const furthestPageIndex = getFurthestPageIndex(storedProgress, totalPages);
     const summary = summarizeLessonCompletion(lesson, storedProgress);
+    const canonicalProgress = storedProgress ? canonicalizeLessonProgressForRead(lesson, storedProgress) : undefined;
     return {
       ...lesson,
       progress: summary.progress,
@@ -706,6 +807,7 @@ export class StudentDashboardService {
       score: storedProgress?.score,
       lastAccessedAt: storedProgress?.lastAccessedAt,
       progressSchemaVersion: storedProgress?.progressSchemaVersion,
+      progressLessonVersion: canonicalProgress?.progressLessonVersion,
       ...(practice
         ? {
             practiceCategories: practice.practiceCategories,

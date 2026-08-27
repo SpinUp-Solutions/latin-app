@@ -42,6 +42,7 @@ jest.mock('@/src/lib/learning-units/progression-access', () => ({
 const lesson = {
   title: 'Lesson',
   type: 'normal',
+  version: 7,
   pages: [
     {
       id: 'page-1',
@@ -54,6 +55,7 @@ const lesson = {
 const passiveLesson = {
   title: 'Passive',
   type: 'normal',
+  version: 7,
   pages: [
     { id: 'page-1', items: [{ id: 'text-1', type: 'text', content: 'Read' }] },
     { id: 'page-2', items: [{ id: 'text-2', type: 'text', content: 'End' }] },
@@ -164,7 +166,8 @@ describe('progress update route', () => {
       expect.anything(),
       expect.objectContaining({
         status: 'completed',
-        progressSchemaVersion: 3,
+        progressSchemaVersion: 4,
+        progressLessonVersion: 7,
         progress: 100,
         completedExerciseCount: 1,
         requiredExerciseCount: 1,
@@ -246,7 +249,7 @@ describe('progress update route', () => {
     });
     expect(mockTransactionSet).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ status: 'completed', progressSchemaVersion: 3, progress: 100 }),
+      expect.objectContaining({ status: 'completed', progressSchemaVersion: 4, progressLessonVersion: 7, progress: 100 }),
       { merge: true }
     );
   });
@@ -267,7 +270,7 @@ describe('progress update route', () => {
     expect(response.body.progress).toBe(100);
     expect(mockTransactionSet).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ status: 'completed', progressSchemaVersion: 3 }),
+      expect.objectContaining({ status: 'completed', progressSchemaVersion: 4, progressLessonVersion: 7 }),
       { merge: true }
     );
   });
@@ -286,10 +289,10 @@ describe('progress update route', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.lessonCompleted).toBe(false);
-    expect(response.body.progress).toBe(50);
+    expect(response.body.progress).toBe(0);
     expect(mockTransactionSet).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ status: 'in-progress', progressSchemaVersion: 3, progress: 50 }),
+      expect.objectContaining({ status: 'in-progress', progressSchemaVersion: 4, progressLessonVersion: 7, progress: 0 }),
       { merge: true }
     );
   });
@@ -304,7 +307,7 @@ describe('progress update route', () => {
     expect(response.body.furthestPageIndex).toBe(1);
     expect(mockTransactionSet).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ furthestPageIndex: 1, progressSchemaVersion: 3 }),
+      expect.objectContaining({ furthestPageIndex: 1, progressSchemaVersion: 4, progressLessonVersion: 7 }),
       { merge: true }
     );
   });
@@ -361,7 +364,7 @@ describe('finish route', () => {
     });
     expect(mockTransactionSet).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ status: 'completed', completedAt: '2026-01-01', progressSchemaVersion: 3 }),
+      expect.objectContaining({ status: 'completed', completedAt: '2026-01-01', progressSchemaVersion: 4, progressLessonVersion: 7 }),
       { merge: true }
     );
   });

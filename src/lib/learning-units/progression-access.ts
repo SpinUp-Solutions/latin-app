@@ -8,6 +8,7 @@ import {
 } from '@/shared/constants/firestore';
 import type { LearningPathDocument, LessonUnit } from '@/src/types/learning-unit';
 import type { UserProgress } from '@/src/types/lesson';
+import { canonicalizeLessonProgressForRead } from '@/src/utils/lessonProgress';
 import { isLessonDocumentData, normalizeLearningUnit } from './domain';
 import { parseLearningPathSnapshot } from './learning-path-service';
 import {
@@ -62,33 +63,46 @@ async function isUnitSequenceUnlockedInTransaction(
   const effectiveTargetIndex = units.findIndex(unit => unit.id === targetId);
   if (effectiveTargetIndex < 0) return false;
 
-  const progressByUnitId = new Map(
-    progressSnapshot.docs.flatMap(snapshot => {
-      const data = snapshot.data() as Partial<UserProgress>;
-      const unitId =
-        typeof data.lessonId === 'string'
-          ? data.lessonId
-          : snapshot.id.startsWith(`${studentId}_`)
-            ? snapshot.id.slice(studentId.length + 1)
-            : null;
-      return unitId ? [[unitId, data] as const] : [];
-    })
-  );
+  const progressByUnitId = new Map<string, Partial<UserProgress>>();
+  const progressSnapshotByUnitId = new Map<string, (typeof progressSnapshot.docs)[number]>();
+  for (const snapshot of progressSnapshot.docs) {
+    const data = snapshot.data() as Partial<UserProgress>;
+    const unitId =
+      typeof data.lessonId === 'string'
+        ? data.lessonId
+        : snapshot.id.startsWith(`${studentId}_`)
+          ? snapshot.id.slice(studentId.length + 1)
+          : null;
+    if (!unitId) continue;
+    progressByUnitId.set(unitId, data);
+    progressSnapshotByUnitId.set(unitId, snapshot);
+  }
   const attemptedTestIds = new Set<string>();
   const activity = { progressByUnitId, attemptedTestIds };
   if (isProgressionUnitUnlocked(units, effectiveTargetIndex, activity)) return true;
 
-  // Page counts were masked out above; load the previous unit's pages only
-  // when its legacy completion fallback could still unlock the target.
+  // Full lesson and progress data are loaded only for the previous lesson whose
+  // canonical completion could unlock the target.
   const previous = units[effectiveTargetIndex - 1];
   const previousProgress = progressByUnitId.get(previous.id);
-  if (previous.kind === 'lesson' && previousProgress) {
-    const previousUnitSnapshot = await transaction.get(db.collection(LEARNING_UNITS_COLLECTION).doc(previous.id));
-    if (previousUnitSnapshot.exists) {
+  const previousProgressSnapshot = progressSnapshotByUnitId.get(previous.id);
+  if (previous.kind === 'lesson' && previousProgress && previousProgressSnapshot) {
+    const [previousUnitSnapshot, fullProgressSnapshot] = await Promise.all([
+      transaction.get(db.collection(LEARNING_UNITS_COLLECTION).doc(previous.id)),
+      transaction.get(previousProgressSnapshot.ref),
+    ]);
+    if (previousUnitSnapshot.exists && fullProgressSnapshot.exists) {
       try {
         const previousUnit = normalizeLearningUnit(previousUnitSnapshot.data(), previous.id);
         if (previousUnit.kind === 'lesson') {
           previous.totalPages = previousUnit.pages.length;
+          progressByUnitId.set(
+            previous.id,
+            canonicalizeLessonProgressForRead(
+              { pages: previousUnit.pages, version: previousUnit.version },
+              fullProgressSnapshot.data() as Partial<UserProgress>
+            )
+          );
           if (isProgressionUnitUnlocked(units, effectiveTargetIndex, activity)) return true;
         }
       } catch {
