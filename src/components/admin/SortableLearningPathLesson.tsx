@@ -66,34 +66,8 @@ export function SortableLearningPathLesson({
       </div>
 
       <div className="min-w-0 flex-1">
-        <div className="mb-1 flex min-w-0 items-start gap-2">
-          <div className="min-w-0 flex-1 font-medium text-gray-900" role="heading" aria-level={3}>
-            <SimpleRichDisplay content={unit.title} className="break-words [&_p]:break-words" />
-          </div>
-          <Badge
-            variant="outline"
-            className={
-              isTest
-                ? 'shrink-0 border-roman-gold/35 bg-roman-gold/15 text-foreground'
-                : 'shrink-0 border-primary/15 bg-primary/[0.08] text-primary'
-            }>
-            {isTest ? (
-              <span className="inline-flex items-center gap-1">
-                <FileCheck2 className="h-3 w-3" aria-hidden="true" />
-                Test
-              </span>
-            ) : (
-              'Lesson'
-            )}
-          </Badge>
-          {hasIssues && (
-            <Badge variant="outline" className="shrink-0 border-amber-300 bg-amber-50 text-amber-900">
-              <span className="inline-flex items-center gap-1">
-                <ShieldAlert className="h-3 w-3" aria-hidden="true" />
-                Needs attention
-              </span>
-            </Badge>
-          )}
+        <div className="mb-1 min-w-0 font-medium text-gray-900" role="heading" aria-level={3}>
+          <SimpleRichDisplay content={unit.title} className="break-words [&_p]:break-words" />
         </div>
         {unit.description && (
           <div className="mb-2 line-clamp-1 text-sm text-gray-600">
@@ -131,35 +105,59 @@ export function SortableLearningPathLesson({
         )}
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
-      <Button size="sm" variant="outline" asChild>
-        <Link
-          href={editHref}
-          onClick={event => {
-            if (!onNavigate) return;
-            event.preventDefault();
-            onNavigate(editHref);
-          }}>
-          {hasIssues ? 'Fix lesson' : 'Edit'}
-        </Link>
-      </Button>
-      <Button
-        type="button"
-        size="sm"
-        variant="ghost"
-        disabled={disabled}
-        onClick={onRemove}
-        aria-label={`Remove ${unit.title} from Learning Path`}>
-        <X className="h-4 w-4" />
-      </Button>
-      {isTest && unit.passingPercentage !== null && (
-        <div
-          className="ml-1 inline-flex items-center gap-1 text-xs font-medium text-roman-gold"
-          title="Students must pass this test before the next unit unlocks">
-          <ShieldAlert className="h-3.5 w-3.5" aria-hidden="true" />
-          Gate
-        </div>
-      )}
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <Badge
+          variant="outline"
+          className={
+            isTest
+              ? 'shrink-0 border-roman-gold/35 bg-roman-gold/15 text-foreground'
+              : 'shrink-0 border-primary/15 bg-primary/[0.08] text-primary'
+          }>
+          {isTest ? (
+            <span className="inline-flex items-center gap-1">
+              <FileCheck2 className="h-3 w-3" aria-hidden="true" />
+              Test
+            </span>
+          ) : (
+            'Lesson'
+          )}
+        </Badge>
+        {hasIssues && (
+          <Badge variant="outline" className="shrink-0 border-amber-300 bg-amber-50 text-amber-900">
+            <span className="inline-flex items-center gap-1">
+              <ShieldAlert className="h-3 w-3" aria-hidden="true" />
+              Needs attention
+            </span>
+          </Badge>
+        )}
+        <Button size="sm" variant="outline" asChild>
+          <Link
+            href={editHref}
+            onClick={event => {
+              if (!onNavigate) return;
+              event.preventDefault();
+              onNavigate(editHref);
+            }}>
+            {hasIssues ? 'Fix lesson' : 'Edit'}
+          </Link>
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          disabled={disabled}
+          onClick={onRemove}
+          aria-label={`Remove ${unit.title} from Learning Path`}>
+          <X className="h-4 w-4" />
+        </Button>
+        {isTest && unit.passingPercentage !== null && (
+          <div
+            className="ml-1 inline-flex items-center gap-1 text-xs font-medium text-roman-gold"
+            title="Students must pass this test before the next unit unlocks">
+            <ShieldAlert className="h-3.5 w-3.5" aria-hidden="true" />
+            Gate
+          </div>
+        )}
       </div>
     </div>
   );

@@ -50,4 +50,13 @@ describe('SortableLearningPathLesson', () => {
     expect(screen.getByText(message)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Fix lesson' })).toHaveAttribute('href', '/admin/lessons/edit/lesson-1');
   });
+
+  it('keeps the kind badge on the same centered row as Edit', () => {
+    render(<SortableLearningPathLesson unit={lesson} index={0} disabled={false} onRemove={jest.fn()} />);
+
+    const edit = screen.getByRole('link', { name: 'Edit' });
+    const actions = edit.parentElement;
+    expect(actions).toHaveClass('items-center');
+    expect(actions).toContainElement(screen.getByText('Lesson'));
+  });
 });
