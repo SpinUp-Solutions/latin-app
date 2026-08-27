@@ -684,6 +684,13 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
             }}
             className="w-full">
             <LessonTypeTabs
+              value={activeTab}
+              onValueChange={value => {
+                setActiveTab(value);
+                if (categoryFilter !== 'all' && categoryFilter !== 'uncategorized') {
+                  setCategoryFilter('all');
+                }
+              }}
               counts={{
                 normal: normalLessons.length,
                 vocab: vocabLessons.length,

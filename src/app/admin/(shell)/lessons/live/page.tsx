@@ -579,7 +579,16 @@ function LiveLessonsPage() {
             setFilterStatus('live');
             setSearchQuery('');
           }}>
-          <LessonTypeTabs counts={counts} />
+          <LessonTypeTabs
+            value={lessonType}
+            onValueChange={value => {
+              if (value !== lessonType && pathDirty && !window.confirm(SWITCH_WITH_UNSAVED_PATH_MESSAGE)) return;
+              setLessonType(value);
+              setFilterStatus('live');
+              setSearchQuery('');
+            }}
+            counts={counts}
+          />
 
           <TabsContent value="normal" className="mt-5">
             <RomanCard className="mb-6">
@@ -812,10 +821,10 @@ function LiveLessonsPage() {
                   <p className="py-4 text-center text-sm text-gray-500">Every normal lesson is placed.</p>
                 ) : (
                   unplacedNormalLessons.map(lesson => (
-                    <div key={lesson.id} className="flex items-center gap-4 rounded-lg border bg-white p-4">
+                    <div key={lesson.id} className="flex min-w-0 flex-col gap-3 rounded-lg border bg-white p-4 sm:flex-row sm:items-center sm:gap-4">
                       <div className="min-w-0 flex-1">
                         <div className="font-medium">
-                          <SimpleRichDisplay content={lesson.title} />
+                          <SimpleRichDisplay content={lesson.title} className="break-words [&_p]:break-words" />
                         </div>
                         <p className="text-xs text-gray-500">{lesson.totalPages} pages</p>
                       </div>
@@ -841,7 +850,7 @@ function LiveLessonsPage() {
 
           {practiceTypes.map(type => (
             <TabsContent key={type} value={type} className="mt-5">
-              <div className="mb-8 grid grid-cols-3 gap-4">
+              <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
                 {[
                   {
                     label: 'Total Lessons',
@@ -865,7 +874,7 @@ function LiveLessonsPage() {
 
               <RomanCard className="mb-6">
                 <RomanCardContent className="flex flex-wrap items-center gap-4 p-4">
-                  <div className="relative min-w-52 flex-1">
+                  <div className="relative min-w-0 flex-1">
                     <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
                       placeholder="Search lessons by title or description..."

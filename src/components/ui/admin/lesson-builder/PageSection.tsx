@@ -1,4 +1,4 @@
-import React, { ReactNode, useState } from 'react';
+import React, { ReactNode, useEffect, useRef, useState } from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
 import { Plus, Trash2, GripVertical, Copy } from 'lucide-react';
@@ -60,6 +60,8 @@ interface SortablePageProps {
   onUpdatePageAutoAdvance: (pageIndex: number, autoAdvance: { enabled: boolean; delay: number }) => void;
   isAutoAdvanceExpanded: boolean;
   onToggleAutoAdvance: () => void;
+  isExpanded: boolean;
+  onToggleExpanded: () => void;
   editorKind: PageDocumentEditorKind;
 }
 
@@ -77,6 +79,8 @@ const SortablePage: React.FC<SortablePageProps> = ({
   onUpdatePageAutoAdvance,
   isAutoAdvanceExpanded,
   onToggleAutoAdvance,
+  isExpanded,
+  onToggleExpanded,
   editorKind,
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: page.id });
@@ -120,6 +124,15 @@ const SortablePage: React.FC<SortablePageProps> = ({
           <Button
             variant="ghost"
             size="sm"
+            className="h-6 px-2 text-xs"
+            onClick={onToggleExpanded}
+            aria-expanded={isExpanded}
+            aria-label={isExpanded ? `Collapse page ${pageIndex + 1}` : `Expand page ${pageIndex + 1}`}>
+            {isExpanded ? 'Collapse' : 'Expand'}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
             className="h-6 w-6 p-0"
             onClick={() => onDuplicatePage(pageIndex)}
             aria-label={`Duplicate page ${pageIndex + 1}`}>
@@ -136,6 +149,8 @@ const SortablePage: React.FC<SortablePageProps> = ({
         </div>
       </div>
 
+      {isExpanded && (
+        <>
       <DraggableContentList
         items={page.items}
         pageIndex={pageIndex}
@@ -167,6 +182,8 @@ const SortablePage: React.FC<SortablePageProps> = ({
           ))}
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 };
@@ -188,6 +205,17 @@ export const PageSection: React.FC<PageSectionProps> = ({
 }) => {
   const dispatch = useDispatch();
   const [expandedAutoAdvancePageId, setExpandedAutoAdvancePageId] = useState<string | null>(null);
+  const [expandedPageId, setExpandedPageId] = useState<string | null>(pages[0]?.id ?? null);
+  const previousPageCount = useRef(pages.length);
+
+  useEffect(() => {
+    if (pages.length > previousPageCount.current) {
+      setExpandedPageId(pages[pages.length - 1]?.id ?? null);
+    } else if (!expandedPageId || !pages.some(page => page.id === expandedPageId)) {
+      setExpandedPageId(pages[0]?.id ?? null);
+    }
+    previousPageCount.current = pages.length;
+  }, [pages, expandedPageId]);
 
   const handleUpdatePageAutoAdvance = (pageIndex: number, autoAdvance: { enabled: boolean; delay: number }) => {
     dispatch(updatePageAutoAdvance({ pageIndex, autoAdvance }));
@@ -261,6 +289,10 @@ export const PageSection: React.FC<PageSectionProps> = ({
                 onUpdatePageAutoAdvance={handleUpdatePageAutoAdvance}
                 isAutoAdvanceExpanded={expandedAutoAdvancePageId === page.id}
                 onToggleAutoAdvance={() => handleToggleAutoAdvance(page.id)}
+                isExpanded={expandedPageId === page.id}
+                onToggleExpanded={() =>
+                  setExpandedPageId(current => (current === page.id ? null : page.id))
+                }
                 editorKind={editorKind}
               />
             ))}

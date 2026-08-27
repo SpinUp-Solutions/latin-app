@@ -128,4 +128,12 @@ describe('lesson sidebar mixed Learning Path', () => {
     expect(refetch).toHaveBeenCalledTimes(1);
     expect(screen.queryByText('No learning units available')).not.toBeInTheDocument();
   });
+
+  it('hides lesson actions from assistive tech while the sidebar is collapsed', () => {
+    render(<LessonSidebar currentLessonId="lesson-1" isCollapsed />);
+
+    expect(screen.queryByRole('button', { name: /^Chapter test TEST Pass/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Close lessons sidebar' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Expand lessons sidebar' })).toBeInTheDocument();
+  });
 });

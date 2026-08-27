@@ -183,4 +183,41 @@ describe('vocabulary pool duplication cache refresh', () => {
       ]);
     });
   });
+
+  it('replaces an accumulated list when search starts after the last page', async () => {
+    const store = createStore();
+    const unfilteredArgs = { filters: { sortBy: 'createdAt' as const, sortOrder: 'desc' as const }, lastPoolId: null };
+    const searchArgs = { filters: { search: 'lesson', sortBy: 'createdAt' as const, sortOrder: 'desc' as const }, lastPoolId: null };
+    const lessonPool = summary('lesson-pool', 'Lesson words', 12);
+
+    mockBaseQuery.mockImplementation(async (request: unknown) => {
+      const url = new URL(String(request), 'https://latin.test');
+      if (url.pathname !== '/admin/vocabulary-pools') throw new Error(`Unexpected request: ${String(request)}`);
+      const cursor = url.searchParams.get('lastPoolId');
+      const search = url.searchParams.get('search');
+      if (search === 'lesson') {
+        if (cursor) return poolsResponse([]);
+        return poolsResponse([lessonPool]);
+      }
+      return cursor ? poolsResponse([middlePool]) : poolsResponse([oldestPool], 'oldest-pool');
+    });
+
+    await store.dispatch(vocabularyPoolApi.endpoints.getPools.initiate(unfilteredArgs, { subscribe: false }));
+    await store.dispatch(
+      vocabularyPoolApi.endpoints.getPools.initiate(
+        { ...unfilteredArgs, lastPoolId: 'oldest-pool' },
+        { subscribe: false }
+      )
+    );
+
+    await store.dispatch(
+      vocabularyPoolApi.endpoints.getPools.initiate(
+        { ...searchArgs, lastPoolId: 'oldest-pool' },
+        { subscribe: false }
+      )
+    );
+    await store.dispatch(vocabularyPoolApi.endpoints.getPools.initiate(searchArgs, { subscribe: false }));
+
+    expect(vocabularyPoolApi.endpoints.getPools.select(searchArgs)(store.getState()).data?.pools).toEqual([lessonPool]);
+  });
 });

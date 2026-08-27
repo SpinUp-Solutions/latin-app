@@ -21,6 +21,7 @@ interface PoolListProps {
   loading: boolean;
   loadingMore: boolean;
   hasMore: boolean;
+  fetching?: boolean;
   onLoadMore: () => void;
   onEdit: (pool: VocabularyPoolSummary) => void;
   onDuplicate?: (pool: VocabularyPoolSummary) => void;
@@ -96,6 +97,7 @@ export const PoolList: React.FC<PoolListProps> = ({
   loading,
   loadingMore,
   hasMore,
+  fetching = false,
   onLoadMore,
   onEdit,
   onDuplicate,
@@ -107,13 +109,14 @@ export const PoolList: React.FC<PoolListProps> = ({
   const reduceMotion = useReducedMotion();
   const revealTransition = assignmentTransition(reduceMotion);
   const [expandedPoolIds, setExpandedPoolIds] = useState<Set<string>>(() => new Set());
+  const uniquePools = pools.filter((pool, index, list) => list.findIndex(candidate => candidate.id === pool.id) === index);
   const sentinelRef = useInfiniteScroll({
     onLoadMore,
     hasMore,
     loading: loadingMore,
     rootMargin: '300px',
   });
-  if (loading && pools.length === 0) {
+  if ((loading || fetching) && pools.length === 0) {
     return (
       <div className="text-center py-12">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red mx-auto mb-4"></div>
@@ -122,7 +125,7 @@ export const PoolList: React.FC<PoolListProps> = ({
     );
   }
 
-  if (pools.length === 0) {
+  if (uniquePools.length === 0) {
     return (
       <RomanCard>
         <RomanCardContent className="p-12 text-center">
@@ -137,7 +140,7 @@ export const PoolList: React.FC<PoolListProps> = ({
 
   return (
     <div className="space-y-4">
-      {pools.map(pool => {
+      {uniquePools.map(pool => {
         const usages = usagesByPoolId[pool.id] ?? [];
         const assigned = usages.length > 0;
         const expanded = expandedPoolIds.has(pool.id);

@@ -31,22 +31,22 @@ export function SortableLessonItem({ lesson, id, onNavigate }: SortableLessonIte
     <div
       ref={setNodeRef}
       style={style}
-      className="flex items-center gap-4 p-4 bg-white rounded-lg border hover:shadow-sm transition-shadow">
+      className="flex min-w-0 flex-col gap-3 rounded-lg border bg-white p-4 transition-shadow hover:shadow-sm sm:flex-row sm:items-center sm:gap-4">
       <button
-        className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 p-1"
+        className="cursor-grab p-1 text-gray-400 hover:text-gray-600 active:cursor-grabbing"
         {...attributes}
         {...listeners}>
-        <GripVertical className="w-5 h-5" />
+        <GripVertical className="h-5 w-5" />
       </button>
 
-      <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-primary/15 bg-primary/[0.08] text-sm font-semibold text-primary shadow-[0_1px_2px_rgb(15_23_42/0.06)]">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-primary/15 bg-primary/[0.08] text-sm font-semibold text-primary shadow-[0_1px_2px_rgb(15_23_42/0.06)]">
         {(lesson.liveOrder || 0) + 1}
       </div>
 
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
+      <div className="min-w-0 flex-1">
+        <div className="mb-1 flex min-w-0 items-start gap-2">
           <div className="min-w-0 flex-1 font-medium text-gray-900" role="heading" aria-level={3}>
-            <SimpleRichDisplay content={lesson.title} className="truncate" />
+            <SimpleRichDisplay content={lesson.title} className="break-words [&_p]:break-words" />
           </div>
           <Badge variant="default" className="shrink-0">
             Live
@@ -71,7 +71,7 @@ export function SortableLessonItem({ lesson, id, onNavigate }: SortableLessonIte
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         <Button size="sm" variant="outline" asChild>
           <Link
             href={`/admin/lessons/edit/${lesson.id}`}
