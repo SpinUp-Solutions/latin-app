@@ -2,9 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { X, MessageSquare } from 'lucide-react';
+import { FEEDBACK_FORM_URL } from '@/src/constants/student-feedback';
 
-const FEEDBACK_FORM_URL =
-  'https://docs.google.com/forms/d/e/1FAIpQLScuJEcipD4D1htH1m-VL0zyZj4H-NAydOM-Syn6e-DZ75M7zQ/viewform';
 const DISMISSED_KEY = 'feedback_banner_dismissed';
 
 interface FeedbackBannerProps {

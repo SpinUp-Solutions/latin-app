@@ -25,6 +25,7 @@ import { SwiperNavigation } from '@/src/components/ui/core/swiper-nav';
 import { PracticeSection } from '@/src/components/ui/core/PracticeSection';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { FeedbackBanner } from '@/src/components/ui/core/feedback-banner';
+import { StudentFeedbackFooter } from '@/src/components/ui/core/student-feedback-footer';
 import { shouldReportClientHardFail, reportUnexpectedError } from '@/src/lib/report-unexpected-error';
 export { MockTestCard } from '@/src/components/ui/core/mock-test-card';
 
@@ -524,6 +525,8 @@ export default function DashboardPage() {
             </section>
           </div>
         </main>
+
+        <StudentFeedbackFooter />
       </div>
     </div>
   );
