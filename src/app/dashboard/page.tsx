@@ -22,6 +22,7 @@ import { CircularProgressButton } from '@/src/components/ui/CircularProgressButt
 import { Swiper, SwiperSlide } from 'swiper/react';
 import 'swiper/css';
 import { SwiperNavigation } from '@/src/components/ui/core/swiper-nav';
+import { OffscreenSlide } from '@/src/components/ui/core/offscreen-slide';
 import { PracticeSection } from '@/src/components/ui/core/PracticeSection';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { FeedbackBanner } from '@/src/components/ui/core/feedback-banner';
@@ -481,6 +482,7 @@ export default function DashboardPage() {
                     speed={250}
                     threshold={5}
                     grabCursor
+                    watchSlidesProgress
                     breakpoints={{
                       1024: { slidesPerView: 2 },
                       1280: { slidesPerView: 3 },
@@ -493,20 +495,15 @@ export default function DashboardPage() {
                     </div>
 
                     {learningUnits.map(unit => (
-                      <SwiperSlide
-                        key={unit.id}
-                        className="overflow-visible px-2 py-8 transition-transform duration-300 sm:p-6 lg:p-10">
-                        {({ isActive }) => (
-                          <div
-                            className={`transform-gpu transition-transform duration-300 ${
-                              isActive ? 'scale-100 sm:scale-105 xl:scale-110' : 'scale-[0.98]'
-                            }`}>
+                      <SwiperSlide key={unit.id} className="min-w-0 overflow-hidden px-2 py-8 sm:p-6 lg:p-10">
+                        {({ isActive, isVisible, isPrev, isNext }) => (
+                          <OffscreenSlide isVisible={isActive || isVisible || isPrev || isNext}>
                             {unit.kind === 'test' ? (
                               <TestCard test={unit} onTestClick={handleLessonClick} />
                             ) : (
                               <LessonCard lesson={unit} onLessonClick={handleLessonClick} />
                             )}
-                          </div>
+                          </OffscreenSlide>
                         )}
                       </SwiperSlide>
                     ))}
