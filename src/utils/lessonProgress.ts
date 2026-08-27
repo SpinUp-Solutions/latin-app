@@ -1,7 +1,7 @@
 import { ExerciseProgress, Lesson, UserProgress } from '@/src/types/lesson';
 import { isExerciseType, parsePageIndex } from './lessonUtils';
 
-export const PROGRESS_SCHEMA_VERSION = 3;
+export const PROGRESS_SCHEMA_VERSION = 4;
 export const STABLE_ID_PROGRESS_SCHEMA_VERSION = 2;
 
 export interface RequiredExercise {
@@ -171,6 +171,41 @@ export interface LessonCompletionSummary {
   missingExercises: RequiredExercise[];
 }
 
+export interface StoredProgressCalculationOptions {
+  totalPages: number;
+  totalExercises?: number;
+  lessonVersion?: number;
+}
+
+function normalizedLessonVersion(version: unknown): number {
+  return Number.isSafeInteger(version) && (version as number) >= 0 ? (version as number) : 0;
+}
+
+function exerciseCompletionPercentage(completedExerciseCount: number, requiredExerciseCount: number): number {
+  if (requiredExerciseCount <= 0) return 0;
+  if (completedExerciseCount >= requiredExerciseCount) return 100;
+  return Math.min(99, Math.round((completedExerciseCount / requiredExerciseCount) * 100));
+}
+
+export function hasTrustedExerciseProgressSummary(
+  progress: Partial<UserProgress> | undefined,
+  options: StoredProgressCalculationOptions
+): boolean {
+  const totalExercises = options.totalExercises ?? 0;
+  return Boolean(
+    progress &&
+      totalExercises > 0 &&
+      typeof progress.progressSchemaVersion === 'number' &&
+      progress.progressSchemaVersion === PROGRESS_SCHEMA_VERSION &&
+      progress.progressLessonVersion === normalizedLessonVersion(options.lessonVersion) &&
+      Number.isSafeInteger(progress.requiredExerciseCount) &&
+      progress.requiredExerciseCount === totalExercises &&
+      Number.isSafeInteger(progress.completedExerciseCount) &&
+      (progress.completedExerciseCount as number) >= 0 &&
+      (progress.completedExerciseCount as number) <= totalExercises
+  );
+}
+
 export function summarizeLessonCompletion(
   lesson: Pick<Lesson, 'pages'>,
   stored: Partial<UserProgress> | undefined
@@ -187,9 +222,11 @@ export function summarizeLessonCompletion(
   const furthestPageIndex = getFurthestPageIndex(stored, totalPages);
   const progress = isCompleted
     ? 100
-    : furthestPageIndex < 0
-      ? 0
-      : Math.min(99, Math.round(((furthestPageIndex + 1) / totalPages) * 100));
+    : requiredExerciseCount > 0
+      ? exerciseCompletionPercentage(completedExerciseCount, requiredExerciseCount)
+      : furthestPageIndex < 0
+        ? 0
+        : Math.min(99, Math.round(((furthestPageIndex + 1) / totalPages) * 100));
 
   return {
     exerciseProgress,
@@ -201,16 +238,35 @@ export function summarizeLessonCompletion(
   };
 }
 
+export function canonicalizeLessonProgressForRead(
+  lesson: Pick<Lesson, 'pages' | 'version'>,
+  stored: Partial<UserProgress>
+): Partial<UserProgress> {
+  const summary = summarizeLessonCompletion(lesson, stored);
+  return {
+    ...stored,
+    exerciseProgress: summary.exerciseProgress,
+    completedExerciseCount: summary.completedExerciseCount,
+    requiredExerciseCount: summary.requiredExerciseCount,
+    progress: summary.progress,
+    status: summary.isCompleted ? 'completed' : 'in-progress',
+    progressSchemaVersion: PROGRESS_SCHEMA_VERSION,
+    progressLessonVersion: normalizedLessonVersion(lesson.version),
+  };
+}
+
 export function toPersistedProgressSummary(
   summary: LessonCompletionSummary,
   existing: Partial<UserProgress> | undefined,
-  now: string
+  now: string,
+  lessonVersion: number | undefined
 ) {
   return {
     exerciseProgress: summary.exerciseProgress,
     progress: summary.progress,
     completedExerciseCount: summary.completedExerciseCount,
     requiredExerciseCount: summary.requiredExerciseCount,
+    progressLessonVersion: normalizedLessonVersion(lessonVersion),
     status: summary.isCompleted ? ('completed' as const) : ('in-progress' as const),
     ...(summary.isCompleted ? { completedAt: existing?.completedAt || now } : {}),
     progressSchemaVersion: PROGRESS_SCHEMA_VERSION,
@@ -219,12 +275,21 @@ export function toPersistedProgressSummary(
 
 export function calculateStoredProgress(
   progress: Partial<UserProgress> | undefined,
-  totalPagesOrOptions: number | { totalPages: number; totalExercises?: number }
+  totalPagesOrOptions: number | StoredProgressCalculationOptions
 ): number {
-  const totalPages =
-    typeof totalPagesOrOptions === 'number' ? totalPagesOrOptions : totalPagesOrOptions.totalPages;
+  const options =
+    typeof totalPagesOrOptions === 'number'
+      ? { totalPages: totalPagesOrOptions, totalExercises: 0, lessonVersion: 0 }
+      : totalPagesOrOptions;
+  const totalPages = options.totalPages;
   if (!progress || totalPages <= 0) return 0;
   if (isStoredLessonComplete(progress, totalPages)) return 100;
+
+  const totalExercises = options.totalExercises ?? 0;
+  if (totalExercises > 0) {
+    if (!hasTrustedExerciseProgressSummary(progress, options)) return 0;
+    return exerciseCompletionPercentage(progress.completedExerciseCount as number, totalExercises);
+  }
 
   const furthestPageIndex = getFurthestPageIndex(progress, totalPages);
   if (furthestPageIndex < 0) return 0;

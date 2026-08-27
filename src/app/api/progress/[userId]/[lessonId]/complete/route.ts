@@ -73,7 +73,8 @@ export async function POST(
       const persisted = toPersistedProgressSummary(
         { ...summary, isCompleted: true, progress: 100 },
         existing,
-        now
+        now,
+        lesson.version
       );
 
       transaction.set(

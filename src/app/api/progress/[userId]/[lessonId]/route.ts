@@ -120,7 +120,7 @@ export async function POST(
             { exerciseId, completedAt: now, score: progressData.score },
           ],
         });
-        const persisted = toPersistedProgressSummary(summary, existing, now);
+        const persisted = toPersistedProgressSummary(summary, existing, now, lesson.version);
         const furthestPageIndex = getFurthestPageIndex(existing, lesson.pages.length);
 
         transaction.set(
@@ -186,7 +186,7 @@ export async function POST(
           furthestPageIndex,
           currentPageIndex: furthestPageIndex,
         });
-        const persisted = toPersistedProgressSummary(summary, existing, now);
+        const persisted = toPersistedProgressSummary(summary, existing, now, lesson.version);
 
         transaction.set(
           progressRef,
@@ -248,7 +248,12 @@ export async function POST(
           return { missingExercises: summary.missingExercises };
         }
 
-        const persisted = toPersistedProgressSummary({ ...summary, isCompleted: true, progress: 100 }, existing, now);
+        const persisted = toPersistedProgressSummary(
+          { ...summary, isCompleted: true, progress: 100 },
+          existing,
+          now,
+          lesson.version
+        );
 
         transaction.set(
           progressRef,

@@ -155,8 +155,8 @@ const passiveLesson = {
   ],
 } as unknown as Lesson;
 
-describe('schema-v3 lesson completion', () => {
-  it('keeps page progress separate from required exercise completion', () => {
+describe('schema-v4 lesson completion', () => {
+  it('derives exercise lesson progress from completed required exercises', () => {
     const none = summarizeLessonCompletion(threeExerciseLesson, { status: 'in-progress', exerciseProgress: [] });
     expect(none).toMatchObject({
       completedExerciseCount: 0,
@@ -169,7 +169,7 @@ describe('schema-v3 lesson completion', () => {
       status: 'in-progress',
       exerciseProgress: [{ exerciseId: 'exercise-a', score: 0, completedAt: '2026-01-01T00:00:00.000Z' }],
     });
-    expect(one.progress).toBe(0);
+    expect(one.progress).toBe(33);
     expect(one.isCompleted).toBe(false);
 
     const two = summarizeLessonCompletion(threeExerciseLesson, {
@@ -194,7 +194,38 @@ describe('schema-v3 lesson completion', () => {
     expect(all).toMatchObject({ progress: 100, isCompleted: true, missingExercises: [] });
   });
 
-  it('keeps passive-only lessons at 0 until the final page is reached', () => {
+  it('caps an incomplete rounded exercise percentage at 99', () => {
+    const manyExerciseLesson = {
+      ...lesson,
+      pages: [
+        {
+          id: 'page-many',
+          items: Array.from({ length: 200 }, (_, index) => ({
+            id: `exercise-${index}`,
+            type: 'fill',
+            title: `Exercise ${index}`,
+          })),
+        },
+      ],
+    } as unknown as Lesson;
+    const summary = summarizeLessonCompletion(manyExerciseLesson, {
+      status: 'in-progress',
+      exerciseProgress: Array.from({ length: 199 }, (_, index) => ({
+        exerciseId: `exercise-${index}`,
+        score: 0,
+        completedAt: '2026-01-01T00:00:00.000Z',
+      })),
+    });
+
+    expect(summary).toMatchObject({
+      completedExerciseCount: 199,
+      requiredExerciseCount: 200,
+      progress: 99,
+      isCompleted: false,
+    });
+  });
+
+  it('keeps passive-only lessons page-based', () => {
     expect(summarizeLessonCompletion(passiveLesson, { furthestPageIndex: 1, status: 'in-progress' })).toMatchObject({
       progress: 67,
       isCompleted: false,
@@ -228,13 +259,15 @@ describe('schema-v3 lesson completion', () => {
     expect(hasLegacyCompletion({ currentPageIndex: 3, progressSchemaVersion: '1' as never }, 3)).toBe(false);
   });
 
-  it('always derives stored progress from the furthest authored page', () => {
+  it('trusts only current schema-v4 exercise summaries and keeps passive progress page-based', () => {
     expect(
       calculateStoredProgress(
         {
-          progressSchemaVersion: 3,
+          progressSchemaVersion: 4,
           progress: 33,
+          completedExerciseCount: 1,
           requiredExerciseCount: 3,
+          progressLessonVersion: 0,
           furthestPageIndex: 0,
           status: 'in-progress',
         },
@@ -244,15 +277,29 @@ describe('schema-v3 lesson completion', () => {
     expect(
       calculateStoredProgress(
         {
-          progressSchemaVersion: 3,
+          progressSchemaVersion: 5,
+          completedExerciseCount: 1,
+          requiredExerciseCount: 3,
+          progressLessonVersion: 0,
+          status: 'in-progress',
+        },
+        { totalPages: 3, totalExercises: 3 }
+      )
+    ).toBe(0);
+    expect(
+      calculateStoredProgress(
+        {
+          progressSchemaVersion: 4,
           progress: 66,
+          completedExerciseCount: 2,
           requiredExerciseCount: 2,
+          progressLessonVersion: 0,
           furthestPageIndex: 2,
           status: 'in-progress',
         },
         { totalPages: 4, totalExercises: 3 }
       )
-    ).toBe(75);
+    ).toBe(0);
     expect(
       calculateStoredProgress(
         { progressSchemaVersion: 1, currentPageIndex: 0, status: 'in-progress' },
@@ -279,13 +326,15 @@ describe('schema-v3 lesson completion', () => {
 
   it('can display numeric 100 without treating the lesson as unlocked', () => {
     const stored = {
-      progressSchemaVersion: 3,
+      progressSchemaVersion: 4,
       progress: 100,
+      completedExerciseCount: 0,
       requiredExerciseCount: 1,
+      progressLessonVersion: 0,
       status: 'in-progress' as const,
       furthestPageIndex: 0,
     };
-    expect(calculateStoredProgress(stored, { totalPages: 2, totalExercises: 1 })).toBe(50);
+    expect(calculateStoredProgress(stored, { totalPages: 2, totalExercises: 1 })).toBe(0);
     expect(isStoredLessonComplete(stored, 2)).toBe(false);
     expect(
       isProgressionUnitComplete(

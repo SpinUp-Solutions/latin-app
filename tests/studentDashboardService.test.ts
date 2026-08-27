@@ -311,9 +311,10 @@ describe('StudentDashboardService summary projection', () => {
     const progressFields = selectedFieldLog.find(fields => fields.includes('lessonId'));
     expect(progressFields).toBeDefined();
     expect(progressFields).not.toContain('exerciseProgress');
-    expect(progressFields).not.toContain('progress');
-    expect(progressFields).not.toContain('completedExerciseCount');
-    expect(progressFields).not.toContain('requiredExerciseCount');
+    expect(progressFields).toContain('progress');
+    expect(progressFields).toContain('completedExerciseCount');
+    expect(progressFields).toContain('requiredExerciseCount');
+    expect(progressFields).toContain('progressLessonVersion');
     expect(JSON.stringify(dashboard)).not.toContain('"exerciseProgress"');
   });
 
@@ -980,11 +981,33 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
     expect(dashboard.pastMockResults).toEqual([{ id: 'past-mock', title: 'Past' }]);
   });
 
-  it('derives dashboard progress from the furthest page regardless of stored exercise counters', async () => {
+  it('uses trusted exercise summaries and canonically refreshes stale lesson versions', async () => {
     const collections = {
       lessons: {
-        trusted: lesson({ title: 'Trusted', liveOrder: 0, totalPages: 4, totalExercises: 3 }),
-        mismatched: lesson({ title: 'Mismatched', liveOrder: 1, totalPages: 4, totalExercises: 3 }),
+        trusted: lesson({
+          title: 'Trusted',
+          liveOrder: 0,
+          version: 2,
+          pages: [
+            { id: 'page-1', items: [{ id: 'trusted-a', type: 'fill', title: 'A' }] },
+            { id: 'page-2', items: [{ id: 'trusted-b', type: 'fill', title: 'B' }] },
+            { id: 'page-3', items: [{ id: 'trusted-c', type: 'fill', title: 'C' }] },
+          ],
+          totalPages: 3,
+          totalExercises: 3,
+        }),
+        mismatched: lesson({
+          title: 'Mismatched',
+          liveOrder: 1,
+          version: 2,
+          pages: [
+            { id: 'page-1', items: [{ id: 'mismatch-a', type: 'fill', title: 'A' }] },
+            { id: 'page-2', items: [{ id: 'mismatch-b', type: 'fill', title: 'B' }] },
+            { id: 'page-3', items: [{ id: 'mismatch-c', type: 'fill', title: 'C' }] },
+          ],
+          totalPages: 3,
+          totalExercises: 3,
+        }),
         locked: lesson({ title: 'Locked', liveOrder: 2, totalPages: 2, totalExercises: 1 }),
       },
       learningPaths: {
@@ -1005,7 +1028,8 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
           progress: 33,
           completedExerciseCount: 1,
           requiredExerciseCount: 3,
-          progressSchemaVersion: 3,
+          progressSchemaVersion: 4,
+          progressLessonVersion: 2,
           lastAccessedAt: 'now',
         },
         user_mismatched: {
@@ -1016,7 +1040,12 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
           progress: 66,
           completedExerciseCount: 2,
           requiredExerciseCount: 2,
-          progressSchemaVersion: 3,
+          progressSchemaVersion: 4,
+          progressLessonVersion: 1,
+          exerciseProgress: [
+            { exerciseId: 'mismatch-a', score: 100, completedAt: 'before' },
+            { exerciseId: 'mismatch-b', score: 100, completedAt: 'before' },
+          ],
           lastAccessedAt: 'now',
         },
       },
@@ -1029,17 +1058,24 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
 
     const dashboard = await service.getDashboard('user');
     const lessonPath = dashboard.learningPath.filter((item): item is StudentLessonSummary => item.kind === 'lesson');
-    expect(lessonPath.map(item => [item.id, item.status, item.progress])).toEqual([
-      ['trusted', 'in-progress', 25],
-      ['mismatched', 'in-progress', 75],
-      ['locked', 'locked', 0],
+    expect(lessonPath.map(item => [item.id, item.status, item.progress, item.progressLessonVersion])).toEqual([
+      ['trusted', 'in-progress', 33, 2],
+      ['mismatched', 'in-progress', 67, 2],
+      ['locked', 'locked', 0, undefined],
     ]);
   });
 
   it('does not unlock the next lesson from numeric 100 without completed status', async () => {
     const collections = {
       lessons: {
-        first: lesson({ title: 'First', liveOrder: 0, totalPages: 2, totalExercises: 1 }),
+        first: lesson({
+          title: 'First',
+          liveOrder: 0,
+          version: 1,
+          pages: [{ id: 'page-1', items: [{ id: 'exercise-a', type: 'fill', title: 'A' }] }],
+          totalPages: 1,
+          totalExercises: 1,
+        }),
         second: lesson({ title: 'Second', liveOrder: 1, totalPages: 2, totalExercises: 1 }),
       },
       learningPaths: {
@@ -1074,9 +1110,115 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
     const dashboard = await service.getDashboard('user');
     const lessonPath = dashboard.learningPath.filter((item): item is StudentLessonSummary => item.kind === 'lesson');
     expect(lessonPath.map(item => [item.id, item.status, item.progress])).toEqual([
-      ['first', 'in-progress', 50],
+      ['first', 'in-progress', 0],
       ['second', 'locked', 0],
     ]);
+  });
+
+  it('uses canonical exercise evidence consistently for dashboard and lesson access', async () => {
+    const collections = {
+      lessons: {
+        first: lesson({
+          title: 'First',
+          liveOrder: 0,
+          version: 2,
+          pages: [{ id: 'page-1', items: [{ id: 'exercise-a', type: 'fill', title: 'A' }] }],
+          totalPages: 1,
+          totalItems: 1,
+          totalExercises: 1,
+        }),
+        second: lesson({ title: 'Second', liveOrder: 1 }),
+      },
+      learningPaths: {
+        default: {
+          id: 'default',
+          revision: 1,
+          unitIds: ['first', 'second'],
+          updatedAt: 'now',
+          updatedBy: 'admin',
+        },
+      },
+      userProgress: {
+        user_first: {
+          userId: 'user',
+          lessonId: 'first',
+          status: 'in-progress',
+          furthestPageIndex: 0,
+          progressSchemaVersion: 2,
+          exerciseProgress: [{ exerciseId: 'exercise-a', score: 100, completedAt: 'before' }],
+          lastAccessedAt: 'before',
+        },
+      },
+    };
+    const { db } = createFakeDb(collections);
+    const service = new StudentDashboardService(
+      db as never,
+      { getAssignmentsForLessonIds: jest.fn(async () => new Map()) } as never
+    );
+
+    const dashboard = await service.getDashboard('user');
+    expect(
+      dashboard.learningPath
+        .filter((item): item is StudentLessonSummary => item.kind === 'lesson')
+        .map(item => [item.id, item.status, item.progress])
+    ).toEqual([
+      ['first', 'completed', 100],
+      ['second', 'available', 0],
+    ]);
+    await expect(service.getLesson('user', 'second')).resolves.toMatchObject({
+      id: 'second',
+      status: 'available',
+    });
+  });
+
+  it('isolates an invalid lesson during canonical dashboard hydration', async () => {
+    const collections = {
+      lessons: {
+        broken: lesson({
+          title: 'Broken',
+          liveOrder: 0,
+          version: 2,
+          pages: 'not-an-array',
+          totalPages: 1,
+          totalItems: 1,
+          totalExercises: 1,
+        }),
+      },
+      learningPaths: {
+        default: {
+          id: 'default',
+          revision: 1,
+          unitIds: ['broken'],
+          updatedAt: 'now',
+          updatedBy: 'admin',
+        },
+      },
+      userProgress: {
+        user_broken: {
+          userId: 'user',
+          lessonId: 'broken',
+          status: 'in-progress',
+          progressSchemaVersion: 2,
+          exerciseProgress: [],
+          lastAccessedAt: 'before',
+        },
+      },
+    };
+    const { db } = createFakeDb(collections);
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const service = new StudentDashboardService(
+      db as never,
+      { getAssignmentsForLessonIds: jest.fn(async () => new Map()) } as never
+    );
+
+    await expect(service.getDashboard('user')).resolves.toMatchObject({
+      learningPath: [{ id: 'broken', status: 'in-progress', progress: 0 }],
+    });
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Unable to canonicalize progress for invalid lesson broken; skipping it',
+      expect.any(StudentDashboardServiceError)
+    );
+    errorSpy.mockRestore();
   });
 
   it('uses canonical completion from full exercise history on getLesson', async () => {
@@ -1121,9 +1263,63 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
     );
 
     const detail = await service.getLesson('user', 'first');
-    expect(detail.progress).toBe(99);
+    expect(detail.progress).toBe(50);
     expect(detail.completedExerciseCount).toBe(1);
     expect(detail.requiredExerciseCount).toBe(2);
     expect(detail.status).toBe('in-progress');
+    expect(detail.progressLessonVersion).toBe(0);
+  });
+
+  it('logs when hydrated counts still disagree with the persisted lesson summary', async () => {
+    const collections = {
+      lessons: {
+        drifted: lesson({
+          title: 'Drifted',
+          liveOrder: 0,
+          version: 2,
+          pages: [{ id: 'page-1', items: [{ id: 'exercise-a', type: 'fill', title: 'A' }] }],
+          totalPages: 1,
+          totalItems: 1,
+          totalExercises: 2,
+        }),
+      },
+      learningPaths: {
+        default: {
+          id: 'default',
+          revision: 1,
+          unitIds: ['drifted'],
+          updatedAt: 'now',
+          updatedBy: 'admin',
+        },
+      },
+      userProgress: {
+        user_drifted: {
+          userId: 'user',
+          lessonId: 'drifted',
+          status: 'in-progress',
+          furthestPageIndex: 0,
+          progressSchemaVersion: 4,
+          progressLessonVersion: 2,
+          completedExerciseCount: 1,
+          requiredExerciseCount: 1,
+          progress: 100,
+          lastAccessedAt: 'before',
+        },
+      },
+    };
+    const { db } = createFakeDb(collections);
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const service = new StudentDashboardService(
+      db as never,
+      { getAssignmentsForLessonIds: jest.fn(async () => new Map()) } as never
+    );
+
+    const dashboard = await service.getDashboard('user');
+    expect(dashboard.learningPath).toMatchObject([{ id: 'drifted', status: 'in-progress', progress: 0 }]);
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Unable to trust hydrated progress for lesson drifted; dashboard will show 0% until the lesson summary matches authored exercises',
+      expect.objectContaining({ requiredExerciseCount: 1, totalExercises: 2 })
+    );
+    errorSpy.mockRestore();
   });
 });
