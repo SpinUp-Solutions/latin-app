@@ -49,6 +49,23 @@ export const LessonCard = memo(
   ({ lesson, onLessonClick }: { lesson: StudentLessonSummary; onLessonClick: (id: string) => void }) => {
     const config = statusConfig[lesson.status || 'available'] || statusConfig.available;
     const progress = typeof lesson.progress === 'number' ? lesson.progress : 0;
+    const statusLabel =
+      lesson.status === 'completed'
+        ? 'Completed'
+        : lesson.status === 'in-progress'
+          ? `${Math.round(progress)}% complete`
+          : lesson.status === 'locked'
+            ? lesson.lockedReason || 'Complete the previous learning unit to unlock'
+            : 'Ready to begin';
+    const description = lesson.description?.trim()
+      ? lesson.description
+      : lesson.status === 'completed'
+        ? 'Review the material from this lesson.'
+        : lesson.status === 'in-progress'
+          ? 'Continue from where you left off.'
+          : lesson.status === 'locked'
+            ? 'Finish the previous learning unit to unlock this lesson.'
+            : 'Start this lesson when you are ready.';
 
     const handleClick = () => {
       if (lesson.status === 'locked') {
@@ -60,20 +77,45 @@ export const LessonCard = memo(
 
     return (
       <RomanCard
-        className={`group h-36 cursor-pointer rounded-3xl shadow-xl transition-all duration-300 transform hover:-translate-y-2 hover:scale-[1.02] hover:shadow-2xl ${config.card}`}
+        className={`group h-40 cursor-pointer overflow-hidden rounded-3xl shadow-xl transition-all duration-300 transform hover:-translate-y-2 hover:scale-[1.02] hover:shadow-2xl ${config.card}`}
         onClick={handleClick}>
-        <RomanCardContent className="relative p-6">
-          <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-white/20 to-transparent" />
-          <div className="relative flex items-center justify-between">
-            <div className="min-w-0 flex-1 pr-4">
-              <h3 className="mb-2 min-w-0 truncate font-serif text-xl text-gray-900">
+        <RomanCardContent className="relative h-full p-5 sm:p-6">
+          <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-white/25 to-transparent" />
+          <div className="relative flex h-full items-center gap-4">
+            <div className="flex h-full min-w-0 flex-1 flex-col">
+              <div className="text-[0.68rem] font-bold uppercase tracking-[0.18em] text-roman-stone/80">Lesson</div>
+              <h3 className="mt-2 min-w-0 truncate font-serif text-xl text-gray-950">
                 <SimpleRichDisplay content={lesson.title} className="truncate [&_p]:truncate" />
               </h3>
-              <div className="line-clamp-2 text-sm text-roman-stone">
-                <SimpleRichDisplay content={lesson.description || ''} />
+              <div className="mt-1 min-h-5 text-sm text-roman-stone">
+                <SimpleRichDisplay content={description} className="line-clamp-1 [&_p]:line-clamp-1" />
+              </div>
+              <div
+                className={`mt-auto min-w-0 truncate text-xs font-semibold ${
+                  lesson.status === 'completed'
+                    ? 'text-emerald-700'
+                    : lesson.status === 'in-progress'
+                      ? 'text-roman-red'
+                      : lesson.status === 'locked'
+                        ? 'text-gray-500'
+                        : 'text-roman-stone'
+                }`}>
+                {statusLabel}
+              </div>
+              <div aria-hidden="true" className="mt-2 h-1 overflow-hidden rounded-full bg-gray-900/10">
+                <div
+                  className={`h-full rounded-full transition-[width] duration-500 ${
+                    lesson.status === 'completed'
+                      ? 'bg-roman-green'
+                      : lesson.status === 'locked'
+                        ? 'bg-gray-300'
+                        : 'bg-roman-red'
+                  }`}
+                  style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}
+                />
               </div>
             </div>
-            <div className="shrink-0">
+            <div className="shrink-0 self-center">
               <CircularProgressButton
                 progress={progress}
                 status={lesson.status}
@@ -475,7 +517,7 @@ export default function DashboardPage() {
                   </RomanCardContent>
                 </RomanCard>
               ) : (
-                <div className="relative overflow-hidden">
+                <div className="relative">
                   <Swiper
                     spaceBetween={0}
                     slidesPerView={1}
@@ -488,7 +530,7 @@ export default function DashboardPage() {
                       1024: { slidesPerView: 2 },
                       1280: { slidesPerView: 3 },
                     }}
-                    className="lesson-cards-carousel overflow-hidden px-0 py-8 sm:p-8"
+                    className="lesson-cards-carousel !overflow-clip [overflow-clip-margin:4rem] px-0 py-8 sm:p-8"
                     centeredSlides={true}
                     effect="slide">
                     <div slot="container-end">
@@ -496,14 +538,21 @@ export default function DashboardPage() {
                     </div>
 
                     {learningUnits.map(unit => (
-                      <SwiperSlide key={unit.id} className="min-w-0 overflow-hidden px-2 py-8 sm:p-6 lg:p-10">
+                      <SwiperSlide
+                        key={unit.id}
+                        className="min-w-0 overflow-visible px-2 py-8 transition-transform duration-300 sm:p-6 lg:p-10">
                         {({ isActive, isVisible, isPrev, isNext }) => (
                           <OffscreenSlide isVisible={isActive || isVisible || isPrev || isNext}>
-                            {unit.kind === 'test' ? (
-                              <TestCard test={unit} onTestClick={handleLessonClick} />
-                            ) : (
-                              <LessonCard lesson={unit} onLessonClick={handleLessonClick} />
-                            )}
+                            <div
+                              className={`transform-gpu transition-transform duration-300 ${
+                                isActive ? 'scale-100 sm:scale-105 xl:scale-110' : 'scale-[0.98]'
+                              }`}>
+                              {unit.kind === 'test' ? (
+                                <TestCard test={unit} onTestClick={handleLessonClick} />
+                              ) : (
+                                <LessonCard lesson={unit} onLessonClick={handleLessonClick} />
+                              )}
+                            </div>
                           </OffscreenSlide>
                         )}
                       </SwiperSlide>

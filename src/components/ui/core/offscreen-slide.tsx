@@ -26,7 +26,7 @@ export function OffscreenSlide({ isVisible, children }: { isVisible: boolean; ch
   const shown = intersecting ?? isVisible;
 
   return (
-    <div ref={ref} className="h-full min-w-0 overflow-hidden" inert={!shown || undefined} aria-hidden={!shown}>
+    <div ref={ref} className="h-full min-w-0 overflow-visible" inert={!shown || undefined} aria-hidden={!shown}>
       {children}
     </div>
   );

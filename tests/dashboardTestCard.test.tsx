@@ -64,10 +64,11 @@ describe('student dashboard test card', () => {
   it('uses the production lesson-card presentation while retaining the accessible action', () => {
     const { container } = render(<LessonCard lesson={lessonSummary()} onLessonClick={jest.fn()} />);
 
-    expect(container.firstChild).toHaveClass('h-36');
-    expect(screen.queryByText('Lesson')).not.toBeInTheDocument();
-    expect(screen.queryByText('Continue from where you left off.')).not.toBeInTheDocument();
-    expect(screen.queryByText('35% complete')).not.toBeInTheDocument();
+    expect(container.firstChild).toHaveClass('h-40');
+    expect(screen.getByText('Lesson')).toBeInTheDocument();
+    expect(screen.getByText('Continue from where you left off.')).toBeInTheDocument();
+    expect(screen.getByText('35% complete')).toBeInTheDocument();
+    expect(container.querySelector('.h-1 > div')).toHaveStyle({ width: '35%' });
     expect(screen.getByRole('button', { name: 'Continue lesson' })).toBeInTheDocument();
   });
 
