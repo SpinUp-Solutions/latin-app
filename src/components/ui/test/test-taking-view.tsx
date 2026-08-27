@@ -1,7 +1,7 @@
 'use client';
 
 import React, { type ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, Eye, FileCheck2, Save } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Eye, FileCheck2, LogOut, Save } from 'lucide-react';
 import { Button } from '@/src/components/ui/button';
 import { Progress } from '@/src/components/ui/progress';
 import { RomanPlayerShell } from '@/src/components/ui/core/roman-player-shell';
@@ -31,6 +31,7 @@ export interface TestTakingViewProps {
   onPrevious: () => void;
   onNext: () => void;
   onReview: () => void;
+  onExit?: () => void;
   navigationPending?: boolean;
   embedded?: boolean;
 }
@@ -54,6 +55,7 @@ export function TestTakingView({
   onPrevious,
   onNext,
   onReview,
+  onExit,
   navigationPending = false,
   embedded = false,
 }: TestTakingViewProps) {
@@ -123,31 +125,44 @@ export function TestTakingView({
         <div
           className="mt-4 flex flex-col gap-3 rounded-2xl border border-roman-red/15 bg-white/95 p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between"
           aria-label="Test page navigation">
-          <Button
-            variant="outline"
-            className="rounded-xl border-roman-red/20 hover:bg-roman-parchment"
-            disabled={navigationPending || currentPageIndex === 0}
-            onClick={onPrevious}>
-            <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
-            Previous page
-          </Button>
-          {!isLastPage ? (
+          {onExit ? (
             <Button
-              className="rounded-xl bg-roman-red hover:bg-roman-red/90"
+              type="button"
+              variant="outline"
+              className="rounded-xl border-roman-red/20 hover:bg-roman-parchment"
               disabled={navigationPending}
-              onClick={onNext}>
-              Next page
-              <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+              onClick={onExit}>
+              <LogOut className="mr-2 h-4 w-4" aria-hidden="true" />
+              Exit test
             </Button>
-          ) : (
+          ) : null}
+          <div className="flex flex-col gap-3 sm:ml-auto sm:flex-row sm:items-center">
             <Button
-              className="rounded-xl bg-roman-red hover:bg-roman-red/90"
-              disabled={navigationPending}
-              onClick={onReview}>
-              Review answers
-              <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+              variant="outline"
+              className="rounded-xl border-roman-red/20 hover:bg-roman-parchment"
+              disabled={navigationPending || currentPageIndex === 0}
+              onClick={onPrevious}>
+              <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
+              Previous page
             </Button>
-          )}
+            {!isLastPage ? (
+              <Button
+                className="rounded-xl bg-roman-red hover:bg-roman-red/90"
+                disabled={navigationPending}
+                onClick={onNext}>
+                Next page
+                <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+              </Button>
+            ) : (
+              <Button
+                className="rounded-xl bg-roman-red hover:bg-roman-red/90"
+                disabled={navigationPending}
+                onClick={onReview}>
+                Review answers
+                <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+              </Button>
+            )}
+          </div>
         </div>
       </main>
     </div>

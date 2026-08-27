@@ -83,6 +83,28 @@ describe('shared Roman test-taking view', () => {
     expect(screen.getByText('page-one:test')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
     expect(onNext).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'Exit test' })).not.toBeInTheDocument();
+  });
+
+  it('exposes an Exit control when the student player provides one', () => {
+    const onExit = jest.fn();
+    render(
+      <TestTakingView
+        title="Roman assessment"
+        pages={pages}
+        currentPageIndex={0}
+        answeredCount={0}
+        totalExercises={2}
+        status="Answer saved."
+        onPrevious={jest.fn()}
+        onNext={jest.fn()}
+        onReview={jest.fn()}
+        onExit={onExit}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Exit test' }));
+    expect(onExit).toHaveBeenCalledTimes(1);
   });
 
   it('keeps local preview answers across pages and resets them when authored pages change', async () => {

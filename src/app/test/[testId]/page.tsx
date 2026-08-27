@@ -239,13 +239,8 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
     };
   }, [flushPendingAnswers, hasUnsavedAnswers, originKey]);
 
-  const begin = async () => {
+  const startFreshAttempt = async () => {
     if (!user || !test || (isMockTest && !mockTest) || normalTest?.status === 'locked') return;
-    if (isMockTest && attempt) {
-      setScreen('taking');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
-    }
     const requestedOriginKey = originKey;
     try {
       const response = await startAttempt({ uid: user.uid, origin }).unwrap();
@@ -258,7 +253,8 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
       });
       setAttempt(response.attempt);
       setPageIndex(0);
-      if (!isMockTest) setScreen('taking');
+      setScreen('taking');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
       const code = getApiErrorCode(error);
       if (code === 'TEST_CONFIGURATION_ERROR' || code === 'TEST_NOT_AVAILABLE') {
@@ -266,6 +262,33 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
         return;
       }
       toast.error(getApiErrorMessage(error, 'Unable to start this test'));
+    }
+  };
+
+  const begin = async () => {
+    if (!user || !test || (isMockTest && !mockTest) || normalTest?.status === 'locked') return;
+    if (attempt) {
+      setScreen('taking');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    await startFreshAttempt();
+  };
+
+  const retake = () => {
+    setAttempt(null);
+    setResult(null);
+    resetAnswerBuffer();
+    setPageIndex(0);
+    void startFreshAttempt();
+  };
+
+  const exitTest = async () => {
+    try {
+      await flushPendingAnswers();
+      router.push('/dashboard');
+    } catch {
+      toast.error('Save the pending answer before leaving this test.');
     }
   };
 
@@ -649,15 +672,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
                 </p>
               )
             ) : (
-              <Button
-                className="bg-roman-red hover:bg-roman-red/90"
-                onClick={() => {
-                  setAttempt(null);
-                  setResult(null);
-                  resetAnswerBuffer();
-                  setPageIndex(0);
-                  setScreen('expectations');
-                }}>
+              <Button className="bg-roman-red hover:bg-roman-red/90" onClick={() => void retake()}>
                 <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
                 {isMockTest ? 'Retake Mock Test' : 'Retake Test'}
               </Button>
@@ -822,6 +837,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
         onPrevious={() => void moveToPage(pageIndex - 1)}
         onNext={() => void moveToPage(pageIndex + 1)}
         onReview={() => void openReview()}
+        onExit={() => void exitTest()}
         navigationPending={translationGrading}
       />
     </TestTranslationGradingProvider>
