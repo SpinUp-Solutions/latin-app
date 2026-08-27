@@ -1,10 +1,14 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { connectAuthEmulator, getAuth } from 'firebase/auth';
-import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore';
+import {
+  connectFirestoreEmulator,
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
-import { getMessaging } from 'firebase/messaging';
-import { getAnalytics } from 'firebase/analytics';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -18,10 +22,31 @@ const firebaseConfig = {
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
-const db = getFirestore(app);
+const usingFirebaseEmulators = process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === 'true';
+
+const initializeClientFirestore = () => {
+  try {
+    return initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    });
+  } catch (error) {
+    // The Firebase app survives Next.js Fast Refresh, while this module and
+    // its newly allocated cache settings can be evaluated again. Reuse the
+    // existing instance in that case; propagate unrelated initialization
+    // failures instead of silently changing Firestore behavior.
+    if (!(error instanceof Error && 'code' in error && error.code === 'failed-precondition')) throw error;
+    return getFirestore(app);
+  }
+};
+
+// The persistent cache serves the `users/{uid}` profile read from IndexedDB
+// instead of the network, taking the auth chain's Firestore round trip off the
+// critical path on every fresh load. It requires IndexedDB, so it stays
+// browser-only (the server render keeps the memory cache); the emulator keeps
+// the previous in-memory behavior because its data is ephemeral.
+const db = typeof window !== 'undefined' && !usingFirebaseEmulators ? initializeClientFirestore() : getFirestore(app);
 const storage = getStorage(app);
 const functions = getFunctions(app);
-const usingFirebaseEmulators = process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === 'true';
 
 if (usingFirebaseEmulators && typeof window !== 'undefined') {
   connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
@@ -33,7 +58,8 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
   console.log('[Firebase] Connected to Functions emulator');
 }
 
-const messaging = typeof window !== 'undefined' && !usingFirebaseEmulators ? getMessaging(app) : null;
-const analytics = typeof window !== 'undefined' && !usingFirebaseEmulators ? getAnalytics(app) : null;
+// Messaging and Analytics are deliberately not initialized here: nothing on
+// the critical path uses them, and their SDKs add script/network work to every
+// page load. When needed, import them dynamically after the app is idle.
 
-export { app, auth, db, storage, functions, messaging, analytics };
+export { app, auth, db, storage, functions };

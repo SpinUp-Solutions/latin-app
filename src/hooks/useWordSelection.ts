@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { useDebounce } from './useDebounce';
 import { useGetWordsForPoolSelectionQuery } from '@/src/store/api/vocabularyPoolApi';
@@ -21,6 +21,7 @@ import {
   selectFiltersExpanded,
 } from '@/src/store/selectors/vocabularyPoolSelectors';
 import { cascadeFilterUpdates } from '@/src/utils/wordFilters';
+import { shouldFetchNextSearchPage } from '@/src/lib/paginated-search';
 import type { Word } from '@/src/types/admin-vocabulary';
 import type { PoolFilters } from '@/src/types/pool-filters';
 
@@ -34,6 +35,9 @@ export const useWordSelection = () => {
   const filtersExpanded = useAppSelector(selectFiltersExpanded);
 
   const debouncedSearch = useDebounce(filters.search || '', 300);
+  const searchPending = (filters.search || '') !== debouncedSearch;
+  const committedSearchRef = useRef(debouncedSearch);
+  const searchCommitted = committedSearchRef.current === debouncedSearch;
   const debouncedFilters = useMemo(
     () => ({
       ...filters,
@@ -52,10 +56,16 @@ export const useWordSelection = () => {
     ]
   );
 
+  useEffect(() => {
+    if (committedSearchRef.current === debouncedSearch) return;
+    committedSearchRef.current = debouncedSearch;
+    dispatch(setPaginationCursor(null));
+  }, [debouncedSearch, dispatch]);
+
   const { data, isLoading, isFetching } = useGetWordsForPoolSelectionQuery({
     filters: debouncedFilters,
     limit: 50,
-    lastWordId: paginationCursor,
+    lastWordId: searchPending || !searchCommitted ? null : paginationCursor,
   });
 
   const availableWords = useMemo(() => {
@@ -85,10 +95,18 @@ export const useWordSelection = () => {
   );
 
   const handleLoadMore = useCallback(() => {
-    if (data?.lastWordId && !isFetching) {
-      dispatch(setPaginationCursor(data.lastWordId));
+    const nextCursor = data?.lastWordId ?? null;
+    if (
+      !shouldFetchNextSearchPage({
+        hasCursor: Boolean(nextCursor),
+        isFetching,
+        searchPending,
+      })
+    ) {
+      return;
     }
-  }, [dispatch, data?.lastWordId, isFetching]);
+    dispatch(setPaginationCursor(nextCursor));
+  }, [dispatch, data?.lastWordId, isFetching, searchPending]);
 
   const handleUpdateFilters = useCallback(
     (updates: Partial<PoolFilters>) => {

@@ -126,9 +126,9 @@ export const LessonBuilder: React.FC<LessonBuilderProps> = ({ initialLesson, onS
 
   return (
     <>
-      <div className="flex h-full bg-gray-50">
+      <div className="flex h-full min-h-0 bg-gray-50">
         {/* Left Panel - Editor */}
-        <div className="w-1/2 overflow-y-auto p-4 space-y-4">
+        <div className="flex min-h-0 w-1/2 flex-col overflow-y-auto p-4 space-y-4">
           {/* Header */}
           <div className="flex items-center justify-between bg-white border rounded-md p-3">
             <div>

@@ -3,15 +3,16 @@
 import React, { useState, useMemo } from 'react';
 import { GeneratedFormIdentificationExercise } from '@/src/types/exercises/generated-form-identification';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
-import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { ExerciseInput, FeedbackDisplay } from '../feedback';
 import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
-import { useGetMultiParadigmWordsQuery } from '@/src/store/api/advancedVocabularyApi';
+import {
+  useGetGeneratedExerciseWordsQuery,
+  type GeneratedExerciseQuerySource,
+} from '@/src/store/api/advancedVocabularyApi';
 import { Card, CardContent } from '../card';
-import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
 import {
   FormIdentificationItemSchema,
   type FormIdentificationItem,
@@ -29,8 +30,12 @@ import {
   normalize,
 } from '@/src/utils/exercises/generatedFormIdentificationExercise';
 import { formatLabel } from '@/src/utils/label-formatter';
-import { normalizeCollection, buildLegacyParadigmConfigs } from '@/src/utils/exercises/legacyExerciseCompat';
-import type { ExerciseAnswer, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
+import type {
+  ExerciseAnswer,
+  ExerciseAnswerHandler,
+  ExerciseCompletionHandler,
+  RuntimeMode,
+} from '@/src/types/runtime-mode';
 import { getContentTypeLabel } from '@/src/lib/content/registry';
 import { createGeneratedFormIdentificationItems } from '@/src/lib/tests/generated-exercises';
 import { RecordedAnswerControls } from './recorded-answer-controls';
@@ -39,11 +44,13 @@ import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 interface Props {
   exercise: GeneratedFormIdentificationExercise;
   onComplete?: (score: number) => void;
+  onCompletionAccepted?: ExerciseCompletionHandler;
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
   initialAnswer?: ExerciseAnswer;
   resolvedItems?: Array<FormIdentificationItem | SingleFieldFormIdentificationItem | MultiAnswerFormIdentificationItem>;
   allowGeneratedExerciseQueries?: boolean;
+  generatedExerciseSource?: GeneratedExerciseQuerySource;
 }
 
 type ItemType = FormIdentificationItem | SingleFieldFormIdentificationItem | MultiAnswerFormIdentificationItem;
@@ -58,11 +65,13 @@ const getExpectedAnswerCount = (item: ItemType) => {
 const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
   exercise,
   onComplete,
+  onCompletionAccepted,
   runtimeMode,
   onAnswer,
   initialAnswer,
   resolvedItems,
   allowGeneratedExerciseQueries = false,
+  generatedExerciseSource,
 }) => {
   const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
@@ -70,47 +79,30 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
   const [wordAnswers, setWordAnswers] = useState<Record<string, Record<string, string>>>({});
   const [multiAnswerSlots, setMultiAnswerSlots] = useState<Record<string, string[][]>>({});
 
-  const config = exercise.data.generatorConfig ?? {
-    collection: '',
-    wordSource: 'filters' as const,
-    count: 0,
-  };
   const isSingleField = exercise.data.mode === 'single-field';
   const requireAllPrimaryAnswers = exercise.data.requireAllPrimaryAnswers ?? false;
   const isMultiAnswerMode = !isSingleField && requireAllPrimaryAnswers;
 
-  // Backward compat: old exercises stored filters/formSelection in generatorConfig
-  // with no paradigmConfigs, wordSource, or poolId
-  const hasNewFormatParadigmConfigs =
-    exercise.data.paradigmConfigs &&
-    typeof exercise.data.paradigmConfigs === 'object' &&
-    Object.keys(exercise.data.paradigmConfigs).length > 0;
-
-  const paradigmConfigs = hasNewFormatParadigmConfigs
-    ? exercise.data.paradigmConfigs
-    : buildLegacyParadigmConfigs(config as Parameters<typeof buildLegacyParadigmConfigs>[0]);
-
-  const { data, isLoading, isError } = useGetMultiParadigmWordsQuery(
+  const { data, isLoading, isError } = useGetGeneratedExerciseWordsQuery(
     {
-      exerciseType: 'generated-form-identification',
-      collection: normalizeCollection(config.collection),
-      wordSource: config.wordSource || 'filters',
-      poolId: config.poolId ?? null,
-      poolWordLimit: config.poolWordLimit ?? null,
-      count: config.count,
-      paradigmConfigs,
+      exercise: {
+        type: 'generated-form-identification',
+        data: exercise.data,
+      },
+      source: generatedExerciseSource ?? { kind: 'admin-preview' },
     },
-    { skip: (mode === 'test' && !allowGeneratedExerciseQueries) || resolvedItems !== undefined }
+    {
+      skip:
+        (!generatedExerciseSource && !allowGeneratedExerciseQueries) ||
+        (mode === 'test' && !allowGeneratedExerciseQueries) ||
+        resolvedItems !== undefined,
+    }
   );
 
   const items: ItemType[] = useMemo(() => {
     if (resolvedItems) return resolvedItems;
     if (!data?.words) return [];
-    return createGeneratedFormIdentificationItems(
-      exercise,
-      data.words as unknown as ExerciseWordResponse[],
-      wordAnswers
-    );
+    return createGeneratedFormIdentificationItems(exercise, data.words, wordAnswers);
   }, [data?.words, exercise, wordAnswers, resolvedItems]);
 
   const validatedItems = useMemo(() => {
@@ -179,6 +171,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
     confirmAdvance,
     resetIndex,
     nextItem,
+    cancelPendingAdvance,
   } = useExerciseProgression({
     totalItems: validatedItems.length,
     initialIndex: restoredIndex,
@@ -198,21 +191,22 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
     resetExercise,
   } = useExerciseFeedback(exercise.feedbackConfig);
 
-  useDelayedExerciseReset({
-    shouldReset: !assessmentMode && shouldResetExercise,
-    delayMs: exercise.itemProgressionDelay,
-    onReset: () => {
-      setUserAnswer('');
-      setWordAnswers({});
-      setMultiAnswerSlots({});
-      setIsProcessing(false);
-      resetIndex();
-      resetExercise();
-    },
-  });
+  const resetRequired = mode === 'practice' && shouldResetExercise;
+
+  const handleExerciseReset = () => {
+    cancelPendingAdvance();
+    setUserAnswer('');
+    setWordAnswers({});
+    setMultiAnswerSlots({});
+    setSubmittedAnswers({});
+    setTestSubmitted(false);
+    setIsProcessing(false);
+    resetIndex();
+    resetExercise();
+  };
 
   const handleSubmit = () => {
-    if (isProcessing || validatedItems.length === 0 || !userAnswer.trim()) return;
+    if (isProcessing || validatedItems.length === 0 || !userAnswer.trim() || resetRequired) return;
     if (currentIndex >= validatedItems.length) return;
 
     const currentItem = validatedItems[currentIndex];
@@ -320,6 +314,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
         setIsProcessing(false);
         if (finalScore !== null) onComplete?.(finalScore);
       }, false);
+      if (!assessmentMode && finalScore !== null) onCompletionAccepted?.(finalScore);
       return;
     }
 
@@ -356,6 +351,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
         setIsProcessing(false);
         if (finalScore !== null) onComplete?.(finalScore);
       }, false);
+      if (!assessmentMode && finalScore !== null) onCompletionAccepted?.(finalScore);
     } else {
       handleIncorrect();
       setIsProcessing(false);
@@ -444,7 +440,12 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
       )}
 
       <ExerciseProgress
-        current={safeIndex}
+        currentIndex={safeIndex}
+        completed={
+          mode === 'practice'
+            ? safeIndex + (isCorrect === true ? 1 : 0)
+            : validatedItems.filter(item => Boolean(submittedAnswers[item.id]?.trim())).length
+        }
         total={validatedItems.length}
         showProgress={exercise.feedbackConfig.progressionRules?.showProgress !== false}
       />
@@ -535,7 +536,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
                   ? `e.g., answer1;answer2`
                   : 'Type your answer...'
             }
-            disabled={isProcessing || testSubmitted}
+            disabled={isProcessing || testSubmitted || resetRequired}
           />
 
           {!assessmentMode && (
@@ -553,6 +554,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
               }
               showExplanation={showExplanation}
               onContinue={!assessmentMode && isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
+              onStartOver={resetRequired ? handleExerciseReset : undefined}
             />
           )}
           {assessmentMode && testSubmitted && (

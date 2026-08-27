@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { skipToken } from '@reduxjs/toolkit/query';
+import { useCallback, useEffect, useMemo } from 'react';
 import { produce } from 'immer';
 import { useAppDispatch } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonEditorSlice';
-import { useGetMultiPosWordsQuery } from '@/src/store/api/advancedVocabularyApi';
+import type {
+  GeneratedExercisePreviewRequest,
+  GeneratedExercisePreviewResult,
+} from '@/src/store/api/advancedVocabularyApi';
 import { useFormSelectionControls } from '@/src/hooks/useFormSelection';
+import { useGeneratedExercisePreview } from '@/src/hooks/useGeneratedExercisePreview';
 import { usePoolPOSSummary } from '@/src/hooks/usePoolPOSSummary';
 import { ensureGeneratorConfig, DEFAULT_POS_FILTERS } from '@/src/utils/exercises/generatorConfigDefaults';
 import { deriveTableTypeFromPOS } from '@/src/utils/generated/tableType';
@@ -19,7 +22,8 @@ import type {
 import type { FormIdentificationPosConfig } from '@/src/types/exercises/base';
 import type { GeneratedExerciseType } from '@/src/config/exerciseSelectFields';
 import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
-import type { GetAdvancedWordsResponse } from '@/src/store/api/advancedVocabularyApi';
+import type { GeneratedFormIdentificationExercise } from '@/src/types/exercises/generated-form-identification';
+import type { GeneratedTranslationExercise } from '@/src/types/exercises/generated-translation';
 
 interface UseGeneratedExerciseEditorOptions {
   exerciseType: GeneratedExerciseType;
@@ -61,8 +65,9 @@ export interface UseGeneratedExerciseEditorReturn<T extends GeneratedExercise> {
     handleSelectAll: () => void;
     handleClearSelection: () => void;
   };
-  previewData: GetAdvancedWordsResponse['data'] | undefined;
+  previewData: GeneratedExercisePreviewResult | undefined;
   isPreviewFetching: boolean;
+  previewError: unknown;
 }
 
 export function useGeneratedExerciseEditor<T extends GeneratedExercise>(
@@ -70,7 +75,6 @@ export function useGeneratedExerciseEditor<T extends GeneratedExercise>(
   options: UseGeneratedExerciseEditorOptions
 ): UseGeneratedExerciseEditorReturn<T> {
   const dispatch = useAppDispatch();
-  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   const rawConfig = editingContent.data?.generatorConfig;
   const config = useMemo(() => ensureGeneratorConfig(rawConfig), [rawConfig]);
@@ -112,22 +116,24 @@ export function useGeneratedExerciseEditor<T extends GeneratedExercise>(
     return editingContent.data.posConfigs?.[activePOS]?.formSelection;
   }, [activePOS, editingContent.data.posConfigs]);
 
-  const previewResult = useGetMultiPosWordsQuery(
-    isPreviewOpen && editingContent.data.posConfigs
-      ? {
-          exerciseType: options.exerciseType,
-          collection: config.collection,
-          wordSource: config.wordSource,
-          poolId: config.poolId,
-          poolWordLimit: config.poolWordLimit,
-          count: config.count,
-          posConfigs: editingContent.data.posConfigs,
-        }
-      : skipToken
-  );
-
-  const previewData = previewResult.data;
-  const isPreviewFetching = previewResult.isFetching;
+  const previewRequest = useMemo((): GeneratedExercisePreviewRequest => {
+    if (options.exerciseType === 'generated-form-identification') {
+      return {
+        type: 'generated-form-identification',
+        data: editingContent.data as GeneratedFormIdentificationExercise['data'],
+      };
+    }
+    return {
+      type: 'generated-translation',
+      translationDirection:
+        'translationDirection' in editingContent
+          ? (editingContent.translationDirection as GeneratedTranslationExercise['translationDirection'])
+          : undefined,
+      data: editingContent.data as GeneratedTranslationExercise['data'],
+    };
+  }, [editingContent, options.exerciseType]);
+  const { isPreviewOpen, setIsPreviewOpen, previewData, isPreviewFetching, previewError } =
+    useGeneratedExercisePreview(previewRequest);
 
   const updateContent = useCallback(
     (updates: Partial<T>) => {
@@ -359,5 +365,6 @@ export function useGeneratedExerciseEditor<T extends GeneratedExercise>(
     formSelectionControls,
     previewData,
     isPreviewFetching,
+    previewError,
   };
 }

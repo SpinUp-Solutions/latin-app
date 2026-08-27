@@ -1,17 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { LEARNING_UNITS_COLLECTION, USER_PROGRESS_COLLECTION } from '@/shared/constants/firestore';
 import { adminDb } from '@/src/services/firebase-admin';
 import { verifyRequestAuth } from '@/src/lib/verifyRequestAuth';
 import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 import { getLessonProgressAccessInTransaction } from '@/src/lib/learning-units/progression-access';
 import { Lesson, UserProgress } from '@/src/types/lesson';
-import {
-  getMissingExercises,
-  getRequiredExercises,
-  isStoredLessonComplete,
-  normalizeExerciseProgress,
-  PROGRESS_SCHEMA_VERSION,
-} from '@/src/utils/lessonProgress';
+import { isStoredLessonComplete, summarizeLessonCompletion, toPersistedProgressSummary } from '@/src/utils/lessonProgress';
+import { reportServerUnexpectedError } from '@/src/lib/report-unexpected-error';
 
 const finishRequestSchema = z.object({ finalPageId: z.string().min(1) });
 
@@ -32,8 +28,8 @@ export async function POST(
     }
     const { finalPageId } = parsedRequest.data;
 
-    const lessonRef = adminDb.collection('lessons').doc(lessonId);
-    const progressRef = adminDb.collection('userProgress').doc(`${userId}_${lessonId}`);
+    const lessonRef = adminDb.collection(LEARNING_UNITS_COLLECTION).doc(lessonId);
+    const progressRef = adminDb.collection(USER_PROGRESS_COLLECTION).doc(`${userId}_${lessonId}`);
     const now = new Date().toISOString();
 
     const result = await adminDb.runTransaction(async transaction => {
@@ -61,17 +57,25 @@ export async function POST(
       if (!finalPage || finalPage.id !== finalPageId) return { kind: 'invalid-final-page' as const };
 
       const existing = (progressSnapshot.data() || {}) as Partial<UserProgress>;
-      const exerciseProgress = normalizeExerciseProgress(lesson, existing.exerciseProgress);
       const alreadyCompleted = isStoredLessonComplete(existing, lesson.pages.length);
-      const missingExercises = alreadyCompleted
-        ? []
-        : getMissingExercises(getRequiredExercises(lesson), exerciseProgress);
+      const furthestPageIndex = lesson.pages.length - 1;
+      const summary = summarizeLessonCompletion(lesson, {
+        ...existing,
+        furthestPageIndex,
+        currentPageIndex: furthestPageIndex,
+      });
+      const missingExercises = alreadyCompleted ? [] : summary.missingExercises;
 
       if (missingExercises.length > 0) {
         return { kind: 'missing-exercises' as const, missingExercises };
       }
 
-      const furthestPageIndex = lesson.pages.length - 1;
+      const persisted = toPersistedProgressSummary(
+        { ...summary, isCompleted: true, progress: 100 },
+        existing,
+        now
+      );
+
       transaction.set(
         progressRef,
         {
@@ -80,17 +84,20 @@ export async function POST(
           lessonId,
           furthestPageIndex,
           currentPageIndex: furthestPageIndex,
-          exerciseProgress,
-          status: 'completed',
-          completedAt: existing.completedAt || now,
+          ...persisted,
           lastAccessedAt: now,
           updatedAt: now,
-          progressSchemaVersion: PROGRESS_SCHEMA_VERSION,
         },
         { merge: true }
       );
 
-      return { kind: 'completed' as const, alreadyCompleted };
+      return {
+        kind: 'completed' as const,
+        alreadyCompleted,
+        progress: persisted.progress,
+        completedExerciseCount: persisted.completedExerciseCount,
+        requiredExerciseCount: persisted.requiredExerciseCount,
+      };
     });
 
     if (result.kind === 'lesson-not-found') {
@@ -112,7 +119,14 @@ export async function POST(
       );
     }
 
-    return NextResponse.json({ success: true, lessonCompleted: true, alreadyCompleted: result.alreadyCompleted });
+    return NextResponse.json({
+      success: true,
+      lessonCompleted: true,
+      alreadyCompleted: result.alreadyCompleted,
+      progress: result.progress,
+      completedExerciseCount: result.completedExerciseCount,
+      requiredExerciseCount: result.requiredExerciseCount,
+    });
   } catch (error) {
     if (
       error &&
@@ -126,6 +140,9 @@ export async function POST(
       );
     }
     console.error('Error completing lesson:', error);
+    reportServerUnexpectedError(error, {
+      tags: { surface: 'finish_lesson' },
+    });
     return NextResponse.json({ error: 'Failed to complete lesson' }, { status: 500 });
   }
 }

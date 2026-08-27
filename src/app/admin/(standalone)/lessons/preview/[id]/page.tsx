@@ -8,6 +8,7 @@ import { LessonWithProgress } from '@/src/types/lesson';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/src/components/ui/button';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
+import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { useAppDispatch } from '@/src/store/hooks';
 import { setLesson, resetLessonState } from '@/src/store/slices/lessonEditorSlice';
 
@@ -81,8 +82,14 @@ function AdminLessonPreviewPage() {
 
       <main className="container mx-auto px-6 py-8">
         <div className="max-w-3xl mx-auto">
-          <h2 className="text-2xl font-serif text-gray-800 mb-6">{previewLesson.title}</h2>
-          <LessonPlayer lesson={previewLesson} trackProgress={false} />
+          <h2 className="text-2xl font-serif text-gray-800 mb-6">
+            <SimpleRichDisplay content={previewLesson.title} />
+          </h2>
+          <LessonPlayer
+            lesson={previewLesson}
+            trackProgress={false}
+            generatedExerciseContext={{ kind: 'admin-preview' }}
+          />
         </div>
       </main>
     </div>

@@ -7,7 +7,7 @@ import { LessonStatus, type StudentLearningUnitSummary } from '@/src/types/lesso
 import { BookOpen, CheckCircle, Lock, Play, ChevronLeft, FileCheck2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/src/hooks/useAuth';
-import { stripHtmlTags } from '@/src/utils/exercises';
+import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { cn } from '@/src/lib/utils';
 
 interface LessonSidebarProps {
@@ -84,23 +84,38 @@ export default function LessonSidebar({ currentLessonId, isCollapsed = false, on
     [router]
   );
 
-  const EXPANDED_WIDTH = '20rem';
-  const COLLAPSED_WIDTH = '3rem';
-
   return (
-    <div
-      className="relative h-full flex-shrink-0 transition-[width] duration-300 ease-in-out"
-      style={{ width: isCollapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH }}>
-      <div className="absolute inset-0 overflow-hidden bg-gradient-to-br from-roman-marble via-white to-roman-parchment border-r border-roman-red/20">
+    <>
+      {!isCollapsed && (
+        <button
+          type="button"
+          className="fixed inset-0 z-30 bg-black/40 min-[901px]:hidden"
+          aria-label="Close lessons sidebar"
+          onClick={onToggleCollapse}
+        />
+      )}
+      <div
+        className={cn(
+          'relative h-full shrink-0 transition-[width] duration-300 ease-in-out',
+          isCollapsed ? 'w-0 min-[901px]:w-12' : 'w-0 min-[901px]:w-80'
+        )}>
+      <div
+        className={cn(
+          'overflow-hidden border-r border-roman-red/20 bg-gradient-to-br from-roman-marble via-white to-roman-parchment',
+          isCollapsed
+            ? 'hidden min-[901px]:absolute min-[901px]:inset-0 min-[901px]:block'
+            : 'fixed inset-y-0 left-0 z-40 w-80 min-[901px]:absolute min-[901px]:inset-0 min-[901px]:w-auto'
+        )}>
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute top-0 left-0 w-48 h-48 bg-gradient-to-r from-roman-gold/20 to-amber-300/15 rounded-full mix-blend-multiply filter blur-2xl opacity-60" />
           <div className="absolute bottom-0 right-0 w-48 h-48 bg-gradient-to-l from-roman-red/15 to-roman-terracotta/10 rounded-full mix-blend-multiply filter blur-2xl opacity-60" />
         </div>
 
         <div
+          hidden={isCollapsed}
           className={cn(
-            'absolute top-0 bottom-0 left-0 w-80 flex flex-col transition-opacity duration-200',
-            isCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'
+            'absolute inset-0 flex flex-col',
+            isCollapsed && 'pointer-events-none'
           )}>
           <div className="relative px-6 py-8 border-b border-roman-red/10 bg-white/40 backdrop-blur-sm flex-shrink-0">
             <div className="flex items-center gap-3 mb-2">
@@ -185,7 +200,7 @@ export default function LessonSidebar({ currentLessonId, isCollapsed = false, on
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <h4 className="min-w-0 flex-1 truncate text-base font-serif text-gray-900">
-                                {unit.title}
+                                <SimpleRichDisplay content={unit.title} className="truncate" />
                               </h4>
                               {isTest && (
                                 <span className="rounded-full bg-indigo-700 px-2 py-0.5 text-[10px] font-bold tracking-wide text-white">
@@ -194,9 +209,9 @@ export default function LessonSidebar({ currentLessonId, isCollapsed = false, on
                               )}
                             </div>
                             {unit.description && (
-                              <p className="text-sm text-roman-stone mt-1 line-clamp-2">
-                                {stripHtmlTags(unit.description)}
-                              </p>
+                              <div className="mt-1 line-clamp-2 text-sm text-roman-stone">
+                                <SimpleRichDisplay content={unit.description} />
+                              </div>
                             )}
 
                             <div className="flex items-center gap-2 mt-2 text-xs text-roman-stone font-medium">
@@ -248,10 +263,8 @@ export default function LessonSidebar({ currentLessonId, isCollapsed = false, on
         </div>
 
         <div
-          className={cn(
-            'absolute inset-0 flex flex-col items-center pt-5 transition-opacity duration-200',
-            isCollapsed ? 'opacity-100' : 'opacity-0 pointer-events-none'
-          )}>
+          hidden={!isCollapsed}
+          className="absolute inset-0 hidden flex-col items-center pt-5 min-[901px]:flex">
           <div className="relative h-10 w-10 bg-gradient-to-br from-roman-red/20 to-roman-terracotta/10 rounded-xl flex items-center justify-center shadow-lg border border-roman-red/20">
             <BookOpen className="h-5 w-5 text-roman-red" />
           </div>
@@ -267,12 +280,13 @@ export default function LessonSidebar({ currentLessonId, isCollapsed = false, on
         type="button"
         onClick={onToggleCollapse}
         aria-label={isCollapsed ? 'Expand lessons sidebar' : 'Collapse lessons sidebar'}
-        className="absolute top-1/2 -translate-y-1/2 left-full z-20 inline-flex h-10 w-6 items-center justify-center rounded-r-lg border border-roman-red/20 border-l-0 bg-white text-roman-red shadow-md transition-colors hover:bg-roman-red/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-roman-red">
+        className="absolute left-full top-1/2 z-20 hidden h-10 w-6 -translate-y-1/2 items-center justify-center rounded-r-lg border border-l-0 border-roman-red/20 bg-white text-roman-red shadow-md transition-colors hover:bg-roman-red/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-roman-red min-[901px]:inline-flex">
         <ChevronLeft
           className="h-4 w-4 transition-transform duration-300"
           style={{ transform: isCollapsed ? 'rotate(180deg)' : 'none' }}
         />
       </button>
     </div>
+    </>
   );
 }

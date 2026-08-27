@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import { ClickOnMultipleWordsExercise } from '@/src/types/exercise';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
-import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { FeedbackDisplay } from '../feedback';
 import { validateClickOnMultipleWords } from '@/src/utils/exercises/clickOnMultipleWords';
@@ -12,12 +11,19 @@ import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { MultiClickableRichDisplay } from '../core/multi-clickable-rich-display';
 import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
-import type { ExerciseAnswer, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
+import type {
+  ExerciseAnswer,
+  ExerciseAnswerHandler,
+  ExerciseCompletionHandler,
+  RuntimeMode,
+} from '@/src/types/runtime-mode';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
+import { splitHtmlIntoWords } from '@/src/utils/htmlWordSplitter';
 
 interface Props {
   exercise: ClickOnMultipleWordsExercise;
   onComplete?: (score: number) => void;
+  onCompletionAccepted?: ExerciseCompletionHandler;
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
   initialAnswer?: ExerciseAnswer;
@@ -26,6 +32,7 @@ interface Props {
 const ClickOnMultipleWordsComponent: React.FC<Props> = ({
   exercise,
   onComplete,
+  onCompletionAccepted,
   runtimeMode,
   onAnswer,
   initialAnswer,
@@ -33,6 +40,7 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({
   const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
+  const passageWords = splitHtmlIntoWords(exercise.data.passage);
   const restoredIndices = initialAnswer?.type === 'click-on-multiple-words' ? initialAnswer.selectedWordIndices : [];
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set(restoredIndices));
   const [hasSubmitted, setHasSubmitted] = useState(restoredIndices.length > 0);
@@ -40,7 +48,7 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({
   const [validationResult, setValidationResult] = useState<ReturnType<typeof validateClickOnMultipleWords> | null>(
     null
   );
-  const { isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance } = useExerciseProgression({
+  const { isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance, cancelPendingAdvance } = useExerciseProgression({
     totalItems: 1,
     itemProgressionDelay: exercise.itemProgressionDelay,
     progressionRules: exercise.feedbackConfig.progressionRules,
@@ -58,20 +66,19 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({
     resetExercise,
   } = useExerciseFeedback(exercise.feedbackConfig);
 
-  useDelayedExerciseReset({
-    shouldReset: !assessmentMode && shouldResetExercise,
-    delayMs: exercise.itemProgressionDelay,
-    onReset: () => {
-      setSelectedIndices(new Set());
-      setHasSubmitted(false);
-      setValidationResult(null);
-      setIsProcessing(false);
-      resetExercise();
-    },
-  });
+  const resetRequired = mode === 'practice' && shouldResetExercise;
+
+  const handleExerciseReset = () => {
+    cancelPendingAdvance();
+    setSelectedIndices(new Set());
+    setHasSubmitted(false);
+    setValidationResult(null);
+    setIsProcessing(false);
+    resetExercise();
+  };
 
   const handleWordClick = (wordIndex: number) => {
-    if (hasSubmitted || isProcessing) return;
+    if (hasSubmitted || isProcessing || resetRequired) return;
 
     setSelectedIndices(prev => {
       const newSet = new Set(prev);
@@ -89,7 +96,7 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({
   };
 
   const handleSubmit = () => {
-    if (isProcessing) return;
+    if (isProcessing || resetRequired) return;
 
     setIsProcessing(true);
     setHasSubmitted(true);
@@ -125,6 +132,7 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({
         setIsProcessing(false);
         onComplete?.(score);
       }, hasVisibleExplanation);
+      if (!assessmentMode) onCompletionAccepted?.(score);
     } else {
       handleIncorrect();
       setIsProcessing(false);
@@ -215,13 +223,13 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({
 
         {/* Action Buttons */}
         <div className="mt-6 flex justify-center gap-4">
-          {!hasSubmitted && (
+          {!hasSubmitted && !resetRequired && (
             <Button onClick={handleSubmit} disabled={isProcessing || selectedIndices.size === 0} className="px-8">
               {isProcessing ? 'Checking...' : 'Submit Selections'}
             </Button>
           )}
 
-          {hasSubmitted && isCorrect === false && !assessmentMode && (
+          {hasSubmitted && isCorrect === false && !assessmentMode && !resetRequired && (
             <Button onClick={handleReset} variant="outline" disabled={isProcessing} className="px-8">
               Try Again
             </Button>
@@ -250,13 +258,25 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({
             message={message}
             level={level}
             hint={exercise.data.hint}
-            correctAnswer={exercise.data.passage
-              .split(' ')
-              .filter((_, i) => exercise.data.correctWordIndices.includes(i))
-              .join(', ')}
+            correctAnswer={
+              <div className="flex flex-wrap items-center gap-1">
+                {exercise.data.correctWordIndices.map(index => {
+                  const word = passageWords[index];
+                  if (!word) return null;
+                  return (
+                    <SimpleRichDisplay
+                      key={`${index}-${word.slice(0, 10)}`}
+                      content={word}
+                      className="inline not-prose"
+                    />
+                  );
+                })}
+              </div>
+            }
             explanation={exercise.data.explanation}
             showExplanation={showExplanation}
             onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
+            onStartOver={resetRequired ? handleExerciseReset : undefined}
           />
         )}
       </div>

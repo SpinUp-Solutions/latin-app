@@ -48,6 +48,18 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /testResultReviews/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /studentMockResults/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /studentMockResultMigrations/{document=**} {
+      allow read, write: if false;
+    }
+
     match /mockTests/{document=**} {
       allow read, write: if false;
     }
@@ -148,6 +160,9 @@ service cloud.firestore {
         && collection != 'testVersionDrafts'
         && collection != 'testAttempts'
         && collection != 'testAttemptSessions'
+        && collection != 'testResultReviews'
+        && collection != 'studentMockResults'
+        && collection != 'studentMockResultMigrations'
         && collection != 'mockTests'
         && collection != 'mockTestOrdering'
         && collection != 'userProgress'

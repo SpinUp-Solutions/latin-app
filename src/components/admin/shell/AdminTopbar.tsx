@@ -8,9 +8,10 @@ import { getAdminBreadcrumbItems } from './breadcrumb-utils';
 
 interface AdminTopbarProps {
   onOpenMenu: () => void;
+  appVersion?: string;
 }
 
-export function AdminTopbar({ onOpenMenu }: AdminTopbarProps) {
+export function AdminTopbar({ onOpenMenu, appVersion }: AdminTopbarProps) {
   const breadcrumbs = getAdminBreadcrumbItems(usePathname());
   const immediateParent = breadcrumbs.at(-2);
   const backDestination = breadcrumbs.length > 2 && immediateParent?.href ? immediateParent : undefined;
@@ -50,6 +51,14 @@ export function AdminTopbar({ onOpenMenu }: AdminTopbarProps) {
           </li>
         ))}
       </ol>
+      {appVersion ? (
+        <p
+          className="ml-auto inline-flex h-7 shrink-0 items-center rounded-md border border-border/70 bg-roman-parchment/90 px-2 font-mono text-[11px] leading-none text-roman-stone"
+          aria-label={`App version ${appVersion}`}
+          title={`App version ${appVersion}`}>
+          v{appVersion}
+        </p>
+      ) : null}
     </header>
   );
 }

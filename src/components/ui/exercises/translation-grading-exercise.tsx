@@ -4,7 +4,6 @@ import React, { useRef, useState } from 'react';
 import { TranslationGradingExercise } from '@/src/types/exercises';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
-import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
 import { useTranslationGrading } from '@/src/hooks/useTranslationGrading';
 import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
@@ -12,8 +11,8 @@ import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { Button } from '@/src/components/ui/button';
 import { Textarea } from '@/src/components/ui/textarea';
 import { getContentTypeLabel } from '@/src/lib/content/registry';
-import { Loader2, ChevronLeft, ChevronRight, Check, Lightbulb } from 'lucide-react';
-import type { ExerciseAnswer, RuntimeMode } from '@/src/types/runtime-mode';
+import { Loader2, ChevronLeft, ChevronRight, Check, Lightbulb, RotateCcw } from 'lucide-react';
+import type { ExerciseAnswer, ExerciseCompletionHandler, RuntimeMode } from '@/src/types/runtime-mode';
 import { richTextToPlainText } from '@/src/utils/exercises/helpers';
 import { useTestTranslationGrading } from '../test/test-translation-grading-context';
 import {
@@ -28,6 +27,7 @@ import {
 interface Props {
   exercise: TranslationGradingExercise;
   onComplete?: (score: number) => void;
+  onCompletionAccepted?: ExerciseCompletionHandler;
   runtimeMode?: RuntimeMode;
   initialAnswer?: ExerciseAnswer;
 }
@@ -43,7 +43,13 @@ const getRoleColor = (role: string) => {
   return 'border-gray-300 bg-gray-50 text-gray-700';
 };
 
-const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComplete, runtimeMode, initialAnswer }) => {
+const TranslationGradingExerciseComponent: React.FC<Props> = ({
+  exercise,
+  onComplete,
+  onCompletionAccepted,
+  runtimeMode,
+  initialAnswer,
+}) => {
   const mode = runtimeMode ?? 'practice';
   const testAnswerMode = mode === 'test';
   const testGradingRuntime = useTestTranslationGrading();
@@ -63,7 +69,7 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
   const targetLanguage = isLatinToEnglish ? 'English' : 'Latin';
   const direction = translationDirection;
 
-  const { currentIndex, isLastItem, isFirstItem, nextItem, previousItem, resetIndex } = useExerciseProgression({
+  const { currentIndex, isLastItem, isFirstItem, nextItem, previousItem, resetIndex, goToItem } = useExerciseProgression({
     totalItems: exercise.data.items.length,
     initialIndex: restoredIndex,
     itemProgressionDelay: exercise.itemProgressionDelay,
@@ -80,24 +86,23 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
   const currentTestGrade = testGrades[String(currentIndex)];
   const testSubmitted = Boolean(currentTestGrade && currentTestGrade.translation === currentAnswer.trim());
   const gradingPending = isLoading || testGrading;
+  const resetRequired = mode === 'practice' && shouldResetExercise;
+  const completionAcceptedRef = useRef(false);
 
-  useDelayedExerciseReset({
-    shouldReset: !testAnswerMode && shouldResetExercise,
-    delayMs: exercise.itemProgressionDelay,
-    onReset: () => {
-      setUserAnswers({});
-      setPassedSentences(new Set());
-      resetGrading();
-      resetIndex();
-      resetExercise();
-      requestAnimationFrame(() => {
-        textareaRef.current?.focus();
-      });
-    },
-  });
+  const handleExerciseReset = () => {
+    setUserAnswers({});
+    setPassedSentences(new Set());
+    resetGrading();
+    resetIndex();
+    resetExercise();
+    completionAcceptedRef.current = false;
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+    });
+  };
 
   const handleSubmit = async () => {
-    if (gradingPending || !currentAnswer.trim()) return;
+    if (gradingPending || !currentAnswer.trim() || resetRequired) return;
 
     const currentItem = exercise.data.items[currentIndex];
     if (testAnswerMode) {
@@ -133,22 +138,47 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
     const passed = result.isPassing;
 
     if (passed) {
-      setPassedSentences(prev => new Set([...prev, currentIndex]));
-      handleCorrect(isLastItem);
+      const nextPassedSentences = new Set(passedSentences);
+      nextPassedSentences.add(currentIndex);
+      setPassedSentences(nextPassedSentences);
+
+      const allPassed = nextPassedSentences.size === exercise.data.items.length;
+      handleCorrect(allPassed);
+      if (mode === 'practice' && allPassed && !completionAcceptedRef.current) {
+        completionAcceptedRef.current = true;
+        onCompletionAccepted?.(100);
+      }
     } else {
       handleIncorrect();
     }
   };
 
+  const allSentencesPassed = passedSentences.size === exercise.data.items.length;
+  const unpassedIndexes = exercise.data.items
+    .map((_, index) => index)
+    .filter(index => !passedSentences.has(index));
+
   const handleContinue = () => {
-    if (isLastItem) {
-      const finalScore = Math.round((passedSentences.size / exercise.data.items.length) * 100);
-      onComplete?.(finalScore);
+    if (allSentencesPassed) {
+      onComplete?.(100);
       return;
     }
+    if (isLastItem) return;
     nextItem();
     resetGrading();
     reset();
+  };
+
+  const reviewUnpassedSentence = (index: number) => {
+    goToItem(index);
+    resetGrading();
+    reset();
+  };
+
+  const reviewNextUnpassed = () => {
+    const nextUnpassed = unpassedIndexes[0];
+    if (nextUnpassed === undefined) return;
+    reviewUnpassedSentence(nextUnpassed);
   };
 
   const continueTest = () => {
@@ -165,12 +195,14 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
   };
 
   const handlePrevious = () => {
+    if (resetRequired) return;
     previousItem();
     resetGrading();
     reset();
   };
 
   const handleNext = () => {
+    if (resetRequired) return;
     nextItem();
     resetGrading();
     reset();
@@ -208,7 +240,8 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
       )}
 
       <ExerciseProgress
-        current={currentIndex}
+        currentIndex={currentIndex}
+        completed={mode === 'practice' ? passedSentences.size : Object.keys(testGrades).length}
         total={exercise.data.items.length}
         showProgress={exercise.feedbackConfig.progressionRules?.showProgress !== false}
       />
@@ -245,14 +278,17 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
                 }
               }}
               onKeyDown={handleKeyDown}
-              disabled={testAnswerMode && (testSubmitted || testGrading)}
+              disabled={resetRequired || (testAnswerMode && (testSubmitted || testGrading))}
               placeholder={`Type your ${targetLanguage} translation...`}
               className="min-h-[140px] text-base resize-y border-roman-red/10 focus-visible:ring-roman-red/20 flex-1"
             />
             <Button
               onClick={handleSubmit}
               disabled={
-                gradingPending || !currentAnswer.trim() || (testAnswerMode && (!testGradingRuntime || testSubmitted))
+                gradingPending ||
+                !currentAnswer.trim() ||
+                resetRequired ||
+                (testAnswerMode && (!testGradingRuntime || testSubmitted))
               }
               variant="outline"
               className="border-roman-red text-roman-red hover:bg-roman-red/5 hover:text-roman-red shadow-sm transition-all hover:translate-y-[-1px] h-auto min-h-[140px] px-4 self-stretch flex flex-col items-center justify-center gap-2"
@@ -292,6 +328,16 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
           <div className="mt-4 p-4 bg-red-50 border border-red-100 text-red-700 rounded-xl text-sm flex items-center gap-3">
             <span className="text-lg">⚠️</span>
             {error}
+          </div>
+        )}
+
+        {!testAnswerMode && resetRequired && (
+          <div className="mt-6 space-y-2 rounded-xl border border-roman-red/10 bg-roman-parchment/20 p-4">
+            <p className="text-sm text-gray-600 text-center">Too many mistakes on this question.</p>
+            <Button onClick={handleExerciseReset} className="w-full gap-2">
+              <RotateCcw className="h-4 w-4" />
+              Start over
+            </Button>
           </div>
         )}
 
@@ -431,30 +477,41 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
                 variant="ghost"
                 size="sm"
                 onClick={handlePrevious}
-                disabled={isFirstItem || isLoading}
+                disabled={isFirstItem || isLoading || resetRequired}
                 className="text-roman-stone/50 hover:text-roman-red transition-colors font-serif italic text-xs">
                 <ChevronLeft className="h-3 w-3 mr-1" />
                 Previous
               </Button>
 
               <div className="flex items-center gap-6">
-                <Button
-                  onClick={() => {
-                    resetGrading();
-                    requestAnimationFrame(() => {
-                      textareaRef.current?.focus();
-                    });
-                  }}
-                  variant="ghost"
-                  className="text-roman-red/60 hover:text-roman-red hover:bg-roman-red/5 font-serif uppercase tracking-widest text-[10px] h-9 px-4">
-                  Try Again
-                </Button>
+                {!resetRequired && (
+                  <Button
+                    onClick={() => {
+                      resetGrading();
+                      requestAnimationFrame(() => {
+                        textareaRef.current?.focus();
+                      });
+                    }}
+                    variant="ghost"
+                    className="text-roman-red/60 hover:text-roman-red hover:bg-roman-red/5 font-serif uppercase tracking-widest text-[10px] h-9 px-4">
+                    Try Again
+                  </Button>
+                )}
 
-                {data.isPassing && (
+                {data.isPassing && !resetRequired && allSentencesPassed && (
                   <Button
                     onClick={handleContinue}
                     className="bg-roman-red hover:bg-roman-red/90 text-white font-serif uppercase tracking-widest text-[10px] h-9 px-8 shadow-md transition-all hover:translate-y-[-1px]">
-                    {isLastItem ? 'Finish Exercise' : 'Next Sentence'}
+                    Finish Exercise
+                    <ChevronRight className="ml-2 h-3 w-3 opacity-70" />
+                  </Button>
+                )}
+
+                {data.isPassing && !resetRequired && !allSentencesPassed && !isLastItem && (
+                  <Button
+                    onClick={handleContinue}
+                    className="bg-roman-red hover:bg-roman-red/90 text-white font-serif uppercase tracking-widest text-[10px] h-9 px-8 shadow-md transition-all hover:translate-y-[-1px]">
+                    Next Sentence
                     <ChevronRight className="ml-2 h-3 w-3 opacity-70" />
                   </Button>
                 )}
@@ -464,12 +521,35 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
                 variant="ghost"
                 size="sm"
                 onClick={handleNext}
-                disabled={isLastItem || isLoading}
+                disabled={isLastItem || isLoading || resetRequired}
                 className="text-roman-stone/50 hover:text-roman-red transition-colors font-serif italic text-xs">
                 Next
                 <ChevronRight className="h-3 w-3 ml-1" />
               </Button>
             </div>
+            {data.isPassing && !resetRequired && !allSentencesPassed && isLastItem && (
+              <div className="mt-4 space-y-3 rounded-xl border border-amber-300 bg-amber-50 p-4">
+                <p className="text-sm font-medium text-amber-900">
+                  {unpassedIndexes.length} remaining {unpassedIndexes.length === 1 ? 'sentence' : 'sentences'} to pass
+                  before this exercise is complete.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {unpassedIndexes.map(index => (
+                    <Button
+                      key={index}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => reviewUnpassedSentence(index)}>
+                      Sentence {index + 1}
+                    </Button>
+                  ))}
+                </div>
+                <Button type="button" variant="outline" onClick={reviewNextUnpassed} className="w-full">
+                  Review next unpassed
+                </Button>
+              </div>
+            )}
           </div>
         )}
 
@@ -479,7 +559,7 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
               variant="ghost"
               size="sm"
               onClick={handlePrevious}
-              disabled={isFirstItem || isLoading}
+              disabled={isFirstItem || isLoading || resetRequired}
               className="text-gray-400 hover:text-roman-stone">
               <ChevronLeft className="h-4 w-4 mr-1" />
               Previous
@@ -491,13 +571,21 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({ exercise, onComp
                   <span className="text-xs">✓</span> Passed
                 </span>
               )}
+              {allSentencesPassed && !resetRequired && (
+                <Button
+                  onClick={handleContinue}
+                  className="bg-roman-red hover:bg-roman-red/90 text-white font-serif uppercase tracking-widest text-[10px] h-9 px-8 shadow-md transition-all hover:translate-y-[-1px]">
+                  Finish Exercise
+                  <ChevronRight className="ml-2 h-3 w-3 opacity-70" />
+                </Button>
+              )}
             </div>
 
             <Button
               variant="ghost"
               size="sm"
               onClick={handleNext}
-              disabled={isLastItem || isLoading}
+              disabled={isLastItem || isLoading || resetRequired}
               className="text-gray-400 hover:text-roman-stone">
               Next
               <ChevronRight className="h-4 w-4 ml-1" />

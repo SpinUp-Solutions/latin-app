@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Page } from '@/src/types/lesson';
 import ContentRenderer from './content-renderer';
@@ -9,18 +9,21 @@ import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { isExerciseType } from '@/src/utils/lessonUtils';
 import { DiagramAuditSubmission } from '@/src/features/sentence-diagramming';
 import type { ExerciseAnswer, ExerciseAnswerEvent, RuntimeMode } from '@/src/types/runtime-mode';
-import type { ResolvedGeneratedExerciseState } from './content-renderer';
+import type { GeneratedExerciseRenderContext, ResolvedGeneratedExerciseState } from './content-renderer';
 import type { VocabularyPoolStudyData } from '@/src/types/vocabulary';
 
 interface PageTemplateProps {
   page: Page;
   pageIndex?: number;
+  lessonId?: string;
   onExerciseComplete?: (exerciseId: string, score: number) => void;
+  onCompletionAccepted?: (exerciseId: string, score: number) => void;
   runtimeMode?: RuntimeMode;
   onAnswer?: (event: ExerciseAnswerEvent) => void;
   answers?: Record<string, ExerciseAnswer>;
   resolvedExerciseState?: Record<string, ResolvedGeneratedExerciseState>;
   allowGeneratedExerciseQueries?: boolean;
+  generatedExerciseContext?: GeneratedExerciseRenderContext;
   vocabularyPoolId?: string | null;
   resolvedVocabularyPool?: VocabularyPoolStudyData;
   onPageComplete?: () => void;
@@ -30,21 +33,41 @@ interface PageTemplateProps {
 export const PageTemplate: React.FC<PageTemplateProps> = ({
   page,
   pageIndex,
+  lessonId,
   onExerciseComplete,
+  onCompletionAccepted,
   runtimeMode = 'practice',
   onAnswer,
   answers,
   resolvedExerciseState,
   allowGeneratedExerciseQueries = false,
+  generatedExerciseContext,
   vocabularyPoolId,
   resolvedVocabularyPool,
   onPageComplete,
   onDiagrammingAttempt,
 }) => {
-  const [completedExercises, setCompletedExercises] = useState(new Set<number>());
+  const [completedExercises, setCompletedExercises] = useState<Set<number>>(() => new Set());
 
   const exerciseItems = page.items.filter(item => isExerciseType(item.type));
   const totalExercises = exerciseItems.length;
+
+  useEffect(() => {
+    setCompletedExercises(new Set());
+  }, [page.id]);
+
+  useEffect(() => {
+    if (!onPageComplete || totalExercises === 0 || completedExercises.size !== totalExercises) return;
+
+    const autoAdvance = page.autoAdvance || { enabled: true, delay: 2000 };
+    if (!autoAdvance.enabled) return;
+
+    const timer = setTimeout(() => {
+      onPageComplete();
+    }, autoAdvance.delay);
+
+    return () => clearTimeout(timer);
+  }, [completedExercises, onPageComplete, page.autoAdvance, totalExercises]);
 
   const handleItemComplete = useCallback(
     (itemIndex: number, score: number) => {
@@ -53,29 +76,21 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({
       if (isExerciseType(item.type)) {
         onExerciseComplete?.(item.id, score);
 
-        const newCompleted = new Set(completedExercises);
-        newCompleted.add(itemIndex);
-        setCompletedExercises(newCompleted);
-
-        if (newCompleted.size === totalExercises && totalExercises > 0 && onPageComplete) {
-          const autoAdvance = page.autoAdvance || { enabled: true, delay: 2000 };
-
-          if (autoAdvance.enabled) {
-            setTimeout(() => {
-              onPageComplete();
-            }, autoAdvance.delay);
-          }
-        }
+        setCompletedExercises(previous => {
+          if (previous.has(itemIndex)) return previous;
+          const next = new Set(previous);
+          next.add(itemIndex);
+          return next;
+        });
       }
     },
-    [page, completedExercises, totalExercises, onExerciseComplete, onPageComplete]
+    [onExerciseComplete, page.items]
   );
   return (
     <motion.div
       key={page.id}
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -20 }}
       transition={{ duration: 0.3 }}
       className="space-y-6">
       {page.title && (
@@ -91,7 +106,13 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: index * 0.1 }}
           className="space-y-4">
-          <ExerciseErrorBoundary key={item.id}>
+          <ExerciseErrorBoundary
+            key={item.id}
+            lessonId={lessonId}
+            exerciseId={item.id}
+            contentType={item.type}
+            pageIndex={pageIndex}
+            itemIndex={index}>
             <ContentRenderer
               content={item}
               pageIndex={pageIndex}
@@ -101,9 +122,11 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({
               initialAnswer={answers?.[item.id]}
               resolvedExerciseState={resolvedExerciseState?.[item.id]}
               allowGeneratedExerciseQueries={allowGeneratedExerciseQueries}
+              generatedExerciseContext={generatedExerciseContext}
               vocabularyPoolId={vocabularyPoolId}
               resolvedVocabularyPool={resolvedVocabularyPool}
               onComplete={(score: number) => handleItemComplete(index, score)}
+              onCompletionAccepted={score => onCompletionAccepted?.(item.id, score)}
               onDiagrammingAttempt={attempt => onDiagrammingAttempt?.(index, item.id, attempt)}
             />
           </ExerciseErrorBoundary>

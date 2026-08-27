@@ -7,6 +7,9 @@ import {
   MOCK_TEST_ORDERING_COLLECTION,
   MOCK_TEST_ORDERING_DOCUMENT_ID,
   MOCK_TESTS_COLLECTION,
+  STUDENT_MOCK_RESULT_MIGRATIONS_COLLECTION,
+  STUDENT_MOCK_RESULTS_COLLECTION,
+  TEST_ATTEMPTS_COLLECTION,
   TEST_VERSION_DRAFTS_COLLECTION,
   TEST_VERSIONS_COLLECTION,
 } from '@/shared/constants/firestore';
@@ -18,19 +21,22 @@ import type {
   MockTestSummary,
   StudentMockTestDetail,
   StudentMockTestSummary,
+  TestAttemptResultSummary,
   TestVersion,
   TestVersionSummary,
 } from '@/src/types/test';
+import type { StudentPastMockResult } from '@/src/types/test-results';
 import { regeneratePageIds } from '@/src/utils/idUtils';
 import { assertVocabularyPoolAssignmentsAllowedInTransaction } from '@/src/lib/vocabulary-pools/assignment.server';
 import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
-import { TestAttemptService } from './attempt-service';
+import { getStudentMockResultId, TestAttemptService } from './attempt-service';
 import { TestServiceError } from './errors';
 import {
   assertVersionReadyForStudentVisibility,
   buildVersion,
   configurationError,
   getVersionSummaries,
+  getVersionSummariesById,
   isStoredVersionReadyForStudentVisibility,
   parseMockSnapshot,
   parseTestSnapshot,
@@ -44,6 +50,9 @@ import {
   moveStandaloneMockToTestInputSchema,
   reactivateStandaloneMockInputSchema,
   reorderMockTestsInputSchema,
+  submittedAttemptResultProjectionSchema,
+  studentMockResultDocumentSchema,
+  studentMockResultMigrationDocumentSchema,
   updateMockTestInputSchema,
   updateTestVersionInputSchema,
   type AssignVersionToMockInput,
@@ -91,8 +100,86 @@ export class MockTestService {
     return this.db.collection(MOCK_TEST_ORDERING_COLLECTION).doc(MOCK_TEST_ORDERING_DOCUMENT_ID);
   }
 
+  private legacyMockResultMigrationRef(studentId: string) {
+    const id = createHash('sha256')
+      .update(JSON.stringify(['mock-results', studentId]))
+      .digest('hex');
+    return this.db.collection(STUDENT_MOCK_RESULT_MIGRATIONS_COLLECTION).doc(id);
+  }
+
+  private async materializeLegacyMockResults(studentId: string, latestByMockId: Map<string, TestAttemptResultSummary>) {
+    const snapshot = await this.db
+      .collection(TEST_ATTEMPTS_COLLECTION)
+      .where('studentId', '==', studentId)
+      .where('origin.kind', '==', 'mock-test')
+      .where('status', '==', 'submitted')
+      .select('origin', 'score', 'maxScore', 'percentage', 'outcome', 'submittedAt')
+      .get();
+
+    const legacyLatest = new Map<string, TestAttemptResultSummary>();
+    for (const document of snapshot.docs) {
+      const data = document.data();
+      const origin = data.origin as { kind?: string; mockTestId?: string } | undefined;
+      if (origin?.kind !== 'mock-test' || typeof origin.mockTestId !== 'string') continue;
+      const parsed = submittedAttemptResultProjectionSchema.safeParse({
+        score: data.score,
+        maxScore: data.maxScore,
+        percentage: data.percentage,
+        outcome: data.outcome,
+        submittedAt: data.submittedAt,
+      });
+      if (!parsed.success) {
+        console.error(`Submitted attempt ${document.id} contains invalid summary fields; skipping review entry`);
+        continue;
+      }
+      const summary: TestAttemptResultSummary = { attemptId: document.id, ...parsed.data };
+      const existing = legacyLatest.get(origin.mockTestId);
+      if (!existing || summary.submittedAt > existing.submittedAt) legacyLatest.set(origin.mockTestId, summary);
+    }
+
+    for (const [mockTestId, legacy] of legacyLatest) {
+      const ref = this.db
+        .collection(STUDENT_MOCK_RESULTS_COLLECTION)
+        .doc(getStudentMockResultId(studentId, mockTestId));
+      const latest = await this.db.runTransaction(async transaction => {
+        const currentSnapshot = await transaction.get(ref);
+        const current = currentSnapshot.exists
+          ? studentMockResultDocumentSchema.safeParse({ ...currentSnapshot.data(), id: currentSnapshot.id })
+          : null;
+        if (current?.success && current.data.latest.submittedAt >= legacy.submittedAt) return current.data.latest;
+
+        const materialized = studentMockResultDocumentSchema.parse({
+          id: ref.id,
+          studentId,
+          mockTestId,
+          latest: legacy,
+        });
+        transaction.set(ref, materialized);
+        return materialized.latest;
+      });
+      latestByMockId.set(mockTestId, latest);
+    }
+
+    const markerRef = this.legacyMockResultMigrationRef(studentId);
+    await this.db.runTransaction(async transaction => {
+      transaction.set(
+        markerRef,
+        studentMockResultMigrationDocumentSchema.parse({
+          id: markerRef.id,
+          studentId,
+          completedAt: this.now(),
+        })
+      );
+    });
+  }
+
   private getVersionSummaries(versionIds: readonly string[]): Promise<TestVersionSummary[]> {
     return getVersionSummaries(this.db, versionIds);
+  }
+
+  /** One batched getAll replaces the per-mock version round trips. */
+  private getVersionSummariesById(versionIds: readonly string[]): Promise<Map<string, TestVersionSummary>> {
+    return getVersionSummariesById(this.db, versionIds);
   }
 
   private buildVersion(
@@ -295,11 +382,25 @@ export class MockTestService {
       .where('isLive', '==', true)
       .orderBy('mockOrder', 'asc')
       .get();
+
+    const mocks = snapshot.docs.flatMap(document => {
+      try {
+        return [parseMockSnapshot(document)];
+      } catch (error) {
+        console.error(`Live mock ${document.id} could not be projected safely; skipping card`, error);
+        return [];
+      }
+    });
+
+    // A single batched lookup validates every live card's version and reads
+    // its total points, instead of one Firestore round trip per mock.
+    const versionsById = await this.getVersionSummariesById(mocks.map(mock => mock.versionId));
+
     const cards = await Promise.all(
-      snapshot.docs.map(async document => {
+      mocks.map(async mock => {
+        const version = versionsById.get(mock.versionId);
+        if (!version) return null;
         try {
-          const mock = parseMockSnapshot(document);
-          const version = (await this.getVersionSummaries([mock.versionId]))[0];
           const origin = { kind: 'mock-test' as const, mockTestId: mock.id };
           const [attemptSummary, scoreTrend] = await Promise.all([
             this.attempts.getAttemptSummary(origin, studentId),
@@ -315,12 +416,72 @@ export class MockTestService {
             scoreTrend,
           };
         } catch (error) {
-          console.error(`Live mock ${document.id} could not be projected safely; skipping card`, error);
+          console.error(`Live mock ${mock.id} could not be projected safely; skipping card`, error);
           return null;
         }
       })
     );
     return cards.filter((card): card is StudentMockTestSummary => card !== null);
+  }
+
+  /**
+   * Projects the latest submitted result for mocks that are hidden, archived,
+   * or otherwise absent from the live card list. These small entries remain
+   * reviewable through their frozen attempt but never offer a retake.
+   */
+  async listPastStudentMockResults(
+    studentId: string,
+    excludedMockIds: ReadonlySet<string> = new Set()
+  ): Promise<StudentPastMockResult[]> {
+    const markerRef = this.legacyMockResultMigrationRef(studentId);
+    const [materializedSnapshot, markerSnapshot] = await Promise.all([
+      this.db.collection(STUDENT_MOCK_RESULTS_COLLECTION).where('studentId', '==', studentId).get(),
+      markerRef.get(),
+    ]);
+
+    const latestByMockId = new Map<string, TestAttemptResultSummary>();
+    for (const document of materializedSnapshot.docs) {
+      const parsed = studentMockResultDocumentSchema.safeParse({ ...document.data(), id: document.id });
+      if (!parsed.success) {
+        console.error(`Student mock result ${document.id} contains invalid data; skipping review entry`);
+        continue;
+      }
+      latestByMockId.set(parsed.data.mockTestId, parsed.data.latest);
+    }
+
+    const marker = markerSnapshot.exists
+      ? studentMockResultMigrationDocumentSchema.safeParse({ ...markerSnapshot.data(), id: markerSnapshot.id })
+      : null;
+    if (!marker?.success || marker.data.studentId !== studentId) {
+      if (markerSnapshot.exists) {
+        console.error(`Student mock-result migration ${markerSnapshot.id} contains invalid data; rebuilding it`);
+      }
+      await this.materializeLegacyMockResults(studentId, latestByMockId);
+    }
+
+    for (const mockId of excludedMockIds) latestByMockId.delete(mockId);
+
+    if (latestByMockId.size === 0) return [];
+
+    const mockSnapshots = await this.db.getAll(...[...latestByMockId.keys()].map(mockId => this.mocks.doc(mockId)));
+    const results: StudentPastMockResult[] = [];
+    for (const mockSnapshot of mockSnapshots) {
+      const latest = latestByMockId.get(mockSnapshot.id);
+      if (!latest) continue;
+      try {
+        const mock = parseMockSnapshot(mockSnapshot);
+        results.push({
+          id: mock.id,
+          title: mock.title,
+          description: mock.description,
+          passingPercentage: mock.passingPercentage,
+          latest,
+        });
+      } catch (error) {
+        console.error(`Past mock ${mockSnapshot.id} could not be projected safely; skipping review entry`, error);
+      }
+    }
+    return results.sort((left, right) => right.latest.submittedAt.localeCompare(left.latest.submittedAt));
   }
 
   async getStudentMockDetail(mockId: string, studentId: string): Promise<StudentMockTestDetail> {
@@ -360,19 +521,23 @@ export class MockTestService {
       .where('isLive', '==', true)
       .orderBy('mockOrder', 'asc')
       .get();
-    const cards = await Promise.all(
-      snapshots.docs.map(async document => {
-        try {
-          const mock = parseMockSnapshot(document);
-          await this.getVersionSummaries([mock.versionId]);
-          return { id: mock.id, title: mock.title, passingPercentage: mock.passingPercentage };
-        } catch (error) {
-          console.error(`Related live mock ${document.id} is unavailable; omitting nudge`, error);
-          return null;
-        }
-      })
-    );
-    return cards.filter((card): card is Pick<MockTest, 'id' | 'title' | 'passingPercentage'> => card !== null);
+
+    const mocks = snapshots.docs.flatMap(document => {
+      try {
+        return [parseMockSnapshot(document)];
+      } catch (error) {
+        console.error(`Related live mock ${document.id} is unavailable; omitting nudge`, error);
+        return [];
+      }
+    });
+
+    // The versions are fetched only to keep unavailable mocks out of the
+    // nudge; one batched getAll validates them all without a round trip per mock.
+    const versionsById = await this.getVersionSummariesById(mocks.map(mock => mock.versionId));
+
+    return mocks
+      .filter(mock => versionsById.has(mock.versionId))
+      .map(mock => ({ id: mock.id, title: mock.title, passingPercentage: mock.passingPercentage }));
   }
 
   async getMock(mockId: string): Promise<MockTest> {

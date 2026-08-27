@@ -6,7 +6,6 @@ import { usePathname } from 'next/navigation';
 import {
   BookOpen,
   ChevronLeft,
-  ChevronRight,
   ClipboardCheck,
   ClipboardList,
   FileCheck2,
@@ -58,7 +57,7 @@ const navigationGroups: NavigationGroup[] = [
   {
     label: 'System',
     items: [
-      { href: '/admin/ai-evaluations', label: 'AI Evaluations', icon: Sparkles, disabled: true },
+      { href: '/admin/ai-evaluations', label: 'AI Evaluations', icon: Sparkles },
       { href: '/admin/diagramming-attempts', label: 'Diagramming Attempts', icon: ClipboardList },
     ],
   },
@@ -182,7 +181,6 @@ export function AdminSidebar({ onNavigate, collapsed = false, onToggleCollapse, 
                           )}>
                           {item.label}
                         </span>
-                        {isActive && !collapsed && <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
                       </Link>
                     )}
                   </li>

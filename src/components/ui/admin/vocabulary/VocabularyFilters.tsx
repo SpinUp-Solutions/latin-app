@@ -47,13 +47,13 @@ export const VocabularyFiltersComponent: React.FC<VocabularyFiltersProps> = ({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4">
           <div className="space-y-2">
             <Label htmlFor="wordType" className="text-sm font-medium text-gray-700">
               Word Type
             </Label>
             <Select value={filters.wordType} onValueChange={value => onFiltersChange({ wordType: value })}>
-              <SelectTrigger id="wordType" className="h-9 bg-white">
+              <SelectTrigger id="wordType" className="h-11 w-full bg-white">
                 <SelectValue placeholder="Select word type" />
               </SelectTrigger>
               <SelectContent className="bg-white max-h-60">
@@ -73,19 +73,19 @@ export const VocabularyFiltersComponent: React.FC<VocabularyFiltersProps> = ({
             </Select>
           </div>
 
-          <div className="space-y-2">
+          <div className="min-w-0 space-y-2">
             <Label htmlFor="search" className="text-sm font-medium text-gray-700">
               Search Words
             </Label>
-            <form onSubmit={onSearch} className="flex gap-2">
+            <form onSubmit={onSearch} className="flex w-full min-w-0 gap-2">
               <Input
                 id="search"
                 placeholder="Search words..."
                 value={filters.search}
                 onChange={e => onFiltersChange({ search: e.target.value })}
-                className="h-9 flex-1 bg-white"
+                className="h-11 min-w-0 flex-1 bg-white"
               />
-              <Button type="submit" size="sm" variant="outline" className="px-3" title="Search">
+              <Button type="submit" variant="outline" className="h-11 shrink-0 px-3" aria-label="Search words">
                 <Search className="h-4 w-4" />
               </Button>
             </form>

@@ -22,6 +22,7 @@ interface ExerciseProgressionActions {
   resetIndex: () => void;
   nextItem: () => void;
   previousItem: () => void;
+  goToItem: (index: number) => void;
   cancelPendingAdvance: () => void;
 }
 
@@ -103,6 +104,20 @@ export function useExerciseProgression({
     setCurrentIndex(0);
   }, [clearAutoAdvanceTimer]);
 
+  const goToItem = useCallback(
+    (index: number) => {
+      pendingAdvanceRef.current = null;
+      setIsAwaitingConfirmation(false);
+      clearAutoAdvanceTimer();
+      if (totalItems <= 0) {
+        setCurrentIndex(0);
+        return;
+      }
+      setCurrentIndex(Math.max(0, Math.min(index, totalItems - 1)));
+    },
+    [clearAutoAdvanceTimer, totalItems]
+  );
+
   const cancelPendingAdvance = useCallback(() => {
     pendingAdvanceRef.current = null;
     setIsAwaitingConfirmation(false);
@@ -166,6 +181,7 @@ export function useExerciseProgression({
     resetIndex,
     nextItem,
     previousItem,
+    goToItem,
     cancelPendingAdvance,
   };
 }

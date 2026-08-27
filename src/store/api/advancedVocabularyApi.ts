@@ -13,6 +13,26 @@ import { filterOverlappingPronounParadigms } from '@/src/utils/generated/pronoun
 import { normalizeCollection } from '@/src/utils/exercises/legacyExerciseCompat';
 import { PARADIGM_TABLE_TYPE, PARADIGM_POS_GROUP } from '@/src/config/paradigmDefinitions';
 import { createAuthenticatedBaseQuery } from './baseQuery';
+import type {
+  GeneratedExercisePlaybackRequest,
+  GeneratedExercisePreviewRequest,
+  GeneratedExercisePreviewResult,
+} from '@/src/lib/tests/generated-preview-schema';
+
+export type {
+  GeneratedExercisePreviewDiagnostics,
+  GeneratedExercisePreviewRequest,
+  GeneratedExercisePreviewResult,
+} from '@/src/lib/tests/generated-preview-schema';
+
+export type GeneratedExerciseQuerySource =
+  | { kind: 'admin-preview' }
+  | ({ kind: 'lesson' } & GeneratedExercisePlaybackRequest);
+
+export interface GeneratedExerciseWordsQueryArgs {
+  exercise: GeneratedExercisePreviewRequest;
+  source: GeneratedExerciseQuerySource;
+}
 
 export const normalizeAdvancedVocabularyCollection = (collection?: string) => normalizeCollection(collection);
 
@@ -630,8 +650,41 @@ export const advancedVocabularyApi = createApi({
       providesTags: [{ type: 'AdvancedWordList', id: 'MULTI_PARADIGM' }],
       keepUnusedDataFor: 60,
     }),
+    previewGeneratedExercise: builder.mutation<GeneratedExercisePreviewResult, GeneratedExercisePreviewRequest>({
+      query: body => ({
+        url: '/admin/exercises/generated-preview',
+        method: 'POST',
+        body,
+      }),
+    }),
+    getGeneratedExerciseWords: builder.query<GeneratedExercisePreviewResult, GeneratedExerciseWordsQueryArgs>({
+      query: ({ exercise, source }) =>
+        source.kind === 'admin-preview'
+          ? {
+              url: '/admin/exercises/generated-preview',
+              method: 'POST',
+              body: exercise,
+            }
+          : {
+              url: '/words/generated-exercise',
+              method: 'POST',
+              body: {
+                lessonId: source.lessonId,
+                pageIndex: source.pageIndex,
+                itemIndex: source.itemIndex,
+                exerciseId: source.exerciseId,
+              },
+            },
+      serializeQueryArgs: ({ queryArgs }) => JSON.stringify(queryArgs),
+      keepUnusedDataFor: 60,
+    }),
   }),
 });
 
-export const { useGetAdvancedWordsQuery, useGetMultiPosWordsQuery, useGetMultiParadigmWordsQuery } =
-  advancedVocabularyApi;
+export const {
+  useGetAdvancedWordsQuery,
+  useGetMultiPosWordsQuery,
+  useGetMultiParadigmWordsQuery,
+  usePreviewGeneratedExerciseMutation,
+  useGetGeneratedExerciseWordsQuery,
+} = advancedVocabularyApi;

@@ -1,31 +1,36 @@
 import React from 'react';
 
 interface ExerciseProgressProps {
-  current: number;
+  currentIndex: number;
+  completed: number;
   total: number;
   label?: string;
   showProgress?: boolean;
 }
 
 export const ExerciseProgress: React.FC<ExerciseProgressProps> = ({
-  current,
+  currentIndex,
+  completed,
   total,
   label = 'Question',
   showProgress = true,
 }) => {
   if (!showProgress) return null;
 
-  const isMatching = label === 'Match';
-  const currentDisplay = isMatching ? current : current + 1;
-  const progressPercentage = Math.round((currentDisplay / total) * 100);
+  const safeTotal = Number.isFinite(total) && total > 0 ? total : 0;
+  const position = safeTotal === 0 ? 0 : Math.min(Math.max(currentIndex, 0) + 1, safeTotal);
+  const completedCount = safeTotal === 0 ? 0 : Math.min(Math.max(completed, 0), safeTotal);
+  const progressPercentage = safeTotal === 0 ? 0 : Math.round((completedCount / safeTotal) * 100);
 
   return (
     <div className="mb-4">
       <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
         <span>
-          {isMatching ? `${label}es: ${currentDisplay}` : `${label} ${currentDisplay}`} of {total}
+          {label} {position} of {safeTotal}
         </span>
-        <span>{progressPercentage}% Complete</span>
+        <span>
+          {completedCount} of {safeTotal} complete ({progressPercentage}%)
+        </span>
       </div>
       <div className="w-full bg-gray-200 rounded-full h-2">
         <div

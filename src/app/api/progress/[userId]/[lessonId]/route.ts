@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { LEARNING_UNITS_COLLECTION, USER_PROGRESS_COLLECTION } from '@/shared/constants/firestore';
 import { adminDb } from '@/src/services/firebase-admin';
 import { verifyRequestAuth } from '@/src/lib/verifyRequestAuth';
 import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
@@ -7,19 +8,17 @@ import { getLessonProgressAccessInTransaction } from '@/src/lib/learning-units/p
 import { Lesson, UserProgress } from '@/src/types/lesson';
 import {
   getFurthestPageIndex,
-  getMissingExercises,
-  getRequiredExercises,
-  isStoredLessonComplete,
-  normalizeExerciseProgress,
-  PROGRESS_SCHEMA_VERSION,
   resolveExerciseId,
+  summarizeLessonCompletion,
+  toPersistedProgressSummary,
 } from '@/src/utils/lessonProgress';
+import { reportServerUnexpectedError } from '@/src/lib/report-unexpected-error';
 
 const progressRequestSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('complete-exercise'),
     exerciseId: z.string().min(1),
-    score: z.number().finite(),
+    score: z.number().finite().min(0).max(100),
   }),
   z
     .object({
@@ -40,10 +39,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const progressDoc = await adminDb.collection('userProgress').doc(`${userId}_${lessonId}`).get();
+    const progressDoc = await adminDb.collection(USER_PROGRESS_COLLECTION).doc(`${userId}_${lessonId}`).get();
     return NextResponse.json(progressDoc.exists ? progressDoc.data() : null);
   } catch (error) {
     console.error('Error fetching user progress:', error);
+    reportServerUnexpectedError(error, {
+      tags: { surface: 'progress_get' },
+    });
     return NextResponse.json({ error: 'Failed to fetch progress' }, { status: 500 });
   }
 }
@@ -81,8 +83,8 @@ export async function POST(
     }
 
     const progressData = parsedProgressData.data;
-    const lessonRef = adminDb.collection('lessons').doc(lessonId);
-    const progressRef = adminDb.collection('userProgress').doc(`${userId}_${lessonId}`);
+    const lessonRef = adminDb.collection(LEARNING_UNITS_COLLECTION).doc(lessonId);
+    const progressRef = adminDb.collection(USER_PROGRESS_COLLECTION).doc(`${userId}_${lessonId}`);
     const now = new Date().toISOString();
 
     if (progressData.action === 'complete-exercise') {
@@ -111,21 +113,14 @@ export async function POST(
         if (!exerciseId) throw new Error('EXERCISE_NOT_FOUND');
 
         const existing = (progressSnapshot.data() || {}) as Partial<UserProgress>;
-        const exerciseProgress = normalizeExerciseProgress(lesson, existing.exerciseProgress);
-        const existingIndex = exerciseProgress.findIndex(record => record.exerciseId === exerciseId);
-        const completedExercise = {
-          exerciseId,
-          completedAt: now,
-          score: progressData.score,
-        };
-
-        if (existingIndex >= 0) exerciseProgress[existingIndex] = completedExercise;
-        else exerciseProgress.push(completedExercise);
-
-        const requiredExercises = getRequiredExercises(lesson);
-        const missingExercises = getMissingExercises(requiredExercises, exerciseProgress);
-        const wasCompleted = isStoredLessonComplete(existing, lesson.pages.length);
-        const isCompleted = wasCompleted || (requiredExercises.length > 0 && missingExercises.length === 0);
+        const summary = summarizeLessonCompletion(lesson, {
+          ...existing,
+          exerciseProgress: [
+            ...(Array.isArray(existing.exerciseProgress) ? existing.exerciseProgress : []),
+            { exerciseId, completedAt: now, score: progressData.score },
+          ],
+        });
+        const persisted = toPersistedProgressSummary(summary, existing, now);
         const furthestPageIndex = getFurthestPageIndex(existing, lesson.pages.length);
 
         transaction.set(
@@ -136,17 +131,19 @@ export async function POST(
             lessonId,
             furthestPageIndex,
             currentPageIndex: furthestPageIndex,
-            exerciseProgress,
-            status: isCompleted ? 'completed' : 'in-progress',
-            ...(isCompleted ? { completedAt: existing.completedAt || now } : {}),
+            ...persisted,
             lastAccessedAt: now,
             updatedAt: now,
-            progressSchemaVersion: PROGRESS_SCHEMA_VERSION,
           },
           { merge: true }
         );
 
-        return { lessonCompleted: isCompleted };
+        return {
+          lessonCompleted: persisted.status === 'completed',
+          progress: persisted.progress,
+          completedExerciseCount: persisted.completedExerciseCount,
+          requiredExerciseCount: persisted.requiredExerciseCount,
+        };
       });
 
       return NextResponse.json({ success: true, ...result });
@@ -184,7 +181,12 @@ export async function POST(
 
         const existing = (progressSnapshot.data() || {}) as Partial<UserProgress>;
         const furthestPageIndex = Math.max(getFurthestPageIndex(existing, lesson.pages.length), submittedIndex);
-        const isCompleted = isStoredLessonComplete(existing, lesson.pages.length);
+        const summary = summarizeLessonCompletion(lesson, {
+          ...existing,
+          furthestPageIndex,
+          currentPageIndex: furthestPageIndex,
+        });
+        const persisted = toPersistedProgressSummary(summary, existing, now);
 
         transaction.set(
           progressRef,
@@ -194,16 +196,20 @@ export async function POST(
             lessonId,
             furthestPageIndex,
             currentPageIndex: furthestPageIndex,
-            status: isCompleted ? 'completed' : 'in-progress',
-            exerciseProgress: normalizeExerciseProgress(lesson, existing.exerciseProgress),
+            ...persisted,
             lastAccessedAt: now,
             updatedAt: now,
-            progressSchemaVersion: PROGRESS_SCHEMA_VERSION,
           },
           { merge: true }
         );
 
-        return { furthestPageIndex };
+        return {
+          furthestPageIndex,
+          lessonCompleted: persisted.status === 'completed',
+          progress: persisted.progress,
+          completedExerciseCount: persisted.completedExerciseCount,
+          requiredExerciseCount: persisted.requiredExerciseCount,
+        };
       });
 
       return NextResponse.json({ success: true, ...result });
@@ -232,13 +238,18 @@ export async function POST(
           });
         }
         const existing = (progressSnapshot.data() || {}) as Partial<UserProgress>;
-        const exerciseProgress = normalizeExerciseProgress(lesson, existing.exerciseProgress);
-        const missingExercises = getMissingExercises(getRequiredExercises(lesson), exerciseProgress);
-        if (!isStoredLessonComplete(existing, lesson.pages.length) && missingExercises.length > 0) {
-          return { missingExercises };
+        const furthestPageIndex = Math.max(lesson.pages.length - 1, 0);
+        const summary = summarizeLessonCompletion(lesson, {
+          ...existing,
+          furthestPageIndex,
+          currentPageIndex: furthestPageIndex,
+        });
+        if (!summary.isCompleted && summary.missingExercises.length > 0) {
+          return { missingExercises: summary.missingExercises };
         }
 
-        const furthestPageIndex = Math.max(lesson.pages.length - 1, 0);
+        const persisted = toPersistedProgressSummary({ ...summary, isCompleted: true, progress: 100 }, existing, now);
+
         transaction.set(
           progressRef,
           {
@@ -247,16 +258,19 @@ export async function POST(
             lessonId,
             furthestPageIndex,
             currentPageIndex: furthestPageIndex,
-            exerciseProgress,
-            status: 'completed',
-            completedAt: existing.completedAt || now,
+            ...persisted,
             lastAccessedAt: now,
             updatedAt: now,
-            progressSchemaVersion: PROGRESS_SCHEMA_VERSION,
           },
           { merge: true }
         );
-        return { missingExercises: [] };
+        return {
+          missingExercises: [],
+          lessonCompleted: true as const,
+          progress: persisted.progress,
+          completedExerciseCount: persisted.completedExerciseCount,
+          requiredExerciseCount: persisted.requiredExerciseCount,
+        };
       });
 
       if (result.missingExercises.length > 0) {
@@ -268,7 +282,13 @@ export async function POST(
           { status: 422 }
         );
       }
-      return NextResponse.json({ success: true, lessonCompleted: true });
+      return NextResponse.json({
+        success: true,
+        lessonCompleted: true,
+        progress: result.progress,
+        completedExerciseCount: result.completedExerciseCount,
+        requiredExerciseCount: result.requiredExerciseCount,
+      });
     }
 
     return NextResponse.json({ error: 'Unsupported progress action' }, { status: 400 });
@@ -290,6 +310,9 @@ export async function POST(
     if (message === 'EXERCISE_NOT_FOUND') return NextResponse.json({ error: 'Exercise not found' }, { status: 400 });
 
     console.error('Error updating user progress:', error);
+    reportServerUnexpectedError(error, {
+      tags: { surface: 'progress_post' },
+    });
     return NextResponse.json({ error: 'Failed to update progress' }, { status: 500 });
   }
 }

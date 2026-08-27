@@ -1,6 +1,6 @@
 {
-  "name": "nextjs-fullstack-boilerplate",
-  "version": "0.1.0",
+  "name": "latin-app",
+  "version": "1.0.1",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -74,6 +74,7 @@
     "@radix-ui/react-toggle-group": "^1.1.1",
     "@radix-ui/react-tooltip": "^1.1.7",
     "@reduxjs/toolkit": "^2.2.1",
+    "@sentry/nextjs": "^10.71.0",
     "@stripe/stripe-js": "^5.5.0",
     "@tiptap/react": "^2.25.0",
     "@tiptap/starter-kit": "^2.25.0",

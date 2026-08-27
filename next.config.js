@@ -1,6 +1,12 @@
+const { withSentryConfig } = require('@sentry/nextjs');
+const { version } = require('./package.json');
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  env: {
+    NEXT_PUBLIC_APP_VERSION: version,
+  },
   experimental: {
     optimizePackageImports: [
       // Radix UI
@@ -38,4 +44,13 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+module.exports = withSentryConfig(nextConfig, {
+  org: 'charalampos-tsitsiringos',
+  project: 'latin-app',
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  release: { name: version },
+  widenClientFileUpload: true,
+  // Tunnel helps production/ad-blockers; skip in next dev where Turbopack forwarding can drop events.
+  ...(process.env.NODE_ENV === 'production' ? { tunnelRoute: '/monitoring' } : {}),
+  silent: !process.env.CI,
+});

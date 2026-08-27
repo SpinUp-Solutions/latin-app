@@ -6,7 +6,7 @@ import { useGetStudentDashboardQuery } from '@/src/store/api/lessonApi';
 import { BookOpen, Pencil, Headphones, CheckCircle, Play, ChevronDown, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/src/hooks/useAuth';
 import { cn } from '@/src/lib/utils';
-import { stripHtmlTags } from '@/src/utils/exercises/helpers';
+import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import WordSearchPanel from './word-search-panel';
 
 type PracticeView = 'vocab' | 'sentence-diagramming' | 'listening';
@@ -129,23 +129,38 @@ export default function PracticeSidebar({
     return studentDashboard.practiceLessons.filter(lesson => lesson.type === lessonType);
   };
 
-  const EXPANDED_WIDTH = '20rem';
-  const COLLAPSED_WIDTH = '3rem';
-
   return (
-    <div
-      className="relative h-full flex-shrink-0 transition-[width] duration-300 ease-in-out"
-      style={{ width: isCollapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH }}>
-      <div className="absolute inset-0 overflow-hidden bg-gradient-to-br from-roman-marble via-white to-roman-parchment border-l border-roman-red/20">
+    <>
+      {!isCollapsed && (
+        <button
+          type="button"
+          className="fixed inset-0 z-30 bg-black/40 min-[901px]:hidden"
+          aria-label="Close practice sidebar"
+          onClick={onToggleCollapse}
+        />
+      )}
+      <div
+        className={cn(
+          'relative h-full shrink-0 transition-[width] duration-300 ease-in-out',
+          isCollapsed ? 'w-0 min-[901px]:w-12' : 'w-0 min-[901px]:w-80'
+        )}>
+      <div
+        className={cn(
+          'overflow-hidden border-l border-roman-red/20 bg-gradient-to-br from-roman-marble via-white to-roman-parchment',
+          isCollapsed
+            ? 'hidden min-[901px]:absolute min-[901px]:inset-0 min-[901px]:block'
+            : 'fixed inset-y-0 right-0 z-40 w-80 min-[901px]:absolute min-[901px]:inset-0 min-[901px]:w-auto'
+        )}>
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-l from-roman-gold/20 to-amber-300/15 rounded-full mix-blend-multiply filter blur-2xl opacity-60" />
           <div className="absolute bottom-0 left-0 w-48 h-48 bg-gradient-to-r from-roman-red/15 to-roman-terracotta/10 rounded-full mix-blend-multiply filter blur-2xl opacity-60" />
         </div>
 
         <div
+          hidden={isCollapsed}
           className={cn(
-            'absolute top-0 bottom-0 right-0 w-80 flex flex-col transition-opacity duration-200',
-            isCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'
+            'absolute inset-0 flex flex-col',
+            isCollapsed && 'pointer-events-none'
           )}>
           <div className="relative px-6 py-8 border-b border-roman-red/10 bg-white/40 backdrop-blur-sm flex-shrink-0">
             <h3 className="text-2xl font-serif text-gray-800">Practice</h3>
@@ -231,14 +246,20 @@ export default function PracticeSidebar({
                                             ? 'bg-roman-green/15 text-roman-green'
                                             : `bg-gray-100 ${config.iconColor}`
                                         )}>
-                                        {isCompleted ? <CheckCircle className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                        {isCompleted ? (
+                                          <CheckCircle className="h-4 w-4" />
+                                        ) : (
+                                          <Play className="h-4 w-4" />
+                                        )}
                                       </div>
                                       <div className="flex-1 min-w-0">
-                                        <h4 className="text-sm font-serif text-gray-900 truncate">{lesson.title}</h4>
+                                        <h4 className="text-sm font-serif text-gray-900 truncate">
+                                          <SimpleRichDisplay content={lesson.title} className="truncate" />
+                                        </h4>
                                         {lesson.description && (
-                                          <p className="text-xs text-roman-stone mt-0.5 line-clamp-1">
-                                            {stripHtmlTags(lesson.description)}
-                                          </p>
+                                          <div className="mt-0.5 line-clamp-1 text-xs text-roman-stone">
+                                            <SimpleRichDisplay content={lesson.description} />
+                                          </div>
                                         )}
                                       </div>
                                     </div>
@@ -258,10 +279,8 @@ export default function PracticeSidebar({
         </div>
 
         <div
-          className={cn(
-            'absolute inset-0 flex flex-col items-center pt-5 transition-opacity duration-200',
-            isCollapsed ? 'opacity-100' : 'opacity-0 pointer-events-none'
-          )}>
+          hidden={!isCollapsed}
+          className="absolute inset-0 hidden flex-col items-center pt-5 min-[901px]:flex">
           <div className="relative h-10 w-10 bg-gradient-to-br from-roman-red/20 to-roman-terracotta/10 rounded-xl flex items-center justify-center shadow-lg border border-roman-red/20">
             <Pencil className="h-5 w-5 text-roman-red" />
           </div>
@@ -277,12 +296,13 @@ export default function PracticeSidebar({
         type="button"
         onClick={onToggleCollapse}
         aria-label={isCollapsed ? 'Expand practice sidebar' : 'Collapse practice sidebar'}
-        className="absolute top-1/2 -translate-y-1/2 right-full z-20 inline-flex h-10 w-6 items-center justify-center rounded-l-lg border border-roman-red/20 border-r-0 bg-white text-roman-red shadow-md transition-colors hover:bg-roman-red/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-roman-red">
+        className="absolute right-full top-1/2 z-20 hidden h-10 w-6 -translate-y-1/2 items-center justify-center rounded-l-lg border border-r-0 border-roman-red/20 bg-white text-roman-red shadow-md transition-colors hover:bg-roman-red/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-roman-red min-[901px]:inline-flex">
         <ChevronRight
           className="h-4 w-4 transition-transform duration-300"
           style={{ transform: isCollapsed ? 'rotate(180deg)' : 'none' }}
         />
       </button>
     </div>
+    </>
   );
 }

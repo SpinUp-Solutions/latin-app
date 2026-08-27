@@ -1,7 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { MockTestCard, TestCard } from '@/src/app/dashboard/page';
-import type { StudentTestSummary } from '@/src/types/lesson';
+import { LessonCard, MockTestCard, TestCard } from '@/src/app/dashboard/page';
+import type { StudentLessonSummary, StudentTestSummary } from '@/src/types/lesson';
 import type { StudentMockTestSummary } from '@/src/types/test';
 
 jest.mock('swiper/react', () => ({
@@ -39,7 +39,38 @@ const testSummary = (overrides: Partial<StudentTestSummary> = {}): StudentTestSu
   ...overrides,
 });
 
+const lessonSummary = (overrides: Partial<StudentLessonSummary> = {}): StudentLessonSummary => ({
+  id: 'lesson-1',
+  kind: 'lesson',
+  title: 'Latin foundations',
+  description: '',
+  type: 'normal',
+  isLive: true,
+  liveOrder: 1,
+  publishedAt: 'now',
+  publishedBy: 'teacher-1',
+  totalPages: 3,
+  totalItems: 3,
+  totalExercises: 1,
+  status: 'in-progress',
+  progress: 35,
+  furthestPageIndex: 0,
+  currentPageIndex: 0,
+  exerciseProgress: [],
+  ...overrides,
+});
+
 describe('student dashboard test card', () => {
+  it('uses the production lesson-card presentation while retaining the accessible action', () => {
+    const { container } = render(<LessonCard lesson={lessonSummary()} onLessonClick={jest.fn()} />);
+
+    expect(container.firstChild).toHaveClass('h-36');
+    expect(screen.queryByText('Lesson')).not.toBeInTheDocument();
+    expect(screen.queryByText('Continue from where you left off.')).not.toBeInTheDocument();
+    expect(screen.queryByText('35% complete')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Continue lesson' })).toBeInTheDocument();
+  });
+
   it('communicates an unsuccessful required-pass result and retake gate', () => {
     render(<TestCard test={testSummary()} onTestClick={jest.fn()} />);
 
@@ -145,9 +176,65 @@ describe('student dashboard test card', () => {
     );
   });
 
-  it('uses the same fixed-height footprint as lesson cards', () => {
+  it('uses the shared fixed-height learning-unit footprint', () => {
     const { container } = render(<TestCard test={testSummary()} onTestClick={jest.fn()} />);
 
-    expect(container.firstChild).toHaveClass('h-36');
+    expect(container.firstChild).toHaveClass('h-40');
+    expect(screen.getByText('Review test')).toBeInTheDocument();
+  });
+
+  it('links to the latest submitted review from the test card', () => {
+    render(<TestCard test={testSummary()} onTestClick={jest.fn()} />);
+
+    expect(screen.getByTestId('test-review-latest-link')).toHaveAttribute('href', '/test-results/attempt-1');
+    expect(screen.getByText('Review latest result')).toBeInTheDocument();
+  });
+
+  it('omits the review link while no attempt has been submitted', () => {
+    render(
+      <TestCard
+        test={testSummary({
+          attemptSummary: {
+            origin: { kind: 'normal-test', testId: 'test-1' },
+            inProgressAttemptId: 'attempt-2',
+            attemptCount: 0,
+            best: null,
+            latest: null,
+          },
+        })}
+        onTestClick={jest.fn()}
+      />
+    );
+
+    expect(screen.queryByTestId('test-review-latest-link')).not.toBeInTheDocument();
+  });
+
+  it('opens the latest mock review without retaking the mock', () => {
+    const onMockClick = jest.fn();
+    const mock: StudentMockTestSummary = {
+      id: 'mock-1',
+      title: 'Chapter 4 rehearsal',
+      description: '',
+      passingPercentage: 70,
+      totalPoints: 10,
+      attemptSummary: {
+        origin: { kind: 'mock-test', mockTestId: 'mock-1' },
+        inProgressAttemptId: null,
+        attemptCount: 1,
+        best: result,
+        latest: result,
+      },
+      scoreTrend: [],
+    };
+    render(<MockTestCard mock={mock} onMockClick={onMockClick} />);
+
+    const reviewLink = screen.getByTestId('mock-review-latest-link');
+    expect(reviewLink).toBeInTheDocument();
+    expect(reviewLink).toHaveAttribute('href', '/test-results/attempt-1');
+    expect(screen.getByRole('button', { name: 'Retake Mock Test: Chapter 4 rehearsal' })).not.toContainElement(
+      reviewLink
+    );
+    fireEvent.click(reviewLink);
+    expect(onMockClick).not.toHaveBeenCalled();
   });
 });

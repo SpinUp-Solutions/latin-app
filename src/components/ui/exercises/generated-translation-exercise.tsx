@@ -3,21 +3,26 @@
 import React, { useState, useMemo } from 'react';
 import { GeneratedTranslationExercise } from '@/src/types/exercises';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
-import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { ExerciseInput, FeedbackDisplay } from '../feedback';
 import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
-import { useGetMultiPosWordsQuery } from '@/src/store/api/advancedVocabularyApi';
+import {
+  useGetGeneratedExerciseWordsQuery,
+  type GeneratedExerciseQuerySource,
+} from '@/src/store/api/advancedVocabularyApi';
 import { Card, CardContent } from '../card';
-import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
 import {
   validateGeneratedTranslationExercise,
   type GeneratedTranslationItem,
 } from '@/src/utils/exercises/generatedTranslationExercise';
-import { normalizeCollection, buildLegacyPosConfigs } from '@/src/utils/exercises/legacyExerciseCompat';
-import type { ExerciseAnswer, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
+import type {
+  ExerciseAnswer,
+  ExerciseAnswerHandler,
+  ExerciseCompletionHandler,
+  RuntimeMode,
+} from '@/src/types/runtime-mode';
 import { getContentTypeLabel } from '@/src/lib/content/registry';
 import { createGeneratedTranslationItems } from '@/src/lib/tests/generated-exercises';
 import { RecordedAnswerControls } from './recorded-answer-controls';
@@ -26,60 +31,53 @@ import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 interface Props {
   exercise: GeneratedTranslationExercise;
   onComplete?: (score: number) => void;
+  onCompletionAccepted?: ExerciseCompletionHandler;
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
   initialAnswer?: ExerciseAnswer;
   resolvedItems?: GeneratedTranslationItem[];
   allowGeneratedExerciseQueries?: boolean;
+  generatedExerciseSource?: GeneratedExerciseQuerySource;
 }
 
 const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
   exercise,
   onComplete,
+  onCompletionAccepted,
   runtimeMode,
   onAnswer,
   initialAnswer,
   resolvedItems,
   allowGeneratedExerciseQueries = false,
+  generatedExerciseSource,
 }) => {
   const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
 
-  const config = exercise.data.generatorConfig ?? {
-    collection: '',
-    wordSource: 'filters' as const,
-    count: 0,
-  };
   const translationDirection = exercise.translationDirection || 'latin-to-english';
-  // Backward compat: old exercises stored filters/formSelection in generatorConfig
-  // with no posConfigs, wordSource, or poolId
-  const hasNewFormatPosConfigs =
-    exercise.data.posConfigs &&
-    typeof exercise.data.posConfigs === 'object' &&
-    Object.keys(exercise.data.posConfigs).length > 0;
 
-  const posConfigs = hasNewFormatPosConfigs
-    ? exercise.data.posConfigs
-    : buildLegacyPosConfigs(config as Parameters<typeof buildLegacyPosConfigs>[0]);
-
-  const { data, isLoading, isError } = useGetMultiPosWordsQuery(
+  const { data, isLoading, isError } = useGetGeneratedExerciseWordsQuery(
     {
-      exerciseType: 'generated-translation',
-      collection: normalizeCollection(config.collection),
-      wordSource: config.wordSource || 'filters',
-      poolId: config.poolId ?? null,
-      poolWordLimit: config.poolWordLimit ?? null,
-      count: config.count,
-      posConfigs,
+      exercise: {
+        type: 'generated-translation',
+        translationDirection,
+        data: exercise.data,
+      },
+      source: generatedExerciseSource ?? { kind: 'admin-preview' },
     },
-    { skip: (mode === 'test' && !allowGeneratedExerciseQueries) || resolvedItems !== undefined }
+    {
+      skip:
+        (!generatedExerciseSource && !allowGeneratedExerciseQueries) ||
+        (mode === 'test' && !allowGeneratedExerciseQueries) ||
+        resolvedItems !== undefined,
+    }
   );
 
   const items: GeneratedTranslationItem[] = useMemo(() => {
     if (resolvedItems) return resolvedItems;
     if (!data?.words) return [];
-    return createGeneratedTranslationItems(exercise, data.words as unknown as ExerciseWordResponse[]);
+    return createGeneratedTranslationItems(exercise, data.words);
   }, [data, exercise, resolvedItems]);
   const restoredAnswers = initialAnswer?.type === 'generated-translation' ? initialAnswer.answers : [];
   const firstIncompleteIndex = items.findIndex((_, index) => !restoredAnswers[index]?.trim());
@@ -97,6 +95,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
     confirmAdvance,
     resetIndex,
     nextItem,
+    cancelPendingAdvance,
   } = useExerciseProgression({
     totalItems: items.length,
     initialIndex: restoredIndex,
@@ -116,21 +115,20 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
     resetExercise,
   } = useExerciseFeedback(exercise.feedbackConfig);
 
-  useDelayedExerciseReset({
-    shouldReset: !assessmentMode && shouldResetExercise,
-    delayMs: exercise.itemProgressionDelay,
-    onReset: () => {
-      setUserAnswer('');
-      setIsProcessing(false);
-      setTestSubmitted(false);
-      setSubmittedAnswers([]);
-      resetIndex();
-      resetExercise();
-    },
-  });
+  const resetRequired = mode === 'practice' && shouldResetExercise;
+
+  const handleExerciseReset = () => {
+    cancelPendingAdvance();
+    setUserAnswer('');
+    setIsProcessing(false);
+    setTestSubmitted(false);
+    setSubmittedAnswers([]);
+    resetIndex();
+    resetExercise();
+  };
 
   const handleSubmit = () => {
-    if (isProcessing || items.length === 0 || !userAnswer.trim()) return;
+    if (isProcessing || items.length === 0 || !userAnswer.trim() || resetRequired) return;
 
     const currentItem = items[currentIndex];
     const nextAnswers = [...submittedAnswers];
@@ -158,6 +156,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
       handleCorrect(isLastItem);
 
       if (isLastItem) {
+        if (!assessmentMode) onCompletionAccepted?.(finalScore!);
         autoAdvanceIfEnabled(() => {
           setUserAnswer('');
           reset();
@@ -262,7 +261,8 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
       )}
 
       <ExerciseProgress
-        current={currentIndex}
+        currentIndex={currentIndex}
+        completed={mode === 'practice' ? currentIndex + (isCorrect === true ? 1 : 0) : submittedAnswers.filter(answer => Boolean(answer?.trim())).length}
         total={items.length}
         showProgress={exercise.feedbackConfig.progressionRules?.showProgress !== false}
       />
@@ -278,7 +278,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
             onChange={handleAnswerChange}
             onSubmit={handleSubmit}
             placeholder={inputPlaceholder}
-            disabled={isProcessing}
+            disabled={isProcessing || resetRequired}
           />
 
           {testAnswerMode ? (
@@ -293,6 +293,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
               showExplanation={!assessmentMode && showExplanation}
               onContinue={(isCorrect || assessmentMode) && isAwaitingConfirmation ? confirmAdvance : undefined}
               allowContinueOnIncorrect={assessmentMode}
+              onStartOver={resetRequired ? handleExerciseReset : undefined}
             />
           )}
         </CardContent>

@@ -28,11 +28,18 @@ export interface CustomUser extends Omit<User, 'uid'> {
 
 interface AuthState {
   user: CustomUser | null;
+  /**
+   * The Firebase auth uid, dispatched as soon as `onAuthStateChanged` fires —
+   * before the Firestore profile snapshot resolves. Data queries key off it so
+   * they can start while the profile is still loading.
+   */
+  authUid: string | null;
   loading: boolean;
 }
 
 const initialState: AuthState = {
   user: null,
+  authUid: null,
   loading: true,
 };
 
@@ -44,8 +51,11 @@ const authSlice = createSlice({
       state.user = action.payload;
       state.loading = false;
     },
+    setAuthUid: (state, action: PayloadAction<string | null>) => {
+      state.authUid = action.payload;
+    },
   },
 });
 
-export const { setUser } = authSlice.actions;
+export const { setUser, setAuthUid } = authSlice.actions;
 export default authSlice.reducer;

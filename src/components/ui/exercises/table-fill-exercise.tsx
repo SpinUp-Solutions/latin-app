@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import { TableFillExercise } from '@/src/types/exercise';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
-import { useDelayedExerciseReset } from '@/src/hooks/useDelayedExerciseReset';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { FeedbackDisplay } from '../feedback';
 import { validateTableFillExercise } from '@/src/utils/exercises/tableFillExercise';
@@ -20,12 +19,18 @@ import {
 } from '../core/roman-table';
 import { cn } from '@/src/lib/utils';
 import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
-import type { ExerciseAnswer, ExerciseAnswerHandler, RuntimeMode } from '@/src/types/runtime-mode';
+import type {
+  ExerciseAnswer,
+  ExerciseAnswerHandler,
+  ExerciseCompletionHandler,
+  RuntimeMode,
+} from '@/src/types/runtime-mode';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
 interface Props {
   exercise: TableFillExercise;
   onComplete?: (score: number) => void;
+  onCompletionAccepted?: ExerciseCompletionHandler;
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
   initialAnswer?: ExerciseAnswer;
@@ -34,6 +39,7 @@ interface Props {
 const TableFillExerciseComponent: React.FC<Props> = ({
   exercise,
   onComplete,
+  onCompletionAccepted,
   runtimeMode,
   onAnswer,
   initialAnswer,
@@ -51,7 +57,7 @@ const TableFillExerciseComponent: React.FC<Props> = ({
   const [hasSubmitted, setHasSubmitted] = useState(hasAllRequiredAnswers(restoredAnswers));
   const [isProcessing, setIsProcessing] = useState(false);
   const [cellResults, setCellResults] = useState<Record<string, boolean>>({});
-  const { isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance } = useExerciseProgression({
+  const { isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance, cancelPendingAdvance } = useExerciseProgression({
     totalItems: 1,
     itemProgressionDelay: exercise.itemProgressionDelay,
     progressionRules: exercise.feedbackConfig.progressionRules,
@@ -69,20 +75,19 @@ const TableFillExerciseComponent: React.FC<Props> = ({
     resetExercise,
   } = useExerciseFeedback(exercise.feedbackConfig);
 
-  useDelayedExerciseReset({
-    shouldReset: !assessmentMode && shouldResetExercise,
-    delayMs: exercise.itemProgressionDelay,
-    onReset: () => {
-      setUserAnswers({});
-      setHasSubmitted(false);
-      setCellResults({});
-      setIsProcessing(false);
-      resetExercise();
-    },
-  });
+  const resetRequired = mode === 'practice' && shouldResetExercise;
+
+  const handleExerciseReset = () => {
+    cancelPendingAdvance();
+    setUserAnswers({});
+    setHasSubmitted(false);
+    setCellResults({});
+    setIsProcessing(false);
+    resetExercise();
+  };
 
   const handleInputChange = (cellKey: string, value: string) => {
-    if (hasSubmitted || isProcessing) return;
+    if (hasSubmitted || isProcessing || resetRequired) return;
     setUserAnswers(prev => ({ ...prev, [cellKey]: value }));
     if (isCorrect !== null) {
       clearFeedback();
@@ -90,7 +95,7 @@ const TableFillExerciseComponent: React.FC<Props> = ({
   };
 
   const handleSubmit = () => {
-    if (isProcessing || !hasAllRequiredAnswers(userAnswers)) return;
+    if (isProcessing || !hasAllRequiredAnswers(userAnswers) || resetRequired) return;
 
     setIsProcessing(true);
     setHasSubmitted(true);
@@ -116,6 +121,7 @@ const TableFillExerciseComponent: React.FC<Props> = ({
         setIsProcessing(false);
         onComplete?.(score);
       }, hasVisibleExplanation);
+      if (!assessmentMode) onCompletionAccepted?.(score);
     } else {
       handleIncorrect();
       setIsProcessing(false);
@@ -196,12 +202,12 @@ const TableFillExerciseComponent: React.FC<Props> = ({
                         <textarea
                           value={userAnswers[cellKey] || ''}
                           onChange={e => handleInputChange(cellKey, e.target.value)}
-                          disabled={hasSubmitted || isProcessing}
+                          disabled={hasSubmitted || isProcessing || resetRequired}
                           placeholder="Enter answer..."
                           className={cn(
                             'w-full min-h-[2rem] p-2 border rounded resize-none bg-transparent',
                             'focus:outline-none focus:ring-2 focus:ring-roman-red focus:border-transparent',
-                            (hasSubmitted || isProcessing) && 'cursor-not-allowed opacity-60'
+                            (hasSubmitted || isProcessing || resetRequired) && 'cursor-not-allowed opacity-60'
                           )}
                           rows={1}
                         />
@@ -235,7 +241,7 @@ const TableFillExerciseComponent: React.FC<Props> = ({
         </RomanTable>
 
         <div className="mt-6 flex justify-center gap-4">
-          {!hasSubmitted && (
+          {!hasSubmitted && !resetRequired && (
             <Button
               onClick={handleSubmit}
               disabled={isProcessing || !hasAllRequiredAnswers(userAnswers)}
@@ -244,7 +250,7 @@ const TableFillExerciseComponent: React.FC<Props> = ({
             </Button>
           )}
 
-          {hasSubmitted && isCorrect === false && !assessmentMode && (
+          {hasSubmitted && isCorrect === false && !assessmentMode && !resetRequired && (
             <Button onClick={handleReset} variant="outline" disabled={isProcessing} className="px-8">
               Try Again
             </Button>
@@ -260,6 +266,7 @@ const TableFillExerciseComponent: React.FC<Props> = ({
             explanation={exercise.data.explanation}
             showExplanation={showExplanation}
             onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
+            onStartOver={resetRequired ? handleExerciseReset : undefined}
           />
         )}
       </div>

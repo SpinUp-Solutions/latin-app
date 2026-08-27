@@ -55,7 +55,6 @@ import {
   AdminSearchInput,
   AdminStatusBadge,
 } from '@/src/components/admin/shell';
-import { cn } from '@/src/lib/utils';
 
 type LessonTab = LessonSummary['type'];
 type LessonType = LessonSummary['type'];
@@ -104,6 +103,10 @@ function LessonMetric({ icon: Icon, label, value }: { icon: LucideIcon; label: s
   );
 }
 
+function LessonCardActions({ children }: { children: React.ReactNode }) {
+  return <div className="flex h-[3.75rem] shrink-0 items-center gap-2 border-t px-5 sm:px-6">{children}</div>;
+}
+
 function LessonTypeBadge({ type }: { type: LessonType }) {
   if (type === 'normal') return null;
 
@@ -134,12 +137,8 @@ function LessonDescription({ content }: { content?: string }) {
 
 function LessonTitle({ content }: { content: string }) {
   return (
-    <h3 className="relative min-w-0 flex-1 pr-10 font-serif text-xl leading-5 tracking-tight text-foreground">
+    <h3 className="min-w-0 flex-1 font-serif text-xl leading-5 tracking-tight text-foreground">
       <SimpleRichDisplay content={content} className="!block break-words whitespace-normal" />
-      <div
-        className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-white via-white/95 to-transparent"
-        aria-hidden="true"
-      />
     </h3>
   );
 }
@@ -322,24 +321,24 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
     }
 
     return (
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
         {lessonsList.map(lesson => (
           <Card
             key={lesson.id}
-            className="group overflow-hidden border-border/80 bg-white/95 shadow-sm transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-primary/20 hover:shadow-lg motion-reduce:transition-none">
-            <CardContent className="!p-0">
-              <div className="relative flex flex-col gap-5 p-5 sm:p-6">
-                {lesson.isLive && (
-                  <div className="absolute right-5 top-5 z-10 sm:right-6 sm:top-6">
-                    <AdminStatusBadge tone="success">Live</AdminStatusBadge>
-                  </div>
-                )}
-                <div className={cn('flex items-start gap-3', lesson.isLive && 'pr-20 sm:pr-24')}>
+            className="group flex h-full flex-col overflow-hidden border-border/80 bg-white/95 shadow-sm transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-primary/20 hover:shadow-lg motion-reduce:transition-none">
+            <CardContent className="flex min-h-0 flex-1 flex-col !p-0">
+              <div className="flex flex-1 flex-col gap-5 p-5 sm:p-6">
+                <div className="flex items-start gap-3">
                   <AdminIconChip
                     icon={lessonTypeConfig[lesson.type].icon}
                     className={lessonTypeConfig[lesson.type].iconChip}
                   />
                   <div className="min-w-0 flex-1">
+                    {lesson.isLive && (
+                      <div className="mb-2 flex">
+                        <AdminStatusBadge tone="success">Live</AdminStatusBadge>
+                      </div>
+                    )}
                     <LessonTitle content={lesson.title} />
                   </div>
                 </div>
@@ -363,38 +362,35 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 border-t bg-muted/30">
+              <div className="grid shrink-0 grid-cols-3 border-t bg-muted/30">
                 <LessonMetric icon={BookOpen} label="Pages" value={lesson.totalPages} />
                 <LessonMetric icon={ClipboardList} label="Exercises" value={lesson.totalExercises} />
                 <LessonMetric icon={FileText} label="Items" value={lesson.totalItems} />
               </div>
 
-              <div className="flex items-center gap-3 border-t px-5 py-3 sm:px-6">
+              <LessonCardActions>
                 <Button
                   size="sm"
                   variant="ghost"
                   onClick={() => router.push(`/admin/lessons/preview/${lesson.id}`)}
-                  className="flex-1 border border-border bg-white font-sans text-foreground hover:bg-roman-parchment hover:text-foreground sm:w-40 sm:flex-none">
+                  className="h-9 min-w-0 flex-1 border border-border bg-white font-sans text-foreground hover:bg-roman-parchment hover:text-foreground">
                   <Eye className="mr-1.5 h-4 w-4" aria-hidden="true" />
                   Preview
                 </Button>
-                <Button
-                  size="sm"
-                  onClick={() => onEditLesson(lesson)}
-                  className="flex-1 font-sans sm:w-40 sm:flex-none">
+                <Button size="sm" onClick={() => onEditLesson(lesson)} className="h-9 min-w-0 flex-1 font-sans">
                   <Edit className="mr-1.5 h-4 w-4" aria-hidden="true" />
                   Edit lesson
                 </Button>
                 <Button
-                  size="icon"
+                  size="sm"
                   variant="ghost"
                   onClick={() => handleDeleteLesson(lesson.id, lesson.title)}
-                  className="h-9 w-9 shrink-0 border border-border bg-white font-sans text-roman-stone hover:bg-primary/10 hover:text-primary"
+                  className="h-9 w-9 shrink-0 border border-border bg-white p-0 font-sans text-roman-stone hover:bg-primary/10 hover:text-primary"
                   aria-label={`Delete ${lesson.title}`}
                   title="Delete lesson">
                   <Trash2 className="h-4 w-4" aria-hidden="true" />
                 </Button>
-              </div>
+              </LessonCardActions>
             </CardContent>
           </Card>
         ))}
@@ -475,13 +471,13 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
               These lessons failed to save previously. You can retry saving them or discard them if no longer needed.
             </p>
           </div>
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
             {filteredRecoveryItems.map(item => (
               <Card
                 key={item.id}
-                className="group overflow-hidden border-primary/15 bg-white/95 shadow-sm transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-lg motion-reduce:transition-none">
-                <CardContent className="!p-0">
-                  <div className="flex flex-col gap-5 p-5 sm:p-6">
+                className="group flex h-full flex-col overflow-hidden border-primary/15 bg-white/95 shadow-sm transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-lg motion-reduce:transition-none">
+                <CardContent className="flex min-h-0 flex-1 flex-col !p-0">
+                  <div className="flex flex-1 flex-col gap-5 p-5 sm:p-6">
                     <div className="flex items-start gap-3">
                       <AdminIconChip
                         icon={AlertTriangle}
@@ -506,7 +502,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 border-t bg-muted/30">
+                  <div className="grid shrink-0 grid-cols-2 border-t bg-muted/30">
                     <LessonMetric icon={BookOpen} label="Pages" value={item.rawLessonData.pages?.length || 0} />
                     <LessonMetric
                       icon={ClipboardList}
@@ -520,12 +516,12 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
                     />
                   </div>
 
-                  <div className="flex items-center gap-2 border-t px-5 py-3 sm:px-6">
+                  <LessonCardActions>
                     <Button
                       size="sm"
                       onClick={() => handleRetryRecovery(item.id)}
                       disabled={retryingRecovery && retryingId === item.id}
-                      className="flex-1 font-sans">
+                      className="h-9 min-w-0 flex-1 font-sans">
                       {retryingRecovery && retryingId === item.id ? (
                         <>
                           <div className="mr-2 h-4 w-4 animate-spin rounded-full border-b-2 border-white" />
@@ -548,7 +544,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
                       title="Discard recovery item">
                       <Trash2 className="h-4 w-4" aria-hidden="true" />
                     </Button>
-                  </div>
+                  </LessonCardActions>
                 </CardContent>
               </Card>
             ))}
@@ -563,7 +559,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
             <div className="h-8 w-1 rounded-full bg-roman-gold" aria-hidden="true" />
             <h2 className="font-serif text-xl text-foreground">Drafts ({filteredDrafts.length})</h2>
           </div>
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
             {filteredDrafts
               .sort(([, a], [, b]) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime())
               .map(([draftKey, draft]) => {
@@ -572,9 +568,9 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
                 return (
                   <Card
                     key={draftKey}
-                    className="group overflow-hidden border-roman-gold/30 bg-white/95 shadow-sm transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-roman-gold/50 hover:shadow-lg motion-reduce:transition-none">
-                    <CardContent className="!p-0">
-                      <div className="flex flex-col gap-5 p-5 sm:p-6">
+                    className="group flex h-full flex-col overflow-hidden border-roman-gold/30 bg-white/95 shadow-sm transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-roman-gold/50 hover:shadow-lg motion-reduce:transition-none">
+                    <CardContent className="flex min-h-0 flex-1 flex-col !p-0">
+                      <div className="flex flex-1 flex-col gap-5 p-5 sm:p-6">
                         <div className="flex items-start gap-3">
                           <AdminIconChip
                             icon={lessonTypeConfig[draftType].icon}
@@ -597,7 +593,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-3 border-t bg-muted/30">
+                      <div className="grid shrink-0 grid-cols-3 border-t bg-muted/30">
                         <LessonMetric icon={BookOpen} label="Pages" value={draft.document.pages.length} />
                         <LessonMetric
                           icon={ClipboardList}
@@ -614,11 +610,11 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
                         />
                       </div>
 
-                      <div className="flex items-center gap-2 border-t px-5 py-3 sm:px-6">
+                      <LessonCardActions>
                         <Button
                           size="sm"
                           onClick={() => onContinueDraft(lessonId)}
-                          className="flex-1 bg-roman-gold font-sans text-foreground hover:bg-roman-gold/90">
+                          className="h-9 min-w-0 flex-1 bg-roman-gold font-sans text-foreground hover:bg-roman-gold/90">
                           <Edit className="mr-1.5 h-4 w-4" aria-hidden="true" />
                           Continue
                         </Button>
@@ -631,7 +627,7 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
                           title="Delete draft">
                           <Trash2 className="h-4 w-4" aria-hidden="true" />
                         </Button>
-                      </div>
+                      </LessonCardActions>
                     </CardContent>
                   </Card>
                 );
@@ -683,6 +679,13 @@ export const LessonManager: React.FC<LessonManagerProps> = ({ onEditLesson, onCo
             }}
             className="w-full">
             <LessonTypeTabs
+              value={activeTab}
+              onValueChange={value => {
+                setActiveTab(value);
+                if (categoryFilter !== 'all' && categoryFilter !== 'uncategorized') {
+                  setCategoryFilter('all');
+                }
+              }}
               counts={{
                 normal: normalLessons.length,
                 vocab: vocabLessons.length,

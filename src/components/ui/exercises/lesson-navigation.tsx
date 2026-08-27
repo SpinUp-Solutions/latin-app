@@ -10,6 +10,7 @@ import { stripHtmlTags } from '@/src/utils/exercises';
 interface LessonNavigationProps {
   currentPageIndex: number;
   totalPages: number;
+  isLessonCompleted?: boolean;
   pageTitles?: (string | undefined)[];
   placement?: 'fixed' | 'contained';
   onPrevious: () => void;
@@ -20,11 +21,13 @@ interface LessonNavigationProps {
   isPlaying: boolean;
   hasAudio: boolean;
   isFinishing?: boolean;
+  isFinishBlocked?: boolean;
 }
 
 export const LessonNavigation: React.FC<LessonNavigationProps> = ({
   currentPageIndex,
   totalPages,
+  isLessonCompleted = false,
   pageTitles = [],
   placement = 'fixed',
   onPrevious,
@@ -35,13 +38,16 @@ export const LessonNavigation: React.FC<LessonNavigationProps> = ({
   isPlaying,
   hasAudio,
   isFinishing = false,
+  isFinishBlocked = false,
 }) => {
   const [jumpOpen, setJumpOpen] = useState(false);
 
   const canGoPrevious = currentPageIndex > 0;
   const canGoNext = currentPageIndex < totalPages - 1;
-  const progressPercentage = Math.round(((currentPageIndex + 1) / totalPages) * 100);
+  const progressPercentage = totalPages > 0 ? Math.round(((currentPageIndex + 1) / totalPages) * 100) : 0;
   const isContained = placement === 'contained';
+  const clampedProgress = Math.max(0, Math.min(100, Number.isFinite(progressPercentage) ? progressPercentage : 0));
+  const isFinalActionDisabled = !canGoNext && (isFinishing || isLessonCompleted || isFinishBlocked);
 
   const handleSelectPage = (index: number) => {
     onGoToPage(index);
@@ -63,7 +69,7 @@ export const LessonNavigation: React.FC<LessonNavigationProps> = ({
         <div className="h-1 w-full bg-roman-parchment/40">
           <div
             className="h-full bg-roman-red transition-all duration-300 ease-out"
-            style={{ width: `${progressPercentage}%` }}
+            style={{ width: `${clampedProgress}%` }}
           />
         </div>
 
@@ -129,16 +135,26 @@ export const LessonNavigation: React.FC<LessonNavigationProps> = ({
           <Button
             variant="outline"
             onClick={canGoNext ? onNext : onFinish}
-            disabled={isFinishing}
+            disabled={isFinalActionDisabled}
             className="rounded-full gap-1 px-3 sm:px-4">
             {canGoNext ? (
               <>
                 <span className="hidden sm:inline">Next</span>
                 <ChevronRight className="h-4 w-4" />
               </>
+            ) : isFinishing ? (
+              <>
+                <span>Finishing…</span>
+                <Check className="h-4 w-4" />
+              </>
+            ) : isLessonCompleted ? (
+              <>
+                <span>Lesson Complete</span>
+                <Check className="h-4 w-4" />
+              </>
             ) : (
               <>
-                <span>{isFinishing ? 'Finishing…' : 'Finish Lesson'}</span>
+                <span>Finish Lesson</span>
                 <Check className="h-4 w-4" />
               </>
             )}

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PoolList } from '@/src/components/ui/admin/vocabulary-pools/PoolList';
 
@@ -89,5 +89,214 @@ describe('vocabulary pool list usage status', () => {
     expect(screen.getByRole('link', { name: 'Lesson: (Copy) → Dictionary Entries' })).toBeInTheDocument();
     expect(screen.getByText('Dictionary Entries').tagName).toBe('STRONG');
     expect(screen.queryByText(/<p>/)).not.toBeInTheDocument();
+  });
+
+  it('renders duplicate button and triggers onDuplicate callback when clicked', async () => {
+    const user = userEvent.setup();
+    const onDuplicate = jest.fn();
+    const { rerender } = render(
+      <PoolList
+        pools={[pool]}
+        loading={false}
+        loadingMore={false}
+        hasMore={false}
+        onLoadMore={jest.fn()}
+        onEdit={jest.fn()}
+        onDuplicate={onDuplicate}
+        onDelete={jest.fn()}
+        usagesByPoolId={{}}
+      />
+    );
+
+    const duplicateBtn = screen.getByRole('button', { name: /duplicate/i });
+    expect(duplicateBtn).toBeInTheDocument();
+    expect(duplicateBtn).toBeEnabled();
+
+    await user.click(duplicateBtn);
+    expect(onDuplicate).toHaveBeenCalledWith(pool);
+
+    rerender(
+      <PoolList
+        pools={[pool]}
+        loading={false}
+        loadingMore={false}
+        hasMore={false}
+        onLoadMore={jest.fn()}
+        onEdit={jest.fn()}
+        onDuplicate={onDuplicate}
+        duplicatingPoolIds={new Set(['pool-1'])}
+        onDelete={jest.fn()}
+        usagesByPoolId={{}}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /duplicate/i })).toBeDisabled();
+  });
+
+  it('tracks concurrent duplications independently with duplicatingPoolIds set', async () => {
+    const poolA = { ...pool, id: 'pool-a', name: 'Pool A' };
+    const poolB = { ...pool, id: 'pool-b', name: 'Pool B' };
+    const onDuplicate = jest.fn();
+
+    const { rerender } = render(
+      <PoolList
+        pools={[poolA, poolB]}
+        loading={false}
+        loadingMore={false}
+        hasMore={false}
+        onLoadMore={jest.fn()}
+        onEdit={jest.fn()}
+        onDuplicate={onDuplicate}
+        duplicatingPoolIds={new Set(['pool-a'])}
+        onDelete={jest.fn()}
+        usagesByPoolId={{}}
+      />
+    );
+
+    const duplicateButtons = screen.getAllByRole('button', { name: /duplicate/i });
+    expect(duplicateButtons[0]).toBeDisabled(); // Pool A is disabled
+    expect(duplicateButtons[1]).toBeEnabled(); // Pool B remains enabled
+
+    rerender(
+      <PoolList
+        pools={[poolA, poolB]}
+        loading={false}
+        loadingMore={false}
+        hasMore={false}
+        onLoadMore={jest.fn()}
+        onEdit={jest.fn()}
+        onDuplicate={onDuplicate}
+        duplicatingPoolIds={new Set(['pool-a', 'pool-b'])}
+        onDelete={jest.fn()}
+        usagesByPoolId={{}}
+      />
+    );
+
+    const updatedButtons = screen.getAllByRole('button', { name: /duplicate/i });
+    expect(updatedButtons[0]).toBeDisabled();
+    expect(updatedButtons[1]).toBeDisabled();
+  });
+
+  it('shows assignment skeletons while usages are loading', () => {
+    render(
+      <PoolList
+        pools={[pool]}
+        loading={false}
+        loadingMore={false}
+        hasMore={false}
+        onLoadMore={jest.fn()}
+        onEdit={jest.fn()}
+        onDelete={jest.fn()}
+        usagesByPoolId={{}}
+        usagesLoading
+      />
+    );
+
+    expect(screen.getByLabelText('Loading assignments')).toBeInTheDocument();
+    expect(screen.getByText('Loading assigned lessons')).toBeInTheDocument();
+    expect(screen.queryByText('Assigned to')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Assigned \(/)).not.toBeInTheDocument();
+  });
+
+  it('replaces assignment skeletons with assigned lessons once usages load', async () => {
+    const { rerender } = render(
+      <PoolList
+        pools={[pool]}
+        loading={false}
+        loadingMore={false}
+        hasMore={false}
+        onLoadMore={jest.fn()}
+        onEdit={jest.fn()}
+        onDelete={jest.fn()}
+        usagesByPoolId={{}}
+        usagesLoading
+      />
+    );
+
+    expect(screen.getByLabelText('Loading assignments')).toBeInTheDocument();
+
+    rerender(
+      <PoolList
+        pools={[pool]}
+        loading={false}
+        loadingMore={false}
+        hasMore={false}
+        onLoadMore={jest.fn()}
+        onEdit={jest.fn()}
+        onDelete={jest.fn()}
+        usagesLoading={false}
+        usagesByPoolId={{
+          'pool-1': [
+            { id: '1', poolId: 'pool-1', kind: 'lesson', label: 'Lesson: One', editorUrl: '/admin/lessons/edit/one' },
+          ],
+        }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText('Loading assignments')).not.toBeInTheDocument();
+    });
+    expect(screen.getByText('Assigned (1)')).toBeInTheDocument();
+    expect(screen.getByText('Assigned to')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Lesson: One' })).toBeInTheDocument();
+  });
+
+  it('hides assignment placeholders when loaded usages are empty', async () => {
+    const { rerender } = render(
+      <PoolList
+        pools={[pool]}
+        loading={false}
+        loadingMore={false}
+        hasMore={false}
+        onLoadMore={jest.fn()}
+        onEdit={jest.fn()}
+        onDelete={jest.fn()}
+        usagesByPoolId={{}}
+        usagesLoading
+      />
+    );
+
+    rerender(
+      <PoolList
+        pools={[pool]}
+        loading={false}
+        loadingMore={false}
+        hasMore={false}
+        onLoadMore={jest.fn()}
+        onEdit={jest.fn()}
+        onDelete={jest.fn()}
+        usagesByPoolId={{}}
+        usagesLoading={false}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText('Loading assignments')).not.toBeInTheDocument();
+    });
+    expect(screen.queryByText('Assigned to')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Assigned \(/)).not.toBeInTheDocument();
+  });
+
+  it('renders one row when pagination returns the same pool twice', () => {
+    render(
+      <PoolList
+        pools={[pool, { ...pool, metadata: { ...pool.metadata, isActive: false } }]}
+        loading={false}
+        loadingMore={false}
+        hasMore={false}
+        onLoadMore={jest.fn()}
+        onEdit={jest.fn()}
+        onDelete={jest.fn()}
+        usagesByPoolId={{
+          'pool-1': [
+            { id: '1', poolId: 'pool-1', kind: 'lesson', label: 'Lesson: One', editorUrl: '/admin/lessons/edit/one' },
+          ],
+        }}
+      />
+    );
+
+    expect(screen.getAllByText('Chapter 1 words')).toHaveLength(1);
+    expect(screen.getByText('Assigned (1)')).toBeInTheDocument();
+    expect(screen.queryByText('Inactive')).not.toBeInTheDocument();
   });
 });

@@ -8,12 +8,13 @@ import { toast } from 'sonner';
 import { Button } from '@/src/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
 import { TestTakingView } from '@/src/components/ui/test/test-taking-view';
+import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { TestTranslationGradingProvider } from '@/src/components/ui/test/test-translation-grading-context';
 import { useAuth } from '@/src/hooks/useAuth';
 import { useBufferedAttemptAnswers } from '@/src/hooks/useBufferedAttemptAnswers';
 import { isExerciseType } from '@/src/lib/content/registry';
 import { isExerciseAnswerComplete } from '@/src/lib/tests/answer-completion';
-import { formatScorePercentage, formatScoreShortfall } from '@/src/lib/tests/formatting';
+import { formatScorePercentage, formatScorePoints, formatScoreShortfall } from '@/src/lib/tests/formatting';
 import { getApiErrorCode, getApiErrorMessage } from '@/src/store/api/baseQuery';
 import { useGetStudentDashboardQuery } from '@/src/store/api/lessonApi';
 import { useGetStudentMockDetailQuery } from '@/src/store/api/mockTestApi';
@@ -28,12 +29,6 @@ import type { TestAttemptOrigin } from '@/src/types/test';
 import type { StudentInProgressTestAttempt, StudentSubmittedTestAttempt } from '@/src/types/test';
 
 const TEST_HISTORY_GUARD_KEY = '__latinTestHistoryGuard';
-
-const formatPoints = (value: number) =>
-  value
-    .toFixed(2)
-    .replace(/\.00$/, '')
-    .replace(/(\.\d)0$/, '$1');
 
 type Screen = 'expectations' | 'taking' | 'review' | 'results' | 'unavailable';
 type MockRetakeAvailability = 'unchecked' | 'checking' | 'available' | 'unavailable';
@@ -244,13 +239,8 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
     };
   }, [flushPendingAnswers, hasUnsavedAnswers, originKey]);
 
-  const begin = async () => {
+  const startFreshAttempt = async () => {
     if (!user || !test || (isMockTest && !mockTest) || normalTest?.status === 'locked') return;
-    if (isMockTest && attempt) {
-      setScreen('taking');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
-    }
     const requestedOriginKey = originKey;
     try {
       const response = await startAttempt({ uid: user.uid, origin }).unwrap();
@@ -263,7 +253,8 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
       });
       setAttempt(response.attempt);
       setPageIndex(0);
-      if (!isMockTest) setScreen('taking');
+      setScreen('taking');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
       const code = getApiErrorCode(error);
       if (code === 'TEST_CONFIGURATION_ERROR' || code === 'TEST_NOT_AVAILABLE') {
@@ -271,6 +262,33 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
         return;
       }
       toast.error(getApiErrorMessage(error, 'Unable to start this test'));
+    }
+  };
+
+  const begin = async () => {
+    if (!user || !test || (isMockTest && !mockTest) || normalTest?.status === 'locked') return;
+    if (attempt) {
+      setScreen('taking');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    await startFreshAttempt();
+  };
+
+  const retake = () => {
+    setAttempt(null);
+    setResult(null);
+    resetAnswerBuffer();
+    setPageIndex(0);
+    void startFreshAttempt();
+  };
+
+  const exitTest = async () => {
+    try {
+      await flushPendingAnswers();
+      router.push('/dashboard');
+    } catch {
+      toast.error('Save the pending answer before leaving this test.');
     }
   };
 
@@ -442,7 +460,9 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
         <Card className="max-w-lg border-gray-300">
           <CardContent className="space-y-4 p-8 text-center">
             <FileCheck2 className="mx-auto h-10 w-10 text-gray-500" />
-            <h1 className="font-serif text-2xl">{test.title}</h1>
+            <h1 className="font-serif text-2xl">
+              <SimpleRichDisplay content={test.title} />
+            </h1>
             <p className="text-gray-600">
               {normalTest.lockedReason || 'Complete the previous learning unit to unlock this test.'}
             </p>
@@ -477,10 +497,10 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
 
   if (screen === 'expectations') {
     const points = mockTest
-      ? `${formatPoints(mockTest.totalPoints)} total points`
+      ? `${formatScorePoints(mockTest.totalPoints)} total points`
       : normalTest && normalTest.minTotalPoints === normalTest.maxTotalPoints
-        ? `${formatPoints(normalTest.minTotalPoints)} total points`
-        : `${formatPoints(normalTest?.minTotalPoints ?? 0)}–${formatPoints(normalTest?.maxTotalPoints ?? 0)} total points, depending on the version selected`;
+        ? `${formatScorePoints(normalTest.minTotalPoints)} total points`
+        : `${formatScorePoints(normalTest?.minTotalPoints ?? 0)}–${formatScorePoints(normalTest?.maxTotalPoints ?? 0)} total points, depending on the version selected`;
     const mockAction = attempt
       ? mockDetail?.attempt || attemptSummary?.inProgressAttemptId
         ? 'Continue Mock Test'
@@ -500,8 +520,12 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
             <div className="mx-auto mb-2 rounded-full border-2 border-roman-gold/40 bg-roman-red p-3 text-white shadow-sm">
               <FileCheck2 className="h-7 w-7" aria-hidden="true" />
             </div>
-            <CardTitle className="font-serif text-3xl text-roman-red">{test.title}</CardTitle>
-            <p className="text-roman-stone">{test.description}</p>
+            <CardTitle className="font-serif text-3xl text-roman-red">
+              <SimpleRichDisplay content={test.title} />
+            </CardTitle>
+            <div className="text-roman-stone">
+              <SimpleRichDisplay content={test.description} />
+            </div>
           </CardHeader>
           <CardContent className="space-y-5 px-6 pb-7 sm:px-8">
             <div className="rounded-xl border border-roman-gold/25 bg-roman-parchment/50 p-4 sm:flex sm:items-center sm:justify-between sm:gap-5">
@@ -585,7 +609,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
               </h1>
               <div className="text-5xl font-semibold text-roman-red">{formatScorePercentage(result.percentage)}%</div>
               <p className="text-lg">
-                {formatPoints(result.score)} / {formatPoints(result.maxScore)} points
+                {formatScorePoints(result.score)} / {formatScorePoints(result.maxScore)} points
               </p>
               {result.outcome === 'not-passed' && result.passingPercentage !== null && (
                 <div className="rounded-lg bg-amber-50 p-3 text-amber-950">
@@ -615,11 +639,12 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
             <CardContent className="space-y-2">
               {Object.entries(result.exerciseResults).map(([exerciseId, exerciseResult], index) => (
                 <div key={exerciseId} className="flex items-center justify-between gap-4 rounded-lg border p-3 text-sm">
-                  <span>
-                    {index + 1}. {exerciseResult.title || 'Exercise'}
+                  <span className="flex min-w-0 items-center gap-1">
+                    <span className="shrink-0">{index + 1}.</span>
+                    <SimpleRichDisplay content={exerciseResult.title || 'Exercise'} />
                   </span>
                   <strong>
-                    {formatPoints(exerciseResult.awardedPoints)} / {formatPoints(exerciseResult.maxPoints)}
+                    {formatScorePoints(exerciseResult.awardedPoints)} / {formatScorePoints(exerciseResult.maxPoints)}
                   </strong>
                 </div>
               ))}
@@ -629,6 +654,9 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
           <div className="flex flex-col justify-center gap-3 sm:flex-row">
             <Button asChild variant="outline">
               <Link href="/dashboard">Back to dashboard</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href={`/test-results/${result.id}`}>Review answers</Link>
             </Button>
             {isMockTest && mockRetakeAvailability !== 'available' ? (
               mockRetakeAvailability === 'checking' ? (
@@ -644,15 +672,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
                 </p>
               )
             ) : (
-              <Button
-                className="bg-roman-red hover:bg-roman-red/90"
-                onClick={() => {
-                  setAttempt(null);
-                  setResult(null);
-                  resetAnswerBuffer();
-                  setPageIndex(0);
-                  setScreen('expectations');
-                }}>
+              <Button className="bg-roman-red hover:bg-roman-red/90" onClick={() => void retake()}>
                 <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
                 {isMockTest ? 'Retake Mock Test' : 'Retake Test'}
               </Button>
@@ -698,8 +718,9 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
                     </p>
                     <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-amber-900">
                       {unanswered.map(item => (
-                        <li key={item.id}>
-                          Page {item.pageIndex + 1}: {item.title}
+                        <li key={item.id} className="flex items-center gap-1">
+                          <span className="shrink-0">Page {item.pageIndex + 1}:</span>
+                          <SimpleRichDisplay content={item.title} />
                         </li>
                       ))}
                     </ul>
@@ -732,8 +753,9 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
                           complete ? 'border-emerald-200 bg-emerald-50/70' : 'border-amber-200 bg-amber-50/70'
                         }`}>
                         <div className="min-w-0">
-                          <div className="font-medium text-slate-900">
-                            Page {item.pageIndex + 1}: {item.title}
+                          <div className="flex items-center gap-1 font-medium text-slate-900">
+                            <span className="shrink-0">Page {item.pageIndex + 1}:</span>
+                            <SimpleRichDisplay content={item.title} />
                           </div>
                           <div
                             className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
@@ -758,8 +780,8 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
                 </ul>
               </div>
               <p className="border-t border-slate-100 pt-4 text-sm leading-6 text-gray-600">
-                Submission is final for this attempt. Exact questions and answers cannot be reopened afterward, but your
-                score breakdown will be retained.
+                Submission is final for this attempt. After you submit, you can review every question with the correct
+                answers and your translation feedback.
               </p>
             </CardContent>
           </Card>
@@ -801,8 +823,8 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
   return (
     <TestTranslationGradingProvider value={{ grades: attempt.translationGrades, grade: gradeTranslation }}>
       <TestTakingView
-        title={test.title}
-        description={test.description}
+        title={<SimpleRichDisplay content={test.title} />}
+        description={test.description ? <SimpleRichDisplay content={test.description} /> : undefined}
         pages={attempt.delivery.pages}
         currentPageIndex={pageIndex}
         answeredCount={answeredCount}
@@ -815,6 +837,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
         onPrevious={() => void moveToPage(pageIndex - 1)}
         onNext={() => void moveToPage(pageIndex + 1)}
         onReview={() => void openReview()}
+        onExit={() => void exitTest()}
         navigationPending={translationGrading}
       />
     </TestTranslationGradingProvider>

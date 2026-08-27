@@ -18,6 +18,7 @@ import type {
 import { createAnnotationId, createEmptySentenceDiagramDocument } from '@/src/features/sentence-diagramming';
 
 jest.mock('@/src/store/api/advancedVocabularyApi', () => ({
+  useGetGeneratedExerciseWordsQuery: () => ({ data: undefined, isLoading: false, isError: false }),
   useGetMultiPosWordsQuery: () => ({ data: undefined, isLoading: false, isError: false }),
   useGetMultiParadigmWordsQuery: () => ({ data: undefined, isLoading: false, isError: false }),
 }));

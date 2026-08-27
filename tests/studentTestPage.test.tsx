@@ -238,6 +238,50 @@ describe('student normal test flow', () => {
     expect(screen.getByText('Results breakdown')).toBeInTheDocument();
   });
 
+  it('exits the in-progress player to the dashboard after saving', async () => {
+    const params = Promise.resolve({ testId: 'test-1' }) as Promise<{ testId: string }> & {
+      status: 'fulfilled';
+      value: { testId: string };
+    };
+    params.status = 'fulfilled';
+    params.value = { testId: 'test-1' };
+    render(
+      <Suspense fallback={<div>Loading route</div>}>
+        <StudentTestPage params={params} />
+      </Suspense>
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Start Test' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Exit test' }));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/dashboard'));
+  });
+
+  it('starts a retake from results in one click', async () => {
+    const params = Promise.resolve({ testId: 'test-1' }) as Promise<{ testId: string }> & {
+      status: 'fulfilled';
+      value: { testId: string };
+    };
+    params.status = 'fulfilled';
+    params.value = { testId: 'test-1' };
+    render(
+      <Suspense fallback={<div>Loading route</div>}>
+        <StudentTestPage params={params} />
+      </Suspense>
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Start Test' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Review answers' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Submit Test' }));
+    expect(await screen.findByRole('button', { name: 'Retake Test' })).toBeInTheDocument();
+    expect(screen.queryByText('Test in progress')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retake Test' }));
+    expect(await screen.findByText('Test in progress')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Start Retake' })).not.toBeInTheDocument();
+    expect(mockStartAttempt).toHaveBeenCalledTimes(2);
+  });
+
   it('reopens a recorded answer from review and clears its server-side value before editing', async () => {
     const params = Promise.resolve({ testId: 'test-1' }) as Promise<{ testId: string }> & {
       status: 'fulfilled';
@@ -692,7 +736,6 @@ describe('student normal test flow', () => {
       </Suspense>
     );
     fireEvent.click(await screen.findByRole('button', { name: 'Start Mock Test' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Begin Mock Test' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Record two answers' }));
     fireEvent.click(screen.getByRole('button', { name: 'Review answers' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Submit Test' }));
@@ -718,6 +761,80 @@ describe('student normal test flow', () => {
       expect(screen.getByText('This mock test is no longer available for another attempt.')).toBeInTheDocument()
     );
     expect(screen.queryByRole('button', { name: 'Retake Mock Test' })).not.toBeInTheDocument();
+  });
+
+  it('starts a mock retake from results in one click', async () => {
+    mockSearchParams.mockReturnValue(new URLSearchParams('origin=mock'));
+    const liveMock = {
+      id: 'mock-1',
+      title: 'Practice mock',
+      description: '',
+      passingPercentage: 70,
+      totalPoints: 2,
+      attemptSummary: {
+        origin: { kind: 'mock-test' as const, mockTestId: 'mock-1' },
+        inProgressAttemptId: null,
+        attemptCount: 0,
+        best: null,
+        latest: null,
+      },
+      scoreTrend: [],
+    };
+    const liveDetail = {
+      mock: {
+        id: 'mock-1',
+        title: 'Practice mock',
+        description: '',
+        passingPercentage: 70,
+        status: 'active' as const,
+        isLive: true,
+      },
+      attempt: null,
+    };
+    mockUseGetStudentDashboardQuery.mockReturnValue({
+      data: { ...dashboard, mockTests: [liveMock] },
+      isLoading: false,
+      isError: false,
+      refetch: mockRefetchDashboard,
+    });
+    mockUseGetStudentMockDetailQuery.mockReturnValue({
+      data: liveDetail,
+      isLoading: false,
+      isError: false,
+      refetch: mockRefetchMockDetail,
+    });
+    mockStartAttempt.mockReturnValue({
+      unwrap: jest.fn().mockResolvedValue({
+        attempt: { ...startedAttempt, origin: { kind: 'mock-test', mockTestId: 'mock-1' } },
+        resumed: false,
+      }),
+    });
+    mockRefetchDashboard.mockResolvedValue({ data: { ...dashboard, mockTests: [liveMock] } });
+    mockRefetchMockDetail.mockResolvedValue({ data: liveDetail });
+    const params = Promise.resolve({ testId: 'mock-1' }) as Promise<{ testId: string }> & {
+      status: 'fulfilled';
+      value: { testId: string };
+    };
+    params.status = 'fulfilled';
+    params.value = { testId: 'mock-1' };
+
+    render(
+      <Suspense fallback={<div>Loading route</div>}>
+        <StudentTestPage params={params} />
+      </Suspense>
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Start Mock Test' }));
+    expect(await screen.findByText('Test in progress')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Begin Mock Test' })).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'Review answers' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Submit Test' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Retake Mock Test' }));
+
+    expect(await screen.findByText('Test in progress')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Start Mock Test' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Begin Mock Test' })).not.toBeInTheDocument();
+    expect(mockStartAttempt).toHaveBeenCalledTimes(2);
   });
 
   it('retries the failing mock-detail source', async () => {

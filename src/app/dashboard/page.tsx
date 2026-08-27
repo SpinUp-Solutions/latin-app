@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/src/services/firebase';
 import { useGetStudentDashboardQuery } from '@/src/store/api/lessonApi';
+import { persistStudentDashboard } from '@/src/store/api/dashboardCache';
 import { useAuth } from '@/src/hooks/useAuth';
 import {
   LessonStatus,
@@ -21,9 +22,12 @@ import { CircularProgressButton } from '@/src/components/ui/CircularProgressButt
 import { Swiper, SwiperSlide } from 'swiper/react';
 import 'swiper/css';
 import { SwiperNavigation } from '@/src/components/ui/core/swiper-nav';
+import { OffscreenSlide } from '@/src/components/ui/core/offscreen-slide';
 import { PracticeSection } from '@/src/components/ui/core/PracticeSection';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { FeedbackBanner } from '@/src/components/ui/core/feedback-banner';
+import { StudentFeedbackFooter } from '@/src/components/ui/core/student-feedback-footer';
+import { shouldReportClientHardFail, reportUnexpectedError } from '@/src/lib/report-unexpected-error';
 export { MockTestCard } from '@/src/components/ui/core/mock-test-card';
 
 const statusConfig: Record<LessonStatus, { card: string }> = {
@@ -41,9 +45,10 @@ const statusConfig: Record<LessonStatus, { card: string }> = {
   },
 };
 
-const LessonCard = memo(
+export const LessonCard = memo(
   ({ lesson, onLessonClick }: { lesson: StudentLessonSummary; onLessonClick: (id: string) => void }) => {
     const config = statusConfig[lesson.status || 'available'] || statusConfig.available;
+    const progress = typeof lesson.progress === 'number' ? lesson.progress : 0;
 
     const handleClick = () => {
       if (lesson.status === 'locked') {
@@ -58,18 +63,29 @@ const LessonCard = memo(
         className={`group h-36 cursor-pointer rounded-3xl shadow-xl transition-all duration-300 transform hover:-translate-y-2 hover:scale-[1.02] hover:shadow-2xl ${config.card}`}
         onClick={handleClick}>
         <RomanCardContent className="relative p-6">
-          <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-3xl"></div>
+          <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-white/20 to-transparent" />
           <div className="relative flex items-center justify-between">
-            <div className="flex-1 pr-4 min-w-0">
-              <h3 className="text-xl font-serif mb-2 text-gray-900 truncate">{lesson.title}</h3>
-              <div className="text-sm text-roman-stone line-clamp-2">
+            <div className="min-w-0 flex-1 pr-4">
+              <h3 className="mb-2 min-w-0 truncate font-serif text-xl text-gray-900">
+                <SimpleRichDisplay content={lesson.title} className="truncate [&_p]:truncate" />
+              </h3>
+              <div className="line-clamp-2 text-sm text-roman-stone">
                 <SimpleRichDisplay content={lesson.description || ''} />
               </div>
             </div>
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               <CircularProgressButton
-                progress={typeof lesson.progress === 'number' ? lesson.progress : 0}
+                progress={progress}
                 status={lesson.status}
+                ariaLabel={
+                  lesson.status === 'locked'
+                    ? 'Lesson locked'
+                    : lesson.status === 'completed'
+                      ? 'Review lesson'
+                      : lesson.status === 'in-progress'
+                        ? 'Continue lesson'
+                        : 'Start lesson'
+                }
                 onClick={(e?: React.MouseEvent) => {
                   e?.stopPropagation();
                   handleClick();
@@ -106,6 +122,19 @@ export const TestCard = memo(
           : summary.latest?.outcome === 'score-only'
             ? 'Latest: Completed'
             : null;
+    const description = test.description?.trim()
+      ? test.description
+      : unavailable
+        ? 'This test is temporarily unavailable.'
+        : locked
+          ? 'Complete the previous learning unit to unlock this test.'
+          : summary.inProgressAttemptId
+            ? 'Continue your current test attempt.'
+            : summary.attemptCount > 0
+              ? 'Review your result or try for a new score.'
+              : test.passingPercentage === null
+                ? 'Check your understanding with a score-only review.'
+                : 'Check your understanding before moving on.';
 
     const handleClick = () => {
       if (unavailable) {
@@ -122,7 +151,7 @@ export const TestCard = memo(
     return (
       <RomanCard
         data-testid="dashboard-test-card"
-        className={`group h-36 cursor-pointer rounded-3xl border shadow-xl transition-all duration-300 hover:-translate-y-2 hover:scale-[1.02] hover:shadow-2xl ${
+        className={`group h-40 cursor-pointer overflow-hidden rounded-3xl border shadow-xl transition-all duration-300 hover:-translate-y-2 hover:scale-[1.02] hover:shadow-2xl ${
           locked
             ? 'border-gray-300 bg-gradient-to-br from-gray-100 to-gray-50'
             : test.passingPercentage === null
@@ -130,16 +159,26 @@ export const TestCard = memo(
               : 'border-indigo-300 bg-gradient-to-br from-indigo-100/90 via-violet-50 to-white'
         }`}
         onClick={handleClick}>
-        <RomanCardContent className="relative h-full p-6">
-          <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-white/20 to-transparent" />
-          <div className="relative flex h-full items-center justify-between">
-            <div className="min-w-0 flex-1 pr-4">
-              <h3 className="truncate font-serif text-xl text-gray-950">{test.title}</h3>
-              <div className="mt-1 line-clamp-1 text-sm text-gray-600">
-                <SimpleRichDisplay content={test.description || ''} />
+        <RomanCardContent className="relative h-full p-5 sm:p-6">
+          <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-white/25 to-transparent" />
+          <div className="relative flex h-full items-center gap-4">
+            <div className="flex h-full min-w-0 flex-1 flex-col">
+              <div
+                className={`text-[0.68rem] font-bold uppercase tracking-[0.18em] ${
+                  locked ? 'text-gray-500' : 'text-indigo-700/75'
+                }`}>
+                Review test
               </div>
-              <div className="mt-2 flex min-w-0 items-center gap-2 text-xs font-semibold text-indigo-800">
-                {locked ? (
+              <h3 className="mt-2 min-w-0 truncate font-serif text-xl text-gray-950">
+                <SimpleRichDisplay content={test.title} className="truncate [&_p]:truncate" />
+              </h3>
+              <div className="mt-1 min-h-5 text-sm text-gray-600">
+                <SimpleRichDisplay content={description} className="line-clamp-1 [&_p]:line-clamp-1" />
+              </div>
+              <div className="mt-auto flex min-w-0 items-center gap-2 text-xs font-semibold text-indigo-800">
+                {unavailable ? (
+                  <span className="truncate text-gray-500">Temporarily unavailable</span>
+                ) : locked ? (
                   <span className="truncate">
                     {test.lockedReason || 'Complete the previous learning unit to unlock'}
                   </span>
@@ -159,28 +198,47 @@ export const TestCard = memo(
                           : `Pass ≥ ${test.passingPercentage}%`}
                       </span>
                     )}
-                    {summary.latest?.outcome === 'not-passed' && test.relatedLiveMocks?.[0] && (
-                      <a
-                        className="min-w-0 truncate text-teal-800 underline-offset-2 hover:underline"
-                        href={`/test/${encodeURIComponent(test.relatedLiveMocks[0].id)}?origin=mock`}
-                        onClick={event => event.stopPropagation()}>
-                        Practice with the {test.relatedLiveMocks[0].title} Mock Test
-                      </a>
-                    )}
                   </>
                 )}
               </div>
+              <div className="mt-1 flex min-h-4 min-w-0 items-center gap-2">
+                {summary.latest ? (
+                  <a
+                    data-testid="test-review-latest-link"
+                    className="shrink-0 truncate text-xs font-semibold text-indigo-700 underline-offset-2 hover:underline"
+                    href={`/test-results/${summary.latest.attemptId}`}
+                    onClick={event => event.stopPropagation()}>
+                    Review latest result
+                  </a>
+                ) : null}
+                {summary.latest?.outcome === 'not-passed' && test.relatedLiveMocks?.[0] ? (
+                  <>
+                    <span aria-hidden="true" className="text-gray-300">
+                      ·
+                    </span>
+                    <a
+                      className="min-w-0 truncate text-xs font-semibold text-teal-800 underline-offset-2 hover:underline"
+                      href={`/test/${encodeURIComponent(test.relatedLiveMocks[0].id)}?origin=mock`}
+                      aria-label={`Practice with the ${test.relatedLiveMocks[0].title} Mock Test`}
+                      onClick={event => event.stopPropagation()}>
+                      Practice mock test
+                    </a>
+                  </>
+                ) : null}
+              </div>
             </div>
-            <CircularProgressButton
-              progress={progress}
-              status={test.status}
-              disabled={unavailable}
-              ariaLabel={unavailable ? 'Test unavailable' : locked ? 'Test locked' : action}
-              onClick={(event?: React.MouseEvent) => {
-                event?.stopPropagation();
-                handleClick();
-              }}
-            />
+            <div className="shrink-0 self-center">
+              <CircularProgressButton
+                progress={progress}
+                status={test.status}
+                disabled={unavailable}
+                ariaLabel={unavailable ? 'Test unavailable' : locked ? 'Test locked' : action}
+                onClick={(event?: React.MouseEvent) => {
+                  event?.stopPropagation();
+                  handleClick();
+                }}
+              />
+            </div>
           </div>
         </RomanCardContent>
       </RomanCard>
@@ -192,16 +250,33 @@ TestCard.displayName = 'TestCard';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, loading, displayName } = useAuth();
+  const { user, loading, displayName, authUid } = useAuth();
 
+  // The query starts from the uid Firebase auth already resolved, without
+  // waiting for the Firestore profile snapshot; returning students also paint
+  // instantly from the persisted cache while it revalidates in the background.
+  const uid = authUid ?? user?.uid ?? '';
   const {
     data: studentDashboard,
     isLoading: lessonsLoading,
     isError: dashboardError,
+    error: dashboardQueryError,
     refetch: refetchDashboard,
-  } = useGetStudentDashboardQuery(user?.uid ?? '', {
-    skip: !user?.uid,
+  } = useGetStudentDashboardQuery(uid, {
+    skip: !uid,
   });
+
+  useEffect(() => {
+    if (uid && studentDashboard) persistStudentDashboard(uid, studentDashboard);
+  }, [uid, studentDashboard]);
+
+  useEffect(() => {
+    if (!dashboardError || studentDashboard || !dashboardQueryError) return;
+    if (!shouldReportClientHardFail(dashboardQueryError)) return;
+    reportUnexpectedError(dashboardQueryError, {
+      tags: { surface: 'dashboard_load' },
+    });
+  }, [dashboardError, dashboardQueryError, studentDashboard]);
 
   const learningUnits = useMemo(() => {
     return studentDashboard?.learningPath ?? [];
@@ -224,6 +299,7 @@ export default function DashboardPage() {
     [vocabLessons, diagrammingLessons, listeningLessons]
   );
   const mockTests = useMemo(() => studentDashboard?.mockTests ?? [], [studentDashboard]);
+  const pastMockResults = useMemo(() => studentDashboard?.pastMockResults ?? [], [studentDashboard]);
 
   const completionStats = useMemo(() => {
     if (learningUnits.length === 0) return { percentage: 0, completed: 0, total: 0 };
@@ -287,7 +363,10 @@ export default function DashboardPage() {
     }
   };
 
-  if (loading || !user || lessonsLoading) {
+  // The page renders as soon as an authenticated uid has dashboard data —
+  // profile loading no longer holds the learning path hostage — and a failed
+  // background revalidation keeps the last good projection on screen.
+  if (!uid || (lessonsLoading && !studentDashboard)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-roman-marble">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>
@@ -295,7 +374,7 @@ export default function DashboardPage() {
     );
   }
 
-  if (dashboardError) {
+  if (dashboardError && !studentDashboard) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-roman-marble p-6">
         <RomanCard className="w-full max-w-lg">
@@ -324,33 +403,37 @@ export default function DashboardPage() {
       </div>
 
       <div className="relative">
-        <header className="bg-white/80 backdrop-blur-sm border-b border-roman-red/20 px-8 py-6 flex items-center justify-between shadow-xl">
-          <div className="flex items-center gap-4">
+        <header className="relative flex flex-col gap-4 bg-white/80 px-4 py-4 shadow-xl backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between sm:px-8 sm:py-6">
+          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
             <Image
               src="/assets/logos/wakeforest_shield.png"
               alt="Wake Forest University"
               width={1000}
               height={736}
-              className="h-14 w-auto"
+              className="h-10 w-auto shrink-0 sm:h-14"
               priority
             />
-            <div>
-              <h1 className="text-3xl font-serif tracking-wide text-gray-900 mb-1">Wake Forest University Latin</h1>
-              <p className="text-lg text-roman-stone leading-relaxed">Welcome back, {displayName}</p>
+            <div className="min-w-0">
+              <h1 className="mb-1 font-serif text-xl tracking-wide text-gray-900 sm:text-3xl">
+                Wake Forest University Latin
+              </h1>
+              <p className="text-sm leading-relaxed text-roman-stone sm:text-lg">
+                {displayName ? `Welcome back, ${displayName}` : 'Welcome back'}
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-4">
             <Button
               variant="ghost"
-              className="text-roman-stone hover:text-roman-red px-6 py-3 rounded-xl text-lg font-medium flex items-center hover:bg-roman-red/5 transition-all"
+              className="flex items-center rounded-xl px-4 py-2 text-base font-medium text-roman-stone transition-all hover:bg-roman-red/5 hover:text-roman-red sm:px-6 sm:py-3 sm:text-lg"
               onClick={() => router.push('/profile')}>
-              <User className="h-5 w-5 mr-2" />
+              <User className="mr-2 h-5 w-5" />
               Profile
             </Button>
             <Button
               onClick={handleSignOut}
               size="lg"
-              className="bg-gradient-to-r from-gray-900 to-gray-800 hover:from-gray-800 hover:to-gray-700 text-white px-8 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5 hover:scale-105">
+              className="rounded-xl bg-gradient-to-r from-gray-900 to-gray-800 px-4 py-2 text-white shadow-lg transition-all hover:-translate-y-0.5 hover:from-gray-800 hover:to-gray-700 hover:shadow-xl sm:px-8 sm:py-3">
               Sign Out
             </Button>
           </div>
@@ -392,7 +475,7 @@ export default function DashboardPage() {
                   </RomanCardContent>
                 </RomanCard>
               ) : (
-                <div className="relative ">
+                <div className="relative overflow-hidden">
                   <Swiper
                     spaceBetween={0}
                     slidesPerView={1}
@@ -400,11 +483,12 @@ export default function DashboardPage() {
                     speed={250}
                     threshold={5}
                     grabCursor
+                    watchSlidesProgress
                     breakpoints={{
                       1024: { slidesPerView: 2 },
                       1280: { slidesPerView: 3 },
                     }}
-                    className="lesson-cards-carousel overflow-visible px-0 py-8 sm:p-8"
+                    className="lesson-cards-carousel overflow-hidden px-0 py-8 sm:p-8"
                     centeredSlides={true}
                     effect="slide">
                     <div slot="container-end">
@@ -412,20 +496,15 @@ export default function DashboardPage() {
                     </div>
 
                     {learningUnits.map(unit => (
-                      <SwiperSlide
-                        key={unit.id}
-                        className="overflow-visible px-2 py-8 transition-transform duration-300 sm:p-6 lg:p-10">
-                        {({ isActive }) => (
-                          <div
-                            className={`transform-gpu transition-transform duration-300 ${
-                              isActive ? 'scale-100 sm:scale-110 xl:scale-125' : 'scale-95'
-                            }`}>
+                      <SwiperSlide key={unit.id} className="min-w-0 overflow-hidden px-2 py-8 sm:p-6 lg:p-10">
+                        {({ isActive, isVisible, isPrev, isNext }) => (
+                          <OffscreenSlide isVisible={isActive || isVisible || isPrev || isNext}>
                             {unit.kind === 'test' ? (
                               <TestCard test={unit} onTestClick={handleLessonClick} />
                             ) : (
                               <LessonCard lesson={unit} onLessonClick={handleLessonClick} />
                             )}
-                          </div>
+                          </OffscreenSlide>
                         )}
                       </SwiperSlide>
                     ))}
@@ -440,10 +519,13 @@ export default function DashboardPage() {
                 onLessonClick={handleLessonClick}
                 mockTests={mockTests}
                 onMockTestClick={handleMockClick}
+                pastMockResults={pastMockResults}
               />
             </section>
           </div>
         </main>
+
+        <StudentFeedbackFooter />
       </div>
     </div>
   );
