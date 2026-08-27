@@ -8,6 +8,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useClipboard } from '../../core/clipboard';
 import { toast } from 'sonner';
 import { getContentTypeLabel } from '@/src/lib/content/registry';
+import { stripHtmlTags } from '@/src/utils/exercises';
 
 interface ContentItemProps {
   item: RenderableContentItem;
@@ -37,6 +38,7 @@ const getContentIcon = (type: string) => {
 export const ContentItem: React.FC<ContentItemProps> = ({ item, onEdit, onRemove, isDraggable = false, meta }) => {
   const Icon = getContentIcon(item.type);
   const typeLabel = getContentTypeLabel(item.type);
+  const accessibleTitle = stripHtmlTags(item.title || typeLabel);
   const { copyItem } = useClipboard();
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -66,6 +68,7 @@ export const ContentItem: React.FC<ContentItemProps> = ({ item, onEdit, onRemove
             variant="ghost"
             size="sm"
             className="cursor-grab active:cursor-grabbing p-0.5 h-5 w-5 text-gray-400 hover:text-gray-600"
+            aria-label={`Reorder ${accessibleTitle}`}
             {...attributes}
             {...listeners}>
             <GripVertical className="h-3 w-3" />
@@ -79,13 +82,29 @@ export const ContentItem: React.FC<ContentItemProps> = ({ item, onEdit, onRemove
       </div>
       <div className="flex items-center gap-0.5">
         {meta}
-        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleCopy} title="Copy content">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 w-6 p-0"
+          onClick={handleCopy}
+          aria-label={`Copy ${accessibleTitle}`}
+          title="Copy content">
           <Copy className="h-3 w-3" />
         </Button>
-        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={onEdit}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 w-6 p-0"
+          onClick={onEdit}
+          aria-label={`Edit ${accessibleTitle}`}>
           <Edit className="h-3 w-3" />
         </Button>
-        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={onRemove}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 w-6 p-0"
+          onClick={onRemove}
+          aria-label={`Remove ${accessibleTitle}`}>
           <Trash2 className="h-3 w-3" />
         </Button>
       </div>

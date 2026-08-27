@@ -58,8 +58,8 @@ export function RomanPlayerShell({
                 Page {currentPage} of {totalPages}
               </span>
             </div>
-            <Heading className="truncate font-serif text-2xl leading-tight tracking-wide text-roman-red">
-              {title}
+            <Heading className="min-w-0 overflow-hidden font-serif text-2xl leading-tight tracking-wide text-roman-red">
+              <span className="block truncate [&_*]:inline [&_*]:whitespace-nowrap">{title}</span>
             </Heading>
             {description && (
               <div className="mt-1 line-clamp-2 text-sm leading-relaxed text-roman-stone">{description}</div>

@@ -6,7 +6,6 @@ import { usePathname } from 'next/navigation';
 import {
   BookOpen,
   ChevronLeft,
-  ChevronRight,
   ClipboardCheck,
   ClipboardList,
   FileCheck2,
@@ -182,7 +181,6 @@ export function AdminSidebar({ onNavigate, collapsed = false, onToggleCollapse, 
                           )}>
                           {item.label}
                         </span>
-                        {isActive && !collapsed && <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
                       </Link>
                     )}
                   </li>
