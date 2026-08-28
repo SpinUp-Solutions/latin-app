@@ -33,6 +33,7 @@ const PENDING_WRITE_FINISH_GRACE_MS = 8_000;
 
 interface ProgressMutationSummary {
   progress?: number;
+  furthestPageIndex?: number;
   lessonCompleted?: boolean;
   completedExerciseCount?: number;
   requiredExerciseCount?: number;
@@ -160,6 +161,9 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   const [currentPageIndex, setCurrentPageIndex] = useState(
     Math.max(0, Math.min(lesson.furthestPageIndex ?? lesson.currentPageIndex ?? 0, lesson.pages.length - 1))
   );
+  const [furthestPageIndex, setFurthestPageIndex] = useState(
+    Math.max(0, Math.min(lesson.furthestPageIndex ?? lesson.currentPageIndex ?? 0, lesson.pages.length - 1))
+  );
 
   const currentPage = lesson.pages[currentPageIndex];
   const totalPages = lesson.pages.length;
@@ -167,6 +171,9 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
 
   const applyProgressMutation = useCallback((result: ProgressMutationSummary, requestLessonId: string) => {
     if (!mountedRef.current || requestLessonId !== lessonIdRef.current) return;
+    if (typeof result.furthestPageIndex === 'number' && Number.isFinite(result.furthestPageIndex)) {
+      setFurthestPageIndex(current => Math.max(current, Math.trunc(result.furthestPageIndex as number)));
+    }
     if (typeof result.requiredExerciseCount === 'number' && Number.isFinite(result.requiredExerciseCount)) {
       setRequiredExerciseCount(current => Math.max(current, Math.trunc(result.requiredExerciseCount as number)));
     }
@@ -205,6 +212,9 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
     );
     setRequiredExerciseCount(Math.max(safeCount(lesson.requiredExerciseCount), requiredExercises.length));
     setCurrentPageIndex(
+      Math.max(0, Math.min(lesson.furthestPageIndex ?? lesson.currentPageIndex ?? 0, lesson.pages.length - 1))
+    );
+    setFurthestPageIndex(
       Math.max(0, Math.min(lesson.furthestPageIndex ?? lesson.currentPageIndex ?? 0, lesson.pages.length - 1))
     );
   }, [lesson.id]); // eslint-disable-line react-hooks/exhaustive-deps -- reset local completion only when switching lessons
@@ -297,6 +307,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
     if (currentPageIndex < totalPages - 1) {
       const newPageIndex = currentPageIndex + 1;
       setCurrentPageIndex(newPageIndex);
+      setFurthestPageIndex(current => Math.max(current, newPageIndex));
     }
   }, [currentPageIndex, totalPages]);
 
@@ -314,6 +325,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
     (newPageIndex: number) => {
       if (newPageIndex < 0 || newPageIndex >= totalPages || newPageIndex === currentPageIndex) return;
       setCurrentPageIndex(newPageIndex);
+      setFurthestPageIndex(current => Math.max(current, newPageIndex));
     },
     [currentPageIndex, totalPages]
   );
@@ -594,6 +606,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
 
         <LessonNavigation
           currentPageIndex={currentPageIndex}
+          furthestPageIndex={furthestPageIndex}
           totalPages={totalPages}
           isLessonCompleted={lessonCompleted}
           pageTitles={lesson.pages.map(page => page.title)}
