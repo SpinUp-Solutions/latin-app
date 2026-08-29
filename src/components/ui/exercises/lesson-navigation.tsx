@@ -9,6 +9,7 @@ import { stripHtmlTags } from '@/src/utils/exercises';
 
 interface LessonNavigationProps {
   currentPageIndex: number;
+  furthestPageIndex?: number;
   totalPages: number;
   isLessonCompleted?: boolean;
   pageTitles?: (string | undefined)[];
@@ -26,6 +27,7 @@ interface LessonNavigationProps {
 
 export const LessonNavigation: React.FC<LessonNavigationProps> = ({
   currentPageIndex,
+  furthestPageIndex = currentPageIndex,
   totalPages,
   isLessonCompleted = false,
   pageTitles = [],
@@ -44,7 +46,8 @@ export const LessonNavigation: React.FC<LessonNavigationProps> = ({
 
   const canGoPrevious = currentPageIndex > 0;
   const canGoNext = currentPageIndex < totalPages - 1;
-  const progressPercentage = totalPages > 0 ? Math.round(((currentPageIndex + 1) / totalPages) * 100) : 0;
+  const progressPageIndex = Math.max(currentPageIndex, furthestPageIndex);
+  const progressPercentage = totalPages > 0 ? Math.round(((progressPageIndex + 1) / totalPages) * 100) : 0;
   const isContained = placement === 'contained';
   const clampedProgress = Math.max(0, Math.min(100, Number.isFinite(progressPercentage) ? progressPercentage : 0));
   const isFinalActionDisabled = !canGoNext && (isFinishing || isLessonCompleted || isFinishBlocked);
