@@ -9,24 +9,27 @@ export interface AIAutocompleteRequest {
   overwriteExisting?: boolean;
 }
 
-export type AICompletableField =
-  | 'translation'
-  | 'definitions'
-  | 'etymology'
-  | 'pronunciation'
-  | 'gender'
-  | 'declension'
-  | 'declension_table'
-  | 'conjugation'
-  | 'conjugation_table'
-  | 'principal_parts'
-  | 'is_deponent'
-  | 'degrees_table'
-  | 'alternate_form'
-  | 'pronoun_type'
-  | 'dictionary_forms'
-  | 'nominative_singular'
-  | 'genitive_singular';
+export const AI_COMPLETABLE_FIELDS = [
+  'translation',
+  'definitions',
+  'etymology',
+  'pronunciation',
+  'gender',
+  'declension',
+  'declension_table',
+  'conjugation',
+  'conjugation_table',
+  'principal_parts',
+  'is_deponent',
+  'degrees_table',
+  'alternate_form',
+  'pronoun_type',
+  'dictionary_forms',
+  'nominative_singular',
+  'genitive_singular',
+] as const;
+
+export type AICompletableField = (typeof AI_COMPLETABLE_FIELDS)[number];
 
 export interface TokenUsage {
   promptTokens: number;
@@ -92,6 +95,15 @@ export interface TranslationGradingRequest {
   sourceText: string;
   userTranslation: string;
   direction: TranslationDirection;
+}
+
+export interface OpenAIRequestContext {
+  /** Stable, non-identifying hash used by OpenAI's abuse-detection systems. */
+  safetyIdentifier?: string;
+  /** Evaluation traffic yields reserved provider capacity to production calls. */
+  capacityClass?: 'production' | 'evaluation';
+  /** Cancels provider work when a higher-level distributed claim is lost. */
+  signal?: AbortSignal;
 }
 
 export interface TranslationGradingResponse<T = unknown> {

@@ -2,9 +2,13 @@ import { TRANSLATION_GRADING_PROFILES } from '@/shared/openai/model-registry';
 import { translationGrader } from '@/shared/openai/translation-grading';
 import { getCachedEvaluationResult, setCachedEvaluationResult } from '@/src/lib/ai-evaluations/cache';
 import { runEvaluationCase } from '@/src/lib/ai-evaluations/execution';
+import { EvaluationSingleFlightPublishError, runEvaluationSingleFlight } from '@/src/lib/ai-evaluations/single-flight';
 import type { EvaluationCase } from '@/src/lib/ai-evaluations/contracts';
 
-jest.mock('@/shared/openai/translation-grading', () => ({ translationGrader: { grade: jest.fn() } }));
+jest.mock('@/shared/openai/translation-grading', () => ({
+  parseTranslationGradingOutput: (_mode: unknown, value: unknown) => value,
+  translationGrader: { grade: jest.fn() },
+}));
 jest.mock('@/src/lib/ai-evaluations/cache-key', () => ({
   createEvaluationCacheKey: jest.fn(
     (input: { model: string; answerText: string; gradingMode: string; profileId: string }) =>
@@ -14,12 +18,28 @@ jest.mock('@/src/lib/ai-evaluations/cache-key', () => ({
 jest.mock('@/src/lib/ai-evaluations/cache', () => ({
   getCachedEvaluationResult: jest.fn(),
   getEvaluationCacheExpiry: jest.fn(() => ({ toMillis: () => Date.now() + 30 * 24 * 60 * 60 * 1_000 })),
+  isValidEvaluationCost: jest.fn(() => true),
   setCachedEvaluationResult: jest.fn(),
 }));
+jest.mock('@/src/lib/ai-evaluations/single-flight', () => {
+  class MockEvaluationSingleFlightPublishError<T> extends Error {
+    constructor(
+      public readonly completedValue: T,
+      public readonly cause: unknown
+    ) {
+      super('single-flight publish failed');
+    }
+  }
+  return {
+    EvaluationSingleFlightPublishError: MockEvaluationSingleFlightPublishError,
+    runEvaluationSingleFlight: jest.fn(),
+  };
+});
 
 const mockedGradeTranslation = jest.mocked(translationGrader.grade);
 const mockedGetCachedEvaluationResult = jest.mocked(getCachedEvaluationResult);
 const mockedSetCachedEvaluationResult = jest.mocked(setCachedEvaluationResult);
+const mockedRunEvaluationSingleFlight = jest.mocked(runEvaluationSingleFlight);
 const db = {} as never;
 
 const evaluationCase: EvaluationCase = {
@@ -96,6 +116,10 @@ describe('AI evaluation execution', () => {
     jest.clearAllMocks();
     mockedGetCachedEvaluationResult.mockResolvedValue(null);
     mockedSetCachedEvaluationResult.mockResolvedValue();
+    mockedRunEvaluationSingleFlight.mockImplementation(async (_key, _db, operation) => ({
+      value: await operation(new AbortController().signal),
+      joined: false,
+    }));
     mockedGradeTranslation.mockImplementation(async (_mode, _request, profileId) => {
       const profile = TRANSLATION_GRADING_PROFILES[profileId ?? 'baseline'];
       if (profile.model === TRANSLATION_GRADING_PROFILES.candidate.model) {
@@ -154,6 +178,37 @@ describe('AI evaluation execution', () => {
       db
     );
     expect(mockedSetCachedEvaluationResult).toHaveBeenCalledWith(expect.objectContaining({ gradingMode: 'test' }), db);
+  });
+
+  it('scores configured expectations instead of only rendering model output', async () => {
+    const criteriaCase: EvaluationCase = {
+      ...evaluationCase,
+      answers: [
+        {
+          ...evaluationCase.answers[0],
+          expectations: { lesson: { passing: true }, test: { minScore: 8, maxScore: 9 } },
+        },
+      ],
+      modes: ['lesson', 'test'],
+    };
+    mockedGradeTranslation.mockImplementation(async (mode, _request, profileId) => {
+      const profile = TRANSLATION_GRADING_PROFILES[profileId ?? 'baseline'];
+      return mode === 'lesson'
+        ? successResult(profile.model, profile.reasoningEffort)
+        : {
+            ...successResult(profile.model, profile.reasoningEffort),
+            data: { score: profileId === 'baseline' ? 8.5 : 7.5, feedback: 'Scored.' },
+          };
+    });
+
+    const result = await runEvaluationCase(criteriaCase, true, db);
+
+    expect(result.aggregate.criteriaEvaluatedCount).toBe(4);
+    expect(result.aggregate.criteriaPassedCount).toBe(3);
+    expect(result.aggregate.criteriaFailedCount).toBe(1);
+    expect(
+      result.cells.find(cell => cell.profileId === 'candidateLow' && cell.gradingMode === 'test')?.criterion
+    ).toEqual({ passed: false, expected: '8–9/10', actual: '7.5/10' });
   });
 
   it('marks missing usage as unavailable rather than a fabricated zero and does not cache it', async () => {
@@ -258,6 +313,27 @@ describe('AI evaluation execution', () => {
     expect(joined.aggregate.costIncurredThisRun?.totalCost).toBe(0);
     expect(joined.aggregate.costIncurredThisRunStatus).toBe('measured');
     expect(joined.aggregate.usage.totalTokens).toBe(280);
+  });
+
+  it('retains incurred provider usage and cost when single-flight publication fails', async () => {
+    const singleAnswerCase = { ...evaluationCase, answers: [evaluationCase.answers[0]] };
+    mockedGradeTranslation.mockImplementation(async (_mode, _request, profileId) => {
+      const profile = TRANSLATION_GRADING_PROFILES[profileId ?? 'baseline'];
+      return successResult(profile.model, profile.reasoningEffort);
+    });
+    mockedRunEvaluationSingleFlight.mockImplementation(async (_key, _db, operation) => {
+      const completed = await operation(new AbortController().signal);
+      throw new EvaluationSingleFlightPublishError(completed, new Error('claim ownership changed'));
+    });
+
+    const result = await runEvaluationCase(singleAnswerCase, true, db);
+
+    expect(mockedGradeTranslation).toHaveBeenCalledTimes(2);
+    expect(result.aggregate.evaluatedCellCount).toBe(2);
+    expect(result.aggregate.failedCellCount).toBe(0);
+    expect(result.aggregate.costIncurredThisRun?.totalCost).toBeCloseTo(0.0006);
+    expect(result.aggregate.usageIncurredThisRun.totalTokens).toBe(280);
+    expect(result.cells.every(cell => !cell.coalescedDuplicate)).toBe(true);
   });
 
   it('reports app-cache reuse as known no-incurred cost while retaining original usage/cost', async () => {

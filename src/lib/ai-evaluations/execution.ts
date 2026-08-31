@@ -4,21 +4,31 @@ import {
   type TranslationGradingRunResult,
   type TranslationGradingRunSuccess,
   translationGrader,
+  parseTranslationGradingOutput,
   type TranslationGradingMode,
   type TestTranslationGradingOutput,
   type TranslationGradingOutput,
 } from '../../../shared/openai/translation-grading';
 import { getTranslationGradingTask } from '../../../shared/openai/translation-grading-tasks';
+import { createTranslationGradingBehaviorFingerprint } from '../../../shared/openai/translation-grading-fingerprint';
 import {
   calculateTokenUsageCost,
   EVALUATION_TRANSLATION_PROFILE_IDS,
   getTranslationGradingProfile,
+  isValidTokenUsage,
   type TranslationGradingProfile,
   type TranslationGradingProfileId,
 } from '../../../shared/openai/model-registry';
 import type { CostBreakdown, TokenUsage } from '../../../shared/openai/types';
-import { getCachedEvaluationResult, getEvaluationCacheExpiry, setCachedEvaluationResult } from './cache';
+import type { OpenAIRequestContext } from '../../../shared/openai/types';
+import {
+  getCachedEvaluationResult,
+  getEvaluationCacheExpiry,
+  isValidEvaluationCost,
+  setCachedEvaluationResult,
+} from './cache';
 import { createEvaluationCacheKey } from './cache-key';
+import { EvaluationSingleFlightPublishError, runEvaluationSingleFlight } from './single-flight';
 import {
   AI_EVALUATION_SCHEMA_VERSION,
   emptyCostBreakdown,
@@ -38,6 +48,82 @@ type ExecutionOutcome = {
   chargeable: boolean;
   runLatencyMs: number;
   generatedAt?: string;
+};
+
+const FAILURE_CODES = new Set([
+  'provider-error',
+  'response-incomplete',
+  'response-missing-message',
+  'response-missing-text',
+  'response-malformed-json',
+  'response-invalid-output',
+]);
+
+const isFiniteNonNegative = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0;
+
+const parseSingleFlightOutcome = (mode: TranslationGradingMode, value: unknown): ExecutionOutcome | null => {
+  if (!value || typeof value !== 'object') return null;
+  const outcome = value as Partial<ExecutionOutcome>;
+  if (
+    typeof outcome.appCacheHit !== 'boolean' ||
+    typeof outcome.chargeable !== 'boolean' ||
+    !isFiniteNonNegative(outcome.runLatencyMs) ||
+    (outcome.generatedAt !== undefined &&
+      (typeof outcome.generatedAt !== 'string' || !Number.isFinite(Date.parse(outcome.generatedAt)))) ||
+    !outcome.result ||
+    typeof outcome.result !== 'object'
+  ) {
+    return null;
+  }
+
+  const result = outcome.result as Partial<
+    TranslationGradingRunResult<TranslationGradingOutput | TestTranslationGradingOutput>
+  >;
+  if (
+    typeof result.requestedModel !== 'string' ||
+    !result.requestedModel ||
+    (result.model !== undefined && typeof result.model !== 'string') ||
+    !isFiniteNonNegative(result.latencyMs) ||
+    (result.usage !== undefined && !isValidTokenUsage(result.usage)) ||
+    (result.tokensUsed !== undefined && !isFiniteNonNegative(result.tokensUsed)) ||
+    (result.usage && result.tokensUsed !== undefined && result.tokensUsed !== result.usage.totalTokens) ||
+    (result.cost !== undefined && (!result.usage || !isValidEvaluationCost(result.cost, result.usage))) ||
+    !result.costMeasurement ||
+    typeof result.costMeasurement !== 'object'
+  ) {
+    return null;
+  }
+
+  const measurement = result.costMeasurement;
+  if (
+    (measurement.status !== 'measured' && measurement.status !== 'unavailable') ||
+    (measurement.reason !== undefined && typeof measurement.reason !== 'string') ||
+    (measurement.status === 'measured' &&
+      (!result.usage || !measurement.cost || !isValidEvaluationCost(measurement.cost, result.usage)))
+  ) {
+    return null;
+  }
+
+  if (result.success === true) {
+    try {
+      return {
+        ...outcome,
+        result: { ...result, success: true, data: parseTranslationGradingOutput(mode, result.data) },
+      } as ExecutionOutcome;
+    } catch {
+      return null;
+    }
+  }
+  if (
+    result.success !== false ||
+    typeof result.code !== 'string' ||
+    !FAILURE_CODES.has(result.code) ||
+    typeof result.error !== 'string'
+  ) {
+    return null;
+  }
+  return { ...outcome, result } as ExecutionOutcome;
 };
 
 // Only promises are retained, never completed results. This coalesces duplicate
@@ -126,8 +212,7 @@ const cacheKeyFor = (
     profileId: job.profileId,
     model: job.profile.model,
     reasoningEffort: job.profile.reasoningEffort,
-    promptVersion: getTranslationGradingTask(job.mode).promptVersion,
-    profileVersion: job.profile.profileVersion,
+    behaviorFingerprint: createTranslationGradingBehaviorFingerprint(getTranslationGradingTask(job.mode), job.profile),
     schemaVersion: AI_EVALUATION_SCHEMA_VERSION,
   });
 
@@ -135,96 +220,125 @@ async function executeUniqueJob(
   evaluationCase: EvaluationCase,
   job: EvaluationJob,
   forceRefresh: boolean,
-  db: Firestore
+  db: Firestore,
+  context: OpenAIRequestContext
 ): Promise<ExecutionOutcome> {
   const runStartedAt = Date.now();
   const cacheKey = cacheKeyFor(evaluationCase, job);
 
+  const cachedOutcome = async (treatAsAppCacheHit: boolean): Promise<ExecutionOutcome | null> => {
+    const cached = await getCachedEvaluationResult(cacheKey, job.mode, db);
+    if (!cached) return null;
+    const currentCost = calculateTokenUsageCost(cached.usage, job.profile.pricing);
+    const cachedResult: TranslationGradingRunSuccess<TranslationGradingOutput | TestTranslationGradingOutput> = {
+      success: true,
+      data: cached.output,
+      requestedModel: cached.model,
+      model: cached.actualModel,
+      usage: cached.usage,
+      tokensUsed: cached.usage.totalTokens,
+      cost: currentCost,
+      costMeasurement: { status: 'measured', cost: currentCost },
+      latencyMs: cached.latencyMs,
+    };
+    return {
+      result: cachedResult,
+      appCacheHit: treatAsAppCacheHit,
+      chargeable: treatAsAppCacheHit,
+      runLatencyMs: Date.now() - runStartedAt,
+      generatedAt: cached.generatedAt,
+    };
+  };
+
   if (!forceRefresh) {
     try {
-      const cached = await getCachedEvaluationResult(cacheKey, job.mode, db);
-      if (cached) {
-        const currentCost = calculateTokenUsageCost(cached.usage, job.profile.pricing);
-        const cachedResult: TranslationGradingRunSuccess<TranslationGradingOutput | TestTranslationGradingOutput> = {
-          success: true,
-          data: cached.output,
-          requestedModel: cached.model,
-          model: cached.actualModel,
-          usage: cached.usage,
-          tokensUsed: cached.usage.totalTokens,
-          cost: currentCost,
-          costMeasurement: { status: 'measured', cost: currentCost },
-          latencyMs: cached.latencyMs,
-        };
-        return {
-          result: cachedResult,
-          appCacheHit: true,
-          chargeable: true,
-          runLatencyMs: Date.now() - runStartedAt,
-          generatedAt: cached.generatedAt,
-        };
-      }
+      const cached = await cachedOutcome(true);
+      if (cached) return cached;
     } catch (error) {
       // A cache outage should not make an interactive evaluation unusable.
       console.warn('[ai-evaluations] cache read failed; running API request', error);
     }
   }
 
-  const providerStartedAt = Date.now();
-  let result: TranslationGradingRunResult<TranslationGradingOutput | TestTranslationGradingOutput>;
-  try {
-    result = await translationGrader.grade(
-      job.mode,
-      {
-        sourceText: evaluationCase.sourceText,
-        userTranslation: job.answer.text,
-        direction: evaluationCase.direction,
-      },
-      job.profileId
-    );
-  } catch (error) {
-    result = createUnexpectedFailure(job.profile, error, Date.now() - providerStartedAt);
-  }
-
-  // Do not write malformed/unmetered output to the shared cache. Billable
-  // metrics must be measured before a successful result becomes reusable.
-  const generatedAt = result.success ? new Date().toISOString() : undefined;
-  if (result.success && result.costMeasurement.status === 'measured' && result.cost && result.usage) {
+  const providerOperation = async (signal: AbortSignal): Promise<ExecutionOutcome> => {
+    const providerStartedAt = Date.now();
+    let result: TranslationGradingRunResult<TranslationGradingOutput | TestTranslationGradingOutput>;
     try {
-      await setCachedEvaluationResult(
+      result = await translationGrader.grade(
+        job.mode,
         {
-          cacheKey,
-          gradingMode: job.mode,
-          model: result.requestedModel,
-          actualModel: result.model ?? result.requestedModel,
-          output: result.data,
-          usage: result.usage!,
-          cost: result.cost,
-          latencyMs: result.latencyMs,
-          generatedAt: generatedAt!,
-          expiresAt: getEvaluationCacheExpiry(),
+          sourceText: evaluationCase.sourceText,
+          userTranslation: job.answer.text,
+          direction: evaluationCase.direction,
         },
-        db
+        job.profileId,
+        { ...context, signal }
       );
     } catch (error) {
-      console.warn('[ai-evaluations] cache write failed', error);
+      result = createUnexpectedFailure(job.profile, error, Date.now() - providerStartedAt);
     }
-  }
 
-  return {
-    result,
-    appCacheHit: false,
-    chargeable: true,
-    runLatencyMs: Date.now() - runStartedAt,
-    generatedAt,
+    // Do not write malformed/unmetered output to the shared cache. Billable
+    // metrics must be measured before a successful result becomes reusable.
+    const generatedAt = result.success ? new Date().toISOString() : undefined;
+    if (result.success && result.costMeasurement.status === 'measured' && result.cost && result.usage) {
+      try {
+        await setCachedEvaluationResult(
+          {
+            cacheKey,
+            gradingMode: job.mode,
+            model: result.requestedModel,
+            actualModel: result.model ?? result.requestedModel,
+            output: result.data,
+            usage: result.usage,
+            cost: result.cost,
+            latencyMs: result.latencyMs,
+            generatedAt: generatedAt!,
+            expiresAt: getEvaluationCacheExpiry(),
+          },
+          db
+        );
+      } catch (error) {
+        console.warn('[ai-evaluations] cache write failed', error);
+      }
+    }
+
+    return {
+      result,
+      appCacheHit: false,
+      chargeable: true,
+      runLatencyMs: Date.now() - runStartedAt,
+      generatedAt,
+    };
   };
+
+  try {
+    const singleFlight = await runEvaluationSingleFlight(cacheKey, db, providerOperation, {
+      serialize: value => value,
+      deserialize: value => parseSingleFlightOutcome(job.mode, value),
+    });
+    return singleFlight.joined ? { ...singleFlight.value, chargeable: false } : singleFlight.value;
+  } catch (error) {
+    if (error instanceof EvaluationSingleFlightPublishError) {
+      const completed = parseSingleFlightOutcome(job.mode, error.completedValue);
+      if (completed) return { ...completed, chargeable: true };
+    }
+    const result = createUnexpectedFailure(job.profile, error, Date.now() - runStartedAt);
+    return {
+      result,
+      appCacheHit: false,
+      chargeable: false,
+      runLatencyMs: Date.now() - runStartedAt,
+    };
+  }
 }
 
 async function executeCoalesced(
   evaluationCase: EvaluationCase,
   job: EvaluationJob,
   forceRefresh: boolean,
-  db: Firestore
+  db: Firestore,
+  context: OpenAIRequestContext
 ): Promise<ExecutionOutcome> {
   const waitStartedAt = Date.now();
   const cacheKey = cacheKeyFor(evaluationCase, job);
@@ -239,7 +353,7 @@ async function executeCoalesced(
     };
   }
 
-  const pending = executeUniqueJob(evaluationCase, job, forceRefresh, db);
+  const pending = executeUniqueJob(evaluationCase, job, forceRefresh, db, context);
   inFlightResults.set(mapKey, pending);
   try {
     return await pending;
@@ -291,10 +405,38 @@ function createSuccessfulCell(
   };
 
   if (job.mode === 'lesson' && 'feedbackLevel' in result.data) {
-    return { ...base, gradingMode: 'lesson', output: result.data };
+    const expected = job.answer.expectations?.lesson;
+    return {
+      ...base,
+      gradingMode: 'lesson',
+      output: result.data,
+      ...(expected
+        ? {
+            criterion: {
+              passed: result.data.isPassing === expected.passing,
+              expected: expected.passing ? 'Passing feedback' : 'Non-passing feedback',
+              actual: result.data.isPassing ? 'Passing feedback' : 'Non-passing feedback',
+            },
+          }
+        : {}),
+    };
   }
   if (job.mode === 'test' && 'score' in result.data) {
-    return { ...base, gradingMode: 'test', output: result.data };
+    const expected = job.answer.expectations?.test;
+    return {
+      ...base,
+      gradingMode: 'test',
+      output: result.data,
+      ...(expected
+        ? {
+            criterion: {
+              passed: result.data.score >= expected.minScore && result.data.score <= expected.maxScore,
+              expected: `${expected.minScore}–${expected.maxScore}/10`,
+              actual: `${result.data.score}/10`,
+            },
+          }
+        : {}),
+    };
   }
   throw new Error(`Translation grading task ${job.mode} returned an incompatible output shape`);
 }
@@ -393,12 +535,14 @@ export function countEvaluationCells(evaluationCase: EvaluationCase): number {
 export async function runEvaluationCase(
   evaluationCase: EvaluationCase,
   forceRefresh: boolean,
-  db: Firestore
+  db: Firestore,
+  context: OpenAIRequestContext = {}
 ): Promise<EvaluationRunResult> {
   const startedAt = new Date();
   const groups = buildEvaluationJobGroups(evaluationCase);
+  const evaluationContext: OpenAIRequestContext = { ...context, capacityClass: 'evaluation' };
   const outcomes = await mapWithConcurrency(groups, MAX_CONCURRENCY, group =>
-    executeCoalesced(evaluationCase, group.jobs[0], forceRefresh, db)
+    executeCoalesced(evaluationCase, group.jobs[0], forceRefresh, db, evaluationContext)
   );
   const cells = new Array<EvaluationCellResult>(
     evaluationCase.answers.length * evaluationCase.modes.length * EVALUATION_TRANSLATION_PROFILE_IDS.length
@@ -437,6 +581,9 @@ export async function runEvaluationCase(
     cellCount: cells.length,
     evaluatedCellCount: successfulCells.length,
     failedCellCount: cells.length - successfulCells.length,
+    criteriaEvaluatedCount: cells.filter(cell => cell.criterion).length,
+    criteriaPassedCount: cells.filter(cell => cell.criterion?.passed).length,
+    criteriaFailedCount: cells.filter(cell => cell.criterion && !cell.criterion.passed).length,
     appCacheHits: uniqueCells.filter(cell => cell.appCacheHit).length,
     openAIPromptCacheHits: uniqueCells.filter(cell => cell.openAIPromptCacheHit).length,
     wallTimeMs: completedAt.getTime() - startedAt.getTime(),

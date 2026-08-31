@@ -7,6 +7,7 @@ import {
 } from '@/src/lib/tests/attempt-service';
 import { MockTestService } from '@/src/lib/tests/mock-service';
 import type { TestAttemptOrigin } from '@/src/types/test';
+import { AIRequestThrottleError } from '@/src/lib/openai/request-throttle';
 
 jest.mock('@/src/services/firebase-admin', () => jest.requireActual('./helpers/routeMocks'));
 jest.mock('firebase-admin/firestore', () => ({ FieldPath: { documentId: jest.fn() } }));
@@ -1254,6 +1255,37 @@ describe('test attempt submission and sticky completion', () => {
       'translationGradeRequestWindows'
     );
     consoleError.mockRestore();
+  });
+
+  it('stops before provider grading when the service-wide AI quota is exhausted', async () => {
+    const db = new FakeFirestore();
+    db.seed('lessons', 'test-1', testDocument(['version-a']));
+    db.seed('testVersions', 'version-a', versionDocumentWith('version-a', translationGradingExercise, 8));
+    const gradeTestTranslation = jest.fn(async () => ({ score: 9, feedback: 'Accurate and idiomatic.' }));
+    const consumeGlobalAIQuota = jest.fn(async () => {
+      throw new AIRequestThrottleError(60_000);
+    });
+    const service = new TestAttemptService(db as never, () => timestamp, {
+      gradeTestTranslation,
+      consumeGlobalAIQuota,
+    });
+    const started = await service.startAttempt(startInput, 'student-1');
+
+    await expect(
+      service.gradeTranslationItem(
+        started.attempt.id,
+        {
+          exerciseId: 'translation-assessment',
+          itemIndex: 0,
+          userTranslation: 'The girl sings.',
+        },
+        'student-1'
+      )
+    ).rejects.toMatchObject({ code: 'ATTEMPT_TRANSLATION_GRADING_RATE_LIMITED', status: 429 });
+
+    expect(consumeGlobalAIQuota).toHaveBeenCalledWith(1);
+    expect(gradeTestTranslation).not.toHaveBeenCalled();
+    expect(db.read('testAttempts', started.attempt.id)?.translationGradeReservations).toEqual({});
   });
 
   it('resets the provider request budget after the fixed window elapses', async () => {

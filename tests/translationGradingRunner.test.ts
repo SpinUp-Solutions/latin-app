@@ -14,6 +14,9 @@ jest.mock('@/shared/openai/client', () => ({
   DEFAULT_TEMPERATURE: 0.2,
   MAX_TOKENS: 32000,
 }));
+jest.mock('@/shared/openai/provider-concurrency.server', () => ({
+  withOpenAIProviderLease: jest.fn(async operation => operation()),
+}));
 
 const createResponse = jest.mocked(openai.responses.create);
 
@@ -125,7 +128,7 @@ describe('translation grading runner', () => {
           }),
           expect.objectContaining({
             type: 'input_text',
-            text: expect.stringContaining("Student's translation (English): All Gaul is divided."),
+            text: expect.stringContaining('"studentTranslation":"All Gaul is divided."'),
           }),
         ],
       }),
@@ -145,7 +148,7 @@ describe('translation grading runner', () => {
     expect(call.prompt_cache_options).toBeUndefined();
     expect(call.prompt_cache_key).toBe('translation-grading-v3:baseline');
     expect(typeof call.input).toBe('string');
-    expect(String(call.input)).toContain("Student's translation (English): All Gaul is divided.");
+    expect(String(call.input)).toContain('"studentTranslation":"All Gaul is divided."');
   });
 
   it('uses a separate compact score-and-feedback prompt and schema for test grading', async () => {
