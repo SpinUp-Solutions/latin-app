@@ -165,6 +165,37 @@ describe('student generated vocabulary route', () => {
     );
   });
 
+  it('filters placeholder forms before selecting from morphology cells', async () => {
+    mockVerifyAuthenticatedAccess.mockResolvedValue({ uid: 'student-1' });
+    mockCollection.mockReturnValue(query);
+    const verb = (id: string, forms: string[]) => ({
+      id,
+      data: () => ({
+        word: id,
+        part_of_speech: 'verb',
+        conjugation: '1',
+        conjugation_table: {
+          indicative: { active: { present: { singular: { first: forms } } } },
+        },
+      }),
+    });
+    query.get.mockResolvedValue({
+      docs: [verb('dash-only', ['—']), verb('blank-only', ['   ', '']), verb('amo', ['—', 'amo', ''])],
+      size: 3,
+      empty: false,
+    });
+
+    const response = await GET({
+      url: 'http://localhost/api/words/generated?collection=vocabulary_words_v5&exerciseMode=true&limit=3&tableType=conjugation&cellPaths=indicative.active.present.singular.first&steps=person',
+      headers: new Headers({ authorization: 'Bearer student-token' }),
+    } as never);
+
+    expect(response.status).toBe(200);
+    const payload = (response as unknown as { body: { data: { words: Array<Record<string, unknown>> } } }).body;
+    expect(payload.data.words).toHaveLength(1);
+    expect(payload.data.words[0]).toMatchObject({ id: 'amo', selected_form: 'amo' });
+  });
+
   it.each([
     ['fetchAll', 'exerciseMode=true&fetchAll=true'],
     ['oversized limit', 'exerciseMode=true&limit=201'],

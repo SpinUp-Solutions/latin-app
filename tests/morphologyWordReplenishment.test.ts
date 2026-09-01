@@ -134,6 +134,54 @@ describe('generated exercise word replenishment', () => {
     expect(result.diagnostics[0].scanned).toBeGreaterThan(10);
   });
 
+  it('filters placeholder forms and replenishes words with no usable selected forms', async () => {
+    const selectedPath = 'indicative.active.present.singular.first';
+    const formSelection = { tableType: 'conjugation' as const, selectedCellPaths: [selectedPath] };
+    const conjugationTable = (forms: string[]) => ({
+      indicative: { active: { present: { singular: { first: forms } } } },
+    });
+    const db = createFakeGeneratedWordDb({
+      words: [
+        verbDoc('aaa-dash-only', { conjugation_table: conjugationTable(['—']) }),
+        verbDoc('aab-blank-only', { conjugation_table: conjugationTable(['   ']) }),
+        verbDoc('real-form', { conjugation_table: conjugationTable(['—', 'amat', '']) }),
+      ],
+    });
+    const exercise = morphologyExercise(
+      {
+        'verb-conjugation': {
+          enabled: true,
+          filters: {},
+          steps: ['person'],
+          formSelection,
+        },
+      },
+      1
+    );
+    const result = await collectGeneratedExerciseWords({
+      db: db as never,
+      collection: 'vocabulary_words_v5',
+      specs: [
+        {
+          id: 'verb-conjugation',
+          paradigm: 'verb-conjugation',
+          partOfSpeech: 'verb',
+          filters: {},
+          tableType: 'conjugation',
+          steps: ['person'],
+          formSelection,
+        },
+      ],
+      count: 1,
+      exercise,
+      rng: createGeneratedExerciseRng(101),
+    });
+
+    expect(result.words).toHaveLength(1);
+    expect(result.words[0]).toMatchObject({ id: 'real-form', selected_form: 'amat' });
+    expect(result.diagnostics[0].scanned).toBeGreaterThan(1);
+  });
+
   it('returns all eligible words when the source is smaller than count', async () => {
     const db = createFakeGeneratedWordDb({
       words: [nounDoc('n1'), nounDoc('n2'), verbDoc('v1')],

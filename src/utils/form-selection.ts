@@ -1,4 +1,5 @@
 import type { VocabularyWordWithId } from '@/src/types/vocabulary/index';
+import { isSelectableMorphologyForm } from '@/src/utils/morphologyForms';
 import { type TableType, getTableFieldName } from '@/src/utils/schema-helpers';
 
 export function getCellValueAtPath(word: VocabularyWordWithId, tableType: TableType, path: string): string[] {
@@ -21,11 +22,11 @@ export function getCellValueAtPath(word: VocabularyWordWithId, tableType: TableT
   }
 
   if (typeof value === 'string') {
-    return [value];
+    return isSelectableMorphologyForm(value) ? [value] : [];
   }
 
   if (Array.isArray(value)) {
-    return value.filter((v): v is string => v !== null && v !== undefined && typeof v === 'string');
+    return value.filter(isSelectableMorphologyForm);
   }
 
   return [];
