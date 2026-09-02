@@ -503,7 +503,10 @@ export const canonicalizeDiagramAnnotations = (
   normalized.forEach(annotation => {
     const spec = ANNOTATION_SPECS[annotation.kind];
 
-    if (spec.isWrapper) {
+    // Most wrappers represent one indivisible phrase span. Some token tools,
+    // such as Finite Verb, are wrappers only for rendering and still grade
+    // each covered word independently.
+    if (spec.isWrapper && !spec.gradeTokensIndividually) {
       canonical.set(annotation.id, {
         id: annotation.id,
         kind: annotation.kind,

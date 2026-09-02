@@ -85,6 +85,51 @@ describe('compareDiagramAnnotationSets', () => {
     });
   });
 
+  it('treats adjacent Finite Verb wrappers as per-word grading coverage', () => {
+    const tokens = tokenizeDiagramSentence('vīvit. Vīvit?');
+    const firstVerb = {
+      startTokenIndex: 0,
+      endTokenIndex: 0,
+      startCharOffset: 0,
+      endCharOffset: tokens[0].text.length,
+    };
+    const secondVerb = {
+      startTokenIndex: 1,
+      endTokenIndex: 1,
+      startCharOffset: 0,
+      endCharOffset: tokens[1].text.length,
+    };
+    const combinedVerbs = {
+      startTokenIndex: 0,
+      endTokenIndex: 1,
+      startCharOffset: 0,
+      endCharOffset: tokens[1].text.length,
+    };
+    const solution = [createAnnotation('verb', firstVerb), createAnnotation('verb', secondVerb)];
+
+    expect(compareDiagramAnnotationSets([createAnnotation('verb', combinedVerbs)], solution, tokens)).toMatchObject({
+      matched: 2,
+      expected: 2,
+      extra: 0,
+      isComplete: true,
+      differences: [],
+    });
+    expect(compareDiagramAnnotationSets([createAnnotation('verb', firstVerb)], solution, tokens)).toMatchObject({
+      matched: 1,
+      expected: 2,
+      extra: 0,
+      isComplete: false,
+      differences: [
+        {
+          type: 'missing',
+          span: secondVerb,
+          text: 'Vīvit?',
+          expectedKind: 'verb',
+        },
+      ],
+    });
+  });
+
   it('treats split exact selections as equivalent when they cover the same letters', () => {
     const tokens = tokenizeDiagramSentence('amamus');
     const solution = [
