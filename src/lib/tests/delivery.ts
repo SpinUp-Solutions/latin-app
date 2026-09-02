@@ -34,6 +34,7 @@ import {
 } from './grading';
 import { parseExerciseAnswer } from './answer-schemas';
 import type { VocabularyPoolLoader } from './vocabulary-pool-loader.server';
+import { getSelectableMatchingAnswers } from '@/src/utils/exercises/matchingExercise';
 
 export interface FrozenTestDeliveryState extends TestAttemptDeliveryState {
   resolvedExercises: Record<string, { items: ResolvedGeneratedItem[] }>;
@@ -182,7 +183,7 @@ function projectMatchingExercise(exercise: ExerciseOfType<'matching'>) {
     data: {
       leftColumn: exercise.data.leftColumn.map(item => ({ id: item.id, value: item.value })),
       rightColumn: exercise.data.rightColumn.map(item => ({ id: item.id, value: item.value })),
-      expectedMatchCount: Object.keys(exercise.data.answers).length,
+      expectedMatchCount: Object.keys(getSelectableMatchingAnswers(exercise)).length,
       requiredRepetitions: exercise.data.requiredRepetitions,
     },
   });
