@@ -18,9 +18,11 @@ beforeEach(() => {
 });
 
 describe('LessonNavigation completion action', () => {
-  it('derives the bar solely from the current page', () => {
-    const { container } = render(<LessonNavigation {...baseProps} currentPageIndex={1} />);
-    expect(container.querySelector('[style="width: 67%;"]')).toBeInTheDocument();
+  it('keeps the bar at the furthest page while showing the page being revisited', () => {
+    const { container } = render(<LessonNavigation {...baseProps} currentPageIndex={0} furthestPageIndex={2} />);
+
+    expect(container.querySelector('[style="width: 100%;"]')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /page 1 \/ 3/i })).toBeInTheDocument();
   });
 
   it('uses Next before the final page', () => {

@@ -17,7 +17,10 @@ import {
 } from '@/src/utils/exercises/generatedFormIdentificationExercise';
 import { getAcceptedAnswersForStep } from '@/src/utils/exercises/formIdentificationHelpers';
 import { validateMultipleChoiceExercise } from '@/src/utils/exercises/multipleChoiceExercise';
-import { validateMatchingExercise } from '@/src/utils/exercises/matchingExercise';
+import {
+  getSelectableMatchingAnswers,
+  validateMatchingExercise,
+} from '@/src/utils/exercises/matchingExercise';
 import { validateFillExercise } from '@/src/utils/exercises/fillExercise';
 import { validateOddOneOutExercise } from '@/src/utils/exercises/oddOneOutExercise';
 import { validateTextSelectionExercise } from '@/src/utils/exercises/textSelectionExercise';
@@ -63,7 +66,7 @@ export function gradeMatching(
   answer: AnswerOfType<'matching'>,
   maxPoints = maxPointsFor(exercise)
 ): ExerciseScore {
-  const expected = Object.entries(exercise.data.answers);
+  const expected = Object.entries(getSelectableMatchingAnswers(exercise));
   const requiredRounds = exercise.data.requiredRepetitions ?? 1;
   if (!Number.isInteger(requiredRounds) || requiredRounds < 1 || requiredRounds > 10) {
     throw new Error(`Matching exercise ${exercise.id} has invalid requiredRepetitions`);

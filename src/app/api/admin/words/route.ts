@@ -7,6 +7,7 @@ import { TABLE_TYPE_CONFIG, type TableType } from '@/src/utils/schema-helpers';
 import type { FormIdentificationStep } from '@/src/types/exercises/schemas/form-identification';
 import { scanTableForMatchingForms, categorizeMatchingPaths } from '@/src/utils/tableScanner';
 import { getApplicableStepsForFormPath } from '@/src/utils/exercises/formIdentificationCompatibility';
+import { isSelectableMorphologyForm } from '@/src/utils/morphologyForms';
 import { AdminAccessError, verifyAdminAccess, verifyAuthenticatedAccess } from '@/src/lib/verifyAdminAccess';
 import {
   requireVocabularyWordsCollection,
@@ -762,12 +763,11 @@ function getCellValueAtPathServer(obj: Record<string, unknown>, path: string): s
   }
 
   if (typeof value === 'string') {
-    return [value];
+    return isSelectableMorphologyForm(value) ? [value] : [];
   }
 
   if (Array.isArray(value)) {
-    const filtered = value.filter((v): v is string => v !== null && v !== undefined && typeof v === 'string');
-    return filtered;
+    return value.filter(isSelectableMorphologyForm);
   }
   return [];
 }

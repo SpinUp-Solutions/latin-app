@@ -89,6 +89,7 @@ jest.mock('@/src/components/ui/exercises/lesson-navigation', () => ({
   __esModule: true,
   default: ({
     currentPageIndex,
+    furthestPageIndex,
     totalPages,
     isLessonCompleted,
     onPrevious,
@@ -98,6 +99,7 @@ jest.mock('@/src/components/ui/exercises/lesson-navigation', () => ({
     isFinishBlocked,
   }: {
     currentPageIndex: number;
+    furthestPageIndex: number;
     totalPages: number;
     isLessonCompleted?: boolean;
     onPrevious: () => void;
@@ -107,7 +109,7 @@ jest.mock('@/src/components/ui/exercises/lesson-navigation', () => ({
     isFinishBlocked?: boolean;
   }) => {
     const canGoNext = currentPageIndex < totalPages - 1;
-    const progressPercentage = Math.round(((currentPageIndex + 1) / totalPages) * 100);
+    const progressPercentage = Math.round(((furthestPageIndex + 1) / totalPages) * 100);
     const label = canGoNext
       ? 'Next page'
       : isFinishing
@@ -207,6 +209,19 @@ describe('LessonPlayer accepted completion tracking', () => {
     expect(screen.getByText('Progress 100%')).toBeInTheDocument();
     expect(screen.getByText('Page content: page-2')).toBeInTheDocument();
     expect(screen.queryByText('Page content: page-1')).not.toBeInTheDocument();
+  });
+
+  it('does not reduce tracked progress when a student revisits a previous page', () => {
+    render(<LessonPlayer lesson={createLesson(3)} trackProgress={false} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('Progress 100%')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Previous page' }));
+
+    expect(screen.getByText('Page content: page-2')).toBeInTheDocument();
+    expect(screen.getByText('Progress 100%')).toBeInTheDocument();
   });
 
   it('renders a noninteractive ring from server counts and applies successful updates', async () => {

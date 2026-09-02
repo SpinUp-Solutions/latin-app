@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { TableType } from '@/src/utils/schema-helpers';
+import { isSelectableMorphologyForm } from '@/src/utils/morphologyForms';
 import {
   ConjugationTableSchema,
   DeclensionTableSchema,
@@ -24,9 +25,9 @@ function isLeafNode(value: unknown): value is string[] | string | null {
 }
 
 function leafContainsForm(leaf: string[] | string | null, targetForm: string): boolean {
-  if (leaf === null) return false;
-  if (typeof leaf === 'string') return leaf === targetForm;
-  return leaf.includes(targetForm);
+  if (!isSelectableMorphologyForm(targetForm) || leaf === null) return false;
+  if (typeof leaf === 'string') return isSelectableMorphologyForm(leaf) && leaf === targetForm;
+  return leaf.some(form => isSelectableMorphologyForm(form) && form === targetForm);
 }
 
 function scanObjectForForm(
@@ -68,7 +69,7 @@ export function scanConjugationTable(table: ConjugationTable, targetForm: string
 }
 
 export function scanTableForMatchingForms(table: unknown, targetForm: string, tableType: TableType): MatchingPath[] {
-  if (!table || !targetForm) return [];
+  if (!table || !isSelectableMorphologyForm(targetForm)) return [];
 
   switch (tableType) {
     case 'conjugation':

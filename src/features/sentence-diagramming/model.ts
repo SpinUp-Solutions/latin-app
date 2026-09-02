@@ -503,7 +503,10 @@ export const canonicalizeDiagramAnnotations = (
   normalized.forEach(annotation => {
     const spec = ANNOTATION_SPECS[annotation.kind];
 
-    if (spec.isWrapper) {
+    // Most wrappers represent one indivisible phrase span. Some token tools,
+    // such as Finite Verb, are wrappers only for rendering and still grade
+    // each covered word independently.
+    if (spec.isWrapper && !spec.gradeTokensIndividually) {
       canonical.set(annotation.id, {
         id: annotation.id,
         kind: annotation.kind,
@@ -533,14 +536,20 @@ export const canonicalizeDiagramAnnotations = (
 
   tokenCoverageByKind.forEach((intervals, kind) => {
     mergeIntervals(intervals).forEach(interval => {
-      const span = {
-        startTokenIndex: interval.start,
-        endTokenIndex: interval.end - 1,
-        startCharOffset: 0,
-        endCharOffset: getTokenLength(tokens[interval.end - 1]),
-      };
-      const id = createAnnotationId(kind, span);
-      canonical.set(id, { id, kind, span });
+      // Token labels describe every covered word independently. Expanding the
+      // merged coverage back into token-sized annotations keeps a combined
+      // selection equivalent to separate selections while allowing partial
+      // answers on adjacent words to receive precise credit and feedback.
+      for (let tokenIndex = interval.start; tokenIndex < interval.end; tokenIndex += 1) {
+        const span = {
+          startTokenIndex: tokenIndex,
+          endTokenIndex: tokenIndex,
+          startCharOffset: 0,
+          endCharOffset: getTokenLength(tokens[tokenIndex]),
+        };
+        const id = createAnnotationId(kind, span);
+        canonical.set(id, { id, kind, span });
+      }
     });
   });
 
