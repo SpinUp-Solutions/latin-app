@@ -2,7 +2,7 @@ import { zodResponseFormat } from 'openai/helpers/zod';
 import { openai, AUTOCOMPLETE_MODEL, MAX_TOKENS } from './client';
 import { calculateModelCost } from './model-registry';
 import { getPromptForPartOfSpeech, SYSTEM_PROMPT } from './prompts';
-import { AIAutocompleteRequest, AIAutocompleteResponse, AICompletableField } from './types';
+import { AIAutocompleteRequest, AIAutocompleteResponse, AICompletableField, OpenAIRequestContext } from './types';
 import { PartOfSpeech } from '../types/vocabulary/schemas/enums';
 import { VocabularyWord } from '../types/vocabulary/schemas';
 import {
@@ -23,6 +23,7 @@ import {
   InterjectionStructuredOutputSchema,
   InterjectionStructuredOutput,
 } from '../types/vocabulary/ai';
+import { withOpenAIProviderLease } from './provider-concurrency.server';
 
 type StructuredOutputSchema =
   | typeof VerbStructuredOutputSchema
@@ -58,41 +59,15 @@ type ResponseDiagnosticsSource = {
       reasoning_tokens?: number;
     };
   } | null;
-  incomplete_details?: unknown;
-  output?: Array<{
-    type: string;
-    status?: string | null;
-  }>;
 };
-
-function getIncompleteReason(details: unknown): string | undefined {
-  if (!details || typeof details !== 'object') {
-    return undefined;
-  }
-
-  const reason = (details as Record<string, unknown>).reason;
-  return typeof reason === 'string' ? reason : undefined;
-}
 
 function createResponseDiagnostics(response: ResponseDiagnosticsSource) {
   const outputTokens = response.usage?.output_tokens;
   const reasoningTokens = response.usage?.output_tokens_details?.reasoning_tokens;
-  const outputTypes = response.output?.map(item => `${item.type}${item.status ? `:${item.status}` : ''}`) ?? [];
-  const incompleteReason = getIncompleteReason(response.incomplete_details);
-
   return {
     outputTokens,
     reasoningTokens,
     totalTokens: response.usage?.total_tokens,
-    outputTypes,
-    incompleteReason,
-    details: JSON.stringify({
-      model: response.model,
-      maxOutputTokens: MAX_TOKENS,
-      usage: response.usage,
-      outputTypes,
-      incompleteDetails: response.incomplete_details,
-    }),
   };
 }
 
@@ -104,17 +79,15 @@ function createTokenBudgetError(prefix: string, response: ResponseDiagnosticsSou
           diagnostics.reasoningTokens !== undefined ? `, including ${diagnostics.reasoningTokens} reasoning tokens` : ''
         }.`
       : '';
-  const reasonMessage = diagnostics.incompleteReason ? ` Reason: ${diagnostics.incompleteReason}.` : '';
 
   return {
     success: false,
-    error: `${prefix}.${tokenMessage}${reasonMessage}`,
+    error: `${prefix}.${tokenMessage}`,
     model: response.model,
     tokensUsed: diagnostics.totalTokens,
     errorDetails: {
       message: prefix,
       type: 'OpenAIIncompleteResponse',
-      details: diagnostics.details,
     },
   };
 }
@@ -270,7 +243,10 @@ function mergeValue(existingValue: unknown, incomingValue: unknown, overwriteExi
 
 const calculateCost = (usage: unknown) => calculateModelCost(usage, AUTOCOMPLETE_MODEL);
 
-export async function autocompleteVocabularyWord(request: AIAutocompleteRequest): Promise<AIAutocompleteResponse> {
+export async function autocompleteVocabularyWord(
+  request: AIAutocompleteRequest,
+  context: OpenAIRequestContext = {}
+): Promise<AIAutocompleteResponse> {
   console.log('[Autocomplete] Starting autocomplete for:', request.word, request.part_of_speech);
 
   const config = PART_OF_SPEECH_CONFIG[request.part_of_speech];
@@ -294,29 +270,35 @@ export async function autocompleteVocabularyWord(request: AIAutocompleteRequest)
     const responseFormat = zodResponseFormat(config.schema, `${request.part_of_speech}_structured_output`);
 
     const startTime = Date.now();
-    const response = await openai.responses.create({
-      model: AUTOCOMPLETE_MODEL,
-      reasoning: { effort: 'low' },
-      max_output_tokens: MAX_TOKENS,
-      instructions: SYSTEM_PROMPT,
-      input: getPromptForPartOfSpeech(request.part_of_speech, request.word),
-      text: {
-        format: {
-          type: 'json_schema',
-          name: responseFormat.json_schema.name,
-          schema: responseFormat.json_schema.schema as { [key: string]: unknown },
-          strict: responseFormat.json_schema.strict ?? true,
-        },
-      },
-    });
+    const response = await withOpenAIProviderLease(
+      signal =>
+        openai.responses.create(
+          {
+            model: AUTOCOMPLETE_MODEL,
+            reasoning: { effort: 'low' },
+            max_output_tokens: MAX_TOKENS,
+            instructions: SYSTEM_PROMPT,
+            input: getPromptForPartOfSpeech(request.part_of_speech, request.word),
+            safety_identifier: context.safetyIdentifier,
+            store: false,
+            text: {
+              format: {
+                type: 'json_schema',
+                name: responseFormat.json_schema.name,
+                schema: responseFormat.json_schema.schema as { [key: string]: unknown },
+                strict: responseFormat.json_schema.strict ?? true,
+              },
+            },
+          },
+          { signal }
+        ),
+      'production',
+      context.signal
+    );
     const endTime = Date.now();
 
     console.log('[Autocomplete] OpenAI API response received in', endTime - startTime, 'ms');
-    console.log('[Autocomplete] Response ID:', response.id);
     console.log('[Autocomplete] Response model:', response.model);
-    console.log('[Autocomplete] Output items count:', response.output?.length || 0);
-    console.log('[Autocomplete] Usage:', JSON.stringify(response.usage, null, 2));
-    console.log('[Autocomplete] Full response object keys:', Object.keys(response));
 
     const messageItem = response.output.find(item => item.type === 'message');
     if (!messageItem || messageItem.type !== 'message') {
@@ -338,7 +320,7 @@ export async function autocompleteVocabularyWord(request: AIAutocompleteRequest)
     }
 
     console.log('[Autocomplete] Parsing structured output...');
-    const structured = JSON.parse(textContent.text) as StructuredOutput;
+    const structured = config.schema.parse(JSON.parse(textContent.text)) as StructuredOutput;
 
     if (!structured) {
       console.error('[Autocomplete] No structured output in message');
@@ -346,46 +328,7 @@ export async function autocompleteVocabularyWord(request: AIAutocompleteRequest)
       return { success: false, error: 'No structured output returned by the model' };
     }
 
-    console.log('[Autocomplete] Structured output received:', Object.keys(structured));
-    console.log('[Autocomplete] Full structured output:', JSON.stringify(structured, null, 2));
-
-    if ('principal_parts' in structured) {
-      console.log(
-        '[Autocomplete] Principal parts in AI response:',
-        JSON.stringify(structured.principal_parts, null, 2)
-      );
-    }
-
-    if ('nominative_singular' in structured) {
-      console.log(
-        '[Autocomplete] Nominative singular in AI response:',
-        JSON.stringify(structured.nominative_singular, null, 2)
-      );
-    }
-
-    if ('genitive_singular' in structured) {
-      console.log(
-        '[Autocomplete] Genitive singular in AI response:',
-        JSON.stringify(structured.genitive_singular, null, 2)
-      );
-    }
-
-    if ('alternate_form' in structured) {
-      console.log('[Autocomplete] Alternate form in AI response:', JSON.stringify(structured.alternate_form, null, 2));
-    }
-
-    if ('conjugation_table' in structured && structured.conjugation_table) {
-      const participles = structured.conjugation_table?.nonFinite?.participle;
-      console.log('[Autocomplete] Participles in AI response:', JSON.stringify(participles, null, 2));
-      console.log('[Autocomplete] Present active participle:', participles?.present?.active);
-      console.log('[Autocomplete] Perfect passive participle:', participles?.perfect?.passive);
-      console.log('[Autocomplete] Future active participle:', participles?.future?.active);
-    }
-
     const existing = request.existingData ?? {};
-    console.log('[Autocomplete] Existing data fields:', Object.keys(existing));
-    console.log('[Autocomplete] Existing principal_parts:', (existing as Record<string, unknown>).principal_parts);
-    console.log('[Autocomplete] Existing alternate_form:', (existing as Record<string, unknown>).alternate_form);
 
     const selectedFields = request.fieldsToComplete
       ? selectFields(request.part_of_speech, request.fieldsToComplete)
@@ -433,7 +376,6 @@ export async function autocompleteVocabularyWord(request: AIAutocompleteRequest)
 
     console.log('[Autocomplete] Field status:', fieldStatus);
     console.log('[Autocomplete] Success! Generated fields:', Object.keys(data));
-    console.log('[Autocomplete] Data being returned to client:', JSON.stringify(data, null, 2));
     console.log('[Autocomplete] Tokens used:', response.usage?.total_tokens);
     console.log('[Autocomplete] Cost:', cost?.totalCost.toFixed(4));
     console.log(`[Autocomplete] ✅ OPENAI CALL COMPLETED: ${((endTime - startTime) / 1000).toFixed(2)}s`);
@@ -448,16 +390,11 @@ export async function autocompleteVocabularyWord(request: AIAutocompleteRequest)
     };
   } catch (error) {
     console.error('[Autocomplete] Error caught:', error);
-    console.error('[Autocomplete] Error type:', error?.constructor?.name);
-    console.error('[Autocomplete] Error message:', error instanceof Error ? error.message : 'Unknown');
-    console.error('[Autocomplete] Error stack:', error instanceof Error ? error.stack : 'No stack');
 
-    const message = error instanceof Error ? error.message : 'Unknown error while requesting autocomplete';
+    const message = 'The vocabulary autocomplete service could not complete this request.';
     const errorDetails = {
       message,
-      type: error?.constructor?.name || typeof error,
-      stack: error instanceof Error ? error.stack : undefined,
-      details: error instanceof Error ? String(error) : String(error),
+      type: 'autocomplete-error',
     };
     return { success: false, error: message, errorDetails };
   }

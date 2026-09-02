@@ -1,15 +1,21 @@
 import type { DocumentSnapshot, Firestore } from 'firebase-admin/firestore';
-import { AI_EVALUATION_CASES_COLLECTION } from '../../../shared/constants/firestore';
+import { AI_EVALUATION_CASES_COLLECTION, AI_EVALUATION_RUNS_COLLECTION } from '../../../shared/constants/firestore';
 import {
   evaluationCaseIdSchema,
   evaluationCaseInputSchema,
   type EvaluationCase,
   type EvaluationCaseInput,
+  type EvaluationRunResult,
+  type EvaluationRunSummary,
 } from './contracts';
 
 export class AIEvaluationServiceError extends Error {
   constructor(
-    public readonly code: 'AI_EVALUATION_CASE_NOT_FOUND' | 'AI_EVALUATION_CASE_INVALID',
+    public readonly code:
+      | 'AI_EVALUATION_CASE_NOT_FOUND'
+      | 'AI_EVALUATION_CASE_INVALID'
+      | 'AI_EVALUATION_RUN_INVALID'
+      | 'AI_EVALUATION_CRITERIA_REQUIRED',
     message: string,
     public readonly status: number
   ) {
@@ -108,3 +114,89 @@ export async function deleteEvaluationCase(id: string, db: Firestore): Promise<v
 }
 
 export const parseEvaluationCaseSnapshot = parseCaseSnapshot;
+
+const finiteNonNegative = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0;
+const validIsoTimestamp = (value: unknown): value is string =>
+  typeof value === 'string' && Number.isFinite(Date.parse(value));
+
+const parseRunSummary = (snapshot: DocumentSnapshot): EvaluationRunSummary => {
+  const value = snapshot.data() as Partial<EvaluationRunSummary> | undefined;
+  if (
+    !value ||
+    typeof value.caseId !== 'string' ||
+    typeof value.caseTitle !== 'string' ||
+    typeof value.createdBy !== 'string' ||
+    !validIsoTimestamp(value.startedAt) ||
+    !validIsoTimestamp(value.completedAt) ||
+    typeof value.forceRefresh !== 'boolean' ||
+    !finiteNonNegative(value.evaluatedCellCount) ||
+    !finiteNonNegative(value.failedCellCount) ||
+    !finiteNonNegative(value.criteriaPassedCount) ||
+    !finiteNonNegative(value.criteriaFailedCount) ||
+    !(value.costIncurredThisRun === null || finiteNonNegative(value.costIncurredThisRun)) ||
+    !finiteNonNegative(value.wallTimeMs)
+  ) {
+    throw new AIEvaluationServiceError(
+      'AI_EVALUATION_RUN_INVALID',
+      `Evaluation run ${snapshot.id} contains invalid persisted data`,
+      409
+    );
+  }
+  return {
+    id: snapshot.id,
+    caseId: value.caseId,
+    caseTitle: value.caseTitle,
+    createdBy: value.createdBy,
+    startedAt: value.startedAt,
+    completedAt: value.completedAt,
+    forceRefresh: value.forceRefresh,
+    evaluatedCellCount: value.evaluatedCellCount,
+    failedCellCount: value.failedCellCount,
+    criteriaPassedCount: value.criteriaPassedCount,
+    criteriaFailedCount: value.criteriaFailedCount,
+    costIncurredThisRun: value.costIncurredThisRun,
+    wallTimeMs: value.wallTimeMs,
+  };
+};
+
+const firestoreValue = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
+export async function persistEvaluationRun(
+  evaluationCase: EvaluationCase,
+  result: EvaluationRunResult,
+  actorId: string,
+  db: Firestore
+): Promise<EvaluationRunResult> {
+  const reference = db.collection(AI_EVALUATION_RUNS_COLLECTION).doc();
+  const summary: Omit<EvaluationRunSummary, 'id'> = {
+    caseId: evaluationCase.id,
+    caseTitle: evaluationCase.title,
+    createdBy: actorId,
+    startedAt: result.startedAt,
+    completedAt: result.completedAt,
+    forceRefresh: result.forceRefresh,
+    evaluatedCellCount: result.aggregate.evaluatedCellCount,
+    failedCellCount: result.aggregate.failedCellCount,
+    criteriaPassedCount: result.aggregate.criteriaPassedCount,
+    criteriaFailedCount: result.aggregate.criteriaFailedCount,
+    costIncurredThisRun: result.aggregate.costIncurredThisRun?.totalCost ?? null,
+    wallTimeMs: result.aggregate.wallTimeMs,
+  };
+  // Run history is deliberately aggregate-only. The saved case owns source
+  // and answer text; deleting it must not leave a second copy in historical
+  // run documents or result-cell subcollections.
+  await reference.set(
+    firestoreValue({
+      ...summary,
+      schemaVersion: result.schemaVersion,
+      aggregate: result.aggregate,
+    })
+  );
+  return { ...result, runId: reference.id, historySaved: true };
+}
+
+export async function listEvaluationRunSummaries(db: Firestore): Promise<EvaluationRunSummary[]> {
+  const snapshot = await db.collection(AI_EVALUATION_RUNS_COLLECTION).orderBy('completedAt', 'desc').limit(20).get();
+  return snapshot.docs.map(parseRunSummary);
+}

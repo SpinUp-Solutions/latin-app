@@ -9,6 +9,7 @@ import {
 } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
+import { initializeAppCheck, ReCaptchaEnterpriseProvider, type AppCheck } from 'firebase/app-check';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -47,6 +48,19 @@ const initializeClientFirestore = () => {
 const db = typeof window !== 'undefined' && !usingFirebaseEmulators ? initializeClientFirestore() : getFirestore(app);
 const storage = getStorage(app);
 const functions = getFunctions(app);
+let appCheck: AppCheck | undefined;
+
+if (typeof window !== 'undefined' && !usingFirebaseEmulators) {
+  const siteKey = process.env.NEXT_PUBLIC_FIREBASE_APP_CHECK_SITE_KEY;
+  if (siteKey) {
+    appCheck = initializeAppCheck(app, {
+      provider: new ReCaptchaEnterpriseProvider(siteKey),
+      isTokenAutoRefreshEnabled: true,
+    });
+  } else if (process.env.NODE_ENV === 'production') {
+    console.error('[Firebase] NEXT_PUBLIC_FIREBASE_APP_CHECK_SITE_KEY is required for callable AI requests.');
+  }
+}
 
 if (usingFirebaseEmulators && typeof window !== 'undefined') {
   connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
@@ -62,4 +76,4 @@ if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
 // the critical path uses them, and their SDKs add script/network work to every
 // page load. When needed, import them dynamically after the app is idle.
 
-export { app, auth, db, storage, functions };
+export { app, appCheck, auth, db, storage, functions };

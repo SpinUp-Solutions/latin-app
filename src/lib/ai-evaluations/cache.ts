@@ -10,7 +10,9 @@ import {
 } from '../../../shared/openai/translation-grading';
 import { AI_EVALUATION_RESULT_CACHE_COLLECTION } from '../../../shared/constants/firestore';
 
-const AI_EVALUATION_CACHE_RETENTION_MS = 30 * 24 * 60 * 60 * 1_000;
+// Evaluation model names may be rolling aliases. Keep reuse deliberately short
+// and make fresh runs the UI default so model updates are not hidden for weeks.
+const AI_EVALUATION_CACHE_RETENTION_MS = 24 * 60 * 60 * 1_000;
 
 export interface CachedEvaluationResult {
   cacheKey: string;
@@ -30,7 +32,7 @@ const cacheCollection = (db: Firestore) => db.collection(AI_EVALUATION_RESULT_CA
 const isFiniteNonNegative = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0;
 
-const isValidCost = (value: unknown, usage: TokenUsage): value is CostBreakdown => {
+export const isValidEvaluationCost = (value: unknown, usage: TokenUsage): value is CostBreakdown => {
   if (!value || typeof value !== 'object') return false;
   const cost = value as Partial<CostBreakdown>;
   return (
@@ -96,7 +98,7 @@ export async function getCachedEvaluationResult(
     !data.actualModel ||
     !parsedUsage ||
     !isValidTokenUsage(usage) ||
-    !isValidCost(data.cost, usage) ||
+    !isValidEvaluationCost(data.cost, usage) ||
     !isFiniteNonNegative(data.latencyMs) ||
     typeof data.generatedAt !== 'string' ||
     !Number.isFinite(Date.parse(data.generatedAt))
@@ -119,7 +121,7 @@ export async function getCachedEvaluationResult(
 }
 
 export async function setCachedEvaluationResult(result: CachedEvaluationResult, db: Firestore): Promise<void> {
-  if (!isValidTokenUsage(result.usage) || !isValidCost(result.cost, result.usage)) {
+  if (!isValidTokenUsage(result.usage) || !isValidEvaluationCost(result.cost, result.usage)) {
     throw new Error('Cannot cache an evaluation without measured, consistent usage and cost');
   }
   parseTranslationGradingOutput(result.gradingMode, result.output);

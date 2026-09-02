@@ -18,7 +18,12 @@ import {
   type TranslationGradingOutput,
   type TranslationGradingOutputByMode,
 } from './translation-grading-tasks';
-import type { TranslationGradingMode, TranslationGradingRequest, TranslationGradingResponse } from './types';
+import type {
+  OpenAIRequestContext,
+  TranslationGradingMode,
+  TranslationGradingRequest,
+  TranslationGradingResponse,
+} from './types';
 
 export type {
   StructuredAIExecutor,
@@ -35,7 +40,8 @@ export interface TranslationGradingService {
   grade<M extends TranslationGradingMode>(
     mode: M,
     request: TranslationGradingRequest,
-    profileId?: TranslationGradingProfileId
+    profileId?: TranslationGradingProfileId,
+    context?: OpenAIRequestContext
   ): Promise<TranslationGradingRunResult<TranslationGradingOutputByMode[M]>>;
 }
 
@@ -51,9 +57,9 @@ export function createTranslationGradingService(
   executor: StructuredAIExecutor = openAIStructuredOutputExecutor
 ): TranslationGradingService {
   return {
-    async grade(mode, request, profileId) {
+    async grade(mode, request, profileId, context) {
       const task = getTranslationGradingTask(mode);
-      return executor.execute(task, task.buildPrompt(request), profileFor(mode, profileId));
+      return executor.execute(task, task.buildPrompt(request), profileFor(mode, profileId), context);
     },
   };
 }
@@ -61,10 +67,11 @@ export function createTranslationGradingService(
 export const translationGrader = createTranslationGradingService();
 
 export async function gradeTranslation(
-  request: TranslationGradingRequest
+  request: TranslationGradingRequest,
+  context?: OpenAIRequestContext
 ): Promise<TranslationGradingResponse<TranslationGradingOutput>> {
   try {
-    const result = await translationGrader.grade('lesson', request);
+    const result = await translationGrader.grade('lesson', request, undefined, context);
     if (!result.success) {
       return {
         success: false,
