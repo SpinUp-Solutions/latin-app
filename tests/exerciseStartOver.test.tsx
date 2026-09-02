@@ -221,6 +221,43 @@ describe('exercise start over flow', () => {
     expect(screen.getByText('Correct!')).toBeInTheDocument();
   });
 
+  it('completes a legacy matching exercise with an orphaned answer key', () => {
+    const onCompletionAccepted = jest.fn();
+    const exercise: MatchingExercise = {
+      id: 'matching-orphaned-answer',
+      type: 'matching',
+      title: 'Match',
+      instructions: '',
+      feedbackConfig: resetFeedbackConfig,
+      data: {
+        leftColumn: [
+          { id: 'left-a', value: 'Alpha' },
+          { id: 'left-b', value: 'Beta' },
+        ],
+        rightColumn: [
+          { id: 'right-a', value: 'One' },
+          { id: 'right-b', value: 'Two' },
+        ],
+        answers: {
+          'left-orphaned': 'right-a',
+          'left-a': 'right-a',
+          'left-b': 'right-b',
+        },
+      },
+    };
+
+    render(<MatchingTable exercise={exercise} onCompletionAccepted={onCompletionAccepted} />);
+
+    expect(screen.getByText('0 of 2 matches completed')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Alpha' }));
+    fireEvent.click(screen.getByRole('button', { name: 'One' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Beta' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Two' }));
+
+    expect(screen.getByText('2 of 2 matches completed')).toBeInTheDocument();
+    expect(onCompletionAccepted).toHaveBeenCalledWith(100);
+  });
+
   it('locks translation grading navigation and shows Start over at threshold', async () => {
     jest.useRealTimers();
 
