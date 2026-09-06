@@ -140,10 +140,6 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
       if (isLastItem) {
         if (!assessmentMode) onCompletionAccepted?.(finalScore!);
         autoAdvanceIfEnabled(() => {
-          setUserAnswer('');
-          setSelectedWordIndex(null);
-          reset();
-          setIsProcessing(false);
           onComplete?.(finalScore!);
         }, hasVisibleExplanation);
       } else {
