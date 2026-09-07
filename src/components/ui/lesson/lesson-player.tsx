@@ -8,6 +8,7 @@ import { RomanPlayerShell } from '@/src/components/ui/core/roman-player-shell';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { Button } from '@/src/components/ui/button';
 import PageTemplate from './page-template';
+import { RetainedLessonPages } from './retained-lesson-pages';
 import useAudio from '@/src/hooks/useAudio';
 import LessonNavigation from '../exercises/lesson-navigation';
 import {
@@ -568,19 +569,41 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
         }>
         <div className="mb-6">
           <div className="lesson-content">
-            <PageTemplate
-              key={currentPage.id}
-              page={currentPage}
-              pageIndex={currentPageIndex}
-              lessonId={lesson.id}
-              runtimeMode={effectiveRuntimeMode}
-              onAnswer={onAnswer}
-              resolvedExerciseState={resolvedExerciseState}
-              generatedExerciseContext={resolvedGeneratedExerciseContext}
-              onCompletionAccepted={handleCompletionAccepted}
-              onPageComplete={handlePageComplete}
-              onDiagrammingAttempt={handleDiagrammingAttempt}
-            />
+            {effectiveRuntimeMode === 'practice' ? (
+              <RetainedLessonPages
+                key={`${lesson.id}:${lesson.version ?? 0}`}
+                pages={lesson.pages}
+                currentPageIndex={currentPageIndex}>
+                {(page, pageIndex) => (
+                  <PageTemplate
+                    page={page}
+                    pageIndex={pageIndex}
+                    lessonId={lesson.id}
+                    runtimeMode={effectiveRuntimeMode}
+                    onAnswer={onAnswer}
+                    resolvedExerciseState={resolvedExerciseState}
+                    generatedExerciseContext={resolvedGeneratedExerciseContext}
+                    onCompletionAccepted={handleCompletionAccepted}
+                    onPageComplete={pageIndex === currentPageIndex ? handlePageComplete : undefined}
+                    onDiagrammingAttempt={pageIndex === currentPageIndex ? handleDiagrammingAttempt : undefined}
+                  />
+                )}
+              </RetainedLessonPages>
+            ) : (
+              <PageTemplate
+                key={currentPage.id}
+                page={currentPage}
+                pageIndex={currentPageIndex}
+                lessonId={lesson.id}
+                runtimeMode={effectiveRuntimeMode}
+                onAnswer={onAnswer}
+                resolvedExerciseState={resolvedExerciseState}
+                generatedExerciseContext={resolvedGeneratedExerciseContext}
+                onCompletionAccepted={handleCompletionAccepted}
+                onPageComplete={handlePageComplete}
+                onDiagrammingAttempt={handleDiagrammingAttempt}
+              />
+            )}
           </div>
         </div>
 

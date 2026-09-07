@@ -208,7 +208,7 @@ describe('LessonPlayer accepted completion tracking', () => {
 
     expect(screen.getByText('Progress 100%')).toBeInTheDocument();
     expect(screen.getByText('Page content: page-2')).toBeInTheDocument();
-    expect(screen.queryByText('Page content: page-1')).not.toBeInTheDocument();
+    expect(screen.getByText('Page content: page-1')).not.toBeVisible();
   });
 
   it('does not reduce tracked progress when a student revisits a previous page', () => {

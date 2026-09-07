@@ -39,6 +39,9 @@ export function useExerciseProgression({
   const pendingAdvanceRef = useRef<(() => void) | null>(null);
   const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const previousTotalRef = useRef(totalItems);
+  const remainingDelayRef = useRef(0);
+  const timerDeadlineRef = useRef(0);
   const pendingTimerCallbackRef = useRef<(() => void) | null>(null);
 
   const clearAutoAdvanceTimer = useCallback(() => {
@@ -50,6 +53,8 @@ export function useExerciseProgression({
   }, []);
 
   useEffect(() => {
+    if (previousTotalRef.current === totalItems) return;
+    previousTotalRef.current = totalItems;
     pendingAdvanceRef.current = null;
     setIsAwaitingConfirmation(false);
     clearAutoAdvanceTimer();
@@ -59,14 +64,24 @@ export function useExerciseProgression({
     });
   }, [totalItems, clearAutoAdvanceTimer]);
 
+  // Activity suspends effects on page leave. Pause timed question advancement and
+  // retain manual Continue callbacks so a returning student can resume either flow.
   useEffect(() => {
+    if (pendingTimerCallbackRef.current) {
+      timerDeadlineRef.current = Date.now() + remainingDelayRef.current;
+      autoAdvanceTimerRef.current = setTimeout(() => {
+        const callback = pendingTimerCallbackRef.current;
+        autoAdvanceTimerRef.current = null;
+        pendingTimerCallbackRef.current = null;
+        callback?.();
+      }, remainingDelayRef.current);
+    }
     return () => {
-      if (autoAdvanceTimerRef.current) {
+      if (autoAdvanceTimerRef.current !== null) {
+        remainingDelayRef.current = Math.max(0, timerDeadlineRef.current - Date.now());
         clearTimeout(autoAdvanceTimerRef.current);
         autoAdvanceTimerRef.current = null;
       }
-      pendingTimerCallbackRef.current = null;
-      pendingAdvanceRef.current = null;
     };
   }, []);
 
@@ -146,6 +161,8 @@ export function useExerciseProgression({
           afterAdvance();
         };
         pendingTimerCallbackRef.current = callback;
+        remainingDelayRef.current = delay;
+        timerDeadlineRef.current = Date.now() + delay;
         autoAdvanceTimerRef.current = setTimeout(() => {
           autoAdvanceTimerRef.current = null;
           pendingTimerCallbackRef.current = null;
