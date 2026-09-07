@@ -1,5 +1,6 @@
 'use client';
 
+import { usePracticeGeneratedExerciseWords } from '@/src/hooks/usePracticeGeneratedExerciseWords';
 import React, { useState, useMemo } from 'react';
 import { GeneratedTranslationExercise } from '@/src/types/exercises';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
@@ -8,10 +9,7 @@ import { ExerciseInput, FeedbackDisplay } from '../feedback';
 import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
-import {
-  useGetGeneratedExerciseWordsQuery,
-  type GeneratedExerciseQuerySource,
-} from '@/src/store/api/advancedVocabularyApi';
+import { type GeneratedExerciseQuerySource } from '@/src/store/api/advancedVocabularyApi';
 import { Card, CardContent } from '../card';
 import {
   validateGeneratedTranslationExercise,
@@ -57,7 +55,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
 
   const translationDirection = exercise.translationDirection || 'latin-to-english';
 
-  const { data, isLoading, isError } = useGetGeneratedExerciseWordsQuery(
+  const { data, isLoading, isError } = usePracticeGeneratedExerciseWords(
     {
       exercise: {
         type: 'generated-translation',
