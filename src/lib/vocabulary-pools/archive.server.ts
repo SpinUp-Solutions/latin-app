@@ -1,9 +1,19 @@
 import type { CollectionReference, DocumentData, Firestore, QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import { FieldPath } from 'firebase-admin/firestore';
-import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
+import {
+  DELETED_VOCABULARY_POOL_COLLECTION,
+  VOCABULARY_POOL_COLLECTION,
+  VOCABULARY_WORDS_COLLECTION,
+} from '@/shared/constants/firestore';
+import { isVocabularyPoolCreationPending } from '@/src/lib/vocabulary-pools/pool-state.server';
 
-export const VOCABULARY_POOL_COLLECTION = 'vocabulary_pools';
-export const DELETED_VOCABULARY_POOL_COLLECTION = 'deleted_vocabulary_pools';
+export { DELETED_VOCABULARY_POOL_COLLECTION, VOCABULARY_POOL_COLLECTION } from '@/shared/constants/firestore';
+
+export {
+  isVocabularyPoolCreationPending,
+  VocabularyPoolStateError,
+} from '@/src/lib/vocabulary-pools/pool-state.server';
+
 export const VOCABULARY_POOL_ARCHIVE_COLLECTION = 'vocabulary_pool_archives';
 export const VOCABULARY_POOL_DELETION_CHALLENGE_COLLECTION = 'vocabulary_pool_deletion_challenges';
 
@@ -28,6 +38,7 @@ export class VocabularyPoolArchiveIntegrityError extends Error {
 export async function getReadableVocabularyPool(db: Firestore, poolId: string): Promise<ReadableVocabularyPool | null> {
   const active = await db.collection(VOCABULARY_POOL_COLLECTION).doc(poolId).get();
   if (active.exists) {
+    if (isVocabularyPoolCreationPending(active.data())) return null;
     return {
       data: active.data() ?? {},
       source: 'active',

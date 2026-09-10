@@ -23,6 +23,10 @@ import {
   writeVocabularyPoolWordArchive,
 } from '@/src/lib/vocabulary-pools/archive.server';
 import {
+  isVocabularyPoolCreationPending,
+  VocabularyPoolStateError,
+} from '@/src/lib/vocabulary-pools/pool-state.server';
+import {
   prepareVocabularyPoolWordMembership,
   VocabularyPoolWordMembershipError,
 } from '@/src/lib/vocabulary-pools/word-membership.server';
@@ -61,6 +65,9 @@ const routeErrorResponse = (error: unknown, action: string) => {
   if (error instanceof VocabularyPoolWordMembershipError) {
     return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
   }
+  if (error instanceof VocabularyPoolStateError) {
+    return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
+  }
   if (error instanceof VocabularyContentSyncLockError) {
     return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
   }
@@ -92,9 +99,15 @@ export async function GET(
       throw new Error('Pool data not found');
     }
 
+    if (isVocabularyPoolCreationPending(poolData)) {
+      return NextResponse.json({ success: false, error: 'Pool not found' }, { status: 404 });
+    }
+
+    const { _copyRequest: _privateCopyRequest, _creationPending: _pendingCreation, ...publicPoolData } = poolData;
+
     const pool = {
       id: poolDoc.id,
-      ...poolData,
+      ...publicPoolData,
       metadata: {
         ...serializePoolMetadata(poolData.metadata),
       },
@@ -225,6 +238,12 @@ export async function PUT(
     await runVocabularyContentMutation(adminDb, async transaction => {
       const poolDoc = await transaction.get(poolRef);
       if (!poolDoc.exists) throw new Error('Pool not found');
+      if (isVocabularyPoolCreationPending(poolDoc.data())) {
+        throw new VocabularyPoolStateError(
+          'Vocabulary pool creation is still in progress. Try again when it finishes.',
+          'VOCABULARY_POOL_PENDING'
+        );
+      }
       const existingWordIds = Array.isArray(poolDoc.data()?.wordDocIds) ? poolDoc.data()!.wordDocIds : [];
       const nextWordIds = updates.wordDocIds === undefined ? existingWordIds : updates.wordDocIds;
       const applyWordReferenceRevisions = await prepareVocabularyPoolWordMembership(
@@ -312,6 +331,12 @@ export async function DELETE(
     }
 
     const poolData = poolSnapshot.data() ?? {};
+    if (isVocabularyPoolCreationPending(poolData)) {
+      throw new VocabularyPoolStateError(
+        'Vocabulary pool creation is still in progress. Try again when it finishes.',
+        'VOCABULARY_POOL_PENDING'
+      );
+    }
     const poolFingerprint = vocabularyPoolContentFingerprint(poolData);
     const wordContentRevision = vocabularyContentRevision(contentStateSnapshot.data());
     const initialChallengeError = validateVocabularyPoolDeletionChallenge({
@@ -349,6 +374,12 @@ export async function DELETE(
       ]);
       if (!lockedPool.exists) {
         throw new VocabularyPoolDeletionError('Pool not found', 404, 'VOCABULARY_POOL_NOT_FOUND');
+      }
+      if (isVocabularyPoolCreationPending(lockedPool.data())) {
+        throw new VocabularyPoolStateError(
+          'Vocabulary pool creation is still in progress. Try again when it finishes.',
+          'VOCABULARY_POOL_PENDING'
+        );
       }
       if (lockedTombstone.exists || lockedArchive.exists) {
         throw new VocabularyPoolDeletionError(

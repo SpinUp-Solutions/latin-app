@@ -6,6 +6,10 @@ import { AdminAccessError, verifyAdminAccess } from '@/src/lib/verifyAdminAccess
 import { MAX_VOCABULARY_POOL_WORD_ADDITIONS } from '@/src/lib/vocabulary-pools/limits';
 import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
 import { VocabularyPoolWordMembershipError } from '@/src/lib/vocabulary-pools/word-membership.server';
+import {
+  isVocabularyPoolCreationPending,
+  VocabularyPoolStateError,
+} from '@/src/lib/vocabulary-pools/pool-state.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,6 +43,12 @@ export async function POST(
       const poolDoc = await transaction.get(poolRef);
       if (!poolDoc.exists) {
         throw new Error('Pool not found');
+      }
+      if (isVocabularyPoolCreationPending(poolDoc.data())) {
+        throw new VocabularyPoolStateError(
+          'Vocabulary pool creation is still in progress. Try again when it finishes.',
+          'VOCABULARY_POOL_PENDING'
+        );
       }
 
       const poolData = poolDoc.data() as VocabularyPool;
@@ -87,6 +97,11 @@ export async function POST(
     if (!updatedPoolData) {
       return NextResponse.json({ success: false, error: 'Pool data not found' }, { status: 404 });
     }
+    const {
+      _copyRequest: _privateCopyRequest,
+      _creationPending: _pendingCreation,
+      ...publicPoolData
+    } = updatedPoolData;
 
     return NextResponse.json({
       success: true,
@@ -96,7 +111,7 @@ export async function POST(
         invalidIds: result.invalidIds,
         pool: {
           id: poolId,
-          ...updatedPoolData,
+          ...publicPoolData,
           metadata: {
             ...updatedPoolData.metadata,
             createdAt: updatedPoolData.metadata.createdAt.toDate(),
@@ -110,6 +125,9 @@ export async function POST(
       return NextResponse.json({ success: false, error: error.message }, { status: error.status });
     }
     if (error instanceof VocabularyPoolWordMembershipError) {
+      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
+    }
+    if (error instanceof VocabularyPoolStateError) {
       return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
     }
     console.error('Error adding words to pool:', error);
@@ -143,6 +161,12 @@ export async function DELETE(
       if (!poolDoc.exists) {
         throw new Error('Pool not found');
       }
+      if (isVocabularyPoolCreationPending(poolDoc.data())) {
+        throw new VocabularyPoolStateError(
+          'Vocabulary pool creation is still in progress. Try again when it finishes.',
+          'VOCABULARY_POOL_PENDING'
+        );
+      }
 
       const poolData = poolDoc.data() as VocabularyPool;
       const currentWordIds = poolData.wordDocIds || [];
@@ -167,6 +191,11 @@ export async function DELETE(
     if (!updatedPoolData) {
       return NextResponse.json({ success: false, error: 'Pool data not found' }, { status: 404 });
     }
+    const {
+      _copyRequest: _privateCopyRequest,
+      _creationPending: _pendingCreation,
+      ...publicPoolData
+    } = updatedPoolData;
 
     return NextResponse.json({
       success: true,
@@ -174,7 +203,7 @@ export async function DELETE(
         removedCount,
         pool: {
           id: poolId,
-          ...updatedPoolData,
+          ...publicPoolData,
           metadata: {
             ...updatedPoolData.metadata,
             createdAt: updatedPoolData.metadata.createdAt.toDate(),
@@ -186,6 +215,9 @@ export async function DELETE(
   } catch (error) {
     if (error instanceof AdminAccessError) {
       return NextResponse.json({ success: false, error: error.message }, { status: error.status });
+    }
+    if (error instanceof VocabularyPoolStateError) {
+      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
     }
     console.error('Error removing words from pool:', error);
     return NextResponse.json(

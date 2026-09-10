@@ -14,6 +14,7 @@ import {
   VocabularyWordCollectionError,
 } from '@/src/lib/vocabulary/word-collection.server';
 import { getReadableVocabularyPool } from '@/src/lib/vocabulary-pools/archive.server';
+import { isVocabularyPoolCreationPending } from '@/src/lib/vocabulary-pools/pool-state.server';
 import { prepareVocabularyContentRevisionBump } from '@/src/lib/vocabulary-pools/content-revision.server';
 import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
 
@@ -81,7 +82,10 @@ const parseCellPaths = (cellPaths: string | null): string[] => {
 
 const parseSteps = (steps: string | null): FormIdentificationStep[] => {
   if (!steps) return [];
-  return steps.split(',').map(step => step.trim()).filter(Boolean) as FormIdentificationStep[];
+  return steps
+    .split(',')
+    .map(step => step.trim())
+    .filter(Boolean) as FormIdentificationStep[];
 };
 
 const parseSelectFields = (selectFields: string | null): string[] => {
@@ -258,7 +262,7 @@ export async function handleVocabularyWordsGET(
               .doc(poolId)
               .get()
               .then(poolDoc =>
-                poolDoc.exists
+                poolDoc.exists && !isVocabularyPoolCreationPending(poolDoc.data())
                   ? { data: poolDoc.data() ?? {}, words: adminDb.collection(collection), source: 'active' as const }
                   : null
               );

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { Query } from 'firebase-admin/firestore';
-import type { VocabularyPool, CreatePoolRequest } from '@/src/types/vocabulary-pool';
+import type { VocabularyPool, VocabularyPoolSummary, CreatePoolRequest } from '@/src/types/vocabulary-pool';
 import {
   buildPoolSearchTokens,
   normalizePoolSearchText,
@@ -13,10 +13,11 @@ import {
   VocabularyPoolWordMembershipError,
 } from '@/src/lib/vocabulary-pools/word-membership.server';
 import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
+import { isVocabularyPoolCreationPending } from '@/src/lib/vocabulary-pools/archive.server';
 
 export const dynamic = 'force-dynamic';
 
-const POOL_SUMMARY_FIELDS = ['name', 'description', 'metadata'];
+const POOL_SUMMARY_FIELDS = ['name', 'description', 'metadata', '_creationPending', '_deletionPending'];
 
 const toDateValue = (value: unknown) =>
   value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function'
@@ -25,6 +26,9 @@ const toDateValue = (value: unknown) =>
 
 const serializePoolSummary = (doc: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot) => {
   const data = doc.data() as Partial<VocabularyPool>;
+
+  const rawData = doc.data();
+  if (isVocabularyPoolCreationPending(rawData) || rawData?._deletionPending) return null;
 
   return toVocabularyPoolSummary(doc.id, {
     ...data,
@@ -81,7 +85,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }
 
       const snapshot = await query.limit(limit).get();
-      const pools = snapshot.docs.map(serializePoolSummary);
+      const pools = snapshot.docs.map(serializePoolSummary).filter(Boolean) as VocabularyPoolSummary[];
       const lastDoc = snapshot.docs[snapshot.docs.length - 1];
 
       return NextResponse.json({
@@ -120,7 +124,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     query = query.limit(fetchLimit).select(...POOL_SUMMARY_FIELDS);
     const snapshot = await query.get();
 
-    let pools = snapshot.docs.map(serializePoolSummary);
+    let pools = snapshot.docs.map(serializePoolSummary).filter(Boolean) as VocabularyPoolSummary[];
 
     if (!useFirestoreFilters) {
       if (difficulty) {
@@ -134,9 +138,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }
     }
 
-    const hasMore = useFirestoreFilters ? snapshot.docs.length === limit : pools.length > limit;
+    const visibleOverflow = pools.length > limit;
+    const hasMore = useFirestoreFilters
+      ? snapshot.docs.length === limit
+      : snapshot.docs.length === fetchLimit || visibleOverflow;
     pools = pools.slice(0, limit);
-    const lastDoc = snapshot.docs.find(d => d.id === pools[pools.length - 1]?.id);
+    // If filtering removed records from a scanned page, advance from the last
+    // scanned document. Once enough visible records were returned, keep the
+    // cursor at the last visible record so no filtered records are skipped.
+    const lastDoc = visibleOverflow
+      ? snapshot.docs.find(d => d.id === pools[pools.length - 1]?.id)
+      : snapshot.docs[snapshot.docs.length - 1];
 
     return NextResponse.json({
       success: true,

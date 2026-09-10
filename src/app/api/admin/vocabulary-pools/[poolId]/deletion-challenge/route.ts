@@ -17,6 +17,10 @@ import {
   VOCABULARY_POOL_DELETION_CHALLENGE_COLLECTION,
 } from '@/src/lib/vocabulary-pools/archive.server';
 import {
+  isVocabularyPoolCreationPending,
+  VocabularyPoolStateError,
+} from '@/src/lib/vocabulary-pools/pool-state.server';
+import {
   CONTENT_SYNC_LOCK_COLLECTION,
   CONTENT_SYNC_LOCK_ID,
   VocabularyContentSyncLockError,
@@ -65,6 +69,12 @@ export async function POST(
       throw new VocabularyPoolDeletionError('Pool not found', 404, 'VOCABULARY_POOL_NOT_FOUND');
     }
     const poolData = poolSnapshot.data() ?? {};
+    if (isVocabularyPoolCreationPending(poolData)) {
+      throw new VocabularyPoolStateError(
+        'Vocabulary pool creation is still in progress. Try again when it finishes.',
+        'VOCABULARY_POOL_PENDING'
+      );
+    }
     const poolFingerprint = vocabularyPoolContentFingerprint(poolData);
     const poolName = typeof poolData.name === 'string' && poolData.name.trim() ? poolData.name.trim() : poolId;
     const wordCount = new Set(
@@ -91,6 +101,12 @@ export async function POST(
       if (syncLock.exists) throw new VocabularyContentSyncLockError();
       if (!pool.exists) {
         throw new VocabularyPoolDeletionError('Pool not found', 404, 'VOCABULARY_POOL_NOT_FOUND');
+      }
+      if (isVocabularyPoolCreationPending(pool.data())) {
+        throw new VocabularyPoolStateError(
+          'Vocabulary pool creation is still in progress. Try again when it finishes.',
+          'VOCABULARY_POOL_PENDING'
+        );
       }
       if (vocabularyPoolContentFingerprint(pool.data() ?? {}) !== poolFingerprint) {
         throw new VocabularyPoolDeletionError(
@@ -132,6 +148,9 @@ export async function POST(
       return NextResponse.json({ success: false, error: error.message }, { status: error.status });
     }
     if (error instanceof VocabularyPoolDeletionError) {
+      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
+    }
+    if (error instanceof VocabularyPoolStateError) {
       return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
     }
     if (error instanceof VocabularyContentSyncLockError) {
