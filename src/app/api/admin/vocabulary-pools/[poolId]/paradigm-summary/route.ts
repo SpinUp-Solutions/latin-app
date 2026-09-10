@@ -6,6 +6,7 @@ import type { FormParadigm } from '@/src/types/exercises/paradigm';
 import { deriveParadigm } from '@/src/utils/paradigm';
 import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 import { AdminAccessError, verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { isVocabularyPoolCreationPending } from '@/src/lib/vocabulary-pools/pool-state.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,6 +36,9 @@ export async function GET(
     }
 
     const poolData = poolDoc.data();
+    if (isVocabularyPoolCreationPending(poolData)) {
+      return NextResponse.json({ success: false, error: 'Pool not found' }, { status: 404 });
+    }
     const wordDocIds = (poolData?.wordDocIds || []) as string[];
 
     if (wordDocIds.length === 0) {

@@ -83,6 +83,9 @@ export interface CreatePoolRequest {
   wordDocIds?: string[];
   difficulty?: 'beginner' | 'intermediate' | 'advanced';
   tags?: string[];
+  /** Create-mode composition fields. Ordinary create callers omit these. */
+  sourcePoolIds?: string[];
+  requestId?: string;
 }
 
 export interface AddWordsRequest {

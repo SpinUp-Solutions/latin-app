@@ -4,6 +4,7 @@ import { FieldPath } from 'firebase-admin/firestore';
 import type { VocabularyPool } from '@/src/types/vocabulary-pool';
 import { toVocabularyPoolSummary } from '@/src/utils/vocabularyPoolSummary';
 import { AdminAccessError, verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { isVocabularyPoolCreationPending } from '@/src/lib/vocabulary-pools/pool-state.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,7 +24,7 @@ export async function GET(
     const snapshot = await adminDb
       .collection('vocabulary_pools')
       .where(FieldPath.documentId(), '==', poolId)
-      .select('name', 'description', 'metadata')
+      .select('name', 'description', 'metadata', '_creationPending')
       .get();
 
     if (snapshot.empty) {
@@ -31,9 +32,17 @@ export async function GET(
     }
 
     const poolDoc = snapshot.docs[0];
+    if (isVocabularyPoolCreationPending(poolDoc.data())) {
+      return NextResponse.json({ success: false, error: 'Pool not found' }, { status: 404 });
+    }
     const data = poolDoc.data() as Partial<VocabularyPool>;
+    const {
+      _copyRequest: _privateCopyRequest,
+      _creationPending: _pendingCreation,
+      ...publicData
+    } = data as Record<string, unknown>;
     const pool = toVocabularyPoolSummary(poolDoc.id, {
-      ...data,
+      ...(publicData as Partial<VocabularyPool>),
       metadata: data.metadata
         ? {
             ...data.metadata,
