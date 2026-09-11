@@ -190,12 +190,21 @@ export const vocabularyPoolApi = createApi({
           const cachedPoolQueries = vocabularyPoolApi.util.selectInvalidatedBy(getState(), [
             { type: 'PoolList', id: 'LIST' },
           ]);
+          const poolQueriesByCacheKey = new Map<string, GetPoolsArgs>(
+            cachedPoolQueries
+              .filter(query => query.endpointName === 'getPools')
+              .map(query => [query.queryCacheKey, query.originalArgs as GetPoolsArgs])
+          );
+
+          // First requests have no provided tags until they settle. Include
+          // them now so their old responses cannot miss the post-create refresh.
+          for (const args of vocabularyPoolApi.util.selectCachedArgsForQuery(getState(), 'getPools')) {
+            const runningQuery = dispatch(vocabularyPoolApi.util.getRunningQueryThunk('getPools', args));
+            if (runningQuery) poolQueriesByCacheKey.set(runningQuery.queryCacheKey, args);
+          }
 
           await Promise.all(
-            cachedPoolQueries.map(async query => {
-              if (query.endpointName !== 'getPools') return;
-              const originalArgs = query.originalArgs as GetPoolsArgs;
-
+            [...poolQueriesByCacheKey.values()].map(async originalArgs => {
               let runningQuery = dispatch(vocabularyPoolApi.util.getRunningQueryThunk('getPools', originalArgs));
               while (runningQuery) {
                 await runningQuery;

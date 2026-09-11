@@ -173,4 +173,84 @@ describe('vocabulary pool copy cache refresh', () => {
       ]);
     });
   });
+
+  it('refreshes a pending first search without delaying already-cached lists', async () => {
+    let copied = false;
+    let releaseFirstSearch!: () => void;
+    const searchRequests: URL[] = [];
+    mockBaseQuery.mockImplementation(async (request: unknown) => {
+      if (typeof request !== 'string') {
+        copied = true;
+        return { data: { success: true, data: { pool: copiedPool } } };
+      }
+
+      const url = new URL(request, 'https://latin.test');
+      if (url.searchParams.has('search')) {
+        searchRequests.push(url);
+        // Capture the server result before the mutation, but delay delivery
+        // until after creation succeeds and its cache refresh has started.
+        const response = poolsResponse(copied ? [copiedPool] : []);
+        if (searchRequests.length === 1) {
+          await new Promise<void>(resolve => {
+            releaseFirstSearch = resolve;
+          });
+        }
+        return response;
+      }
+      return poolsResponse(copied ? [copiedPool, activePool] : [activePool]);
+    });
+
+    const store = createStore();
+    const cachedArgs = { filters: { sortBy: 'createdAt' as const, sortOrder: 'desc' as const }, lastPoolId: null };
+    const searchArgs = {
+      filters: { search: 'copied', sortBy: 'name' as const, sortOrder: 'asc' as const },
+      lastPoolId: null,
+    };
+    await store.dispatch(vocabularyPoolApi.endpoints.getPools.initiate(cachedArgs, { subscribe: false }));
+    const firstSearch = store.dispatch(vocabularyPoolApi.endpoints.getPools.initiate(searchArgs));
+
+    try {
+      await waitFor(() => expect(releaseFirstSearch).toBeDefined());
+      await store
+        .dispatch(
+          vocabularyPoolApi.endpoints.createPoolFromPools.initiate(
+            {
+              name: 'Copied pool',
+              description: 'Copied words',
+              difficulty: 'beginner',
+              tags: [],
+              sourcePoolIds: ['source-a'],
+              wordDocIds: [],
+              requestId: 'pending-search-request',
+            },
+            { track: false }
+          )
+        )
+        .unwrap();
+
+      await waitFor(() => {
+        expect(vocabularyPoolApi.endpoints.getPools.select(cachedArgs)(store.getState()).data?.pools).toEqual([
+          copiedPool,
+          activePool,
+        ]);
+      });
+      expect(searchRequests).toHaveLength(1);
+      expect(vocabularyPoolApi.endpoints.getPools.select(searchArgs)(store.getState()).status).toBe('pending');
+
+      releaseFirstSearch();
+      await firstSearch;
+      await waitFor(() => {
+        expect(vocabularyPoolApi.endpoints.getPools.select(searchArgs)(store.getState()).data?.pools).toEqual([
+          copiedPool,
+        ]);
+      });
+      expect(searchRequests).toHaveLength(2);
+      expect(searchRequests[1].search).toBe(searchRequests[0].search);
+      expect(searchRequests[1].searchParams.has('lastPoolId')).toBe(false);
+    } finally {
+      releaseFirstSearch?.();
+      firstSearch.unsubscribe();
+      store.dispatch(vocabularyPoolApi.util.resetApiState());
+    }
+  });
 });
