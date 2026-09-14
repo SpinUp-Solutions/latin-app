@@ -1,7 +1,12 @@
+import {
+  updateLinkedPoolMembership,
+  resolveVocabularyPool,
+  assertPoolDocumentSize,
+} from '@/src/lib/vocabulary-pools/linked-pools.server';
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import type { VocabularyPool, AddWordsRequest } from '@/src/types/vocabulary-pool';
-import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
+import { VOCABULARY_POOL_COLLECTION } from '@/shared/constants/firestore';
 import { AdminAccessError, verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import { MAX_VOCABULARY_POOL_WORD_ADDITIONS } from '@/src/lib/vocabulary-pools/limits';
 import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
@@ -20,7 +25,7 @@ export async function POST(
   try {
     const actor = await verifyAdminAccess(request);
     const { poolId } = await params;
-    const { wordDocIds, skipDuplicates = true }: AddWordsRequest = await request.json();
+    const { wordDocIds }: AddWordsRequest = await request.json();
 
     if (!wordDocIds || !Array.isArray(wordDocIds) || wordDocIds.length === 0) {
       return NextResponse.json(
@@ -36,63 +41,28 @@ export async function POST(
       );
     }
 
-    const poolRef = adminDb.collection('vocabulary_pools').doc(poolId);
+    const poolRef = adminDb.collection(VOCABULARY_POOL_COLLECTION).doc(poolId);
     const requestedIds = [...new Set(wordDocIds)];
 
-    const result = await runVocabularyContentMutation(adminDb, async transaction => {
-      const poolDoc = await transaction.get(poolRef);
-      if (!poolDoc.exists) {
-        throw new Error('Pool not found');
-      }
-      if (isVocabularyPoolCreationPending(poolDoc.data())) {
-        throw new VocabularyPoolStateError(
-          'Vocabulary pool creation is still in progress. Try again when it finishes.',
-          'VOCABULARY_POOL_PENDING'
-        );
-      }
-
-      const poolData = poolDoc.data() as VocabularyPool;
-      const currentWordIds = poolData.wordDocIds || [];
-      const candidateIds = skipDuplicates ? requestedIds.filter(id => !currentWordIds.includes(id)) : requestedIds;
-      if (candidateIds.length > MAX_VOCABULARY_POOL_WORD_ADDITIONS) {
-        throw new Error(`Add at most ${MAX_VOCABULARY_POOL_WORD_ADDITIONS} new words to a pool at once`);
-      }
-      const wordRefs = candidateIds.map(wordId => adminDb.collection(VOCABULARY_WORDS_COLLECTION).doc(wordId));
-      const wordDocs = wordRefs.length > 0 ? await transaction.getAll(...wordRefs) : [];
-      const validIds = candidateIds.filter((_, index) => wordDocs[index].exists);
-      const invalidIds = candidateIds.filter((_, index) => !wordDocs[index].exists);
-      const deletingIds = candidateIds.filter((_, index) => Boolean(wordDocs[index].data()?._deletionPending));
-      if (deletingIds.length > 0) {
-        throw new VocabularyPoolWordMembershipError('Cannot assign vocabulary words pending deletion');
-      }
-
-      const newIds = validIds;
-      const duplicateCount = skipDuplicates ? requestedIds.length - candidateIds.length : 0;
-      const updatedWordIds = [...currentWordIds, ...newIds];
-
-      for (const wordId of new Set(newIds)) {
-        const index = candidateIds.indexOf(wordId);
-        const wordDoc = wordDocs[index];
-        const currentRevision = wordDoc.data()?._poolReferenceRevision;
-        transaction.update(wordRefs[index], {
-          _poolReferenceRevision: Number.isSafeInteger(currentRevision) ? Number(currentRevision) + 1 : 1,
-        });
-      }
-
-      transaction.update(poolRef, {
-        wordDocIds: updatedWordIds,
-        'metadata.wordCount': updatedWordIds.length,
+    if (requestedIds.length > MAX_VOCABULARY_POOL_WORD_ADDITIONS)
+      return NextResponse.json(
+        { success: false, error: `Add at most ${MAX_VOCABULARY_POOL_WORD_ADDITIONS} words at once` },
+        { status: 400 }
+      );
+    const result = await updateLinkedPoolMembership(
+      adminDb,
+      poolId,
+      {
         'metadata.updatedAt': new Date(),
         'metadata.updatedBy': actor.uid,
-      });
-
-      return { newIds, duplicateCount, invalidIds };
-    });
-
-    console.log(`Successfully added ${result.newIds.length} words to pool ${poolId}`);
+      },
+      { addWordDocIds: requestedIds }
+    );
 
     const updatedPoolDoc = await poolRef.get();
-    const updatedPoolData = updatedPoolDoc.data();
+    const updatedPoolData = updatedPoolDoc.exists
+      ? await resolveVocabularyPool(adminDb, poolId, updatedPoolDoc.data()!)
+      : undefined;
 
     if (!updatedPoolData) {
       return NextResponse.json({ success: false, error: 'Pool data not found' }, { status: 404 });
@@ -106,7 +76,7 @@ export async function POST(
     return NextResponse.json({
       success: true,
       data: {
-        addedCount: result.newIds.length,
+        addedCount: result.addedCount,
         duplicateCount: result.duplicateCount,
         invalidIds: result.invalidIds,
         pool: {
@@ -114,8 +84,8 @@ export async function POST(
           ...publicPoolData,
           metadata: {
             ...updatedPoolData.metadata,
-            createdAt: updatedPoolData.metadata.createdAt.toDate(),
-            updatedAt: updatedPoolData.metadata.updatedAt.toDate(),
+            createdAt: updatedPoolData.metadata.createdAt?.toDate?.() ?? updatedPoolData.metadata.createdAt,
+            updatedAt: updatedPoolData.metadata.updatedAt?.toDate?.() ?? updatedPoolData.metadata.updatedAt,
           },
         },
       },
@@ -154,7 +124,7 @@ export async function DELETE(
       );
     }
 
-    const poolRef = adminDb.collection('vocabulary_pools').doc(poolId);
+    const poolRef = adminDb.collection(VOCABULARY_POOL_COLLECTION).doc(poolId);
 
     const removedCount = await runVocabularyContentMutation(adminDb, async transaction => {
       const poolDoc = await transaction.get(poolRef);
@@ -170,9 +140,16 @@ export async function DELETE(
 
       const poolData = poolDoc.data() as VocabularyPool;
       const currentWordIds = poolData.wordDocIds || [];
+      const effective = await resolveVocabularyPool(adminDb, poolId, poolDoc.data()!, transaction);
+      if ((effective.inheritedWordDocIds ?? []).some((id: string) => wordDocIds.includes(id)))
+        throw new VocabularyPoolStateError(
+          'Inherited words must be removed in their source pool.',
+          'VOCABULARY_POOL_INHERITED_WORD'
+        );
       const updatedWordIds = currentWordIds.filter(id => !wordDocIds.includes(id));
       const removed = currentWordIds.length - updatedWordIds.length;
 
+      assertPoolDocumentSize({ ...poolData, wordDocIds: updatedWordIds });
       transaction.update(poolRef, {
         wordDocIds: updatedWordIds,
         'metadata.wordCount': updatedWordIds.length,
@@ -186,7 +163,9 @@ export async function DELETE(
     console.log(`Successfully removed ${removedCount} words from pool ${poolId}`);
 
     const updatedPoolDoc = await poolRef.get();
-    const updatedPoolData = updatedPoolDoc.data();
+    const updatedPoolData = updatedPoolDoc.exists
+      ? await resolveVocabularyPool(adminDb, poolId, updatedPoolDoc.data()!)
+      : undefined;
 
     if (!updatedPoolData) {
       return NextResponse.json({ success: false, error: 'Pool data not found' }, { status: 404 });
@@ -206,8 +185,8 @@ export async function DELETE(
           ...publicPoolData,
           metadata: {
             ...updatedPoolData.metadata,
-            createdAt: updatedPoolData.metadata.createdAt.toDate(),
-            updatedAt: updatedPoolData.metadata.updatedAt.toDate(),
+            createdAt: updatedPoolData.metadata.createdAt?.toDate?.() ?? updatedPoolData.metadata.createdAt,
+            updatedAt: updatedPoolData.metadata.updatedAt?.toDate?.() ?? updatedPoolData.metadata.updatedAt,
           },
         },
       },

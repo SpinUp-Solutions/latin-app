@@ -1,3 +1,4 @@
+import { createLinkedVocabularyPool, resolveVocabularyPool } from '@/src/lib/vocabulary-pools/linked-pools.server';
 import { createHash } from 'node:crypto';
 import type {
   DocumentData,
@@ -219,10 +220,15 @@ async function readSources(db: Firestore, sourcePoolIds: readonly string[]): Pro
   // Reading all active and tombstone documents before validating any of them
   // keeps the lookup deterministic and makes conflicts fail closed.
   const [activeSnapshots, tombstoneSnapshots] = await Promise.all([
-    getAllDocuments(db, activeRefs, ['wordDocIds', '_creationPending', '_deletionPending']),
+    getAllDocuments(db, activeRefs, ['wordDocIds', 'sourcePoolIds', '_creationPending', '_deletionPending']),
     getAllDocuments(db, tombstoneRefs, ['archiveId']),
   ]);
-  return sourcePoolIds.map((id, index) => assertSourceState(id, activeSnapshots[index], tombstoneSnapshots[index]));
+  return Promise.all(
+    sourcePoolIds.map(async (id, index) => {
+      const source = assertSourceState(id, activeSnapshots[index], tombstoneSnapshots[index]);
+      return { ...source, data: await resolveVocabularyPool(db, id, source.data) };
+    })
+  );
 }
 
 function validateWordSnapshots(wordIds: readonly string[], snapshots: readonly DocumentSnapshot[]): void {
@@ -559,6 +565,7 @@ export async function createVocabularyPoolFromPools(
   actorUid: string,
   input: CreateVocabularyPoolFromPoolsRequest
 ): Promise<DocumentData> {
+  if (input.keepLinked !== false) return createLinkedVocabularyPool(db, actorUid, input);
   const requestFingerprint = vocabularyPoolCopyRequestFingerprint(input);
   const poolId = operationDocumentId(actorUid, input.requestId);
   const poolRef = db.collection(VOCABULARY_POOL_COLLECTION).doc(poolId);
@@ -697,8 +704,11 @@ export async function createVocabularyPoolFromPools(
             }
             const activeSnapshots = await transactionGetAll(transaction, activeRefs);
             const tombstoneSnapshots = await transactionGetAll(transaction, tombstoneRefs);
-            const currentSources = input.sourcePoolIds.map((id, index) =>
-              assertSourceState(id, activeSnapshots[index], tombstoneSnapshots[index])
+            const currentSources = await Promise.all(
+              input.sourcePoolIds.map(async (id, index) => {
+                const source = assertSourceState(id, activeSnapshots[index], tombstoneSnapshots[index]);
+                return { ...source, data: await resolveVocabularyPool(db, id, source.data, transaction) };
+              })
             );
             ensureSourceFingerprint(
               sourceFingerprint,
@@ -779,8 +789,11 @@ export async function createVocabularyPoolFromPools(
           }
           const activeSnapshots = await transactionGetAll(transaction, activeRefs);
           const tombstoneSnapshots = await transactionGetAll(transaction, tombstoneRefs);
-          const currentSources = input.sourcePoolIds.map((id, index) =>
-            assertSourceState(id, activeSnapshots[index], tombstoneSnapshots[index])
+          const currentSources = await Promise.all(
+            input.sourcePoolIds.map(async (id, index) => {
+              const source = assertSourceState(id, activeSnapshots[index], tombstoneSnapshots[index]);
+              return { ...source, data: await resolveVocabularyPool(db, id, source.data, transaction) };
+            })
           );
           ensureSourceFingerprint(sourceFingerprint, sourceMembershipFingerprint(input.sourcePoolIds, currentSources));
 

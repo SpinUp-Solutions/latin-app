@@ -9,7 +9,9 @@ jest.mock('@/src/hooks/useWordSelection', () => ({
   useWordSelection: () => ({ selectedIds: mockSelectedIds, clear: mockClear }),
 }));
 jest.mock('@/src/components/ui/admin/vocabulary-pools/WordSelector', () => ({
-  WordSelector: () => <div data-testid="word-selector" />,
+  WordSelector: ({ initialSelectedIds }: { initialSelectedIds?: string[] }) => (
+    <div data-testid="word-selector" data-selected={JSON.stringify(initialSelectedIds)} />
+  ),
 }));
 jest.mock('@/src/components/ui/admin/vocabulary-pools/VocabularyPoolImportSelector', () => ({
   VocabularyPoolImportSelector: ({
@@ -109,4 +111,40 @@ describe('PoolForm copy submission identity', () => {
     resolveSubmit(true);
     await waitFor(() => expect(mockClear).toHaveBeenCalledTimes(1));
   });
+});
+
+it('edits only direct words and keeps source links when saving a combined pool', async () => {
+  mockSelectedIds = ['own'];
+  mockSubmit.mockResolvedValue(true);
+  render(
+    <PoolForm
+      mode="edit"
+      initialData={{
+        id: 'combined',
+        name: 'Lesson 5',
+        description: 'Review',
+        wordDocIds: ['inherited', 'own'],
+        directWordDocIds: ['own'],
+        inheritedWordDocIds: ['inherited'],
+        sourcePoolIds: ['source'],
+        sources: [{ id: 'source', name: '<strong>Lesson 3</strong>' }],
+      }}
+      onSubmit={mockSubmit}
+      onCancel={jest.fn()}
+      isLoading={false}
+    />
+  );
+  expect(screen.getByTestId('word-selector')).toHaveAttribute('data-selected', '["own"]');
+  expect(screen.getByText(/inherited words update automatically/)).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Edit source: Lesson 3' })).toHaveAttribute(
+    'href',
+    '/admin/vocabulary-pools/source/edit'
+  );
+  fireEvent.submit(screen.getByRole('button', { name: 'Save Changes' }).closest('form')!);
+  await waitFor(() =>
+    expect(mockSubmit).toHaveBeenLastCalledWith(
+      expect.objectContaining({ directWordDocIds: ['own'], sourcePoolIds: ['source'] })
+    )
+  );
+  expect(mockSubmit.mock.calls.at(-1)?.[0].wordDocIds).toBeUndefined();
 });

@@ -1,3 +1,4 @@
+import { resolveVocabularyPool } from '@/src/lib/vocabulary-pools/linked-pools.server';
 import type { CollectionReference, DocumentData, Firestore, QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import { FieldPath } from 'firebase-admin/firestore';
 import {
@@ -40,7 +41,7 @@ export async function getReadableVocabularyPool(db: Firestore, poolId: string): 
   if (active.exists) {
     if (isVocabularyPoolCreationPending(active.data())) return null;
     return {
-      data: active.data() ?? {},
+      data: await resolveVocabularyPool(db, poolId, active.data() ?? {}),
       source: 'active',
       words: db.collection(VOCABULARY_WORDS_COLLECTION),
     };

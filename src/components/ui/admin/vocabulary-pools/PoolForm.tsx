@@ -1,3 +1,4 @@
+import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
@@ -36,7 +37,7 @@ export const PoolForm: React.FC<PoolFormProps> = ({
   copyRequestResetVersion,
 }) => {
   const { selectedIds, clear } = useWordSelection();
-  const [sourcePoolIds, setSourcePoolIds] = useState<string[]>([]);
+  const [sourcePoolIds, setSourcePoolIds] = useState<string[]>(initialData?.sourcePoolIds ?? []);
   const requestIdRef = useRef<string>(newCopyRequestId());
   const previousCopyRequestResetVersionRef = useRef(copyRequestResetVersion);
   const submittedFingerprintRef = useRef<string | null>(null);
@@ -125,6 +126,11 @@ export const PoolForm: React.FC<PoolFormProps> = ({
       submitData.requestId = requestIdRef.current;
     }
 
+    if (mode === 'edit') {
+      submitData.sourcePoolIds = sourcePoolIds;
+      submitData.directWordDocIds = selectedIds;
+      delete submitData.wordDocIds;
+    }
     submittingRef.current = true;
     setIsSubmitting(true);
     try {
@@ -240,19 +246,33 @@ export const PoolForm: React.FC<PoolFormProps> = ({
               )}
             </div>
 
-            {mode === 'create' && (
+            {
               <VocabularyPoolImportSelector
                 selectedPoolIds={sourcePoolIds}
+                excludedPoolId={initialData?.id}
                 onSelectionChange={setSourcePoolIds}
                 disabled={isLoading || isSubmitting}
               />
-            )}
+            }
 
+            {Boolean(initialData?.inheritedWordDocIds?.length) && (
+              <div className="rounded-lg border bg-stone-50 p-4 text-sm space-y-2">
+                <p>
+                  {initialData?.inheritedWordDocIds?.length} inherited words update automatically. Edit them in a source
+                  pool, or unlink that entire pool above.
+                </p>
+                {initialData?.sources?.map(source => (
+                  <a key={source.id} href={`/admin/vocabulary-pools/${source.id}/edit`} className="block underline">
+                    Edit source: <SimpleRichDisplay content={source.name} />
+                  </a>
+                ))}
+              </div>
+            )}
             {/* Word Selection Section */}
             <div className="space-y-2">
               <Label className="text-base font-medium flex items-center gap-2">
                 <BookOpen className="h-4 w-4" />
-                Select Words for Pool (Optional)
+                Select Direct Words for Pool (Optional)
               </Label>
               <p className="text-sm text-gray-600 mb-4">
                 You can add words now or add them later after creating the pool.
@@ -260,8 +280,14 @@ export const PoolForm: React.FC<PoolFormProps> = ({
 
               <WordSelector
                 maxSelection={MAX_VOCABULARY_POOL_WORD_ADDITIONS}
-                initialSelectedWords={initialData && 'words' in initialData ? initialData.words : undefined}
-                initialSelectedIds={initialData?.wordDocIds}
+                initialSelectedWords={
+                  initialData && 'words' in initialData
+                    ? initialData.words.filter(word =>
+                        (initialData.directWordDocIds ?? initialData.wordDocIds ?? []).includes(word.id)
+                      )
+                    : undefined
+                }
+                initialSelectedIds={initialData?.directWordDocIds ?? initialData?.wordDocIds}
               />
             </div>
 

@@ -1,3 +1,4 @@
+import type { ThunkDispatch, UnknownAction } from '@reduxjs/toolkit';
 import { createApi } from '@reduxjs/toolkit/query/react';
 import {
   VocabularyPool,
@@ -45,7 +46,7 @@ interface GetPoolsArgs {
 export const vocabularyPoolApi = createApi({
   reducerPath: 'vocabularyPoolApi',
   baseQuery: createAuthenticatedBaseQuery(),
-  tagTypes: ['Pool', 'PoolList', 'PoolUsage', 'AvailableWords'],
+  tagTypes: ['PoolContent', 'Pool', 'PoolList', 'PoolUsage', 'AvailableWords'],
   keepUnusedDataFor: 60 * 5,
   refetchOnMountOrArgChange: 300,
   refetchOnFocus: false,
@@ -67,6 +68,7 @@ export const vocabularyPoolApi = createApi({
         if (lastPoolId) params.append('lastPoolId', lastPoolId);
         if (filters?.search) params.append('search', filters.search);
         if (filters?.difficulty) params.append('difficulty', filters.difficulty);
+        if (filters?.tags?.length) params.append('tags', filters.tags.join(','));
         if (filters?.isActive !== null && filters?.isActive !== undefined) {
           params.append('isActive', filters.isActive.toString());
         }
@@ -118,7 +120,10 @@ export const vocabularyPoolApi = createApi({
         missingWordIds: response.data.missingWordIds,
         actualWordCount: response.data.actualWordCount,
       }),
-      providesTags: (result, error, poolId) => [{ type: 'Pool', id: poolId }],
+      providesTags: (result, error, poolId) => [
+        { type: 'PoolContent', id: 'ALL' },
+        { type: 'Pool', id: poolId },
+      ],
     }),
 
     getStudentPool: builder.query<VocabularyPoolStudyData, string>({
@@ -144,6 +149,7 @@ export const vocabularyPoolApi = createApi({
         return { data: { id: identity?.id ?? poolId, name: identity?.name ?? 'Vocabulary Pool', items } };
       },
       providesTags: (result, error, poolId) => [
+        { type: 'PoolContent', id: 'ALL' },
         { type: 'Pool', id: `student-${poolId}` },
         { type: 'Pool', id: 'STUDENT_LIST' },
       ],
@@ -152,19 +158,28 @@ export const vocabularyPoolApi = createApi({
     getPoolSummary: builder.query<VocabularyPoolSummary, string>({
       query: poolId => `/admin/vocabulary-pools/${poolId}/summary`,
       transformResponse: (response: { success: boolean; data: { pool: VocabularyPoolSummary } }) => response.data.pool,
-      providesTags: (result, error, poolId) => [{ type: 'Pool', id: poolId }],
+      providesTags: (result, error, poolId) => [
+        { type: 'PoolContent', id: 'ALL' },
+        { type: 'Pool', id: poolId },
+      ],
     }),
 
     getPoolPOSSummary: builder.query<POSSummaryData, string>({
       query: poolId => `/admin/vocabulary-pools/${poolId}/pos-summary`,
       transformResponse: (response: { success: boolean; data: POSSummaryData }) => response.data,
-      providesTags: (result, error, poolId) => [{ type: 'Pool', id: `${poolId}-pos-summary` }],
+      providesTags: (result, error, poolId) => [
+        { type: 'PoolContent', id: 'ALL' },
+        { type: 'Pool', id: `${poolId}-pos-summary` },
+      ],
     }),
 
     getPoolParadigmSummary: builder.query<ParadigmSummaryData, string>({
       query: poolId => `/admin/vocabulary-pools/${poolId}/paradigm-summary`,
       transformResponse: (response: { success: boolean; data: ParadigmSummaryData }) => response.data,
-      providesTags: (result, error, poolId) => [{ type: 'Pool', id: `${poolId}-paradigm-summary` }],
+      providesTags: (result, error, poolId) => [
+        { type: 'PoolContent', id: 'ALL' },
+        { type: 'Pool', id: `${poolId}-paradigm-summary` },
+      ],
     }),
 
     createPool: builder.mutation<VocabularyPool, CreatePoolRequest>({
@@ -174,7 +189,7 @@ export const vocabularyPoolApi = createApi({
         body: poolData,
       }),
       transformResponse: (response: { success: boolean; data: { pool: VocabularyPool } }) => response.data.pool,
-      invalidatesTags: [{ type: 'PoolList', id: 'LIST' }],
+      onQueryStarted: refreshPoolLists,
     }),
 
     createPoolFromPools: builder.mutation<VocabularyPool, CreateVocabularyPoolFromPoolsRequest>({
@@ -184,45 +199,7 @@ export const vocabularyPoolApi = createApi({
         body: poolData,
       }),
       transformResponse: (response: { success: boolean; data: { pool: VocabularyPool } }) => response.data.pool,
-      async onQueryStarted(_arg, { dispatch, queryFulfilled, getState }) {
-        try {
-          await queryFulfilled;
-          const cachedPoolQueries = vocabularyPoolApi.util.selectInvalidatedBy(getState(), [
-            { type: 'PoolList', id: 'LIST' },
-          ]);
-          const poolQueriesByCacheKey = new Map<string, GetPoolsArgs>(
-            cachedPoolQueries
-              .filter(query => query.endpointName === 'getPools')
-              .map(query => [query.queryCacheKey, query.originalArgs as GetPoolsArgs])
-          );
-
-          // First requests have no provided tags until they settle. Include
-          // them now so their old responses cannot miss the post-create refresh.
-          for (const args of vocabularyPoolApi.util.selectCachedArgsForQuery(getState(), 'getPools')) {
-            const runningQuery = dispatch(vocabularyPoolApi.util.getRunningQueryThunk('getPools', args));
-            if (runningQuery) poolQueriesByCacheKey.set(runningQuery.queryCacheKey, args);
-          }
-
-          await Promise.all(
-            [...poolQueriesByCacheKey.values()].map(async originalArgs => {
-              let runningQuery = dispatch(vocabularyPoolApi.util.getRunningQueryThunk('getPools', originalArgs));
-              while (runningQuery) {
-                await runningQuery;
-                runningQuery = dispatch(vocabularyPoolApi.util.getRunningQueryThunk('getPools', originalArgs));
-              }
-
-              await dispatch(
-                vocabularyPoolApi.endpoints.getPools.initiate(
-                  { ...originalArgs, lastPoolId: null },
-                  { subscribe: false, forceRefetch: true }
-                )
-              );
-            })
-          );
-        } catch {
-          // The caller owns mutation error feedback; cache refresh is best effort.
-        }
-      },
+      onQueryStarted: refreshPoolLists,
     }),
 
     duplicatePool: builder.mutation<VocabularyPool, { poolId: string; name?: string }>({
@@ -232,36 +209,7 @@ export const vocabularyPoolApi = createApi({
         body: name ? { name } : {},
       }),
       transformResponse: (response: { success: boolean; data: { pool: VocabularyPool } }) => response.data.pool,
-      async onQueryStarted(_arg, { dispatch, queryFulfilled, getState }) {
-        try {
-          await queryFulfilled;
-          const cachedPoolQueries = vocabularyPoolApi.util.selectInvalidatedBy(getState(), [
-            { type: 'PoolList', id: 'LIST' },
-          ]);
-
-          await Promise.all(
-            cachedPoolQueries.map(async query => {
-              if (query.endpointName !== 'getPools') return;
-              const originalArgs = query.originalArgs as GetPoolsArgs;
-
-              let runningQuery = dispatch(vocabularyPoolApi.util.getRunningQueryThunk('getPools', originalArgs));
-              while (runningQuery) {
-                await runningQuery;
-                runningQuery = dispatch(vocabularyPoolApi.util.getRunningQueryThunk('getPools', originalArgs));
-              }
-
-              await dispatch(
-                vocabularyPoolApi.endpoints.getPools.initiate(
-                  { ...originalArgs, lastPoolId: null },
-                  { subscribe: false, forceRefetch: true }
-                )
-              );
-            })
-          );
-        } catch {
-          // ignore query failure handled by caller
-        }
-      },
+      onQueryStarted: refreshPoolLists,
     }),
 
     updatePool: builder.mutation<VocabularyPool, { id: string; data: Partial<VocabularyPool> }>({
@@ -271,13 +219,15 @@ export const vocabularyPoolApi = createApi({
         body: data,
       }),
       transformResponse: (response: { success: boolean; data: { pool: VocabularyPool } }) => response.data.pool,
-      invalidatesTags: (result, error, { id }) => [
-        { type: 'Pool', id },
-        { type: 'Pool', id: `student-${id}` },
-        { type: 'Pool', id: `${id}-pos-summary` },
-        { type: 'Pool', id: `${id}-paradigm-summary` },
-        { type: 'PoolList', id: 'LIST' },
-      ],
+      invalidatesTags: (_result, error) =>
+        error
+          ? []
+          : [
+              { type: 'PoolContent', id: 'ALL' },
+              { type: 'PoolUsage', id: 'MANAGEMENT' },
+              { type: 'AvailableWords', id: 'LIST' },
+            ],
+      onQueryStarted: refreshPoolLists,
     }),
 
     preparePoolDeletion: builder.mutation<VocabularyPoolDeletionChallenge, string>({
@@ -294,12 +244,15 @@ export const vocabularyPoolApi = createApi({
         method: 'DELETE',
         body: { confirmationToken },
       }),
-      invalidatesTags: (result, error, { poolId }) => [
-        { type: 'Pool', id: poolId },
-        { type: 'Pool', id: `student-${poolId}` },
-        { type: 'PoolList', id: 'LIST' },
-        { type: 'PoolUsage', id: 'MANAGEMENT' },
-      ],
+      invalidatesTags: (_result, error) =>
+        error
+          ? []
+          : [
+              { type: 'PoolContent', id: 'ALL' },
+              { type: 'PoolUsage', id: 'MANAGEMENT' },
+              { type: 'AvailableWords', id: 'LIST' },
+            ],
+      onQueryStarted: refreshPoolLists,
     }),
 
     addWordsToPool: builder.mutation<
@@ -315,13 +268,15 @@ export const vocabularyPoolApi = createApi({
         success: boolean;
         data: { pool: VocabularyPool; addedCount: number; duplicateCount: number; invalidIds: string[] };
       }) => response.data,
-      invalidatesTags: (result, error, { poolId }) => [
-        { type: 'Pool', id: poolId },
-        { type: 'Pool', id: `student-${poolId}` },
-        { type: 'Pool', id: `${poolId}-pos-summary` },
-        { type: 'Pool', id: `${poolId}-paradigm-summary` },
-        { type: 'AvailableWords', id: 'LIST' },
-      ],
+      invalidatesTags: (_result, error) =>
+        error
+          ? []
+          : [
+              { type: 'PoolContent', id: 'ALL' },
+              { type: 'PoolUsage', id: 'MANAGEMENT' },
+              { type: 'AvailableWords', id: 'LIST' },
+            ],
+      onQueryStarted: refreshPoolLists,
     }),
 
     removeWordsFromPool: builder.mutation<{ pool: VocabularyPool }, { poolId: string; wordDocIds: string[] }>({
@@ -331,13 +286,15 @@ export const vocabularyPoolApi = createApi({
         body: { wordDocIds },
       }),
       transformResponse: (response: { success: boolean; data: { pool: VocabularyPool } }) => response.data,
-      invalidatesTags: (result, error, { poolId }) => [
-        { type: 'Pool', id: poolId },
-        { type: 'Pool', id: `student-${poolId}` },
-        { type: 'Pool', id: `${poolId}-pos-summary` },
-        { type: 'Pool', id: `${poolId}-paradigm-summary` },
-        { type: 'AvailableWords', id: 'LIST' },
-      ],
+      invalidatesTags: (_result, error) =>
+        error
+          ? []
+          : [
+              { type: 'PoolContent', id: 'ALL' },
+              { type: 'PoolUsage', id: 'MANAGEMENT' },
+              { type: 'AvailableWords', id: 'LIST' },
+            ],
+      onQueryStarted: refreshPoolLists,
     }),
 
     getWordsForPoolSelection: builder.query<
@@ -406,3 +363,56 @@ export const {
   useRemoveWordsFromPoolMutation,
   useGetWordsForPoolSelectionQuery,
 } = vocabularyPoolApi;
+
+type PoolCacheState = { vocabularyPoolApi: ReturnType<typeof vocabularyPoolApi.reducer> };
+/** Always replace accumulated pages after a mutation, including pending first-page searches. */
+async function refreshPoolLists(
+  _arg: unknown,
+  {
+    dispatch,
+    queryFulfilled,
+    getState,
+  }: {
+    dispatch: ThunkDispatch<unknown, unknown, UnknownAction>;
+    queryFulfilled: Promise<unknown>;
+    getState: () => unknown;
+  }
+): Promise<void> {
+  try {
+    await queryFulfilled;
+    const cachedPoolQueries = vocabularyPoolApi.util.selectInvalidatedBy(getState() as PoolCacheState, [
+      { type: 'PoolList', id: 'LIST' },
+    ]);
+    const poolQueriesByCacheKey = new Map<string, GetPoolsArgs>(
+      cachedPoolQueries
+        .filter(query => query.endpointName === 'getPools')
+        .map(query => [query.queryCacheKey, query.originalArgs as GetPoolsArgs])
+    );
+
+    // First requests have no provided tags until they settle. Include
+    // them now so their old responses cannot miss the post-create refresh.
+    for (const args of vocabularyPoolApi.util.selectCachedArgsForQuery(getState() as PoolCacheState, 'getPools')) {
+      const runningQuery = dispatch(vocabularyPoolApi.util.getRunningQueryThunk('getPools', args));
+      if (runningQuery) poolQueriesByCacheKey.set(runningQuery.queryCacheKey, args);
+    }
+
+    await Promise.all(
+      [...poolQueriesByCacheKey.values()].map(async originalArgs => {
+        let runningQuery = dispatch(vocabularyPoolApi.util.getRunningQueryThunk('getPools', originalArgs));
+        while (runningQuery) {
+          await runningQuery;
+          runningQuery = dispatch(vocabularyPoolApi.util.getRunningQueryThunk('getPools', originalArgs));
+        }
+
+        await dispatch(
+          vocabularyPoolApi.endpoints.getPools.initiate(
+            { ...originalArgs, lastPoolId: null },
+            { subscribe: false, forceRefetch: true }
+          )
+        );
+      })
+    );
+  } catch {
+    // The caller owns mutation error feedback; cache refresh is best effort.
+  }
+}

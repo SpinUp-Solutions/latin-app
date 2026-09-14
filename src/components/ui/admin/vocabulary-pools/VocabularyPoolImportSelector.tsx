@@ -20,6 +20,7 @@ interface VocabularyPoolImportSelectorProps {
   selectedPoolIds: string[];
   onSelectionChange: (poolIds: string[]) => void;
   disabled?: boolean;
+  excludedPoolId?: string;
 }
 
 const isUsableSummary = (pool: VocabularyPoolSummary): boolean => {
@@ -47,6 +48,7 @@ export const VocabularyPoolImportSelector: React.FC<VocabularyPoolImportSelector
   selectedPoolIds,
   onSelectionChange,
   disabled = false,
+  excludedPoolId,
 }) => {
   const [search, setSearch] = useState('');
   const [cursorState, setCursorState] = useState<{ filterKey: string; cursor: string | null }>({
@@ -125,7 +127,7 @@ export const VocabularyPoolImportSelector: React.FC<VocabularyPoolImportSelector
   });
 
   const togglePool = (pool: VocabularyPoolSummary) => {
-    if (disabled) return;
+    if (disabled || (!selectedIdSet.has(pool.id) && selectedPoolIds.length >= 100)) return;
     const nextIds = selectedIdSet.has(pool.id)
       ? selectedPoolIds.filter(id => id !== pool.id)
       : [...selectedPoolIds, pool.id];
@@ -156,7 +158,8 @@ export const VocabularyPoolImportSelector: React.FC<VocabularyPoolImportSelector
           Add words from pools
         </Label>
         <p className="text-sm text-gray-600">
-          Copies words into this new pool. Original pools stay unchanged. Repeated words are included once.
+          Links these pools so word additions and removals update automatically. Repeated words are included once.
+          Unlink a whole pool to stop inheriting its words.
         </p>
       </div>
 
@@ -231,38 +234,43 @@ export const VocabularyPoolImportSelector: React.FC<VocabularyPoolImportSelector
             </div>
           ) : (
             <div className="max-h-96 overflow-y-auto space-y-2">
-              {pools.map(pool => {
-                const selected = selectedIdSet.has(pool.id);
-                return (
-                  <Card
-                    key={pool.id}
-                    className={`cursor-pointer transition-colors ${selected ? 'ring-2 ring-roman-red bg-red-50/30' : 'hover:bg-gray-50'}`}
-                    onClick={() => togglePool(pool)}>
-                    <CardContent className="p-3 flex items-start gap-3">
-                      <Checkbox
-                        checked={selected}
-                        disabled={disabled}
-                        aria-label={`Select ${pool.name}`}
-                        onCheckedChange={() => togglePool(pool)}
-                        onClick={event => event.stopPropagation()}
-                      />
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <div className="flex items-center gap-2">
-                          {selected && <Check className="h-4 w-4 text-roman-red shrink-0" />}
-                          <SimpleRichDisplay content={pool.name} className="font-medium truncate" />
+              {pools
+                .filter(pool => pool.id !== excludedPoolId)
+                .map(pool => {
+                  const selected = selectedIdSet.has(pool.id);
+                  return (
+                    <Card
+                      key={pool.id}
+                      className={`cursor-pointer transition-colors ${selected ? 'ring-2 ring-roman-red bg-red-50/30' : 'hover:bg-gray-50'}`}
+                      onClick={() => togglePool(pool)}>
+                      <CardContent className="p-3 flex items-start gap-3">
+                        <Checkbox
+                          checked={selected}
+                          disabled={disabled}
+                          aria-label={`Select ${pool.name}`}
+                          onCheckedChange={() => togglePool(pool)}
+                          onClick={event => event.stopPropagation()}
+                        />
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="flex items-center gap-2">
+                            {selected && <Check className="h-4 w-4 text-roman-red shrink-0" />}
+                            <SimpleRichDisplay content={pool.name} className="font-medium truncate" />
+                          </div>
+                          <SimpleRichDisplay
+                            content={pool.description}
+                            className="text-sm text-gray-600 line-clamp-2"
+                          />
+                          <div className="flex items-center gap-2 text-xs text-gray-500">
+                            <span>{pool.metadata.wordCount} words</span>
+                            <Badge variant={pool.metadata.isActive ? 'default' : 'secondary'} className="text-xs">
+                              {pool.metadata.isActive ? 'Active' : 'Inactive'}
+                            </Badge>
+                          </div>
                         </div>
-                        <SimpleRichDisplay content={pool.description} className="text-sm text-gray-600 line-clamp-2" />
-                        <div className="flex items-center gap-2 text-xs text-gray-500">
-                          <span>{pool.metadata.wordCount} words</span>
-                          <Badge variant={pool.metadata.isActive ? 'default' : 'secondary'} className="text-xs">
-                            {pool.metadata.isActive ? 'Active' : 'Inactive'}
-                          </Badge>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               {(hasMore || loadingMore) && (
                 <div ref={sentinelRef} className="flex flex-col items-center gap-2 py-3">
                   {loadingMore && <Loader2 className="h-5 w-5 animate-spin text-gray-500" />}

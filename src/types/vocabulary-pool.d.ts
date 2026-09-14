@@ -5,6 +5,10 @@ export interface VocabularyPool {
   name: string;
   description: string;
   wordDocIds: string[]; // Array of word document IDs
+  sourcePoolIds?: string[];
+  directWordDocIds?: string[];
+  inheritedWordDocIds?: string[];
+  sources?: Array<{ id: string; name: string }>;
   searchTokens?: string[];
   metadata: VocabularyPoolMetadata;
 }
@@ -36,6 +40,7 @@ export interface VocabularyPoolsResponse {
 }
 
 export type VocabularyPoolUsageKind =
+  | 'pool'
   | 'lesson'
   | 'lesson-exercise'
   | 'test-version'
@@ -83,6 +88,7 @@ export interface CreatePoolRequest {
   wordDocIds?: string[];
   difficulty?: 'beginner' | 'intermediate' | 'advanced';
   tags?: string[];
+  directWordDocIds?: string[];
   /** Create-mode composition fields. Ordinary create callers omit these. */
   sourcePoolIds?: string[];
   requestId?: string;

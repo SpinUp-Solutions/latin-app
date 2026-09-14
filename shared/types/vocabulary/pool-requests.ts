@@ -34,7 +34,9 @@ export const createVocabularyPoolFromPoolsRequestSchema = z
       .max(500, 'Description must be less than 500 characters'),
     difficulty: difficultySchema.default('beginner'),
     tags: tagsSchema,
-    sourcePoolIds: z.array(vocabularyPoolIdSchema).min(1, 'Select at least one source pool'),
+    sourcePoolIds: z.array(vocabularyPoolIdSchema).min(1, 'Select at least one source pool').max(100),
+    /** New compositions stay linked. False retains the explicit snapshot-copy API. */
+    keepLinked: z.boolean().optional(),
     wordDocIds: z.array(vocabularyPoolIdSchema).default([]),
     requestId: requestIdSchema,
   })
