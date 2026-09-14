@@ -44,6 +44,7 @@ NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-storage-bucket
 NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your-sender-id
 NEXT_PUBLIC_FIREBASE_APP_ID=your-app-id
 NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=your-measurement-id
+NEXT_PUBLIC_FIREBASE_APP_CHECK_SITE_KEY=your-recaptcha-enterprise-site-key
 ```
 
 Below that, in the env file, add the following as well:

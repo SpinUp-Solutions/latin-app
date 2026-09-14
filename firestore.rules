@@ -90,6 +90,22 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /aiRequestThrottles/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /aiProviderConcurrency/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /aiEvaluationInFlight/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /aiEvaluationRuns/{document=**} {
+      allow read, write: if false;
+    }
+
     // Vocabulary authoring and deletion archives are exposed only through
     // authenticated server routes. Direct SDK access would bypass admin checks,
     // confirmation challenges, and immutable archive guarantees.
@@ -170,6 +186,10 @@ service cloud.firestore {
         && collection != 'aiEvaluationCases'
         && collection != 'aiEvaluationResultCache'
         && collection != 'aiEvaluationRunThrottles'
+        && collection != 'aiRequestThrottles'
+        && collection != 'aiProviderConcurrency'
+        && collection != 'aiEvaluationInFlight'
+        && collection != 'aiEvaluationRuns'
         && collection != 'vocabulary_pools'
         && collection != 'vocabulary_words_v5'
         && collection != 'vocabulary_words_v4'

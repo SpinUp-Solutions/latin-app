@@ -50,6 +50,8 @@ import {
   type TestTranslationGradingOutput,
 } from '@/shared/openai/translation-grading';
 import type { TranslationGradingRequest } from '@/shared/openai/types';
+import { createOpenAISafetyIdentifier } from '@/shared/openai/safety';
+import { AIRequestThrottleError, consumeAIGlobalRequestQuota } from '@/src/lib/openai/request-throttle';
 import { richTextToPlainText } from '@/src/utils/exercises/helpers';
 import { TEST_VERSION_SUMMARY_FIELDS, selectLeastUsedTestVersion, validateTestAssignmentGraph } from './domain';
 import { TestServiceError } from './errors';
@@ -101,7 +103,10 @@ export const TRANSLATION_GRADING_RESERVATION_MS = 5 * 60 * 1000;
 export const TRANSLATION_GRADING_REQUEST_WINDOW_MS = 10 * 60 * 1000;
 export const MAX_TRANSLATION_GRADING_REQUESTS_PER_WINDOW = 5;
 
-type TestTranslationGrader = (request: TranslationGradingRequest) => Promise<TestTranslationGradingOutput>;
+type TestTranslationGrader = (
+  request: TranslationGradingRequest,
+  safetyIdentifier?: string
+) => Promise<TestTranslationGradingOutput>;
 
 const originId = (origin: TestAttemptOrigin) => (origin.kind === 'normal-test' ? origin.testId : origin.mockTestId);
 
@@ -229,6 +234,7 @@ export interface TestAttemptServiceOptions {
   maxAttemptDocumentBytes?: number;
   maxReviewDocumentBytes?: number;
   gradeTestTranslation?: TestTranslationGrader;
+  consumeGlobalAIQuota?: (requestUnits: number) => Promise<void>;
 }
 
 export class TestAttemptService {
@@ -238,6 +244,7 @@ export class TestAttemptService {
   private readonly maxAttemptDocumentBytes: number;
   private readonly maxReviewDocumentBytes?: number;
   private readonly gradeTestTranslation: TestTranslationGrader;
+  private readonly consumeGlobalAIQuota: (requestUnits: number) => Promise<void>;
 
   constructor(
     private readonly db: Firestore = adminDb,
@@ -249,10 +256,15 @@ export class TestAttemptService {
     this.loadVocabularyPool = options.loadVocabularyPool ?? createFirestoreVocabularyPoolLoader(db);
     this.maxAttemptDocumentBytes = options.maxAttemptDocumentBytes ?? MAX_TEST_ATTEMPT_DOCUMENT_BYTES;
     this.maxReviewDocumentBytes = options.maxReviewDocumentBytes;
+    this.consumeGlobalAIQuota =
+      options.consumeGlobalAIQuota ??
+      (options.gradeTestTranslation
+        ? async () => undefined
+        : requestUnits => consumeAIGlobalRequestQuota('test-grading', requestUnits, this.db));
     this.gradeTestTranslation =
       options.gradeTestTranslation ??
-      (async request => {
-        const result = await translationGrader.grade('test', request);
+      (async (request, safetyIdentifier) => {
+        const result = await translationGrader.grade('test', request, undefined, { safetyIdentifier });
         if (!result.success) throw new Error(result.error);
         return result.data;
       });
@@ -837,10 +849,24 @@ export class TestAttemptService {
 
     if (preparation.kind === 'existing') return preparation.attempt;
 
+    try {
+      await this.consumeGlobalAIQuota(1);
+    } catch (error) {
+      await this.releaseTranslationGradeReservation(attemptRef, studentId, request, reservationToken);
+      if (error instanceof AIRequestThrottleError) {
+        throw new TestServiceError(
+          'ATTEMPT_TRANSLATION_GRADING_RATE_LIMITED',
+          'Translation grading is at capacity. Please try again after the grading window resets.',
+          429
+        );
+      }
+      throw error;
+    }
+
     let gradingOutput: TestTranslationGradingOutput;
     try {
       gradingOutput = testTranslationGradingOutputSchema.parse(
-        await this.gradeTestTranslation(preparation.gradingRequest)
+        await this.gradeTestTranslation(preparation.gradingRequest, createOpenAISafetyIdentifier(studentId))
       );
     } catch (error) {
       console.error(`Could not grade translation item for attempt ${attemptId}`, error);
