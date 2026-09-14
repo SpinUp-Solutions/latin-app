@@ -88,7 +88,12 @@ export const LessonNavigation: React.FC<LessonNavigationProps> = ({
 
           <div className="flex items-center gap-2">
             {hasAudio && (
-              <Button variant="outline" size="icon" onClick={onTogglePlay} className="rounded-full">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={onTogglePlay}
+                aria-label={isPlaying ? 'Pause audio' : 'Play audio'}
+                className="rounded-full">
                 {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
               </Button>
             )}

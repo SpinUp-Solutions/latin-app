@@ -8,218 +8,162 @@ interface UseAudioReturn {
   togglePlay: () => void;
   play: () => void;
   pause: () => void;
-  onEnded: () => void; // might be useful later ()
+  onEnded: () => void;
   setAudioSource: (src: string | null | undefined) => void;
 }
 
-export function useAudio(initialAudioPath?: string | null, onAudioEnded?: () => void): UseAudioReturn {
-  const [audioPath, setAudioPath] = useState<string | null | undefined>(initialAudioPath);
-  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+export function useAudio(
+  initialAudioPath?: string | null,
+  onAudioEnded?: () => void,
+  playbackKey?: string
+): UseAudioReturn {
+  const [audioPath, setAudioPath] = useState(initialAudioPath);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const signedUrlRef = useRef<string | null>(null);
+  const generationRef = useRef(0);
+  const requestRef = useRef<AbortController | null>(null);
   const playCleanupRef = useRef<(() => void) | null>(null);
+  const activeAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const cancelPlayback = useCallback(() => {
+    generationRef.current += 1;
+    requestRef.current?.abort();
+    requestRef.current = null;
+    playCleanupRef.current?.();
+    playCleanupRef.current = null;
+    activeAudioRef.current = null;
+  }, []);
 
   useEffect(() => {
-    setSignedUrl(null);
-  }, [audioPath]);
+    setAudioPath(initialAudioPath);
+  }, [initialAudioPath, playbackKey]);
 
-  const getSignedUrl = useCallback(async () => {
-    if (!audioPath) {
-      console.log('No audioPath provided');
-      return null;
-    }
-
-    try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) throw new Error('Not authenticated');
-
-      const response = await fetch('/api/get-signed-audio-url', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ audioPath }),
-      });
-
-      if (!response.ok) {
-        console.error('Failed to fetch signed URL:', response.status, response.statusText);
-        throw new Error('Failed to fetch signed URL');
-      }
-
-      const data = await response.json();
-      return data.signedUrl;
-    } catch (error) {
-      console.error('Error getting signed URL:', error);
-      return null;
-    }
-  }, [audioPath]);
-
-  const playAudio = useCallback(async () => {
+  useEffect(() => {
     const audio = audioRef.current;
-    if (!audio) {
-      console.log('No audio element found');
-      return;
-    }
+    cancelPlayback();
+    signedUrlRef.current = null;
+    setIsPlaying(false);
+    setIsLoading(false);
 
-    let url = signedUrl;
-    console.log('Current signed URL:', url);
-    if (!url) {
-      console.log('Getting new signed URL...');
-      setIsLoading(true);
-      const newSignedUrl = await getSignedUrl();
-      if (newSignedUrl) {
-        setSignedUrl(newSignedUrl);
-        url = newSignedUrl;
-        console.log('New signed URL set:', url);
-      } else {
-        console.log('Failed to get signed URL');
-        setIsLoading(false);
-        return;
+    return () => {
+      cancelPlayback();
+      // Capture this element: the ref may already point at the next page's audio.
+      if (audio) {
+        audio.pause();
+        audio.removeAttribute('src');
+        audio.load();
       }
-    }
+    };
+  }, [audioPath, initialAudioPath, playbackKey, cancelPlayback]);
 
-    if (url) {
-      console.log('Setting audio source and playing:', url);
-      const needsNewSource = audio.src !== url;
-
-      if (needsNewSource) {
-        setIsLoading(true);
-        audio.src = url;
-        console.log('Audio source updated');
-      }
-
-      if (audio.readyState >= 3 && !needsNewSource) {
-        console.log('Audio already ready, playing immediately');
-        const playPromise = audio.play();
-        if (playPromise !== undefined) {
-          playPromise
-            .then(() => {
-              console.log('Audio playing successfully');
-              setIsPlaying(true);
-            })
-            .catch(error => {
-              console.error('Audio play error:', error);
-              setIsPlaying(false);
-            });
-        }
-        return;
-      }
-
-      const handleCanPlay = () => {
-        console.log('Audio can play, stopping loading');
-        setIsLoading(false);
-        audio.removeEventListener('canplay', handleCanPlay);
-        audio.removeEventListener('error', handleLoadError);
-        playCleanupRef.current = null;
-      };
-
-      const handleLoadError = (e: Event) => {
-        console.error('Audio load error:', e);
-        setIsLoading(false);
-        setIsPlaying(false);
-        audio.removeEventListener('canplay', handleCanPlay);
-        audio.removeEventListener('error', handleLoadError);
-        playCleanupRef.current = null;
-      };
-
-      if (playCleanupRef.current) {
-        playCleanupRef.current();
-      }
-
-      audio.addEventListener('canplay', handleCanPlay);
-      audio.addEventListener('error', handleLoadError);
-
-      playCleanupRef.current = () => {
-        audio.removeEventListener('canplay', handleCanPlay);
-        audio.removeEventListener('error', handleLoadError);
-      };
-
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => {
-            console.log('Audio playing successfully');
-            setIsPlaying(true);
-          })
-          .catch(error => {
-            console.error('Audio play error:', error);
-            setIsPlaying(false);
-            setIsLoading(false);
-          });
-      }
-    } else {
-      console.log('No URL available to play');
-      setIsLoading(false);
-    }
-  }, [signedUrl, getSignedUrl]);
+  const onEnded = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio || activeAudioRef.current !== audio) return;
+    cancelPlayback();
+    setIsPlaying(false);
+    setIsLoading(false);
+    onAudioEnded?.();
+  }, [cancelPlayback, onAudioEnded]);
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
+    audio.addEventListener('ended', onEnded);
+    return () => audio.removeEventListener('ended', onEnded);
+  }, [onEnded, audioPath, playbackKey]);
 
-    const handleEnded = () => {
-      setIsPlaying(false);
-      onAudioEnded?.();
-    };
+  const playAudio = useCallback(async () => {
+    const audio = audioRef.current;
+    if (!audio || !audioPath) return;
 
-    const handleError = (e: Event) => console.error('Audio error', e);
+    cancelPlayback();
+    const generation = generationRef.current;
+    const isCurrent = () => generationRef.current === generation && audioRef.current === audio;
+    const controller = new AbortController();
+    requestRef.current = controller;
+    setIsLoading(true);
 
-    audio.addEventListener('ended', handleEnded);
-    audio.addEventListener('error', handleError);
+    try {
+      let url = signedUrlRef.current;
+      if (!url) {
+        const token = await auth.currentUser?.getIdToken();
+        if (!isCurrent()) return;
+        if (!token) throw new Error('Not authenticated');
 
-    return () => {
-      audio.removeEventListener('ended', handleEnded);
-      audio.removeEventListener('error', handleError);
-    };
-  }, [onAudioEnded]);
-
-  useEffect(() => {
-    return () => {
-      if (playCleanupRef.current) {
-        playCleanupRef.current();
+        const response = await fetch('/api/get-signed-audio-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ audioPath }),
+          signal: controller.signal,
+        });
+        if (!isCurrent()) return;
+        if (!response.ok) throw new Error('Failed to fetch signed URL');
+        const data: unknown = await response.json();
+        if (!isCurrent()) return;
+        if (!data || typeof data !== 'object' || !('signedUrl' in data) || typeof data.signedUrl !== 'string') {
+          throw new Error('Invalid signed audio URL response');
+        }
+        url = data.signedUrl;
+        signedUrlRef.current = url;
       }
-    };
-  }, []);
 
-  const togglePlay = () => {
-    if (isPlaying) {
-      audioRef.current?.pause();
+      if (!isCurrent()) return;
+      requestRef.current = null;
+      if (audio.src !== url) audio.src = url;
+      activeAudioRef.current = audio;
+
+      const handleCanPlay = () => {
+        if (isCurrent()) setIsLoading(false);
+      };
+      const handleError = () => {
+        if (!isCurrent()) return;
+        cancelPlayback();
+        setIsLoading(false);
+        setIsPlaying(false);
+      };
+      audio.addEventListener('canplay', handleCanPlay);
+      audio.addEventListener('error', handleError);
+      playCleanupRef.current = () => {
+        audio.removeEventListener('canplay', handleCanPlay);
+        audio.removeEventListener('error', handleError);
+      };
+
+      await audio.play();
+      if (!isCurrent()) return;
+      setIsLoading(false);
+      setIsPlaying(true);
+    } catch (error) {
+      if (!isCurrent()) return;
+      cancelPlayback();
+      setIsLoading(false);
       setIsPlaying(false);
-    } else {
-      playAudio();
+      console.error('Audio playback failed:', error);
     }
-  };
+  }, [audioPath, cancelPlayback]);
 
-  const play = () => {
-    playAudio();
-  };
-
-  const pause = () => {
+  const pause = useCallback(() => {
+    cancelPlayback();
     audioRef.current?.pause();
     setIsPlaying(false);
-  };
+    setIsLoading(false);
+  }, [cancelPlayback]);
 
-  const onEnded = () => {
-    onAudioEnded?.();
+  const play = useCallback(() => {
+    void playAudio();
+  }, [playAudio]);
+  const togglePlay = () => {
+    if (isPlaying || isLoading) pause();
+    else play();
   };
 
   const setAudioSource = (src: string | null | undefined) => {
+    pause();
     setAudioPath(src);
-    setIsPlaying(false);
   };
 
-  return {
-    audioRef,
-    isPlaying,
-    isLoading,
-    togglePlay,
-    play,
-    pause,
-    onEnded,
-    setAudioSource,
-  };
+  return { audioRef, isPlaying, isLoading, togglePlay, play, pause, onEnded, setAudioSource };
 }
 
 export default useAudio;
