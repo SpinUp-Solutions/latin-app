@@ -1,3 +1,4 @@
+import { VocabularyPoolStateError } from '@/src/lib/vocabulary-pools/pool-state.server';
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import type { Word } from '@/src/types/admin-vocabulary';
@@ -55,6 +56,8 @@ export async function GET(
       },
     });
   } catch (error) {
+    if (error instanceof VocabularyPoolStateError)
+      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
     if (error instanceof AdminAccessError) {
       return NextResponse.json({ success: false, error: error.message }, { status: error.status });
     }

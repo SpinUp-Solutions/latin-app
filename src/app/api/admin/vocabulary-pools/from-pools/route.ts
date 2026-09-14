@@ -26,7 +26,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
     const input = createVocabularyPoolFromPoolsRequestSchema.parse(body);
-    const pool = await createVocabularyPoolFromPools(adminDb, actor.uid, input);
+    const { _copyRequest: _privateRequest, ...pool } = await createVocabularyPoolFromPools(adminDb, actor.uid, input);
 
     return NextResponse.json(
       {

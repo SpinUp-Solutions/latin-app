@@ -1,3 +1,5 @@
+import { VocabularyPoolStateError } from '@/src/lib/vocabulary-pools/pool-state.server';
+import { resolveVocabularyPool } from '@/src/lib/vocabulary-pools/linked-pools.server';
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { Query, FieldPath } from 'firebase-admin/firestore';
@@ -261,9 +263,13 @@ export async function handleVocabularyWordsGET(
               .collection('vocabulary_pools')
               .doc(poolId)
               .get()
-              .then(poolDoc =>
+              .then(async poolDoc =>
                 poolDoc.exists && !isVocabularyPoolCreationPending(poolDoc.data())
-                  ? { data: poolDoc.data() ?? {}, words: adminDb.collection(collection), source: 'active' as const }
+                  ? {
+                      data: await resolveVocabularyPool(adminDb, poolId, poolDoc.data() ?? {}),
+                      words: adminDb.collection(collection),
+                      source: 'active' as const,
+                    }
                   : null
               );
       if (!readablePool) {
@@ -543,6 +549,8 @@ export async function handleVocabularyWordsGET(
       },
     });
   } catch (error) {
+    if (error instanceof VocabularyPoolStateError)
+      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
     if (error instanceof AdminAccessError) {
       return NextResponse.json({ success: false, error: error.message }, { status: error.status });
     }
@@ -642,6 +650,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
     });
   } catch (error) {
+    if (error instanceof VocabularyPoolStateError)
+      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
     if (error instanceof AdminAccessError) {
       return NextResponse.json({ success: false, error: error.message }, { status: error.status });
     }
@@ -733,6 +743,8 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
       updatedData,
     });
   } catch (error) {
+    if (error instanceof VocabularyPoolStateError)
+      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
     if (error instanceof AdminAccessError) {
       return NextResponse.json({ success: false, error: error.message }, { status: error.status });
     }
@@ -875,6 +887,8 @@ async function getWordTypeCounts(collection: string) {
 
     return counts;
   } catch (error) {
+    if (error instanceof VocabularyPoolStateError)
+      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
     console.error('Error getting word type counts:', error);
     return counts;
   }

@@ -1,3 +1,5 @@
+import { VocabularyPoolStateError } from '@/src/lib/vocabulary-pools/pool-state.server';
+import { resolveVocabularyPool } from '@/src/lib/vocabulary-pools/linked-pools.server';
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { FieldPath } from 'firebase-admin/firestore';
@@ -24,7 +26,7 @@ export async function GET(
     const snapshot = await adminDb
       .collection('vocabulary_pools')
       .where(FieldPath.documentId(), '==', poolId)
-      .select('name', 'description', 'metadata', '_creationPending')
+      .select('name', 'description', 'metadata', '_creationPending', 'sourcePoolIds', 'wordDocIds')
       .get();
 
     if (snapshot.empty) {
@@ -35,7 +37,7 @@ export async function GET(
     if (isVocabularyPoolCreationPending(poolDoc.data())) {
       return NextResponse.json({ success: false, error: 'Pool not found' }, { status: 404 });
     }
-    const data = poolDoc.data() as Partial<VocabularyPool>;
+    const data = (await resolveVocabularyPool(adminDb, poolId, poolDoc.data())) as Partial<VocabularyPool>;
     const {
       _copyRequest: _privateCopyRequest,
       _creationPending: _pendingCreation,
@@ -57,6 +59,8 @@ export async function GET(
       data: { pool },
     });
   } catch (error) {
+    if (error instanceof VocabularyPoolStateError)
+      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
     if (error instanceof AdminAccessError) {
       return NextResponse.json({ success: false, error: error.message }, { status: error.status });
     }

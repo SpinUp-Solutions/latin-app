@@ -1,3 +1,4 @@
+import { assertPoolHasNoDependents, resolveVocabularyPool } from '@/src/lib/vocabulary-pools/linked-pools.server';
 import { NextRequest, NextResponse } from 'next/server';
 import { FieldValue } from 'firebase-admin/firestore';
 import { adminDb } from '@/src/services/firebase-admin';
@@ -75,10 +76,11 @@ export async function POST(
         'VOCABULARY_POOL_PENDING'
       );
     }
-    const poolFingerprint = vocabularyPoolContentFingerprint(poolData);
+    const poolFingerprint = vocabularyPoolContentFingerprint(await resolveVocabularyPool(adminDb, poolId, poolData));
     const poolName = typeof poolData.name === 'string' && poolData.name.trim() ? poolData.name.trim() : poolId;
+    const effectivePoolData = await resolveVocabularyPool(adminDb, poolId, poolData);
     const wordCount = new Set(
-      (Array.isArray(poolData.wordDocIds) ? poolData.wordDocIds : []).filter(
+      (Array.isArray(effectivePoolData.wordDocIds) ? effectivePoolData.wordDocIds : []).filter(
         (wordId): wordId is string => typeof wordId === 'string' && wordId.length > 0
       )
     ).size;
@@ -108,7 +110,12 @@ export async function POST(
           'VOCABULARY_POOL_PENDING'
         );
       }
-      if (vocabularyPoolContentFingerprint(pool.data() ?? {}) !== poolFingerprint) {
+      await assertPoolHasNoDependents(adminDb, transaction, poolId);
+      if (
+        vocabularyPoolContentFingerprint(
+          await resolveVocabularyPool(adminDb, poolId, pool.data() ?? {}, transaction)
+        ) !== poolFingerprint
+      ) {
         throw new VocabularyPoolDeletionError(
           'The pool changed while deletion was being prepared. Review it and try again.',
           409,

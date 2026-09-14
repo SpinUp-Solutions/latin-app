@@ -1,3 +1,4 @@
+import { resolveVocabularyPool } from '@/src/lib/vocabulary-pools/linked-pools.server';
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { VOCABULARY_POOL_COLLECTION } from '@/src/lib/vocabulary-pools/archive.server';
@@ -37,7 +38,11 @@ export async function POST(
         throw new Error('Pool not found');
       }
 
-      const sourceData = sourceSnapshot.data() as Partial<VocabularyPool>;
+      const sourceData = (await resolveVocabularyPool(
+        adminDb,
+        poolId,
+        sourceSnapshot.data() ?? {}
+      )) as Partial<VocabularyPool>;
       if (isVocabularyPoolCreationPending(sourceData)) {
         throw new VocabularyPoolStateError(
           'Vocabulary pool creation is still in progress. Try again when it finishes.',

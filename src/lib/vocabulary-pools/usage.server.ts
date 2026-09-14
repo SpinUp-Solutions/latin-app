@@ -1,5 +1,7 @@
+import { poolSourceIds } from '@/src/lib/vocabulary-pools/linked-pools.server';
 import type { Firestore } from 'firebase-admin/firestore';
 import {
+  VOCABULARY_POOL_COLLECTION,
   LEARNING_UNITS_COLLECTION,
   MOCK_TESTS_COLLECTION,
   TEST_VERSION_DRAFTS_COLLECTION,
@@ -27,6 +29,7 @@ const SCAN_COLLECTIONS = [
     name: MOCK_TESTS_COLLECTION,
     fields: ['title', 'versionId', 'parent', 'status'],
   },
+  { name: VOCABULARY_POOL_COLLECTION, fields: ['name', 'sourcePoolIds'] },
 ] as const;
 
 type RecordData = Record<string, unknown>;
@@ -219,12 +222,24 @@ function appendReferences(
 
 /** Projects the canonical documents into display-safe, per-assignment usages. */
 export function projectVocabularyPoolUsages(input: {
+  pools?: AuthoringDocument[];
   learningUnits: AuthoringDocument[];
   versions: AuthoringDocument[];
   drafts: AuthoringDocument[];
   mocks: AuthoringDocument[];
 }): VocabularyPoolUsage[] {
   const usages: VocabularyPoolUsage[] = [];
+  for (const pool of input.pools ?? []) {
+    for (const poolId of poolSourceIds(pool.data)) {
+      usages.push({
+        id: `pool:${pool.id}:${poolId}`,
+        poolId,
+        kind: 'pool',
+        label: `Pool: ${displayName(pool.data.name, pool.id)}`,
+        editorUrl: `/admin/vocabulary-pools/${pool.id}/edit`,
+      });
+    }
+  }
   const lessons = input.learningUnits.filter(document => isLessonDocumentData(document.data));
   const tests = input.learningUnits.filter(isTestDocument);
 
@@ -338,11 +353,11 @@ export async function scanVocabularyPoolUsages(db: Firestore): Promise<Vocabular
       logScan(result.status, Date.now() - startedAt, result.documentCount);
       return result;
     }
-    const [learningUnits, versions, drafts, mocks] = loaded.documents;
+    const [learningUnits, versions, drafts, mocks, pools] = loaded.documents;
     const result: VocabularyPoolUsageScan = {
       status: 'available',
       documentCount: loaded.documentCount,
-      usages: projectVocabularyPoolUsages({ learningUnits, versions, drafts, mocks }),
+      usages: projectVocabularyPoolUsages({ learningUnits, versions, drafts, mocks, pools }),
     };
     logScan(result.status, Date.now() - startedAt, result.documentCount);
     return result;

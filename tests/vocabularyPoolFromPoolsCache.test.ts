@@ -50,7 +50,41 @@ const poolsResponse = (pools: VocabularyPoolSummary[], lastPoolId: string | null
   data: { success: true, data: { pools, hasMore: Boolean(lastPoolId), lastPoolId } },
 });
 
-describe('vocabulary pool copy cache refresh', () => {
+describe.each(['create', 'update', 'add', 'remove'] as const)('vocabulary pool %s cache refresh', mutationKind => {
+  const mutate = (store: ReturnType<typeof createStore>) => {
+    if (mutationKind === 'update')
+      return store.dispatch(
+        vocabularyPoolApi.endpoints.updatePool.initiate({ id: 'source-a', data: { wordDocIds: [] } }, { track: false })
+      );
+    if (mutationKind === 'add')
+      return store.dispatch(
+        vocabularyPoolApi.endpoints.addWordsToPool.initiate(
+          { poolId: 'source-a', wordDocIds: ['word-1'] },
+          { track: false }
+        )
+      );
+    if (mutationKind === 'remove')
+      return store.dispatch(
+        vocabularyPoolApi.endpoints.removeWordsFromPool.initiate(
+          { poolId: 'source-a', wordDocIds: ['word-1'] },
+          { track: false }
+        )
+      );
+    return store.dispatch(
+      vocabularyPoolApi.endpoints.createPoolFromPools.initiate(
+        {
+          name: 'Combined',
+          description: 'Combined words',
+          sourcePoolIds: ['source-a'],
+          requestId: 'request',
+          wordDocIds: [],
+          tags: [],
+          difficulty: 'beginner',
+        },
+        { track: false }
+      )
+    );
+  };
   beforeEach(() => {
     jest.clearAllMocks();
     deferOldestTail = false;
@@ -59,7 +93,10 @@ describe('vocabulary pool copy cache refresh', () => {
     mockBaseQuery.mockImplementation(async (request: unknown) => {
       if (typeof request !== 'string') {
         const mutation = request as { url?: string; method?: string };
-        if (mutation.url?.endsWith('/from-pools') && mutation.method === 'POST') {
+        if (
+          mutation.url?.startsWith('/admin/vocabulary-pools') &&
+          ['POST', 'PUT', 'DELETE'].includes(mutation.method ?? '')
+        ) {
           copied = true;
           return { data: { success: true, data: { pool: copiedPool } } };
         }
@@ -99,20 +136,7 @@ describe('vocabulary pool copy cache refresh', () => {
       vocabularyPoolApi.endpoints.getPools.initiate({ ...oldestArgs, lastPoolId: 'oldest-pool' }, { subscribe: false })
     );
 
-    await store.dispatch(
-      vocabularyPoolApi.endpoints.createPoolFromPools.initiate(
-        {
-          name: 'Copied pool',
-          description: 'Copied words',
-          difficulty: 'beginner',
-          tags: [],
-          sourcePoolIds: ['source-a'],
-          wordDocIds: [],
-          requestId: 'request-1',
-        },
-        { track: false }
-      )
-    );
+    await mutate(store);
 
     await waitFor(() => {
       expect(vocabularyPoolApi.endpoints.getPools.select(newestArgs)(store.getState()).data?.pools).toEqual([
@@ -145,20 +169,7 @@ describe('vocabulary pool copy cache refresh', () => {
     );
     await waitFor(() => expect(releaseOldestTail).toBeDefined());
 
-    const mutation = store.dispatch(
-      vocabularyPoolApi.endpoints.createPoolFromPools.initiate(
-        {
-          name: 'Copied pool',
-          description: 'Copied words',
-          difficulty: 'beginner',
-          tags: [],
-          sourcePoolIds: ['source-a'],
-          wordDocIds: [],
-          requestId: 'request-2',
-        },
-        { track: false }
-      )
-    );
+    const mutation = mutate(store);
     const requestsBeforeTailCompletes = mockBaseQuery.mock.calls
       .map(([request]) => request)
       .filter((request): request is string => typeof request === 'string');
@@ -211,22 +222,7 @@ describe('vocabulary pool copy cache refresh', () => {
 
     try {
       await waitFor(() => expect(releaseFirstSearch).toBeDefined());
-      await store
-        .dispatch(
-          vocabularyPoolApi.endpoints.createPoolFromPools.initiate(
-            {
-              name: 'Copied pool',
-              description: 'Copied words',
-              difficulty: 'beginner',
-              tags: [],
-              sourcePoolIds: ['source-a'],
-              wordDocIds: [],
-              requestId: 'pending-search-request',
-            },
-            { track: false }
-          )
-        )
-        .unwrap();
+      await mutate(store).unwrap();
 
       await waitFor(() => {
         expect(vocabularyPoolApi.endpoints.getPools.select(cachedArgs)(store.getState()).data?.pools).toEqual([
@@ -253,4 +249,61 @@ describe('vocabulary pool copy cache refresh', () => {
       store.dispatch(vocabularyPoolApi.util.resetApiState());
     }
   });
+});
+
+it('refreshes dependent pool detail, summaries and student playback after a source changes', async () => {
+  const store = createStore();
+  let changed = false;
+  mockBaseQuery.mockImplementation(async (request: unknown) => {
+    if (typeof request !== 'string') {
+      changed = true;
+      return { data: { success: true, data: { pool: copiedPool } } };
+    }
+    const count = changed ? 2 : 1;
+    const pool = {
+      ...copiedPool,
+      id: 'combined',
+      wordDocIds: changed ? ['a', 'b'] : ['a'],
+      words: [],
+      metadata: { ...copiedPool.metadata, wordCount: count },
+    };
+    if (request.includes('/pos-summary') || request.includes('/paradigm-summary'))
+      return { data: { success: true, data: { totalWords: count } } };
+    if (request.startsWith('/vocabulary-pools/'))
+      return {
+        data: {
+          success: true,
+          data: {
+            id: 'combined',
+            name: 'Combined',
+            items: changed ? [{ id: 'a' }, { id: 'b' }] : [{ id: 'a' }],
+            hasMore: false,
+            nextOffset: count,
+          },
+        },
+      };
+    return { data: { success: true, data: { pool } } };
+  });
+  const detail = store.dispatch(vocabularyPoolApi.endpoints.getPool.initiate('combined'));
+  const summary = store.dispatch(vocabularyPoolApi.endpoints.getPoolSummary.initiate('combined'));
+  const pos = store.dispatch(vocabularyPoolApi.endpoints.getPoolPOSSummary.initiate('combined'));
+  const paradigm = store.dispatch(vocabularyPoolApi.endpoints.getPoolParadigmSummary.initiate('combined'));
+  const student = store.dispatch(vocabularyPoolApi.endpoints.getStudentPool.initiate('combined'));
+  try {
+    await Promise.all([detail, summary, pos, paradigm, student]);
+    await store
+      .dispatch(vocabularyPoolApi.endpoints.updatePool.initiate({ id: 'source', data: { wordDocIds: ['a', 'b'] } }))
+      .unwrap();
+    await waitFor(() => {
+      const state = store.getState();
+      expect(vocabularyPoolApi.endpoints.getPool.select('combined')(state).data?.wordDocIds).toEqual(['a', 'b']);
+      expect(vocabularyPoolApi.endpoints.getPoolSummary.select('combined')(state).data?.metadata.wordCount).toBe(2);
+      expect(vocabularyPoolApi.endpoints.getPoolPOSSummary.select('combined')(state).data?.totalWords).toBe(2);
+      expect(vocabularyPoolApi.endpoints.getPoolParadigmSummary.select('combined')(state).data?.totalWords).toBe(2);
+      expect(vocabularyPoolApi.endpoints.getStudentPool.select('combined')(state).data?.items).toHaveLength(2);
+    });
+  } finally {
+    [detail, summary, pos, paradigm, student].forEach(query => query.unsubscribe());
+    store.dispatch(vocabularyPoolApi.util.resetApiState());
+  }
 });

@@ -224,6 +224,7 @@ const makeRequest = (overrides: Partial<CreateVocabularyPoolFromPoolsRequest> = 
     sourcePoolIds: ['lesson-67'],
     wordDocIds: [],
     requestId: 'request-1',
+    keepLinked: false,
     ...overrides,
   });
 
@@ -331,7 +332,7 @@ describe('create vocabulary pool from pools service', () => {
       );
     });
     expect(db.fieldMasks).toContainEqual(['_deletionPending', '_poolReferenceRevision']);
-    expect(db.fieldMasks).toContainEqual(['wordDocIds', '_creationPending', '_deletionPending']);
+    expect(db.fieldMasks).toContainEqual(['wordDocIds', 'sourcePoolIds', '_creationPending', '_deletionPending']);
   });
 
   it('leaves source documents unchanged and preserves distinct IDs with the same spelling', async () => {

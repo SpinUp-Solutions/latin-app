@@ -1,3 +1,10 @@
+import { z } from 'zod';
+import {
+  assertPoolHasNoDependents,
+  updateLinkedPoolMembership,
+  sourcePoolIdsSchema,
+  resolveVocabularyPool,
+} from '@/src/lib/vocabulary-pools/linked-pools.server';
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { FieldPath } from 'firebase-admin/firestore';
@@ -26,10 +33,7 @@ import {
   isVocabularyPoolCreationPending,
   VocabularyPoolStateError,
 } from '@/src/lib/vocabulary-pools/pool-state.server';
-import {
-  prepareVocabularyPoolWordMembership,
-  VocabularyPoolWordMembershipError,
-} from '@/src/lib/vocabulary-pools/word-membership.server';
+import { VocabularyPoolWordMembershipError } from '@/src/lib/vocabulary-pools/word-membership.server';
 import {
   runVocabularyContentExclusiveMutation,
   runVocabularyContentMutation,
@@ -50,6 +54,11 @@ const serializePoolMetadata = (metadata: FirebaseFirestore.DocumentData) => ({
 });
 
 const routeErrorResponse = (error: unknown, action: string) => {
+  if (error instanceof z.ZodError)
+    return NextResponse.json(
+      { success: false, error: 'Invalid pool update', code: 'VALIDATION_ERROR' },
+      { status: 400 }
+    );
   if (error instanceof AdminAccessError) {
     return NextResponse.json({ success: false, error: error.message }, { status: error.status });
   }
@@ -89,12 +98,12 @@ export async function GET(
     await verifyAdminAccess(request);
     const { poolId } = await params;
 
-    const poolDoc = await adminDb.collection('vocabulary_pools').doc(poolId).get();
+    const poolDoc = await adminDb.collection(VOCABULARY_POOL_COLLECTION).doc(poolId).get();
     if (!poolDoc.exists) {
       throw new Error('Pool not found');
     }
 
-    const poolData = poolDoc.data();
+    const poolData = await resolveVocabularyPool(adminDb, poolId, poolDoc.data() ?? {});
     if (!poolData) {
       throw new Error('Pool data not found');
     }
@@ -199,18 +208,19 @@ export async function PUT(
   try {
     const actor = await verifyAdminAccess(request);
     const { poolId } = await params;
-    const updates = await request.json();
-
-    if (updates.name !== undefined && updates.name.length > 100) {
-      return NextResponse.json({ success: false, error: 'Name must be less than 100 characters' }, { status: 400 });
-    }
-
-    if (updates.description !== undefined && updates.description.length > 500) {
-      return NextResponse.json(
-        { success: false, error: 'Description must be less than 500 characters' },
-        { status: 400 }
-      );
-    }
+    const updates = z
+      .object({
+        name: z.string().trim().min(1).max(100).optional(),
+        description: z.string().trim().min(1).max(500).optional(),
+        wordDocIds: z.array(z.string().min(1)).optional(),
+        directWordDocIds: z.array(z.string().min(1)).optional(),
+        sourcePoolIds: sourcePoolIdsSchema.optional(),
+        tags: z.array(z.string().max(100)).max(100).optional(),
+        difficulty: z.enum(['beginner', 'intermediate', 'advanced']).optional(),
+        metadata: z.object({ difficulty: z.enum(['beginner', 'intermediate', 'advanced']).optional() }).optional(),
+      })
+      .strict()
+      .parse(await request.json());
 
     const updateData: Record<string, unknown> = {
       'metadata.updatedAt': new Date(),
@@ -234,30 +244,11 @@ export async function PUT(
       updateData['metadata.difficulty'] = updates.metadata.difficulty;
     }
 
-    const poolRef = adminDb.collection('vocabulary_pools').doc(poolId);
-    await runVocabularyContentMutation(adminDb, async transaction => {
-      const poolDoc = await transaction.get(poolRef);
-      if (!poolDoc.exists) throw new Error('Pool not found');
-      if (isVocabularyPoolCreationPending(poolDoc.data())) {
-        throw new VocabularyPoolStateError(
-          'Vocabulary pool creation is still in progress. Try again when it finishes.',
-          'VOCABULARY_POOL_PENDING'
-        );
-      }
-      const existingWordIds = Array.isArray(poolDoc.data()?.wordDocIds) ? poolDoc.data()!.wordDocIds : [];
-      const nextWordIds = updates.wordDocIds === undefined ? existingWordIds : updates.wordDocIds;
-      const applyWordReferenceRevisions = await prepareVocabularyPoolWordMembership(
-        transaction,
-        adminDb,
-        existingWordIds,
-        nextWordIds
-      );
-      applyWordReferenceRevisions();
-      transaction.update(poolRef, updateData as FirebaseFirestore.UpdateData<FirebaseFirestore.DocumentData>);
-    });
+    const poolRef = adminDb.collection(VOCABULARY_POOL_COLLECTION).doc(poolId);
+    await updateLinkedPoolMembership(adminDb, poolId, updateData, updates);
 
     const updatedDoc = await poolRef.get();
-    const poolData = updatedDoc.data()!;
+    const poolData = await resolveVocabularyPool(adminDb, poolId, updatedDoc.data()!);
 
     return NextResponse.json({
       success: true,
@@ -267,6 +258,10 @@ export async function PUT(
           name: poolData.name,
           description: poolData.description,
           wordDocIds: poolData.wordDocIds || [],
+          sourcePoolIds: poolData.sourcePoolIds,
+          directWordDocIds: poolData.directWordDocIds,
+          inheritedWordDocIds: poolData.inheritedWordDocIds,
+          sources: poolData.sources,
           searchTokens: poolData.searchTokens || buildPoolSearchTokens(poolData.name || ''),
           metadata: {
             ...serializePoolMetadata(poolData.metadata),
@@ -337,7 +332,7 @@ export async function DELETE(
         'VOCABULARY_POOL_PENDING'
       );
     }
-    const poolFingerprint = vocabularyPoolContentFingerprint(poolData);
+    const poolFingerprint = vocabularyPoolContentFingerprint(await resolveVocabularyPool(adminDb, poolId, poolData));
     const wordContentRevision = vocabularyContentRevision(contentStateSnapshot.data());
     const initialChallengeError = validateVocabularyPoolDeletionChallenge({
       stored: challengeSnapshot.data(),
@@ -394,11 +389,14 @@ export async function DELETE(
         actorUid: actor.uid,
         poolId,
         usageFingerprint,
-        poolFingerprint: vocabularyPoolContentFingerprint(lockedPool.data() ?? {}),
+        poolFingerprint: vocabularyPoolContentFingerprint(
+          await resolveVocabularyPool(adminDb, poolId, lockedPool.data() ?? {})
+        ),
         wordContentRevision: vocabularyContentRevision(lockedContentState.data()),
       });
       if (lockedChallengeError) throw lockedChallengeError;
-      const archivedWordCount = await writeVocabularyPoolWordArchive(adminDb, archiveId, lockedPool.data() ?? {});
+      const archivedPoolData = await resolveVocabularyPool(adminDb, poolId, lockedPool.data() ?? {});
+      const archivedWordCount = await writeVocabularyPoolWordArchive(adminDb, archiveId, archivedPoolData);
       await runVocabularyContentMutation(
         adminDb,
         async transaction => {
@@ -424,18 +422,21 @@ export async function DELETE(
               actorUid: actor.uid,
               poolId,
               usageFingerprint,
-              poolFingerprint: vocabularyPoolContentFingerprint(poolDoc.data() ?? {}),
+              poolFingerprint: vocabularyPoolContentFingerprint(
+                await resolveVocabularyPool(adminDb, poolId, poolDoc.data() ?? {}, transaction)
+              ),
               wordContentRevision: vocabularyContentRevision(contentState.data()),
             });
           }
 
+          await assertPoolHasNoDependents(adminDb, transaction, poolId);
           if (transactionError) {
             if (currentChallenge.exists) transaction.delete(challengeRef);
             return;
           }
 
           transaction.create(archiveRef, {
-            ...(poolDoc.data() ?? {}),
+            ...archivedPoolData,
             _archive: {
               poolId,
               deletedAt: new Date(),
