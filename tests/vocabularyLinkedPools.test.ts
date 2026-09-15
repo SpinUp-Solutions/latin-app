@@ -44,7 +44,9 @@ class MemoryDb {
                 field === '__name__'
                   ? snapshot.id
                   : field.split('.').reduce((value, key) => value?.[key], snapshot.data());
-              return op === 'array-contains' ? actual?.includes(value) : actual === value;
+              if (op === 'array-contains') return actual?.includes(value);
+              if (op === 'in') return Array.isArray(value) && value.includes(actual);
+              return actual === value;
             })
           )
           .slice(0, maximum);
@@ -136,7 +138,7 @@ jest.mock('@/src/lib/verifyAdminAccess', () => {
   };
 });
 import { POST as createRoute } from '@/src/app/api/admin/vocabulary-pools/from-pools/route';
-import { PUT as updateRoute } from '@/src/app/api/admin/vocabulary-pools/[poolId]/route';
+import { GET as getPool, PUT as updateRoute } from '@/src/app/api/admin/vocabulary-pools/[poolId]/route';
 import { POST as addWords, DELETE as removeWords } from '@/src/app/api/admin/vocabulary-pools/[poolId]/words/route';
 import { POST as prepareDeletion } from '@/src/app/api/admin/vocabulary-pools/[poolId]/deletion-challenge/route';
 import { GET as listPools } from '@/src/app/api/admin/vocabulary-pools/route';
@@ -215,6 +217,39 @@ test('editing direct words and unlinking a whole source preserves explicit overl
   await updateLinkedPoolMembership(mockDb as never, pool.id, {}, { directWordDocIds: ['a'], sourcePoolIds: [] });
   expect((await read(pool.id)).wordDocIds).toEqual(['a']);
 });
+
+test.each([false, true])(
+  'unlink survives a fresh GET and releases the source for deletion (keep another source: %s)',
+  async keepAnotherSource => {
+    seed('other-source', ['other']);
+    const remainingSources = keepAnotherSource ? ['other-source'] : [];
+    const pool = await create({ sourcePoolIds: ['lesson-3', ...remainingSources], wordDocIds: ['a', 'own'] });
+    expect((await prepareDeletion(request('POST', {}), params('lesson-3'))).status).toBe(409);
+
+    const response = await updateRoute(
+      request('PUT', { directWordDocIds: ['a', 'own'], sourcePoolIds: remainingSources }),
+      params(pool.id)
+    );
+    expect(response.status).toBe(200);
+    expect((await response.json()).data.pool.sourcePoolIds).toEqual(remainingSources);
+    expect(mockDb.docs.get(poolPath(pool.id))?.sourcePoolIds).toEqual(remainingSources);
+
+    const reloaded = await getPool(request('GET', undefined), params(pool.id));
+    expect(reloaded.status).toBe(200);
+    const body = await reloaded.json();
+    expect(body.data.pool.sourcePoolIds).toEqual(remainingSources);
+    const expectedWords = keepAnotherSource ? ['other', 'a', 'own'] : ['a', 'own'];
+    expect(body.data.pool.wordDocIds).toEqual(expectedWords);
+    expect(body.data.pool.words.map((word: { id: string }) => word.id)).toEqual(expectedWords);
+    expect(body.data.actualWordCount).toBe(expectedWords.length);
+
+    const deletion = await prepareDeletion(request('POST', {}), params('lesson-3'));
+    expect(deletion.status).toBe(200);
+    expect((await deletion.json()).data.usages).toEqual([]);
+    if (keepAnotherSource)
+      expect((await prepareDeletion(request('POST', {}), params('other-source'))).status).toBe(409);
+  }
+);
 
 test('source changes cannot introduce indirect cycles', async () => {
   const pool = await create();
