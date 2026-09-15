@@ -1,9 +1,12 @@
+import { VocabularyPoolStateError } from '@/src/lib/vocabulary-pools/pool-state.server';
+import { resolveVocabularyPool } from '@/src/lib/vocabulary-pools/linked-pools.server';
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { FieldPath } from 'firebase-admin/firestore';
 import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 import { AdminAccessError, verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { isVocabularyPoolCreationPending } from '@/src/lib/vocabulary-pools/pool-state.server';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,7 +34,10 @@ export async function GET(
       );
     }
 
-    const poolData = poolDoc.data();
+    const poolData = await resolveVocabularyPool(adminDb, poolId, poolDoc.data() ?? {});
+    if (isVocabularyPoolCreationPending(poolData)) {
+      return NextResponse.json({ success: false, error: 'Pool not found' }, { status: 404 });
+    }
     const wordDocIds = (poolData?.wordDocIds || []) as string[];
 
     if (wordDocIds.length === 0) {
@@ -79,6 +85,8 @@ export async function GET(
       },
     });
   } catch (error) {
+    if (error instanceof VocabularyPoolStateError)
+      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
     if (error instanceof AdminAccessError) {
       return NextResponse.json({ success: false, error: error.message }, { status: error.status });
     }

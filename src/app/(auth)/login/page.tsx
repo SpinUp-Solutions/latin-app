@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { signInWithEmailAndPassword } from 'firebase/auth';
@@ -12,6 +12,12 @@ import { Loader2 } from 'lucide-react';
 import Image from 'next/image';
 import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { useAuth } from '@/src/hooks/useAuth';
+import {
+  isExpectedSignInError,
+  recordAuthBreadcrumb,
+  reportAuthIssue,
+  watchAuthStage,
+} from '@/src/lib/auth-diagnostics';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -20,9 +26,24 @@ export default function LoginPage() {
   const [formLoading, setFormLoading] = useState(false);
 
   const { user, loading: authLoading, isAdmin } = useAuth();
+  const latestAuth = useRef({ user, authLoading });
+  latestAuth.current = { user, authLoading };
+  const cancelDiagnostic = useRef<(() => void) | null>(null);
+  const attemptNumber = useRef(0);
+  const redirectRequested = useRef(false);
+
+  useEffect(
+    () => () => {
+      attemptNumber.current += 1;
+      cancelDiagnostic.current?.();
+    },
+    []
+  );
 
   useEffect(() => {
     if (user && !authLoading) {
+      redirectRequested.current = true;
+      recordAuthBreadcrumb('redirect_requested', { destination: isAdmin ? '/admin' : '/dashboard' });
       if (isAdmin) {
         router.replace('/admin');
       } else {
@@ -34,12 +55,43 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormLoading(true);
+    cancelDiagnostic.current?.();
+    const attempt = ++attemptNumber.current;
+    redirectRequested.current = false;
+    const startedAt = Date.now();
+    const getDiagnosticDetails = () => ({
+      firebaseUserPresent: !!auth.currentUser,
+      authLoading: latestAuth.current.authLoading,
+      profileLoaded: !!latestAuth.current.user,
+      profileMatchesAuthUser: !!auth.currentUser && latestAuth.current.user?.uid === auth.currentUser.uid,
+      redirectRequested: redirectRequested.current,
+    });
+    recordAuthBreadcrumb('sign_in_started', getDiagnosticDetails());
+    cancelDiagnostic.current = watchAuthStage('sign_in_request_timeout', getDiagnosticDetails);
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const credential = await signInWithEmailAndPassword(auth, email, password);
+      if (attempt === attemptNumber.current) {
+        cancelDiagnostic.current?.();
+        recordAuthBreadcrumb('credentials_accepted', { elapsedMs: Date.now() - startedAt, ...getDiagnosticDetails() });
+        // This also watches repeated sign-ins for the same Firebase user, which
+        // do not fire onAuthStateChanged again after a profile listener stalls.
+        cancelDiagnostic.current = watchAuthStage(
+          'sign_in_not_completed',
+          () => ({
+            ...getDiagnosticDetails(),
+            credentialsAccepted: true,
+          }),
+          credential.user.uid
+        );
+      }
       toast.success('Successfully logged in!');
     } catch (error: unknown) {
-      console.error('Login error:', error);
+      if (attempt === attemptNumber.current) {
+        cancelDiagnostic.current?.();
+        recordAuthBreadcrumb('sign_in_failed', { elapsedMs: Date.now() - startedAt }, error);
+        if (!isExpectedSignInError(error)) reportAuthIssue('sign_in_failed', getDiagnosticDetails(), error);
+      }
       const errorMessage = error instanceof Error ? error.message : 'Failed to log in. Please check your credentials.';
       toast.error(errorMessage);
     } finally {
