@@ -244,13 +244,15 @@ export const VocabularyPoolImportSelector: React.FC<VocabularyPoolImportSelector
                       className={`cursor-pointer transition-colors ${selected ? 'ring-2 ring-roman-red bg-red-50/30' : 'hover:bg-gray-50'}`}
                       onClick={() => togglePool(pool)}>
                       <CardContent className="p-3 flex items-start gap-3">
-                        <Checkbox
-                          checked={selected}
-                          disabled={disabled}
-                          aria-label={`Select ${pool.name}`}
-                          onCheckedChange={() => togglePool(pool)}
-                          onClick={event => event.stopPropagation()}
-                        />
+                        {/* Contain clicks from both the checkbox and Radix's hidden form input. */}
+                        <div onClick={event => event.stopPropagation()}>
+                          <Checkbox
+                            checked={selected}
+                            disabled={disabled}
+                            aria-label={`Select ${pool.name}`}
+                            onCheckedChange={() => togglePool(pool)}
+                          />
+                        </div>
                         <div className="min-w-0 flex-1 space-y-1">
                           <div className="flex items-center gap-2">
                             {selected && <Check className="h-4 w-4 text-roman-red shrink-0" />}
