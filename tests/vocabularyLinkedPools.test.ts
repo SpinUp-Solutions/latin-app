@@ -27,14 +27,35 @@ type Data = Record<string, any>;
 class MemoryDb {
   docs = new Map<string, Data>();
   writes: number[] = [];
+  queryReads: Array<{ collection: string; limit: number; count: number }> = [];
   failAfterPublication = false;
   collection(name: string) {
-    const query = (filters: Array<[string, string, unknown]> = [], maximum = Infinity): any => ({
+    const query = (
+      filters: Array<[string, string, unknown]> = [],
+      maximum = Infinity,
+      orderField = '__name__',
+      direction = 'asc',
+      cursor?: { id: string; data: () => Data },
+      fields?: string[]
+    ): any => ({
       doc: (id: string) => this.ref(`${name}/${id}`),
-      where: (field: string, op: string, value: unknown) => query([...filters, [field, op, value]], maximum),
-      select: () => query(filters, maximum),
-      limit: (n: number) => query(filters, n),
+      where: (field: string, op: string, value: unknown) =>
+        query([...filters, [field, op, value]], maximum, orderField, direction, cursor, fields),
+      orderBy: (field: string, order = 'asc') => query(filters, maximum, field, order, cursor, fields),
+      startAfter: (snapshot: { id: string; data: () => Data }) =>
+        query(filters, maximum, orderField, direction, snapshot, fields),
+      select: (...selected: string[]) => query(filters, maximum, orderField, direction, cursor, selected),
+      limit: (n: number) => query(filters, n, orderField, direction, cursor, fields),
       get: async () => {
+        const orderValue = (snapshot: { id: string; data: () => Data }) =>
+          orderField === '__name__'
+            ? snapshot.id
+            : orderField.split('.').reduce((value, key) => value?.[key], snapshot.data());
+        const compare = (left: { id: string; data: () => Data }, right: { id: string; data: () => Data }) => {
+          const a = orderValue(left);
+          const b = orderValue(right);
+          return (direction === 'asc' ? 1 : -1) * (a < b ? -1 : a > b ? 1 : 0);
+        };
         const docs = [...this.docs.keys()]
           .filter(path => path.startsWith(`${name}/`) && path.split('/').length === name.split('/').length + 1)
           .map(path => this.snapshot(path))
@@ -49,7 +70,17 @@ class MemoryDb {
               return actual === value;
             })
           )
-          .slice(0, maximum);
+          .sort(compare)
+          .filter(snapshot => !cursor || compare(snapshot, cursor) > 0)
+          .slice(0, maximum)
+          .map(snapshot => ({
+            ...snapshot,
+            data: () =>
+              fields
+                ? Object.fromEntries(Object.entries(snapshot.data()).filter(([field]) => fields.includes(field)))
+                : snapshot.data(),
+          }));
+        this.queryReads.push({ collection: name, limit: maximum, count: docs.length });
         return { docs, empty: docs.length === 0, size: docs.length };
       },
       count: () => ({
@@ -379,4 +410,143 @@ test('deletion preparation blocks referenced sources and fingerprints inherited 
   const before = vocabularyPoolContentFingerprint(await read(pool.id));
   await updateLinkedPoolMembership(mockDb as never, 'lesson-3', {}, { wordDocIds: ['b'] });
   expect(vocabularyPoolContentFingerprint(await read(pool.id))).not.toBe(before);
+});
+
+const listByCount = (query: Record<string, string> = {}) =>
+  listPools({
+    url: `http://localhost/api/admin/vocabulary-pools?${new URLSearchParams({ sortBy: 'wordCount', ...query })}`,
+  } as NextRequest);
+
+test.each(['asc', 'desc'])('paginates every pool in a 505-pool catalog by live count (%s)', async sortOrder => {
+  mockDb.docs.clear();
+  const expected: Array<{ id: string; count: number }> = [];
+  for (let index = 0; index < 505; index++) {
+    const id = `pool-${String(index).padStart(3, '0')}`;
+    const count = index % 5;
+    // Edited ordinary pools persist sourcePoolIds: []; these are not one graph.
+    seed(
+      id,
+      Array.from({ length: count }, (_, word) => `word-${word}`),
+      []
+    );
+    expected.push({ id, count });
+  }
+  expected.sort((a, b) => a.count - b.count || a.id.localeCompare(b.id));
+  if (sortOrder === 'desc') expected.reverse();
+
+  const ids: string[] = [];
+  let cursor = '';
+  for (let page = 0; page < 26; page++) {
+    const response = await listByCount({ sortOrder, limit: '20', ...(cursor ? { lastPoolId: cursor } : {}) });
+    expect(response.status).toBe(200);
+    const { data } = await response.json();
+    expect(data.pools.map((pool: { id: string }) => pool.id)).toEqual(
+      expected.slice(page * 20, page * 20 + 20).map(pool => pool.id)
+    );
+    expect(data.hasMore).toBe(page < 25);
+    cursor = data.lastPoolId;
+    ids.push(...data.pools.map((pool: { id: string }) => pool.id));
+  }
+  expect(new Set(ids).size).toBe(505);
+  const last = await listByCount({ sortOrder, lastPoolId: cursor });
+  expect((await last.json()).data).toEqual({ pools: [], hasMore: false, lastPoolId: null });
+  expect(mockDb.queryReads.every(read => read.limit <= 200 && read.count <= 200)).toBe(true);
+  expect(mockDb.writes).toEqual([]);
+});
+
+test('filters a catalog above 500 before resolving unrelated links and hides pending pools', async () => {
+  for (let index = 0; index < 501; index++) seed(`unrelated-${index}`, [], ['missing-source']);
+  seed('matching', ['a', 'b']);
+  seed('wrong-tag', ['a']);
+  seed('wrong-active', ['a']);
+  seed('pending', ['a']);
+  seed('deleting', ['a']);
+  for (const id of ['matching', 'wrong-tag', 'wrong-active', 'pending', 'deleting']) {
+    Object.assign(mockDb.docs.get(poolPath(id))!.metadata, {
+      difficulty: 'advanced',
+      isActive: false,
+      tags: ['review'],
+    });
+  }
+  mockDb.docs.get(poolPath('wrong-tag'))!.metadata.tags = ['other'];
+  mockDb.docs.get(poolPath('wrong-active'))!.metadata.isActive = true;
+  mockDb.docs.get(poolPath('pending'))!._creationPending = {};
+  mockDb.docs.get(poolPath('deleting'))!._deletionPending = true;
+  const response = await listByCount({ difficulty: 'advanced', isActive: 'false', tags: 'review,alternate' });
+  expect(response.status).toBe(200);
+  expect((await response.json()).data).toMatchObject({
+    pools: [{ id: 'matching' }],
+    hasMore: false,
+    lastPoolId: 'matching',
+  });
+  const empty = await listByCount({ difficulty: 'intermediate' });
+  expect(empty.status).toBe(200);
+  expect((await empty.json()).data).toEqual({ pools: [], hasMore: false, lastPoolId: null });
+});
+
+test('more than 500 independent linked pools retain live nested counts after source edits', async () => {
+  for (let index = 0; index < 501; index++) seed(`linked-${index}`, [], ['lesson-3']);
+  seed('nested', ['own', 'a'], ['linked-0']);
+  let response = await listByCount({ limit: '1' });
+  expect(response.status).toBe(200);
+  expect((await response.json()).data.pools[0]).toMatchObject({ id: 'nested', metadata: { wordCount: 3 } });
+  seed('lesson-3', ['b', 'c', 'd']);
+  response = await listByCount({ limit: '1' });
+  expect(response.status).toBe(200);
+  expect((await response.json()).data.pools[0]).toMatchObject({ id: 'nested', metadata: { wordCount: 5 } });
+});
+
+test('name-sorted pages can include unrelated graphs whose combined size exceeds 500', async () => {
+  for (let index = 0; index < 100; index++) {
+    const sources = Array.from({ length: 5 }, (_, source) => `z-source-${index}-${source}`);
+    sources.forEach(id => seed(id, ['a']));
+    seed(`a-linked-${index}`, [], sources);
+  }
+  const response = await listPools({
+    url: 'http://localhost/api/admin/vocabulary-pools?sortBy=name&sortOrder=asc&limit=100',
+  } as NextRequest);
+  expect(response.status).toBe(200);
+  const { data } = await response.json();
+  expect(data.pools).toHaveLength(100);
+  expect(data.pools.every((pool: Data) => pool.id.startsWith('a-linked-') && pool.metadata.wordCount === 1)).toBe(true);
+});
+
+test.each([0, 200])('finishes a catalog scan at an exact read-batch boundary (%i pools)', async count => {
+  mockDb.docs.clear();
+  for (let index = 0; index < count; index++) seed(`pool-${index}`, []);
+  const response = await listByCount({ limit: '100' });
+  expect(response.status).toBe(200);
+  const { data } = await response.json();
+  expect(data.pools).toHaveLength(Math.min(count, 100));
+  expect(data.hasMore).toBe(count > 100);
+  expect(mockDb.queryReads.at(-1)?.count).toBe(0);
+});
+
+test('still rejects a single linked dependency graph above 500 pools', async () => {
+  for (let index = 0; index < 501; index++) seed(`graph-${index}`, [], index < 500 ? [`graph-${index + 1}`] : []);
+  const response = await listByCount();
+  expect(response.status).toBe(409);
+  expect((await response.json()).code).toBe('VOCABULARY_POOL_GRAPH_TOO_LARGE');
+});
+
+test.each(['missing', 'filtered', 'pending', 'deleting'])(
+  'rejects a %s word-count cursor with the existing stale-cursor response',
+  async state => {
+    seed('cursor', []);
+    if (state === 'missing') mockDb.docs.delete(poolPath('cursor'));
+    if (state === 'filtered') mockDb.docs.get(poolPath('cursor'))!.metadata.difficulty = 'advanced';
+    if (state === 'pending') mockDb.docs.get(poolPath('cursor'))!._creationPending = {};
+    if (state === 'deleting') mockDb.docs.get(poolPath('cursor'))!._deletionPending = true;
+    const response = await listByCount({ lastPoolId: 'cursor', difficulty: 'beginner' });
+    expect(response.status).toBe(409);
+    expect((await response.json()).code).toBe('VOCABULARY_POOL_CURSOR_STALE');
+  }
+);
+
+test('rejects unauthorized catalog reads before querying any pool', async () => {
+  mockAuthorized = false;
+  const collection = jest.spyOn(mockDb, 'collection');
+  const response = await listByCount();
+  expect(response.status).toBe(401);
+  expect(collection).not.toHaveBeenCalled();
 });
