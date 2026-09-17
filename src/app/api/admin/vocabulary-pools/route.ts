@@ -1,74 +1,30 @@
 import {
-  createVocabularyPoolResolver,
-  MAX_LINKED_POOL_GRAPH_SIZE,
-} from '@/src/lib/vocabulary-pools/linked-pools.server';
+  listVocabularyPoolsByWordCount,
+  POOL_SUMMARY_FIELDS,
+  summarizeVocabularyPool,
+} from '@/src/lib/vocabulary-pools/list.server';
 import { VocabularyPoolStateError } from '@/src/lib/vocabulary-pools/pool-state.server';
 import { VOCABULARY_POOL_COLLECTION } from '@/shared/constants/firestore';
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { Query } from 'firebase-admin/firestore';
-import type { VocabularyPool, VocabularyPoolSummary, CreatePoolRequest } from '@/src/types/vocabulary-pool';
-import {
-  buildPoolSearchTokens,
-  normalizePoolSearchText,
-  toVocabularyPoolSummary,
-} from '@/src/utils/vocabularyPoolSummary';
+import type { VocabularyPoolSummary, CreatePoolRequest } from '@/src/types/vocabulary-pool';
+import { buildPoolSearchTokens, normalizePoolSearchText } from '@/src/utils/vocabularyPoolSummary';
 import { AdminAccessError, verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import {
   prepareVocabularyPoolWordMembership,
   VocabularyPoolWordMembershipError,
 } from '@/src/lib/vocabulary-pools/word-membership.server';
 import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
-import { isVocabularyPoolCreationPending } from '@/src/lib/vocabulary-pools/archive.server';
 
 export const dynamic = 'force-dynamic';
-
-const POOL_SUMMARY_FIELDS = [
-  'name',
-  'description',
-  'metadata',
-  '_creationPending',
-  '_deletionPending',
-  'sourcePoolIds',
-];
-
-const toDateValue = (value: unknown) =>
-  value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function'
-    ? value.toDate()
-    : value;
-
-const serializePoolSummary = (doc: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot) => {
-  const data = doc.data() as Partial<VocabularyPool>;
-
-  const rawData = doc.data();
-  if (isVocabularyPoolCreationPending(rawData) || rawData?._deletionPending) return null;
-
-  return toVocabularyPoolSummary(doc.id, {
-    ...data,
-    metadata: data.metadata
-      ? {
-          ...data.metadata,
-          createdAt: toDateValue(data.metadata.createdAt),
-          updatedAt: toDateValue(data.metadata.updatedAt),
-        }
-      : undefined,
-  });
-};
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     await verifyAdminAccess(request);
     const { searchParams } = new URL(request.url);
     const limit = Math.max(1, Math.min(100, parseInt(searchParams.get('limit') || '20') || 20));
-    const resolver = createVocabularyPoolResolver(adminDb);
-    const summarize = async (doc: FirebaseFirestore.DocumentSnapshot) => {
-      const summary = serializePoolSummary(doc);
-      if (summary && doc.data()?.sourcePoolIds !== undefined) {
-        const effective = await resolver.resolve(doc.id);
-        summary.metadata = { ...summary.metadata, wordCount: effective.metadata.wordCount };
-      }
-      return summary;
-    };
+    const summarize = (doc: FirebaseFirestore.DocumentSnapshot) => summarizeVocabularyPool(adminDb, doc);
     const lastPoolId = searchParams.get('lastPoolId');
     const search = searchParams.get('search');
     const difficulty = searchParams.get('difficulty');
@@ -122,43 +78,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     // Effective counts cannot be ordered by the persisted direct-word count.
     if (sortBy === 'wordCount') {
-      const snapshot = await adminDb
-        .collection(VOCABULARY_POOL_COLLECTION)
-        .limit(MAX_LINKED_POOL_GRAPH_SIZE + 1)
-        .select(...POOL_SUMMARY_FIELDS)
-        .get();
-      if (snapshot.docs.length > MAX_LINKED_POOL_GRAPH_SIZE)
-        throw new VocabularyPoolStateError(
-          'Too many pools to sort by live word count.',
-          'VOCABULARY_POOL_GRAPH_TOO_LARGE'
-        );
-      const pools: VocabularyPoolSummary[] = [];
-      for (const doc of snapshot.docs) {
-        const pool = await summarize(doc);
-        if (
-          !pool ||
-          (difficulty && pool.metadata.difficulty !== difficulty) ||
-          (isActive !== null && pool.metadata.isActive !== isActive) ||
-          (tags?.length && !pool.metadata.tags.some(tag => tags.includes(tag)))
-        )
-          continue;
-        pools.push(pool);
-      }
-      pools.sort(
-        (a, b) =>
-          (sortOrder === 'asc' ? 1 : -1) *
-          (a.metadata.wordCount - b.metadata.wordCount || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-      );
-      const start = lastPoolId ? pools.findIndex(pool => pool.id === lastPoolId) + 1 : 0;
-      if (lastPoolId && start === 0)
-        return NextResponse.json(
-          { success: false, error: 'Pool list changed. Refresh the list.', code: 'VOCABULARY_POOL_CURSOR_STALE' },
-          { status: 409 }
-        );
-      const page = pools.slice(start, start + limit);
+      const data = await listVocabularyPoolsByWordCount(adminDb, {
+        limit,
+        sortOrder,
+        lastPoolId,
+        difficulty,
+        isActive,
+        tags,
+      });
       return NextResponse.json({
         success: true,
-        data: { pools: page, hasMore: start + limit < pools.length, lastPoolId: page.at(-1)?.id ?? null },
+        data,
       });
     }
 
