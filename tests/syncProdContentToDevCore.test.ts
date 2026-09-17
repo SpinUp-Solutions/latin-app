@@ -555,3 +555,48 @@ describe('production content sync pure core', () => {
     expect(decoded.values[2][0]).toMatchObject({ path: 'vocabulary_pools/pool-1' });
   });
 });
+
+describe('linked vocabulary pool sync dependencies', () => {
+  it('preserves nested dev fixture sources and their words', () => {
+    const { source, target } = baseStates();
+    target.collections.vocabulary_pools[0].data.sourcePoolIds = ['nested-source'];
+    target.collections.vocabulary_pools.push(
+      record('vocabulary_pools', 'nested-source', { wordDocIds: ['nested-word'] })
+    );
+    target.collections.vocabulary_words_v5.push(record('vocabulary_words_v5', 'nested-word', { word: 'amo' }));
+    const plan = createPlan(source, target);
+    expect(plan.closure.preservedPoolIds.has('nested-source')).toBe(true);
+    expect(plan.closure.preservedWordIds.has('nested-word')).toBe(true);
+  });
+
+  it('remaps a combined fixture when its nested source is cloned', () => {
+    const { source, target } = baseStates();
+    target.excludedCollections.testVersions[0].data = { name: 'Fixture', pages: [] };
+    target.collections.vocabulary_pools[0].data.sourcePoolIds = ['nested-source'];
+    target.collections.vocabulary_pools.push(
+      record('vocabulary_pools', 'nested-source', { wordDocIds: ['word-fixture'] })
+    );
+    source.collections.vocabulary_pools.push(record('vocabulary_pools', 'nested-source', { wordDocIds: [] }));
+    const plan = createPlan(source, target);
+    const remaps = plan.audit.fixtureClosure.fixtureRemaps;
+    const nested = remaps.find(item => item.originalId === 'nested-source')!;
+    const parent = remaps.find(item => item.originalId === 'pool-fixture')!;
+    expect(nested).toBeDefined();
+    expect(parent).toBeDefined();
+    const projected = plan.projectedState as unknown as TestState;
+    expect(
+      projected.collections.vocabulary_pools.find(pool => pool.id === parent.remappedId)?.data.sourcePoolIds
+    ).toEqual([nested.remappedId]);
+  });
+
+  it.each(['missing', 'cycle'])('rejects a %s source pool graph during planning', condition => {
+    const { source, target } = baseStates();
+    source.collections.vocabulary_pools.push(
+      record('vocabulary_pools', 'linked', {
+        wordDocIds: [],
+        sourcePoolIds: [condition === 'cycle' ? 'linked' : 'absent'],
+      })
+    );
+    expect(() => createPlan(source, target)).toThrow(/source pool|cycle/);
+  });
+});

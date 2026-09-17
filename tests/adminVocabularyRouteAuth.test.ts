@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 
 const routes = [
   'src/app/api/admin/vocabulary-pools/route.ts',
+  'src/app/api/admin/vocabulary-pools/from-pools/route.ts',
   'src/app/api/admin/vocabulary-pools/backfill-search-tokens/route.ts',
   'src/app/api/admin/vocabulary-pools/usages/route.ts',
   'src/app/api/admin/vocabulary-pools/[poolId]/route.ts',

@@ -1,11 +1,14 @@
 import type { DocumentData, Firestore, Transaction } from 'firebase-admin/firestore';
-
-const VOCABULARY_POOL_COLLECTION = 'vocabulary_pools';
-const DELETED_VOCABULARY_POOL_COLLECTION = 'deleted_vocabulary_pools';
+import { DELETED_VOCABULARY_POOL_COLLECTION, VOCABULARY_POOL_COLLECTION } from '@/shared/constants/firestore';
+import { isVocabularyPoolCreationPending } from '@/src/lib/vocabulary-pools/pool-state.server';
 
 export class VocabularyPoolAssignmentError extends Error {
   constructor(
-    public readonly code: 'VOCABULARY_POOL_ARCHIVED' | 'VOCABULARY_POOL_NOT_FOUND' | 'VOCABULARY_POOL_STATE_CONFLICT',
+    public readonly code:
+      | 'VOCABULARY_POOL_ARCHIVED'
+      | 'VOCABULARY_POOL_NOT_FOUND'
+      | 'VOCABULARY_POOL_STATE_CONFLICT'
+      | 'VOCABULARY_POOL_PENDING',
     message: string,
     public readonly status = 409
   ) {
@@ -82,7 +85,15 @@ export async function assertVocabularyPoolAssignmentsAllowedInTransaction(
     const existingSlots = existingPoolSlots.get(poolId) ?? new Map<string, number>();
     const nextCount = [...nextSlots.values()].reduce((total, count) => total + count, 0);
     if (nextCount === 0) continue;
-    if (active.exists && !tombstone.exists) continue;
+    if (active.exists && !tombstone.exists) {
+      if (isVocabularyPoolCreationPending(active.data()) && nextCount > 0) {
+        throw new VocabularyPoolAssignmentError(
+          'VOCABULARY_POOL_PENDING',
+          `Vocabulary pool ${poolId} is still being created and cannot be assigned`
+        );
+      }
+      continue;
+    }
     if (
       !active.exists &&
       tombstone.exists &&

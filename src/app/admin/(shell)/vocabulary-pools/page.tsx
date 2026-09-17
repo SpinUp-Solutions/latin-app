@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/src/components/ui/button';
 import { Plus } from 'lucide-react';
@@ -28,6 +28,9 @@ function VocabularyPoolsPage() {
   const dispatch = useAppDispatch();
   const filters = useAppSelector(state => state.vocabularyPools.filters);
   const [lastPoolId, setLastPoolId] = useState<string | null>(null);
+  const deletingPoolIdsRef = useRef(new Set<string>());
+  const [deletingPoolIds, setDeletingPoolIds] = useState<Set<string>>(() => new Set());
+  const [deletionErrors, setDeletionErrors] = useState<Record<string, string>>({});
   const [duplicatingPoolIds, setDuplicatingPoolIds] = useState<Set<string>>(() => new Set());
   const { data, isLoading, isFetching, error } = useGetPoolsQuery({ filters, lastPoolId });
   const {
@@ -51,41 +54,59 @@ function VocabularyPoolsPage() {
   }, [filters]);
 
   const handleDeletePool = async (poolId: string) => {
-    let challenge;
-    try {
-      challenge = await preparePoolDeletion(poolId).unwrap();
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to check pool assignments'));
-      return;
-    }
-
-    if (challenge.usageStatus !== 'available') {
-      toast.error('Assignment checks are unavailable. The pool was not deleted.');
-      return;
-    }
-    if (challenge.usages.length > 0) {
-      toast.error(
-        `Remove this pool from ${challenge.usages.length} saved ${challenge.usages.length === 1 ? 'assignment' : 'assignments'} before deleting it.`
-      );
-      return;
-    }
-
-    if (
-      !window.confirm(
-        buildVocabularyPoolDeleteConfirmation(challenge.poolName, challenge.usages, challenge.usageStatus)
-      )
-    ) {
-      return;
-    }
+    if (deletingPoolIdsRef.current.has(poolId)) return;
+    deletingPoolIdsRef.current.add(poolId);
+    setDeletingPoolIds(new Set(deletingPoolIdsRef.current));
+    setDeletionErrors(current => {
+      const next = { ...current };
+      delete next[poolId];
+      return next;
+    });
+    const showDeletionError = (message: string) => {
+      setDeletionErrors(current => ({ ...current, [poolId]: message }));
+      toast.error(message);
+    };
 
     try {
-      await deletePoolMutation({
-        poolId,
-        confirmationToken: challenge.token,
-      }).unwrap();
-      toast.success('Pool deleted successfully');
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to delete pool'));
+      let challenge;
+      try {
+        challenge = await preparePoolDeletion(poolId).unwrap();
+      } catch (error) {
+        showDeletionError(getApiErrorMessage(error, 'Failed to check pool assignments'));
+        return;
+      }
+
+      if (challenge.usageStatus !== 'available') {
+        showDeletionError('Assignment checks are unavailable. The pool was not deleted.');
+        return;
+      }
+      if (challenge.usages.length > 0) {
+        showDeletionError(
+          `Remove this pool from ${challenge.usages.length} saved ${challenge.usages.length === 1 ? 'assignment' : 'assignments'} before deleting it.`
+        );
+        return;
+      }
+
+      if (
+        !window.confirm(
+          buildVocabularyPoolDeleteConfirmation(challenge.poolName, challenge.usages, challenge.usageStatus)
+        )
+      ) {
+        return;
+      }
+
+      try {
+        await deletePoolMutation({
+          poolId,
+          confirmationToken: challenge.token,
+        }).unwrap();
+        toast.success('Pool deleted successfully');
+      } catch (error) {
+        showDeletionError(getApiErrorMessage(error, 'Failed to delete pool'));
+      }
+    } finally {
+      deletingPoolIdsRef.current.delete(poolId);
+      setDeletingPoolIds(new Set(deletingPoolIdsRef.current));
     }
   };
 
@@ -161,6 +182,8 @@ function VocabularyPoolsPage() {
           onDuplicate={handleDuplicatePool}
           duplicatingPoolIds={duplicatingPoolIds}
           onDelete={handleDeletePool}
+          deletingPoolIds={deletingPoolIds}
+          deletionErrors={deletionErrors}
           usagesByPoolId={usageData?.usagesByPoolId ?? {}}
           usagesLoading={usageLoading}
         />
