@@ -90,7 +90,7 @@ describe('lesson network recovery with a real RTK Query store', () => {
     // RTK Query batches subscription notifications after the request settles.
     await waitFor(() =>
       expect(
-        screen.queryByRole('status') ?? screen.queryByRole('heading', { name: /Lesson Locked|Failed to Load Lesson/ })
+        screen.queryByRole('status') ?? screen.queryByRole('heading', { name: /Lesson Locked|We couldn’t open this lesson/ })
       ).toBeInTheDocument()
     );
   };
@@ -112,7 +112,7 @@ describe('lesson network recovery with a real RTK Query store', () => {
     await screen.findByRole('status');
     expect(mockBaseQuery).toHaveBeenCalledTimes(3);
     expect(screen.getByRole('textbox', { name: 'Answer' })).toHaveValue('in-progress answer');
-    expect(screen.queryByText('Failed to Load Lesson')).not.toBeInTheDocument();
+    expect(screen.queryByText('We couldn’t open this lesson')).not.toBeInTheDocument();
     expect(Sentry.captureException).toHaveBeenCalledWith(
       expect.any(Error),
       expect.objectContaining({
@@ -134,7 +134,7 @@ describe('lesson network recovery with a real RTK Query store', () => {
         })
     );
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Retrying…' })).toBeDisabled());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Trying again…' })).toBeDisabled());
     expect(screen.getByRole('textbox', { name: 'Answer' })).toHaveValue('in-progress answer');
     await act(async () => resolve(lessonResponse()));
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
@@ -156,7 +156,7 @@ describe('lesson network recovery with a real RTK Query store', () => {
   it('shows a retryable initial error and can load the lesson after recovery', async () => {
     mockBaseQuery.mockResolvedValue({ error: networkError });
     render(page());
-    await screen.findByText('Failed to Load Lesson');
+    await screen.findByText('We couldn’t open this lesson');
     expect(screen.queryByText('Player lesson-1')).not.toBeInTheDocument();
     expect(Sentry.captureException).toHaveBeenCalledWith(
       expect.any(Error),
@@ -174,7 +174,7 @@ describe('lesson network recovery with a real RTK Query store', () => {
     await loadLesson();
     await refresh({ status, data: { error: 'Unavailable' } });
     expect(screen.queryByText('Player lesson-1')).not.toBeInTheDocument();
-    expect(screen.getByText(status === 403 ? 'Lesson Locked' : 'Failed to Load Lesson')).toBeInTheDocument();
+    expect(screen.getByText(status === 403 ? 'Lesson Locked' : 'We couldn’t open this lesson')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
   });
 
@@ -210,7 +210,7 @@ describe('lesson network recovery with a real RTK Query store', () => {
     await loadLesson();
     await refresh({ status: 'PARSING_ERROR', originalStatus: 200, data: 'bad', error: 'Invalid JSON' });
     expect(screen.queryByText('Player lesson-1')).not.toBeInTheDocument();
-    expect(screen.getByText('Failed to Load Lesson')).toBeInTheDocument();
+    expect(screen.getByText('We couldn’t open this lesson')).toBeInTheDocument();
   });
 
   it.each(['lesson', 'account'])(
@@ -221,7 +221,7 @@ describe('lesson network recovery with a real RTK Query store', () => {
       if (change === 'lesson') mockLessonId = 'lesson-2';
       else mockUserId = 'student-2';
       view.rerender(page());
-      await screen.findByText('Failed to Load Lesson');
+      await screen.findByText('We couldn’t open this lesson');
       expect(screen.queryByText('Player lesson-1')).not.toBeInTheDocument();
       expect(screen.queryByRole('status')).not.toBeInTheDocument();
     }

@@ -11,7 +11,7 @@ import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { useAppDispatch } from '@/src/store/hooks';
 import { setLesson, resetLessonState } from '@/src/store/slices/lessonEditorSlice';
-import { getApiErrorMessage, hasApiErrorStatus, isRetryableApiError } from '@/src/store/api/baseQuery';
+import { hasApiErrorStatus, isRetryableApiError } from '@/src/store/api/baseQuery';
 
 function AdminLessonPreviewPage() {
   const params = useParams();
@@ -62,10 +62,14 @@ function AdminLessonPreviewPage() {
 
   if (!previewLesson) {
     const errorMessage = hasApiErrorStatus(error, 404)
-      ? 'The requested lesson could not be found.'
-      : isRetryableApiError(error)
-        ? 'The requested lesson could not be loaded. Please try again.'
-        : getApiErrorMessage(error, 'The requested lesson could not be loaded.');
+      ? 'We couldn’t find this lesson.'
+      : hasApiErrorStatus(error, 401)
+        ? 'Please sign in again to open this lesson.'
+        : hasApiErrorStatus(error, 403)
+          ? 'You don’t have permission to open this lesson.'
+          : isRetryableApiError(error)
+            ? 'Please try again in a moment.'
+            : 'This lesson isn’t available right now. Please go back to your lessons.';
     return (
       <div className="min-h-screen bg-roman-marble">
         <header className="bg-white border-b border-border px-4 py-3">
@@ -77,11 +81,11 @@ function AdminLessonPreviewPage() {
         <main className="container mx-auto py-8 px-4">
           <div className="max-w-3xl mx-auto">
             <div className="p-8 bg-white rounded-lg border border-border text-center">
-              <h2 className="text-2xl font-serif text-gray-800 mb-4">Failed to Load Lesson</h2>
+              <h2 className="text-2xl font-serif text-gray-800 mb-4">We couldn’t open this lesson</h2>
               <p className="text-roman-stone">{errorMessage}</p>
               {isRetryableApiError(error) && (
                 <Button type="button" className="mt-4" onClick={() => void refetch()} disabled={isFetching}>
-                  {isFetching ? 'Retrying…' : 'Try again'}
+                  {isFetching ? 'Trying again…' : 'Try again'}
                 </Button>
               )}
             </div>
@@ -99,7 +103,7 @@ function AdminLessonPreviewPage() {
           Back to Lessons
         </Button>
         <div className="rounded border border-roman-gold/40 bg-roman-parchment px-3 py-1 text-sm text-foreground">
-          Admin Preview Mode - Progress not tracked
+          Lesson preview — progress isn’t saved
         </div>
       </header>
 
@@ -108,7 +112,7 @@ function AdminLessonPreviewPage() {
           role="status"
           className="flex flex-wrap items-center justify-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-950">
           <span>
-            We couldn’t refresh this preview. Your place and answers are kept. Try again to load the latest version.
+            We’re having trouble connecting. Your place and answers are still here. Please try again.
           </span>
           <Button
             type="button"
@@ -116,7 +120,7 @@ function AdminLessonPreviewPage() {
             size="sm"
             onClick={() => void refetch()}
             disabled={isFetching}>
-            {isFetching ? 'Retrying…' : 'Try again'}
+            {isFetching ? 'Trying again…' : 'Try again'}
           </Button>
         </div>
       )}

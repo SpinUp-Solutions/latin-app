@@ -152,7 +152,7 @@ describe('authenticated read network recovery', () => {
     const result = await request;
     expect(result.error).toEqual({
       status: 'FETCH_ERROR',
-      error: 'Unable to connect to the sign-in service. Please try again.',
+      error: 'We’re having trouble connecting. Please try again.',
     });
     expect(mockGetIdToken).toHaveBeenCalledTimes(3);
     expect(mockFetch).not.toHaveBeenCalled();

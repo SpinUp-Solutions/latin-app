@@ -144,7 +144,7 @@ export const createAuthenticatedBaseQuery = (): BaseQueryFn<
         // refresh failures must use the same recoverable state as failed GETs.
         if (!isObject(error) || error.code !== 'auth/network-request-failed') throw error;
         result = {
-          error: { status: 'FETCH_ERROR', error: 'Unable to connect to the sign-in service. Please try again.' },
+          error: { status: 'FETCH_ERROR', error: 'We’re having trouble connecting. Please try again.' },
         };
       }
 

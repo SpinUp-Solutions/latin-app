@@ -118,7 +118,7 @@ describe('admin preview network recovery with the real player and RTK Query stor
     });
     await waitFor(() =>
       expect(
-        screen.queryByRole('status') ?? screen.queryByRole('heading', { name: 'Failed to Load Lesson' })
+        screen.queryByRole('status') ?? screen.queryByRole('heading', { name: 'We couldn’t open this lesson' })
       ).toBeInTheDocument()
     );
   };
@@ -134,7 +134,7 @@ describe('admin preview network recovery with the real player and RTK Query stor
     });
     await screen.findByRole('status');
     expectPreservedPreview();
-    expect(screen.queryByText('Failed to Load Lesson')).not.toBeInTheDocument();
+    expect(screen.queryByText('We couldn’t open this lesson')).not.toBeInTheDocument();
 
     let resolve: (value: ReturnType<typeof lessonResponse>) => void = () => undefined;
     mockBaseQuery.mockImplementation(
@@ -144,7 +144,7 @@ describe('admin preview network recovery with the real player and RTK Query stor
         })
     );
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Retrying…' })).toBeDisabled());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Trying again…' })).toBeDisabled());
     expectPreservedPreview();
     await act(async () => resolve(lessonResponse()));
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
@@ -172,9 +172,9 @@ describe('admin preview network recovery with the real player and RTK Query stor
   it('offers retry after an initial network failure without calling the lesson missing', async () => {
     mockBaseQuery.mockResolvedValue({ error: networkError });
     render(page());
-    await screen.findByText('Failed to Load Lesson');
+    await screen.findByText('We couldn’t open this lesson');
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
-    expect(screen.queryByText('The requested lesson could not be found.')).not.toBeInTheDocument();
+    expect(screen.queryByText('We couldn’t find this lesson.')).not.toBeInTheDocument();
     mockBaseQuery.mockResolvedValue(lessonResponse());
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     await screen.findByText('Preview page 1');
@@ -183,7 +183,7 @@ describe('admin preview network recovery with the real player and RTK Query stor
   it.each([401, 403, 404, 409])('blocks cached content and clears editor state after HTTP %s', async status => {
     await loadPreview();
     await refresh({ status, data: { error: 'Unavailable' } });
-    expect(screen.getByText('Failed to Load Lesson')).toBeInTheDocument();
+    expect(screen.getByText('We couldn’t open this lesson')).toBeInTheDocument();
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
     expect(store.getState().lessonEditor.currentLesson).toBeNull();
@@ -238,7 +238,7 @@ describe('admin preview network recovery with the real player and RTK Query stor
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     expect(store.getState().lessonEditor.currentLesson).toBeNull();
     await act(async () => resolve({ error: networkError }));
-    await screen.findByText('Failed to Load Lesson');
+    await screen.findByText('We couldn’t open this lesson');
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
