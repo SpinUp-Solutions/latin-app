@@ -7,13 +7,20 @@ import { getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { ZodError } from 'zod';
 import { autocompleteVocabularyWord } from '../../shared/openai/autocomplete';
-import { resolveRootWord, ResolveRootWordRequest } from '../../shared/openai/root-resolver';
+import { resolveRootWord } from '../../shared/openai/root-resolver';
 import { gradeTranslation } from '../../shared/openai/translation-grading';
-import { AIAutocompleteRequest, TranslationGradingRequest } from '../../shared/openai/types';
+import {
+  aiAutocompleteRequestSchema,
+  rootWordRequestSchema,
+  translationGradingRequestSchema,
+} from '../../shared/openai/request-contracts';
+import { createOpenAISafetyIdentifier } from '../../shared/openai/safety';
+import { USERS_COLLECTION } from '../../shared/constants/firestore';
 import {
   evaluationFunctionDeleteRequestSchema,
   evaluationFunctionRunRequestSchema,
   evaluationFunctionSaveRequestSchema,
+  missingEvaluationCriteria,
 } from '../../src/lib/ai-evaluations/contracts';
 import { countEvaluationCells, runEvaluationCase } from '../../src/lib/ai-evaluations/execution';
 import {
@@ -22,19 +29,50 @@ import {
   deleteEvaluationCase,
   getEvaluationCase,
   listEvaluationCases,
+  listEvaluationRunSummaries,
+  persistEvaluationRun,
   updateEvaluationCase,
 } from '../../src/lib/ai-evaluations/persistence';
 import { AIEvaluationThrottleError, consumeEvaluationRunQuota } from '../../src/lib/ai-evaluations/throttle';
+import {
+  AIRequestThrottleError,
+  consumeAIGlobalRequestQuota,
+  consumeAIRequestQuota,
+} from '../../src/lib/openai/request-throttle';
+import { aiCallableAccessError, shouldEnforceAIAppCheck, type AICallableName } from './ai-callable-policy';
 
 const openaiApiKey = defineSecret('OPENAI_API_KEY');
 const adminApp = getApps()[0] ?? initializeApp();
 const functionsDb = getFirestore(adminApp);
 
-async function requireAdmin(auth: { uid: string } | undefined): Promise<string> {
-  if (!auth) throw new HttpsError('unauthenticated', 'User must be authenticated');
-  const user = await functionsDb.collection('users').doc(auth.uid).get();
-  if (user.data()?.role !== 'admin') throw new HttpsError('permission-denied', 'Admin access required');
+const appCheckOptions = { enforceAppCheck: shouldEnforceAIAppCheck() };
+
+function throwCallableAccessError(error: 'unauthenticated' | 'permission-denied'): never {
+  throw new HttpsError(error, error === 'unauthenticated' ? 'User must be authenticated' : 'Admin access required');
+}
+
+function requireAuthenticated(callableName: AICallableName, auth: { uid: string } | undefined): string {
+  const error = aiCallableAccessError(callableName, auth?.uid);
+  if (error) throwCallableAccessError(error);
+  return auth!.uid;
+}
+
+async function requireAdmin(callableName: AICallableName, auth: { uid: string } | undefined): Promise<string> {
+  if (!auth) throwCallableAccessError('unauthenticated');
+  const user = await functionsDb.collection(USERS_COLLECTION).doc(auth.uid).get();
+  const error = aiCallableAccessError(callableName, auth.uid, user.data()?.role);
+  if (error) throwCallableAccessError(error);
   return auth.uid;
+}
+
+function throwAIHttpsError(error: unknown): never {
+  if (error instanceof HttpsError) throw error;
+  if (error instanceof ZodError) throw new HttpsError('invalid-argument', 'Invalid AI request');
+  if (error instanceof AIRequestThrottleError) {
+    throw new HttpsError('resource-exhausted', error.message, { retryAfterMs: error.retryAfterMs });
+  }
+  console.error('[ai] callable failed', error);
+  throw new HttpsError('internal', 'The AI request could not be completed.');
 }
 
 function throwEvaluationHttpsError(error: unknown): never {
@@ -44,6 +82,9 @@ function throwEvaluationHttpsError(error: unknown): never {
     throw new HttpsError(error.status === 404 ? 'not-found' : 'failed-precondition', error.message);
   }
   if (error instanceof AIEvaluationThrottleError) {
+    throw new HttpsError('resource-exhausted', error.message, { retryAfterMs: error.retryAfterMs });
+  }
+  if (error instanceof AIRequestThrottleError) {
     throw new HttpsError('resource-exhausted', error.message, { retryAfterMs: error.retryAfterMs });
   }
   console.error('[ai-evaluations] callable failed', error);
@@ -56,31 +97,19 @@ export const autocompleteWord = onCall(
     memory: '512MiB',
     region: 'us-central1',
     secrets: [openaiApiKey],
+    ...appCheckOptions,
   },
   async request => {
     console.log('[Firebase Function] autocompleteWord called');
 
-    if (!request.auth) {
-      console.error('[Firebase Function] Unauthenticated request');
-      throw new HttpsError('unauthenticated', 'User must be authenticated');
-    }
-
-    const data = request.data as AIAutocompleteRequest;
-
-    if (!data.word || typeof data.word !== 'string') {
-      throw new HttpsError('invalid-argument', 'Word is required');
-    }
-
-    if (!data.part_of_speech || typeof data.part_of_speech !== 'string') {
-      throw new HttpsError('invalid-argument', 'Part of speech is required');
-    }
-
-    console.log(`[Firebase Function] Processing: word="${data.word}", part_of_speech="${data.part_of_speech}"`);
-
-    const startTime = Date.now();
-
     try {
-      const result = await autocompleteVocabularyWord(data);
+      const actorId = await requireAdmin('autocompleteWord', request.auth ? { uid: request.auth.uid } : undefined);
+      const data = aiAutocompleteRequestSchema.parse(request.data);
+      await consumeAIRequestQuota(actorId, 'autocomplete', functionsDb);
+      const startTime = Date.now();
+      const result = await autocompleteVocabularyWord(data, {
+        safetyIdentifier: createOpenAISafetyIdentifier(actorId),
+      });
       const endTime = Date.now();
 
       console.log(`[Firebase Function] Completed in ${endTime - startTime}ms`);
@@ -92,10 +121,7 @@ export const autocompleteWord = onCall(
 
       return result;
     } catch (error) {
-      const endTime = Date.now();
-      console.error(`[Firebase Function] Error after ${endTime - startTime}ms:`, error);
-
-      throw new HttpsError('internal', error instanceof Error ? error.message : 'Unknown error occurred');
+      return throwAIHttpsError(error);
     }
   }
 );
@@ -106,28 +132,25 @@ export const resolveRootWordFn = onCall(
     memory: '512MiB',
     region: 'us-central1',
     secrets: [openaiApiKey],
+    ...appCheckOptions,
   },
   async request => {
     console.log('[Firebase Function] resolveRootWordFn called');
 
-    if (!request.auth) {
-      console.error('[Firebase Function] Unauthenticated request');
-      throw new HttpsError('unauthenticated', 'User must be authenticated');
-    }
-
-    const data = request.data as ResolveRootWordRequest;
-    const selectedText = typeof data.selectedText === 'string' ? data.selectedText.trim() : '';
-
-    if (!selectedText) {
-      throw new HttpsError('invalid-argument', 'selectedText is required');
-    }
-
     try {
+      const actorId = await requireAdmin('resolveRootWordFn', request.auth ? { uid: request.auth.uid } : undefined);
+      const data = rootWordRequestSchema.parse(request.data);
+      await consumeAIRequestQuota(actorId, 'root-resolver', functionsDb);
       const startTime = Date.now();
-      const result = await resolveRootWord({
-        selectedText,
-        context: typeof data.context === 'string' ? data.context : undefined,
-      });
+      const result = await resolveRootWord(
+        {
+          selectedText: data.selectedText,
+          context: data.context,
+        },
+        {
+          safetyIdentifier: createOpenAISafetyIdentifier(actorId),
+        }
+      );
       const elapsed = Date.now() - startTime;
 
       console.log(`[Firebase Function] resolveRootWordFn completed in ${elapsed}ms`);
@@ -136,8 +159,7 @@ export const resolveRootWordFn = onCall(
 
       return result;
     } catch (error) {
-      console.error('[Firebase Function] resolveRootWordFn error:', error);
-      throw new HttpsError('internal', error instanceof Error ? error.message : 'Unknown error occurred');
+      return throwAIHttpsError(error);
     }
   }
 );
@@ -148,33 +170,17 @@ export const gradeTranslationFn = onCall(
     memory: '512MiB',
     region: 'us-central1',
     secrets: [openaiApiKey],
+    ...appCheckOptions,
   },
   async request => {
-    if (!request.auth) {
-      throw new HttpsError('unauthenticated', 'User must be authenticated');
-    }
-
-    const data = request.data as TranslationGradingRequest;
-    console.log(`[gradeTranslationFn] ========================================`);
-    console.log(`[gradeTranslationFn] OPENAI_API_KEY present: ${!!process.env.OPENAI_API_KEY}`);
-    console.log(`[gradeTranslationFn] Direction: ${data.direction}`);
-    console.log(`[gradeTranslationFn] Source: "${data.sourceText?.substring(0, 40)}..."`);
-
-    if (!data.sourceText || typeof data.sourceText !== 'string') {
-      throw new HttpsError('invalid-argument', 'sourceText is required');
-    }
-
-    if (!data.userTranslation || typeof data.userTranslation !== 'string') {
-      throw new HttpsError('invalid-argument', 'userTranslation is required');
-    }
-
-    if (!data.direction || (data.direction !== 'latin-to-english' && data.direction !== 'english-to-latin')) {
-      throw new HttpsError('invalid-argument', 'direction is required');
-    }
-
     try {
+      const actorId = requireAuthenticated('gradeTranslationFn', request.auth ? { uid: request.auth.uid } : undefined);
+      const data = translationGradingRequestSchema.parse(request.data);
+      await consumeAIRequestQuota(actorId, 'lesson-grading', functionsDb);
       const startTime = Date.now();
-      const result = await gradeTranslation(data);
+      const result = await gradeTranslation(data, {
+        safetyIdentifier: createOpenAISafetyIdentifier(actorId),
+      });
       const elapsed = Date.now() - startTime;
 
       console.log(`[gradeTranslationFn] ✅ Completed in ${elapsed}ms`);
@@ -184,8 +190,7 @@ export const gradeTranslationFn = onCall(
 
       return result;
     } catch (error) {
-      console.error(`[gradeTranslationFn] ❌ Error:`, error);
-      throw new HttpsError('internal', error instanceof Error ? error.message : 'Unknown error occurred');
+      return throwAIHttpsError(error);
     }
   }
 );
@@ -196,12 +201,22 @@ const evaluationCrudOptions = {
   region: 'us-central1',
   concurrency: 20,
   maxInstances: 2,
+  ...appCheckOptions,
 };
 
 export const listAiEvaluationCasesFn = onCall(evaluationCrudOptions, async request => {
   try {
-    await requireAdmin(request.auth ? { uid: request.auth.uid } : undefined);
+    await requireAdmin('listAiEvaluationCasesFn', request.auth ? { uid: request.auth.uid } : undefined);
     return { cases: await listEvaluationCases(functionsDb) };
+  } catch (error) {
+    return throwEvaluationHttpsError(error);
+  }
+});
+
+export const listAiEvaluationRunsFn = onCall(evaluationCrudOptions, async request => {
+  try {
+    await requireAdmin('listAiEvaluationRunsFn', request.auth ? { uid: request.auth.uid } : undefined);
+    return { runs: await listEvaluationRunSummaries(functionsDb) };
   } catch (error) {
     return throwEvaluationHttpsError(error);
   }
@@ -209,7 +224,7 @@ export const listAiEvaluationCasesFn = onCall(evaluationCrudOptions, async reque
 
 export const saveAiEvaluationCaseFn = onCall(evaluationCrudOptions, async request => {
   try {
-    const actorId = await requireAdmin(request.auth ? { uid: request.auth.uid } : undefined);
+    const actorId = await requireAdmin('saveAiEvaluationCaseFn', request.auth ? { uid: request.auth.uid } : undefined);
     const input = evaluationFunctionSaveRequestSchema.parse(request.data);
     const evaluationCase = input.caseId
       ? await updateEvaluationCase(input.caseId, input.input, actorId, functionsDb)
@@ -222,7 +237,7 @@ export const saveAiEvaluationCaseFn = onCall(evaluationCrudOptions, async reques
 
 export const deleteAiEvaluationCaseFn = onCall(evaluationCrudOptions, async request => {
   try {
-    await requireAdmin(request.auth ? { uid: request.auth.uid } : undefined);
+    await requireAdmin('deleteAiEvaluationCaseFn', request.auth ? { uid: request.auth.uid } : undefined);
     const input = evaluationFunctionDeleteRequestSchema.parse(request.data);
     await deleteEvaluationCase(input.caseId, functionsDb);
     return { success: true };
@@ -244,16 +259,34 @@ export const runAiEvaluationFn = onCall(
     concurrency: 2,
     maxInstances: 2,
     secrets: [openaiApiKey],
+    ...appCheckOptions,
   },
   async request => {
     try {
-      const actorId = await requireAdmin(request.auth ? { uid: request.auth.uid } : undefined);
+      const actorId = await requireAdmin('runAiEvaluationFn', request.auth ? { uid: request.auth.uid } : undefined);
       const input = evaluationFunctionRunRequestSchema.parse(request.data);
       const evaluationCase = await getEvaluationCase(input.caseId, functionsDb);
+      const missingCriteria = missingEvaluationCriteria(evaluationCase);
+      if (missingCriteria.length > 0) {
+        throw new AIEvaluationServiceError(
+          'AI_EVALUATION_CRITERIA_REQUIRED',
+          `Add expected outcomes before running: ${missingCriteria.join('; ')}`,
+          409
+        );
+      }
       const requestedCells = countEvaluationCells(evaluationCase);
       await consumeEvaluationRunQuota(actorId, input.forceRefresh, requestedCells, functionsDb);
+      await consumeAIGlobalRequestQuota('evaluation', requestedCells, functionsDb);
 
-      return await runEvaluationCase(evaluationCase, input.forceRefresh, functionsDb);
+      const result = await runEvaluationCase(evaluationCase, input.forceRefresh, functionsDb, {
+        safetyIdentifier: createOpenAISafetyIdentifier(actorId),
+      });
+      try {
+        return await persistEvaluationRun(evaluationCase, result, actorId, functionsDb);
+      } catch (error) {
+        console.error('[ai-evaluations] failed to persist completed run', error);
+        return { ...result, historySaved: false };
+      }
     } catch (error) {
       return throwEvaluationHttpsError(error);
     }

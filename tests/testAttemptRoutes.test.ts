@@ -5,6 +5,7 @@ import { POST as startAttempt } from '@/src/app/api/test-attempts/start/route';
 import { TestServiceError } from '@/src/lib/tests/errors';
 
 const mockVerifyRequestAuth = jest.fn();
+const mockVerifyRequestAppCheck = jest.fn();
 const mockStartAttempt = jest.fn();
 const mockSaveAttemptAnswers = jest.fn();
 const mockGradeTranslationItem = jest.fn();
@@ -16,6 +17,10 @@ jest.mock('@/src/services/firebase-admin', () => jest.requireActual('./helpers/r
 
 jest.mock('@/src/lib/verifyRequestAuth', () => ({
   verifyRequestAuth: (...args: unknown[]) => mockVerifyRequestAuth(...args),
+}));
+
+jest.mock('@/src/lib/verifyRequestAppCheck', () => ({
+  verifyRequestAppCheck: (...args: unknown[]) => mockVerifyRequestAppCheck(...args),
 }));
 
 jest.mock('@/src/lib/tests/attempt-service', () => ({
@@ -34,6 +39,7 @@ describe('student test-attempt routes', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockVerifyRequestAuth.mockResolvedValue({ uid: 'student-1' });
+    mockVerifyRequestAppCheck.mockResolvedValue(true);
   });
 
   it('derives the student from authentication when starting an attempt', async () => {
@@ -135,6 +141,19 @@ describe('student test-attempt routes', () => {
       },
     });
     expect(mockGradeTranslationItem).toHaveBeenCalledWith('attempt-1', input, 'student-1');
+  });
+
+  it('rejects translation grading without valid app attestation', async () => {
+    mockVerifyRequestAppCheck.mockResolvedValue(false);
+
+    const response = (await gradeTranslation(
+      request({ exerciseId: 'translation.one', itemIndex: 0, userTranslation: 'The girl sings.' }),
+      params('attempt-1')
+    )) as unknown as { status: number; body: { error: string } };
+
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe('Valid app attestation is required');
+    expect(mockGradeTranslationItem).not.toHaveBeenCalled();
   });
 
   it('returns a clear conflict when a translation item is already graded', async () => {
