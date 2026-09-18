@@ -79,6 +79,7 @@ export const lessonApi = appApi.injectEndpoints({
 
     getLessonById: builder.query<{ lesson: Lesson; tooltips: Record<string, TooltipData> }, { lessonId: string }>({
       query: ({ lessonId }) => `/admin/lessons/${lessonId}`,
+      extraOptions: { retryNetworkErrors: true },
       transformResponse: (response: { lesson?: Lesson } | Lesson) => {
         const lesson = 'lesson' in response ? response.lesson : (response as Lesson);
         if (!lesson) {

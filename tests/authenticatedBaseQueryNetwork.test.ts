@@ -112,6 +112,27 @@ describe('authenticated read network recovery', () => {
     expect(mockFetch).toHaveBeenCalledTimes(3);
   });
 
+  it('enables bounded retries on the actual admin lesson read endpoint', async () => {
+    const appStore = configureStore({
+      reducer: { [appApi.reducerPath]: appApi.reducer },
+      middleware: getDefaultMiddleware => getDefaultMiddleware().concat(appApi.middleware),
+    });
+    const lesson = { id: 'lesson-1', pages: [] };
+    mockFetch
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce(jsonResponse({ lesson }));
+    try {
+      const request = appStore.dispatch(lessonApi.endpoints.getLessonById.initiate({ lessonId: 'lesson-1' }));
+      await jest.advanceTimersByTimeAsync(2000);
+      expect((await request).data).toEqual({ lesson, tooltips: {} });
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+      expect((mockFetch.mock.calls[2][0] as Request).url).toContain('/api/admin/lessons/lesson-1');
+    } finally {
+      appStore.dispatch(appApi.util.resetApiState());
+    }
+  });
+
   it('recovers when Firebase token refresh temporarily cannot reach the network', async () => {
     mockGetIdToken.mockRejectedValueOnce(tokenNetworkError).mockResolvedValue('fresh-token');
     mockFetch.mockResolvedValue(jsonResponse({ ok: true }));
