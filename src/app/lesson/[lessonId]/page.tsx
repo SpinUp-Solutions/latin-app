@@ -12,6 +12,7 @@ import { FeedbackBanner } from '@/src/components/ui/core/feedback-banner';
 import { useAuth } from '@/src/hooks/useAuth';
 import { BookOpen, Pencil } from 'lucide-react';
 import { shouldReportClientHardFail, reportUnexpectedError } from '@/src/lib/report-unexpected-error';
+import { isRetryableApiError } from '@/src/store/api/baseQuery';
 
 const SIDEBAR_COLLAPSE_KEY = 'lesson-sidebar-collapse';
 
@@ -27,6 +28,8 @@ export default function DynamicLessonPage() {
   const {
     currentData: currentLesson,
     isLoading: lessonsLoading,
+    isFetching,
+    refetch,
     error,
   } = useGetStudentLessonQuery(
     { lessonId, userId: user?.uid ?? '' },
@@ -77,15 +80,30 @@ export default function DynamicLessonPage() {
         error.data.code === 'LESSON_LOCKED'
     );
 
+  const hasCurrentLesson = currentLesson?.id === lessonId;
+  const [allowCachedLesson, setAllowCachedLesson] = useState(true);
+  const isRefreshFailure = allowCachedLesson && hasCurrentLesson && isRetryableApiError(error);
+
   useEffect(() => {
-    if (!error || isLockedError) return;
+    if (isFetching) return;
+    // Once the server rejects cached content, a later network failure must not
+    // restore it. Only a successful load makes that content usable again.
+    if (error && !isRetryableApiError(error)) setAllowCachedLesson(false);
+    else if (!error && hasCurrentLesson) setAllowCachedLesson(true);
+  }, [error, hasCurrentLesson, isFetching]);
+
+  useEffect(() => {
+    if (!error || isLockedError || isFetching) return;
     if (!shouldReportClientHardFail(error)) return;
     reportUnexpectedError(error, {
-      tags: { surface: 'lesson_load', lessonId },
+      tags: { surface: isRefreshFailure ? 'lesson_refresh' : 'lesson_load', lessonId },
+      level: isRefreshFailure ? 'warning' : 'error',
+      extra: { hasCurrentLesson, online: navigator.onLine, visibilityState: document.visibilityState },
     });
-  }, [error, isLockedError, lessonId]);
+  }, [error, isLockedError, isFetching, isRefreshFailure, hasCurrentLesson, lessonId]);
 
-  const isRequestedLessonLoading = lessonsLoading || Boolean(currentLesson && currentLesson.id !== lessonId);
+  const isRequestedLessonLoading =
+    lessonsLoading || (!hasCurrentLesson && isFetching) || Boolean(currentLesson && !hasCurrentLesson && !error);
 
   if (authLoading || !user || isRequestedLessonLoading) {
     return (
@@ -95,7 +113,7 @@ export default function DynamicLessonPage() {
     );
   }
 
-  if (error) {
+  if (error && !isRefreshFailure) {
     const errorMessage = isLockedError
       ? 'Complete the previous lesson to unlock this one.'
       : 'The requested lesson could not be loaded.';
@@ -123,6 +141,15 @@ export default function DynamicLessonPage() {
                 {isLockedError ? 'Lesson Locked' : 'Failed to Load Lesson'}
               </h2>
               <p className="text-roman-stone">{errorMessage}</p>
+              {isRetryableApiError(error) && (
+                <button
+                  type="button"
+                  onClick={() => void refetch()}
+                  disabled={isFetching}
+                  className="mt-4 mr-3 px-4 py-2 bg-roman-red text-white rounded hover:bg-roman-red/90 disabled:opacity-50">
+                  {isFetching ? 'Retrying…' : 'Try again'}
+                </button>
+              )}
               <button
                 onClick={() => router.push('/dashboard')}
                 className="mt-4 px-4 py-2 bg-roman-red text-white rounded hover:bg-roman-red/90">
@@ -210,6 +237,23 @@ export default function DynamicLessonPage() {
       </header>
 
       <FeedbackBanner />
+
+      {isRefreshFailure && (
+        <div
+          role="status"
+          className="flex shrink-0 flex-wrap items-center justify-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-950">
+          <span>
+            We couldn’t refresh this lesson. You can keep your place, but progress may not save until the connection returns.
+          </span>
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            disabled={isFetching}
+            className="rounded border border-amber-800 px-3 py-1 font-medium hover:bg-amber-100 disabled:opacity-50">
+            {isFetching ? 'Retrying…' : 'Try again'}
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-1 overflow-hidden">
         <LessonSidebar

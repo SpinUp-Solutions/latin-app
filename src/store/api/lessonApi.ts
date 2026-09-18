@@ -23,6 +23,7 @@ export const lessonApi = appApi.injectEndpoints({
 
     getStudentDashboard: builder.query<StudentDashboard, string>({
       query: () => '/student-dashboard',
+      extraOptions: { retryNetworkErrors: true },
       transformResponse: (response: { dashboard: StudentDashboard }) => response.dashboard,
       providesTags: (result, error, userId) => [
         { type: 'StudentLearningPath', id: userId },
@@ -45,6 +46,7 @@ export const lessonApi = appApi.injectEndpoints({
 
     getStudentLesson: builder.query<LessonWithProgress, { lessonId: string; userId: string }>({
       query: ({ lessonId }) => `/lessons/${encodeURIComponent(lessonId)}`,
+      extraOptions: { retryNetworkErrors: true },
       transformResponse: (response: { lesson: LessonWithProgress }) => response.lesson,
       providesTags: (result, error, { lessonId, userId }) => [
         { type: 'StudentLesson', id: lessonId },
