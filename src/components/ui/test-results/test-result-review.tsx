@@ -1,6 +1,8 @@
 'use client';
 
 import Link from 'next/link';
+import { FileDown } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/src/components/ui/button';
 import React, { useMemo, useState } from 'react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/src/components/ui/accordion';
@@ -12,6 +14,7 @@ import { VocabularyViewer } from '@/src/components/ui/lesson/VocabularyViewer';
 import { VocabularyPoolViewer } from '@/src/components/ui/lesson/VocabularyPoolViewer';
 import { formatScorePoints } from '@/src/lib/tests/formatting';
 import { cn } from '@/src/lib/utils';
+import { downloadSubmittedTestResultPdf, saveBlobAsFile } from '@/src/services/testResultPdfService';
 import type {
   StudentTestResult,
   TestResultReviewExerciseItem,
@@ -183,6 +186,20 @@ export function TestResultReviewView({ result }: { result: StudentTestResult }) 
 
   const defaultOpenEntry = entries.find(entry => !entry.correct) ?? entries[0];
   const [openEntryId, setOpenEntryId] = useState(defaultOpenEntry?.id ?? '');
+  const [exportingPdf, setExportingPdf] = useState(false);
+
+  const exportPdf = async () => {
+    if (exportingPdf) return;
+    setExportingPdf(true);
+    try {
+      const { blob, filename } = await downloadSubmittedTestResultPdf(attempt.id);
+      saveBlobAsFile(blob, filename);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to export this result as a PDF');
+    } finally {
+      setExportingPdf(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-roman-marble p-4 md:p-8" data-testid="test-result-review">
@@ -193,6 +210,15 @@ export function TestResultReviewView({ result }: { result: StudentTestResult }) 
           </Button>
           <Button asChild variant="outline">
             <Link href="/dashboard">Back to dashboard</Link>
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void exportPdf()}
+            disabled={exportingPdf}
+            data-testid="export-result-pdf">
+            <FileDown className="mr-2 h-4 w-4" aria-hidden="true" />
+            {exportingPdf ? 'Exporting PDF…' : 'Export PDF'}
           </Button>
         </nav>
         <div
