@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import ContentRenderer from '@/src/components/ui/lesson/content-renderer';
 import { SectionedTestProvider } from '@/src/components/ui/test/sectioned-test-context';
 import type { Page } from '@/src/types/page';
+import type { ExerciseAnswer } from '@/src/types/runtime-mode';
 
 jest.mock('@/src/services/wordLookupService', () => ({}));
 jest.mock('@/src/components/ui/core/simple-rich-editor', () => ({ SimpleRichEditor: () => null }));
@@ -119,4 +120,91 @@ it('saves translation drafts and advances without calling an AI grading route', 
   fireEvent.click(screen.getByRole('button', { name: 'Record translation' }));
   expect(complete).toHaveBeenCalledTimes(1);
   expect(screen.queryByText(/translation feedback|score|\/10|continue/i)).not.toBeInTheDocument();
+});
+
+const multipleChoice = (multiple = true) =>
+  ({
+    id: 'choice',
+    type: 'multiple-choice',
+    title: 'Choose',
+    instructions: '',
+    feedbackConfig: { escalationLevels: [] },
+    data: {
+      question: 'Choose the verbs',
+      allowMultipleSelections: multiple,
+      options: [
+        { id: 'a', text: 'amo' },
+        { id: 'b', text: 'video' },
+      ],
+    },
+  }) as unknown as Page['items'][number];
+
+it.each([false, true])('saves MC draft selections immediately but completes only on submit (multiple=%s)', multiple => {
+  const complete = jest.fn();
+  const answer = jest.fn();
+  render(
+    <SectionedTestProvider value>
+      <ContentRenderer content={multipleChoice(multiple)} runtimeMode="test" onAnswer={answer} onComplete={complete} />
+    </SectionedTestProvider>
+  );
+  fireEvent.click(screen.getByRole('button', { name: /amo/ }));
+  expect(answer).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      answer: { type: 'multiple-choice', selectedOptionIds: ['a'] },
+    })
+  );
+  fireEvent.click(screen.getByRole('button', { name: /video/ }));
+  expect(answer).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      answer: { type: 'multiple-choice', selectedOptionIds: multiple ? ['a', 'b'] : ['b'] },
+    })
+  );
+  expect(complete).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Submit Answer' }));
+  expect(complete).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole('button', { name: /submit|continue|finish/i })).not.toBeInTheDocument();
+});
+
+it('restores an editable MC draft and saves deselection without marking it complete', () => {
+  const complete = jest.fn();
+  const answer = jest.fn();
+  render(
+    <SectionedTestProvider value>
+      <ContentRenderer
+        content={multipleChoice()}
+        runtimeMode="test"
+        initialAnswer={{ type: 'multiple-choice', selectedOptionIds: ['a', 'b'] }}
+        onAnswer={answer}
+        onComplete={complete}
+      />
+    </SectionedTestProvider>
+  );
+  expect(screen.getByRole('button', { name: /amo/ })).toHaveAttribute('aria-pressed', 'true');
+  fireEvent.click(screen.getByRole('button', { name: /amo/ }));
+  fireEvent.click(screen.getByRole('button', { name: /video/ }));
+  expect(answer).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      answer: { type: 'multiple-choice', selectedOptionIds: [] },
+    })
+  );
+  expect(screen.getByRole('button', { name: 'Submit Answer' })).toBeDisabled();
+  expect(complete).not.toHaveBeenCalled();
+});
+
+it('preserves legacy MC recording and restored-answer behavior', () => {
+  const complete = jest.fn();
+  const answer = jest.fn();
+  const { rerender } = render(
+    <ContentRenderer content={multipleChoice()} runtimeMode="test" onAnswer={answer} onComplete={complete} />
+  );
+  fireEvent.click(screen.getByRole('button', { name: /amo/ }));
+  expect(answer).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Submit Answer' }));
+  expect(complete).toHaveBeenCalledTimes(1);
+  const initialAnswer: ExerciseAnswer = { type: 'multiple-choice', selectedOptionIds: ['a'] };
+  rerender(
+    <ContentRenderer key="resume" content={multipleChoice()} runtimeMode="test" initialAnswer={initialAnswer} />
+  );
+  expect(screen.getByRole('button', { name: /amo/ })).toBeDisabled();
+  expect(screen.queryByRole('button', { name: 'Submit Answer' })).not.toBeInTheDocument();
 });

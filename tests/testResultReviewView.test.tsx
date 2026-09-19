@@ -201,16 +201,21 @@ describe('submitted test result review view', () => {
 
     const triggers = screen.getAllByRole('button', { name: /^Exercise \d+:/ });
     expect(triggers.filter(trigger => trigger.getAttribute('aria-expanded') === 'true')).toHaveLength(1);
+    expect(triggers[1]).toHaveTextContent('Hide answers');
+    expect(triggers[2]).toHaveTextContent('Show answers');
 
     fireEvent.click(triggers[2]);
     expect(triggers[0]).toHaveAttribute('aria-expanded', 'false');
     expect(triggers[1]).toHaveAttribute('aria-expanded', 'false');
     expect(triggers[2]).toHaveAttribute('aria-expanded', 'true');
+    expect(triggers[1]).toHaveTextContent('Show answers');
+    expect(triggers[2]).toHaveTextContent('Hide answers');
     expect(triggers.filter(trigger => trigger.getAttribute('aria-expanded') === 'true')).toHaveLength(1);
 
     // Students can close the currently open exercise.
     fireEvent.click(triggers[2]);
     expect(triggers[2]).toHaveAttribute('aria-expanded', 'false');
+    expect(triggers[2]).toHaveTextContent('Show answers');
   });
 
   it('shows per-part marks, accepted answers, and teacher explanations', () => {

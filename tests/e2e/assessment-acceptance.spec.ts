@@ -130,6 +130,96 @@ test.describe('Assessment acceptance', () => {
   });
 
   for (const mock of [false, true]) {
+    test(`MC drafts survive refresh and the last submitted answer opens review (${mock ? 'mock/mobile' : 'normal'})`, async ({
+      page,
+    }) => {
+      const { db } = getE2EAdmin();
+      const versionRef = db.collection('testVersions').doc(mock ? E2E_IDS.nudgeVersion : E2E_IDS.scoreVersion);
+      const original = (await versionRef.get()).data()!;
+      const firstPage = original.pages[0];
+      const choice = {
+        ...firstPage.items[0],
+        id: 'choice',
+        type: 'multiple-choice',
+        title: 'Choose the verbs',
+        data: {
+          question: 'Choose every verb.',
+          allowMultipleSelections: true,
+          options: [
+            { id: 'a', text: 'amo', isCorrect: true },
+            { id: 'b', text: 'video', isCorrect: true },
+            { id: 'c', text: 'puella', isCorrect: false },
+          ],
+        },
+      };
+      await versionRef.update({
+        pages: [{ ...firstPage, items: [...firstPage.items, choice] }],
+        totalItems: 2,
+        totalExercises: 2,
+        totalPoints: original.totalPoints * 2,
+      });
+      if (mock) await page.setViewportSize({ width: 390, height: 844 });
+      await signIn(page, mock ? E2E_USERS.mock : E2E_USERS.scoreOnly);
+      await dashboardCard(page, mock ? 'Required-pass practice' : 'Score-only checkpoint')
+        .getByRole('button', { name: mock ? 'Start Mock Test' : 'Start Test' })
+        .click();
+      await page.waitForURL(url => url.pathname === `/test/${mock ? E2E_IDS.nudgeMock : E2E_IDS.scoreTest}`);
+      await page.getByRole('button', { name: mock ? 'Start Mock Test' : 'Start Test', exact: true }).click();
+      await page.getByPlaceholder(/Type your answer/).fill('love');
+      await page.getByRole('button', { name: 'Check', exact: true }).click();
+      await expect(page.getByRole('status')).toContainText('Answers saved.');
+
+      const savedSelection = page.waitForResponse(
+        response => response.url().endsWith('/answers') && Boolean(response.request().postDataJSON()?.answers?.choice)
+      );
+      await page.getByRole('button', { name: /amo/ }).click();
+      await expect(page.getByRole('status')).not.toContainText('Answers saved.');
+      expect((await (await savedSelection).json()).attempt.answers.choice.selectedOptionIds).toEqual(['a']);
+      await expect(page.getByRole('status')).toContainText('Answers saved.');
+      await expect(page.getByRole('heading', { name: 'Review section', exact: true })).toHaveCount(0);
+      await page.reload();
+      await page.getByRole('button', { name: mock ? 'Continue Mock Test' : 'Continue Test', exact: true }).click();
+      await expect(page.getByRole('button', { name: /amo/ })).toHaveAttribute('aria-pressed', 'true');
+      await expect(page.getByRole('button', { name: /amo/ })).toBeEnabled();
+      await page.getByRole('button', { name: /video/ }).focus();
+      await page.keyboard.press('Space');
+      await expect(page.getByRole('button', { name: /video/ })).toHaveAttribute('aria-pressed', 'true');
+      await page.getByRole('button', { name: 'Submit Answer', exact: true }).click();
+      // Do not click Review section: exercise completion must open it itself.
+      await expect(page.getByRole('heading', { name: 'Review section', exact: true })).toBeVisible();
+      await expect(page.getByRole('status')).toContainText('Answers saved.');
+      await page.reload();
+      await page.getByRole('button', { name: mock ? 'Continue Mock Test' : 'Continue Test', exact: true }).click();
+      await expect(page.getByRole('heading', { name: 'Review section', exact: true })).toBeVisible();
+      await page.getByRole('button', { name: 'Return to section' }).click();
+      await expect(page.getByRole('button', { name: 'Submit Answer', exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Review section', exact: true })).toHaveCount(0);
+      await page.getByRole('button', { name: 'Review section', exact: true }).click();
+      await page.getByRole('button', { name: 'Confirm section and submit' }).click();
+      await page.getByRole('link', { name: 'Review answers' }).click();
+      const triggers = page.getByRole('button', { name: /^Exercise \d+:/ });
+      await expect(triggers).toHaveCount(2);
+      await expect(triggers.nth(0)).toContainText('Hide answers');
+      await expect(triggers.nth(1)).toContainText('Show answers');
+      await triggers.nth(1).click();
+      await expect(triggers.nth(0)).toHaveAttribute('aria-expanded', 'false');
+      await expect(triggers.nth(1)).toHaveAttribute('aria-expanded', 'true');
+      await expect(triggers.nth(1)).toContainText('Hide answers');
+      const choicePanel = page.getByTestId('review-exercise-choice');
+      await expect(choicePanel.getByText('Your choice', { exact: true })).toHaveCount(2);
+      await expect(choicePanel.getByText('Your answer is marked above.')).toBeVisible();
+      await triggers.nth(1).press('Enter');
+      await expect(triggers.nth(1)).toHaveAttribute('aria-expanded', 'false');
+      await expect(triggers.nth(1)).toContainText('Show answers');
+      await expect(choicePanel.getByText('Your answer is marked above.')).not.toBeVisible();
+      await triggers.nth(1).click();
+      await page.screenshot({
+        path: `test-results/result-controls-${mock ? 'mobile' : 'desktop'}.png`,
+        fullPage: true,
+        animations: 'disabled',
+      });
+    });
+
     test(`sections lock, resume, preserve edits, and submit with omissions (${mock ? 'mock/mobile' : 'normal'})`, async ({
       page,
     }) => {

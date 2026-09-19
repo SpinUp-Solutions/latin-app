@@ -42,6 +42,10 @@ reopening until another section begins. Content-only sections still need explici
 confirmation. Existing practice, authoring preview, and legacy attempts keep
 their original exercise behavior.
 
+Multiple-choice selections save as drafts immediately. `Submit Answer` marks the
+exercise finished after the student has selected all intended options; there is
+no additional per-answer confirmation. Saved selections remain editable on resume.
+
 ## Hidden translation grading
 
 Confirmation reserves a fingerprint of the frozen page and its answers in a
