@@ -1,7 +1,18 @@
 import React from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { toast } from 'sonner';
 import { TestResultReviewView } from '@/src/components/ui/test-results/test-result-review';
+import { downloadSubmittedTestResultPdf, saveBlobAsFile } from '@/src/services/testResultPdfService';
 import type { StudentTestResult, TestResultReviewItem } from '@/src/types/test-results';
+
+jest.mock('sonner', () => ({
+  toast: { error: jest.fn(), success: jest.fn() },
+}));
+
+jest.mock('@/src/services/testResultPdfService', () => ({
+  downloadSubmittedTestResultPdf: jest.fn(),
+  saveBlobAsFile: jest.fn(),
+}));
 
 const submittedAt = '2026-08-19T12:00:00.000Z';
 
@@ -158,6 +169,10 @@ const buildResult = (
 });
 
 describe('submitted test result review view', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   it('opens the first incorrect or partly correct exercise by default', () => {
     render(
       <TestResultReviewView
@@ -342,5 +357,39 @@ describe('submitted test result review view', () => {
     expect(screen.getByText('23 / 40 points')).toBeInTheDocument();
     expect(screen.getByText('Detailed review unavailable')).toBeInTheDocument();
     expect(screen.queryByTestId('test-result-accordion')).not.toBeInTheDocument();
+  });
+
+  it('exports a PDF of the submitted result', async () => {
+    const download = downloadSubmittedTestResultPdf as jest.MockedFunction<typeof downloadSubmittedTestResultPdf>;
+    const save = saveBlobAsFile as jest.MockedFunction<typeof saveBlobAsFile>;
+    const blob = new Blob(['%PDF'], { type: 'application/pdf' });
+    download.mockResolvedValue({ blob, filename: 'jane-doe-chapter-3-quiz-2026-08-19.pdf' });
+
+    render(
+      <TestResultReviewView
+        result={buildResult([[fillItem('ex-fill-1', { awardedPoints: 10, correctFirst: true })]])}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export PDF' }));
+
+    await waitFor(() => expect(download).toHaveBeenCalledWith('attempt-1'));
+    expect(save).toHaveBeenCalledWith(blob, 'jane-doe-chapter-3-quiz-2026-08-19.pdf');
+  });
+
+  it('shows an error toast when PDF export fails', async () => {
+    const download = downloadSubmittedTestResultPdf as jest.MockedFunction<typeof downloadSubmittedTestResultPdf>;
+    download.mockRejectedValue(new Error('Unable to export this result as a PDF'));
+
+    render(
+      <TestResultReviewView
+        result={buildResult([[fillItem('ex-fill-1', { awardedPoints: 10, correctFirst: true })]])}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export PDF' }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Unable to export this result as a PDF'));
+    expect(saveBlobAsFile).not.toHaveBeenCalled();
   });
 });
