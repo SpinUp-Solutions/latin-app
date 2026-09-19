@@ -257,6 +257,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
           onComplete={onComplete}
           onCompletionAccepted={acceptedCompletionHandler}
           runtimeMode={mode}
+          onAnswer={handleAnswer}
           initialAnswer={initialAnswer}
         />
       );

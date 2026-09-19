@@ -1,3 +1,5 @@
+import type { SectionWrite, SectionPhaseInput, ConfirmSectionInput } from '@/shared/tests/sections';
+import type { StudentTestAttempt, ConfirmSectionResult } from '@/src/types/test';
 import type {
   CreateTestWithVersionInput,
   StartTestAttemptInput,
@@ -186,12 +188,13 @@ export const testApi = appApi.injectEndpoints({
         uid: string;
         attemptId: string;
         answers: Record<string, ExerciseAnswer | null>;
+        section?: SectionWrite;
       }
     >({
-      query: ({ uid: _uid, attemptId, answers }) => ({
+      query: ({ uid: _uid, attemptId, answers, section }) => ({
         url: `/test-attempts/${attemptId}/answers`,
         method: 'PATCH',
-        body: { answers },
+        body: { answers, ...(section ? { section } : {}) },
       }),
       transformResponse: (response: { attempt: StudentInProgressTestAttempt }) => response.attempt,
       invalidatesTags: (result, error, { attemptId }) => (result ? [{ type: 'TestAttempt', id: attemptId }] : []),
@@ -236,6 +239,46 @@ export const testApi = appApi.injectEndpoints({
             ]
           : [],
     }),
+    getTestAttempt: builder.query<StudentTestAttempt, string>({
+      query: attemptId => `/test-attempts/${attemptId}`,
+      transformResponse: (response: { attempt: StudentTestAttempt }) => response.attempt,
+    }),
+    setTestSectionPhase: builder.mutation<
+      StudentInProgressTestAttempt,
+      { attemptId: string; pageId: string } & SectionPhaseInput
+    >({
+      query: ({ attemptId, pageId, ...body }) => ({
+        url: `/test-attempts/${attemptId}/sections/${pageId}`,
+        method: 'PATCH',
+        body,
+      }),
+      transformResponse: (response: { attempt: StudentInProgressTestAttempt }) => response.attempt,
+    }),
+    confirmTestSection: builder.mutation<
+      ConfirmSectionResult,
+      { uid: string; attemptId: string; pageId: string } & ConfirmSectionInput
+    >({
+      query: ({ uid: _uid, attemptId, pageId, ...body }) => ({
+        url: `/test-attempts/${attemptId}/sections/${pageId}/confirm`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: (result, error, { uid, attemptId }) =>
+        result?.attempt.status === 'submitted'
+          ? [
+              { type: 'TestAttempt', id: attemptId },
+              { type: 'AttemptSummary', id: getAttemptSummaryTagId(uid, result.attempt.origin) },
+              { type: 'StudentLearningPath', id: uid },
+              STUDENT_DASHBOARD_TAG,
+              ...(result.attempt.origin.kind === 'mock-test'
+                ? [
+                    { type: 'MockTest' as const, id: 'STUDENT' },
+                    { type: 'MockTest' as const, id: result.attempt.origin.mockTestId },
+                  ]
+                : []),
+            ]
+          : [],
+    }),
     getTestResult: builder.query<StudentTestResult, string>({
       query: attemptId => `/test-results/${attemptId}`,
       transformResponse: (response: { result: StudentTestResult }) => response.result,
@@ -245,6 +288,9 @@ export const testApi = appApi.injectEndpoints({
 });
 
 export const {
+  useLazyGetTestAttemptQuery,
+  useSetTestSectionPhaseMutation,
+  useConfirmTestSectionMutation,
   useGetTestsQuery,
   useGetTestByIdQuery,
   useCreateTestMutation,

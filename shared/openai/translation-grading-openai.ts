@@ -17,7 +17,8 @@ export interface StructuredAIExecutor {
   execute<M extends TranslationGradingMode>(
     task: TranslationGradingTask<M>,
     prompt: TranslationGradingPrompt,
-    profile: TranslationGradingProfile
+    profile: TranslationGradingProfile,
+    options?: { signal?: AbortSignal; timeout?: number; maxRetries?: number }
   ): Promise<TranslationGradingRunResult<TranslationGradingOutputByMode[M]>>;
 }
 
@@ -62,45 +63,50 @@ const providerFailure = (profile: TranslationGradingProfile, latencyMs: number):
 });
 
 export const openAIStructuredOutputExecutor: StructuredAIExecutor = {
-  async execute(task, prompt, profile) {
+  async execute(task, prompt, profile, options) {
     const startTime = Date.now();
     let response: Awaited<ReturnType<typeof openai.responses.create>>;
     try {
       const explicitPromptCaching = profile.promptCacheMode === 'explicit';
-      response = await openai.responses.create({
-        model: profile.model,
-        max_output_tokens: profile.maxOutputTokens[task.mode],
-        instructions: task.systemPrompt,
-        reasoning: { effort: profile.reasoningEffort },
-        input: explicitPromptCaching
-          ? [
-              {
-                type: 'message',
-                role: 'user',
-                content: [
-                  {
-                    type: 'input_text',
-                    text: prompt.stablePrefix,
-                    prompt_cache_breakpoint: { mode: 'explicit' },
-                  },
-                  { type: 'input_text', text: prompt.variableSuffix },
-                ],
-              },
-            ]
-          : `${prompt.stablePrefix}\n\n${prompt.variableSuffix}`,
-        prompt_cache_key: promptCacheKeyFor(profile, prompt.variableSuffix, task.mode),
-        ...(explicitPromptCaching ? { prompt_cache_options: { mode: 'explicit' as const, ttl: '30m' as const } } : {}),
-        service_tier: 'default',
-        store: false,
-        text: {
-          format: {
-            type: 'json_schema',
-            name: task.formatName,
-            schema: taskJsonSchema(task),
-            strict: true,
+      response = await openai.responses.create(
+        {
+          model: profile.model,
+          max_output_tokens: profile.maxOutputTokens[task.mode],
+          instructions: task.systemPrompt,
+          reasoning: { effort: profile.reasoningEffort },
+          input: explicitPromptCaching
+            ? [
+                {
+                  type: 'message',
+                  role: 'user',
+                  content: [
+                    {
+                      type: 'input_text',
+                      text: prompt.stablePrefix,
+                      prompt_cache_breakpoint: { mode: 'explicit' },
+                    },
+                    { type: 'input_text', text: prompt.variableSuffix },
+                  ],
+                },
+              ]
+            : `${prompt.stablePrefix}\n\n${prompt.variableSuffix}`,
+          prompt_cache_key: promptCacheKeyFor(profile, prompt.variableSuffix, task.mode),
+          ...(explicitPromptCaching
+            ? { prompt_cache_options: { mode: 'explicit' as const, ttl: '30m' as const } }
+            : {}),
+          service_tier: 'default',
+          store: false,
+          text: {
+            format: {
+              type: 'json_schema',
+              name: task.formatName,
+              schema: taskJsonSchema(task),
+              strict: true,
+            },
           },
         },
-      });
+        options
+      );
     } catch (error) {
       console.error('[translation-grading] provider request failed', error);
       return providerFailure(profile, Date.now() - startTime);

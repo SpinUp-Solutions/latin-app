@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+import { Button } from '@/src/components/ui/button';
 import React, { useMemo } from 'react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/src/components/ui/accordion';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
@@ -184,7 +186,17 @@ export function TestResultReviewView({ result }: { result: StudentTestResult }) 
   return (
     <div className="min-h-screen bg-roman-marble p-4 md:p-8" data-testid="test-result-review">
       <div className="mx-auto max-w-4xl space-y-6">
+        <nav aria-label="Result navigation" className="flex flex-wrap gap-3">
+          <Button asChild variant="outline">
+            <a href="#result-summary">Back to summary</a>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/dashboard">Back to dashboard</Link>
+          </Button>
+        </nav>
         <div
+          id="result-summary"
+          tabIndex={-1}
           className={cn(
             'overflow-hidden rounded-2xl border bg-white shadow-md',
             attempt.outcome === 'not-passed' ? 'border-amber-300' : 'border-emerald-300'
@@ -216,7 +228,7 @@ export function TestResultReviewView({ result }: { result: StudentTestResult }) 
         ) : (
           <Accordion
             type="single"
-            collapsible={false}
+            collapsible
             defaultValue={defaultOpenEntry?.id}
             className="space-y-3"
             data-testid="test-result-accordion">

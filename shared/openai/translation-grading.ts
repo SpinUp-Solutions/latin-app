@@ -35,7 +35,8 @@ export interface TranslationGradingService {
   grade<M extends TranslationGradingMode>(
     mode: M,
     request: TranslationGradingRequest,
-    profileId?: TranslationGradingProfileId
+    profileId?: TranslationGradingProfileId,
+    options?: { signal?: AbortSignal; timeout?: number; maxRetries?: number }
   ): Promise<TranslationGradingRunResult<TranslationGradingOutputByMode[M]>>;
 }
 
@@ -51,9 +52,11 @@ export function createTranslationGradingService(
   executor: StructuredAIExecutor = openAIStructuredOutputExecutor
 ): TranslationGradingService {
   return {
-    async grade(mode, request, profileId) {
+    async grade(mode, request, profileId, options) {
       const task = getTranslationGradingTask(mode);
-      return executor.execute(task, task.buildPrompt(request), profileFor(mode, profileId));
+      return options
+        ? executor.execute(task, task.buildPrompt(request), profileFor(mode, profileId), options)
+        : executor.execute(task, task.buildPrompt(request), profileFor(mode, profileId));
     },
   };
 }

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import { dashboardCard, recordFillAnswer, signIn, submitCurrentTest } from './fixtures/journeys';
 import { E2E_IDS, E2E_USERS, getE2EAdmin, parentMockId, seedAcceptanceData } from './fixtures/seed';
@@ -49,7 +50,6 @@ test.describe('Assessment acceptance', () => {
     await expect(page.getByRole('heading', { name: 'Test passed' })).toBeVisible();
 
     await page.getByRole('button', { name: 'Retake Test' }).click();
-    await page.getByRole('button', { name: 'Start Retake' }).click();
     await recordFillAnswer(page, 'wrong again');
     await submitCurrentTest(page);
     await expect(page.getByRole('heading', { name: 'Keep going' })).toBeVisible();
@@ -105,7 +105,8 @@ test.describe('Assessment acceptance', () => {
     await expect(page.getByText('Complete this test to continue — any score counts')).toBeVisible();
     await page.getByRole('button', { name: 'Continue Test' }).click();
     await expect(page.getByText('amo, amare', { exact: true })).toBeVisible();
-    await expect(page.getByPlaceholder('Type your answer...')).toHaveValue('love');
+    await expect(page.getByRole('heading', { name: 'Review section', exact: true })).toBeVisible();
+    await expect(page.getByRole('textbox')).toHaveValue('love');
     await expect(page.getByText('changed-source-prompt')).toHaveCount(0);
 
     const attempts = await db
@@ -127,6 +128,86 @@ test.describe('Assessment acceptance', () => {
       },
     });
   });
+
+  for (const mock of [false, true]) {
+    test(`sections lock, resume, preserve edits, and submit with omissions (${mock ? 'mock/mobile' : 'normal'})`, async ({
+      page,
+    }) => {
+      const { db } = getE2EAdmin();
+      const versionId = mock ? E2E_IDS.nudgeVersion : E2E_IDS.scoreVersion;
+      const versionRef = db.collection('testVersions').doc(versionId);
+      const original = (await versionRef.get()).data()!;
+      const firstPage = original.pages[0];
+      const secondExercise = {
+        ...firstPage.items[0],
+        id: 'section-two-exercise',
+        title: 'Future section question',
+        data: { items: [{ text: 'future-prompt', answer: 'future-answer' }] },
+      };
+      await versionRef.update({
+        pages: [firstPage, { id: 'section-two', title: 'Second section', items: [secondExercise] }],
+        totalPages: 2,
+        totalItems: 2,
+        totalExercises: 2,
+        totalPoints: original.totalPoints * 2,
+      });
+      if (mock) await page.setViewportSize({ width: 390, height: 844 });
+      await signIn(page, mock ? E2E_USERS.mock : E2E_USERS.scoreOnly);
+      await dashboardCard(page, mock ? 'Required-pass practice' : 'Score-only checkpoint')
+        .getByRole('button', { name: mock ? 'Start Mock Test' : 'Start Test' })
+        .click();
+      const startResponse = page.waitForResponse(response => response.url().endsWith('/api/test-attempts/start'));
+      await page.getByRole('button', { name: mock ? 'Start Mock Test' : 'Start Test', exact: true }).click();
+      const start = await startResponse;
+      const first = (await start.json()).attempt;
+      expect(JSON.stringify(first)).not.toContain('future-prompt');
+      expect(first).not.toHaveProperty('translationGrades');
+      const authorization = start.request().headers()['authorization'];
+      await recordFillAnswer(page, 'love');
+      await page.getByRole('textbox').fill('edited answer');
+      await expect(page.getByRole('status')).toContainText('Answers saved.');
+      await page.getByRole('button', { name: 'Return to section' }).click();
+      await expect(page.getByRole('textbox', { name: /Type your answer/ })).toHaveValue('edited answer');
+      await expect(page.getByRole('button', { name: 'Review section' })).toBeVisible();
+      await page.getByRole('button', { name: 'Review section' }).click();
+      await expect(page.getByRole('textbox')).toHaveValue('edited answer');
+      await page.screenshot({ path: `test-results/section-review-${mock ? 'mobile' : 'desktop'}.png`, fullPage: true });
+      const confirmationResponse = page.waitForResponse(response =>
+        response.url().endsWith(`/sections/${firstPage.id}/confirm`)
+      );
+      await page.getByRole('button', { name: 'Confirm section and continue' }).click();
+      const confirmation = await confirmationResponse;
+      const next = (await confirmation.json()).attempt;
+      expect(next.delivery.pages.map((p: { id: string }) => p.id)).toEqual(['section-two']);
+      expect(next.answers).toEqual({});
+      await expect(page.getByText('future-prompt')).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Previous page' })).toHaveCount(0);
+      const stale = await page.request.patch(`/api/test-attempts/${first.id}/answers`, {
+        headers: { authorization },
+        data: {
+          section: { pageId: firstPage.id, expectedRevision: 1, mutationId: randomUUID() },
+          answers: { [firstPage.items[0].id]: { type: 'fill', answers: ['overwrite locked answer'] } },
+        },
+      });
+      expect(stale.status()).toBe(409);
+      await page.reload();
+      await page.getByRole('button', { name: mock ? 'Continue Mock Test' : 'Continue Test', exact: true }).click();
+      await expect(page.getByText('future-prompt')).toBeVisible();
+      await page.getByRole('button', { name: 'Review section' }).click();
+      await expect(page.getByRole('button', { name: 'Confirm section and submit' })).toBeDisabled();
+      await page.getByRole('checkbox', { name: /I understand this section/ }).check();
+      await page.getByRole('button', { name: 'Confirm section and submit' }).click();
+      await page.getByRole('link', { name: 'Review answers' }).click();
+      await expect(page.getByRole('link', { name: 'Back to summary' })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Back to dashboard' })).toBeVisible();
+      const open = page.locator('[data-testid="test-result-accordion"] button[aria-expanded="true"]');
+      await expect(open).toHaveCount(1);
+      await open.click();
+      await expect(open).toHaveCount(0);
+      await page.goBack();
+      await expect(page).toHaveURL(new RegExp(`/test/${mock ? E2E_IDS.nudgeMock : E2E_IDS.scoreTest}`));
+    });
+  }
 
   test('admin mock assignment transfers ownership into an ordered fixed-version student flow', async ({
     browser,

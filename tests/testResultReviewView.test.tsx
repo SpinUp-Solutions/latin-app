@@ -188,7 +188,7 @@ describe('submitted test result review view', () => {
     expect(triggers[1]).toHaveAttribute('aria-expanded', 'false');
   });
 
-  it('keeps exactly one accordion item open at a time', () => {
+  it('keeps at most one accordion item open and allows it to collapse', () => {
     render(
       <TestResultReviewView
         result={buildResult([
@@ -208,9 +208,9 @@ describe('submitted test result review view', () => {
     expect(triggers[2]).toHaveAttribute('aria-expanded', 'true');
     expect(triggers.filter(trigger => trigger.getAttribute('aria-expanded') === 'true')).toHaveLength(1);
 
-    // A single (non-collapsible) accordion never allows zero open items.
+    // Students can close the currently open exercise.
     fireEvent.click(triggers[2]);
-    expect(triggers[2]).toHaveAttribute('aria-expanded', 'true');
+    expect(triggers[2]).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('shows per-part marks, accepted answers, and teacher explanations', () => {

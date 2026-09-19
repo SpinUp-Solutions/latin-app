@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle, HelpCircle, RotateCcw, Undo2, XCircle } from 'lucide-react';
 import { ANNOTATION_SPECS, AnnotationKind, DEFAULT_STUDENT_TOOLS, normalizeAnnotationTools } from './annotation-spec';
 import {
@@ -41,6 +41,7 @@ export interface SentenceDiagramStudentProps {
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
   initialAnswer?: ExerciseAnswer;
+  answerEditing?: boolean;
   onAttempt?: (attempt: DiagramAuditSubmission) => void;
 }
 
@@ -184,6 +185,7 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
   runtimeMode,
   onAnswer,
   initialAnswer,
+  answerEditing = false,
   onAttempt,
 }) => {
   const mode = runtimeMode ?? 'practice';
@@ -192,11 +194,20 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
   const [annotations, setAnnotations] = useState<DiagramAnnotation[]>(
     initialAnswer?.type === 'sentence-diagramming' ? initialAnswer.annotations : []
   );
+  const answerCallbackRef = useRef(onAnswer);
+  answerCallbackRef.current = onAnswer;
+  const lastEmittedAnnotations = useRef(annotations);
+  useEffect(() => {
+    if (answerEditing && lastEmittedAnnotations.current !== annotations) {
+      lastEmittedAnnotations.current = annotations;
+      answerCallbackRef.current?.({ type: 'sentence-diagramming', annotations });
+    }
+  }, [annotations, answerEditing]);
   const [selection, setSelection] = useState<DiagramSelection | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [surfaceResetKey, setSurfaceResetKey] = useState(0);
   const [testSubmitted, setTestSubmitted] = useState(
-    testAnswerMode && initialAnswer?.type === 'sentence-diagramming'
+    !answerEditing && testAnswerMode && initialAnswer?.type === 'sentence-diagramming'
   );
   const historyRef = useRef<DiagramAnnotation[][]>([]);
   const normalizedTools = normalizeAnnotationTools(exercise.data.availableStudentTools);
@@ -485,14 +496,16 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
         ) : null}
 
         <div className="flex flex-wrap items-center gap-2 border-t border-stone-100 px-5 py-3">
-          <Button
-            size="sm"
-            onClick={handleSubmit}
-            disabled={interactionLocked || annotations.length === 0}
-            className="gap-1.5">
-            <CheckCircle className="h-3.5 w-3.5" />
-            Check
-          </Button>
+          {!answerEditing && (
+            <Button
+              size="sm"
+              onClick={handleSubmit}
+              disabled={interactionLocked || annotations.length === 0}
+              className="gap-1.5">
+              <CheckCircle className="h-3.5 w-3.5" />
+              Check
+            </Button>
+          )}
           <Button
             size="sm"
             onClick={handleUndo}

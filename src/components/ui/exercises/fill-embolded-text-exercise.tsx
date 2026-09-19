@@ -16,6 +16,7 @@ import type {
   ExerciseCompletionHandler,
   RuntimeMode,
 } from '@/src/types/runtime-mode';
+import { useSectionedTest } from '../test/sectioned-test-context';
 import { RecordedAnswerControls } from './recorded-answer-controls';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 import { splitHtmlIntoWords } from '@/src/utils/htmlWordSplitter';
@@ -41,6 +42,7 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
   const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
+  const sectioned = useSectionedTest();
   const passageWords = useMemo(() => splitHtmlIntoWords(exercise.data.passage), [exercise.data.passage]);
   const restoredAnswers = initialAnswer?.type === 'fill-embolded-text' ? initialAnswer.answers : [];
   const firstIncompleteIndex = exercise.data.words.findIndex((_, index) => !restoredAnswers[index]?.trim());
@@ -122,6 +124,10 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
     if (testAnswerMode) {
       onAnswer?.({ type: 'fill-embolded-text', answers: nextAnswers });
       setTestSubmitted(true);
+      if (sectioned) {
+        if (isLastItem) onComplete?.(0);
+        else continueTest();
+      }
       return;
     }
 
@@ -216,7 +222,11 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
 
       <ExerciseProgress
         currentIndex={currentIndex}
-        completed={mode === 'practice' ? currentIndex + (isCorrect === true ? 1 : 0) : submittedAnswers.filter(answer => Boolean(answer?.trim())).length}
+        completed={
+          mode === 'practice'
+            ? currentIndex + (isCorrect === true ? 1 : 0)
+            : submittedAnswers.filter(answer => Boolean(answer?.trim())).length
+        }
         total={exercise.data.words.length}
         label="Word"
         showProgress={exercise.feedbackConfig.progressionRules?.showProgress !== false}
@@ -265,7 +275,7 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
         </div>
 
         {testAnswerMode ? (
-          testSubmitted && <RecordedAnswerControls isLastItem={isLastItem} onContinue={continueTest} />
+          !sectioned && testSubmitted && <RecordedAnswerControls isLastItem={isLastItem} onContinue={continueTest} />
         ) : (
           <FeedbackDisplay
             isCorrect={isCorrect}

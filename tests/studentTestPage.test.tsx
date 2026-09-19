@@ -1,3 +1,6 @@
+jest.mock('@/src/components/ui/test/sectioned-test-player', () => ({
+  SectionedTestPlayer: () => <div>Sectioned player</div>,
+}));
 import React, { Suspense } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import StudentTestPage from '@/src/app/test/[testId]/page';

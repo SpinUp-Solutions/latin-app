@@ -1,5 +1,6 @@
 'use client';
 
+import { useSectionedTest } from '../test/sectioned-test-context';
 import React, { useState } from 'react';
 import { TableFillExercise } from '@/src/types/exercise';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
@@ -47,6 +48,7 @@ const TableFillExerciseComponent: React.FC<Props> = ({
   const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
+  const sectioned = useSectionedTest();
   const restoredAnswers = initialAnswer?.type === 'table-fill' ? initialAnswer.answers : {};
   const requiredCellKeys = exercise.data.rows.flatMap(row =>
     exercise.data.columns.flatMap(column => (row.cells[column.id]?.isBlank ? [`${row.id}-${column.id}`] : []))
@@ -57,11 +59,13 @@ const TableFillExerciseComponent: React.FC<Props> = ({
   const [hasSubmitted, setHasSubmitted] = useState(hasAllRequiredAnswers(restoredAnswers));
   const [isProcessing, setIsProcessing] = useState(false);
   const [cellResults, setCellResults] = useState<Record<string, boolean>>({});
-  const { isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance, cancelPendingAdvance } = useExerciseProgression({
-    totalItems: 1,
-    itemProgressionDelay: exercise.itemProgressionDelay,
-    progressionRules: exercise.feedbackConfig.progressionRules,
-  });
+  const { isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance, cancelPendingAdvance } = useExerciseProgression(
+    {
+      totalItems: 1,
+      itemProgressionDelay: exercise.itemProgressionDelay,
+      progressionRules: exercise.feedbackConfig.progressionRules,
+    }
+  );
 
   const {
     isCorrect,
@@ -89,6 +93,7 @@ const TableFillExerciseComponent: React.FC<Props> = ({
   const handleInputChange = (cellKey: string, value: string) => {
     if (hasSubmitted || isProcessing || resetRequired) return;
     setUserAnswers(prev => ({ ...prev, [cellKey]: value }));
+    if (testAnswerMode && sectioned) onAnswer?.({ type: 'table-fill', answers: { ...userAnswers, [cellKey]: value } });
     if (isCorrect !== null) {
       clearFeedback();
     }
