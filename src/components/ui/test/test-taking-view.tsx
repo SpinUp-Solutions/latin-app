@@ -34,6 +34,7 @@ export interface TestTakingViewProps {
   onExit?: () => void;
   navigationPending?: boolean;
   embedded?: boolean;
+  sectionNavigation?: { pageIndex: number; totalPages: number };
 }
 
 export function TestTakingView({
@@ -58,6 +59,7 @@ export function TestTakingView({
   onExit,
   navigationPending = false,
   embedded = false,
+  sectionNavigation,
 }: TestTakingViewProps) {
   const currentPage = pages[currentPageIndex];
   const answeredPercentage = totalExercises > 0 ? (answeredCount / totalExercises) * 100 : 0;
@@ -75,8 +77,8 @@ export function TestTakingView({
         <RomanPlayerShell
           icon={FileCheck2}
           label={preview ? 'Test preview' : 'Test in progress'}
-          currentPage={currentPageIndex + 1}
-          totalPages={pages.length}
+          currentPage={(sectionNavigation?.pageIndex ?? currentPageIndex) + 1}
+          totalPages={sectionNavigation?.totalPages ?? pages.length}
           title={title}
           description={description}
           headingAs={embedded ? 'div' : 'h1'}
@@ -104,19 +106,21 @@ export function TestTakingView({
             </>
           }>
           {currentPage ? (
-            <PageTemplate
-              key={currentPage.id}
-              page={currentPage}
-              pageIndex={currentPageIndex}
-              runtimeMode="test"
-              onAnswer={onAnswer}
-              answers={answers}
-              resolvedExerciseState={resolvedExerciseState}
-              allowGeneratedExerciseQueries={allowGeneratedExerciseQueries}
-              vocabularyPoolId={vocabularyPoolId}
-              resolvedVocabularyPool={resolvedVocabularyPool}
-              onExerciseComplete={onExerciseComplete}
-            />
+            <div inert={Boolean(sectionNavigation && navigationPending) || undefined}>
+              <PageTemplate
+                key={currentPage.id}
+                page={currentPage}
+                pageIndex={currentPageIndex}
+                runtimeMode="test"
+                onAnswer={onAnswer}
+                answers={answers}
+                resolvedExerciseState={resolvedExerciseState}
+                allowGeneratedExerciseQueries={allowGeneratedExerciseQueries}
+                vocabularyPoolId={vocabularyPoolId}
+                resolvedVocabularyPool={resolvedVocabularyPool}
+                onExerciseComplete={onExerciseComplete}
+              />
+            </div>
           ) : (
             <p className="py-12 text-center text-roman-stone">This test page is unavailable.</p>
           )}
@@ -137,15 +141,17 @@ export function TestTakingView({
             </Button>
           ) : null}
           <div className="flex flex-col gap-3 sm:ml-auto sm:flex-row sm:items-center">
-            <Button
-              variant="outline"
-              className="rounded-xl border-roman-red/20 hover:bg-roman-parchment"
-              disabled={navigationPending || currentPageIndex === 0}
-              onClick={onPrevious}>
-              <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
-              Previous page
-            </Button>
-            {!isLastPage ? (
+            {!sectionNavigation && (
+              <Button
+                variant="outline"
+                className="rounded-xl border-roman-red/20 hover:bg-roman-parchment"
+                disabled={navigationPending || currentPageIndex === 0}
+                onClick={onPrevious}>
+                <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
+                Previous page
+              </Button>
+            )}
+            {!sectionNavigation && !isLastPage ? (
               <Button
                 className="rounded-xl bg-roman-red hover:bg-roman-red/90"
                 disabled={navigationPending}
@@ -158,7 +164,7 @@ export function TestTakingView({
                 className="rounded-xl bg-roman-red hover:bg-roman-red/90"
                 disabled={navigationPending}
                 onClick={onReview}>
-                Review answers
+                {sectionNavigation ? 'Review section' : 'Review answers'}
                 <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
               </Button>
             )}

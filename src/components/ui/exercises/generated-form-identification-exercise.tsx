@@ -38,6 +38,7 @@ import type {
 } from '@/src/types/runtime-mode';
 import { getContentTypeLabel } from '@/src/lib/content/registry';
 import { createGeneratedFormIdentificationItems } from '@/src/lib/tests/generated-exercises';
+import { useSectionedTest } from '../test/sectioned-test-context';
 import { RecordedAnswerControls } from './recorded-answer-controls';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
@@ -76,6 +77,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
   const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
+  const sectioned = useSectionedTest();
   const [wordAnswers, setWordAnswers] = useState<Record<string, Record<string, string>>>({});
   const [multiAnswerSlots, setMultiAnswerSlots] = useState<Record<string, string[][]>>({});
 
@@ -217,6 +219,10 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
     if (testAnswerMode) {
       onAnswer?.({ type: 'generated-form-identification', answers: nextAnswers });
       setTestSubmitted(true);
+      if (sectioned) {
+        if (isLastItem) onComplete?.(0);
+        else continueTest();
+      }
       return;
     }
 
@@ -557,7 +563,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
               onStartOver={resetRequired ? handleExerciseReset : undefined}
             />
           )}
-          {assessmentMode && testSubmitted && (
+          {assessmentMode && testSubmitted && !sectioned && (
             <RecordedAnswerControls isLastItem={isLastItem} onContinue={continueTest} />
           )}
         </CardContent>

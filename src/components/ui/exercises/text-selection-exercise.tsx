@@ -17,6 +17,7 @@ import type {
   ExerciseCompletionHandler,
   RuntimeMode,
 } from '@/src/types/runtime-mode';
+import { useSectionedTest } from '../test/sectioned-test-context';
 import { RecordedAnswerControls } from './recorded-answer-controls';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 import { splitHtmlIntoWords } from '@/src/utils/htmlWordSplitter';
@@ -41,6 +42,7 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({
   const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
+  const sectioned = useSectionedTest();
   const passageWords = splitHtmlIntoWords(exercise.data.passage);
   const restoredIndices = initialAnswer?.type === 'text-selection' ? initialAnswer.selectedWordIndices : [];
   const restoredIndex = Math.min(restoredIndices.length, Math.max(exercise.data.questions.length - 1, 0));
@@ -101,6 +103,10 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({
     if (testAnswerMode) {
       onAnswer?.({ type: 'text-selection', selectedWordIndices: nextIndices });
       setTestSubmitted(true);
+      if (sectioned) {
+        if (isLastItem) onComplete?.(0);
+        else continueTest();
+      }
       return;
     }
 
@@ -211,7 +217,7 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({
         </div>
 
         {testAnswerMode ? (
-          testSubmitted && <RecordedAnswerControls isLastItem={isLastItem} onContinue={continueTest} />
+          !sectioned && testSubmitted && <RecordedAnswerControls isLastItem={isLastItem} onContinue={continueTest} />
         ) : (
           <FeedbackDisplay
             isCorrect={isCorrect}
