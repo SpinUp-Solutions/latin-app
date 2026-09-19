@@ -17,6 +17,9 @@ import { TEST_RUNTIME_FEEDBACK_CONFIG } from '@/src/types/runtime-mode';
 import { splitHtmlIntoWords } from '@/src/utils/htmlWordSplitter';
 import { richTextToPlainText, stripHtmlTags } from '@/src/utils/exercises/helpers';
 import { formatLabel } from '@/src/utils/label-formatter';
+import { ClipboardList } from 'lucide-react';
+import { Button } from '@/src/components/ui/button';
+import { cn } from '@/src/lib/utils';
 
 const generatedPromptSchema = z.object({
   id: z.string().optional(),
@@ -46,14 +49,24 @@ function AnswerField({
 }) {
   const id = React.useId();
   return (
-    <div className="space-y-2">
-      <label htmlFor={id} className="block text-sm font-medium">
+    <div className="space-y-2.5">
+      <label htmlFor={id} className="block text-sm font-medium leading-relaxed text-slate-700">
         {label}
       </label>
       {multiline ? (
-        <Textarea id={id} value={value} onChange={event => onChange(event.target.value)} />
+        <Textarea
+          id={id}
+          className="min-h-28 rounded-xl border-slate-200 bg-slate-50/70 p-3 focus-visible:ring-roman-red/30"
+          value={value}
+          onChange={event => onChange(event.target.value)}
+        />
       ) : (
-        <Input id={id} value={value} onChange={event => onChange(event.target.value)} />
+        <Input
+          id={id}
+          className="h-11 rounded-xl border-slate-200 bg-slate-50/70 focus-visible:ring-roman-red/30"
+          value={value}
+          onChange={event => onChange(event.target.value)}
+        />
       )}
       {!value.trim() && <p className="text-xs text-amber-800">Unanswered</p>}
     </div>
@@ -168,8 +181,16 @@ function ExerciseAnswers({
         <>
           <Rich text={exercise.data.question} />
           {exercise.data.options.map(option => (
-            <label key={option.id} className="flex items-start gap-3 rounded-lg border p-3">
+            <label
+              key={option.id}
+              className={cn(
+                'flex cursor-pointer items-start gap-3 rounded-xl border p-4 text-sm transition-colors focus-within:ring-2 focus-within:ring-roman-red/20',
+                selected.includes(option.id)
+                  ? 'border-roman-red/30 bg-roman-parchment/50'
+                  : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100/70'
+              )}>
               <input
+                className="mt-1 h-4 w-4 shrink-0 accent-roman-red"
                 type={exercise.data.allowMultipleSelections ? 'checkbox' : 'radio'}
                 name={exercise.id}
                 checked={selected.includes(option.id)}
@@ -197,8 +218,16 @@ function ExerciseAnswers({
         <>
           <Rich text={exercise.data.question} />
           {exercise.data.items.map(item => (
-            <label key={item.id} className="flex gap-3 rounded-lg border p-3">
+            <label
+              key={item.id}
+              className={cn(
+                'flex cursor-pointer items-start gap-3 rounded-xl border p-4 text-sm transition-colors focus-within:ring-2 focus-within:ring-roman-red/20',
+                current.selectedItemId === item.id
+                  ? 'border-roman-red/30 bg-roman-parchment/50'
+                  : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100/70'
+              )}>
               <input
+                className="mt-1 h-4 w-4 shrink-0 accent-roman-red"
                 type="radio"
                 name={exercise.id}
                 checked={current.selectedItemId === item.id}
@@ -229,7 +258,7 @@ function ExerciseAnswers({
                 <label key={left.id} className="grid gap-2 sm:grid-cols-2">
                   <Rich text={left.value} />
                   <select
-                    className="min-w-0 rounded-md border p-2"
+                    className="min-h-11 min-w-0 rounded-xl border border-slate-200 bg-slate-50/70 px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-roman-red/30"
                     aria-label={`Round ${roundIndex + 1}: ${stripHtmlTags(left.value)}`}
                     value={rounds[roundIndex]?.[left.id] ?? ''}
                     onChange={event => {
@@ -313,11 +342,15 @@ function ExerciseAnswers({
               </legend>
               <div className="flex flex-wrap gap-1">
                 {words.map((word, i) => (
-                  <button
+                  <Button
+                    variant="outline"
                     type="button"
                     key={i}
                     aria-pressed={values[index] === i}
-                    className={`rounded border px-2 py-1 ${values[index] === i ? 'border-roman-red bg-roman-parchment' : ''}`}
+                    className={cn(
+                      'h-auto min-h-11 whitespace-normal rounded-xl border-slate-200 px-3 py-2 text-slate-700 hover:bg-roman-parchment',
+                      values[index] === i && 'border-roman-red/40 bg-roman-parchment text-roman-red'
+                    )}
                     onClick={() =>
                       onChange({
                         type: 'text-selection',
@@ -325,7 +358,7 @@ function ExerciseAnswers({
                       })
                     }>
                     <Rich text={word} />
-                  </button>
+                  </Button>
                 ))}
               </div>
               {(values[index] ?? -1) < 0 && <p className="text-xs text-amber-800">Unanswered</p>}
@@ -341,11 +374,15 @@ function ExerciseAnswers({
           <Rich text={exercise.data.instructions} />
           <div className="flex flex-wrap gap-1">
             {splitHtmlIntoWords(exercise.data.passage).map((word, index) => (
-              <button
+              <Button
+                variant="outline"
                 type="button"
                 key={index}
                 aria-pressed={selected.includes(index)}
-                className={`rounded border px-2 py-1 ${selected.includes(index) ? 'border-roman-red bg-roman-parchment' : ''}`}
+                className={cn(
+                  'h-auto min-h-11 whitespace-normal rounded-xl border-slate-200 px-3 py-2 text-slate-700 hover:bg-roman-parchment',
+                  selected.includes(index) && 'border-roman-red/40 bg-roman-parchment text-roman-red'
+                )}
                 onClick={() =>
                   onChange({
                     type: 'click-on-multiple-words',
@@ -355,7 +392,7 @@ function ExerciseAnswers({
                   })
                 }>
                 <Rich text={word} />
-              </button>
+              </Button>
             ))}
           </div>
         </>
@@ -387,7 +424,7 @@ export function SectionAnswerReview({
 }) {
   const page = delivery.pages[0];
   return (
-    <div className="space-y-6" data-testid="section-answer-review">
+    <div className="space-y-7" data-testid="section-answer-review">
       <Rich text={page.title} />
       {page.audioPath && <AudioPlayButton audioPath={page.audioPath} showLabel />}
       {page.items.map(item => {
@@ -408,9 +445,14 @@ export function SectionAnswerReview({
             key={item.id}
             disabled={disabled}
             inert={disabled || undefined}
-            className="space-y-4 rounded-xl border bg-white p-4 sm:p-6">
-            <legend className="px-2 font-serif text-lg text-roman-red">
-              <Rich text={item.title || getContentTypeLabel(item.type)} />
+            className="min-w-0 space-y-5 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_12px_35px_-24px_rgba(30,41,59,0.35)] sm:p-6">
+            <legend className="max-w-full px-1">
+              <span className="inline-flex max-w-full items-center gap-2.5 rounded-full border border-roman-red/15 bg-white px-4 py-2 font-serif text-base font-medium text-roman-red shadow-sm sm:px-5 sm:text-lg">
+                <ClipboardList className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span className="min-w-0 break-words leading-snug">
+                  <Rich text={item.title || getContentTypeLabel(item.type)} />
+                </span>
+              </span>
             </legend>
             <Rich text={exercise.instructions} />
             {exercise.audioPath && <AudioPlayButton audioPath={exercise.audioPath} />}

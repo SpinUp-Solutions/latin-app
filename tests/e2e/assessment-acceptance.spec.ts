@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
-import { dashboardCard, recordFillAnswer, signIn, submitCurrentTest } from './fixtures/journeys';
+import { dashboardCard, recordFillAnswerAndReview, signIn, submitCurrentTest } from './fixtures/journeys';
 import { E2E_IDS, E2E_USERS, getE2EAdmin, parentMockId, seedAcceptanceData } from './fixtures/seed';
 
 test.describe('Assessment acceptance', () => {
@@ -17,7 +17,7 @@ test.describe('Assessment acceptance', () => {
 
     await expect(page.getByText('Complete this test to continue — any score counts')).toBeVisible();
     await page.getByRole('button', { name: 'Start Test' }).click();
-    await recordFillAnswer(page, 'love');
+    await recordFillAnswerAndReview(page, 'love');
     await submitCurrentTest(page);
 
     await expect(page.getByRole('heading', { name: 'Test complete' })).toBeVisible();
@@ -31,7 +31,7 @@ test.describe('Assessment acceptance', () => {
     await dashboardCard(page, 'Required-pass checkpoint').getByRole('button', { name: 'Start Test' }).click();
     await expect(page.getByText('Score 100% or higher to continue along your Learning Path')).toBeVisible();
     await page.getByRole('button', { name: 'Start Test' }).click();
-    await recordFillAnswer(page, 'wrong');
+    await recordFillAnswerAndReview(page, 'wrong');
     await submitCurrentTest(page);
 
     await expect(page.getByRole('heading', { name: 'Keep going' })).toBeVisible();
@@ -45,12 +45,12 @@ test.describe('Assessment acceptance', () => {
 
     await dashboardCard(page, 'Required-pass checkpoint').getByRole('button', { name: 'Retake Test' }).click();
     await page.getByRole('button', { name: 'Start Retake' }).click();
-    await recordFillAnswer(page, 'love');
+    await recordFillAnswerAndReview(page, 'love');
     await submitCurrentTest(page);
     await expect(page.getByRole('heading', { name: 'Test passed' })).toBeVisible();
 
     await page.getByRole('button', { name: 'Retake Test' }).click();
-    await recordFillAnswer(page, 'wrong again');
+    await recordFillAnswerAndReview(page, 'wrong again');
     await submitCurrentTest(page);
     await expect(page.getByRole('heading', { name: 'Keep going' })).toBeVisible();
     await page.getByRole('link', { name: 'Back to dashboard' }).click();
@@ -70,7 +70,7 @@ test.describe('Assessment acceptance', () => {
     await page.getByRole('button', { name: 'Start Test' }).click();
 
     await expect(page.getByText('amo, amare', { exact: true })).toBeVisible();
-    await recordFillAnswer(page, 'love');
+    await recordFillAnswerAndReview(page, 'love');
     const { db } = getE2EAdmin();
     await db
       .collection('testVersions')
@@ -130,7 +130,7 @@ test.describe('Assessment acceptance', () => {
   });
 
   for (const mock of [false, true]) {
-    test(`MC drafts survive refresh and the last submitted answer opens review (${mock ? 'mock/mobile' : 'normal'})`, async ({
+    test(`MC drafts survive refresh and completed pages wait for Review section (${mock ? 'mock/mobile' : 'normal'})`, async ({
       page,
     }) => {
       const { db } = getE2EAdmin();
@@ -185,9 +185,15 @@ test.describe('Assessment acceptance', () => {
       await page.keyboard.press('Space');
       await expect(page.getByRole('button', { name: /video/ })).toHaveAttribute('aria-pressed', 'true');
       await page.getByRole('button', { name: 'Submit Answer', exact: true }).click();
-      // Do not click Review section: exercise completion must open it itself.
-      await expect(page.getByRole('heading', { name: 'Review section', exact: true })).toBeVisible();
       await expect(page.getByRole('status')).toContainText('Answers saved.');
+      await expect(page.getByRole('heading', { name: 'Review section', exact: true })).toHaveCount(0);
+      await expect(page.getByTestId('test-taking-view')).toBeVisible();
+      await page.reload();
+      await page.getByRole('button', { name: mock ? 'Continue Mock Test' : 'Continue Test', exact: true }).click();
+      await expect(page.getByTestId('test-taking-view')).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Review section', exact: true })).toHaveCount(0);
+      await page.getByRole('button', { name: 'Review section', exact: true }).click();
+      await expect(page.getByRole('heading', { name: 'Review section', exact: true })).toBeVisible();
       await page.reload();
       await page.getByRole('button', { name: mock ? 'Continue Mock Test' : 'Continue Test', exact: true }).click();
       await expect(page.getByRole('heading', { name: 'Review section', exact: true })).toBeVisible();
@@ -253,7 +259,7 @@ test.describe('Assessment acceptance', () => {
       expect(JSON.stringify(first)).not.toContain('future-prompt');
       expect(first).not.toHaveProperty('translationGrades');
       const authorization = start.request().headers()['authorization'];
-      await recordFillAnswer(page, 'love');
+      await recordFillAnswerAndReview(page, 'love');
       await page.getByRole('textbox').fill('edited answer');
       await expect(page.getByRole('status')).toContainText('Answers saved.');
       await page.getByRole('button', { name: 'Return to section' }).click();
@@ -364,7 +370,7 @@ test.describe('Assessment acceptance', () => {
     ).toBeVisible();
     await studentPage.getByRole('button', { name: 'Start Mock Test' }).click();
     await expect(studentPage.getByText('fixed-version-prompt')).toBeVisible();
-    await recordFillAnswer(studentPage, 'fixed-answer');
+    await recordFillAnswerAndReview(studentPage, 'fixed-answer');
     await submitCurrentTest(studentPage);
     await expect(studentPage.getByRole('heading', { name: 'Test passed' })).toBeVisible();
     await studentPage.getByRole('link', { name: 'Back to dashboard' }).click();

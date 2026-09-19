@@ -37,8 +37,9 @@ private frozen review snapshot and scoring rules.
   for recovery. Responses belonging to an obsolete client scope are ignored.
 
 Review edits preserve other fields. Saving is flushed before phase changes,
-confirmation, and explicit exit. Returning from review suppresses automatic
-reopening until another section begins. Content-only sections still need explicit
+confirmation, and explicit exit. Completing the page never navigates automatically:
+the student presses `Review section` when ready, including after returning to a
+completed page or resuming it. Content-only sections still need explicit
 confirmation. Existing practice, authoring preview, and legacy attempts keep
 their original exercise behavior.
 

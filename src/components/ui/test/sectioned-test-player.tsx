@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { ArrowLeft, ArrowRight, ClipboardCheck, Loader2, LockKeyhole, LogOut, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import type {
   StudentInProgressTestAttempt,
@@ -22,6 +23,9 @@ import { isExerciseAnswerComplete } from '@/src/lib/tests/answer-completion';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { Button } from '@/src/components/ui/button';
 import { Textarea } from '@/src/components/ui/textarea';
+import { Checkbox } from '@/src/components/ui/checkbox';
+import { RomanPlayerShell } from '@/src/components/ui/core/roman-player-shell';
+import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { SectionAnswerReview } from './section-answer-review';
 import { SectionedTestProvider } from './sectioned-test-context';
 import { TestTakingView } from './test-taking-view';
@@ -52,7 +56,9 @@ export function SectionedTestPlayer({ attempt, onAttempt, buffer, title, uid, or
   const [setPhase] = useSetTestSectionPhaseMutation();
   const [confirmSection] = useConfirmTestSectionMutation();
   const [getAttempt] = useLazyGetTestAttemptQuery();
-  const [busy, setBusy] = useState(false);
+  const [pendingAction, setPendingAction] = useState<'navigation' | 'confirmation' | null>(null);
+  const busy = pendingAction !== null;
+  const omissionsId = useId();
   const busyRef = useRef(false);
   const mountedRef = useRef(true);
   const [acknowledged, setAcknowledged] = useState(false);
@@ -61,9 +67,6 @@ export function SectionedTestPlayer({ attempt, onAttempt, buffer, title, uid, or
     answers: Record<string, ExerciseAnswer>;
   } | null>(null);
   const [recoveredSubmission, setRecoveredSubmission] = useState<StudentSubmittedTestAttempt | null>(null);
-  const [autoReview, setAutoReview] = useState(false);
-  const suppressAutoReview = useRef(false);
-  const completedRef = useRef(new Set<string>());
   const resumedConfirmationRef = useRef<string | null>(null);
   const page = attempt.delivery.pages[0];
   const exercises = page.items.filter(item => isExerciseType(item.type)) as Exercise[];
@@ -84,22 +87,7 @@ export function SectionedTestPlayer({ attempt, onAttempt, buffer, title, uid, or
     };
   }, []);
   useEffect(() => {
-    completedRef.current = new Set(
-      exercises
-        .filter(item =>
-          isExerciseAnswerComplete(
-            item,
-            attempt.answers[item.id],
-            attempt.delivery.resolvedExercises[item.id]?.items.length ?? 0
-          )
-        )
-        .map(item => item.id)
-    );
-    suppressAutoReview.current = false;
-    setAutoReview(false);
     setAcknowledged(false);
-    // The frozen page identity defines a new section, not each autosave response.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page.id]);
 
   const { activateAttempt } = buffer;
@@ -135,7 +123,7 @@ export function SectionedTestPlayer({ attempt, onAttempt, buffer, title, uid, or
   const changePhase = async (phase: 'answering' | 'review') => {
     if (busyRef.current || buffer.conflict) return;
     busyRef.current = true;
-    setBusy(true);
+    setPendingAction('navigation');
     try {
       await buffer.flushPendingAnswers();
       const updated = await setPhase({
@@ -146,24 +134,20 @@ export function SectionedTestPlayer({ attempt, onAttempt, buffer, title, uid, or
       }).unwrap();
       if (!mountedRef.current) return;
       adopt(updated);
-      if (phase === 'answering') suppressAutoReview.current = true;
-      setAutoReview(false);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
       if (!mountedRef.current) return;
-      setAutoReview(false);
       toast.error(getApiErrorMessage(error, 'Save your answers before continuing.'));
     } finally {
       busyRef.current = false;
-      if (mountedRef.current) setBusy(false);
+      if (mountedRef.current) setPendingAction(null);
     }
   };
 
   const confirm = async (resuming = false) => {
     if (busyRef.current || buffer.conflict) return;
     busyRef.current = true;
-    setBusy(true);
-    setAutoReview(false);
+    setPendingAction('confirmation');
     try {
       await buffer.flushPendingAnswers();
       const request = {
@@ -198,14 +182,10 @@ export function SectionedTestPlayer({ attempt, onAttempt, buffer, title, uid, or
       }
     } finally {
       busyRef.current = false;
-      if (mountedRef.current) setBusy(false);
+      if (mountedRef.current) setPendingAction(null);
     }
   };
 
-  useEffect(() => {
-    if (autoReview && !busy && !buffer.conflict && attempt.section.phase === 'answering') void changePhase('review');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoReview, busy, buffer.conflict, attempt.section.phase]);
   useEffect(() => {
     const key = `${attempt.id}:${page.id}`;
     if (attempt.section.phase === 'confirming' && resumedConfirmationRef.current !== key) {
@@ -217,14 +197,16 @@ export function SectionedTestPlayer({ attempt, onAttempt, buffer, title, uid, or
 
   const saveStatus = (
     <span>
-      {busy
+      {pendingAction === 'confirmation'
         ? 'Confirming section…'
-        : (buffer.saveError ??
-          (buffer.saveStatus === 'saved'
-            ? 'Answers saved.'
-            : buffer.saveStatus === 'saving'
-              ? 'Saving answers…'
-              : 'Answers recorded; saving…'))}
+        : pendingAction === 'navigation'
+          ? 'Saving answers…'
+          : (buffer.saveError ??
+            (buffer.saveStatus === 'saved'
+              ? 'Answers saved.'
+              : buffer.saveStatus === 'saving'
+                ? 'Saving answers…'
+                : 'Answers recorded; saving…'))}
     </span>
   );
   const conflictNotice = buffer.conflict && (
@@ -302,25 +284,44 @@ export function SectionedTestPlayer({ attempt, onAttempt, buffer, title, uid, or
           onReview={() => void changePhase('review')}
           onExit={() => void onExit()}
           navigationPending={busy || buffer.conflict}
-          onExerciseComplete={id => {
-            completedRef.current.add(id);
-            if (!suppressAutoReview.current && exercises.every(item => completedRef.current.has(item.id)))
-              setAutoReview(true);
-          }}
         />
       ) : (
-        <main className="min-h-screen bg-roman-marble p-4 md:py-8">
-          <div className="mx-auto max-w-4xl space-y-6">
-            <header className="space-y-3 rounded-2xl border bg-white p-6">
-              <p className="text-sm text-roman-stone">
-                Section {attempt.section.pageIndex + 1} of {attempt.section.totalPages}
-              </p>
-              <h1 className="font-serif text-2xl text-roman-red">Review section</h1>
-              <p>Check spelling and every answer carefully. After you confirm this section, you cannot return to it.</p>
-              <div role="status" aria-live="polite" className="text-sm">
-                {saveStatus}
+        <main className="min-h-screen bg-gradient-to-b from-roman-marble via-white to-roman-parchment/50 p-4 md:py-8">
+          <div className="mx-auto max-w-4xl space-y-7">
+            <RomanPlayerShell
+              icon={ClipboardCheck}
+              label="Answer review"
+              currentPage={attempt.section.pageIndex + 1}
+              totalPages={attempt.section.totalPages}
+              title="Review section"
+              description={<SimpleRichDisplay content={title} />}
+              headingAs="h1"
+              className="overflow-hidden rounded-2xl border-roman-red/15 shadow-md"
+              contentClassName="p-5 sm:p-6"
+              headerFooter={
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-roman-stone">
+                  <div role="status" aria-live="polite" className="flex items-center gap-2">
+                    {busy ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Save className="h-4 w-4" aria-hidden="true" />
+                    )}
+                    {saveStatus}
+                  </div>
+                  <span className="rounded-full border border-roman-red/10 bg-white/80 px-3 py-1 font-medium text-roman-red">
+                    {answered} of {exercises.length} answered
+                  </span>
+                </div>
+              }>
+              <div className="flex items-start gap-3 text-sm leading-relaxed text-slate-600">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-roman-red/5 text-roman-red">
+                  <LockKeyhole className="h-4 w-4" aria-hidden="true" />
+                </span>
+                <p>
+                  Check spelling and every answer carefully. After you confirm this section, you cannot return to it.
+                </p>
               </div>
-            </header>
+            </RomanPlayerShell>
             <SectionAnswerReview
               key={`${attempt.id}:${page.id}:${attempt.section.revision}:${attempt.updatedAt}`}
               delivery={attempt.delivery}
@@ -332,38 +333,54 @@ export function SectionedTestPlayer({ attempt, onAttempt, buffer, title, uid, or
               disabled={busy || buffer.conflict || attempt.section.phase === 'confirming'}
             />
             {incomplete && (
-              <label className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4">
-                <input
-                  type="checkbox"
+              <label
+                htmlFor={omissionsId}
+                className="flex cursor-pointer items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50/80 p-5 text-sm leading-relaxed text-amber-950">
+                <Checkbox
+                  id={omissionsId}
+                  className="mt-1 h-5 w-5 rounded-md border-amber-500 data-[state=checked]:border-roman-red data-[state=checked]:bg-roman-red"
                   checked={acknowledged}
                   disabled={busy}
-                  onChange={event => setAcknowledged(event.target.checked)}
+                  onCheckedChange={checked => setAcknowledged(checked === true)}
                 />
                 <span>I understand this section has unanswered parts and those parts will receive zero credit.</span>
               </label>
             )}
-            <div className="flex flex-wrap gap-3 rounded-xl border bg-white p-4">
-              <Button
-                variant="outline"
-                disabled={busy || buffer.conflict}
-                onClick={() => void changePhase('answering')}>
-                Return to section
-              </Button>
-              <Button
-                disabled={
-                  busy || buffer.conflict || (incomplete && !acknowledged && attempt.section.phase !== 'confirming')
-                }
-                onClick={() => void confirm(attempt.section.phase === 'confirming')}>
-                {busy
-                  ? 'Confirming section…'
-                  : attempt.section.pageIndex === attempt.section.totalPages - 1
-                    ? 'Confirm section and submit'
-                    : 'Confirm section and continue'}
-              </Button>
-              <Button variant="ghost" disabled={busy} onClick={() => void onExit()}>
-                Exit test
-              </Button>
-            </div>
+            <RomanCard className="rounded-2xl border-roman-red/15 bg-white/95 shadow-sm">
+              <RomanCardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-center">
+                <Button
+                  variant="outline"
+                  className="min-h-11 rounded-xl border-roman-red/20 text-roman-red hover:bg-roman-parchment"
+                  disabled={busy || buffer.conflict}
+                  onClick={() => void changePhase('answering')}>
+                  <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" /> Return to section
+                </Button>
+                <Button
+                  className="h-auto min-h-11 whitespace-normal rounded-xl bg-roman-red px-5 py-3 text-white shadow-sm hover:bg-roman-red/90 sm:ml-auto"
+                  disabled={
+                    busy || buffer.conflict || (incomplete && !acknowledged && attempt.section.phase !== 'confirming')
+                  }
+                  onClick={() => void confirm(attempt.section.phase === 'confirming')}>
+                  {pendingAction === 'confirmation'
+                    ? 'Confirming section…'
+                    : attempt.section.pageIndex === attempt.section.totalPages - 1
+                      ? 'Confirm section and submit'
+                      : 'Confirm section and continue'}
+                  {pendingAction === 'confirmation' ? (
+                    <Loader2 className="ml-2 h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <ArrowRight className="ml-2 h-4 w-4 shrink-0" aria-hidden="true" />
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="min-h-11 rounded-xl text-slate-600 hover:bg-slate-100"
+                  disabled={busy}
+                  onClick={() => void onExit()}>
+                  <LogOut className="mr-2 h-4 w-4" aria-hidden="true" /> Exit test
+                </Button>
+              </RomanCardContent>
+            </RomanCard>
           </div>
         </main>
       )}
