@@ -1,7 +1,11 @@
 /** @jest-environment node */
 
 import { sourceTitleFromDocument, studentIdentityFromProfile } from '@/src/lib/tests/result-pdf-identity';
-import { buildTestResultPdfModel, type TestResultPdfExercise } from '@/src/lib/tests/result-pdf-model';
+import {
+  buildTestResultPdfModel,
+  RESULT_PDF_PAIR_SEPARATOR,
+  type TestResultPdfExercise,
+} from '@/src/lib/tests/result-pdf-model';
 import type { StudentTestResult, TestResultReviewItem } from '@/src/types/test-results';
 import { stripHtmlTags } from '@/src/utils/exercises/helpers';
 
@@ -33,6 +37,7 @@ const fillItem = (withHtml = false): TestResultReviewItem =>
     title: withHtml ? '<p>Fill <em>verbs</em></p>' : 'Fill verbs',
     instructions: '',
     maxPoints: 10,
+    explanation: withHtml ? '<p>Because amo is a verb of loving</p>' : 'Because amo is a verb of loving',
     studentAnswer: { type: 'fill', answers: ['wrong', 'walk'] },
     result: { awardedPoints: 5, maxPoints: 10 },
     question: { items: [{ text: withHtml ? '<p>amō</p>' : 'amo' }, { text: 'ambulo' }] },
@@ -105,8 +110,22 @@ const identity = studentIdentityFromProfile({
 const pdfExerciseText = (exercise: TestResultPdfExercise): string =>
   exercise.groups.flatMap(group => [group.heading, ...group.lines].filter(Boolean)).join('\n');
 
+const headings = (exercise: TestResultPdfExercise): string[] =>
+  exercise.groups.map(group => group.heading).filter((value): value is string => Boolean(value));
+
+const expectHeadingOrder = (exercise: TestResultPdfExercise, earlier: string, later: string) => {
+  const order = headings(exercise);
+  const left = order.indexOf(earlier);
+  const right = order.indexOf(later);
+  expect(left).toBeGreaterThanOrEqual(0);
+  expect(right).toBeGreaterThan(left);
+};
+
+const feedbackOrExplanation =
+  /explanation|ai feedback|because amo is a verb of loving|very close, but check|line two needs the conjunction|the second word/i;
+
 describe('test result PDF model', () => {
-  it('includes fill answers, accepted answers, and explanations', () => {
+  it('includes fill scores, expected answers, then student answers without explanations', () => {
     const model = buildTestResultPdfModel({
       result: buildResult([fillItem()]),
       identity,
@@ -119,14 +138,23 @@ describe('test result PDF model', () => {
     expect(model.percentageLabel).toBe('50%');
     expect(model.outcomeLabel).toBe('Not passed');
     expect(model.exercises[0]?.statusLabel).toBe('Partly correct');
-    const lines = pdfExerciseText(model.exercises[0]!);
-    expect(lines).toContain('Your answer: wrong');
+    const exercise = model.exercises[0]!;
+    const lines = pdfExerciseText(exercise);
+    expect(lines).toContain('Incorrect · 0 / 5 points');
+    expect(lines).toContain('Correct · 5 / 5 points');
     expect(lines).toContain('Accepted answer: love');
-    expect(lines).toContain('Explanation: Because amo is a verb of loving');
-    expect(lines).toContain('Your answer: walk');
+    expect(lines).toContain('wrong');
+    expect(lines).toContain('walk');
+    expect(lines).not.toMatch(feedbackOrExplanation);
+    expect(headings(exercise).filter(heading => heading === 'Expected answer').length).toBe(2);
+    expect(headings(exercise).filter(heading => heading === 'Student answer').length).toBe(2);
+    expectHeadingOrder(exercise, 'Blank 1', 'Expected answer');
+    expectHeadingOrder(exercise, 'Expected answer', 'Student answer');
+    expect(exercise.groups.find(group => group.heading === 'Expected answer')?.tone).toBe('answer');
+    expect(exercise.groups.find(group => group.heading === 'Student answer')?.tone).toBe('incorrect');
   });
 
-  it('strips HTML from prompts and explanations', () => {
+  it('strips HTML from prompts and omits answer-key explanations', () => {
     const model = buildTestResultPdfModel({
       result: buildResult([fillItem(true)]),
       identity,
@@ -138,23 +166,28 @@ describe('test result PDF model', () => {
     expect(text).not.toContain('<em>');
     expect(text).toContain('Fill verbs');
     expect(text).toContain('amō');
-    expect(text).toContain('Because amo is a verb of loving');
+    expect(text).not.toContain('Because amo is a verb of loving');
+    expect(text).not.toMatch(/explanation/i);
   });
 
-  it('includes AI translation score and feedback', () => {
+  it('includes AI translation score but omits feedback prose', () => {
     const model = buildTestResultPdfModel({
       result: buildResult([translationItem()]),
       identity,
       source: { kindLabel: 'Test', title: 'Quiz' },
     });
 
-    const lines = pdfExerciseText(model.exercises[0]!);
-    expect(lines).toContain('amo et ambulo');
-    expect(lines).toContain('Your translation');
-    expect(lines).toContain('I love walking');
+    const exercise = model.exercises[0]!;
+    const lines = pdfExerciseText(exercise);
     expect(lines).toContain('AI score: 8 / 10');
-    expect(lines).toContain('AI feedback');
-    expect(lines).toContain('Very close, but check the conjunction.');
+    expect(lines).toContain('Partly correct · 8 / 10 points');
+    expect(lines).toContain('amo et ambulo');
+    expect(lines).toContain('I love walking');
+    expect(lines).not.toContain('AI feedback');
+    expect(lines).not.toContain('Very close, but check the conjunction.');
+    expectHeadingOrder(exercise, 'Score', 'Question');
+    expectHeadingOrder(exercise, 'Question', 'Student answer');
+    expect(exercise.groups.find(group => group.heading === 'Student answer')?.tone).toBe('partial');
   });
 
   it('labels mock results separately from official tests', () => {
@@ -283,31 +316,48 @@ describe('test result PDF model', () => {
     });
 
     const matchingText = pdfExerciseText(model.exercises[0]!);
-    expect(matchingText).toContain('Your matches');
-    expect(matchingText).toContain('amo ↔ I walk');
-    expect(matchingText).toContain('Correct matches');
-    expect(matchingText).toContain('amo ↔ I love');
+    expect(matchingText).toContain('Expected answer');
+    expect(matchingText).toContain('Student answer');
+    expect(matchingText).toContain(`amo${RESULT_PDF_PAIR_SEPARATOR}I walk`);
+    expect(matchingText).toContain(`amo${RESULT_PDF_PAIR_SEPARATOR}I love`);
+    expect(matchingText).not.toContain('↔');
+    expect(matchingText).not.toContain('→');
+    expectHeadingOrder(model.exercises[0]!, 'Expected answer', 'Student answer');
+    expect(model.exercises[0]!.groups.find(group => group.heading === 'Expected answer')?.tone).toBe('answer');
+    expect(model.exercises[0]!.groups.find(group => group.heading === 'Student answer')?.tone).toBe('incorrect');
 
     const choiceText = pdfExerciseText(model.exercises[1]!);
-    expect(choiceText).toContain('Your answer');
+    expect(choiceText).toContain('Question');
+    expect(choiceText).toContain('Expected answer');
+    expect(choiceText).toContain('Student answer');
     expect(choiceText).toContain('I walk');
-    expect(choiceText).toContain('Correct answer');
     expect(choiceText).toContain('I love');
+    expectHeadingOrder(model.exercises[1]!, 'Question', 'Expected answer');
+    expectHeadingOrder(model.exercises[1]!, 'Expected answer', 'Student answer');
 
     const tableText = pdfExerciseText(model.exercises[2]!);
-    expect(tableText).toContain('Your answer: walk');
-    expect(tableText).toContain('Correct answer: love');
+    expect(tableText).toContain('Expected answer');
+    expect(tableText).toContain('love');
+    expect(tableText).toContain('Student answer');
+    expect(tableText).toContain('walk');
+    expectHeadingOrder(model.exercises[2]!, 'Expected answer', 'Student answer');
 
     const clickText = pdfExerciseText(model.exercises[3]!);
-    expect(clickText).toContain('Your selected words');
-    expect(clickText).toContain('amo');
-    expect(clickText).toContain('Correct words');
+    expect(clickText).toContain('Expected answer');
     expect(clickText).toContain('ambulo');
+    expect(clickText).toContain('Student answer');
+    expect(clickText).toContain('amo');
+    expectHeadingOrder(model.exercises[3]!, 'Question', 'Expected answer');
+    expectHeadingOrder(model.exercises[3]!, 'Expected answer', 'Student answer');
 
     const translationText = pdfExerciseText(model.exercises[4]!);
     expect(translationText).toContain('I love');
     expect(translationText).toContain('and I walk');
-    expect(translationText).toContain('Line two needs the conjunction.');
+    expect(translationText).toContain('AI score: 8 / 10');
+    expect(translationText).not.toContain('Line two needs the conjunction.');
+    expect(translationText).not.toContain('AI feedback');
+    expectHeadingOrder(model.exercises[4]!, 'Score', 'Question');
+    expectHeadingOrder(model.exercises[4]!, 'Question', 'Student answer');
   });
 
   it('maps text-selection and click-word indices with the grader word splitter', () => {
@@ -356,15 +406,19 @@ describe('test result PDF model', () => {
     });
 
     const selectionText = pdfExerciseText(model.exercises[0]!);
-    expect(selectionText).toContain('Your word: ambulo');
-    expect(selectionText).toContain('Correct word: ambulo');
+    expect(selectionText).toContain('ambulo');
     expect(selectionText).not.toContain('Your word: et');
     expect(selectionText).not.toContain('Correct word: et');
+    expect(selectionText).not.toContain('The second word.');
+    expect(model.exercises[0]!.groups.find(group => group.heading === 'Expected answer')?.lines).toEqual(['ambulo']);
+    expect(model.exercises[0]!.groups.find(group => group.heading === 'Student answer')?.lines).toEqual(['ambulo']);
+    expectHeadingOrder(model.exercises[0]!, 'Question', 'Expected answer');
+    expectHeadingOrder(model.exercises[0]!, 'Expected answer', 'Student answer');
 
     const clickText = pdfExerciseText(model.exercises[1]!);
-    expect(clickText).toContain('Your selected words');
+    expect(clickText).toContain('Student answer');
     expect(clickText).toContain('amoet');
-    expect(clickText).toContain('Correct words');
+    expect(clickText).toContain('Expected answer');
     expect(clickText).toContain('ambulo');
   });
 
@@ -411,13 +465,14 @@ describe('test result PDF model', () => {
       identity,
       source: { kindLabel: 'Test', title: 'Quiz' },
     });
-    const text = pdfExerciseText(model.exercises[0]!);
-    expect(text).toContain(`Your word: ${expectedWord}`);
-    expect(text).toContain(`Correct word: ${expectedWord}`);
-    expect(model.exercises[1]!.groups.find(group => group.heading === 'Your selected words')?.lines).toEqual([
+    expect(model.exercises[0]!.groups.find(group => group.heading === 'Expected answer')?.lines).toEqual([
       expectedWord,
     ]);
-    expect(model.exercises[1]!.groups.find(group => group.heading === 'Correct words')?.lines).toEqual([expectedWord]);
+    expect(model.exercises[0]!.groups.find(group => group.heading === 'Student answer')?.lines).toEqual([expectedWord]);
+    expect(model.exercises[1]!.groups.find(group => group.heading === 'Student answer')?.lines).toEqual([expectedWord]);
+    expect(model.exercises[1]!.groups.find(group => group.heading === 'Expected answer')?.lines).toEqual([
+      expectedWord,
+    ]);
   });
 
   it.each([true, false])(
@@ -456,6 +511,7 @@ describe('test result PDF model', () => {
         result: { awardedPoints: 0, maxPoints: 1 },
         question: {
           latin: 'puella amat',
+          translation: '',
           tokens: [
             { id: 't0', text: 'puella', index: 0 },
             { id: 't1', text: 'amat', index: 1 },
@@ -468,6 +524,7 @@ describe('test result PDF model', () => {
             { id: 't1', text: 'amat', index: 1 },
           ],
           solutionAnnotations,
+          explanation: { text: 'Nominative marks the subject.', tokens: [], annotations: [] },
         },
         itemResults: {
           annotations: useGradedAnnotations ? studentAnnotations : [],
@@ -475,20 +532,24 @@ describe('test result PDF model', () => {
           correct: false,
           points: { awardedPoints: 0, maxPoints: 1 },
         },
-      } as TestResultReviewItem;
+      } as unknown as TestResultReviewItem;
       const model = buildTestResultPdfModel({
         result: buildResult([diagram]),
         identity,
         source: { kindLabel: 'Test', title: 'Quiz' },
       });
-      expect(model.exercises[0]!.groups.find(group => group.heading === 'Your diagram')?.lines).toEqual([
+      expect(model.exercises[0]!.groups.find(group => group.heading === 'Student answer')?.lines).toEqual([
         'Nominative: puell',
       ]);
-      expect(model.exercises[0]!.groups.find(group => group.heading === 'Correct diagram')?.lines).toEqual([
+      expect(model.exercises[0]!.groups.find(group => group.heading === 'Expected answer')?.lines).toEqual([
         'Nominative: a',
         'Nominative: a am',
         'Nominative: puella amat',
       ]);
+      expectHeadingOrder(model.exercises[0]!, 'Question', 'Expected answer');
+      expectHeadingOrder(model.exercises[0]!, 'Expected answer', 'Student answer');
+      expect(pdfExerciseText(model.exercises[0]!)).not.toContain('Nominative marks the subject.');
+      expect(pdfExerciseText(model.exercises[0]!)).not.toMatch(/explanation/i);
     }
   );
 
@@ -509,16 +570,17 @@ describe('test result PDF model', () => {
       itemResults: { rounds: [] },
     } as unknown as TestResultReviewItem;
 
-    const text = pdfExerciseText(
-      buildTestResultPdfModel({
-        result: buildResult([matching]),
-        identity,
-        source: { kindLabel: 'Test', title: 'Quiz' },
-      }).exercises[0]!
-    );
+    const exercise = buildTestResultPdfModel({
+      result: buildResult([matching]),
+      identity,
+      source: { kindLabel: 'Test', title: 'Quiz' },
+    }).exercises[0]!;
+    const text = pdfExerciseText(exercise);
 
-    expect(text).toContain('Your matches');
+    expect(text).toContain('Student answer');
     expect(text).toContain('No answer was recorded.');
-    expect(text).toContain('amo ↔ I love');
+    expect(text).toContain(`amo${RESULT_PDF_PAIR_SEPARATOR}I love`);
+    expect(text).not.toContain('↔');
+    expectHeadingOrder(exercise, 'Expected answer', 'Student answer');
   });
 });
