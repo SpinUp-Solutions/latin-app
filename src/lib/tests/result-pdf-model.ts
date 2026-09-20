@@ -1,4 +1,6 @@
 import { ANNOTATION_SPECS } from '@/src/features/sentence-diagramming/annotation-spec';
+import { getSpanText, type DiagramSpan } from '@/src/features/sentence-diagramming/model';
+import { parseFragment, type DefaultTreeAdapterMap } from 'parse5';
 import { formatScorePercentage, formatScorePoints } from '@/src/lib/tests/formatting';
 import type { ResultPdfSource, ResultPdfStudentIdentity } from '@/src/lib/tests/result-pdf-identity';
 import type { StudentSubmittedTestAttempt } from '@/src/types/test';
@@ -8,7 +10,7 @@ import type {
   TestResultReviewItem,
   TestResultReviewSupportingItem,
 } from '@/src/types/test-results';
-import { richTextToPlainText, stripHtmlTags } from '@/src/utils/exercises/helpers';
+import { richTextToPlainText } from '@/src/utils/exercises/helpers';
 
 export type TestResultPdfTone = 'neutral' | 'student' | 'answer' | 'explanation' | 'feedback';
 
@@ -68,8 +70,15 @@ const EMPTY_ANSWER = 'No answer was recorded.';
 
 const plain = (value?: string | null): string => (value ? richTextToPlainText(value) : '');
 
+// Match the student's DOM textContent: decode entities once and concatenate text
+// nodes without inserting whitespace at block/BR boundaries or counting comments.
+const htmlTextContent = (node: DefaultTreeAdapterMap['node']): string => {
+  if ('value' in node) return node.value;
+  return 'childNodes' in node ? node.childNodes.map(htmlTextContent).join('') : '';
+};
+
 const wordsFromHtml = (html: string): string[] =>
-  stripHtmlTags(html)
+  htmlTextContent(parseFragment(html))
     .split(/\s+/)
     .filter(word => word.trim());
 
@@ -461,18 +470,12 @@ function flattenFillEmbolded(item: ExerciseOfType<'fill-embolded-text'>): TestRe
 }
 
 function flattenSentenceDiagram(item: ExerciseOfType<'sentence-diagramming'>): TestResultPdfLineGroup[] {
-  const tokenText = (start: number, end: number) =>
-    item.answerKey.tokens
-      .filter(token => token.index >= start && token.index <= end)
-      .map(token => token.text)
-      .join(' ')
-      .trim() || '(empty span)';
-  const formatAnnotation = (annotation: { kind: string; span: { startTokenIndex: number; endTokenIndex: number } }) => {
+  const formatAnnotation = (annotation: { kind: string; span: DiagramSpan }) => {
     const label =
       annotation.kind in ANNOTATION_SPECS
         ? ANNOTATION_SPECS[annotation.kind as keyof typeof ANNOTATION_SPECS].label
         : annotation.kind;
-    return `${label}: ${tokenText(annotation.span.startTokenIndex, annotation.span.endTokenIndex)}`;
+    return `${label}: ${getSpanText(item.answerKey.tokens, annotation.span).trim() || '(empty span)'}`;
   };
   const studentAnnotations =
     item.itemResults.annotations.length > 0

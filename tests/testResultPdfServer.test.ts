@@ -98,6 +98,23 @@ describe('createSubmittedResultPdf', () => {
     );
   });
 
+  it.each([
+    { kind: 'normal-test' as const, testId: 'test-1' },
+    { kind: 'mock-test' as const, mockTestId: 'mock-1' },
+  ])('normalizes rich-text titles for both rendering and filenames: $kind', async origin => {
+    const sourcePath =
+      origin.kind === 'normal-test' ? `${LEARNING_UNITS_COLLECTION}/test-1` : `${MOCK_TESTS_COLLECTION}/mock-1`;
+    const { filename } = await createSubmittedResultPdf(
+      result(origin),
+      { uid: 'student-1' },
+      createDb({
+        [sourcePath]: { title: '<p>Chapter <strong>3</strong>&nbsp;&amp; Quiz</p>' },
+      })
+    );
+    expect(filename).toBe('student-chapter-3-quiz-2026-09-19.pdf');
+    expect(renderTestResultPdf).toHaveBeenCalledWith(expect.objectContaining({ title: 'Chapter 3 & Quiz' }));
+  });
+
   it('reads mock titles and falls back to the auth email when the profile is missing', async () => {
     const { filename } = await createSubmittedResultPdf(
       result({ kind: 'mock-test', mockTestId: 'mock-1' }),
