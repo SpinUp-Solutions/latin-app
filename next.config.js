@@ -4,6 +4,11 @@ const { version } = require('./package.json');
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  serverExternalPackages: ['pdf-lib', '@pdf-lib/fontkit'],
+  outputFileTracingIncludes: {
+    '/api/test-results/[attemptId]/pdf': ['./src/lib/tests/fonts/**/*'],
+    '/src/app/api/test-results/[attemptId]/pdf/route': ['./src/lib/tests/fonts/**/*'],
+  },
   env: {
     NEXT_PUBLIC_APP_VERSION: version,
   },
