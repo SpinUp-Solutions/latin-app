@@ -1,5 +1,5 @@
 import { sourceTitleFromDocument, studentIdentityFromProfile } from '@/src/lib/tests/result-pdf-identity';
-import { buildTestResultPdfModel } from '@/src/lib/tests/result-pdf-model';
+import { buildTestResultPdfModel, pdfExerciseText } from '@/src/lib/tests/result-pdf-model';
 import type { StudentTestResult, TestResultReviewItem } from '@/src/types/test-results';
 
 const submittedAt = '2026-08-19T12:00:00.000Z';
@@ -113,7 +113,7 @@ describe('test result PDF model', () => {
     expect(model.percentageLabel).toBe('50%');
     expect(model.outcomeLabel).toBe('Not passed');
     expect(model.exercises[0]?.statusLabel).toBe('Partly correct');
-    const lines = model.exercises[0]?.groups.flatMap(group => group.lines).join('\n') ?? '';
+    const lines = pdfExerciseText(model.exercises[0]!);
     expect(lines).toContain('Your answer: wrong');
     expect(lines).toContain('Accepted answer: love');
     expect(lines).toContain('Explanation: Because amo is a verb of loving');
@@ -127,9 +127,7 @@ describe('test result PDF model', () => {
       source: { kindLabel: 'Test', title: 'Quiz' },
     });
 
-    const text = [model.exercises[0]?.title, ...(model.exercises[0]?.groups.flatMap(group => group.lines) ?? [])].join(
-      '\n'
-    );
+    const text = [model.exercises[0]?.title, pdfExerciseText(model.exercises[0]!)].join('\n');
     expect(text).not.toContain('<p>');
     expect(text).not.toContain('<em>');
     expect(text).toContain('Fill verbs');
@@ -144,11 +142,13 @@ describe('test result PDF model', () => {
       source: { kindLabel: 'Test', title: 'Quiz' },
     });
 
-    const lines = model.exercises[0]?.groups.flatMap(group => group.lines).join('\n') ?? '';
+    const lines = pdfExerciseText(model.exercises[0]!);
     expect(lines).toContain('amo et ambulo');
-    expect(lines).toContain('Your translation: I love walking');
+    expect(lines).toContain('Your translation');
+    expect(lines).toContain('I love walking');
     expect(lines).toContain('AI score: 8 / 10');
-    expect(lines).toContain('AI feedback: Very close, but check the conjunction.');
+    expect(lines).toContain('AI feedback');
+    expect(lines).toContain('Very close, but check the conjunction.');
   });
 
   it('labels mock results separately from official tests', () => {
@@ -175,7 +175,132 @@ describe('test result PDF model', () => {
     expect(model.exercises).toEqual([]);
     expect(model.reviewUnavailableNote).toMatch(/question-by-question review could not be loaded/);
     expect(model.exerciseSummaries).toEqual([
-      { number: 1, title: 'Fill ex-fill-1', awardedPoints: '5', maxPoints: '10' },
+      {
+        number: 1,
+        title: 'Fill ex-fill-1',
+        awardedPoints: '5',
+        maxPoints: '10',
+        statusLabel: 'Partly correct',
+      },
     ]);
+  });
+
+  it('keeps matching, choice, table, and selected-word answers explicit', () => {
+    const matching: TestResultReviewItem = {
+      id: 'ex-match',
+      type: 'matching',
+      title: 'Match the verbs',
+      maxPoints: 2,
+      studentAnswer: { type: 'matching', rounds: [{ 'left-1': 'right-2' }] },
+      result: { awardedPoints: 0, maxPoints: 2 },
+      question: {
+        leftColumn: [{ id: 'left-1', value: 'amo' }],
+        rightColumn: [
+          { id: 'right-1', value: 'I love' },
+          { id: 'right-2', value: 'I walk' },
+        ],
+        expectedMatchCount: 1,
+      },
+      answerKey: { pairs: [{ leftId: 'left-1', leftValue: 'amo', rightId: 'right-1', rightValue: 'I love' }] },
+      itemResults: { rounds: [] },
+    } as unknown as TestResultReviewItem;
+
+    const choice: TestResultReviewItem = {
+      id: 'ex-choice',
+      type: 'multiple-choice',
+      title: 'Choose',
+      maxPoints: 1,
+      studentAnswer: { type: 'multiple-choice', selectedOptionIds: ['b'] },
+      result: { awardedPoints: 0, maxPoints: 1 },
+      question: { question: 'What is amo?', options: [], allowMultipleSelections: false },
+      answerKey: {
+        options: [
+          { id: 'a', text: 'I love', isCorrect: true },
+          { id: 'b', text: 'I walk', isCorrect: false },
+        ],
+      },
+      itemResults: { selectedOptionIds: ['b'], correct: false, points: { awardedPoints: 0, maxPoints: 1 } },
+    } as TestResultReviewItem;
+
+    const table: TestResultReviewItem = {
+      id: 'ex-table',
+      type: 'table-fill',
+      title: 'Fill the table',
+      maxPoints: 1,
+      studentAnswer: { type: 'table-fill', answers: { 'row-1-col-1': 'walk' } },
+      result: { awardedPoints: 0, maxPoints: 1 },
+      question: {
+        columns: [{ id: 'col-1', header: 'Meaning' }],
+        rows: [{ id: 'row-1', cells: { 'col-1': { content: '', isBlank: true } } }],
+      },
+      answerKey: {
+        rows: [{ id: 'row-1', cells: { 'col-1': { content: '', isBlank: true, answer: 'love' } } }],
+      },
+      itemResults: { cells: [] },
+    } as unknown as TestResultReviewItem;
+
+    const click: TestResultReviewItem = {
+      id: 'ex-click',
+      type: 'click-on-multiple-words',
+      title: 'Click the verbs',
+      maxPoints: 2,
+      studentAnswer: { type: 'click-on-multiple-words', selectedWordIndices: [0] },
+      result: { awardedPoints: 1, maxPoints: 2 },
+      question: { passage: 'amo et ambulo' },
+      answerKey: { correctWordIndices: [0, 2] },
+      itemResults: {
+        selectedWordIndices: [],
+        correct: false,
+        points: { awardedPoints: 1, maxPoints: 2 },
+      },
+    } as TestResultReviewItem;
+
+    const translation: TestResultReviewItem = {
+      ...translationItem(),
+      studentAnswer: { type: 'translation-grading', translations: ['I love\nand I walk'] },
+      itemResults: {
+        items: [
+          {
+            translation: 'I love\nand I walk',
+            score: 8,
+            feedback: 'Line two needs the conjunction.',
+            points: { awardedPoints: 8, maxPoints: 10 },
+          },
+        ],
+      },
+    } as TestResultReviewItem;
+
+    const model = buildTestResultPdfModel({
+      result: buildResult([matching, choice, table, click, translation]),
+      identity,
+      source: { kindLabel: 'Test', title: 'Quiz' },
+    });
+
+    const matchingText = pdfExerciseText(model.exercises[0]!);
+    expect(matchingText).toContain('Your matches');
+    expect(matchingText).toContain('amo ↔ I walk');
+    expect(matchingText).toContain('Correct matches');
+    expect(matchingText).toContain('amo ↔ I love');
+
+    const choiceText = pdfExerciseText(model.exercises[1]!);
+    expect(choiceText).toContain('Your answer');
+    expect(choiceText).toContain('I walk');
+    expect(choiceText).toContain('Correct answer');
+    expect(choiceText).toContain('I love');
+
+    const tableText = pdfExerciseText(model.exercises[2]!);
+    expect(tableText).toContain('Your answer: walk');
+    expect(tableText).toContain('Correct answer: love');
+
+    const clickText = pdfExerciseText(model.exercises[3]!);
+    expect(clickText).toContain('Your selected words');
+    expect(clickText).toContain('amo');
+    expect(clickText).toContain('Correct words');
+    expect(clickText).toContain('ambulo');
+
+    const translationText = pdfExerciseText(model.exercises[4]!);
+    expect(translationText).toContain('I love');
+    expect(translationText).toContain('and I walk');
+    expect(translationText).toContain('Line two needs the conjunction.');
   });
 });

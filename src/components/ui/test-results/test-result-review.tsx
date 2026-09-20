@@ -213,7 +213,7 @@ export function TestResultReviewView({ result }: { result: StudentTestResult }) 
           </Button>
           <Button
             type="button"
-            variant="outline"
+            className="bg-roman-red hover:bg-roman-red/90"
             onClick={() => void exportPdf()}
             disabled={exportingPdf}
             data-testid="export-result-pdf">
