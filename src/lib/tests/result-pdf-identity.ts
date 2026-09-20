@@ -1,4 +1,5 @@
 import type { TestAttemptOrigin } from '@/src/types/test';
+import { richTextToPlainText } from '@/src/utils/exercises/helpers';
 
 export type ResultPdfKindLabel = 'Test' | 'Mock test';
 
@@ -21,7 +22,7 @@ const trimmedString = (value: unknown): string => (typeof value === 'string' ? v
 export function sourceTitleFromDocument(origin: TestAttemptOrigin, data: unknown): ResultPdfSource {
   const kindLabel: ResultPdfKindLabel = origin.kind === 'mock-test' ? 'Mock test' : 'Test';
   const fallback = kindLabel;
-  const title = trimmedString(isRecord(data) ? data.title : undefined);
+  const title = richTextToPlainText(trimmedString(isRecord(data) ? data.title : undefined));
   return { kindLabel, title: title || fallback };
 }
 

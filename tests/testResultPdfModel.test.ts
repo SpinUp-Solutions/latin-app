@@ -1,3 +1,5 @@
+/** @jest-environment node */
+
 import { sourceTitleFromDocument, studentIdentityFromProfile } from '@/src/lib/tests/result-pdf-identity';
 import { buildTestResultPdfModel, type TestResultPdfExercise } from '@/src/lib/tests/result-pdf-model';
 import type { StudentTestResult, TestResultReviewItem } from '@/src/types/test-results';
@@ -365,6 +367,130 @@ describe('test result PDF model', () => {
     expect(clickText).toContain('Correct words');
     expect(clickText).toContain('ambulo');
   });
+
+  it.each([
+    ['<p>arma&nbsp;virumque cano</p>', 'virumque'],
+    ['<p>arma&#160;virumque cano</p>', 'virumque'],
+    ['<p>arma&#xA0;virumque cano</p>', 'virumque'],
+    ['<p>arma&Tab;virumque cano</p>', 'virumque'],
+    ['<p>arma <em>virum</em>que cano</p>', 'virumque'],
+    ['<p>arma &amacr;mo cano</p>', 'āmo'],
+    ['<p>arma &amp;nbsp; cano</p>', '&nbsp;'],
+    ['<p>arma</p><p>virumque cano</p>', 'cano'],
+    ['<p>arma<br>virumque cano</p>', 'cano'],
+    ['<p title="a > b">arma virumque cano</p>', 'virumque'],
+    ['<p>arma <!-- not a word -->virumque cano</p>', 'virumque'],
+  ])('preserves browser word indices without a DOM: %s', (passage, expectedWord) => {
+    expect(typeof window).toBe('undefined');
+    const selection: TestResultReviewItem = {
+      id: 'selection',
+      type: 'text-selection',
+      title: 'Select',
+      maxPoints: 1,
+      studentAnswer: { type: 'text-selection', selectedWordIndices: [1] },
+      result: { awardedPoints: 1, maxPoints: 1 },
+      question: { passage, questions: [{ id: 'q1', text: 'Select word two' }] },
+      answerKey: { questions: [{ id: 'q1', text: 'Select word two', correctWordIndex: 1 }] },
+      itemResults: {
+        selections: [{ questionId: 'q1', wordIndex: 1, correct: true, points: { awardedPoints: 1, maxPoints: 1 } }],
+      },
+    };
+    const click: TestResultReviewItem = {
+      id: 'click',
+      type: 'click-on-multiple-words',
+      title: 'Click',
+      maxPoints: 1,
+      studentAnswer: { type: 'click-on-multiple-words', selectedWordIndices: [1] },
+      result: { awardedPoints: 1, maxPoints: 1 },
+      question: { passage },
+      answerKey: { correctWordIndices: [1] },
+      itemResults: { selectedWordIndices: [1], correct: true, points: { awardedPoints: 1, maxPoints: 1 } },
+    };
+    const model = buildTestResultPdfModel({
+      result: buildResult([selection, click]),
+      identity,
+      source: { kindLabel: 'Test', title: 'Quiz' },
+    });
+    const text = pdfExerciseText(model.exercises[0]!);
+    expect(text).toContain(`Your word: ${expectedWord}`);
+    expect(text).toContain(`Correct word: ${expectedWord}`);
+    expect(model.exercises[1]!.groups.find(group => group.heading === 'Your selected words')?.lines).toEqual([
+      expectedWord,
+    ]);
+    expect(model.exercises[1]!.groups.find(group => group.heading === 'Correct words')?.lines).toEqual([expectedWord]);
+  });
+
+  it.each([true, false])(
+    'preserves sub-word and multi-token diagram spans (graded annotations: %s)',
+    useGradedAnnotations => {
+      const studentAnnotations = [
+        {
+          id: 'student',
+          kind: 'nominative' as const,
+          span: { startTokenIndex: 0, endTokenIndex: 0, startCharOffset: 0, endCharOffset: 5 },
+        },
+      ];
+      const solutionAnnotations = [
+        {
+          id: 'ending',
+          kind: 'nominative' as const,
+          span: { startTokenIndex: 0, endTokenIndex: 0, startCharOffset: 5, endCharOffset: 6 },
+        },
+        {
+          id: 'phrase',
+          kind: 'nominative' as const,
+          span: { startTokenIndex: 0, endTokenIndex: 1, startCharOffset: 5, endCharOffset: 2 },
+        },
+        {
+          id: 'whole',
+          kind: 'nominative' as const,
+          span: { startTokenIndex: 0, endTokenIndex: 1, startCharOffset: 0, endCharOffset: 4 },
+        },
+      ];
+      const diagram: TestResultReviewItem = {
+        id: 'diagram',
+        type: 'sentence-diagramming',
+        title: 'Diagram',
+        maxPoints: 1,
+        studentAnswer: { type: 'sentence-diagramming', annotations: studentAnnotations },
+        result: { awardedPoints: 0, maxPoints: 1 },
+        question: {
+          latin: 'puella amat',
+          tokens: [
+            { id: 't0', text: 'puella', index: 0 },
+            { id: 't1', text: 'amat', index: 1 },
+          ],
+        },
+        answerKey: {
+          latin: 'puella amat',
+          tokens: [
+            { id: 't0', text: 'puella', index: 0 },
+            { id: 't1', text: 'amat', index: 1 },
+          ],
+          solutionAnnotations,
+        },
+        itemResults: {
+          annotations: useGradedAnnotations ? studentAnnotations : [],
+          accuracy: 0,
+          correct: false,
+          points: { awardedPoints: 0, maxPoints: 1 },
+        },
+      } as TestResultReviewItem;
+      const model = buildTestResultPdfModel({
+        result: buildResult([diagram]),
+        identity,
+        source: { kindLabel: 'Test', title: 'Quiz' },
+      });
+      expect(model.exercises[0]!.groups.find(group => group.heading === 'Your diagram')?.lines).toEqual([
+        'Nominative: puell',
+      ]);
+      expect(model.exercises[0]!.groups.find(group => group.heading === 'Correct diagram')?.lines).toEqual([
+        'Nominative: a',
+        'Nominative: a am',
+        'Nominative: puella amat',
+      ]);
+    }
+  );
 
   it('records an empty matching attempt when no rounds were saved', () => {
     const matching: TestResultReviewItem = {

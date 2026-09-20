@@ -59,6 +59,15 @@ describe('PDF identity and source titles', () => {
     });
   });
 
+  it('falls back when a rich-text title has no visible content', () => {
+    expect(
+      sourceTitleFromDocument({ kind: 'normal-test', testId: 'test-1' }, { title: '<p><br>&nbsp;</p>' }).title
+    ).toBe('Test');
+    expect(sourceTitleFromDocument({ kind: 'mock-test', mockTestId: 'mock-1' }, { title: '<p><br></p>' }).title).toBe(
+      'Mock test'
+    );
+  });
+
   it('reads test and mock titles and falls back when they are missing', () => {
     expect(sourceTitleFromDocument({ kind: 'normal-test', testId: 'test-1' }, { title: 'Chapter 3 Quiz' })).toEqual({
       kindLabel: 'Test',
