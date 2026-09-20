@@ -12,66 +12,47 @@ import type {
 
 const PAGE_WIDTH = 612;
 const PAGE_HEIGHT = 792;
-const MARGIN_X = 50;
-const MARGIN_TOP = 62;
-const MARGIN_BOTTOM = 48;
-const BODY_SIZE = 10.5;
-const SMALL_SIZE = 9;
-const TITLE_SIZE = 22;
-const HEADING_SIZE = 13;
-const LINE_GAP = 3.2;
-const GROUP_HEADING_SIZE = 9;
-const ROMAN_RED = rgb(0.55, 0.14, 0.14);
-const SLATE = rgb(0.16, 0.21, 0.28);
-const MUTED = rgb(0.4, 0.44, 0.5);
-const RULE = rgb(0.84, 0.8, 0.75);
-const PARCHMENT = rgb(0.995, 0.985, 0.97);
+const MARGIN_X = 48;
+const MARGIN_TOP = 44;
+const MARGIN_BOTTOM = 40;
+const BODY_SIZE = 10;
+const SMALL_SIZE = 8;
+const TITLE_SIZE = 18;
+const LINE_GAP = 2;
+const LABEL_SIZE = 7;
+const PILL_RADIUS = 7;
+const CARD_RADIUS = 10;
+const MIN_EXERCISE_KEEP = 92;
 
-const TONE_STYLES: Record<TestResultPdfTone, { bg: RGB; bar: RGB; heading: RGB; body: RGB }> = {
-  neutral: { bg: rgb(0.97, 0.96, 0.95), bar: rgb(0.58, 0.6, 0.64), heading: rgb(0.3, 0.33, 0.38), body: SLATE },
-  score: { bg: rgb(0.97, 0.96, 0.95), bar: rgb(0.55, 0.14, 0.14), heading: ROMAN_RED, body: SLATE },
-  correct: {
-    bg: rgb(0.9, 0.97, 0.92),
-    bar: rgb(0.1, 0.46, 0.28),
-    heading: rgb(0.08, 0.38, 0.22),
-    body: rgb(0.1, 0.28, 0.18),
-  },
-  partial: {
-    bg: rgb(1, 0.96, 0.88),
-    bar: rgb(0.78, 0.46, 0.06),
-    heading: rgb(0.55, 0.32, 0.02),
-    body: rgb(0.38, 0.24, 0.04),
-  },
-  incorrect: {
-    bg: rgb(0.99, 0.93, 0.92),
-    bar: rgb(0.72, 0.16, 0.16),
-    heading: rgb(0.58, 0.12, 0.12),
-    body: rgb(0.38, 0.1, 0.1),
-  },
-  answer: {
-    bg: rgb(0.88, 0.96, 0.9),
-    bar: rgb(0.08, 0.48, 0.3),
-    heading: rgb(0.06, 0.36, 0.22),
-    body: rgb(0.08, 0.26, 0.16),
-  },
-  student: {
-    bg: rgb(0.9, 0.95, 0.99),
-    bar: rgb(0.16, 0.42, 0.68),
-    heading: rgb(0.1, 0.32, 0.54),
-    body: rgb(0.1, 0.24, 0.4),
-  },
+const hex = (value: string): RGB => {
+  const n = Number.parseInt(value.slice(1), 16);
+  return rgb(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
 };
 
-const STATUS_TONE: Record<TestResultPdfExercise['statusLabel'], TestResultPdfTone> = {
-  Correct: 'correct',
-  'Partly correct': 'partial',
-  Incorrect: 'incorrect',
-};
+const ROMAN_RED = hex('#8B2635');
+const MARBLE = hex('#F5F5F5');
+const WHITE = rgb(1, 1, 1);
+const SLATE_900 = hex('#0f172a');
+const SLATE_700 = hex('#334155');
+const SLATE_500 = hex('#64748b');
+const SLATE_200 = hex('#e2e8f0');
+const BORDER = hex('#e8e4de');
+const EMERALD_50 = hex('#ecfdf5');
+const EMERALD_100 = hex('#d1fae5');
+const EMERALD_300 = hex('#6ee7b7');
+const EMERALD_800 = hex('#065f46');
+const ROSE_50 = hex('#fff1f2');
+const ROSE_100 = hex('#ffe4e6');
+const ROSE_800 = hex('#9f1239');
+const AMBER_50 = hex('#fffbeb');
+const AMBER_100 = hex('#fef3c7');
+const AMBER_300 = hex('#fcd34d');
+const AMBER_800 = hex('#92400e');
 
-const overallTone = (model: TestResultPdfModel): TestResultPdfTone => {
-  if (model.outcomeLabel === 'Passed') return 'correct';
-  if (model.outcomeLabel === 'Not passed') return 'incorrect';
-  return 'score';
+const STATUS_PILL: Record<TestResultPdfExercise['statusLabel'], { bg: RGB; bar: RGB; text: RGB; fill: RGB }> = {
+  Correct: { bg: EMERALD_100, bar: EMERALD_800, text: EMERALD_800, fill: EMERALD_50 },
+  'Partly correct': { bg: AMBER_100, bar: AMBER_800, text: AMBER_800, fill: AMBER_50 },
+  Incorrect: { bg: ROSE_100, bar: ROSE_800, text: ROSE_800, fill: ROSE_50 },
 };
 
 const fontBytesCache = new Map<string, Uint8Array>();
@@ -141,7 +122,25 @@ const wrapLine = (font: PDFFont, text: string, size: number, maxWidth: number): 
 const wrapParagraphs = (font: PDFFont, text: string, size: number, maxWidth: number): string[] =>
   text.split(/\r?\n/).flatMap(paragraph => wrapLine(font, paragraph, size, maxWidth));
 
-const usableHeight = () => PAGE_HEIGHT - MARGIN_TOP - MARGIN_BOTTOM;
+const isStudentGroup = (group: TestResultPdfLineGroup) =>
+  Boolean(group.heading?.startsWith('Student')) || group.tone === 'student';
+
+const isExpectedGroup = (group: TestResultPdfLineGroup) =>
+  Boolean(group.heading?.startsWith('Expected')) || group.tone === 'answer';
+
+const isQuestionGroup = (group: TestResultPdfLineGroup) =>
+  group.heading === 'Question' || Boolean(group.heading?.startsWith('Question '));
+
+const isScoreGroup = (group: TestResultPdfLineGroup) => {
+  const tone = group.tone ?? 'neutral';
+  return tone === 'score' || tone === 'correct' || tone === 'partial' || tone === 'incorrect';
+};
+
+const statusFromTone = (tone?: TestResultPdfTone): TestResultPdfExercise['statusLabel'] => {
+  if (tone === 'correct') return 'Correct';
+  if (tone === 'partial') return 'Partly correct';
+  return 'Incorrect';
+};
 
 class PdfWriter {
   private page!: PDFPage;
@@ -159,7 +158,7 @@ class PdfWriter {
   private addPage() {
     this.page = this.doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
     this.pages.push(this.page);
-    this.page.drawRectangle({ x: 0, y: 0, width: PAGE_WIDTH, height: PAGE_HEIGHT, color: PARCHMENT });
+    this.page.drawRectangle({ x: 0, y: 0, width: PAGE_WIDTH, height: PAGE_HEIGHT, color: MARBLE });
     this.y = PAGE_HEIGHT - MARGIN_TOP;
   }
 
@@ -176,180 +175,419 @@ class PdfWriter {
     return PAGE_WIDTH - MARGIN_X * 2;
   }
 
-  gap(amount = 10) {
+  gap(amount = 6) {
     this.ensureSpace(amount);
     this.y -= amount;
   }
 
-  rule() {
-    this.ensureSpace(14);
-    this.page.drawLine({
-      start: { x: MARGIN_X, y: this.y },
-      end: { x: PAGE_WIDTH - MARGIN_X, y: this.y },
-      thickness: 0.7,
-      color: RULE,
-    });
-    this.y -= 12;
+  private roundedRect(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    radius: number,
+    fill?: RGB,
+    border?: RGB,
+    borderWidth = 0.8
+  ) {
+    const r = Math.max(0, Math.min(radius, width / 2, height / 2));
+    if (fill) {
+      this.page.drawRectangle({ x: x + r, y, width: width - r * 2, height, color: fill });
+      this.page.drawRectangle({ x, y: y + r, width, height: height - r * 2, color: fill });
+      this.page.drawEllipse({ x: x + r, y: y + r, xScale: r, yScale: r, color: fill });
+      this.page.drawEllipse({ x: x + width - r, y: y + r, xScale: r, yScale: r, color: fill });
+      this.page.drawEllipse({ x: x + r, y: y + height - r, xScale: r, yScale: r, color: fill });
+      this.page.drawEllipse({ x: x + width - r, y: y + height - r, xScale: r, yScale: r, color: fill });
+    }
+    if (border) {
+      this.page.drawRectangle({
+        x,
+        y,
+        width,
+        height,
+        borderColor: border,
+        borderWidth,
+      });
+    }
   }
 
-  text(value: string, size: number, font = this.regular, color = SLATE, gap = LINE_GAP, width = this.contentWidth()) {
-    const lines = wrapParagraphs(font, value, size, width);
+  private textLines(lines: string[], x: number, top: number, size: number, font: PDFFont, color: RGB, gap: number) {
+    let cursor = top;
     for (const line of lines) {
-      const height = size + gap;
+      if (line) this.page.drawText(line, { x, y: cursor - size, size, font, color });
+      cursor -= size + gap;
+    }
+    return cursor;
+  }
+
+  private drawPill(label: string, xRight: number, yBottom: number, status: TestResultPdfExercise['statusLabel']) {
+    const pill = STATUS_PILL[status];
+    const width = this.bold.widthOfTextAtSize(label, 7.5) + 12;
+    this.roundedRect(xRight - width, yBottom, width, 14, PILL_RADIUS, pill.bg);
+    this.page.drawText(label, {
+      x: xRight - width + 6,
+      y: yBottom + 3.6,
+      size: 7.5,
+      font: this.bold,
+      color: pill.text,
+    });
+    return width;
+  }
+
+  private wrapBody(lines: string[], width: number, size = BODY_SIZE) {
+    return lines.flatMap(line => wrapParagraphs(this.regular, line, size, width));
+  }
+
+  summaryCard(model: TestResultPdfModel) {
+    const width = this.contentWidth();
+    const inner = width - 28;
+    const kicker = `${model.kindLabel} result review`;
+    const titleLines = wrapParagraphs(this.bold, model.title, TITLE_SIZE, inner);
+    const scoreLine = `${model.scoreLabel} / ${model.maxScoreLabel} points`;
+    const outcomeBits = [
+      ...(model.outcomeLabel ? [model.outcomeLabel] : []),
+      ...(model.passingPercentageLabel ? [`Passing mark ${model.passingPercentageLabel}`] : []),
+    ];
+    const meta = [
+      model.studentName,
+      ...(model.studentUsername ? [model.studentUsername] : []),
+      ...(model.studentEmail ? [model.studentEmail] : []),
+      `Submitted ${model.submittedAtLabel}`,
+    ].join('  ·  ');
+    const metaLines = wrapParagraphs(this.regular, meta, SMALL_SIZE, inner);
+    const percentSize = 32;
+    const height =
+      12 +
+      12 +
+      titleLines.length * (TITLE_SIZE + 2) +
+      percentSize +
+      8 +
+      14 +
+      (outcomeBits.length ? 12 : 0) +
+      metaLines.length * (SMALL_SIZE + 2) +
+      18;
+    this.ensureSpace(height + 6);
+    const boxY = this.y - height;
+    const border =
+      model.outcomeLabel === 'Not passed' ? AMBER_300 : model.outcomeLabel === 'Passed' ? EMERALD_300 : BORDER;
+    this.roundedRect(MARGIN_X, boxY, width, height, CARD_RADIUS, WHITE, border);
+    this.page.drawRectangle({ x: MARGIN_X, y: boxY + height - 4, width, height: 4, color: ROMAN_RED });
+    let cursor = this.y - 14;
+    const kickerWidth = this.bold.widthOfTextAtSize(kicker, SMALL_SIZE);
+    this.page.drawText(kicker, {
+      x: MARGIN_X + (width - kickerWidth) / 2,
+      y: cursor - SMALL_SIZE,
+      size: SMALL_SIZE,
+      font: this.bold,
+      color: ROMAN_RED,
+    });
+    cursor -= SMALL_SIZE + 6;
+    for (const line of titleLines) {
+      const lineWidth = this.bold.widthOfTextAtSize(line, TITLE_SIZE);
+      this.page.drawText(line, {
+        x: MARGIN_X + (width - lineWidth) / 2,
+        y: cursor - TITLE_SIZE,
+        size: TITLE_SIZE,
+        font: this.bold,
+        color: SLATE_900,
+      });
+      cursor -= TITLE_SIZE + 2;
+    }
+    cursor -= 4;
+    const percentWidth = this.bold.widthOfTextAtSize(model.percentageLabel, percentSize);
+    this.page.drawText(model.percentageLabel, {
+      x: MARGIN_X + (width - percentWidth) / 2,
+      y: cursor - percentSize,
+      size: percentSize,
+      font: this.bold,
+      color: ROMAN_RED,
+    });
+    cursor -= percentSize + 6;
+    const scoreWidth = this.regular.widthOfTextAtSize(scoreLine, BODY_SIZE);
+    this.page.drawText(scoreLine, {
+      x: MARGIN_X + (width - scoreWidth) / 2,
+      y: cursor - BODY_SIZE,
+      size: BODY_SIZE,
+      font: this.regular,
+      color: SLATE_700,
+    });
+    cursor -= BODY_SIZE + 3;
+    if (outcomeBits.length) {
+      const outcome = outcomeBits.join('  ·  ');
+      const outcomeWidth = this.regular.widthOfTextAtSize(outcome, SMALL_SIZE);
+      this.page.drawText(outcome, {
+        x: MARGIN_X + (width - outcomeWidth) / 2,
+        y: cursor - SMALL_SIZE,
+        size: SMALL_SIZE,
+        font: this.regular,
+        color: SLATE_500,
+      });
+      cursor -= SMALL_SIZE + 4;
+    }
+    cursor -= 4;
+    for (const line of metaLines) {
+      const lineWidth = this.regular.widthOfTextAtSize(line, SMALL_SIZE);
+      this.page.drawText(line, {
+        x: MARGIN_X + (width - lineWidth) / 2,
+        y: cursor - SMALL_SIZE,
+        size: SMALL_SIZE,
+        font: this.regular,
+        color: SLATE_500,
+      });
+      cursor -= SMALL_SIZE + 2;
+    }
+    this.y = boxY - 10;
+  }
+
+  scoreList(model: TestResultPdfModel) {
+    if (model.exerciseSummaries.length === 0) return;
+    this.ensureSpace(22);
+    this.page.drawText('Exercise scores', {
+      x: MARGIN_X,
+      y: this.y - 11,
+      size: 11,
+      font: this.bold,
+      color: SLATE_900,
+    });
+    this.y -= 16;
+    for (const exercise of model.exerciseSummaries) {
+      const status = exercise.statusLabel ?? 'Incorrect';
+      const left = `${exercise.number}. ${exercise.title}`;
+      const right = `${status}  ${exercise.awardedPoints}/${exercise.maxPoints}`;
+      const leftLines = wrapParagraphs(this.regular, left, BODY_SIZE, this.contentWidth() - 150);
+      const height = Math.max(16, leftLines.length * 13);
       this.ensureSpace(height);
-      if (line) {
-        this.page.drawText(line, { x: MARGIN_X, y: this.y - size, size, font, color });
-      }
+      this.textLines(leftLines, MARGIN_X, this.y, BODY_SIZE, this.regular, SLATE_700, 2);
+      const rightWidth = this.bold.widthOfTextAtSize(right, SMALL_SIZE);
+      this.page.drawText(right, {
+        x: PAGE_WIDTH - MARGIN_X - rightWidth,
+        y: this.y - BODY_SIZE,
+        size: SMALL_SIZE,
+        font: this.bold,
+        color: STATUS_PILL[status].text,
+      });
       this.y -= height;
     }
+    this.y -= 8;
   }
 
-  private wrappedBlock(group: TestResultPdfLineGroup) {
-    const innerWidth = this.contentWidth() - 26;
-    const headingLines = group.heading ? wrapParagraphs(this.bold, group.heading, GROUP_HEADING_SIZE, innerWidth) : [];
-    const bodyLines = group.lines.flatMap(line => wrapParagraphs(this.regular, line, BODY_SIZE, innerWidth));
-    const padding = 10;
-    const headingHeight = headingLines.length * (GROUP_HEADING_SIZE + 3);
-    const bodyHeight = bodyLines.length * (BODY_SIZE + LINE_GAP);
-    const height = padding * 2 + headingHeight + bodyHeight + (headingLines.length && bodyLines.length ? 4 : 0);
-    return { headingLines, bodyLines, height, padding };
+  private hairline() {
+    this.ensureSpace(8);
+    this.page.drawLine({
+      start: { x: MARGIN_X, y: this.y - 2 },
+      end: { x: PAGE_WIDTH - MARGIN_X, y: this.y - 2 },
+      thickness: 0.5,
+      color: SLATE_200,
+    });
+    this.y -= 8;
   }
 
-  block(group: TestResultPdfLineGroup) {
-    const tone = group.tone ?? 'neutral';
-    const palette = TONE_STYLES[tone];
-    const { headingLines, bodyLines, height, padding } = this.wrappedBlock(group);
-    const maxBlock = usableHeight() - 8;
+  private exerciseHeader(exercise: TestResultPdfExercise) {
+    const titleWidth = this.contentWidth() - 150;
+    const titleLines = wrapParagraphs(this.bold, exercise.title, 11, titleWidth);
+    const height = 18 + titleLines.length * 13;
+    this.ensureSpace(height + MIN_EXERCISE_KEEP - 18);
+    const circleX = MARGIN_X + 8;
+    const circleY = this.y - 12;
+    const circle = STATUS_PILL[exercise.statusLabel];
+    this.page.drawEllipse({ x: circleX, y: circleY, xScale: 8, yScale: 8, color: circle.bg });
+    const number = String(exercise.number);
+    const numberWidth = this.bold.widthOfTextAtSize(number, 8);
+    this.page.drawText(number, {
+      x: circleX - numberWidth / 2,
+      y: circleY - 2.8,
+      size: 8,
+      font: this.bold,
+      color: circle.text,
+    });
+    this.textLines(titleLines, MARGIN_X + 22, this.y - 2, 11, this.bold, SLATE_900, 2);
+    const points = `${exercise.awardedPoints} / ${exercise.maxPoints}`;
+    const pointsWidth = this.regular.widthOfTextAtSize(points, SMALL_SIZE);
+    this.drawPill(exercise.statusLabel, PAGE_WIDTH - MARGIN_X, this.y - 16, exercise.statusLabel);
+    this.page.drawText(points, {
+      x: PAGE_WIDTH - MARGIN_X - pointsWidth,
+      y: this.y - 28,
+      size: SMALL_SIZE,
+      font: this.regular,
+      color: SLATE_500,
+    });
+    this.y -= height;
+  }
 
-    if (height > maxBlock) {
-      if (group.heading) this.text(group.heading, GROUP_HEADING_SIZE, this.bold, palette.heading, 4);
-      for (const line of group.lines) this.text(line, BODY_SIZE, this.regular, palette.body);
-      this.gap(8);
-      return;
+  private drawQuestion(group: TestResultPdfLineGroup) {
+    const width = this.contentWidth();
+    const bodyLines = this.wrapBody(group.lines, width, 11);
+    const height = 11 + bodyLines.length * (11 + 2);
+    this.ensureSpace(height + 4);
+    this.page.drawText('QUESTION', {
+      x: MARGIN_X,
+      y: this.y - LABEL_SIZE,
+      size: LABEL_SIZE,
+      font: this.bold,
+      color: SLATE_500,
+    });
+    this.y -= LABEL_SIZE + 4;
+    this.y = this.textLines(bodyLines, MARGIN_X, this.y, 11, this.regular, SLATE_900, 2);
+    this.y -= 4;
+  }
+
+  private drawScoreLine(group: TestResultPdfLineGroup) {
+    const statusLine = group.lines.find(line => /correct|incorrect|not scored/i.test(line));
+    const extra = group.lines.filter(line => line !== statusLine);
+    const title = group.heading ?? '';
+    const status = statusFromTone(group.tone);
+    const pillLabel = statusLine?.split(' · ')[0] ?? status;
+    const points = statusLine?.includes(' · ') ? statusLine.split(' · ')[1] : undefined;
+    const detail = [points, ...extra].filter((line): line is string => Boolean(line));
+    const titleLines = title ? wrapParagraphs(this.bold, title, 9, this.contentWidth() - 120) : [];
+    const extraLines = this.wrapBody(detail, this.contentWidth(), SMALL_SIZE);
+    const height = 4 + Math.max(16, titleLines.length * 12) + extraLines.length * (SMALL_SIZE + 1.5);
+    this.ensureSpace(height);
+    this.textLines(titleLines, MARGIN_X, this.y, 9, this.bold, SLATE_700, 2);
+    if (pillLabel) this.drawPill(pillLabel, PAGE_WIDTH - MARGIN_X, this.y - 14, status);
+    this.y -= Math.max(16, titleLines.length * 12);
+    if (extraLines.length) {
+      this.y = this.textLines(extraLines, MARGIN_X, this.y, SMALL_SIZE, this.regular, SLATE_500, 1.5);
     }
+    this.y -= 3;
+  }
 
-    this.ensureSpace(height + 6);
+  private answerBlockHeight(group: TestResultPdfLineGroup, padded: boolean) {
+    const inner = this.contentWidth() - (padded ? 16 : 0);
+    const headingLines = group.heading ? wrapParagraphs(this.bold, group.heading.toUpperCase(), LABEL_SIZE, inner) : [];
+    const bodyLines = this.wrapBody(group.lines, inner);
+    const pad = padded ? 5 : 1;
+    return pad * 2 + headingLines.length * (LABEL_SIZE + 1.5) + bodyLines.length * (BODY_SIZE + 1.8) + 2;
+  }
+
+  private drawExpected(group: TestResultPdfLineGroup) {
+    const width = this.contentWidth();
+    const heading = (group.heading ?? 'Expected answer').toUpperCase();
+    const bodyLines = this.wrapBody(group.lines, width);
+    const height = 10 + bodyLines.length * (BODY_SIZE + 1.8);
+    this.ensureSpace(height + 2);
+    this.page.drawText(heading, {
+      x: MARGIN_X,
+      y: this.y - LABEL_SIZE,
+      size: LABEL_SIZE,
+      font: this.bold,
+      color: EMERALD_800,
+    });
+    this.y -= LABEL_SIZE + 3;
+    this.y = this.textLines(bodyLines, MARGIN_X, this.y, BODY_SIZE, this.regular, SLATE_900, 1.8);
+    this.y -= 3;
+  }
+
+  private drawStudent(group: TestResultPdfLineGroup) {
+    const status = statusFromTone(group.tone === 'student' ? 'correct' : group.tone);
+    const colors = STATUS_PILL[status];
+    const heading = (group.heading ?? 'Student answer').toUpperCase();
+    const inner = this.contentWidth() - 16;
+    const headingLines = wrapParagraphs(this.bold, heading, LABEL_SIZE, inner);
+    const bodyLines = this.wrapBody(group.lines, inner);
+    const pad = 5;
+    const height = pad * 2 + headingLines.length * (LABEL_SIZE + 1.5) + bodyLines.length * (BODY_SIZE + 1.8);
+    this.ensureSpace(height + 4);
     const boxY = this.y - height;
     this.page.drawRectangle({
       x: MARGIN_X,
       y: boxY,
       width: this.contentWidth(),
       height,
-      color: palette.bg,
-      borderColor: rgb(palette.bar.red, palette.bar.green, palette.bar.blue),
-      borderWidth: 0.35,
+      color: colors.fill,
     });
-    this.page.drawRectangle({ x: MARGIN_X, y: boxY, width: 6.5, height, color: palette.bar });
-
-    let cursor = this.y - padding;
-    const draw = (lines: string[], size: number, font: PDFFont, color: RGB, gap: number) => {
-      for (const line of lines) {
-        if (line) {
-          this.page.drawText(line, { x: MARGIN_X + 16, y: cursor - size, size, font, color });
-        }
-        cursor -= size + gap;
-      }
-    };
-    draw(headingLines, GROUP_HEADING_SIZE, this.bold, palette.heading, 3);
-    if (headingLines.length && bodyLines.length) cursor -= 4;
-    draw(bodyLines, BODY_SIZE, this.regular, palette.body, LINE_GAP);
-    this.y = boxY - 9;
-  }
-
-  exercise(exercise: TestResultPdfExercise) {
-    const statusTone = STATUS_TONE[exercise.statusLabel];
-    const palette = TONE_STYLES[statusTone];
-    const scoreLines = wrapParagraphs(
-      this.bold,
-      `${exercise.statusLabel}  ·  ${exercise.awardedPoints} / ${exercise.maxPoints} points`,
-      15,
-      this.contentWidth() - 28
-    );
-    const titleLines = wrapParagraphs(
-      this.regular,
-      `Exercise ${exercise.number}. ${exercise.title}`,
-      SMALL_SIZE,
-      this.contentWidth() - 28
-    );
-    const bannerHeight = 20 + scoreLines.length * 18 + titleLines.length * (SMALL_SIZE + 3);
-    const groupsHeight = exercise.groups.reduce((sum, group) => {
-      const height = this.wrappedBlock(group).height;
-      return sum + Math.min(height, usableHeight() - 8) + 9;
-    }, 0);
-    const estimated = bannerHeight + groupsHeight + 8;
-    if (estimated <= usableHeight()) this.ensureSpace(estimated);
-    else this.ensureSpace(bannerHeight + 72);
-    this.ensureSpace(bannerHeight);
-    const boxY = this.y - bannerHeight;
     this.page.drawRectangle({
       x: MARGIN_X,
       y: boxY,
-      width: this.contentWidth(),
-      height: bannerHeight,
-      color: palette.bg,
-      borderColor: palette.bar,
-      borderWidth: 0.45,
+      width: 3,
+      height,
+      color: colors.bar,
     });
-    this.page.drawRectangle({ x: MARGIN_X, y: boxY, width: 7, height: bannerHeight, color: palette.bar });
+    let cursor = this.y - pad;
+    cursor = this.textLines(headingLines, MARGIN_X + 10, cursor, LABEL_SIZE, this.bold, colors.text, 1.5);
+    cursor -= 1;
+    this.textLines(bodyLines, MARGIN_X + 10, cursor, BODY_SIZE, this.regular, SLATE_900, 1.8);
+    this.y = boxY - 6;
+  }
 
-    let cursor = this.y - 12;
-    for (const line of scoreLines) {
-      this.page.drawText(line, {
-        x: MARGIN_X + 16,
-        y: cursor - 15,
-        size: 15,
+  private drawPrompt(group: TestResultPdfLineGroup) {
+    const width = this.contentWidth();
+    const heading = group.heading ? group.heading.toUpperCase() : '';
+    const bodyLines = this.wrapBody(group.lines, width);
+    const height = (heading ? 10 : 0) + bodyLines.length * (BODY_SIZE + LINE_GAP);
+    this.ensureSpace(height + 2);
+    if (heading) {
+      this.page.drawText(heading, {
+        x: MARGIN_X,
+        y: this.y - LABEL_SIZE,
+        size: LABEL_SIZE,
         font: this.bold,
-        color: palette.heading,
+        color: SLATE_500,
       });
-      cursor -= 18;
+      this.y -= LABEL_SIZE + 3;
     }
-    cursor -= 2;
-    for (const line of titleLines) {
-      this.page.drawText(line, {
-        x: MARGIN_X + 16,
-        y: cursor - SMALL_SIZE,
-        size: SMALL_SIZE,
-        font: this.regular,
-        color: SLATE,
-      });
-      cursor -= SMALL_SIZE + 3;
-    }
-    this.y = boxY - 12;
+    this.y = this.textLines(bodyLines, MARGIN_X, this.y, BODY_SIZE, this.regular, SLATE_700, LINE_GAP);
+    this.y -= 3;
+  }
 
-    for (const group of exercise.groups) this.block(group);
+  reviewNote(text: string) {
+    this.drawPrompt({ heading: 'Review note', tone: 'neutral', lines: [text] });
+  }
+
+  exercise(exercise: TestResultPdfExercise) {
+    if (this.remaining() < MIN_EXERCISE_KEEP) this.addPage();
+    this.hairline();
+    this.exerciseHeader(exercise);
+    for (let index = 0; index < exercise.groups.length; index += 1) {
+      const group = exercise.groups[index]!;
+      const next = exercise.groups[index + 1];
+      if (isExpectedGroup(group) && next && isStudentGroup(next)) {
+        const pairHeight = this.answerBlockHeight(group, false) + this.answerBlockHeight(next, true) + 8;
+        this.ensureSpace(Math.min(pairHeight, 64));
+        this.drawExpected(group);
+        this.drawStudent(next);
+        index += 1;
+        continue;
+      }
+      if (isStudentGroup(group)) {
+        this.drawStudent(group);
+        continue;
+      }
+      if (isExpectedGroup(group)) {
+        this.drawExpected(group);
+        continue;
+      }
+      if (isQuestionGroup(group)) {
+        this.drawQuestion(group);
+        continue;
+      }
+      if (isScoreGroup(group)) {
+        this.drawScoreLine(group);
+        continue;
+      }
+      this.drawPrompt(group);
+    }
+    this.gap(8);
   }
 }
 
 const stampPages = (model: TestResultPdfModel, pages: PDFPage[], font: PDFFont) => {
   pages.forEach((page, index) => {
-    page.drawRectangle({ x: 0, y: PAGE_HEIGHT - 8, width: PAGE_WIDTH, height: 8, color: ROMAN_RED });
-    page.drawText(`${model.kindLabel} result report`, {
-      x: MARGIN_X,
-      y: PAGE_HEIGHT - 28,
-      size: 8.5,
-      font,
-      color: ROMAN_RED,
-    });
-    const pageLabel = `Page ${index + 1} of ${pages.length}`;
+    page.drawRectangle({ x: 0, y: PAGE_HEIGHT - 4, width: PAGE_WIDTH, height: 4, color: ROMAN_RED });
+    const pageLabel = `${index + 1} / ${pages.length}`;
     page.drawText(pageLabel, {
-      x: PAGE_WIDTH - MARGIN_X - font.widthOfTextAtSize(pageLabel, 8.5),
-      y: PAGE_HEIGHT - 28,
-      size: 8.5,
+      x: PAGE_WIDTH - MARGIN_X - font.widthOfTextAtSize(pageLabel, 8),
+      y: 18,
+      size: 8,
       font,
-      color: MUTED,
-    });
-    page.drawLine({
-      start: { x: MARGIN_X, y: 34 },
-      end: { x: PAGE_WIDTH - MARGIN_X, y: 34 },
-      thickness: 0.6,
-      color: RULE,
+      color: SLATE_500,
     });
     page.drawText(`${model.studentName}  ·  ${model.title}`, {
       x: MARGIN_X,
-      y: 20,
-      size: 8.5,
+      y: 18,
+      size: 8,
       font,
-      color: MUTED,
+      color: SLATE_500,
     });
   });
 };
@@ -366,51 +604,10 @@ export async function renderTestResultPdf(model: TestResultPdfModel): Promise<Ui
   }
 
   const writer = new PdfWriter(doc, regular, bold);
-  writer.text(`${model.kindLabel} result`, SMALL_SIZE, bold, ROMAN_RED, 4);
-  writer.text(model.title, TITLE_SIZE, bold, ROMAN_RED, 7);
-  writer.text(`Submitted ${model.submittedAtLabel}`, SMALL_SIZE, regular, MUTED, 5);
-  writer.gap(6);
+  writer.summaryCard(model);
+  writer.scoreList(model);
 
-  writer.block({
-    heading: 'Student',
-    tone: 'neutral',
-    lines: [
-      model.studentName,
-      ...(model.studentUsername ? [`Username: ${model.studentUsername}`] : []),
-      ...(model.studentEmail ? [`Email: ${model.studentEmail}`] : []),
-    ],
-  });
-  writer.block({
-    heading: 'Overall score',
-    tone: overallTone(model),
-    lines: [
-      `${model.percentageLabel}  ·  ${model.scoreLabel} / ${model.maxScoreLabel} points`,
-      ...(model.outcomeLabel ? [`Outcome: ${model.outcomeLabel}`] : []),
-      ...(model.passingPercentageLabel ? [`Passing mark: ${model.passingPercentageLabel}`] : []),
-    ],
-  });
-
-  writer.gap(4);
-  writer.rule();
-  if (model.exerciseSummaries.length > 0) {
-    writer.text('Exercise scores', HEADING_SIZE, bold, ROMAN_RED, 8);
-    for (const exercise of model.exerciseSummaries) {
-      const status = exercise.statusLabel ? `${exercise.statusLabel}  ·  ` : '';
-      const tone = exercise.statusLabel ? STATUS_TONE[exercise.statusLabel] : 'neutral';
-      writer.text(
-        `${exercise.number}. ${exercise.title}  —  ${status}${exercise.awardedPoints} / ${exercise.maxPoints} points`,
-        BODY_SIZE,
-        regular,
-        TONE_STYLES[tone].heading,
-        5
-      );
-    }
-    writer.gap(8);
-  }
-
-  if (model.reviewUnavailableNote) {
-    writer.block({ heading: 'Review note', tone: 'neutral', lines: [model.reviewUnavailableNote] });
-  }
+  if (model.reviewUnavailableNote) writer.reviewNote(model.reviewUnavailableNote);
 
   for (const exercise of model.exercises) writer.exercise(exercise);
 
