@@ -1,4 +1,4 @@
-import { renderTestResultPdf } from '@/src/lib/tests/result-pdf';
+import { renderTestResultPdf } from '@/src/lib/tests/result-pdf-render.server';
 import { buildTestResultPdfModel } from '@/src/lib/tests/result-pdf-model';
 import type { StudentTestResult } from '@/src/types/test-results';
 
@@ -64,5 +64,7 @@ describe('test result PDF renderer', () => {
     const bytes = await renderTestResultPdf(model);
     expect(Buffer.from(bytes.subarray(0, 4)).toString('utf8')).toBe('%PDF');
     expect(bytes.byteLength).toBeGreaterThan(1000);
+    const again = await renderTestResultPdf(model);
+    expect(Buffer.from(again.subarray(0, 4)).toString('utf8')).toBe('%PDF');
   });
 });

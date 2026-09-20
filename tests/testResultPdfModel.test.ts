@@ -1,6 +1,7 @@
 import { sourceTitleFromDocument, studentIdentityFromProfile } from '@/src/lib/tests/result-pdf-identity';
-import { buildTestResultPdfModel, pdfExerciseText } from '@/src/lib/tests/result-pdf-model';
+import { buildTestResultPdfModel, type TestResultPdfExercise } from '@/src/lib/tests/result-pdf-model';
 import type { StudentTestResult, TestResultReviewItem } from '@/src/types/test-results';
+import { stripHtmlTags } from '@/src/utils/exercises/helpers';
 
 const submittedAt = '2026-08-19T12:00:00.000Z';
 
@@ -98,6 +99,9 @@ const identity = studentIdentityFromProfile({
   username: 'jdoe',
   email: 'jane@school.edu',
 });
+
+const pdfExerciseText = (exercise: TestResultPdfExercise): string =>
+  exercise.groups.flatMap(group => [group.heading, ...group.lines].filter(Boolean)).join('\n');
 
 describe('test result PDF model', () => {
   it('includes fill answers, accepted answers, and explanations', () => {
@@ -302,5 +306,93 @@ describe('test result PDF model', () => {
     expect(translationText).toContain('I love');
     expect(translationText).toContain('and I walk');
     expect(translationText).toContain('Line two needs the conjunction.');
+  });
+
+  it('maps text-selection and click-word indices with the grader word splitter', () => {
+    const passage = '<p>amo</p><p>et ambulo</p>';
+    const words = stripHtmlTags(passage)
+      .split(/\s+/)
+      .filter(word => word.trim());
+    expect(words).toEqual(['amoet', 'ambulo']);
+
+    const selection: TestResultReviewItem = {
+      id: 'ex-select',
+      type: 'text-selection',
+      title: 'Select the verb',
+      maxPoints: 1,
+      studentAnswer: { type: 'text-selection', selectedWordIndices: [1] },
+      result: { awardedPoints: 1, maxPoints: 1 },
+      question: { passage, questions: [{ id: 'q1', text: 'Which word is ambulo?' }] },
+      answerKey: {
+        questions: [{ id: 'q1', text: 'Which word is ambulo?', correctWordIndex: 1, explanation: 'The second word.' }],
+      },
+      itemResults: {
+        selections: [{ questionId: 'q1', wordIndex: 1, correct: true, points: { awardedPoints: 1, maxPoints: 1 } }],
+      },
+    } as TestResultReviewItem;
+
+    const click: TestResultReviewItem = {
+      id: 'ex-click-html',
+      type: 'click-on-multiple-words',
+      title: 'Click the verbs',
+      maxPoints: 2,
+      studentAnswer: { type: 'click-on-multiple-words', selectedWordIndices: [0] },
+      result: { awardedPoints: 1, maxPoints: 2 },
+      question: { passage },
+      answerKey: { correctWordIndices: [0, 1] },
+      itemResults: {
+        selectedWordIndices: [0],
+        correct: false,
+        points: { awardedPoints: 1, maxPoints: 2 },
+      },
+    } as TestResultReviewItem;
+
+    const model = buildTestResultPdfModel({
+      result: buildResult([selection, click]),
+      identity,
+      source: { kindLabel: 'Test', title: 'Quiz' },
+    });
+
+    const selectionText = pdfExerciseText(model.exercises[0]!);
+    expect(selectionText).toContain('Your word: ambulo');
+    expect(selectionText).toContain('Correct word: ambulo');
+    expect(selectionText).not.toContain('Your word: et');
+    expect(selectionText).not.toContain('Correct word: et');
+
+    const clickText = pdfExerciseText(model.exercises[1]!);
+    expect(clickText).toContain('Your selected words');
+    expect(clickText).toContain('amoet');
+    expect(clickText).toContain('Correct words');
+    expect(clickText).toContain('ambulo');
+  });
+
+  it('records an empty matching attempt when no rounds were saved', () => {
+    const matching: TestResultReviewItem = {
+      id: 'ex-match-empty',
+      type: 'matching',
+      title: 'Match the verbs',
+      maxPoints: 2,
+      studentAnswer: null,
+      result: { awardedPoints: 0, maxPoints: 2 },
+      question: {
+        leftColumn: [{ id: 'left-1', value: 'amo' }],
+        rightColumn: [{ id: 'right-1', value: 'I love' }],
+        expectedMatchCount: 1,
+      },
+      answerKey: { pairs: [{ leftId: 'left-1', leftValue: 'amo', rightId: 'right-1', rightValue: 'I love' }] },
+      itemResults: { rounds: [] },
+    } as unknown as TestResultReviewItem;
+
+    const text = pdfExerciseText(
+      buildTestResultPdfModel({
+        result: buildResult([matching]),
+        identity,
+        source: { kindLabel: 'Test', title: 'Quiz' },
+      }).exercises[0]!
+    );
+
+    expect(text).toContain('Your matches');
+    expect(text).toContain('No answer was recorded.');
+    expect(text).toContain('amo ↔ I love');
   });
 });

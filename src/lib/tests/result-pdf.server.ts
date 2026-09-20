@@ -2,7 +2,7 @@ import { LEARNING_UNITS_COLLECTION, MOCK_TESTS_COLLECTION } from '@/shared/const
 import { buildTestResultPdfFilename } from '@/src/lib/tests/result-pdf-filename';
 import { sourceTitleFromDocument, studentIdentityFromProfile } from '@/src/lib/tests/result-pdf-identity';
 import { buildTestResultPdfModel } from '@/src/lib/tests/result-pdf-model';
-import { renderTestResultPdf } from '@/src/lib/tests/result-pdf';
+import { renderTestResultPdf } from '@/src/lib/tests/result-pdf-render.server';
 import { adminDb } from '@/src/services/firebase-admin';
 import type { StudentTestResult } from '@/src/types/test-results';
 import type { Firestore } from 'firebase-admin/firestore';

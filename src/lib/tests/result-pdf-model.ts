@@ -8,7 +8,7 @@ import type {
   TestResultReviewItem,
   TestResultReviewSupportingItem,
 } from '@/src/types/test-results';
-import { richTextToPlainText } from '@/src/utils/exercises/helpers';
+import { richTextToPlainText, stripHtmlTags } from '@/src/utils/exercises/helpers';
 
 export type TestResultPdfTone = 'neutral' | 'student' | 'answer' | 'explanation' | 'feedback';
 
@@ -68,7 +68,10 @@ const EMPTY_ANSWER = 'No answer was recorded.';
 
 const plain = (value?: string | null): string => (value ? richTextToPlainText(value) : '');
 
-const wordsFromHtml = (html: string): string[] => plain(html).split(/\s+/).filter(Boolean);
+const wordsFromHtml = (html: string): string[] =>
+  stripHtmlTags(html)
+    .split(/\s+/)
+    .filter(word => word.trim());
 
 const isExerciseReviewItem = (item: TestResultReviewItem): item is TestResultReviewExerciseItem => 'answerKey' in item;
 
@@ -287,9 +290,7 @@ function flattenMatching(item: ExerciseOfType<'matching'>): TestResultPdfLineGro
   const roundCount = Math.max(scoredRounds.length, savedRounds.length);
   const groups: TestResultPdfLineGroup[] = [];
 
-  if (item.studentAnswer === null && roundCount === 0) {
-    groups.push(group('Your matches', [EMPTY_ANSWER], 'student'));
-  } else if (roundCount === 0) {
+  if (roundCount === 0) {
     groups.push(group('Your matches', [EMPTY_ANSWER], 'student'));
   } else {
     for (let roundIndex = 0; roundIndex < roundCount; roundIndex += 1) {
@@ -681,10 +682,6 @@ function summariesFromAttempt(attempt: StudentSubmittedTestAttempt): TestResultP
     maxPoints: formatScorePoints(exercise.maxPoints),
     statusLabel: statusLabel(exercise.awardedPoints, exercise.maxPoints),
   }));
-}
-
-export function pdfExerciseText(exercise: TestResultPdfExercise): string {
-  return exercise.groups.flatMap(group => [group.heading, ...group.lines].filter(Boolean)).join('\n');
 }
 
 export function buildTestResultPdfModel(input: {

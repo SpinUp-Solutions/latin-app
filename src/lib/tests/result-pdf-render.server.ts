@@ -29,7 +29,12 @@ const TONE_STYLES: Record<TestResultPdfTone, { bg: RGB; bar: RGB; heading: RGB }
   feedback: { bg: rgb(0.96, 0.94, 0.99), bar: rgb(0.5, 0.36, 0.72), heading: rgb(0.38, 0.24, 0.58) },
 };
 
+const fontBytesCache = new Map<string, Uint8Array>();
+
 async function loadFontBytes(fileName: string): Promise<Uint8Array> {
+  const cached = fontBytesCache.get(fileName);
+  if (cached) return cached;
+
   const candidates = [
     path.join(process.cwd(), 'src/lib/tests/fonts', fileName),
     (() => {
@@ -45,7 +50,10 @@ async function loadFontBytes(fileName: string): Promise<Uint8Array> {
   for (const candidate of candidates) {
     try {
       const bytes = new Uint8Array(await readFile(candidate));
-      if (bytes.byteLength > 100) return bytes;
+      if (bytes.byteLength > 100) {
+        fontBytesCache.set(fileName, bytes);
+        return bytes;
+      }
     } catch {
       continue;
     }
