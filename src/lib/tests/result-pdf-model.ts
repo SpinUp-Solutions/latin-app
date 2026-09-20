@@ -13,6 +13,10 @@ export interface TestResultPdfLineGroup {
   heading?: string;
   tone?: TestResultPdfTone;
   lines: string[];
+  table?: {
+    columns: string[];
+    rows: Array<Array<{ lines: string[]; tone?: TestResultPdfTone }>>;
+  };
 }
 
 /** Font-safe pairing mark. Embedded Noto Sans has no arrow glyphs (U+2192 / U+2194). */
@@ -257,7 +261,7 @@ function flattenFill(item: ExerciseOfType<'fill'>): TestResultPdfLineGroup[] {
     const awarded = result?.points.awardedPoints ?? 0;
     const max = result?.points.maxPoints ?? 1;
     const prompt = plain(keyItem.text) || `Blank ${index + 1}`;
-    const accepted = `Accepted ${keyItem.acceptedAnswers.length > 1 ? 'answers' : 'answer'}: ${keyItem.acceptedAnswers.join(' or ')}`;
+    const accepted = keyItem.acceptedAnswers.join(' or ');
     const groups: TestResultPdfLineGroup[] = [];
     if (item.answerKey.items.length > 1) {
       groups.push(
@@ -428,31 +432,29 @@ function flattenTableFill(item: ExerciseOfType<'table-fill'>): TestResultPdfLine
   const groups: TestResultPdfLineGroup[] = [];
   const title = plain(item.question.title);
   if (title) groups.push(group('Question', [title]));
-
-  item.answerKey.rows.forEach((row, rowIndex) => {
-    item.question.columns.forEach(column => {
-      const cell = row.cells[column.id];
-      if (!cell?.isBlank) return;
-      const key = `${row.id}-${column.id}`;
-      const result = resultsByCell.get(key);
-      const studentValue = result?.value ?? saved[key];
-      const awarded = result?.points.awardedPoints ?? 0;
-      const max = result?.points.maxPoints ?? 1;
-      const heading = `${plain(column.header) || `Column ${column.id}`} · row ${rowIndex + 1}`;
-      groups.push(
-        group(
-          heading,
-          [result ? pointsLine(awarded, max, result.correct) : 'Not scored'],
-          result ? statusTone(awarded, max, result.correct) : 'score'
-        ),
-        group('Expected answer', [recorded(cell.answer)], 'answer'),
-        group(
-          'Student answer',
-          [recorded(studentValue)],
-          result ? studentTone(awarded, max, result.correct) : 'incorrect'
-        )
-      );
-    });
+  groups.push({
+    lines: [],
+    table: {
+      columns: item.question.columns.map((column, index) => plain(column.header) || `Column ${index + 1}`),
+      rows: item.answerKey.rows.map(row =>
+        item.question.columns.map(column => {
+          const cell = row.cells[column.id];
+          if (!cell?.isBlank) return { lines: [plain(cell?.content)] };
+          const key = `${row.id}-${column.id}`;
+          const result = resultsByCell.get(key);
+          return {
+            lines: [
+              recorded(result?.value ?? saved[key]),
+              `Expected: ${recorded(cell.answer)}`,
+              result ? pointsLine(result.points.awardedPoints, result.points.maxPoints, result.correct) : 'Not scored',
+            ],
+            tone: result
+              ? studentTone(result.points.awardedPoints, result.points.maxPoints, result.correct)
+              : 'neutral',
+          };
+        })
+      ),
+    },
   });
   return groups;
 }
@@ -501,7 +503,7 @@ function flattenGeneratedTranslation(item: ExerciseOfType<'generated-translation
     const studentValue = result?.value ?? saved[index];
     const awarded = result?.points.awardedPoints ?? 0;
     const max = result?.points.maxPoints ?? 1;
-    const accepted = `Accepted ${keyItem.acceptedAnswers.length > 1 ? 'answers' : 'answer'}: ${keyItem.acceptedAnswers.join(' or ')}`;
+    const accepted = keyItem.acceptedAnswers.join(' or ');
     return [
       group(
         `Item ${index + 1}`,
@@ -533,7 +535,7 @@ function flattenGeneratedFormIdentification(
     const awarded = result?.points.awardedPoints ?? 0;
     const max = result?.points.maxPoints ?? 1;
     const expected: string[] = [];
-    if (accepted?.length) expected.push(`Accepted answers: ${accepted.join(' or ')}`);
+    if (accepted?.length) expected.push(accepted.join(' or '));
     if (correctAnswer && !accepted?.includes(correctAnswer)) expected.push(correctAnswer);
     if (correctDisplay && !accepted?.length) expected.push(correctDisplay);
     return [
@@ -580,7 +582,6 @@ function flattenTranslationGrading(item: ExerciseOfType<'translation-grading'>):
     const questionLines = [latin, instructions].filter(Boolean);
     if (questionLines.length) groups.push(group(count > 1 ? `Question ${index + 1}` : 'Question', questionLines));
     groups.push(
-      group('Expected answer', ['No reference translation was recorded.'], 'neutral'),
       group(
         'Student answer',
         multiline(result?.translation ?? saved[index]),
