@@ -8,6 +8,7 @@ import { updateEditingContent } from '@/src/store/slices/lessonEditorSlice';
 import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
 import { SimpleRichEditor } from '../../core/simple-rich-editor';
+import { ExerciseTitleInstructions } from './ExerciseHeaderFields';
 import { SimpleRichDisplay } from '../../core/simple-rich-display';
 
 export const OddOneOutEditor: React.FC = () => {
@@ -69,27 +70,12 @@ export const OddOneOutEditor: React.FC = () => {
     <div className="space-y-6">
       {/* Basic Fields */}
       <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium mb-1">Exercise Title</label>
-          <SimpleRichEditor
-            content={editingContent.title || ''}
-            onChange={value => updateContent({ title: value })}
-            placeholder="Enter exercise title..."
-            singleLine={true}
-            className="w-full"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">Instructions</label>
-          <SimpleRichEditor
-            content={editingContent.instructions || ''}
-            onChange={value => updateContent({ instructions: value })}
-            placeholder="Provide instructions for students..."
-            rows={3}
-            className="w-full"
-          />
-        </div>
+        <ExerciseTitleInstructions
+          title={editingContent.title || ''}
+          instructions={editingContent.instructions || ''}
+          onTitleChange={value => updateContent({ title: value })}
+          onInstructionsChange={value => updateContent({ instructions: value })}
+        />
 
         <div>
           <label className="block text-sm font-medium mb-1">Question</label>
