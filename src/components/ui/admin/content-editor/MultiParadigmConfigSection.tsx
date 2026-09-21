@@ -19,25 +19,8 @@ import {
   PARADIGM_LABELS,
   PARADIGM_RELEVANT_FILTERS,
 } from '@/src/config/paradigmDefinitions';
-import {
-  DndContext,
-  closestCenter,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  KeyboardSensor,
-  DragEndEvent,
-} from '@dnd-kit/core';
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-  useSortable,
-  arrayMove,
-  sortableKeyboardCoordinates,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { restrictToVerticalAxis, restrictToParentElement } from '@dnd-kit/modifiers';
-import { AlertTriangle, GripVertical } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
+import { SortableStepList } from './SortableStepList';
 import { Alert, AlertDescription, AlertTitle } from '@/src/components/ui/alert';
 import {
   getCompatibilityStepLabels,
@@ -51,25 +34,6 @@ interface MultiParadigmConfigSectionProps {
   onUpdateParadigmConfig: (paradigm: FormParadigm, updates: Partial<ParadigmConfig>) => void;
   onToggleParadigm: (paradigm: FormParadigm, enabled: boolean) => void;
 }
-
-const SortableStepItem: React.FC<{ step: FormIdentificationStep }> = ({ step }) => {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: step });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
-  return (
-    <div ref={setNodeRef} style={style} className="flex items-center gap-3 rounded border bg-white p-2 text-sm">
-      <div {...attributes} {...listeners} className="cursor-move">
-        <GripVertical className="h-4 w-4 text-gray-500" />
-      </div>
-      <span className="flex-1 capitalize">{step.replace(/_/g, ' ')}</span>
-    </div>
-  );
-};
 
 const PRONOUN_PARADIGMS: FormParadigm[] = ['pronoun-personal', 'pronoun-gendered'];
 const NON_PRONOUN_PARADIGMS: FormParadigm[] = ['verb-conjugation', 'noun-declension', 'adjective-declension'];
@@ -111,15 +75,6 @@ export const MultiParadigmConfigSection: React.FC<MultiParadigmConfigSectionProp
     }
   }, [availableParadigms, activeParadigm]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 8 },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
   const currentConfig = activeParadigm ? paradigmConfigs[activeParadigm] : undefined;
   const formSelectionProps = activeParadigm ? getFormSelectionProps(activeParadigm) : null;
 
@@ -133,38 +88,6 @@ export const MultiParadigmConfigSection: React.FC<MultiParadigmConfigSectionProp
     },
     formSelectionProps?.pronounType,
     formSelectionProps?.pronounPerson
-  );
-
-  const handleStepToggle = useCallback(
-    (step: FormIdentificationStep) => {
-      if (!activeParadigm) return;
-      const config = paradigmConfigs[activeParadigm];
-      const currentSteps = config?.steps || [];
-      const newSteps = currentSteps.includes(step) ? currentSteps.filter(s => s !== step) : [...currentSteps, step];
-
-      onUpdateParadigmConfig(activeParadigm, { steps: newSteps });
-    },
-    [activeParadigm, paradigmConfigs, onUpdateParadigmConfig]
-  );
-
-  const handleDragEnd = useCallback(
-    (event: DragEndEvent) => {
-      if (!activeParadigm) return;
-      const { active, over } = event;
-      if (over && active.id !== over.id) {
-        const config = paradigmConfigs[activeParadigm];
-        const steps = config?.steps || [];
-        if (steps.length === 0) {
-          return;
-        }
-        const oldIndex = steps.indexOf(active.id as FormIdentificationStep);
-        const newIndex = steps.indexOf(over.id as FormIdentificationStep);
-        const reorderedSteps = arrayMove(steps, oldIndex, newIndex);
-
-        onUpdateParadigmConfig(activeParadigm, { steps: reorderedSteps });
-      }
-    },
-    [activeParadigm, paradigmConfigs, onUpdateParadigmConfig]
   );
 
   const handleFilterChange = useCallback(
@@ -432,43 +355,12 @@ export const MultiParadigmConfigSection: React.FC<MultiParadigmConfigSectionProp
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium mb-3">Steps to Identify (in order)</label>
-                  <div className="space-y-4">
-                    <div className="flex flex-wrap gap-2">
-                      {availableSteps.map(step => (
-                        <Button
-                          key={step}
-                          type="button"
-                          variant={currentSteps.includes(step) ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => handleStepToggle(step)}
-                          className="capitalize">
-                          {step.replace(/_/g, ' ')}
-                        </Button>
-                      ))}
-                    </div>
-
-                    {currentSteps.length > 0 && (
-                      <div>
-                        <p className="text-sm text-gray-600 mb-2">Selected steps (drag to reorder):</p>
-                        <DndContext
-                          sensors={sensors}
-                          collisionDetection={closestCenter}
-                          onDragEnd={handleDragEnd}
-                          modifiers={[restrictToVerticalAxis, restrictToParentElement]}>
-                          <SortableContext items={currentSteps} strategy={verticalListSortingStrategy}>
-                            <div className="space-y-2">
-                              {currentSteps.map(step => (
-                                <SortableStepItem key={step} step={step} />
-                              ))}
-                            </div>
-                          </SortableContext>
-                        </DndContext>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <SortableStepList
+                  availableSteps={availableSteps}
+                  selectedSteps={currentSteps}
+                  onChange={steps => onUpdateParadigmConfig(activeParadigm, { steps })}
+                  formatLabel={step => step.replace(/_/g, ' ')}
+                />
 
                 <div>
                   <label className="block text-sm font-medium mb-3">Filters</label>
