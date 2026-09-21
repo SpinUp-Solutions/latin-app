@@ -6,7 +6,8 @@ import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { ExerciseInput, FeedbackDisplay } from '../feedback';
 import { ExerciseProgress } from './exercise-progress';
-import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
+import { ExerciseIntro } from './exercise-intro';
+import { applySequentialItemResult } from './sequential-item-result';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import {
   useGetGeneratedExerciseWordsQuery,
@@ -159,37 +160,22 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
         )
       : null;
 
-    if (validation.isCorrect) {
-      handleCorrect(isLastItem);
-
-      if (isLastItem) {
-        if (!assessmentMode) onCompletionAccepted?.(finalScore!);
-        autoAdvanceIfEnabled(() => {
-          setUserAnswer('');
-          reset();
-          setIsProcessing(false);
-          onComplete?.(finalScore!);
-        }, false);
-      } else {
-        autoAdvanceIfEnabled(() => {
-          setUserAnswer('');
-          reset();
-          setIsProcessing(false);
-        }, false);
-      }
-    } else {
-      handleIncorrect();
-      if (assessmentMode) {
-        autoAdvanceIfEnabled(() => {
-          setUserAnswer('');
-          reset();
-          setIsProcessing(false);
-          if (finalScore !== null) onComplete?.(finalScore);
-        }, false);
-      } else {
-        setIsProcessing(false);
-      }
-    }
+    applySequentialItemResult({
+      isCorrect: validation.isCorrect,
+      isLastItem,
+      assessmentMode,
+      finalScore,
+      handleCorrect,
+      handleIncorrect,
+      autoAdvanceIfEnabled,
+      onCompletionAccepted,
+      onComplete,
+      clearItem: () => {
+        setUserAnswer('');
+        reset();
+      },
+      stopProcessing: () => setIsProcessing(false),
+    });
   };
 
   const handleAnswerChange = (value: string) => {
@@ -236,18 +222,12 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-start">
-        <h3 className="text-lg font-serif text-roman-red mb-2">
-          <SimpleRichDisplay content={exercise.title || getContentTypeLabel(exercise.type)} />
-        </h3>
-        {exercise.audioPath && <AudioPlayButton audioPath={exercise.audioPath} />}
-      </div>
-
-      {exercise.instructions && exercise.instructions.replace(/<[^>]*>/g, '').trim() !== '' && (
-        <div className="text-roman-stone">
-          <SimpleRichDisplay content={exercise.instructions} />
-        </div>
-      )}
+      <ExerciseIntro
+        variant="plain"
+        title={exercise.title || getContentTypeLabel(exercise.type)}
+        audioPath={exercise.audioPath}
+        instructions={exercise.instructions}
+      />
 
       <ExerciseProgress
         currentIndex={currentIndex}
