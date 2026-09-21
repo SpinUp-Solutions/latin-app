@@ -113,6 +113,11 @@ interface Block {
   grid?: boolean;
   headerRow?: boolean;
   maxWidth?: number;
+  kind?: 'part';
+  divided?: boolean;
+  partHeading?: string;
+  partScore?: string;
+  partColor?: RGB;
 }
 
 const isStudent = (group: TestResultPdfLineGroup) => group.heading?.startsWith('Student') || group.tone === 'student';
@@ -127,6 +132,15 @@ const answerStyle = (group: TestResultPdfLineGroup) =>
       : group.tone === 'incorrect'
         ? STATUS.Incorrect
         : { ink: MUTED, fill: WHITE };
+
+const scoreColor = (tone?: TestResultPdfLineGroup['tone']): RGB =>
+  tone === 'correct'
+    ? STATUS.Correct.ink
+    : tone === 'partial'
+      ? STATUS['Partly correct'].ink
+      : tone === 'incorrect'
+        ? STATUS.Incorrect.ink
+        : MUTED;
 
 /** Presentation only: never infer scores or answers from the displayed text. */
 function exerciseBlocks(exercise: TestResultPdfExercise): Block[] {
@@ -201,11 +215,21 @@ function exerciseBlocks(exercise: TestResultPdfExercise): Block[] {
         inset: 10,
         gap: 12,
       });
-    } else if (isScore(group)) {
-      // A numbered part's prompt and mark share a compact line. A neutral
-      // ungraded part stays neutral rather than acquiring an incorrect badge.
+    } else if (isScore(group) && group.heading) {
+      // Each blank, choice, or sub-question gets its own heading and score
+      // so later parts do not run into the previous answer.
       blocks.push({
-        columns: [{ lines: [[group.heading, ...group.lines].filter(Boolean).join(' · ')], color: MUTED }],
+        kind: 'part',
+        divided: blocks.length > 0,
+        partHeading: group.heading,
+        partScore: group.lines.filter(Boolean).join(' · '),
+        partColor: scoreColor(group.tone),
+        columns: [],
+        gap: 10,
+      });
+    } else if (isScore(group)) {
+      blocks.push({
+        columns: [{ lines: [group.lines.filter(Boolean).join(' · ')], color: MUTED }],
         size: 8,
         gap: 4,
       });
@@ -439,8 +463,70 @@ class PdfWriter {
     }
   }
 
+  private scoreLabel(exercise: TestResultPdfExercise) {
+    return `${exercise.awardedPoints} / ${exercise.maxPoints} points`;
+  }
+
   private headerLines(exercise: TestResultPdfExercise, continued: boolean) {
-    return this.lines(`${exercise.title}${continued ? ' (continued)' : ''}`, this.serif, 14, CONTENT_WIDTH - 160);
+    const scoreWidth = this.bold.widthOfTextAtSize(this.scoreLabel(exercise), 10);
+    const titleWidth = Math.max(180, CONTENT_WIDTH - scoreWidth - 64);
+    return this.lines(`${exercise.title}${continued ? ' (continued)' : ''}`, this.serif, 14, titleWidth);
+  }
+
+  private blockHeight(block: Block) {
+    return block.kind === 'part' ? this.measurePart(block).height : this.measure(block).height;
+  }
+
+  private measurePart(block: Block) {
+    const score = block.partScore ?? '';
+    const scoreWidth = score ? this.regular.widthOfTextAtSize(score, 9) : 0;
+    const stacked = scoreWidth > CONTENT_WIDTH * 0.42;
+    const headingWidth = stacked ? CONTENT_WIDTH : Math.max(160, CONTENT_WIDTH - scoreWidth - 16);
+    const headingLines = this.lines(block.partHeading ?? '', this.bold, 11, headingWidth);
+    const scoreLines = stacked && score ? this.lines(score, this.regular, 9, CONTENT_WIDTH) : [];
+    const ruleSpace = block.divided ? 22 : 2;
+    const textHeight = Math.max(headingLines.length, 1) * 15 + scoreLines.length * 13;
+    const gap = block.gap ?? 8;
+    return {
+      headingLines,
+      scoreLines,
+      stacked,
+      scoreWidth,
+      score,
+      ruleSpace,
+      textHeight,
+      gap,
+      height: ruleSpace + textHeight + gap,
+    };
+  }
+
+  private drawPart(block: Block) {
+    const layout = this.measurePart(block);
+    const fresh = PAGE_HEIGHT - MARGIN_TOP - MARGIN_BOTTOM - this.continuationHeight();
+    if (layout.height > this.remaining() && layout.height <= fresh) this.addPage();
+    let cursor = this.y;
+    if (block.divided) {
+      cursor -= 8;
+      this.rule(cursor);
+      cursor -= 14;
+    } else {
+      cursor -= 2;
+    }
+    const textTop = cursor;
+    for (const line of layout.headingLines) {
+      this.draw(line, MARGIN_X, cursor, 11, this.bold, INK);
+      cursor -= 15;
+    }
+    const color = block.partColor ?? MUTED;
+    if (layout.stacked) {
+      for (const line of layout.scoreLines) {
+        this.draw(line, MARGIN_X, cursor, 9, this.regular, color);
+        cursor -= 13;
+      }
+    } else if (layout.score) {
+      this.draw(layout.score, PAGE_WIDTH - MARGIN_X - layout.scoreWidth, textTop, 9, this.regular, color);
+    }
+    this.y -= layout.height;
   }
 
   private continuationHeight() {
@@ -451,14 +537,16 @@ class PdfWriter {
   private exerciseHeader(exercise: TestResultPdfExercise, continued = false) {
     const lines = this.headerLines(exercise, continued);
     const visible = lines.slice(0, 3);
-    if (lines.length > 3) visible[2] = this.fit(`${visible[2]}…`, this.serif, 14, CONTENT_WIDTH - 160);
+    const scoreWidth = this.bold.widthOfTextAtSize(this.scoreLabel(exercise), 10);
+    const titleWidth = Math.max(180, CONTENT_WIDTH - scoreWidth - 64);
+    if (lines.length > 3) visible[2] = this.fit(`${visible[2]}…`, this.serif, 14, titleWidth);
     const height = visible.length * 19 + 16;
     this.page.drawRectangle({ x: MARGIN_X, y: this.y - height, width: CONTENT_WIDTH, height, color: PARCHMENT });
     this.draw(String(exercise.number).padStart(2, '0'), MARGIN_X + 12, this.y - 10, 10, this.bold, ROMAN_RED);
     visible.forEach((line, index) =>
       this.draw(line, MARGIN_X + 40, this.y - 8 - index * 19, 14, this.serif, ROMAN_RED)
     );
-    const points = `${exercise.awardedPoints} / ${exercise.maxPoints}`;
+    const points = this.scoreLabel(exercise);
     const right = PAGE_WIDTH - MARGIN_X - 12;
     this.draw(points, right - this.bold.widthOfTextAtSize(points, 10), this.y - 9, 10, this.bold, INK);
     this.draw(
@@ -475,10 +563,17 @@ class PdfWriter {
   exercise(exercise: TestResultPdfExercise) {
     const blocks = exerciseBlocks(exercise);
     const headerHeight = Math.min(3, this.headerLines(exercise, false).length) * 19 + 28;
-    const totalHeight = headerHeight + blocks.reduce((sum, block) => sum + this.measure(block).height, 0);
+    const totalHeight = headerHeight + blocks.reduce((sum, block) => sum + this.blockHeight(block), 0);
     this.activeExercise = undefined;
     const freshSpace = PAGE_HEIGHT - MARGIN_TOP - MARGIN_BOTTOM;
-    if ((totalHeight <= freshSpace ? totalHeight : headerHeight + 100) > this.remaining()) this.addPage();
+    const separated = this.y < PAGE_HEIGHT - MARGIN_TOP - 8;
+    const gap = separated ? 18 : 0;
+    if ((totalHeight <= freshSpace ? totalHeight : headerHeight + 100) + gap > this.remaining()) this.addPage();
+    else if (gap) {
+      this.y -= 8;
+      this.rule(this.y);
+      this.y -= 10;
+    }
     this.activeExercise = exercise;
     this.exerciseHeader(exercise);
     // Preserve very long authored titles in full, outside the bounded running header.
@@ -489,14 +584,16 @@ class PdfWriter {
       const next = blocks[index + 1];
       // Keep a question/part label with its answer when both fit a fresh page.
       if (!block.inset && next) {
-        let cluster = this.measure(block).height;
+        let cluster = this.blockHeight(block);
         for (let ahead = index + 1; ahead < blocks.length; ahead += 1) {
-          cluster += this.measure(blocks[ahead]).height;
+          if (blocks[ahead].kind === 'part') break;
+          cluster += this.blockHeight(blocks[ahead]);
           if (blocks[ahead].inset) break;
         }
         if (cluster > this.remaining() && cluster <= freshSpace - this.continuationHeight()) this.addPage();
       }
-      this.block(block);
+      if (block.kind === 'part') this.drawPart(block);
+      else this.block(block);
     }
     this.y -= 10;
     this.activeExercise = undefined;
@@ -509,7 +606,7 @@ class PdfWriter {
           { lines: [`${exercise.number}. ${exercise.title}`] },
           {
             lines: [
-              `${exercise.awardedPoints} / ${exercise.maxPoints}${exercise.statusLabel ? ` · ${exercise.statusLabel}` : ''}`,
+              `${exercise.awardedPoints} / ${exercise.maxPoints} points${exercise.statusLabel ? ` · ${exercise.statusLabel}` : ''}`,
             ],
           },
         ],

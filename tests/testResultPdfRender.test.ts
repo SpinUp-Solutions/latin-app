@@ -206,6 +206,7 @@ describe('test-like PDF layout', () => {
     expect(values).not.toContain('QUESTION');
     expect(values.join(' ')).not.toMatch(/jdoe|jane@school.edu|Passing mark/);
     expect(values.filter(value => value === 'Fill amō')).toHaveLength(1);
+    expect(values).toContain('8 / 10 points');
     const expected = text.find(line => line.value === 'EXPECTED ANSWER')!;
     const student = text.find(line => line.value === 'STUDENT ANSWER')!;
     expect(student.page).toBe(expected.page);
@@ -302,6 +303,62 @@ describe('test-like PDF layout', () => {
     const { text } = await inspectRender(model);
     expect(text.some(line => line.value === model.reviewUnavailableNote)).toBe(true);
     expect(text.some(line => line.value === '1. Fill amō')).toBe(true);
+    expect(text.some(line => line.value === '8 / 10 points · Partly correct')).toBe(true);
     expectTextInsidePage(text);
+  });
+
+  it('labels scores as points and rules off each part of a multi-part question', async () => {
+    const model = previewModel();
+    model.exercises = [
+      {
+        ...model.exercises[0],
+        title: 'Fill the blanks',
+        awardedPoints: '5',
+        maxPoints: '10',
+        statusLabel: 'Partly correct',
+        groups: [
+          { heading: 'Blank 1', tone: 'incorrect', lines: ['Incorrect · 0 / 5 points'] },
+          { heading: 'Question', lines: ['amō'] },
+          { heading: 'Expected answer', tone: 'answer', lines: ['love'] },
+          { heading: 'Student answer', tone: 'incorrect', lines: ['wrong'] },
+          { heading: 'Blank 2', tone: 'correct', lines: ['Correct · 5 / 5 points'] },
+          { heading: 'Question', lines: ['ambulō'] },
+          { heading: 'Expected answer', tone: 'answer', lines: ['walk'] },
+          { heading: 'Student answer', tone: 'student', lines: ['walk'] },
+        ],
+      },
+      {
+        ...model.exercises[0],
+        number: 2,
+        title: 'Choose the meaning',
+        awardedPoints: '0',
+        maxPoints: '1',
+        statusLabel: 'Incorrect',
+        groups: [
+          { heading: 'Question', lines: ['What is amo?'] },
+          { heading: 'Expected answer', tone: 'answer', lines: ['I love'] },
+          { heading: 'Student answer', tone: 'incorrect', lines: ['I walk'] },
+        ],
+      },
+    ];
+    const drawLine = jest.spyOn(PDFPage.prototype, 'drawLine');
+    try {
+      const { text } = await inspectRender(model);
+      const blank1 = text.find(line => line.value === 'Blank 1')!;
+      const blank2 = text.find(line => line.value === 'Blank 2')!;
+      const choice = text.find(line => line.value === 'Choose the meaning')!;
+      expect(text.some(line => line.value === '5 / 10 points')).toBe(true);
+      expect(text.some(line => line.value === '0 / 1 points')).toBe(true);
+      expect(blank1.y).toBeGreaterThan(blank2.y + 48);
+      expect(choice.y).toBeLessThan(blank2.y);
+      const rules = drawLine.mock.calls
+        .map(([options]) => options)
+        .filter(options => options?.start && options.end && options.start.x <= 48 && options.end.x >= 564);
+      expect(rules.some(rule => rule!.start.y < blank1.y && rule!.start.y > blank2.y)).toBe(true);
+      expect(rules.some(rule => rule!.start.y < blank2.y && rule!.start.y > choice.y)).toBe(true);
+      expectTextInsidePage(text);
+    } finally {
+      drawLine.mockRestore();
+    }
   });
 });
