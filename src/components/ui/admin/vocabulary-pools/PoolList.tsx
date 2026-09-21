@@ -8,6 +8,7 @@ import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display'
 import { Skeleton } from '@/src/components/ui/skeleton';
 import { Edit, Trash2, Copy, Library, Calendar, Hash, Loader2 } from 'lucide-react';
 import { useInfiniteScroll } from '@/src/hooks/useInfiniteScroll';
+import { VocabularyInfiniteScrollSentinel } from '@/src/components/ui/admin/vocabulary/VocabularyResultsState';
 import { cn } from '@/src/lib/utils';
 import type { VocabularyPoolSummary, VocabularyPoolUsage } from '@/src/types/vocabulary-pool';
 
@@ -304,16 +305,12 @@ export const PoolList: React.FC<PoolListProps> = ({
         );
       })}
 
-      {(hasMore || loadingMore) && (
-        <div ref={sentinelRef} className="flex justify-center py-6">
-          {loadingMore && (
-            <div className="flex items-center gap-2 text-gray-600">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="text-sm">Loading more pools...</span>
-            </div>
-          )}
-        </div>
-      )}
+      <VocabularyInfiniteScrollSentinel
+        sentinelRef={sentinelRef}
+        loadingMore={loadingMore}
+        hasMore={hasMore}
+        label="Loading more pools..."
+      />
     </div>
   );
 };

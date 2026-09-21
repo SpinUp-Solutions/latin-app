@@ -27,6 +27,10 @@ import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 
 const TARGET_COLLECTION = VOCABULARY_WORDS_COLLECTION;
 
+function csvWhenFiltered<T extends string>(active: boolean, value: readonly T[] | 'all'): string | undefined {
+  return active && value !== 'all' && value.length > 0 ? value.join(',') : undefined;
+}
+
 function AdvancedFiltersPage() {
   const dispatch = useDispatch();
   const filters = useSelector(selectAdvancedFilters);
@@ -43,25 +47,11 @@ function AdvancedFiltersPage() {
     partOfSpeech: filters.partOfSpeech !== 'all' ? filters.partOfSpeech : undefined,
     search: debouncedSearch || undefined,
     lastWordId: pagination.lastWordId,
-    verbConjugation:
-      filters.partOfSpeech === 'verb' && filters.verbConjugation !== 'all' && filters.verbConjugation.length > 0
-        ? filters.verbConjugation.join(',')
-        : undefined,
+    verbConjugation: csvWhenFiltered(filters.partOfSpeech === 'verb', filters.verbConjugation),
     isDeponent: filters.partOfSpeech === 'verb' && filters.isDeponent !== 'both' ? filters.isDeponent : undefined,
-    nounDeclension:
-      filters.partOfSpeech === 'noun' && filters.nounDeclension !== 'all' && filters.nounDeclension.length > 0
-        ? filters.nounDeclension.join(',')
-        : undefined,
-    adjectiveDeclension:
-      filters.partOfSpeech === 'adjective' &&
-      filters.adjectiveDeclension !== 'all' &&
-      filters.adjectiveDeclension.length > 0
-        ? filters.adjectiveDeclension.join(',')
-        : undefined,
-    pronounType:
-      filters.partOfSpeech === 'pronoun' && filters.pronounType !== 'all' && filters.pronounType.length > 0
-        ? filters.pronounType.join(',')
-        : undefined,
+    nounDeclension: csvWhenFiltered(filters.partOfSpeech === 'noun', filters.nounDeclension),
+    adjectiveDeclension: csvWhenFiltered(filters.partOfSpeech === 'adjective', filters.adjectiveDeclension),
+    pronounType: csvWhenFiltered(filters.partOfSpeech === 'pronoun', filters.pronounType),
     pronounPerson:
       filters.partOfSpeech === 'pronoun' &&
       filters.pronounType !== 'all' &&
