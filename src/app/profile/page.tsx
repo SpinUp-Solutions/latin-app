@@ -9,14 +9,12 @@ import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
 import { Label } from '@/src/components/ui/label';
 import { toast } from 'sonner';
-import { Loader2, ArrowLeft, CalendarIcon } from 'lucide-react';
+import { Loader2, ArrowLeft } from 'lucide-react';
 import Image from 'next/image';
 import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
+import { DateOfBirthField } from '@/src/components/ui/core/date-of-birth-field';
 import { PageLoading } from '@/src/components/ui/page-loading';
 import { useAuth } from '@/src/hooks/useAuth';
-import { Calendar } from '@/src/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/src/components/ui/popover';
-import { cn } from '@/src/lib/utils';
 import { z } from 'zod';
 
 const ProfileSchema = z.object({
@@ -255,35 +253,12 @@ export default function ProfilePage() {
 
               <div className="space-y-2">
                 <Label>Date of birth</Label>
-                <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className={cn(
-                        'w-full justify-start text-left font-normal bg-background',
-                        !dateOfBirth && 'text-muted-foreground'
-                      )}>
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {dateOfBirth
-                        ? dateOfBirth.toLocaleDateString('en-US', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric',
-                          })
-                        : 'Date of birth'}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0 bg-transparent border-none shadow-none" align="start">
-                    <Calendar
-                      variant="dob"
-                      selected={dateOfBirth}
-                      onSelect={setDateOfBirth}
-                      disabled={date => date > new Date()}
-                      onClose={() => setCalendarOpen(false)}
-                    />
-                  </PopoverContent>
-                </Popover>
+                <DateOfBirthField
+                  value={dateOfBirth}
+                  onChange={setDateOfBirth}
+                  open={calendarOpen}
+                  onOpenChange={setCalendarOpen}
+                />
               </div>
 
               <Button type="submit" className="w-full" disabled={saving}>

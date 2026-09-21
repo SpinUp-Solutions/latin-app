@@ -2,15 +2,12 @@
 
 import React from 'react';
 import { useParams } from 'next/navigation';
-import { BookOpen } from 'lucide-react';
-import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
-import { RomanSpinner } from '@/src/components/ui/page-loading';
-import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { useAppSelector } from '@/src/store/hooks';
 import { useGetStudentPoolQuery } from '@/src/store/api/vocabularyPoolApi';
 import { useGetStudentLessonQuery } from '@/src/store/api/lessonApi';
 import { useAuth } from '@/src/hooks/useAuth';
 import type { VocabularyPoolContent, VocabularyPoolStudyData } from '@/src/types/vocabulary';
+import { VocabularyNotice } from './vocabulary-notice';
 import { VocabularyStudyView } from './VocabularyStudyView';
 
 interface VocabularyPoolViewerProps {
@@ -49,20 +46,11 @@ export function VocabularyPoolViewer({ content, poolId, resolvedPool }: Vocabula
   if (resolvedPool) {
     if (resolvedPool.items.length === 0) {
       return (
-        <div className="space-y-6">
-          <div className="text-center space-y-2">
-            <h2 className="text-2xl font-serif text-gray-800">
-              <SimpleRichDisplay content={content.title || resolvedPool.name} />
-            </h2>
-            <p className="text-roman-stone">From: {resolvedPool.name}</p>
-          </div>
-          <RomanCard>
-            <RomanCardContent className="p-8 text-center">
-              <BookOpen className="h-12 w-12 mx-auto text-gray-300 mb-4" />
-              <p className="text-gray-500">This vocabulary pool is empty.</p>
-            </RomanCardContent>
-          </RomanCard>
-        </div>
+        <VocabularyNotice
+          title={content.title || resolvedPool.name}
+          subtitle={`From: ${resolvedPool.name}`}
+          message="This vocabulary pool is empty."
+        />
       );
     }
 
@@ -82,91 +70,46 @@ export function VocabularyPoolViewer({ content, poolId, resolvedPool }: Vocabula
   if (!poolIdToUse) {
     if (isResolvingPoolId) {
       return (
-        <div className="space-y-6">
-          <div className="text-center space-y-2">
-            <h2 className="text-2xl font-serif text-gray-800">
-              <SimpleRichDisplay content={content.title || 'Vocabulary Pool'} />
-            </h2>
-            <p className="text-roman-stone">Loading vocabulary...</p>
-          </div>
-          <RomanCard>
-            <RomanCardContent className="p-8 text-center">
-              <RomanSpinner className="mx-auto mb-4" />
-              <p className="text-gray-500">Loading lesson data...</p>
-            </RomanCardContent>
-          </RomanCard>
-        </div>
+        <VocabularyNotice
+          title={content.title || 'Vocabulary Pool'}
+          subtitle="Loading vocabulary..."
+          message="Loading lesson data..."
+          status="loading"
+        />
       );
     }
 
-    return (
-      <div className="space-y-6">
-        <div className="text-center space-y-2">
-          <h2 className="text-2xl font-serif text-gray-800">
-            <SimpleRichDisplay content={content.title || 'Vocabulary Pool'} />
-          </h2>
-        </div>
-        <RomanCard>
-          <RomanCardContent className="p-8 text-center">
-            <BookOpen className="h-12 w-12 mx-auto text-gray-300 mb-4" />
-            <p className="text-gray-500">No vocabulary pool assigned.</p>
-          </RomanCardContent>
-        </RomanCard>
-      </div>
-    );
+    return <VocabularyNotice title={content.title || 'Vocabulary Pool'} message="No vocabulary pool assigned." />;
   }
 
   if (poolError) {
     return (
-      <div className="space-y-6">
-        <RomanCard>
-          <RomanCardContent className="p-8 text-center">
-            <BookOpen className="h-12 w-12 mx-auto text-red-300 mb-4" />
-            <p className="text-red-600 font-medium">Failed to load vocabulary pool</p>
-            <p className="text-roman-stone text-sm mt-2">
-              The assigned vocabulary pool could not be loaded. It may have been removed or is temporarily unavailable.
-            </p>
-          </RomanCardContent>
-        </RomanCard>
-      </div>
+      <VocabularyNotice
+        message="Failed to load vocabulary pool"
+        detail="The assigned vocabulary pool could not be loaded. It may have been removed or is temporarily unavailable."
+        status="error"
+      />
     );
   }
 
   if (poolLoading || !vocabularyPool) {
     return (
-      <div className="space-y-6">
-        <div className="text-center space-y-2">
-          <h2 className="text-2xl font-serif text-gray-800">
-            <SimpleRichDisplay content={content.title || 'Vocabulary'} />
-          </h2>
-          <p className="text-roman-stone">Loading vocabulary...</p>
-        </div>
-        <RomanCard>
-          <RomanCardContent className="p-8 text-center">
-            <RomanSpinner className="mx-auto mb-4" />
-            <p className="text-gray-500">Loading words from vocabulary pool...</p>
-          </RomanCardContent>
-        </RomanCard>
-      </div>
+      <VocabularyNotice
+        title={content.title || 'Vocabulary'}
+        subtitle="Loading vocabulary..."
+        message="Loading words from vocabulary pool..."
+        status="loading"
+      />
     );
   }
 
   if (vocabularyPool.items.length === 0) {
     return (
-      <div className="space-y-6">
-        <div className="text-center space-y-2">
-          <h2 className="text-2xl font-serif text-gray-800">
-            <SimpleRichDisplay content={content.title || vocabularyPool.name} />
-          </h2>
-          <p className="text-roman-stone">From: {vocabularyPool.name}</p>
-        </div>
-        <RomanCard>
-          <RomanCardContent className="p-8 text-center">
-            <BookOpen className="h-12 w-12 mx-auto text-gray-300 mb-4" />
-            <p className="text-gray-500">This vocabulary pool is empty.</p>
-          </RomanCardContent>
-        </RomanCard>
-      </div>
+      <VocabularyNotice
+        title={content.title || vocabularyPool.name}
+        subtitle={`From: ${vocabularyPool.name}`}
+        message="This vocabulary pool is empty."
+      />
     );
   }
 
