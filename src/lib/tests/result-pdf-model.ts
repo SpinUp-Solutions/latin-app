@@ -346,9 +346,10 @@ function flattenTextSelection(item: ExerciseOfType<'text-selection'>): TestResul
     groups.push(
       group(
         `Question ${index + 1}`,
-        [plain(question.text), result ? pointsLine(awarded, max, result.correct) : 'Not scored'],
+        [result ? pointsLine(awarded, max, result.correct) : 'Not scored'],
         result ? statusTone(awarded, max, result.correct) : 'score'
       ),
+      group('Question', [plain(question.text)]),
       group('Expected answer', [correctWord], 'answer'),
       group(
         'Student answer',
