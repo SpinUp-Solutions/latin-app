@@ -290,6 +290,8 @@ describe('test-like PDF layout', () => {
     }
     const firstRow = text.filter(line => /^Cell 1,[1-4]$/.test(line.value));
     expect(new Set(firstRow.slice(0, 4).map(line => line.y)).size).toBe(1);
+    const yAt = (row: number) => text.find(line => line.value === `Cell ${row},2`)!.y;
+    expect(yAt(1) - yAt(2)).toBe(yAt(2) - yAt(3));
     expectTextInsidePage(text);
   });
 

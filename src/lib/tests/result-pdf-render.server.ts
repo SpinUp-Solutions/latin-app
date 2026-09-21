@@ -111,7 +111,7 @@ interface Block {
   inset?: number;
   gap?: number;
   grid?: boolean;
-  tableStart?: boolean;
+  headerRow?: boolean;
   maxWidth?: number;
 }
 
@@ -144,17 +144,33 @@ function exerciseBlocks(exercise: TestResultPdfExercise): Block[] {
           bands.push([0, ...columns.slice(start, start + 3).map((_, index) => start + index)]);
         }
       for (const band of bands) {
-        rows.forEach((row, rowIndex) => {
-          if (!band.length) return;
-          blocks.push({
-            columns: band.map(index => ({
+        if (!band.length) continue;
+        const labeled = (row?: (typeof rows)[number]) =>
+          band.map(index => {
+            const cell = row?.[index];
+            return {
               label: columns[index],
-              lines: row[index].lines,
-              color: answerStyle({ lines: [], tone: row[index].tone }).ink,
-              fill: answerStyle({ lines: [], tone: row[index].tone }).fill,
-            })),
+              lines: cell?.lines ?? [],
+              ...(cell
+                ? {
+                    color: answerStyle({ lines: [], tone: cell.tone }).ink,
+                    fill: answerStyle({ lines: [], tone: cell.tone }).fill,
+                  }
+                : {}),
+            };
+          });
+        blocks.push({
+          columns: labeled(),
+          grid: true,
+          headerRow: true,
+          size: 9,
+          inset: 6,
+          gap: 0,
+        });
+        rows.forEach((row, rowIndex) => {
+          blocks.push({
+            columns: labeled(row),
             grid: true,
-            tableStart: rowIndex === 0,
             size: 9,
             inset: 8,
             gap: rowIndex === rows.length - 1 ? 12 : 0,
@@ -311,7 +327,7 @@ class PdfWriter {
     this.y = Math.min(this.y, top - 72) - 20;
   }
 
-  private measure(block: Block, showLabels = !block.grid || block.tableStart) {
+  private measure(block: Block, showLabels = !block.grid || Boolean(block.headerRow)) {
     const size = block.size ?? BODY_SIZE;
     const leading = Math.max(LEADING, size + 5);
     const font = block.serif ? this.serif : this.regular;
@@ -327,18 +343,55 @@ class PdfWriter {
           : [],
     }));
     const labelHeight = Math.max(0, ...columns.map(column => column.labels.length)) * 11;
-    const rows = Math.max(1, ...columns.map(column => column.body.length));
+    const rows = block.headerRow ? 0 : Math.max(1, ...columns.map(column => column.body.length));
     const height = inset * 2 + labelHeight + rows * leading + (block.gap ?? 8);
     return { size, leading, font, inset, gutter, width, columns, labelHeight, rows, height };
   }
 
+  private replayTableHeader(block: Block) {
+    if (!block.grid || block.headerRow || !block.columns.some(column => column.label)) return;
+    this.block({
+      columns: block.columns.map(column => ({ label: column.label, lines: [] })),
+      grid: true,
+      headerRow: true,
+      size: block.size,
+      inset: 6,
+      gap: 0,
+    });
+  }
+
   block(block: Block) {
-    let showLabels = !block.grid || Boolean(block.tableStart);
+    const headerRow = Boolean(block.headerRow);
+    let showLabels = !block.grid || headerRow;
     let layout = this.measure(block, showLabels);
     const freshSpace = PAGE_HEIGHT - MARGIN_TOP - MARGIN_BOTTOM - this.continuationHeight();
-    if (layout.height > this.remaining() && layout.height <= freshSpace) {
+    const startOnNewPage = () => {
       this.addPage();
-      showLabels = true;
+      if (block.grid && !headerRow) this.replayTableHeader(block);
+    };
+    if (layout.height > this.remaining() && layout.height <= freshSpace) {
+      startOnNewPage();
+      showLabels = headerRow;
+    }
+    if (headerRow) {
+      layout = this.measure(block, true);
+      const gap = block.gap ?? 0;
+      if (layout.height + gap > this.remaining()) this.addPage();
+      layout = this.measure(block, true);
+      const { inset, gutter, width, columns, labelHeight } = layout;
+      const height = inset * 2 + labelHeight;
+      columns.forEach((column, index) => {
+        const x = MARGIN_X + index * (width + gutter);
+        this.page.drawRectangle({ x, y: this.y - height, width, height, color: PARCHMENT });
+        this.page.drawRectangle({ x, y: this.y - height, width, height, borderColor: RULE, borderWidth: 0.5 });
+        let cursor = this.y - inset;
+        for (const label of column.labels) {
+          this.draw(label, x + inset, cursor, LABEL_SIZE, this.bold, MUTED);
+          cursor -= 11;
+        }
+      });
+      this.y -= height + gap;
+      return;
     }
     let offset = 0;
     while (offset < layout.rows) {
@@ -347,9 +400,9 @@ class PdfWriter {
       const gap = block.gap ?? 8;
       let capacity = Math.floor((this.remaining() - overhead - gap) / layout.leading);
       if (capacity < 1) {
-        this.addPage();
-        showLabels = true;
-        layout = this.measure(block, true);
+        startOnNewPage();
+        showLabels = !block.grid;
+        layout = this.measure(block, showLabels);
         overhead = layout.inset * 2 + layout.labelHeight;
         capacity = Math.max(1, Math.floor((this.remaining() - overhead - gap) / layout.leading));
       }
@@ -360,14 +413,6 @@ class PdfWriter {
         const x = MARGIN_X + index * (width + gutter);
         if (column.fill) this.page.drawRectangle({ x, y: this.y - height, width, height, color: column.fill });
         if (block.grid) {
-          if (labelHeight)
-            this.page.drawRectangle({
-              x,
-              y: this.y - labelHeight - inset,
-              width,
-              height: labelHeight + inset,
-              color: PARCHMENT,
-            });
           this.page.drawRectangle({ x, y: this.y - height, width, height, borderColor: RULE, borderWidth: 0.5 });
         } else if (inset) {
           this.page.drawLine({
@@ -379,7 +424,7 @@ class PdfWriter {
         }
         let cursor = this.y - inset;
         for (const label of column.labels) {
-          this.draw(label, x + inset, cursor, LABEL_SIZE, this.bold, block.grid ? MUTED : (column.color ?? MUTED));
+          this.draw(label, x + inset, cursor, LABEL_SIZE, this.bold, column.color ?? MUTED);
           cursor -= 11;
         }
         cursor = this.y - inset - labelHeight;
@@ -390,10 +435,7 @@ class PdfWriter {
       });
       this.y -= height + gap;
       offset += count;
-      if (offset < rows) {
-        this.addPage();
-        showLabels = true;
-      }
+      if (offset < rows) startOnNewPage();
     }
   }
 
