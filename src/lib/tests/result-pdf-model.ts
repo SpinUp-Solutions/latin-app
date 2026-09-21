@@ -4,12 +4,7 @@ import { parseFragment, type DefaultTreeAdapterMap } from 'parse5';
 import { formatScorePercentage, formatScorePoints } from '@/src/lib/tests/formatting';
 import type { ResultPdfSource, ResultPdfStudentIdentity } from '@/src/lib/tests/result-pdf-identity';
 import type { StudentSubmittedTestAttempt } from '@/src/types/test';
-import type {
-  StudentTestResult,
-  TestResultReviewExerciseItem,
-  TestResultReviewItem,
-  TestResultReviewSupportingItem,
-} from '@/src/types/test-results';
+import type { StudentTestResult, TestResultReviewExerciseItem, TestResultReviewItem } from '@/src/types/test-results';
 import { richTextToPlainText } from '@/src/utils/exercises/helpers';
 
 export type TestResultPdfTone = 'neutral' | 'score' | 'correct' | 'partial' | 'incorrect' | 'answer' | 'student';
@@ -18,6 +13,10 @@ export interface TestResultPdfLineGroup {
   heading?: string;
   tone?: TestResultPdfTone;
   lines: string[];
+  table?: {
+    columns: string[];
+    rows: Array<Array<{ lines: string[]; tone?: TestResultPdfTone }>>;
+  };
 }
 
 /** Font-safe pairing mark. Embedded Noto Sans has no arrow glyphs (U+2192 / U+2194). */
@@ -62,10 +61,6 @@ type ExerciseOfType<T extends TestResultReviewExerciseItem['type']> = Extract<
 
 interface ReviewEntry {
   number: number;
-  supporting: TestResultReviewSupportingItem[];
-  pageTitles: string[];
-  pageHasAudio: boolean;
-  poolName?: string;
   exercise: TestResultReviewExerciseItem;
 }
 
@@ -135,8 +130,6 @@ const outcomeLabelFor = (attempt: StudentSubmittedTestAttempt): string | null =>
   return attempt.outcome === 'passed' ? 'Passed' : 'Not passed';
 };
 
-const audioNote = (audioPath?: string | null): string[] => (audioPath ? ['Audio attached'] : []);
-
 const recorded = (value?: string | null): string => {
   const trimmed = value?.trim() ?? '';
   return trimmed || EMPTY_ANSWER;
@@ -153,121 +146,30 @@ const group = (heading: string | undefined, lines: string[], tone?: TestResultPd
   lines: lines.length > 0 ? lines : [EMPTY_ANSWER],
 });
 
-function flattenSupporting(
-  items: TestResultReviewSupportingItem[],
-  poolName?: string,
-  poolItems?: Array<{ latin: string; english: string; pronunciation?: string | null; example?: string; notes?: string }>
-): string[] {
-  const lines: string[] = [];
-  for (const item of items) {
-    lines.push(...audioNote(item.audioPath));
-    switch (item.type) {
-      case 'text':
-      case 'emphasis': {
-        const title = plain(item.title);
-        const content = plain(item.content);
-        if (title) lines.push(title);
-        if (content) lines.push(content);
-        break;
-      }
-      case 'table': {
-        const title = plain(item.tableData.title);
-        const caption = plain(item.tableData.caption);
-        if (title) lines.push(title);
-        if (caption) lines.push(caption);
-        const headers = item.tableData.columns.map(column => plain(column.header));
-        if (headers.some(Boolean)) lines.push(headers.join(' | '));
-        for (const row of item.tableData.rows) {
-          lines.push(
-            [plain(row.rowHeader), ...item.tableData.columns.map(column => plain(row.cells[column.id]))]
-              .filter(Boolean)
-              .join(' | ')
-          );
-        }
-        for (const footnote of item.tableData.footnotes ?? []) {
-          const text = plain(footnote);
-          if (text) lines.push(text);
-        }
-        break;
-      }
-      case 'vocabulary': {
-        const title = plain(item.title);
-        if (title) lines.push(title);
-        for (const word of item.vocabularyItems) {
-          const extras = [word.pronunciation, word.partOfSpeech, word.example, word.notes].filter(Boolean);
-          lines.push(`${word.latin} — ${word.english}${extras.length ? ` (${extras.join('; ')})` : ''}`);
-        }
-        break;
-      }
-      case 'vocabulary-pool': {
-        lines.push(poolName ? `Vocabulary pool: ${poolName}` : 'Vocabulary pool');
-        for (const word of poolItems ?? []) {
-          const extras = [word.pronunciation, word.example, word.notes].filter(Boolean);
-          lines.push(`${word.latin} — ${word.english}${extras.length ? ` (${extras.join('; ')})` : ''}`);
-        }
-        break;
-      }
-      case 'listening-passage': {
-        const title = plain(item.title);
-        const instructions = plain(item.instructions);
-        if (title) lines.push(title);
-        if (instructions) lines.push(instructions);
-        const latin = plain(item.data.latinText);
-        const translation = plain(item.data.translation);
-        if (latin) lines.push(`Latin: ${latin}`);
-        if (translation) lines.push(`Translation: ${translation}`);
-        lines.push(...audioNote(item.data.passageAudioPath));
-        break;
-      }
-      default:
-        break;
-    }
-  }
-  return lines.filter(Boolean);
-}
-
 function buildReviewEntries(result: StudentTestResult): ReviewEntry[] {
   const entries: ReviewEntry[] = [];
   let number = 0;
-  let pendingSupporting: TestResultReviewSupportingItem[] = [];
-  let pendingPageTitles: string[] = [];
-  let pendingPageAudio = false;
-  const pool = result.review?.content.vocabularyPool;
   for (const page of result.review?.content.pages ?? []) {
-    const title = plain(page.title);
-    if (title) pendingPageTitles.push(title);
-    if (page.audioPath) pendingPageAudio = true;
-    let lastExerciseIndex: number | null = null;
     for (const item of page.items) {
-      if (!isExerciseReviewItem(item)) {
-        pendingSupporting.push(item);
-        continue;
-      }
+      if (!isExerciseReviewItem(item)) continue;
       number += 1;
-      lastExerciseIndex = entries.length;
-      entries.push({
-        number,
-        supporting: pendingSupporting,
-        pageTitles: pendingPageTitles,
-        pageHasAudio: pendingPageAudio,
-        poolName: pool?.name,
-        exercise: item,
-      });
-      pendingSupporting = [];
-      pendingPageTitles = [];
-      pendingPageAudio = false;
+      entries.push({ number, exercise: item });
     }
-    if (pendingSupporting.length > 0 && lastExerciseIndex !== null) {
-      entries[lastExerciseIndex].supporting.push(...pendingSupporting);
-      pendingSupporting = [];
-    }
-  }
-  if (entries.length > 0) {
-    if (pendingPageTitles.length > 0) entries[entries.length - 1].pageTitles.push(...pendingPageTitles);
-    if (pendingPageAudio) entries[entries.length - 1].pageHasAudio = true;
-    if (pendingSupporting.length > 0) entries[entries.length - 1].supporting.push(...pendingSupporting);
   }
   return entries;
+}
+
+function withExerciseInstructions(
+  groups: TestResultPdfLineGroup[],
+  instructions?: string | null
+): TestResultPdfLineGroup[] {
+  const instruction = plain(instructions);
+  if (!instruction) return groups;
+  if (groups[0]?.heading === 'Question' || groups[0]?.heading?.startsWith('Question ')) {
+    groups[0] = { ...groups[0], lines: [instruction, ...groups[0].lines] };
+    return groups;
+  }
+  return [group('Question', [instruction]), ...groups];
 }
 
 function flattenExercise(item: TestResultReviewExerciseItem): TestResultPdfLineGroup[] {
@@ -359,20 +261,27 @@ function flattenFill(item: ExerciseOfType<'fill'>): TestResultPdfLineGroup[] {
     const awarded = result?.points.awardedPoints ?? 0;
     const max = result?.points.maxPoints ?? 1;
     const prompt = plain(keyItem.text) || `Blank ${index + 1}`;
-    const accepted = `Accepted ${keyItem.acceptedAnswers.length > 1 ? 'answers' : 'answer'}: ${keyItem.acceptedAnswers.join(' or ')}`;
-    return [
-      group(
-        `Blank ${index + 1}`,
-        [prompt, result ? pointsLine(awarded, max, result.correct) : 'Not scored'],
-        result ? statusTone(awarded, max, result.correct) : 'score'
-      ),
+    const accepted = keyItem.acceptedAnswers.join(' or ');
+    const groups: TestResultPdfLineGroup[] = [];
+    if (item.answerKey.items.length > 1) {
+      groups.push(
+        group(
+          `Blank ${index + 1}`,
+          [result ? pointsLine(awarded, max, result.correct) : 'Not scored'],
+          result ? statusTone(awarded, max, result.correct) : 'score'
+        )
+      );
+    }
+    groups.push(
+      group('Question', [prompt]),
       group('Expected answer', [accepted], 'answer'),
       group(
         'Student answer',
         [recorded(studentValue)],
         result ? studentTone(awarded, max, result.correct) : 'incorrect'
-      ),
-    ];
+      )
+    );
+    return groups;
   });
 }
 
@@ -400,15 +309,6 @@ function flattenMultipleChoice(item: ExerciseOfType<'multiple-choice'>): TestRes
       selected.length > 0 ? selected.map(option => plain(option.text)) : [EMPTY_ANSWER],
       studentTone(awarded, max, item.itemResults.correct)
     ),
-    group(
-      'All options',
-      item.answerKey.options.map(option => {
-        const tags = [option.isCorrect ? 'correct' : null, selectedIds.has(option.id) ? 'your choice' : null].filter(
-          Boolean
-        );
-        return `${plain(option.text)}${tags.length ? ` (${tags.join(', ')})` : ''}`;
-      })
-    ),
   ];
 }
 
@@ -423,26 +323,13 @@ function flattenOddOneOut(item: ExerciseOfType<'odd-one-out'>): TestResultPdfLin
   const awarded = item.itemResults.points.awardedPoints;
   const max = item.itemResults.points.maxPoints;
   const tone = studentTone(awarded, max, item.itemResults.correct);
-  const groups: TestResultPdfLineGroup[] = [
+  const studentLines = [recorded(selected ? plain(selected.text) : '')];
+  if (item.question.requireExplanation) studentLines.push(...multiline(savedExplanation));
+  return [
     group('Question', [plain(item.question.question)]),
     group('Expected answer', [recorded(oddOne ? plain(oddOne.text) : '')], 'answer'),
-    group('Student answer', [recorded(selected ? plain(selected.text) : '')], tone),
+    group('Student answer', studentLines, tone),
   ];
-  if (item.question.requireExplanation) {
-    groups.push(group('Student explanation', multiline(savedExplanation), tone));
-  }
-  groups.push(
-    group(
-      'All items',
-      item.answerKey.items.map(entry => {
-        const tags = [entry.isOddOneOut ? 'odd one out' : null, entry.id === selectedId ? 'your choice' : null].filter(
-          Boolean
-        );
-        return `${plain(entry.text)}${tags.length ? ` (${tags.join(', ')})` : ''}`;
-      })
-    )
-  );
-  return groups;
 }
 
 function flattenTextSelection(item: ExerciseOfType<'text-selection'>): TestResultPdfLineGroup[] {
@@ -485,12 +372,12 @@ function flattenFillEmbolded(item: ExerciseOfType<'fill-embolded-text'>): TestRe
     groups.push(
       group(
         heading,
-        [
-          ...(plain(word.question) ? [plain(word.question)] : []),
-          result ? pointsLine(awarded, max, result.correct) : 'Not scored',
-        ],
+        [result ? pointsLine(awarded, max, result.correct) : 'Not scored'],
         result ? statusTone(awarded, max, result.correct) : 'score'
-      ),
+      )
+    );
+    if (plain(word.question)) groups.push(group('Question', [plain(word.question)]));
+    groups.push(
       group('Expected answer', [word.correctAnswer], 'answer'),
       group(
         'Student answer',
@@ -545,45 +432,30 @@ function flattenTableFill(item: ExerciseOfType<'table-fill'>): TestResultPdfLine
   const groups: TestResultPdfLineGroup[] = [];
   const title = plain(item.question.title);
   if (title) groups.push(group('Question', [title]));
-
-  item.answerKey.rows.forEach((row, rowIndex) => {
-    item.question.columns.forEach(column => {
-      const cell = row.cells[column.id];
-      if (!cell?.isBlank) return;
-      const key = `${row.id}-${column.id}`;
-      const result = resultsByCell.get(key);
-      const studentValue = result?.value ?? saved[key];
-      const awarded = result?.points.awardedPoints ?? 0;
-      const max = result?.points.maxPoints ?? 1;
-      const heading = `${plain(column.header) || `Column ${column.id}`} · row ${rowIndex + 1}`;
-      groups.push(
-        group(
-          heading,
-          [result ? pointsLine(awarded, max, result.correct) : 'Not scored'],
-          result ? statusTone(awarded, max, result.correct) : 'score'
-        ),
-        group('Expected answer', [recorded(cell.answer)], 'answer'),
-        group(
-          'Student answer',
-          [recorded(studentValue)],
-          result ? studentTone(awarded, max, result.correct) : 'incorrect'
-        )
-      );
-    });
+  groups.push({
+    lines: [],
+    table: {
+      columns: item.question.columns.map((column, index) => plain(column.header) || `Column ${index + 1}`),
+      rows: item.answerKey.rows.map(row =>
+        item.question.columns.map(column => {
+          const cell = row.cells[column.id];
+          if (!cell?.isBlank) return { lines: [plain(cell?.content)] };
+          const key = `${row.id}-${column.id}`;
+          const result = resultsByCell.get(key);
+          return {
+            lines: [
+              recorded(result?.value ?? saved[key]),
+              `Expected: ${recorded(cell.answer)}`,
+              result ? pointsLine(result.points.awardedPoints, result.points.maxPoints, result.correct) : 'Not scored',
+            ],
+            tone: result
+              ? studentTone(result.points.awardedPoints, result.points.maxPoints, result.correct)
+              : 'neutral',
+          };
+        })
+      ),
+    },
   });
-
-  const givenCells = item.answerKey.rows.flatMap((row, rowIndex) =>
-    item.question.columns.flatMap(column => {
-      const cell = row.cells[column.id];
-      if (!cell || cell.isBlank) return [];
-      return [`${plain(column.header) || column.id} · row ${rowIndex + 1}: ${plain(cell.content)}`];
-    })
-  );
-  if (givenCells.length > 0) groups.push(group('Provided table text', givenCells));
-  for (const footnote of item.question.footnotes ?? []) {
-    const text = plain(footnote);
-    if (text) groups.push(group('Footnote', [text]));
-  }
   return groups;
 }
 
@@ -595,8 +467,6 @@ function flattenClickOnMultipleWords(item: ExerciseOfType<'click-on-multiple-wor
       : item.studentAnswer?.type === 'click-on-multiple-words'
         ? item.studentAnswer.selectedWordIndices
         : [];
-  const selected = new Set(selectedIndices);
-  const correct = new Set(item.answerKey.correctWordIndices);
   const wordAt = (index: number) => words[index] ?? `word ${index + 1}`;
   const awarded = item.itemResults.points.awardedPoints;
   const max = item.itemResults.points.maxPoints;
@@ -623,15 +493,6 @@ function flattenClickOnMultipleWords(item: ExerciseOfType<'click-on-multiple-wor
       studentTone(awarded, max, item.itemResults.correct)
     )
   );
-  const labeledWords = words.map((word, index) => {
-    const tags = [
-      correct.has(index) && selected.has(index) ? 'correct and selected' : null,
-      correct.has(index) && !selected.has(index) ? 'correct and missed' : null,
-      selected.has(index) && !correct.has(index) ? 'selected and not required' : null,
-    ].filter(Boolean);
-    return tags.length ? `${word} (${tags.join(', ')})` : word;
-  });
-  if (labeledWords.length > 0) groups.push(group('Passage with marks', [labeledWords.join(' ')]));
   return groups;
 }
 
@@ -642,13 +503,14 @@ function flattenGeneratedTranslation(item: ExerciseOfType<'generated-translation
     const studentValue = result?.value ?? saved[index];
     const awarded = result?.points.awardedPoints ?? 0;
     const max = result?.points.maxPoints ?? 1;
-    const accepted = `Accepted ${keyItem.acceptedAnswers.length > 1 ? 'answers' : 'answer'}: ${keyItem.acceptedAnswers.join(' or ')}`;
+    const accepted = keyItem.acceptedAnswers.join(' or ');
     return [
       group(
         `Item ${index + 1}`,
-        [plain(keyItem.text), result ? pointsLine(awarded, max, result.correct) : 'Not scored'],
+        [result ? pointsLine(awarded, max, result.correct) : 'Not scored'],
         result ? statusTone(awarded, max, result.correct) : 'score'
       ),
+      group('Question', [plain(keyItem.text)]),
       group('Expected answer', [accepted], 'answer'),
       group(
         'Student answer',
@@ -673,7 +535,7 @@ function flattenGeneratedFormIdentification(
     const awarded = result?.points.awardedPoints ?? 0;
     const max = result?.points.maxPoints ?? 1;
     const expected: string[] = [];
-    if (accepted?.length) expected.push(`Accepted answers: ${accepted.join(' or ')}`);
+    if (accepted?.length) expected.push(accepted.join(' or '));
     if (correctAnswer && !accepted?.includes(correctAnswer)) expected.push(correctAnswer);
     if (correctDisplay && !accepted?.length) expected.push(correctDisplay);
     return [
@@ -705,22 +567,20 @@ function flattenTranslationGrading(item: ExerciseOfType<'translation-grading'>):
     const instructions = plain(item.answerKey.items[index]?.instructions ?? item.question.items[index]?.instructions);
     const awarded = result?.points.awardedPoints ?? 0;
     const max = result?.points.maxPoints ?? 1;
-    groups.push(
-      group(
-        count > 1 ? `Score ${index + 1}` : 'Score',
-        [
-          result
-            ? result.score === null
-              ? 'AI score: Not graded'
-              : `AI score: ${result.score} / 10`
-            : 'AI score: Not graded',
-          result ? pointsLine(awarded, max) : 'Not scored',
-        ],
-        result ? statusTone(awarded, max) : 'score'
-      )
-    );
-    if (latin) groups.push(group(count > 1 ? `Question ${index + 1}` : 'Question', [latin]));
-    if (instructions) groups.push(group('Instructions', [instructions]));
+    const aiScore = result == null || result.score === null ? 'Not graded' : `${result.score} / 10`;
+    if (count > 1) {
+      groups.push(
+        group(
+          `Score ${index + 1}`,
+          [`AI score: ${aiScore}`, result ? pointsLine(awarded, max) : 'Not scored'],
+          result ? statusTone(awarded, max) : 'score'
+        )
+      );
+    } else {
+      groups.push(group('AI score', [aiScore]));
+    }
+    const questionLines = [latin, instructions].filter(Boolean);
+    if (questionLines.length) groups.push(group(count > 1 ? `Question ${index + 1}` : 'Question', questionLines));
     groups.push(
       group(
         'Student answer',
@@ -749,28 +609,14 @@ export function buildTestResultPdfModel(input: {
 }): TestResultPdfModel {
   const { result, identity, source } = input;
   const entries = buildReviewEntries(result);
-  const poolItems = result.review?.content.vocabularyPool?.items;
-  const exercises: TestResultPdfExercise[] = entries.map(entry => {
-    const contextLines = [
-      ...entry.pageTitles.map(title => `Page: ${title}`),
-      ...(entry.pageHasAudio ? ['Audio attached'] : []),
-      ...flattenSupporting(entry.supporting, entry.poolName, poolItems),
-      ...audioNote(entry.exercise.audioPath),
-    ];
-    const instruction = plain(entry.exercise.instructions);
-    const groups: TestResultPdfLineGroup[] = [];
-    if (contextLines.length) groups.push(group('Context', contextLines));
-    if (instruction) groups.push(group('Instructions', [instruction]));
-    groups.push(...flattenExercise(entry.exercise));
-    return {
-      number: entry.number,
-      title: plain(entry.exercise.title) || `Exercise ${entry.number}`,
-      awardedPoints: formatScorePoints(entry.exercise.result.awardedPoints),
-      maxPoints: formatScorePoints(entry.exercise.result.maxPoints),
-      statusLabel: statusLabel(entry.exercise.result.awardedPoints, entry.exercise.result.maxPoints),
-      groups,
-    };
-  });
+  const exercises: TestResultPdfExercise[] = entries.map(entry => ({
+    number: entry.number,
+    title: plain(entry.exercise.title) || `Exercise ${entry.number}`,
+    awardedPoints: formatScorePoints(entry.exercise.result.awardedPoints),
+    maxPoints: formatScorePoints(entry.exercise.result.maxPoints),
+    statusLabel: statusLabel(entry.exercise.result.awardedPoints, entry.exercise.result.maxPoints),
+    groups: withExerciseInstructions(flattenExercise(entry.exercise), entry.exercise.instructions),
+  }));
 
   const exerciseSummaries =
     exercises.length > 0

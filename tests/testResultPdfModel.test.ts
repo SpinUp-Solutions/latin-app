@@ -142,14 +142,18 @@ describe('test result PDF model', () => {
     const lines = pdfExerciseText(exercise);
     expect(lines).toContain('Incorrect · 0 / 5 points');
     expect(lines).toContain('Correct · 5 / 5 points');
-    expect(lines).toContain('Accepted answer: love');
+    expect(lines).toContain('love');
+    expect(lines).not.toContain('Accepted answer:');
     expect(lines).toContain('wrong');
     expect(lines).toContain('walk');
     expect(lines).not.toMatch(feedbackOrExplanation);
     expect(headings(exercise).filter(heading => heading === 'Expected answer').length).toBe(2);
     expect(headings(exercise).filter(heading => heading === 'Student answer').length).toBe(2);
-    expectHeadingOrder(exercise, 'Blank 1', 'Expected answer');
+    expectHeadingOrder(exercise, 'Blank 1', 'Question');
+    expectHeadingOrder(exercise, 'Question', 'Expected answer');
     expectHeadingOrder(exercise, 'Expected answer', 'Student answer');
+    expect(headings(exercise)).not.toContain('Context');
+    expect(headings(exercise)).not.toContain('Instructions');
     expect(exercise.groups.find(group => group.heading === 'Expected answer')?.tone).toBe('answer');
     expect(exercise.groups.find(group => group.heading === 'Student answer')?.tone).toBe('incorrect');
   });
@@ -179,14 +183,20 @@ describe('test result PDF model', () => {
 
     const exercise = model.exercises[0]!;
     const lines = pdfExerciseText(exercise);
-    expect(lines).toContain('AI score: 8 / 10');
-    expect(lines).toContain('Partly correct · 8 / 10 points');
+    expect(lines).toContain('AI score');
+    expect(lines).toContain('8 / 10');
     expect(lines).toContain('amo et ambulo');
     expect(lines).toContain('I love walking');
     expect(lines).not.toContain('AI feedback');
     expect(lines).not.toContain('Very close, but check the conjunction.');
-    expectHeadingOrder(exercise, 'Score', 'Question');
+    expect(exercise.statusLabel).toBe('Partly correct');
+    expect(exercise.awardedPoints).toBe('8');
+    expectHeadingOrder(exercise, 'AI score', 'Question');
     expectHeadingOrder(exercise, 'Question', 'Student answer');
+    expect(headings(exercise)).not.toContain('Instructions');
+    expect(headings(exercise)).not.toContain('Context');
+    expect(lines).not.toContain('No reference translation was recorded.');
+    expect(headings(exercise)).not.toContain('Expected answer');
     expect(exercise.groups.find(group => group.heading === 'Student answer')?.tone).toBe('partial');
   });
 
@@ -334,13 +344,13 @@ describe('test result PDF model', () => {
     expect(choiceText).toContain('I love');
     expectHeadingOrder(model.exercises[1]!, 'Question', 'Expected answer');
     expectHeadingOrder(model.exercises[1]!, 'Expected answer', 'Student answer');
+    expect(headings(model.exercises[1]!)).not.toContain('All options');
+    expect(choiceText).not.toMatch(/your choice/i);
 
-    const tableText = pdfExerciseText(model.exercises[2]!);
-    expect(tableText).toContain('Expected answer');
-    expect(tableText).toContain('love');
-    expect(tableText).toContain('Student answer');
-    expect(tableText).toContain('walk');
-    expectHeadingOrder(model.exercises[2]!, 'Expected answer', 'Student answer');
+    expect(model.exercises[2]!.groups.find(group => group.table)?.table).toEqual({
+      columns: ['Meaning'],
+      rows: [[{ lines: ['walk', 'Expected: love', 'Not scored'], tone: 'neutral' }]],
+    });
 
     const clickText = pdfExerciseText(model.exercises[3]!);
     expect(clickText).toContain('Expected answer');
@@ -349,15 +359,74 @@ describe('test result PDF model', () => {
     expect(clickText).toContain('amo');
     expectHeadingOrder(model.exercises[3]!, 'Question', 'Expected answer');
     expectHeadingOrder(model.exercises[3]!, 'Expected answer', 'Student answer');
+    expect(headings(model.exercises[3]!)).not.toContain('Passage with marks');
 
     const translationText = pdfExerciseText(model.exercises[4]!);
     expect(translationText).toContain('I love');
     expect(translationText).toContain('and I walk');
-    expect(translationText).toContain('AI score: 8 / 10');
+    expect(translationText).toContain('8 / 10');
     expect(translationText).not.toContain('Line two needs the conjunction.');
     expect(translationText).not.toContain('AI feedback');
-    expectHeadingOrder(model.exercises[4]!, 'Score', 'Question');
+    expectHeadingOrder(model.exercises[4]!, 'AI score', 'Question');
     expectHeadingOrder(model.exercises[4]!, 'Question', 'Student answer');
+    expect(translationText).not.toContain('No reference translation was recorded.');
+  });
+
+  it('preserves table headers, fixed cells, saved answers, and individual marks in the original grid', () => {
+    const table = {
+      id: 'table',
+      type: 'table-fill',
+      title: 'Present tense',
+      maxPoints: 2,
+      instructions: 'Complete the forms.',
+      studentAnswer: { type: 'table-fill', answers: { 'r2-form': 'amās' } },
+      result: { awardedPoints: 0, maxPoints: 2 },
+      question: {
+        columns: [
+          { id: 'person', header: '<b>Person</b>' },
+          { id: 'form', header: 'amāre' },
+        ],
+      },
+      answerKey: {
+        rows: [
+          {
+            id: 'r1',
+            cells: {
+              person: { content: '<i>1st singular</i>', isBlank: false },
+              form: { content: '', isBlank: true, answer: 'amō' },
+            },
+          },
+          {
+            id: 'r2',
+            cells: {
+              person: { content: '2nd singular', isBlank: false },
+              form: { content: '', isBlank: true, answer: 'amās' },
+            },
+          },
+        ],
+      },
+      itemResults: {
+        cells: [
+          { rowId: 'r1', columnId: 'form', value: 'amat', correct: false, points: { awardedPoints: 0, maxPoints: 1 } },
+        ],
+      },
+    } as unknown as TestResultReviewItem;
+    const exercise = buildTestResultPdfModel({
+      result: buildResult([table]),
+      identity,
+      source: { kindLabel: 'Test', title: 'Quiz' },
+    }).exercises[0];
+    expect(exercise.groups[0].lines).toEqual(['Complete the forms.']);
+    expect(exercise.groups.find(group => group.table)?.table).toEqual({
+      columns: ['Person', 'amāre'],
+      rows: [
+        [
+          { lines: ['1st singular'] },
+          { lines: ['amat', 'Expected: amō', 'Incorrect · 0 / 1 points'], tone: 'incorrect' },
+        ],
+        [{ lines: ['2nd singular'] }, { lines: ['amās', 'Expected: amās', 'Not scored'], tone: 'neutral' }],
+      ],
+    });
   });
 
   it('maps text-selection and click-word indices with the grader word splitter', () => {
@@ -552,6 +621,65 @@ describe('test result PDF model', () => {
       expect(pdfExerciseText(model.exercises[0]!)).not.toMatch(/explanation/i);
     }
   );
+
+  it('omits lesson page chrome, context, and instruction panels', () => {
+    const supporting = {
+      id: 'text-1',
+      type: 'text',
+      title: 'Lesson intro',
+      content: 'Supporting passage that belongs to the page, not the exercise.',
+    } as TestResultReviewItem;
+    const choice: TestResultReviewItem = {
+      id: 'ex-choice',
+      type: 'multiple-choice',
+      title: 'Choose',
+      instructions: 'Pick one option.',
+      maxPoints: 1,
+      studentAnswer: { type: 'multiple-choice', selectedOptionIds: ['b'] },
+      result: { awardedPoints: 0, maxPoints: 1 },
+      question: { question: 'What is amo?', options: [], allowMultipleSelections: false },
+      answerKey: {
+        options: [
+          { id: 'a', text: 'I love', isCorrect: true },
+          { id: 'b', text: 'I walk', isCorrect: false },
+        ],
+      },
+      itemResults: { selectedOptionIds: ['b'], correct: false, points: { awardedPoints: 0, maxPoints: 1 } },
+    } as TestResultReviewItem;
+
+    const model = buildTestResultPdfModel({
+      result: {
+        attempt: attempt(),
+        review: {
+          id: 'attempt-1',
+          reviewVersion: 1,
+          attemptId: 'attempt-1',
+          versionId: 'version-1',
+          origin: { kind: 'normal-test', testId: 'test-1' },
+          submittedAt,
+          content: {
+            pages: [{ id: 'page-0', title: 'New Page', items: [supporting, choice] }],
+          },
+        },
+      },
+      identity,
+      source: { kindLabel: 'Test', title: 'Quiz' },
+    });
+
+    const exercise = model.exercises[0]!;
+    const text = pdfExerciseText(exercise);
+    expect(model.exercises).toHaveLength(1);
+    expect(headings(exercise)).not.toContain('Context');
+    expect(headings(exercise)).not.toContain('Instructions');
+    expect(text).not.toContain('Page:');
+    expect(text).not.toContain('New Page');
+    expect(text).not.toContain('Lesson intro');
+    expect(text).not.toContain('Supporting passage that belongs to the page');
+    expect(text).toContain('Pick one option.');
+    expect(text).toContain('What is amo?');
+    expectHeadingOrder(exercise, 'Question', 'Expected answer');
+    expectHeadingOrder(exercise, 'Expected answer', 'Student answer');
+  });
 
   it('records an empty matching attempt when no rounds were saved', () => {
     const matching: TestResultReviewItem = {

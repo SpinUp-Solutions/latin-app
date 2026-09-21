@@ -7,71 +7,27 @@ import type {
   TestResultPdfExercise,
   TestResultPdfLineGroup,
   TestResultPdfModel,
-  TestResultPdfTone,
 } from '@/src/lib/tests/result-pdf-model';
 
 const PAGE_WIDTH = 612;
 const PAGE_HEIGHT = 792;
-const MARGIN_X = 50;
-const MARGIN_TOP = 62;
+const MARGIN_X = 48;
+const MARGIN_TOP = 44;
 const MARGIN_BOTTOM = 48;
-const BODY_SIZE = 10.5;
-const SMALL_SIZE = 9;
-const TITLE_SIZE = 22;
-const HEADING_SIZE = 13;
-const LINE_GAP = 3.2;
-const GROUP_HEADING_SIZE = 9;
-const ROMAN_RED = rgb(0.55, 0.14, 0.14);
-const SLATE = rgb(0.16, 0.21, 0.28);
-const MUTED = rgb(0.4, 0.44, 0.5);
-const RULE = rgb(0.84, 0.8, 0.75);
-const PARCHMENT = rgb(0.995, 0.985, 0.97);
-
-const TONE_STYLES: Record<TestResultPdfTone, { bg: RGB; bar: RGB; heading: RGB; body: RGB }> = {
-  neutral: { bg: rgb(0.97, 0.96, 0.95), bar: rgb(0.58, 0.6, 0.64), heading: rgb(0.3, 0.33, 0.38), body: SLATE },
-  score: { bg: rgb(0.97, 0.96, 0.95), bar: rgb(0.55, 0.14, 0.14), heading: ROMAN_RED, body: SLATE },
-  correct: {
-    bg: rgb(0.9, 0.97, 0.92),
-    bar: rgb(0.1, 0.46, 0.28),
-    heading: rgb(0.08, 0.38, 0.22),
-    body: rgb(0.1, 0.28, 0.18),
-  },
-  partial: {
-    bg: rgb(1, 0.96, 0.88),
-    bar: rgb(0.78, 0.46, 0.06),
-    heading: rgb(0.55, 0.32, 0.02),
-    body: rgb(0.38, 0.24, 0.04),
-  },
-  incorrect: {
-    bg: rgb(0.99, 0.93, 0.92),
-    bar: rgb(0.72, 0.16, 0.16),
-    heading: rgb(0.58, 0.12, 0.12),
-    body: rgb(0.38, 0.1, 0.1),
-  },
-  answer: {
-    bg: rgb(0.88, 0.96, 0.9),
-    bar: rgb(0.08, 0.48, 0.3),
-    heading: rgb(0.06, 0.36, 0.22),
-    body: rgb(0.08, 0.26, 0.16),
-  },
-  student: {
-    bg: rgb(0.9, 0.95, 0.99),
-    bar: rgb(0.16, 0.42, 0.68),
-    heading: rgb(0.1, 0.32, 0.54),
-    body: rgb(0.1, 0.24, 0.4),
-  },
-};
-
-const STATUS_TONE: Record<TestResultPdfExercise['statusLabel'], TestResultPdfTone> = {
-  Correct: 'correct',
-  'Partly correct': 'partial',
-  Incorrect: 'incorrect',
-};
-
-const overallTone = (model: TestResultPdfModel): TestResultPdfTone => {
-  if (model.outcomeLabel === 'Passed') return 'correct';
-  if (model.outcomeLabel === 'Not passed') return 'incorrect';
-  return 'score';
+const CONTENT_WIDTH = PAGE_WIDTH - MARGIN_X * 2;
+const BODY_SIZE = 10;
+const LEADING = 15;
+const LABEL_SIZE = 7.5;
+const ROMAN_RED = rgb(139 / 255, 38 / 255, 53 / 255);
+const PARCHMENT = rgb(248 / 255, 243 / 255, 230 / 255);
+const INK = rgb(0.15, 0.18, 0.23);
+const MUTED = rgb(0.39, 0.43, 0.48);
+const RULE = rgb(0.86, 0.86, 0.85);
+const WHITE = rgb(1, 1, 1);
+const STATUS = {
+  Correct: { ink: rgb(0.02, 0.37, 0.27), fill: rgb(0.94, 0.98, 0.96) },
+  'Partly correct': { ink: rgb(0.57, 0.25, 0.05), fill: rgb(1, 0.98, 0.92) },
+  Incorrect: { ink: rgb(0.62, 0.07, 0.22), fill: rgb(1, 0.95, 0.96) },
 };
 
 const fontBytesCache = new Map<string, Uint8Array>();
@@ -141,17 +97,144 @@ const wrapLine = (font: PDFFont, text: string, size: number, maxWidth: number): 
 const wrapParagraphs = (font: PDFFont, text: string, size: number, maxWidth: number): string[] =>
   text.split(/\r?\n/).flatMap(paragraph => wrapLine(font, paragraph, size, maxWidth));
 
-const usableHeight = () => PAGE_HEIGHT - MARGIN_TOP - MARGIN_BOTTOM;
+interface Column {
+  label?: string;
+  lines: string[];
+  color?: RGB;
+  fill?: RGB;
+}
+
+interface Block {
+  columns: Column[];
+  size?: number;
+  serif?: boolean;
+  inset?: number;
+  gap?: number;
+  grid?: boolean;
+  headerRow?: boolean;
+  maxWidth?: number;
+}
+
+const isStudent = (group: TestResultPdfLineGroup) => group.heading?.startsWith('Student') || group.tone === 'student';
+const isExpected = (group: TestResultPdfLineGroup) => group.heading?.startsWith('Expected') || group.tone === 'answer';
+const isScore = (group: TestResultPdfLineGroup) =>
+  ['score', 'correct', 'partial', 'incorrect'].includes(group.tone ?? '');
+const answerStyle = (group: TestResultPdfLineGroup) =>
+  group.tone === 'student' || group.tone === 'correct'
+    ? STATUS.Correct
+    : group.tone === 'partial'
+      ? STATUS['Partly correct']
+      : group.tone === 'incorrect'
+        ? STATUS.Incorrect
+        : { ink: MUTED, fill: WHITE };
+
+/** Presentation only: never infer scores or answers from the displayed text. */
+function exerciseBlocks(exercise: TestResultPdfExercise): Block[] {
+  const blocks: Block[] = [];
+  for (let index = 0; index < exercise.groups.length; index += 1) {
+    const group = exercise.groups[index];
+    const next = exercise.groups[index + 1];
+    if (group.table) {
+      const { columns, rows } = group.table;
+      // Keep wide paradigms readable: repeat the first column in each band.
+      const bands: number[][] = [];
+      if (columns.length <= 4) bands.push(columns.map((_, index) => index));
+      else
+        for (let start = 1; start < columns.length; start += 3) {
+          bands.push([0, ...columns.slice(start, start + 3).map((_, index) => start + index)]);
+        }
+      for (const band of bands) {
+        if (!band.length) continue;
+        const labeled = (row?: (typeof rows)[number]) =>
+          band.map(index => {
+            const cell = row?.[index];
+            return {
+              label: columns[index],
+              lines: cell?.lines ?? [],
+              ...(cell
+                ? {
+                    color: answerStyle({ lines: [], tone: cell.tone }).ink,
+                    fill: answerStyle({ lines: [], tone: cell.tone }).fill,
+                  }
+                : {}),
+            };
+          });
+        blocks.push({
+          columns: labeled(),
+          grid: true,
+          headerRow: true,
+          size: 9,
+          inset: 6,
+          gap: 0,
+        });
+        rows.forEach((row, rowIndex) => {
+          blocks.push({
+            columns: labeled(row),
+            grid: true,
+            size: 9,
+            inset: 8,
+            gap: rowIndex === rows.length - 1 ? 12 : 0,
+          });
+        });
+      }
+    } else if (isExpected(group) && next && isStudent(next)) {
+      blocks.push({
+        columns: [
+          { label: group.heading, lines: group.lines, color: STATUS.Correct.ink },
+          { label: next.heading, lines: next.lines, color: answerStyle(next).ink, fill: answerStyle(next).fill },
+        ],
+        inset: 10,
+        gap: 12,
+      });
+      index += 1;
+    } else if (isStudent(group)) {
+      blocks.push({
+        columns: [
+          { label: group.heading, lines: group.lines, color: answerStyle(group).ink, fill: answerStyle(group).fill },
+        ],
+        inset: 10,
+        gap: 12,
+      });
+    } else if (isExpected(group)) {
+      blocks.push({
+        columns: [{ label: group.heading, lines: group.lines, color: STATUS.Correct.ink }],
+        inset: 10,
+        gap: 12,
+      });
+    } else if (isScore(group)) {
+      // A numbered part's prompt and mark share a compact line. A neutral
+      // ungraded part stays neutral rather than acquiring an incorrect badge.
+      blocks.push({
+        columns: [{ lines: [[group.heading, ...group.lines].filter(Boolean).join(' · ')], color: MUTED }],
+        size: 8,
+        gap: 4,
+      });
+    } else if (group.heading === 'AI score') {
+      blocks.push({ columns: [{ lines: [`AI score: ${group.lines.join(' · ')}`], color: MUTED }], size: 8, gap: 6 });
+    } else {
+      const question = group.heading === 'Question' || group.heading?.startsWith('Question ');
+      blocks.push({
+        columns: [{ label: question ? undefined : group.heading, lines: group.lines }],
+        serif: question,
+        size: question ? 11.5 : BODY_SIZE,
+        gap: 8,
+      });
+    }
+  }
+  return blocks;
+}
 
 class PdfWriter {
   private page!: PDFPage;
   private y = 0;
+  private activeExercise?: TestResultPdfExercise;
   readonly pages: PDFPage[] = [];
 
   constructor(
     private readonly doc: PDFDocument,
     private readonly regular: PDFFont,
-    private readonly bold: PDFFont
+    private readonly bold: PDFFont,
+    private readonly serif: PDFFont
   ) {
     this.addPage();
   }
@@ -159,261 +242,322 @@ class PdfWriter {
   private addPage() {
     this.page = this.doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
     this.pages.push(this.page);
-    this.page.drawRectangle({ x: 0, y: 0, width: PAGE_WIDTH, height: PAGE_HEIGHT, color: PARCHMENT });
     this.y = PAGE_HEIGHT - MARGIN_TOP;
+    if (this.activeExercise) this.exerciseHeader(this.activeExercise, true);
   }
 
   private remaining() {
     return this.y - MARGIN_BOTTOM;
   }
 
-  private ensureSpace(height: number) {
-    if (this.remaining() >= height) return;
-    this.addPage();
+  private draw(text: string, x: number, top: number, size = BODY_SIZE, font = this.regular, color = INK) {
+    if (text) this.page.drawText(text, { x, y: top - size, size, font, color });
   }
 
-  private contentWidth() {
-    return PAGE_WIDTH - MARGIN_X * 2;
+  private rule(y: number, color = RULE) {
+    this.page.drawLine({ start: { x: MARGIN_X, y }, end: { x: PAGE_WIDTH - MARGIN_X, y }, thickness: 0.6, color });
   }
 
-  gap(amount = 10) {
-    this.ensureSpace(amount);
-    this.y -= amount;
+  private lines(text: string, font: PDFFont, size: number, width: number) {
+    return wrapParagraphs(font, text, size, width);
   }
 
-  rule() {
-    this.ensureSpace(14);
-    this.page.drawLine({
-      start: { x: MARGIN_X, y: this.y },
-      end: { x: PAGE_WIDTH - MARGIN_X, y: this.y },
-      thickness: 0.7,
-      color: RULE,
-    });
-    this.y -= 12;
-  }
-
-  text(value: string, size: number, font = this.regular, color = SLATE, gap = LINE_GAP, width = this.contentWidth()) {
-    const lines = wrapParagraphs(font, value, size, width);
-    for (const line of lines) {
-      const height = size + gap;
-      this.ensureSpace(height);
-      if (line) {
-        this.page.drawText(line, { x: MARGIN_X, y: this.y - size, size, font, color });
-      }
-      this.y -= height;
+  private fit(text: string, font: PDFFont, size: number, width: number) {
+    if (font.widthOfTextAtSize(text, size) <= width) return text;
+    const characters = Array.from(text);
+    let low = 0;
+    let high = characters.length;
+    while (low < high) {
+      const middle = Math.ceil((low + high) / 2);
+      if (font.widthOfTextAtSize(`${characters.slice(0, middle).join('')}…`, size) <= width) low = middle;
+      else high = middle - 1;
     }
+    return `${characters.slice(0, low).join('')}…`;
   }
 
-  private wrappedBlock(group: TestResultPdfLineGroup) {
-    const innerWidth = this.contentWidth() - 26;
-    const headingLines = group.heading ? wrapParagraphs(this.bold, group.heading, GROUP_HEADING_SIZE, innerWidth) : [];
-    const bodyLines = group.lines.flatMap(line => wrapParagraphs(this.regular, line, BODY_SIZE, innerWidth));
-    const padding = 10;
-    const headingHeight = headingLines.length * (GROUP_HEADING_SIZE + 3);
-    const bodyHeight = bodyLines.length * (BODY_SIZE + LINE_GAP);
-    const height = padding * 2 + headingHeight + bodyHeight + (headingLines.length && bodyLines.length ? 4 : 0);
-    return { headingLines, bodyLines, height, padding };
+  summary(model: TestResultPdfModel) {
+    const scoreWidth = 122;
+    const leftWidth = CONTENT_WIDTH - scoreWidth - 28;
+    this.rule(this.y, ROMAN_RED);
+    this.y -= 15;
+    this.draw(`${model.kindLabel.toUpperCase()} RESULTS`, MARGIN_X, this.y, LABEL_SIZE, this.bold, ROMAN_RED);
+    this.y -= 17;
+    const top = this.y;
+    // Pathological titles are flowed below the score, keeping every character.
+    const title = this.lines(model.title, this.serif, 23, leftWidth);
+    const firstLines = title.splice(0, 4);
+    for (const line of firstLines) {
+      this.draw(line, MARGIN_X, this.y, 23, this.serif, ROMAN_RED);
+      this.y -= 29;
+    }
+    const right = PAGE_WIDTH - MARGIN_X;
+    const scoreSize = 30;
+    this.draw(
+      model.percentageLabel,
+      right - this.bold.widthOfTextAtSize(model.percentageLabel, scoreSize),
+      top,
+      scoreSize,
+      this.bold,
+      ROMAN_RED
+    );
+    const score = `${model.scoreLabel} / ${model.maxScoreLabel} points`;
+    this.draw(score, right - this.regular.widthOfTextAtSize(score, 9), top - 37, 9, this.regular, MUTED);
+    if (model.outcomeLabel && model.outcomeLabel !== 'Score only') {
+      this.draw(
+        model.outcomeLabel,
+        right - this.bold.widthOfTextAtSize(model.outcomeLabel, 8),
+        top - 53,
+        8,
+        this.bold,
+        INK
+      );
+    }
+    if (title.length) {
+      this.y = Math.min(this.y, top - 72);
+      this.block({ columns: [{ lines: title }], serif: true, size: 23 });
+    }
+    this.y -= 8;
+    this.block({ columns: [{ lines: [model.studentName] }], size: 11, gap: 3, maxWidth: leftWidth });
+    this.block({
+      columns: [{ lines: [`Submitted ${model.submittedAtLabel}`], color: MUTED }],
+      size: 8,
+      gap: 0,
+      maxWidth: leftWidth,
+    });
+    this.y = Math.min(this.y, top - 72) - 20;
   }
 
-  block(group: TestResultPdfLineGroup) {
-    const tone = group.tone ?? 'neutral';
-    const palette = TONE_STYLES[tone];
-    const { headingLines, bodyLines, height, padding } = this.wrappedBlock(group);
-    const maxBlock = usableHeight() - 8;
+  private measure(block: Block, showLabels = !block.grid || Boolean(block.headerRow)) {
+    const size = block.size ?? BODY_SIZE;
+    const leading = Math.max(LEADING, size + 5);
+    const font = block.serif ? this.serif : this.regular;
+    const inset = block.inset ?? 0;
+    const gutter = block.columns.length > 1 && !block.grid ? 12 : 0;
+    const width = ((block.maxWidth ?? CONTENT_WIDTH) - gutter * (block.columns.length - 1)) / block.columns.length;
+    const columns = block.columns.map(column => ({
+      ...column,
+      body: column.lines.flatMap(line => this.lines(line, font, size, width - inset * 2)),
+      labels:
+        showLabels && column.label
+          ? this.lines(column.label.toUpperCase(), this.bold, LABEL_SIZE, width - inset * 2)
+          : [],
+    }));
+    const labelHeight = Math.max(0, ...columns.map(column => column.labels.length)) * 11;
+    const rows = block.headerRow ? 0 : Math.max(1, ...columns.map(column => column.body.length));
+    const height = inset * 2 + labelHeight + rows * leading + (block.gap ?? 8);
+    return { size, leading, font, inset, gutter, width, columns, labelHeight, rows, height };
+  }
 
-    if (height > maxBlock) {
-      if (group.heading) this.text(group.heading, GROUP_HEADING_SIZE, this.bold, palette.heading, 4);
-      for (const line of group.lines) this.text(line, BODY_SIZE, this.regular, palette.body);
-      this.gap(8);
+  private replayTableHeader(block: Block) {
+    if (!block.grid || block.headerRow || !block.columns.some(column => column.label)) return;
+    this.block({
+      columns: block.columns.map(column => ({ label: column.label, lines: [] })),
+      grid: true,
+      headerRow: true,
+      size: block.size,
+      inset: 6,
+      gap: 0,
+    });
+  }
+
+  block(block: Block) {
+    const headerRow = Boolean(block.headerRow);
+    let showLabels = !block.grid || headerRow;
+    let layout = this.measure(block, showLabels);
+    const freshSpace = PAGE_HEIGHT - MARGIN_TOP - MARGIN_BOTTOM - this.continuationHeight();
+    const startOnNewPage = () => {
+      this.addPage();
+      if (block.grid && !headerRow) this.replayTableHeader(block);
+    };
+    if (layout.height > this.remaining() && layout.height <= freshSpace) {
+      startOnNewPage();
+      showLabels = headerRow;
+    }
+    if (headerRow) {
+      layout = this.measure(block, true);
+      const gap = block.gap ?? 0;
+      if (layout.height + gap > this.remaining()) this.addPage();
+      layout = this.measure(block, true);
+      const { inset, gutter, width, columns, labelHeight } = layout;
+      const height = inset * 2 + labelHeight;
+      columns.forEach((column, index) => {
+        const x = MARGIN_X + index * (width + gutter);
+        this.page.drawRectangle({ x, y: this.y - height, width, height, color: PARCHMENT });
+        this.page.drawRectangle({ x, y: this.y - height, width, height, borderColor: RULE, borderWidth: 0.5 });
+        let cursor = this.y - inset;
+        for (const label of column.labels) {
+          this.draw(label, x + inset, cursor, LABEL_SIZE, this.bold, MUTED);
+          cursor -= 11;
+        }
+      });
+      this.y -= height + gap;
       return;
     }
-
-    this.ensureSpace(height + 6);
-    const boxY = this.y - height;
-    this.page.drawRectangle({
-      x: MARGIN_X,
-      y: boxY,
-      width: this.contentWidth(),
-      height,
-      color: palette.bg,
-      borderColor: rgb(palette.bar.red, palette.bar.green, palette.bar.blue),
-      borderWidth: 0.35,
-    });
-    this.page.drawRectangle({ x: MARGIN_X, y: boxY, width: 6.5, height, color: palette.bar });
-
-    let cursor = this.y - padding;
-    const draw = (lines: string[], size: number, font: PDFFont, color: RGB, gap: number) => {
-      for (const line of lines) {
-        if (line) {
-          this.page.drawText(line, { x: MARGIN_X + 16, y: cursor - size, size, font, color });
-        }
-        cursor -= size + gap;
+    let offset = 0;
+    while (offset < layout.rows) {
+      layout = this.measure(block, showLabels);
+      let overhead = layout.inset * 2 + layout.labelHeight;
+      const gap = block.gap ?? 8;
+      let capacity = Math.floor((this.remaining() - overhead - gap) / layout.leading);
+      if (capacity < 1) {
+        startOnNewPage();
+        showLabels = !block.grid;
+        layout = this.measure(block, showLabels);
+        overhead = layout.inset * 2 + layout.labelHeight;
+        capacity = Math.max(1, Math.floor((this.remaining() - overhead - gap) / layout.leading));
       }
-    };
-    draw(headingLines, GROUP_HEADING_SIZE, this.bold, palette.heading, 3);
-    if (headingLines.length && bodyLines.length) cursor -= 4;
-    draw(bodyLines, BODY_SIZE, this.regular, palette.body, LINE_GAP);
-    this.y = boxY - 9;
+      const { size, leading, font, inset, gutter, width, columns, labelHeight, rows } = layout;
+      const count = Math.min(rows - offset, capacity);
+      const height = overhead + count * leading;
+      columns.forEach((column, index) => {
+        const x = MARGIN_X + index * (width + gutter);
+        if (column.fill) this.page.drawRectangle({ x, y: this.y - height, width, height, color: column.fill });
+        if (block.grid) {
+          this.page.drawRectangle({ x, y: this.y - height, width, height, borderColor: RULE, borderWidth: 0.5 });
+        } else if (inset) {
+          this.page.drawLine({
+            start: { x, y: this.y },
+            end: { x: x + width, y: this.y },
+            thickness: 0.6,
+            color: column.color ?? RULE,
+          });
+        }
+        let cursor = this.y - inset;
+        for (const label of column.labels) {
+          this.draw(label, x + inset, cursor, LABEL_SIZE, this.bold, column.color ?? MUTED);
+          cursor -= 11;
+        }
+        cursor = this.y - inset - labelHeight;
+        for (const line of column.body.slice(offset, offset + count)) {
+          this.draw(line, x + inset, cursor, size, font, INK);
+          cursor -= leading;
+        }
+      });
+      this.y -= height + gap;
+      offset += count;
+      if (offset < rows) startOnNewPage();
+    }
+  }
+
+  private headerLines(exercise: TestResultPdfExercise, continued: boolean) {
+    return this.lines(`${exercise.title}${continued ? ' (continued)' : ''}`, this.serif, 14, CONTENT_WIDTH - 160);
+  }
+
+  private continuationHeight() {
+    // Headers are bounded so even exceptionally long titles leave body space.
+    return this.activeExercise ? Math.min(3, this.headerLines(this.activeExercise, true).length) * 19 + 26 : 0;
+  }
+
+  private exerciseHeader(exercise: TestResultPdfExercise, continued = false) {
+    const lines = this.headerLines(exercise, continued);
+    const visible = lines.slice(0, 3);
+    if (lines.length > 3) visible[2] = this.fit(`${visible[2]}…`, this.serif, 14, CONTENT_WIDTH - 160);
+    const height = visible.length * 19 + 16;
+    this.page.drawRectangle({ x: MARGIN_X, y: this.y - height, width: CONTENT_WIDTH, height, color: PARCHMENT });
+    this.draw(String(exercise.number).padStart(2, '0'), MARGIN_X + 12, this.y - 10, 10, this.bold, ROMAN_RED);
+    visible.forEach((line, index) =>
+      this.draw(line, MARGIN_X + 40, this.y - 8 - index * 19, 14, this.serif, ROMAN_RED)
+    );
+    const points = `${exercise.awardedPoints} / ${exercise.maxPoints}`;
+    const right = PAGE_WIDTH - MARGIN_X - 12;
+    this.draw(points, right - this.bold.widthOfTextAtSize(points, 10), this.y - 9, 10, this.bold, INK);
+    this.draw(
+      exercise.statusLabel,
+      right - this.regular.widthOfTextAtSize(exercise.statusLabel, 7.5),
+      this.y - 24,
+      7.5,
+      this.regular,
+      STATUS[exercise.statusLabel].ink
+    );
+    this.y -= height + 12;
   }
 
   exercise(exercise: TestResultPdfExercise) {
-    const statusTone = STATUS_TONE[exercise.statusLabel];
-    const palette = TONE_STYLES[statusTone];
-    const scoreLines = wrapParagraphs(
-      this.bold,
-      `${exercise.statusLabel}  ·  ${exercise.awardedPoints} / ${exercise.maxPoints} points`,
-      15,
-      this.contentWidth() - 28
-    );
-    const titleLines = wrapParagraphs(
-      this.regular,
-      `Exercise ${exercise.number}. ${exercise.title}`,
-      SMALL_SIZE,
-      this.contentWidth() - 28
-    );
-    const bannerHeight = 20 + scoreLines.length * 18 + titleLines.length * (SMALL_SIZE + 3);
-    const groupsHeight = exercise.groups.reduce((sum, group) => {
-      const height = this.wrappedBlock(group).height;
-      return sum + Math.min(height, usableHeight() - 8) + 9;
-    }, 0);
-    const estimated = bannerHeight + groupsHeight + 8;
-    if (estimated <= usableHeight()) this.ensureSpace(estimated);
-    else this.ensureSpace(bannerHeight + 72);
-    this.ensureSpace(bannerHeight);
-    const boxY = this.y - bannerHeight;
-    this.page.drawRectangle({
-      x: MARGIN_X,
-      y: boxY,
-      width: this.contentWidth(),
-      height: bannerHeight,
-      color: palette.bg,
-      borderColor: palette.bar,
-      borderWidth: 0.45,
-    });
-    this.page.drawRectangle({ x: MARGIN_X, y: boxY, width: 7, height: bannerHeight, color: palette.bar });
-
-    let cursor = this.y - 12;
-    for (const line of scoreLines) {
-      this.page.drawText(line, {
-        x: MARGIN_X + 16,
-        y: cursor - 15,
-        size: 15,
-        font: this.bold,
-        color: palette.heading,
-      });
-      cursor -= 18;
+    const blocks = exerciseBlocks(exercise);
+    const headerHeight = Math.min(3, this.headerLines(exercise, false).length) * 19 + 28;
+    const totalHeight = headerHeight + blocks.reduce((sum, block) => sum + this.measure(block).height, 0);
+    this.activeExercise = undefined;
+    const freshSpace = PAGE_HEIGHT - MARGIN_TOP - MARGIN_BOTTOM;
+    if ((totalHeight <= freshSpace ? totalHeight : headerHeight + 100) > this.remaining()) this.addPage();
+    this.activeExercise = exercise;
+    this.exerciseHeader(exercise);
+    // Preserve very long authored titles in full, outside the bounded running header.
+    if (this.headerLines(exercise, false).length > 3)
+      this.block({ columns: [{ lines: [exercise.title] }], serif: true, size: 12 });
+    for (let index = 0; index < blocks.length; index += 1) {
+      const block = blocks[index];
+      const next = blocks[index + 1];
+      // Keep a question/part label with its answer when both fit a fresh page.
+      if (!block.inset && next) {
+        let cluster = this.measure(block).height;
+        for (let ahead = index + 1; ahead < blocks.length; ahead += 1) {
+          cluster += this.measure(blocks[ahead]).height;
+          if (blocks[ahead].inset) break;
+        }
+        if (cluster > this.remaining() && cluster <= freshSpace - this.continuationHeight()) this.addPage();
+      }
+      this.block(block);
     }
-    cursor -= 2;
-    for (const line of titleLines) {
-      this.page.drawText(line, {
-        x: MARGIN_X + 16,
-        y: cursor - SMALL_SIZE,
-        size: SMALL_SIZE,
+    this.y -= 10;
+    this.activeExercise = undefined;
+  }
+
+  scoreList(model: TestResultPdfModel) {
+    for (const exercise of model.exerciseSummaries) {
+      this.block({
+        columns: [
+          { lines: [`${exercise.number}. ${exercise.title}`] },
+          {
+            lines: [
+              `${exercise.awardedPoints} / ${exercise.maxPoints}${exercise.statusLabel ? ` · ${exercise.statusLabel}` : ''}`,
+            ],
+          },
+        ],
+        gap: 10,
+      });
+    }
+  }
+
+  finish(model: TestResultPdfModel) {
+    this.pages.forEach((page, index) => {
+      const pageLabel = `${index + 1} / ${this.pages.length}`;
+      const pageLabelWidth = this.regular.widthOfTextAtSize(pageLabel, 8);
+      const footer = this.fit(
+        `${model.studentName} · ${model.title}`,
+        this.regular,
+        8,
+        CONTENT_WIDTH - pageLabelWidth - 20
+      );
+      page.drawLine({
+        start: { x: MARGIN_X, y: 34 },
+        end: { x: PAGE_WIDTH - MARGIN_X, y: 34 },
+        thickness: 0.5,
+        color: RULE,
+      });
+      page.drawText(footer, { x: MARGIN_X, y: 20, size: 8, font: this.regular, color: MUTED });
+      page.drawText(pageLabel, {
+        x: PAGE_WIDTH - MARGIN_X - pageLabelWidth,
+        y: 20,
+        size: 8,
         font: this.regular,
-        color: SLATE,
+        color: MUTED,
       });
-      cursor -= SMALL_SIZE + 3;
-    }
-    this.y = boxY - 12;
-
-    for (const group of exercise.groups) this.block(group);
+    });
   }
 }
-
-const stampPages = (model: TestResultPdfModel, pages: PDFPage[], font: PDFFont) => {
-  pages.forEach((page, index) => {
-    page.drawRectangle({ x: 0, y: PAGE_HEIGHT - 8, width: PAGE_WIDTH, height: 8, color: ROMAN_RED });
-    page.drawText(`${model.kindLabel} result report`, {
-      x: MARGIN_X,
-      y: PAGE_HEIGHT - 28,
-      size: 8.5,
-      font,
-      color: ROMAN_RED,
-    });
-    const pageLabel = `Page ${index + 1} of ${pages.length}`;
-    page.drawText(pageLabel, {
-      x: PAGE_WIDTH - MARGIN_X - font.widthOfTextAtSize(pageLabel, 8.5),
-      y: PAGE_HEIGHT - 28,
-      size: 8.5,
-      font,
-      color: MUTED,
-    });
-    page.drawLine({
-      start: { x: MARGIN_X, y: 34 },
-      end: { x: PAGE_WIDTH - MARGIN_X, y: 34 },
-      thickness: 0.6,
-      color: RULE,
-    });
-    page.drawText(`${model.studentName}  ·  ${model.title}`, {
-      x: MARGIN_X,
-      y: 20,
-      size: 8.5,
-      font,
-      color: MUTED,
-    });
-  });
-};
 
 export async function renderTestResultPdf(model: TestResultPdfModel): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
   const regular = await doc.embedFont(await loadFontBytes('NotoSans-Regular.ttf'), { subset: true });
-  let bold = regular;
-  try {
-    bold = await doc.embedFont(await loadFontBytes('NotoSans-Bold.ttf'), { subset: true });
-  } catch {
-    bold = regular;
-  }
-
-  const writer = new PdfWriter(doc, regular, bold);
-  writer.text(`${model.kindLabel} result`, SMALL_SIZE, bold, ROMAN_RED, 4);
-  writer.text(model.title, TITLE_SIZE, bold, ROMAN_RED, 7);
-  writer.text(`Submitted ${model.submittedAtLabel}`, SMALL_SIZE, regular, MUTED, 5);
-  writer.gap(6);
-
-  writer.block({
-    heading: 'Student',
-    tone: 'neutral',
-    lines: [
-      model.studentName,
-      ...(model.studentUsername ? [`Username: ${model.studentUsername}`] : []),
-      ...(model.studentEmail ? [`Email: ${model.studentEmail}`] : []),
-    ],
-  });
-  writer.block({
-    heading: 'Overall score',
-    tone: overallTone(model),
-    lines: [
-      `${model.percentageLabel}  ·  ${model.scoreLabel} / ${model.maxScoreLabel} points`,
-      ...(model.outcomeLabel ? [`Outcome: ${model.outcomeLabel}`] : []),
-      ...(model.passingPercentageLabel ? [`Passing mark: ${model.passingPercentageLabel}`] : []),
-    ],
-  });
-
-  writer.gap(4);
-  writer.rule();
-  if (model.exerciseSummaries.length > 0) {
-    writer.text('Exercise scores', HEADING_SIZE, bold, ROMAN_RED, 8);
-    for (const exercise of model.exerciseSummaries) {
-      const status = exercise.statusLabel ? `${exercise.statusLabel}  ·  ` : '';
-      const tone = exercise.statusLabel ? STATUS_TONE[exercise.statusLabel] : 'neutral';
-      writer.text(
-        `${exercise.number}. ${exercise.title}  —  ${status}${exercise.awardedPoints} / ${exercise.maxPoints} points`,
-        BODY_SIZE,
-        regular,
-        TONE_STYLES[tone].heading,
-        5
-      );
-    }
-    writer.gap(8);
-  }
-
-  if (model.reviewUnavailableNote) {
-    writer.block({ heading: 'Review note', tone: 'neutral', lines: [model.reviewUnavailableNote] });
-  }
-
+  const bold = await doc.embedFont(await loadFontBytes('NotoSans-Bold.ttf'), { subset: true });
+  const serif = await doc.embedFont(await loadFontBytes('NotoSerif-Regular.ttf'), { subset: true });
+  const writer = new PdfWriter(doc, regular, bold, serif);
+  writer.summary(model);
+  if (model.reviewUnavailableNote) writer.block({ columns: [{ lines: [model.reviewUnavailableNote], color: MUTED }] });
+  // A fallback score list is useful only when there is no detailed review.
+  if (!model.exercises.length) writer.scoreList(model);
   for (const exercise of model.exercises) writer.exercise(exercise);
-
-  stampPages(model, writer.pages, regular);
+  writer.finish(model);
   return doc.save();
 }
