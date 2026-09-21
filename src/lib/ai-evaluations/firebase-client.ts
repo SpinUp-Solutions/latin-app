@@ -7,6 +7,7 @@ import type {
   EvaluationFunctionRunRequest,
   EvaluationFunctionSaveRequest,
   EvaluationRunResult,
+  EvaluationRunSummary,
 } from './contracts';
 
 const FIREBASE_EVALUATION_TIMEOUT_MS = 540_000;
@@ -24,6 +25,14 @@ export async function listEvaluationCasesInFirebase(): Promise<EvaluationCase[]>
     'listAiEvaluationCasesFn'
   );
   return (await callable({})).data.cases;
+}
+
+export async function listEvaluationRunsInFirebase(): Promise<EvaluationRunSummary[]> {
+  const callable = httpsCallable<Record<string, never>, { runs: EvaluationRunSummary[] }>(
+    functions,
+    'listAiEvaluationRunsFn'
+  );
+  return (await callable({})).data.runs;
 }
 
 export async function saveEvaluationCaseInFirebase(

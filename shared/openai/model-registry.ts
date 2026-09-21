@@ -120,6 +120,14 @@ export const TRANSLATION_GRADING_PROFILES = {
     promptCacheMode: 'explicit',
     profileVersion: 'translation-grading-v3:candidate',
   }),
+  candidateLow: defineTranslationGradingProfile('candidateLow', 'gpt56Luna', {
+    labelSuffix: 'Low',
+    reasoningEffort: 'low',
+    maxOutputTokens: { lesson: 5000, test: 5000 },
+    promptCacheKey: 'translation-grading-v3:candidate-low',
+    promptCacheMode: 'explicit',
+    profileVersion: 'translation-grading-v3:candidate-low',
+  }),
 } as const satisfies Record<string, TranslationGradingProfileDefinition>;
 
 export type TranslationGradingProfileId = keyof typeof TRANSLATION_GRADING_PROFILES;
@@ -137,7 +145,7 @@ export const PRODUCTION_TRANSLATION_POLICY = {
 /** The evaluation workspace renders and runs these registered profiles. */
 export const EVALUATION_TRANSLATION_PROFILE_IDS = [
   'baseline',
-  'candidate',
+  'candidateLow',
 ] as const satisfies readonly TranslationGradingProfileId[];
 
 interface RawUsage {

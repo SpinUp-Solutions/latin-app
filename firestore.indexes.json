@@ -749,6 +749,18 @@
       "indexes": []
     },
     {
+      "collectionGroup": "aiEvaluationInFlight",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "aiRequestThrottles",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
       "collectionGroup": "testAttempts",
       "fieldPath": "answers",
       "indexes": []
