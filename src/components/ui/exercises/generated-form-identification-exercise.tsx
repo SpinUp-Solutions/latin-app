@@ -315,10 +315,13 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
         : null;
 
       autoAdvanceIfEnabled(() => {
+        if (finalScore !== null) {
+          onComplete?.(finalScore);
+          return;
+        }
         setUserAnswer('');
         reset();
         setIsProcessing(false);
-        if (finalScore !== null) onComplete?.(finalScore);
       }, false);
       if (!assessmentMode && finalScore !== null) onCompletionAccepted?.(finalScore);
       return;
@@ -352,10 +355,13 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
         : null;
 
       autoAdvanceIfEnabled(() => {
+        if (finalScore !== null) {
+          onComplete?.(finalScore);
+          return;
+        }
         setUserAnswer('');
         reset();
         setIsProcessing(false);
-        if (finalScore !== null) onComplete?.(finalScore);
       }, false);
       if (!assessmentMode && finalScore !== null) onCompletionAccepted?.(finalScore);
     } else {

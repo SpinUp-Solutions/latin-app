@@ -125,9 +125,6 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({
       if (isLastItem) {
         if (!assessmentMode) onCompletionAccepted?.(finalScore!);
         autoAdvanceIfEnabled(() => {
-          setSelectedWordIndex(null);
-          reset();
-          setIsProcessing(false);
           onComplete?.(finalScore!);
         }, hasVisibleExplanation);
       } else {
