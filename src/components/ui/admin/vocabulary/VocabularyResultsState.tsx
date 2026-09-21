@@ -19,6 +19,7 @@ interface VocabularyInfiniteScrollSentinelProps {
   loadingMore: boolean;
   hasMore: boolean;
   className?: string;
+  label?: string;
 }
 
 export function VocabularyInfiniteScrollSentinel({
@@ -26,6 +27,7 @@ export function VocabularyInfiniteScrollSentinel({
   loadingMore,
   hasMore,
   className,
+  label = 'Loading more words...',
 }: VocabularyInfiniteScrollSentinelProps) {
   if (!hasMore && !loadingMore) return null;
 
@@ -34,7 +36,7 @@ export function VocabularyInfiniteScrollSentinel({
       {loadingMore && (
         <div className="flex items-center gap-2 text-gray-600" role="status">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          <span className="text-sm">Loading more words...</span>
+          <span className="text-sm">{label}</span>
         </div>
       )}
     </div>

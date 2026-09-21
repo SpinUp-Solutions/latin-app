@@ -36,6 +36,10 @@ import { shouldFetchNextSearchPage } from '@/src/lib/paginated-search';
 const EMPTY_WORDS: VocabularyWordWithId[] = [];
 const PART_OF_SPEECH_OPTIONS = PartOfSpeechSchema.options;
 
+function omitUndefinedFields<T extends object>(updates: T): Partial<T> {
+  return Object.fromEntries(Object.entries(updates).filter(([, value]) => value !== undefined)) as Partial<T>;
+}
+
 function AdminVocabularyPage() {
   const dispatch = useDispatch();
   const filters = useSelector(selectVocabularyFilters);
@@ -119,17 +123,11 @@ function AdminVocabularyPage() {
     if (!selectedWordId) return false;
 
     try {
-      const cleanedUpdates = Object.fromEntries(
-        Object.entries(updates).filter(([, value]) => {
-          if (value === undefined) return false;
-          return true;
-        })
-      );
-
-      delete (cleanedUpdates as Record<string, unknown>).createdAt;
-      delete (cleanedUpdates as Record<string, unknown>).updatedAt;
-      delete (cleanedUpdates as Record<string, unknown>).sort_key;
-      delete (cleanedUpdates as Record<string, unknown>).random_index;
+      const cleanedUpdates = omitUndefinedFields(updates);
+      delete cleanedUpdates.createdAt;
+      delete cleanedUpdates.updatedAt;
+      delete cleanedUpdates.sort_key;
+      delete cleanedUpdates.random_index;
 
       console.debug('VocabularyPage cleaned updates', cleanedUpdates);
       await updateWord({ wordId: selectedWordId, updates: cleanedUpdates, collection: TARGET_COLLECTION }).unwrap();
@@ -146,13 +144,7 @@ function AdminVocabularyPage() {
   const handleSaveWord = async (updates: Partial<VocabularyWord>) => {
     if (isPlaceholderWord(creatingWord)) {
       try {
-        const cleanedUpdates = Object.fromEntries(
-          Object.entries(updates).filter(([, value]) => {
-            if (value === undefined) return false;
-            return true;
-          })
-        );
-
+        const cleanedUpdates = omitUndefinedFields(updates);
         const { createdAt, updatedAt, ...wordData } = cleanedUpdates as VocabularyWord & {
           createdAt?: VocabularyWord['createdAt'];
           updatedAt?: VocabularyWord['updatedAt'];

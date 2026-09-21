@@ -1,65 +1,32 @@
 import { useFormContext } from 'react-hook-form';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/src/components/ui/form';
 import { Switch } from '@/src/components/ui/switch';
 import { VocabularyFormValues } from './types';
 import { PrincipalPartsEditor } from './PrincipalPartsEditor';
 import { VerbConjugationSchema } from '@/shared/types/vocabulary/schemas/enums';
 import type { z } from 'zod';
-import React from 'react';
 import { useAIFieldStatus } from '@/src/hooks/useAIFieldStatus';
 import { cn } from '@/src/lib/utils';
+import { AIEnumSelect } from './AIEnumSelect';
 
 type VerbConjugationValue = z.infer<typeof VerbConjugationSchema>;
 
 const conjugationValues = VerbConjugationSchema.options as readonly VerbConjugationValue[];
+const conjugationOptions = conjugationValues.map(value => ({ value, label: value }));
 
 export const VerbForm = () => {
   const form = useFormContext<VocabularyFormValues>();
-  const conjugationAIStatus = useAIFieldStatus('conjugation');
   const isDeponentAIStatus = useAIFieldStatus('is_deponent');
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4">
-        <FormField
-          control={form.control}
+        <AIEnumSelect
           name="conjugation"
-          render={({ field }) => {
-            const selectValue =
-              field.value && typeof field.value === 'string' && field.value.trim() !== '' ? field.value : undefined;
-            return (
-              <FormItem>
-                <FormLabel>Conjugation</FormLabel>
-                <FormControl>
-                  <Select
-                    value={selectValue}
-                    onValueChange={value => {
-                      if (value && value.trim() !== '') {
-                        field.onChange(value);
-                      }
-                    }}>
-                    <SelectTrigger
-                      className={cn(
-                        conjugationAIStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
-                        conjugationAIStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
-                        'focus:bg-white'
-                      )}>
-                      <SelectValue placeholder="Select conjugation" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {conjugationValues.map(value => (
-                        <SelectItem key={value} value={value}>
-                          {value}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            );
-          }}
+          label="Conjugation"
+          placeholder="Select conjugation"
+          options={conjugationOptions}
+          omitBlank
         />
 
         <FormField

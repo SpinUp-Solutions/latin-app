@@ -6,7 +6,7 @@ import { getApiErrorMessage } from '@/src/store/api/baseQuery';
 import { toast } from 'sonner';
 import { useGetPoolQuery, useUpdatePoolMutation } from '@/src/store/api/vocabularyPoolApi';
 import { PoolForm } from '@/src/components/ui/admin/vocabulary-pools/PoolForm';
-import { AdminLoadingPage } from '@/src/components/ui/admin/AdminLoadingPage';
+import { PageLoading } from '@/src/components/ui/page-loading';
 import { Button } from '@/src/components/ui/button';
 import { AlertCircle } from 'lucide-react';
 import Link from 'next/link';
@@ -53,7 +53,7 @@ function EditPoolPage({ params }: EditPoolPageProps) {
   };
 
   if (loading) {
-    return <AdminLoadingPage />;
+    return <PageLoading label="Loading vocabulary pool" />;
   }
 
   if (error || !pool) {

@@ -1,23 +1,15 @@
 import { useFormContext } from 'react-hook-form';
 import { Input } from '@/src/components/ui/input';
-import { Textarea } from '@/src/components/ui/textarea';
 import { Button } from '@/src/components/ui/button';
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/src/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { VocabularyFormValues } from './types';
 import { Plus, Trash2 } from 'lucide-react';
-import React from 'react';
-import { useAIFieldStatus } from '@/src/hooks/useAIFieldStatus';
-import { cn } from '@/src/lib/utils';
+import { AITextField } from './AITextField';
 
 export const BaseWordForm = () => {
   const form = useFormContext<VocabularyFormValues>();
   const definitions = form.watch('definitions') || [];
-  const translationAIStatus = useAIFieldStatus('translation');
-  const etymologyAIStatus = useAIFieldStatus('etymology');
-  const pronunciationAIStatus = useAIFieldStatus('pronunciation');
-  const alternateFormAIStatus = useAIFieldStatus('alternate_form');
-  const dictionaryEntryAIStatus = useAIFieldStatus('dictionary_entry');
 
   const addDefinition = () => {
     form.setValue('definitions', [...definitions, '']);
@@ -70,29 +62,7 @@ export const BaseWordForm = () => {
         />
       </div>
 
-      <FormField
-        control={form.control}
-        name="translation"
-        render={({ field }) => {
-          return (
-            <FormItem>
-              <FormLabel>Translation</FormLabel>
-              <FormControl>
-                <Textarea
-                  rows={2}
-                  {...field}
-                  className={cn(
-                    translationAIStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
-                    translationAIStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
-                    'focus:bg-white'
-                  )}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          );
-        }}
-      />
+      <AITextField name="translation" label="Translation" multiline />
 
       <div className="space-y-2">
         <FormLabel>Definitions</FormLabel>
@@ -127,103 +97,13 @@ export const BaseWordForm = () => {
         </div>
       </div>
 
-      <FormField
-        control={form.control}
-        name="etymology"
-        render={({ field }) => {
-          return (
-            <FormItem>
-              <FormLabel>Etymology</FormLabel>
-              <FormControl>
-                <Textarea
-                  rows={2}
-                  {...field}
-                  value={field.value ?? ''}
-                  className={cn(
-                    etymologyAIStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
-                    etymologyAIStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
-                    'focus:bg-white'
-                  )}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          );
-        }}
-      />
+      <AITextField name="etymology" label="Etymology" multiline />
 
-      <FormField
-        control={form.control}
-        name="pronunciation"
-        render={({ field }) => {
-          return (
-            <FormItem>
-              <FormLabel>Pronunciation</FormLabel>
-              <FormControl>
-                <Input
-                  {...field}
-                  value={field.value ?? ''}
-                  className={cn(
-                    pronunciationAIStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
-                    pronunciationAIStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
-                    'focus:bg-white'
-                  )}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          );
-        }}
-      />
+      <AITextField name="pronunciation" label="Pronunciation" />
 
-      <FormField
-        control={form.control}
-        name="alternate_form"
-        render={({ field }) => {
-          return (
-            <FormItem>
-              <FormLabel>Alternate Form</FormLabel>
-              <FormControl>
-                <Input
-                  {...field}
-                  value={field.value ?? ''}
-                  className={cn(
-                    alternateFormAIStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
-                    alternateFormAIStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
-                    'focus:bg-white'
-                  )}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          );
-        }}
-      />
+      <AITextField name="alternate_form" label="Alternate Form" />
 
-      <FormField
-        control={form.control}
-        name="dictionary_entry"
-        render={({ field }) => {
-          return (
-            <FormItem>
-              <FormLabel>Dictionary Entry</FormLabel>
-              <FormControl>
-                <Input
-                  {...field}
-                  value={field.value ?? ''}
-                  placeholder="e.g., amō, amāre, amāvī, amātum"
-                  className={cn(
-                    dictionaryEntryAIStatus === 'filled' && 'bg-green-50 border-green-300 transition-colors',
-                    dictionaryEntryAIStatus === 'missing' && 'bg-red-50 border-red-300 transition-colors',
-                    'focus:bg-white'
-                  )}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          );
-        }}
-      />
+      <AITextField name="dictionary_entry" label="Dictionary Entry" placeholder="e.g., amō, amāre, amāvī, amātum" />
     </div>
   );
 };

@@ -7,9 +7,10 @@ import { Button } from '@/src/components/ui/button';
 import React, { useMemo, useState } from 'react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/src/components/ui/accordion';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
-import { AudioPlayer } from '@/src/components/ui/core/AudioPlayer';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
+import { ListeningPassageView } from '@/src/components/ui/exercises/listening-passage-exercise';
 import ConjugationTable from '@/src/components/ui/lesson/conjugation-table';
+import TextComponent from '@/src/components/ui/lesson/text-component';
 import { VocabularyViewer } from '@/src/components/ui/lesson/VocabularyViewer';
 import { VocabularyPoolViewer } from '@/src/components/ui/lesson/VocabularyPoolViewer';
 import { formatScorePoints } from '@/src/lib/tests/formatting';
@@ -43,15 +44,7 @@ const SupportingContentView = ({
     case 'emphasis':
       return (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          {item.title ? (
-            <h4 className="mb-1 font-serif text-lg text-slate-900">
-              <SimpleRichDisplay content={item.title} />
-            </h4>
-          ) : null}
-          <div className="prose prose-sm max-w-none prose-p:my-2 prose-p:leading-snug">
-            <SimpleRichDisplay content={item.content} />
-          </div>
-          {item.audioPath ? <AudioPlayButton audioPath={item.audioPath} className="mt-2" /> : null}
+          <TextComponent title={item.title} content={item.content} audioPath={item.audioPath ?? undefined} />
         </div>
       );
     case 'table':
@@ -83,29 +76,13 @@ const SupportingContentView = ({
     case 'listening-passage':
       return (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          {item.title ? (
-            <h4 className="mb-1 font-serif text-lg text-slate-900">
-              <SimpleRichDisplay content={item.title} />
-            </h4>
-          ) : null}
-          {item.instructions ? (
-            <div className="mb-2 text-sm text-slate-600">
-              <SimpleRichDisplay content={item.instructions} />
-            </div>
-          ) : null}
-          <div className="space-y-2 rounded-xl border border-roman-terracotta/20 bg-gradient-to-br from-roman-parchment/50 to-white p-5">
-            <div className="font-serif leading-relaxed text-slate-900">
-              <SimpleRichDisplay content={item.data.latinText} />
-            </div>
-            <div className="text-sm italic text-slate-500">
-              <SimpleRichDisplay content={item.data.translation} />
-            </div>
-          </div>
-          {item.data.passageAudioPath ? (
-            <div className="mt-3">
-              <AudioPlayer audioPath={item.data.passageAudioPath} />
-            </div>
-          ) : null}
+          <ListeningPassageView
+            title={item.title}
+            instructions={item.instructions}
+            latinText={item.data.latinText}
+            translation={item.data.translation}
+            passageAudioPath={item.data.passageAudioPath}
+          />
         </div>
       );
     default:
