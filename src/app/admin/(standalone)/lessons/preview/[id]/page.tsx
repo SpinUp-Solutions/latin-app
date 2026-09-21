@@ -7,6 +7,7 @@ import LessonPlayer from '@/src/components/ui/lesson/lesson-player';
 import { LessonWithProgress } from '@/src/types/lesson';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/src/components/ui/button';
+import { PageLoading } from '@/src/components/ui/page-loading';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { useAppDispatch } from '@/src/store/hooks';
@@ -53,11 +54,7 @@ function AdminLessonPreviewPage() {
   }, [canShowLesson, data]);
 
   if (isLoading || (!hasCurrentLesson && isFetching)) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-roman-marble">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>
-      </div>
-    );
+    return <PageLoading label="Loading lesson preview" />;
   }
 
   if (!previewLesson) {

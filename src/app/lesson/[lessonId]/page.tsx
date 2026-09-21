@@ -11,6 +11,7 @@ import PracticeSidebar from '@/src/components/ui/lesson/practice-sidebar';
 import { FeedbackBanner } from '@/src/components/ui/core/feedback-banner';
 import { useAuth } from '@/src/hooks/useAuth';
 import { BookOpen, Pencil } from 'lucide-react';
+import { PageLoading } from '@/src/components/ui/page-loading';
 import { shouldReportClientHardFail, reportUnexpectedError } from '@/src/lib/report-unexpected-error';
 import { isRetryableApiError } from '@/src/store/api/baseQuery';
 
@@ -106,11 +107,7 @@ export default function DynamicLessonPage() {
     lessonsLoading || (!hasCurrentLesson && isFetching) || Boolean(currentLesson && !hasCurrentLesson && !error);
 
   if (authLoading || !user || isRequestedLessonLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-roman-marble">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>
-      </div>
-    );
+    return <PageLoading label="Loading lesson" />;
   }
 
   if (error && !isRefreshFailure) {

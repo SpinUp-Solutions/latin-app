@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { Loader2, ArrowLeft, CalendarIcon } from 'lucide-react';
 import Image from 'next/image';
 import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
+import { PageLoading } from '@/src/components/ui/page-loading';
 import { useAuth } from '@/src/hooks/useAuth';
 import { Calendar } from '@/src/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/src/components/ui/popover';
@@ -169,11 +170,7 @@ export default function ProfilePage() {
   };
 
   if (loading || !user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-roman-marble">
-        <Loader2 className="h-8 w-8 animate-spin text-roman-red" />
-      </div>
-    );
+    return <PageLoading label="Loading profile" />;
   }
 
   return (

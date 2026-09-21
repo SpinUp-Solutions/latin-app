@@ -7,6 +7,7 @@ import { RootState } from '@/src/store';
 import { BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
 import { LessonBuilder } from '@/src/components/ui/admin';
+import { PageLoading } from '@/src/components/ui/page-loading';
 import { ClipboardProvider } from '@/src/components/ui/core/clipboard';
 import { Lesson } from '@/src/types/lesson';
 import { useAppDispatch } from '@/src/store/hooks';
@@ -194,11 +195,7 @@ function EditLessonPage({ params }: EditLessonPageProps) {
   useBeforeUnload(shouldBlockNavigation, handleBrowserBackButton);
 
   if (loading || navigating || !currentLesson) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-roman-marble">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>
-      </div>
-    );
+    return <PageLoading label="Loading lesson" />;
   }
 
   return (

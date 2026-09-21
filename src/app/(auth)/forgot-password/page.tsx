@@ -10,6 +10,7 @@ import { Input } from '@/src/components/ui/input';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
+import { PageLoading } from '@/src/components/ui/page-loading';
 import { useAuth } from '@/src/hooks/useAuth';
 
 export default function ForgotPasswordPage() {
@@ -41,11 +42,7 @@ export default function ForgotPasswordPage() {
   };
 
   if (authLoading || user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-roman-marble">
-        <Loader2 className="h-8 w-8 animate-spin text-roman-red" />
-      </div>
-    );
+    return <PageLoading />;
   }
 
   return (

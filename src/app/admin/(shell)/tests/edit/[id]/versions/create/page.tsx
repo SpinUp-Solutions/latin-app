@@ -3,6 +3,7 @@
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
+import { PageLoading } from '@/src/components/ui/page-loading';
 import { TestVersionEditor } from '@/src/components/ui/admin';
 import type { TestVersionEditorValue } from '@/src/components/ui/admin/TestVersionEditor';
 import { useCreateTestVersionMutation, useGetTestByIdQuery } from '@/src/store/api/testApi';
@@ -14,7 +15,7 @@ function CreateVersionPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const { data: detail } = useGetTestByIdQuery(id);
   const [create, { isLoading }] = useCreateTestVersionMutation();
-  if (!detail) return <div className="p-8">Loading test…</div>;
+  if (!detail) return <PageLoading label="Loading test" />;
   const save = async (value: TestVersionEditorValue) => {
     try {
       await create({ testId: id, version: value.version }).unwrap();

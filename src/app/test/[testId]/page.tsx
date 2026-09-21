@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { AlertTriangle, ArrowLeft, CheckCircle2, FileCheck2, Loader2, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/src/components/ui/button';
+import { PageLoading } from '@/src/components/ui/page-loading';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
 import { TestTakingView } from '@/src/components/ui/test/test-taking-view';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
@@ -415,11 +416,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
   };
 
   if (authLoading || dashboardLoading || (isMockTest && mockDetailLoading) || (!user && !dashboardError)) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-roman-marble">
-        <div className="h-9 w-9 animate-spin rounded-full border-b-2 border-roman-red" />
-      </div>
-    );
+    return <PageLoading label="Loading test" />;
   }
 
   // A submit can legitimately make a hidden/archived/moved mock detail 404.

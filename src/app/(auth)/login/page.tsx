@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import Image from 'next/image';
 import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/ui/core/roman-card';
+import { PageLoading } from '@/src/components/ui/page-loading';
 import { useAuth } from '@/src/hooks/useAuth';
 import {
   isExpectedSignInError,
@@ -100,11 +101,7 @@ export default function LoginPage() {
   };
 
   if (authLoading || user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-roman-marble">
-        <Loader2 className="h-8 w-8 animate-spin text-roman-red" />
-      </div>
-    );
+    return <PageLoading />;
   }
 
   return (
