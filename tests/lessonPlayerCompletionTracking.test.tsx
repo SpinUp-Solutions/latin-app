@@ -575,6 +575,51 @@ describe('LessonPlayer mutation summaries and retries', () => {
       pageWrites[2].reject({ status: 500 });
     });
     expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(captureException).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        tags: { surface: 'page_progress', lessonId: 'lesson-1', pageId: 'page-1' },
+      })
+    );
+    expect(jest.mocked(captureException).mock.calls[0]?.[1]).not.toEqual(
+      expect.objectContaining({ level: 'warning' })
+    );
+    jest.useRealTimers();
+  });
+
+  it('reports exhausted page-progress network failures as Sentry warnings', async () => {
+    jest.useFakeTimers();
+    render(<LessonPlayer lesson={createLesson(2, { status: 'in-progress' })} />);
+
+    const networkError = { status: 'FETCH_ERROR', error: 'TypeError: Failed to fetch' };
+    await act(async () => {
+      pageWrites[0].reject(networkError);
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
+    await act(async () => {
+      pageWrites[1].reject(networkError);
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(3000);
+    });
+    await act(async () => {
+      pageWrites[2].reject(networkError);
+    });
+
+    expect(captureException).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        level: 'warning',
+        tags: { surface: 'page_progress', lessonId: 'lesson-1', pageId: 'page-1' },
+        extra: expect.objectContaining({
+          online: expect.any(Boolean),
+          visibilityState: expect.any(String),
+        }),
+      })
+    );
+    expect(toast.error).toHaveBeenCalledTimes(1);
     jest.useRealTimers();
   });
 

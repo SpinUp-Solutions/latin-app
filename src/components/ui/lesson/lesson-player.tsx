@@ -25,7 +25,11 @@ import { stripHtmlTags } from '@/src/utils/exercises';
 import type { ExerciseAnswerEvent, RuntimeMode } from '@/src/types/runtime-mode';
 import type { GeneratedExerciseRenderContext, ResolvedGeneratedExerciseState } from './content-renderer';
 import { getApiErrorMessage, isRetryableApiError } from '@/src/store/api/baseQuery';
-import { reportUnexpectedError, reportWatchedEvent } from '@/src/lib/report-unexpected-error';
+import {
+  isClientFetchOrParseFailure,
+  reportUnexpectedError,
+  reportWatchedEvent,
+} from '@/src/lib/report-unexpected-error';
 import ExerciseCompletionRing from './exercise-completion-ring';
 
 const RETRY_DELAYS_MS = [1000, 3000];
@@ -285,6 +289,8 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
         reportUnexpectedError(error, {
           tags: { surface: 'page_progress', lessonId: requestLessonId, pageId },
           includeExpected: true,
+          ...(isClientFetchOrParseFailure(error) ? { level: 'warning' as const } : {}),
+          extra: { online: navigator.onLine, visibilityState: document.visibilityState },
         });
         toast.error(getApiErrorMessage(error, 'Unable to save your page progress.'));
       }
