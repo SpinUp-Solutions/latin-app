@@ -12,6 +12,7 @@ import { FeedbackBanner } from '@/src/components/ui/core/feedback-banner';
 import { useAuth } from '@/src/hooks/useAuth';
 import { BookOpen, Pencil } from 'lucide-react';
 import { PageLoading } from '@/src/components/ui/page-loading';
+import { ConnectionRetryBanner } from '@/src/components/ui/core/connection-retry-banner';
 import { shouldReportClientHardFail, reportUnexpectedError } from '@/src/lib/report-unexpected-error';
 import { isRetryableApiError } from '@/src/store/api/baseQuery';
 
@@ -180,12 +181,8 @@ export default function DynamicLessonPage() {
         <main className="container mx-auto py-8 px-4">
           <div className="max-w-3xl mx-auto">
             <div className="p-8 bg-white rounded-lg border border-border text-center">
-              <h2 className="text-2xl font-serif text-gray-800 mb-4">
-                Lesson Not Found
-              </h2>
-              <p className="text-roman-stone">
-                We couldn’t find this lesson.
-              </p>
+              <h2 className="text-2xl font-serif text-gray-800 mb-4">Lesson Not Found</h2>
+              <p className="text-roman-stone">We couldn’t find this lesson.</p>
               <button
                 onClick={() => router.push('/dashboard')}
                 className="mt-4 px-4 py-2 bg-roman-red text-white rounded hover:bg-roman-red/90">
@@ -236,28 +233,16 @@ export default function DynamicLessonPage() {
       <FeedbackBanner />
 
       {isRefreshFailure && (
-        <div
-          role="status"
-          className="flex shrink-0 flex-wrap items-center justify-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-950">
-          <span>
-            We’re having trouble connecting. Your place and answers are still here, but your progress may not be saved. Please try again.
-          </span>
-          <button
-            type="button"
-            onClick={() => void refetch()}
-            disabled={isFetching}
-            className="rounded border border-amber-800 px-3 py-1 font-medium hover:bg-amber-100 disabled:opacity-50">
-            {isFetching ? 'Trying again…' : 'Try again'}
-          </button>
-        </div>
+        <ConnectionRetryBanner
+          className="shrink-0"
+          retrying={isFetching}
+          onRetry={() => void refetch()}
+          message="We’re having trouble connecting. Your place and answers are still here, but your progress may not be saved. Please try again."
+        />
       )}
 
       <div className="flex flex-1 overflow-hidden">
-        <LessonSidebar
-          currentLessonId={lessonId}
-          isCollapsed={collapsed.left}
-          onToggleCollapse={toggleLeft}
-        />
+        <LessonSidebar currentLessonId={lessonId} isCollapsed={collapsed.left} onToggleCollapse={toggleLeft} />
         <main className="min-w-0 flex-1 overflow-y-auto px-3 pb-6 pt-4 sm:px-6 sm:pt-6">
           <div className="max-w-3xl mx-auto">
             <LessonPlayer key={currentLesson.id} lesson={currentLesson} />

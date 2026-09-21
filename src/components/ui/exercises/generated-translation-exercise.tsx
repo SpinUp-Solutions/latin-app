@@ -13,6 +13,7 @@ import {
   type GeneratedExerciseQuerySource,
 } from '@/src/store/api/advancedVocabularyApi';
 import { Card, CardContent } from '../card';
+import { ExerciseLoadingCard, ExerciseMessageCard } from './exercise-status-card';
 import {
   validateGeneratedTranslationExercise,
   type GeneratedTranslationItem,
@@ -208,42 +209,24 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
     nextItem();
   };
 
-  if (!resolvedItems && isLoading) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center justify-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red mr-3"></div>
-            <div className="text-gray-600">Loading exercise...</div>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+  if (!resolvedItems && isLoading) return <ExerciseLoadingCard />;
 
   if (!resolvedItems && isError) {
     return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="text-center text-red-600">
-            <div className="font-medium">Error loading exercise</div>
-            <div className="text-sm mt-2">Unable to fetch vocabulary words. Please try again later.</div>
-          </div>
-        </CardContent>
-      </Card>
+      <ExerciseMessageCard
+        title="Error loading exercise"
+        message="Unable to fetch vocabulary words. Please try again later."
+      />
     );
   }
 
   if (items.length === 0) {
     return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="text-center text-amber-600">
-            <div className="font-medium">No vocabulary found</div>
-            <div className="text-sm mt-2">No words match the configured filters for this exercise.</div>
-          </div>
-        </CardContent>
-      </Card>
+      <ExerciseMessageCard
+        tone="warning"
+        title="No vocabulary found"
+        message="No words match the configured filters for this exercise."
+      />
     );
   }
 

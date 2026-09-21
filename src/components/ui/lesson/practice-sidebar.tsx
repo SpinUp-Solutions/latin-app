@@ -7,6 +7,7 @@ import { BookOpen, Pencil, Headphones, CheckCircle, Play, ChevronDown, ChevronRi
 import { useAuth } from '@/src/hooks/useAuth';
 import { cn } from '@/src/lib/utils';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
+import { RomanSpinner } from '@/src/components/ui/page-loading';
 import WordSearchPanel from './word-search-panel';
 
 type PracticeView = 'vocab' | 'sentence-diagramming' | 'listening';
@@ -177,7 +178,7 @@ export default function PracticeSidebar({
           <div className="flex-1 overflow-y-auto relative">
             {isLoading ? (
               <div className="flex items-center justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red" />
+                <RomanSpinner />
               </div>
             ) : (
               <div className="py-2">

@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/src/components/ui/card';
 import { Badge } from '@/src/components/ui/badge';
 import { Plus, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
+import { RomanSpinner } from '@/src/components/ui/page-loading';
 import { AdvancedFiltersPanel } from '@/src/components/ui/admin/vocabulary/AdvancedFiltersPanel';
 import { useWordSelection } from '@/src/hooks/useWordSelection';
 import { useInfiniteScroll } from '@/src/hooks/useInfiniteScroll';
@@ -124,7 +125,7 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
 
             {isLoading && !isFetching ? (
               <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-roman-red mx-auto mb-2" />
+                <RomanSpinner className="mx-auto mb-2 h-6 w-6" />
                 <p className="text-sm text-gray-600">Loading words...</p>
               </div>
             ) : availableWords.length === 0 ? (
@@ -167,7 +168,7 @@ export const WordSelector: React.FC<WordSelectorProps> = ({
                 {hasMore && <div ref={sentinelRef} className="h-4" />}
                 {isFetching && (
                   <div className="flex justify-center pt-4">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-roman-red" />
+                    <RomanSpinner className="h-6 w-6" />
                   </div>
                 )}
               </div>

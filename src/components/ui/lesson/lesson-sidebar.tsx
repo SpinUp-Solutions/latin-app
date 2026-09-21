@@ -8,6 +8,7 @@ import { BookOpen, CheckCircle, Lock, Play, ChevronLeft, FileCheck2 } from 'luci
 import { toast } from 'sonner';
 import { useAuth } from '@/src/hooks/useAuth';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
+import { RomanSpinner } from '@/src/components/ui/page-loading';
 import { cn } from '@/src/lib/utils';
 
 interface LessonSidebarProps {
@@ -140,7 +141,7 @@ export default function LessonSidebar({ currentLessonId, isCollapsed = false, on
           <div className="flex-1 overflow-y-auto relative">
             {isLoading ? (
               <div className="flex items-center justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red" />
+                <RomanSpinner />
               </div>
             ) : isError ? (
               <div className="space-y-3 px-6 py-12 text-center">

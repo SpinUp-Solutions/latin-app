@@ -12,6 +12,7 @@ import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { useAppDispatch } from '@/src/store/hooks';
 import { setLesson, resetLessonState } from '@/src/store/slices/lessonEditorSlice';
+import { ConnectionRetryBanner } from '@/src/components/ui/core/connection-retry-banner';
 import { hasApiErrorStatus, isRetryableApiError } from '@/src/store/api/baseQuery';
 
 function AdminLessonPreviewPage() {
@@ -105,21 +106,11 @@ function AdminLessonPreviewPage() {
       </header>
 
       {isRefreshFailure && (
-        <div
-          role="status"
-          className="flex flex-wrap items-center justify-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-950">
-          <span>
-            We’re having trouble connecting. Your place and answers are still here. Please try again.
-          </span>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => void refetch()}
-            disabled={isFetching}>
-            {isFetching ? 'Trying again…' : 'Try again'}
-          </Button>
-        </div>
+        <ConnectionRetryBanner
+          retrying={isFetching}
+          onRetry={() => void refetch()}
+          message="We’re having trouble connecting. Your place and answers are still here. Please try again."
+        />
       )}
 
       <main className="container mx-auto px-6 py-8">

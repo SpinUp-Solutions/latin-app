@@ -5,6 +5,7 @@ import * as Sentry from '@sentry/nextjs';
 import { LessonWithProgress } from '@/src/types/lesson';
 import { BookOpen, Headphones, CheckCircle } from 'lucide-react';
 import { RomanPlayerShell } from '@/src/components/ui/core/roman-player-shell';
+import { RomanSpinner } from '@/src/components/ui/page-loading';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { Button } from '@/src/components/ui/button';
 import PageTemplate from './page-template';
@@ -537,7 +538,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   if (!lesson || !currentPage) {
     return (
       <div className="min-h-[300px] flex items-center justify-center bg-roman-marble">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>
+        <RomanSpinner />
       </div>
     );
   }
