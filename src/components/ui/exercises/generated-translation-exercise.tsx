@@ -25,6 +25,7 @@ import type {
 } from '@/src/types/runtime-mode';
 import { getContentTypeLabel } from '@/src/lib/content/registry';
 import { createGeneratedTranslationItems } from '@/src/lib/tests/generated-exercises';
+import { useSectionedTest } from '../test/sectioned-test-context';
 import { RecordedAnswerControls } from './recorded-answer-controls';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
@@ -54,6 +55,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
   const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
+  const sectioned = useSectionedTest();
 
   const translationDirection = exercise.translationDirection || 'latin-to-english';
 
@@ -139,6 +141,10 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
     if (testAnswerMode) {
       onAnswer?.({ type: 'generated-translation', answers: nextAnswers });
       setTestSubmitted(true);
+      if (sectioned) {
+        if (isLastItem) onComplete?.(0);
+        else continueTest();
+      }
       return;
     }
 
@@ -262,7 +268,11 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
 
       <ExerciseProgress
         currentIndex={currentIndex}
-        completed={mode === 'practice' ? currentIndex + (isCorrect === true ? 1 : 0) : submittedAnswers.filter(answer => Boolean(answer?.trim())).length}
+        completed={
+          mode === 'practice'
+            ? currentIndex + (isCorrect === true ? 1 : 0)
+            : submittedAnswers.filter(answer => Boolean(answer?.trim())).length
+        }
         total={items.length}
         showProgress={exercise.feedbackConfig.progressionRules?.showProgress !== false}
       />
@@ -282,7 +292,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
           />
 
           {testAnswerMode ? (
-            testSubmitted && <RecordedAnswerControls isLastItem={isLastItem} onContinue={continueTest} />
+            !sectioned && testSubmitted && <RecordedAnswerControls isLastItem={isLastItem} onContinue={continueTest} />
           ) : (
             <FeedbackDisplay
               isCorrect={isCorrect}

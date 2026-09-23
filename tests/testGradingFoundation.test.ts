@@ -350,6 +350,32 @@ describe('test grading foundation', () => {
     ).toEqual({ awardedPoints: 0, maxPoints: 2 });
   });
 
+  it('ignores orphaned matching answer keys in the score denominator', () => {
+    const exercise: MatchingExercise = {
+      id: 'matching-orphaned-answer',
+      type: 'matching',
+      title: 'Matching',
+      instructions: '',
+      maxPoints: 2,
+      feedbackConfig,
+      data: {
+        leftColumn: [{ id: 'left-a', value: 'A' }],
+        rightColumn: [{ id: 'right-a', value: 'One' }],
+        answers: {
+          'left-orphaned': 'right-a',
+          'left-a': 'right-a',
+        },
+      },
+    };
+
+    expect(
+      gradeMatching(exercise, {
+        type: 'matching',
+        rounds: [{ 'left-a': 'right-a' }],
+      })
+    ).toEqual({ awardedPoints: 2, maxPoints: 2 });
+  });
+
   it('rejects fractional matching repetitions before they can award more than maxPoints', () => {
     const exercise: MatchingExercise = {
       id: 'matching-fractional-rounds',

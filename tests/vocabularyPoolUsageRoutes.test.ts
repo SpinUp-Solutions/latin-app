@@ -56,7 +56,20 @@ jest.mock('@/src/lib/vocabulary-pools/archive.server', () => ({
 }));
 jest.mock('@/src/services/firebase-admin', () => ({
   adminDb: {
-    collection: (collection: string) => ({ doc: (id: string) => ref(collection, id) }),
+    collection: (collection: string) => ({
+      doc: (id: string) => ref(collection, id),
+      where: (_field: string, _operator: string, poolId: string) => ({
+        limit: () => ({
+          get: async () => ({
+            empty: ![...snapshots.entries()].some(
+              ([path, snapshot]) =>
+                path.startsWith(`${collection}/`) &&
+                (snapshot.data()?.sourcePoolIds as string[] | undefined)?.includes(poolId)
+            ),
+          }),
+        }),
+      }),
+    }),
     runTransaction: async (callback: (transaction: unknown) => unknown) =>
       callback({
         get: async (candidate: FakeRef) => candidate.get(),

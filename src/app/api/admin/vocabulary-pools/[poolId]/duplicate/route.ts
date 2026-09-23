@@ -1,3 +1,4 @@
+import { resolveVocabularyPool } from '@/src/lib/vocabulary-pools/linked-pools.server';
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { VOCABULARY_POOL_COLLECTION } from '@/src/lib/vocabulary-pools/archive.server';
@@ -9,6 +10,10 @@ import {
   runVocabularyContentMutation,
   VocabularyContentSyncLockError,
 } from '@/src/lib/vocabulary-pools/sync-lock.server';
+import {
+  isVocabularyPoolCreationPending,
+  VocabularyPoolStateError,
+} from '@/src/lib/vocabulary-pools/pool-state.server';
 import type { VocabularyPool } from '@/src/types/vocabulary-pool';
 
 export const dynamic = 'force-dynamic';
@@ -33,7 +38,23 @@ export async function POST(
         throw new Error('Pool not found');
       }
 
-      const sourceData = sourceSnapshot.data() as Partial<VocabularyPool>;
+      const sourceData = (await resolveVocabularyPool(
+        adminDb,
+        poolId,
+        sourceSnapshot.data() ?? {}
+      )) as Partial<VocabularyPool>;
+      if (isVocabularyPoolCreationPending(sourceData)) {
+        throw new VocabularyPoolStateError(
+          'Vocabulary pool creation is still in progress. Try again when it finishes.',
+          'VOCABULARY_POOL_PENDING'
+        );
+      }
+      if ((sourceData as Record<string, unknown>)._deletionPending) {
+        throw new VocabularyPoolStateError(
+          'Vocabulary pool is pending deletion and cannot be duplicated.',
+          'VOCABULARY_POOL_PENDING_DELETION'
+        );
+      }
       const rawWordIds = Array.isArray(sourceData.wordDocIds) ? sourceData.wordDocIds : [];
       const uniqueWordIds = [...new Set(rawWordIds)].filter(
         (id): id is string => typeof id === 'string' && id.trim().length > 0
@@ -134,6 +155,9 @@ export async function POST(
     }
     if (error instanceof AdminAccessError) {
       return NextResponse.json({ success: false, error: error.message }, { status: error.status });
+    }
+    if (error instanceof VocabularyPoolStateError) {
+      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
     }
 
     console.error('Error duplicating vocabulary pool:', error);

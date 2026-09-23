@@ -1,4 +1,10 @@
-import { fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import {
+  fetchBaseQuery,
+  type BaseQueryFn,
+  type FetchArgs,
+  type FetchBaseQueryError,
+  type FetchBaseQueryMeta,
+} from '@reduxjs/toolkit/query/react';
 import { appCheck, auth } from '@/src/services/firebase';
 import { apiEndpointRequiresAppCheck } from '@/shared/openai/app-check';
 
@@ -89,8 +95,30 @@ export const getApiErrorCode = (error: unknown): string | undefined => {
   return typeof error.data.code === 'string' ? error.data.code : undefined;
 };
 
-export const createAuthenticatedBaseQuery = () =>
-  fetchBaseQuery({
+type AuthenticatedQueryOptions = { retryNetworkErrors?: boolean };
+
+const NETWORK_RETRY_DELAYS_MS = [500, 1500];
+
+const waitForNetworkRetry = (delayMs: number, signal: AbortSignal): Promise<void> =>
+  new Promise(resolve => {
+    const finish = () => {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', finish);
+      resolve();
+    };
+    const timer = setTimeout(finish, delayMs);
+    signal.addEventListener('abort', finish, { once: true });
+    if (signal.aborted) finish();
+  });
+
+export const createAuthenticatedBaseQuery = (): BaseQueryFn<
+  string | FetchArgs,
+  unknown,
+  FetchBaseQueryError,
+  AuthenticatedQueryOptions,
+  FetchBaseQueryMeta
+> => {
+  const authenticatedFetch = fetchBaseQuery({
     baseUrl: '/api',
     prepareHeaders: async (headers, { endpoint }) => {
       const user = auth.currentUser;
@@ -106,3 +134,33 @@ export const createAuthenticatedBaseQuery = () =>
       return headers;
     },
   });
+
+  return async (args, api, extraOptions) => {
+    const initialUserId = auth.currentUser?.uid;
+    const method = typeof args === 'string' ? 'GET' : (args.method ?? 'GET').toUpperCase();
+    // Retry only explicitly opted-in reads. Mutations have their own domain
+    // retry rules and must never be replayed by this transport wrapper.
+    const canRetry = extraOptions?.retryNetworkErrors && api.type === 'query' && method === 'GET';
+    for (let attempt = 0; ; attempt += 1) {
+      let result: Awaited<ReturnType<typeof authenticatedFetch>>;
+      try {
+        result = await authenticatedFetch(args, api, extraOptions);
+      } catch (error) {
+        // prepareHeaders runs outside fetchBaseQuery's fetch try/catch. Token
+        // refresh failures must use the same recoverable state as failed GETs.
+        if (!isObject(error) || error.code !== 'auth/network-request-failed') throw error;
+        result = {
+          error: { status: 'FETCH_ERROR', error: 'We’re having trouble connecting. Please try again.' },
+        };
+      }
+
+      const networkFailure = result.error?.status === 'FETCH_ERROR' || result.error?.status === 'TIMEOUT_ERROR';
+      if (!canRetry || !networkFailure || attempt >= NETWORK_RETRY_DELAYS_MS.length || api.signal.aborted) {
+        return result;
+      }
+      await waitForNetworkRetry(NETWORK_RETRY_DELAYS_MS[attempt], api.signal);
+      // An aborted request or an account switch must not start another fetch.
+      if (api.signal.aborted || auth.currentUser?.uid !== initialUserId) return result;
+    }
+  };
+};

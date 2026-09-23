@@ -47,6 +47,8 @@ export interface AnnotationSpec {
   exclusivityGroup?: AnnotationExclusivityGroup;
   tone: AnnotationTone;
   isWrapper: boolean;
+  /** A visual wrapper whose covered tokens are independent grading units. */
+  gradeTokensIndividually?: boolean;
   wrapperVisual?: WrapperVisual;
   wrapperPriority?: number;
   resettableColor: boolean;
@@ -132,6 +134,7 @@ const SPEC_LIST: AnnotationSpec[] = [
     exclusivityGroup: 'shape',
     tone: 'gold',
     isWrapper: true,
+    gradeTokensIndividually: true,
     wrapperVisual: 'circle',
     wrapperPriority: 60,
     resettableColor: false,

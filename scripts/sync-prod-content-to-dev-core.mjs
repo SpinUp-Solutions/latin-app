@@ -435,7 +435,7 @@ function validateLessonRecord(data, label, fallbackId) {
 export function collectPoolIds(value) {
   const result = new Set();
   const visit = (current, key = '', parentKey = '') => {
-    if (typeof current === 'string' && POOL_REFERENCE_KEYS.has(key)) {
+    if (typeof current === 'string' && (POOL_REFERENCE_KEYS.has(key) || key === 'sourcePoolIds')) {
       if (parentKey === 'generatorConfig' && ['poolId', 'pool_id'].includes(key)) return;
       result.add(current);
       return;
@@ -499,7 +499,8 @@ function isOpaqueFirestoreValue(value) {
 
 function rewriteFixtureReferences(value, poolRemaps, wordRemaps, key = '') {
   if (typeof value === 'string') {
-    if (POOL_REFERENCE_KEYS.has(key) && poolRemaps.has(value)) return poolRemaps.get(value);
+    if ((POOL_REFERENCE_KEYS.has(key) || key === 'sourcePoolIds') && poolRemaps.has(value))
+      return poolRemaps.get(value);
     if (key === 'wordId' && wordRemaps.has(value)) return wordRemaps.get(value);
     return value;
   }
@@ -627,6 +628,40 @@ function assertCloneDestination(collection, clone, sourceRecords, targetRecords)
  * with different production content. Clones stay inside mirrored collections;
  * protected version/draft records are never rewritten.
  */
+function linkedPoolIds(record) {
+  const ids = record.data.sourcePoolIds;
+  if (ids === undefined) return [];
+  if (
+    !Array.isArray(ids) ||
+    ids.length > 100 ||
+    ids.some(id => typeof id !== 'string' || !id.trim() || id.includes('/') || id === '.' || id === '..')
+  )
+    throw new SyncError('INVALID_SCHEMA', `Pool ${record.id} has invalid sourcePoolIds`);
+  return ids;
+}
+
+function validatePoolLinks(pools) {
+  const done = new Set();
+  const visit = (id, ancestors = new Set()) => {
+    if (ancestors.has(id)) throw new SyncError('INVALID_SCHEMA', `Pool link cycle at ${id}`);
+    if (done.has(id)) return;
+    const record = pools.get(id);
+    if (!record) throw new SyncError('MISSING_PROJECTED_REFERENCE', `Missing source pool ${id}`);
+    const path = new Set(ancestors).add(id);
+    for (const sourceId of linkedPoolIds(record)) visit(sourceId, path);
+    done.add(id);
+  };
+  for (const id of pools.keys()) visit(id);
+}
+
+function expandLinkedPoolIds(ids, targetPools, sourcePools) {
+  for (const id of ids) {
+    const record = targetPools.get(id) ?? sourcePools.get(id);
+    if (!record) throw new SyncError('MISSING_FIXTURE_DEPENDENCY', `Missing source pool ${id}`);
+    for (const sourceId of linkedPoolIds(record)) ids.add(sourceId);
+  }
+}
+
 export function resolveFixtureDependencyCollisions(sourceState, targetState) {
   const source = normalizedCollections(sourceState.collections);
   const target = normalizedTargetCollections(targetState);
@@ -649,6 +684,8 @@ export function resolveFixtureDependencyCollisions(sourceState, targetState) {
   ];
   const mutablePoolIds = new Set(mutableLessons.flatMap(record => [...collectPoolIds(record.data)]));
   const protectedPoolIds = new Set(protectedRecords.flatMap(({ record }) => [...collectPoolIds(record.data)]));
+  expandLinkedPoolIds(mutablePoolIds, targetPools, sourcePools);
+  expandLinkedPoolIds(protectedPoolIds, targetPools, sourcePools);
   const mutableDirectWordIds = new Set(mutableLessons.flatMap(record => [...collectWordIds(record.data)]));
   const protectedDirectWordIds = new Set(protectedRecords.flatMap(({ record }) => [...collectWordIds(record.data)]));
 
@@ -704,6 +741,18 @@ export function resolveFixtureDependencyCollisions(sourceState, targetState) {
     if (!targetPool || !Array.isArray(targetPool.data.wordDocIds)) continue;
     if (targetPool.data.wordDocIds.some(wordId => wordRemaps.has(wordId))) poolsNeedingClone.add(poolId);
   }
+  // A cloned source requires every dependent fixture pool to point at its clone.
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const poolId of mutablePoolIds) {
+      const pool = targetPools.get(poolId);
+      if (pool && !poolsNeedingClone.has(poolId) && linkedPoolIds(pool).some(id => poolsNeedingClone.has(id))) {
+        poolsNeedingClone.add(poolId);
+        changed = true;
+      }
+    }
+  }
   for (const poolId of poolsNeedingClone) {
     if (protectedPoolIds.has(poolId)) {
       throw new SyncError('AMBIGUOUS_FIXTURE_DEPENDENCY', `Protected fixture pool ${poolId} requires a remap`);
@@ -730,7 +779,7 @@ export function resolveFixtureDependencyCollisions(sourceState, targetState) {
     left.localeCompare(right)
   )) {
     const targetPool = targetPools.get(originalId);
-    const data = rewriteFixtureReferences(targetPool.data, new Map(), wordRemaps);
+    const data = rewriteFixtureReferences(targetPool.data, poolRemaps, wordRemaps);
     const clone = normalizeDocumentRecord('vocabulary_pools', { id: remappedId, data });
     clonedPools.push(assertCloneDestination('vocabulary_pools', clone, sourcePools, targetPools));
   }
@@ -827,6 +876,12 @@ export function collectFixtureClosure(sourceState, targetState) {
     ) {
       throw new SyncError('INVALID_FIXTURE_DEPENDENCY', `Vocabulary pool ${poolId} has an invalid wordDocIds list`);
     }
+    for (const sourceId of linkedPoolIds(selectedPool)) {
+      if (!poolIds.has(sourceId)) {
+        poolIds.add(sourceId);
+        pendingPools.push(sourceId);
+      }
+    }
     for (const wordId of selectedPool.data.wordDocIds) wordIds.add(wordId);
   }
   for (const wordId of wordIds) {
@@ -860,6 +915,7 @@ function validateSourceState(sourceState) {
     );
   const wordIds = new Set(words.map(record => record.id));
   const poolIds = new Set(pools.map(record => record.id));
+  validatePoolLinks(recordsById(pools));
   for (const pool of pools) {
     if (!Array.isArray(pool.data.wordDocIds))
       throw new SyncError('INVALID_SCHEMA', `source vocabulary_pools/${pool.id}.wordDocIds must be an array`);
@@ -919,6 +975,7 @@ export function validateProjectedState(sourceState, targetState, closure) {
       if (!lessons.has(unitId))
         throw new SyncError('MISSING_PROJECTED_REFERENCE', `Learning path references missing lesson ${unitId}`);
   }
+  validatePoolLinks(pools);
   for (const [id, pool] of pools) {
     if (!Array.isArray(pool.data.wordDocIds))
       throw new SyncError('INVALID_SCHEMA', `Projected pool ${id} has no wordDocIds array`);
@@ -995,6 +1052,7 @@ export function validateCurrentTargetState(targetState, closure) {
       if (!lessonIds.has(unitId))
         throw new SyncError('MISSING_PROJECTED_REFERENCE', `Current dev path references missing lesson ${unitId}`);
   }
+  validatePoolLinks(pools);
   for (const [id, pool] of pools) {
     if (!Array.isArray(pool.data.wordDocIds))
       throw new SyncError('INVALID_SCHEMA', `Current dev pool ${id} has no wordDocIds array`);

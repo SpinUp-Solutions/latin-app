@@ -1,6 +1,7 @@
 import { FieldPath, type Firestore } from 'firebase-admin/firestore';
 import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
+import { isVocabularyPoolCreationPending } from '@/src/lib/vocabulary-pools/pool-state.server';
 
 export const WORD_DELETION_POOL_CLEANUP_BATCH_SIZE = 150;
 const CLEANED_POOL_NAME_SAMPLE_SIZE = 20;
@@ -68,11 +69,15 @@ export async function cleanupVocabularyWordPoolReferences(
         const updatedWordIds = Array.isArray(poolData.wordDocIds)
           ? poolData.wordDocIds.filter((id: unknown) => id !== input.wordId)
           : [];
-        transaction.update(poolDoc.ref, {
-          wordDocIds: updatedWordIds,
-          'metadata.wordCount': updatedWordIds.length,
-          'metadata.updatedAt': new Date(),
-        });
+        const updateData: Record<string, unknown> = { wordDocIds: updatedWordIds };
+        // A creation stage deliberately omits ordering fields. Cleanup still
+        // removes the dangling membership for integrity scans, but must not
+        // make that hidden stage queryable by filling in metadata.
+        if (!isVocabularyPoolCreationPending(poolData)) {
+          updateData['metadata.wordCount'] = updatedWordIds.length;
+          updateData['metadata.updatedAt'] = new Date();
+        }
+        transaction.update(poolDoc.ref, updateData as FirebaseFirestore.UpdateData<FirebaseFirestore.DocumentData>);
       }
       return currentPools.docs.map(poolDoc =>
         typeof poolDoc.data().name === 'string' ? poolDoc.data().name : poolDoc.id

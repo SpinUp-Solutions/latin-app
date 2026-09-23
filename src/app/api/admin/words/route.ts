@@ -1,3 +1,5 @@
+import { VocabularyPoolStateError } from '@/src/lib/vocabulary-pools/pool-state.server';
+import { resolveVocabularyPool } from '@/src/lib/vocabulary-pools/linked-pools.server';
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { Query, FieldPath } from 'firebase-admin/firestore';
@@ -7,12 +9,14 @@ import { TABLE_TYPE_CONFIG, type TableType } from '@/src/utils/schema-helpers';
 import type { FormIdentificationStep } from '@/src/types/exercises/schemas/form-identification';
 import { scanTableForMatchingForms, categorizeMatchingPaths } from '@/src/utils/tableScanner';
 import { getApplicableStepsForFormPath } from '@/src/utils/exercises/formIdentificationCompatibility';
+import { isSelectableMorphologyForm } from '@/src/utils/morphologyForms';
 import { AdminAccessError, verifyAdminAccess, verifyAuthenticatedAccess } from '@/src/lib/verifyAdminAccess';
 import {
   requireVocabularyWordsCollection,
   VocabularyWordCollectionError,
 } from '@/src/lib/vocabulary/word-collection.server';
 import { getReadableVocabularyPool } from '@/src/lib/vocabulary-pools/archive.server';
+import { isVocabularyPoolCreationPending } from '@/src/lib/vocabulary-pools/pool-state.server';
 import { prepareVocabularyContentRevisionBump } from '@/src/lib/vocabulary-pools/content-revision.server';
 import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
 
@@ -80,7 +84,10 @@ const parseCellPaths = (cellPaths: string | null): string[] => {
 
 const parseSteps = (steps: string | null): FormIdentificationStep[] => {
   if (!steps) return [];
-  return steps.split(',').map(step => step.trim()).filter(Boolean) as FormIdentificationStep[];
+  return steps
+    .split(',')
+    .map(step => step.trim())
+    .filter(Boolean) as FormIdentificationStep[];
 };
 
 const parseSelectFields = (selectFields: string | null): string[] => {
@@ -256,9 +263,13 @@ export async function handleVocabularyWordsGET(
               .collection('vocabulary_pools')
               .doc(poolId)
               .get()
-              .then(poolDoc =>
-                poolDoc.exists
-                  ? { data: poolDoc.data() ?? {}, words: adminDb.collection(collection), source: 'active' as const }
+              .then(async poolDoc =>
+                poolDoc.exists && !isVocabularyPoolCreationPending(poolDoc.data())
+                  ? {
+                      data: await resolveVocabularyPool(adminDb, poolId, poolDoc.data() ?? {}),
+                      words: adminDb.collection(collection),
+                      source: 'active' as const,
+                    }
                   : null
               );
       if (!readablePool) {
@@ -538,6 +549,8 @@ export async function handleVocabularyWordsGET(
       },
     });
   } catch (error) {
+    if (error instanceof VocabularyPoolStateError)
+      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
     if (error instanceof AdminAccessError) {
       return NextResponse.json({ success: false, error: error.message }, { status: error.status });
     }
@@ -637,6 +650,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
     });
   } catch (error) {
+    if (error instanceof VocabularyPoolStateError)
+      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
     if (error instanceof AdminAccessError) {
       return NextResponse.json({ success: false, error: error.message }, { status: error.status });
     }
@@ -728,6 +743,8 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
       updatedData,
     });
   } catch (error) {
+    if (error instanceof VocabularyPoolStateError)
+      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
     if (error instanceof AdminAccessError) {
       return NextResponse.json({ success: false, error: error.message }, { status: error.status });
     }
@@ -762,12 +779,11 @@ function getCellValueAtPathServer(obj: Record<string, unknown>, path: string): s
   }
 
   if (typeof value === 'string') {
-    return [value];
+    return isSelectableMorphologyForm(value) ? [value] : [];
   }
 
   if (Array.isArray(value)) {
-    const filtered = value.filter((v): v is string => v !== null && v !== undefined && typeof v === 'string');
-    return filtered;
+    return value.filter(isSelectableMorphologyForm);
   }
   return [];
 }
@@ -871,6 +887,8 @@ async function getWordTypeCounts(collection: string) {
 
     return counts;
   } catch (error) {
+    if (error instanceof VocabularyPoolStateError)
+      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
     console.error('Error getting word type counts:', error);
     return counts;
   }

@@ -15,6 +15,42 @@ const createAnnotation = (kind: DiagramAnnotation['kind'], span: DiagramSpan): D
 });
 
 describe('compareDiagramAnnotationSets', () => {
+  it('credits a tagged verb when the adjacent verb is still missing the same label', () => {
+    const tokens = tokenizeDiagramSentence('perīrent, audiēt');
+    const firstVerb = {
+      startTokenIndex: 0,
+      endTokenIndex: 0,
+      startCharOffset: 0,
+      endCharOffset: tokens[0].text.length,
+    };
+    const secondVerb = {
+      startTokenIndex: 1,
+      endTokenIndex: 1,
+      startCharOffset: 0,
+      endCharOffset: tokens[1].text.length,
+    };
+    const solution = [createAnnotation('active', firstVerb), createAnnotation('active', secondVerb)];
+    const student = [createAnnotation('active', firstVerb)];
+
+    expect(compareDiagramAnnotationSets(student, solution, tokens)).toMatchObject({
+      matched: 1,
+      expected: 2,
+      extra: 0,
+      isComplete: false,
+      matchedIds: [createAnnotationId('active', firstVerb)],
+      missingIds: [createAnnotationId('active', secondVerb)],
+      extraIds: [],
+      differences: [
+        {
+          type: 'missing',
+          span: secondVerb,
+          text: 'audiēt',
+          expectedKind: 'active',
+        },
+      ],
+    });
+  });
+
   it('treats adjacent token annotations of the same kind as equivalent to one combined span', () => {
     const tokens = tokenizeDiagramSentence('puella bona currit celeriter');
     const solution = [
@@ -41,10 +77,56 @@ describe('compareDiagramAnnotationSets', () => {
     ];
 
     expect(compareDiagramAnnotationSets(student, solution, tokens)).toMatchObject({
-      matched: 1,
-      expected: 1,
+      matched: 2,
+      expected: 2,
       extra: 0,
       isComplete: true,
+      differences: [],
+    });
+  });
+
+  it('treats adjacent Finite Verb wrappers as per-word grading coverage', () => {
+    const tokens = tokenizeDiagramSentence('vīvit. Vīvit?');
+    const firstVerb = {
+      startTokenIndex: 0,
+      endTokenIndex: 0,
+      startCharOffset: 0,
+      endCharOffset: tokens[0].text.length,
+    };
+    const secondVerb = {
+      startTokenIndex: 1,
+      endTokenIndex: 1,
+      startCharOffset: 0,
+      endCharOffset: tokens[1].text.length,
+    };
+    const combinedVerbs = {
+      startTokenIndex: 0,
+      endTokenIndex: 1,
+      startCharOffset: 0,
+      endCharOffset: tokens[1].text.length,
+    };
+    const solution = [createAnnotation('verb', firstVerb), createAnnotation('verb', secondVerb)];
+
+    expect(compareDiagramAnnotationSets([createAnnotation('verb', combinedVerbs)], solution, tokens)).toMatchObject({
+      matched: 2,
+      expected: 2,
+      extra: 0,
+      isComplete: true,
+      differences: [],
+    });
+    expect(compareDiagramAnnotationSets([createAnnotation('verb', firstVerb)], solution, tokens)).toMatchObject({
+      matched: 1,
+      expected: 2,
+      extra: 0,
+      isComplete: false,
+      differences: [
+        {
+          type: 'missing',
+          span: secondVerb,
+          text: 'Vīvit?',
+          expectedKind: 'verb',
+        },
+      ],
     });
   });
 

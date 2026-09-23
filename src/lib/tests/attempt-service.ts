@@ -1,3 +1,16 @@
+import { confirmSectionInputSchema, sectionPhaseInputSchema } from '@/shared/tests/sections';
+import {
+  activeSection,
+  assertActiveSection,
+  fingerprint,
+  sectionFingerprint,
+  sectionIncomplete,
+  translationsToGrade,
+  validateSectionAnswer,
+} from './sections.server';
+import { isExerciseAnswerComplete } from './answer-completion';
+import type { Exercise } from '@/src/types/exercises';
+import type { ConfirmSectionResult } from '@/src/types/test';
 import { createHash, randomUUID } from 'node:crypto';
 import type { DocumentReference, DocumentSnapshot, Firestore, Transaction } from 'firebase-admin/firestore';
 import {
@@ -105,6 +118,7 @@ export const MAX_TRANSLATION_GRADING_REQUESTS_PER_WINDOW = 5;
 
 type TestTranslationGrader = (
   request: TranslationGradingRequest,
+  signal?: AbortSignal,
   safetyIdentifier?: string
 ) => Promise<TestTranslationGradingOutput>;
 
@@ -145,6 +159,18 @@ function parseAttemptSnapshot(snapshot: DocumentSnapshot): TestAttempt {
     const answers = Object.fromEntries(
       Object.entries(parsed.data.answers).map(([exerciseId, answer]) => [exerciseId, parseExerciseAnswer(answer)])
     );
+    if (parsed.data.flowVersion === 1) {
+      for (const [id, answer] of Object.entries(answers)) {
+        const exercise = parsed.data.deliveryState.pages.flatMap(page => page.items).find(item => item.id === id);
+        if (!exercise || !isExerciseType(exercise.type) || answer.type !== exercise.type)
+          throw new Error('Invalid persisted exercise reference');
+        validateSectionAnswer(
+          exercise as unknown as Exercise,
+          answer,
+          parsed.data.deliveryState.resolvedExercises[id]?.items
+        );
+      }
+    }
     return { ...parsed.data, answers } as InProgressTestAttempt;
   } catch {
     throw new TestServiceError(
@@ -174,12 +200,57 @@ function toStudentAttempt(attempt: TestAttempt): StudentTestAttempt {
       answers: _answers,
       translationGrades: _translationGrades,
       deliveryState: _deliveryState,
+      confirmedSections: _confirmedSections,
       ...studentAttempt
     } = attempt;
     return studentAttempt;
   }
 
+  if (attempt.flowVersion === 1) {
+    const { page, pageIndex, state } = activeSection(attempt);
+    const delivery = sanitizeTestDeliveryState(attempt.deliveryState as FrozenTestDeliveryState);
+    const exerciseIds = new Set(page.items.map(item => item.id));
+    const exercises = delivery.pages.flatMap(page => page.items).filter(item => isExerciseType(item.type));
+    return {
+      id: attempt.id,
+      versionId: attempt.versionId,
+      passingPercentage: attempt.passingPercentage,
+      origin: attempt.origin,
+      startedAt: attempt.startedAt,
+      updatedAt: attempt.updatedAt,
+      status: 'in-progress',
+      flowVersion: 1,
+      answers: Object.fromEntries(Object.entries(attempt.answers).filter(([id]) => exerciseIds.has(id))),
+      delivery: {
+        versionId: delivery.versionId,
+        pages: [delivery.pages[pageIndex]],
+        resolvedExercises: Object.fromEntries(
+          Object.entries(delivery.resolvedExercises).filter(([id]) => exerciseIds.has(id))
+        ),
+        ...(page.items.some(item => item.type === 'vocabulary-pool') && delivery.vocabularyPool
+          ? { vocabularyPool: delivery.vocabularyPool }
+          : {}),
+      },
+      section: {
+        pageId: page.id,
+        pageIndex,
+        totalPages: delivery.pages.length,
+        totalExercises: exercises.length,
+        answeredCount: exercises.filter(item =>
+          isExerciseAnswerComplete(
+            item as Exercise,
+            attempt.answers[item.id],
+            delivery.resolvedExercises[item.id]?.items.length ?? 0
+          )
+        ).length,
+        revision: state.revision,
+        phase: state.phase as 'answering' | 'review' | 'confirming',
+      },
+    };
+  }
   const {
+    flowVersion: _flowVersion,
+    sections: _sections,
     studentId: _studentId,
     deliveryState,
     translationGradeReservations: _translationGradeReservations,
@@ -263,8 +334,13 @@ export class TestAttemptService {
         : requestUnits => consumeAIGlobalRequestQuota('test-grading', requestUnits, this.db));
     this.gradeTestTranslation =
       options.gradeTestTranslation ??
-      (async (request, safetyIdentifier) => {
-        const result = await translationGrader.grade('test', request, undefined, { safetyIdentifier });
+      (async (request, signal, safetyIdentifier) => {
+        const result = await translationGrader.grade(
+          'test',
+          request,
+          undefined,
+          { signal, safetyIdentifier, timeout: 90_000, maxRetries: 0 }
+        );
         if (!result.success) throw new Error(result.error);
         return result.data;
       });
@@ -641,6 +717,8 @@ export class TestAttemptService {
           passingPercentage,
           origin,
           status: 'in-progress',
+          flowVersion: 1,
+          sections: Object.fromEntries(deliveryState.pages.map(page => [page.id, { revision: 0, phase: 'answering' }])),
           answers: {},
           translationGrades: {},
           translationGradeReservations: {},
@@ -681,6 +759,40 @@ export class TestAttemptService {
     return this.db.runTransaction(async transaction => {
       const attempt = await this.getOwnedInProgressAttempt(transaction, attemptRef, studentId);
 
+      if (attempt.flowVersion === 1) {
+        if (!changes.section)
+          throw new TestServiceError('ATTEMPT_SECTION_REQUIRED', 'Reload this attempt to save section answers', 409);
+        const { pageId, expectedRevision, mutationId } = changes.section;
+        const { page, state } = activeSection(attempt);
+        const payloadFingerprint = fingerprint(changes.answers);
+        const receipt = state.saveMutations?.[mutationId];
+        if (page.id === pageId && receipt) {
+          if (receipt.fingerprint !== payloadFingerprint || receipt.expectedRevision !== expectedRevision)
+            throw new TestServiceError(
+              'ATTEMPT_REVISION_CONFLICT',
+              'A save identifier was reused with different answers',
+              409
+            );
+          return toStudentAttempt(attempt) as StudentInProgressTestAttempt;
+        }
+        assertActiveSection(attempt, pageId, expectedRevision);
+        if (state.phase === 'confirming')
+          throw new TestServiceError('ATTEMPT_SECTION_LOCKED', 'Wait for section confirmation to finish', 409);
+        if (Object.keys(changes.answers).some(id => !page.items.some(item => item.id === id)))
+          throw new TestServiceError('ATTEMPT_SECTION_LOCKED', 'Only the current section can be edited', 409);
+        attempt.sections = {
+          ...attempt.sections,
+          [pageId]: {
+            ...state,
+            revision: state.revision + 1,
+            saveMutations: {
+              ...state.saveMutations,
+              [mutationId]: { fingerprint: payloadFingerprint, expectedRevision },
+            },
+          },
+        };
+      } else if (changes.section)
+        throw new TestServiceError('ATTEMPT_SECTION_REQUIRED', 'This is a legacy attempt', 409);
       const answers = { ...attempt.answers };
       const translationGrades = Object.fromEntries(
         Object.entries(attempt.translationGrades).map(([exerciseId, grades]) => [exerciseId, { ...grades }])
@@ -705,7 +817,7 @@ export class TestAttemptService {
             400
           );
         }
-        if (item.type === 'translation-grading') {
+        if (item.type === 'translation-grading' && attempt.flowVersion !== 1) {
           if (Object.keys(translationGrades[exerciseId] ?? {}).length > 0) {
             throw new TestServiceError(
               'ATTEMPT_TRANSLATION_ALREADY_GRADED',
@@ -741,8 +853,18 @@ export class TestAttemptService {
         if (!isAnswerForExercise(answer, item.type)) {
           throw new TestServiceError('ATTEMPT_ANSWER_INVALID', `The committed answer must have type ${item.type}`, 400);
         }
+        if (attempt.flowVersion === 1)
+          validateSectionAnswer(item as Exercise, answer, attempt.deliveryState.resolvedExercises[exerciseId]?.items);
         answers[exerciseId] = answer;
-        if (item.type === 'translation-grading') delete translationGrades[exerciseId];
+        if (item.type === 'translation-grading') {
+          translationGrades[exerciseId] = Object.fromEntries(
+            Object.entries(translationGrades[exerciseId] ?? {}).filter(
+              ([index, grade]) =>
+                answer.type === 'translation-grading' &&
+                answer.translations[Number(index)]?.trim() === grade.translation
+            )
+          );
+        }
       }
 
       const updated = testAttemptDocumentSchema.parse({
@@ -770,6 +892,12 @@ export class TestAttemptService {
 
     const preparation = await this.db.runTransaction(async transaction => {
       const attempt = await this.getOwnedInProgressAttempt(transaction, attemptRef, studentId);
+      if (attempt.flowVersion === 1)
+        throw new TestServiceError(
+          'ATTEMPT_SECTION_REQUIRED',
+          'Translations are graded only when confirming a section',
+          409
+        );
       const { exercise, item } = getTranslationExerciseItem(attempt, request);
       const existingGrade = attempt.translationGrades[request.exerciseId]?.[String(request.itemIndex)];
       if (existingGrade) {
@@ -866,7 +994,7 @@ export class TestAttemptService {
     let gradingOutput: TestTranslationGradingOutput;
     try {
       gradingOutput = testTranslationGradingOutputSchema.parse(
-        await this.gradeTestTranslation(preparation.gradingRequest, createOpenAISafetyIdentifier(studentId))
+        await this.gradeTestTranslation(preparation.gradingRequest, undefined, createOpenAISafetyIdentifier(studentId))
       );
     } catch (error) {
       console.error(`Could not grade translation item for attempt ${attemptId}`, error);
@@ -938,6 +1066,203 @@ export class TestAttemptService {
     }
   }
 
+  async getAttempt(attemptId: string, studentId: string): Promise<StudentTestAttempt> {
+    return this.db.runTransaction(async transaction => {
+      const attempt = parseAttemptSnapshot(await transaction.get(this.attempts.doc(attemptId)));
+      assertAttemptOwner(attempt, studentId);
+      if (attempt.status === 'in-progress' && attempt.origin.kind === 'normal-test')
+        await this.assertNormalTestUnlocked(transaction, studentId, attempt.origin.testId, true);
+      return toStudentAttempt(attempt);
+    });
+  }
+
+  async setSectionPhase(
+    attemptId: string,
+    pageId: string,
+    input: unknown,
+    studentId: string
+  ): Promise<StudentInProgressTestAttempt> {
+    const request = sectionPhaseInputSchema.parse(input);
+    return this.db.runTransaction(async transaction => {
+      const ref = this.attempts.doc(attemptId);
+      const attempt = await this.getOwnedInProgressAttempt(transaction, ref, studentId);
+      const { state } = assertActiveSection(attempt, pageId, request.expectedRevision);
+      if (state.confirmation && translationReservationIsActive(state.confirmation.expiresAt, this.now()))
+        throw new TestServiceError('ATTEMPT_SECTION_LOCKED', 'Section confirmation is still running', 409);
+      const { confirmation: _confirmation, ...rest } = state;
+      attempt.sections = { ...attempt.sections, [pageId]: { ...rest, phase: request.phase } };
+      attempt.updatedAt = this.now();
+      this.assertAttemptDocumentSize(attempt);
+      transaction.set(ref, attempt);
+      return toStudentAttempt(attempt) as StudentInProgressTestAttempt;
+    });
+  }
+
+  async confirmSection(
+    attemptId: string,
+    pageId: string,
+    input: unknown,
+    studentId: string
+  ): Promise<ConfirmSectionResult> {
+    const request = confirmSectionInputSchema.parse(input);
+    const ref = this.attempts.doc(attemptId);
+    const token = randomUUID();
+    const prepared = await this.db.runTransaction(async transaction => {
+      const stored = parseAttemptSnapshot(await transaction.get(ref));
+      assertAttemptOwner(stored, studentId);
+      if (stored.flowVersion !== 1)
+        throw new TestServiceError('ATTEMPT_SECTION_REQUIRED', 'This attempt does not use section confirmation', 409);
+      if (
+        stored.status === 'submitted'
+          ? !stored.confirmedSections?.[pageId]
+          : !stored.deliveryState.pages.some(page => page.id === pageId)
+      )
+        throw new TestServiceError('ATTEMPT_SECTION_LOCKED', 'This section is not part of this attempt', 409);
+      if (stored.status === 'submitted')
+        return { result: { attempt: toStudentAttempt(stored), pending: false, completionGranted: false } };
+      const attempt = stored;
+      if (attempt.origin.kind === 'normal-test')
+        await this.assertNormalTestUnlocked(transaction, studentId, attempt.origin.testId, true);
+      if (
+        attempt.sections?.[pageId]?.phase === 'confirmed' &&
+        attempt.sections[pageId].revision === request.expectedRevision
+      )
+        return { result: { attempt: toStudentAttempt(attempt), pending: false } };
+      const { page, pageIndex, state } = assertActiveSection(attempt, pageId, request.expectedRevision);
+      const timestamp = this.now();
+      if (state.confirmation && translationReservationIsActive(state.confirmation.expiresAt, timestamp))
+        return { result: { attempt: toStudentAttempt(attempt), pending: true, retryAfterMs: 2000 } };
+      if (!request.acknowledgeIncomplete && sectionIncomplete(attempt, pageId))
+        throw new TestServiceError(
+          'ATTEMPT_INCOMPLETE_ACK_REQUIRED',
+          'Acknowledge the unanswered parts before confirming this section',
+          409
+        );
+      const hash = sectionFingerprint(attempt, pageId);
+      if (state.confirmation && state.confirmation.fingerprint !== hash)
+        throw new TestServiceError('ATTEMPT_REVISION_CONFLICT', 'The section changed during confirmation', 409);
+      const work = translationsToGrade(attempt, pageId)[0];
+      if (!work) {
+        // Locked sections reject all writes, so their retry receipts are no
+        // longer needed. Bound their lifetime to the editable section.
+        const { confirmation: _confirmation, saveMutations: _saveMutations, ...rest } = state;
+        attempt.sections = { ...attempt.sections, [pageId]: { ...rest, phase: 'confirmed', confirmedAt: timestamp } };
+        attempt.updatedAt = timestamp;
+        if (pageIndex === attempt.deliveryState.pages.length - 1)
+          return { result: { ...(await this.submitInTransaction(transaction, attempt, studentId)), pending: false } };
+        this.assertAttemptDocumentSize(attempt);
+        transaction.set(ref, attempt);
+        return { result: { attempt: toStudentAttempt(attempt), pending: false } };
+      }
+      const window = attempt.translationGradeRequestWindows[work.exerciseId]?.[String(work.itemIndex)];
+      const windowActive = window && translationRequestWindowIsActive(window.windowStartedAt, timestamp);
+      if (windowActive && window.count >= MAX_TRANSLATION_GRADING_REQUESTS_PER_WINDOW)
+        throw new TestServiceError(
+          'ATTEMPT_TRANSLATION_GRADING_RATE_LIMITED',
+          'Translation grading is temporarily unavailable. Please retry after the grading window resets.',
+          429
+        );
+      attempt.translationGradeRequestWindows = {
+        ...attempt.translationGradeRequestWindows,
+        [work.exerciseId]: {
+          ...attempt.translationGradeRequestWindows[work.exerciseId],
+          [String(work.itemIndex)]: windowActive
+            ? { ...window, count: window.count + 1 }
+            : { windowStartedAt: timestamp, count: 1 },
+        },
+      };
+      attempt.sections = {
+        ...attempt.sections,
+        [page.id]: {
+          ...state,
+          phase: 'confirming',
+          confirmation: {
+            requestId: state.confirmation?.requestId ?? request.requestId,
+            token,
+            fingerprint: hash,
+            expiresAt: new Date(Date.parse(timestamp) + TRANSLATION_GRADING_RESERVATION_MS).toISOString(),
+          },
+        },
+      };
+      this.assertAttemptDocumentSize(attempt);
+      transaction.set(ref, attempt);
+      return { work, hash };
+    });
+    if ('result' in prepared && prepared.result) return prepared.result;
+    const { work, hash } = prepared;
+    if (!work) throw new TestServiceError('ATTEMPT_GRADING_UNAVAILABLE', 'Section confirmation could not start', 503);
+    let deadline: ReturnType<typeof setTimeout> | undefined;
+    const controller = new AbortController();
+    try {
+      const output = testTranslationGradingOutputSchema.parse(
+        await Promise.race([
+          this.gradeTestTranslation(work.request, controller.signal, createOpenAISafetyIdentifier(studentId)),
+          new Promise<never>((_, reject) => {
+            deadline = setTimeout(() => {
+              controller.abort();
+              reject(new Error('Translation deadline exceeded'));
+            }, 90_000);
+          }),
+        ])
+      );
+      return await this.db.runTransaction(async transaction => {
+        const attempt = await this.getOwnedInProgressAttempt(transaction, ref, studentId);
+        const { state } = assertActiveSection(attempt, pageId, request.expectedRevision);
+        if (
+          state.confirmation?.token !== token ||
+          state.confirmation.fingerprint !== hash ||
+          sectionFingerprint(attempt, pageId) !== hash
+        )
+          throw new TestServiceError(
+            'ATTEMPT_REVISION_CONFLICT',
+            'Section confirmation changed. Reload your attempt.',
+            409
+          );
+        attempt.translationGrades = {
+          ...attempt.translationGrades,
+          [work.exerciseId]: {
+            ...attempt.translationGrades[work.exerciseId],
+            [String(work.itemIndex)]: { ...output, translation: work.translation },
+          },
+        };
+        // Checkpoint each grade. The next bounded request resumes or finalizes.
+        attempt.sections = {
+          ...attempt.sections,
+          [pageId]: { ...state, confirmation: { ...state.confirmation, expiresAt: this.now() } },
+        };
+        this.assertAttemptDocumentSize(attempt);
+        this.assertAttemptCanBeSubmitted(attempt);
+        transaction.set(ref, attempt);
+        return { attempt: toStudentAttempt(attempt), pending: true, retryAfterMs: 0 };
+      });
+    } catch (error) {
+      await this.db
+        .runTransaction(async transaction => {
+          const snapshot = await transaction.get(ref);
+          if (!snapshot.exists) return;
+          const attempt = parseAttemptSnapshot(snapshot);
+          if (
+            attempt.status !== 'in-progress' ||
+            attempt.studentId !== studentId ||
+            attempt.sections?.[pageId]?.confirmation?.token !== token
+          )
+            return;
+          const { confirmation: _confirmation, ...state } = attempt.sections[pageId];
+          attempt.sections = { ...attempt.sections, [pageId]: { ...state, phase: 'review' } };
+          transaction.set(ref, attempt);
+        })
+        .catch(() => undefined); // An interrupted cleanup is recovered by lease expiry.
+      if (error instanceof TestServiceError) throw error;
+      throw new TestServiceError(
+        'ATTEMPT_GRADING_UNAVAILABLE',
+        'We could not confirm this section. Your answers are saved. Please retry.',
+        503
+      );
+    } finally {
+      if (deadline) clearTimeout(deadline);
+    }
+  }
+
   async submitAttempt(attemptId: string, studentId: string): Promise<SubmitTestAttemptResult> {
     const attemptRef = this.attempts.doc(attemptId);
 
@@ -947,149 +1272,168 @@ export class TestAttemptService {
       if (attempt.status === 'submitted') {
         return { attempt: toStudentAttempt(attempt) as StudentSubmittedTestAttempt, completionGranted: false };
       }
-      const gradingTimestamp = this.now();
-      const translationGradingInProgress = Object.values(attempt.translationGradeReservations).some(reservations =>
-        Object.values(reservations).some(reservation =>
-          translationReservationIsActive(reservation.expiresAt, gradingTimestamp)
-        )
+      if (attempt.flowVersion === 1)
+        throw new TestServiceError('ATTEMPT_SECTION_REQUIRED', 'Confirm the final section to submit this attempt', 409);
+      return this.submitInTransaction(transaction, attempt, studentId);
+    });
+  }
+
+  private async submitInTransaction(
+    transaction: Transaction,
+    attempt: InProgressTestAttempt,
+    studentId: string
+  ): Promise<SubmitTestAttemptResult> {
+    const attemptRef = this.attempts.doc(attempt.id);
+    const gradingTimestamp = this.now();
+    const translationGradingInProgress = Object.values(attempt.translationGradeReservations).some(reservations =>
+      Object.values(reservations).some(reservation =>
+        translationReservationIsActive(reservation.expiresAt, gradingTimestamp)
+      )
+    );
+    if (translationGradingInProgress) {
+      throw new TestServiceError(
+        'ATTEMPT_TRANSLATION_GRADING_IN_PROGRESS',
+        'Wait for translation grading to finish before submitting this test',
+        409
       );
-      if (translationGradingInProgress) {
+    }
+    if (attempt.origin.kind === 'normal-test') {
+      await this.assertNormalTestUnlocked(transaction, studentId, attempt.origin.testId, true);
+    }
+
+    let frozenScore: FrozenDeliveryScore;
+    let exerciseResults: SubmittedTestAttempt['exerciseResults'];
+    let review: TestResultReview;
+    try {
+      ({ frozenScore, exerciseResults, review } = this.buildReviewForAttempt(attempt, this.now()));
+      if (!isTestResultReviewDocumentWithinSizeLimit(review, this.maxReviewDocumentBytes)) {
         throw new TestServiceError(
-          'ATTEMPT_TRANSLATION_GRADING_IN_PROGRESS',
-          'Wait for translation grading to finish before submitting this test',
-          409
+          'ATTEMPT_TOO_LARGE',
+          'This test attempt is too large to submit safely. Please ask an administrator to review its content size.',
+          422
         );
       }
-      if (attempt.origin.kind === 'normal-test') {
-        await this.assertNormalTestUnlocked(transaction, studentId, attempt.origin.testId, true);
-      }
+    } catch (error) {
+      if (error instanceof TestServiceError) throw error;
+      throw configurationError(`Could not grade attempt ${attempt.id} from its frozen delivery state`, error);
+    }
 
-      let frozenScore: FrozenDeliveryScore;
-      let exerciseResults: SubmittedTestAttempt['exerciseResults'];
-      let review: TestResultReview;
+    const timestamp = review.submittedAt;
+    const percentage = (frozenScore.awardedPoints / frozenScore.maxPoints) * 100;
+    const outcome =
+      attempt.passingPercentage === null
+        ? 'score-only'
+        : percentage + PASSING_THRESHOLD_TOLERANCE >= attempt.passingPercentage
+          ? 'passed'
+          : 'not-passed';
+
+    let submitted: SubmittedTestAttempt;
+    try {
+      submitted = submittedTestAttemptDocumentSchema.parse({
+        id: attempt.id,
+        studentId: attempt.studentId,
+        versionId: attempt.versionId,
+        passingPercentage: attempt.passingPercentage,
+        origin: attempt.origin,
+        startedAt: attempt.startedAt,
+        updatedAt: timestamp,
+        status: 'submitted',
+        ...(attempt.flowVersion === 1
+          ? {
+              flowVersion: 1,
+              confirmedSections: Object.fromEntries(
+                Object.entries(attempt.sections!).map(([id, state]) => [id, state.confirmedAt])
+              ),
+            }
+          : {}),
+        exerciseResults,
+        score: frozenScore.awardedPoints,
+        maxScore: frozenScore.maxPoints,
+        percentage,
+        outcome,
+        submittedAt: timestamp,
+      }) as SubmittedTestAttempt;
+    } catch (error) {
+      throw configurationError(`Could not freeze the result of attempt ${attempt.id}`, error);
+    }
+    this.assertAttemptDocumentSize(submitted);
+
+    // All transaction reads must precede writes: read the completion record
+    // before freezing the attempt, clearing the session pointer, and granting
+    // sticky normal-flow completion.
+    const origin = attempt.origin;
+    const completionTestId = origin.kind === 'normal-test' && outcome !== 'not-passed' ? origin.testId : null;
+    const completionRef = completionTestId ? this.progress.doc(`${studentId}_${completionTestId}`) : null;
+    const sessionRef = this.attemptSessions.doc(getTestAttemptSessionId(studentId, origin));
+    const mockResultRef =
+      origin.kind === 'mock-test'
+        ? this.studentMockResults.doc(getStudentMockResultId(studentId, origin.mockTestId))
+        : null;
+    const [sessionSnapshot, completionSnapshot, mockResultSnapshot] = await Promise.all([
+      transaction.get(sessionRef),
+      completionRef ? transaction.get(completionRef) : Promise.resolve(null),
+      mockResultRef ? transaction.get(mockResultRef) : Promise.resolve(null),
+    ]);
+
+    let shouldClearSession = false;
+    if (sessionSnapshot.exists) {
       try {
-        ({ frozenScore, exerciseResults, review } = this.buildReviewForAttempt(attempt, this.now()));
-        if (!isTestResultReviewDocumentWithinSizeLimit(review, this.maxReviewDocumentBytes)) {
-          throw new TestServiceError(
-            'ATTEMPT_TOO_LARGE',
-            'This test attempt is too large to submit safely. Please ask an administrator to review its content size.',
-            422
-          );
-        }
+        const session = parseSessionSnapshot(sessionSnapshot);
+        shouldClearSession =
+          session.attemptId === attempt.id && session.studentId === studentId && sameOrigin(session.origin, origin);
       } catch (error) {
-        if (error instanceof TestServiceError) throw error;
-        throw configurationError(`Could not grade attempt ${attempt.id} from its frozen delivery state`, error);
+        console.error(`Attempt session ${sessionSnapshot.id} contains invalid persisted data`, error);
       }
+    }
 
-      const timestamp = review.submittedAt;
-      const percentage = (frozenScore.awardedPoints / frozenScore.maxPoints) * 100;
-      const outcome =
-        attempt.passingPercentage === null
-          ? 'score-only'
-          : percentage + PASSING_THRESHOLD_TOLERANCE >= attempt.passingPercentage
-            ? 'passed'
-            : 'not-passed';
+    transaction.set(attemptRef, submitted);
+    transaction.set(this.reviews.doc(attempt.id), review);
+    if (shouldClearSession) transaction.delete(sessionRef);
 
-      let submitted: SubmittedTestAttempt;
-      try {
-        submitted = submittedTestAttemptDocumentSchema.parse({
-          id: attempt.id,
-          studentId: attempt.studentId,
-          versionId: attempt.versionId,
-          passingPercentage: attempt.passingPercentage,
-          origin: attempt.origin,
-          startedAt: attempt.startedAt,
+    if (mockResultRef && origin.kind === 'mock-test') {
+      const existing = mockResultSnapshot?.exists
+        ? studentMockResultDocumentSchema.safeParse({ ...mockResultSnapshot.data(), id: mockResultSnapshot.id })
+        : null;
+      if (!existing?.success || existing.data.latest.submittedAt <= timestamp) {
+        transaction.set(
+          mockResultRef,
+          studentMockResultDocumentSchema.parse({
+            id: mockResultRef.id,
+            studentId,
+            mockTestId: origin.mockTestId,
+            latest: {
+              attemptId: attempt.id,
+              score: submitted.score,
+              maxScore: submitted.maxScore,
+              percentage: submitted.percentage,
+              outcome: submitted.outcome,
+              submittedAt: submitted.submittedAt,
+            },
+          })
+        );
+      }
+    }
+
+    let completionGranted = false;
+    if (completionRef && completionSnapshot && completionTestId) {
+      const existing = completionSnapshot.data() as Partial<TestUnitCompletionProgress> | undefined;
+      if (existing?.status !== 'completed') {
+        const record: TestUnitCompletionProgress = {
+          userId: studentId,
+          lessonId: completionTestId,
+          status: 'completed',
+          exerciseProgress: [],
+          completedAt: typeof existing?.completedAt === 'string' ? existing.completedAt : timestamp,
+          lastAccessedAt: timestamp,
           updatedAt: timestamp,
-          status: 'submitted',
-          exerciseResults,
-          score: frozenScore.awardedPoints,
-          maxScore: frozenScore.maxPoints,
-          percentage,
-          outcome,
-          submittedAt: timestamp,
-        }) as SubmittedTestAttempt;
-      } catch (error) {
-        throw configurationError(`Could not freeze the result of attempt ${attempt.id}`, error);
+          progressSchemaVersion: 2,
+        };
+        transaction.set(completionRef, record);
+        completionGranted = true;
       }
-      this.assertAttemptDocumentSize(submitted);
+    }
 
-      // All transaction reads must precede writes: read the completion record
-      // before freezing the attempt, clearing the session pointer, and granting
-      // sticky normal-flow completion.
-      const origin = attempt.origin;
-      const completionTestId = origin.kind === 'normal-test' && outcome !== 'not-passed' ? origin.testId : null;
-      const completionRef = completionTestId ? this.progress.doc(`${studentId}_${completionTestId}`) : null;
-      const sessionRef = this.attemptSessions.doc(getTestAttemptSessionId(studentId, origin));
-      const mockResultRef =
-        origin.kind === 'mock-test'
-          ? this.studentMockResults.doc(getStudentMockResultId(studentId, origin.mockTestId))
-          : null;
-      const [sessionSnapshot, completionSnapshot, mockResultSnapshot] = await Promise.all([
-        transaction.get(sessionRef),
-        completionRef ? transaction.get(completionRef) : Promise.resolve(null),
-        mockResultRef ? transaction.get(mockResultRef) : Promise.resolve(null),
-      ]);
-
-      let shouldClearSession = false;
-      if (sessionSnapshot.exists) {
-        try {
-          const session = parseSessionSnapshot(sessionSnapshot);
-          shouldClearSession =
-            session.attemptId === attempt.id && session.studentId === studentId && sameOrigin(session.origin, origin);
-        } catch (error) {
-          console.error(`Attempt session ${sessionSnapshot.id} contains invalid persisted data`, error);
-        }
-      }
-
-      transaction.set(attemptRef, submitted);
-      transaction.set(this.reviews.doc(attempt.id), review);
-      if (shouldClearSession) transaction.delete(sessionRef);
-
-      if (mockResultRef && origin.kind === 'mock-test') {
-        const existing = mockResultSnapshot?.exists
-          ? studentMockResultDocumentSchema.safeParse({ ...mockResultSnapshot.data(), id: mockResultSnapshot.id })
-          : null;
-        if (!existing?.success || existing.data.latest.submittedAt <= timestamp) {
-          transaction.set(
-            mockResultRef,
-            studentMockResultDocumentSchema.parse({
-              id: mockResultRef.id,
-              studentId,
-              mockTestId: origin.mockTestId,
-              latest: {
-                attemptId: attempt.id,
-                score: submitted.score,
-                maxScore: submitted.maxScore,
-                percentage: submitted.percentage,
-                outcome: submitted.outcome,
-                submittedAt: submitted.submittedAt,
-              },
-            })
-          );
-        }
-      }
-
-      let completionGranted = false;
-      if (completionRef && completionSnapshot && completionTestId) {
-        const existing = completionSnapshot.data() as Partial<TestUnitCompletionProgress> | undefined;
-        if (existing?.status !== 'completed') {
-          const record: TestUnitCompletionProgress = {
-            userId: studentId,
-            lessonId: completionTestId,
-            status: 'completed',
-            exerciseProgress: [],
-            completedAt: typeof existing?.completedAt === 'string' ? existing.completedAt : timestamp,
-            lastAccessedAt: timestamp,
-            updatedAt: timestamp,
-            progressSchemaVersion: 2,
-          };
-          transaction.set(completionRef, record);
-          completionGranted = true;
-        }
-      }
-
-      return { attempt: toStudentAttempt(submitted) as StudentSubmittedTestAttempt, completionGranted };
-    });
+    return { attempt: toStudentAttempt(submitted) as StudentSubmittedTestAttempt, completionGranted };
   }
 
   async getAttemptSummary(origin: TestAttemptOrigin, studentId: string): Promise<TestAttemptOriginSummary> {

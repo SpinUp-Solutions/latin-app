@@ -13,6 +13,7 @@ import { getApplicableStepsForFormPath } from '@/src/utils/exercises/formIdentif
 import { getExerciseDisplayForm } from '@/src/utils/exercises/formSelection';
 import { prepareGeneratedFormIdentificationWord } from '@/src/utils/exercises/formIdentificationPreparation';
 import { isRejectedBySpecAwarePronounOverlap } from '@/src/utils/generated/pronounParadigmFiltering';
+import { isSelectableMorphologyForm } from '@/src/utils/morphologyForms';
 import type { GeneratedExercisePreviewDiagnostics } from './generated-preview-schema';
 import {
   isUsableGeneratedTranslationWord,
@@ -147,8 +148,8 @@ const getPathValues = (value: Record<string, unknown>, path: string): string[] =
     if (!current || typeof current !== 'object' || !(key in current)) return [];
     current = (current as Record<string, unknown>)[key];
   }
-  if (typeof current === 'string') return [current];
-  return Array.isArray(current) ? current.filter((entry): entry is string => typeof entry === 'string') : [];
+  if (typeof current === 'string') return isSelectableMorphologyForm(current) ? [current] : [];
+  return Array.isArray(current) ? current.filter(isSelectableMorphologyForm) : [];
 };
 
 function selectForm(

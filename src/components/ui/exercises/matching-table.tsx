@@ -6,7 +6,10 @@ import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { FeedbackDisplay } from '../feedback';
 import FieldSelect from '../core/field-select';
-import { validateMatchingExercise } from '@/src/utils/exercises/matchingExercise';
+import {
+  getSelectableMatchingAnswers,
+  validateMatchingExercise,
+} from '@/src/utils/exercises/matchingExercise';
 import { ExerciseProgress } from './exercise-progress';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
@@ -44,7 +47,7 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({
   const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
   const { leftColumn, rightColumn } = exercise.data;
-  const finalAnswer = useMemo(() => exercise.data.answers || {}, [exercise.data.answers]);
+  const finalAnswer = useMemo(() => getSelectableMatchingAnswers(exercise), [exercise]);
   const totalMatches = testAnswerMode
     ? (exercise.data.expectedMatchCount ?? leftColumn.length)
     : Object.keys(finalAnswer).length;

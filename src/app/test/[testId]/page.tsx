@@ -9,6 +9,7 @@ import { Button } from '@/src/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
 import { TestTakingView } from '@/src/components/ui/test/test-taking-view';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
+import { SectionedTestPlayer } from '@/src/components/ui/test/sectioned-test-player';
 import { TestTranslationGradingProvider } from '@/src/components/ui/test/test-translation-grading-context';
 import { useAuth } from '@/src/hooks/useAuth';
 import { useBufferedAttemptAnswers } from '@/src/hooks/useBufferedAttemptAnswers';
@@ -54,6 +55,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
   const [startAttempt, { isLoading: starting }] = useStartTestAttemptMutation();
   const [gradeTestTranslation, { isLoading: translationGrading }] = useGradeTestTranslationMutation();
   const [submitAttempt, { isLoading: submitting }] = useSubmitTestAttemptMutation();
+  const answerBuffer = useBufferedAttemptAnswers();
   const {
     activateAttempt,
     adoptPersistedAnswer,
@@ -65,7 +67,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
     reset: resetAnswerBuffer,
     saveError,
     saveStatus: answerSaveStatus,
-  } = useBufferedAttemptAnswers();
+  } = answerBuffer;
 
   const [screen, setScreen] = useState<Screen>('expectations');
   const [attempt, setAttempt] = useState<StudentInProgressTestAttempt | null>(null);
@@ -130,6 +132,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
         if (activeOriginKeyRef.current !== originKey) return;
         activateAttempt({
           answers: response.attempt.answers,
+          section: response.attempt.section,
           attemptId: response.attempt.id,
           originKey,
           uid: user.uid,
@@ -174,6 +177,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
   );
 
   useEffect(() => {
+    if (screen !== 'taking' && screen !== 'review') return;
     let effectActive = true;
     historyEffectActiveRef.current = true;
     const guardValue = `test:${originKey}`;
@@ -237,7 +241,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
       historyEffectActiveRef.current = false;
       window.removeEventListener('popstate', protectHistoryNavigation);
     };
-  }, [flushPendingAnswers, hasUnsavedAnswers, originKey]);
+  }, [flushPendingAnswers, hasUnsavedAnswers, originKey, screen]);
 
   const startFreshAttempt = async () => {
     if (!user || !test || (isMockTest && !mockTest) || normalTest?.status === 'locked') return;
@@ -247,6 +251,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
       if (activeOriginKeyRef.current !== requestedOriginKey) return;
       activateAttempt({
         answers: response.attempt.answers,
+        section: response.attempt.section,
         attemptId: response.attempt.id,
         originKey: requestedOriginKey,
         uid: user.uid,
@@ -333,6 +338,30 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
     }
   };
 
+  const acceptSubmission = (submittedResult: StudentSubmittedTestAttempt) => {
+    const requestedOriginKey = originKey;
+    setResult(submittedResult);
+    setScreen('results');
+    if (isMockTest) {
+      setMockRetakeAvailability('checking');
+      // A completed delivery remains viewable even if administrators hide,
+      // archive, or move its mock before this refresh finishes. Retakes,
+      // however, must be based on fresh live projections rather than the
+      // detail that authorized the just-submitted frozen attempt.
+      void Promise.allSettled([refetchDashboard(), refetchMockDetail()]).then(results => {
+        if (activeOriginKeyRef.current !== requestedOriginKey) return;
+        const refreshedDashboard = results[0].status === 'fulfilled' ? results[0].value.data : undefined;
+        const refreshedDetail = results[1].status === 'fulfilled' ? results[1].value.data : undefined;
+        const liveCard = refreshedDashboard?.mockTests?.find(mock => mock.id === testId);
+        const isEligible = Boolean(
+          liveCard && refreshedDetail?.mock.status === 'active' && refreshedDetail.mock.isLive
+        );
+        setMockRetakeAvailability(isEligible ? 'available' : 'unavailable');
+      });
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const submit = async () => {
     if (!attempt || !user) return;
     const requestedOriginKey = originKey;
@@ -343,26 +372,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
         attemptId: attempt.id,
       }).unwrap();
       if (activeOriginKeyRef.current !== requestedOriginKey) return;
-      setResult(response.attempt);
-      setScreen('results');
-      if (isMockTest) {
-        setMockRetakeAvailability('checking');
-        // A completed delivery remains viewable even if administrators hide,
-        // archive, or move its mock before this refresh finishes. Retakes,
-        // however, must be based on fresh live projections rather than the
-        // detail that authorized the just-submitted frozen attempt.
-        void Promise.allSettled([refetchDashboard(), refetchMockDetail()]).then(results => {
-          if (activeOriginKeyRef.current !== requestedOriginKey) return;
-          const refreshedDashboard = results[0].status === 'fulfilled' ? results[0].value.data : undefined;
-          const refreshedDetail = results[1].status === 'fulfilled' ? results[1].value.data : undefined;
-          const liveCard = refreshedDashboard?.mockTests?.find(mock => mock.id === testId);
-          const isEligible = Boolean(
-            liveCard && refreshedDetail?.mock.status === 'active' && refreshedDetail.mock.isLive
-          );
-          setMockRetakeAvailability(isEligible ? 'available' : 'unavailable');
-        });
-      }
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      acceptSubmission(response.attempt);
     } catch (error) {
       if (getApiErrorCode(error) === 'TEST_CONFIGURATION_ERROR') {
         setScreen('unavailable');
@@ -386,7 +396,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
     try {
       await flushPendingAnswers();
       setAttempt(current => {
-        if (!current) return current;
+        if (!current || current.flowVersion === 1) return current;
         const nextAnswers = { ...current.answers };
         const nextTranslationGrades = { ...current.translationGrades };
         delete nextAnswers[exerciseId];
@@ -542,8 +552,9 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
             </div>
             <ul className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-sm leading-6 text-slate-700">
               <li className="flex gap-3 before:mt-2.5 before:h-1.5 before:w-1.5 before:shrink-0 before:rounded-full before:bg-roman-red">
-                For translations, you’ll get brief guidance as you go. Feedback on other questions appears after you
-                submit.
+                {attempt?.flowVersion === undefined && attempt
+                  ? 'For translations, you’ll get brief guidance as you go. Feedback on other questions appears after you submit.'
+                  : 'Review each section before confirming it. Once confirmed, you cannot return. All scores and feedback appear after submission.'}
               </li>
               <li className="flex gap-3 before:mt-2.5 before:h-1.5 before:w-1.5 before:shrink-0 before:rounded-full before:bg-roman-red">
                 Your answers save automatically, so you can refresh or return later without losing your work.
@@ -685,6 +696,21 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
 
   if (!attempt) return null;
 
+  if (attempt.flowVersion === 1)
+    return (
+      <SectionedTestPlayer
+        key={attempt.id}
+        attempt={attempt}
+        onAttempt={setAttempt}
+        buffer={answerBuffer}
+        title={test.title}
+        uid={user!.uid}
+        originKey={originKey}
+        onSubmitted={acceptSubmission}
+        onExit={exitTest}
+      />
+    );
+
   if (screen === 'review') {
     const unanswered = exerciseItems.filter(
       item => !isExerciseAnswerComplete(item.exercise, answers[item.id], item.resolvedItemCount)
@@ -735,7 +761,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
                     const hasRecordedAnswer = Boolean(answers[item.id]);
                     const translationIsFinal =
                       item.exercise.type === 'translation-grading' &&
-                      Object.keys(attempt.translationGrades[item.id] ?? {}).length > 0;
+                      Object.keys(attempt.translationGrades?.[item.id] ?? {}).length > 0;
                     const clearExisting = complete && !translationIsFinal;
                     const actionLabel = translationIsFinal
                       ? complete
@@ -821,7 +847,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
   );
 
   return (
-    <TestTranslationGradingProvider value={{ grades: attempt.translationGrades, grade: gradeTranslation }}>
+    <TestTranslationGradingProvider value={{ grades: attempt.translationGrades ?? {}, grade: gradeTranslation }}>
       <TestTakingView
         title={<SimpleRichDisplay content={test.title} />}
         description={test.description ? <SimpleRichDisplay content={test.description} /> : undefined}

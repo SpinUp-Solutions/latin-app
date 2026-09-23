@@ -28,6 +28,7 @@ import { prepareGeneratedFormIdentificationWord } from '@/src/utils/exercises/fo
 import { formatGeneratedPreviewDiagnostics } from '@/src/utils/generated/generatedExercisePreview';
 import { getApiErrorMessage } from '@/src/store/api/baseQuery';
 import { AlertTriangle, Loader2 } from 'lucide-react';
+import { GeneratedQuestionCountField } from './GeneratedQuestionCountField';
 
 export const GeneratedFormIdentificationEditor: React.FC = () => {
   const editingContent = useAppSelector(
@@ -121,6 +122,12 @@ const GeneratedFormIdentificationEditorView: React.FC<{
       <VocabularyPoolSelector
         selectedPoolId={editor.config.poolId || undefined}
         onPoolSelect={poolId => editor.updateConfig({ poolId: poolId || null })}
+      />
+
+      <GeneratedQuestionCountField
+        id="form-identification-question-count"
+        count={editor.config.count}
+        onChange={count => editor.updateConfig({ count })}
       />
 
       <div className="space-y-2">

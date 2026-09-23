@@ -1,6 +1,10 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import Link from 'next/link';
+import { FileDown } from 'lucide-react';
+import { toast } from 'sonner';
+import { Button } from '@/src/components/ui/button';
+import React, { useMemo, useState } from 'react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/src/components/ui/accordion';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { AudioPlayer } from '@/src/components/ui/core/AudioPlayer';
@@ -10,6 +14,7 @@ import { VocabularyViewer } from '@/src/components/ui/lesson/VocabularyViewer';
 import { VocabularyPoolViewer } from '@/src/components/ui/lesson/VocabularyPoolViewer';
 import { formatScorePoints } from '@/src/lib/tests/formatting';
 import { cn } from '@/src/lib/utils';
+import { downloadSubmittedTestResultPdf, saveBlobAsFile } from '@/src/services/testResultPdfService';
 import type {
   StudentTestResult,
   TestResultReviewExerciseItem,
@@ -180,11 +185,45 @@ export function TestResultReviewView({ result }: { result: StudentTestResult }) 
   const entries = useMemo(() => buildAccordionEntries(result), [result]);
 
   const defaultOpenEntry = entries.find(entry => !entry.correct) ?? entries[0];
+  const [openEntryId, setOpenEntryId] = useState(defaultOpenEntry?.id ?? '');
+  const [exportingPdf, setExportingPdf] = useState(false);
+
+  const exportPdf = async () => {
+    if (exportingPdf) return;
+    setExportingPdf(true);
+    try {
+      const { blob, filename } = await downloadSubmittedTestResultPdf(attempt.id);
+      saveBlobAsFile(blob, filename);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to export this result as a PDF');
+    } finally {
+      setExportingPdf(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-roman-marble p-4 md:p-8" data-testid="test-result-review">
       <div className="mx-auto max-w-4xl space-y-6">
+        <nav aria-label="Result navigation" className="flex flex-wrap gap-3">
+          <Button asChild variant="outline">
+            <a href="#result-summary">Back to summary</a>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/dashboard">Back to dashboard</Link>
+          </Button>
+          <Button
+            type="button"
+            className="bg-roman-red hover:bg-roman-red/90"
+            onClick={() => void exportPdf()}
+            disabled={exportingPdf}
+            data-testid="export-result-pdf">
+            <FileDown className="mr-2 h-4 w-4" aria-hidden="true" />
+            {exportingPdf ? 'Exporting PDF…' : 'Export PDF'}
+          </Button>
+        </nav>
         <div
+          id="result-summary"
+          tabIndex={-1}
           className={cn(
             'overflow-hidden rounded-2xl border bg-white shadow-md',
             attempt.outcome === 'not-passed' ? 'border-amber-300' : 'border-emerald-300'
@@ -216,8 +255,9 @@ export function TestResultReviewView({ result }: { result: StudentTestResult }) 
         ) : (
           <Accordion
             type="single"
-            collapsible={false}
-            defaultValue={defaultOpenEntry?.id}
+            collapsible
+            value={openEntryId}
+            onValueChange={setOpenEntryId}
             className="space-y-3"
             data-testid="test-result-accordion">
             {entries.map(entry => (
@@ -241,8 +281,13 @@ export function TestResultReviewView({ result }: { result: StudentTestResult }) 
                       <SimpleRichDisplay content={entry.title} className="truncate" />
                     </div>
                   </div>
-                  <span className="shrink-0 text-sm tabular-nums text-slate-500">
-                    {formatScorePoints(entry.awardedPoints)} / {formatScorePoints(entry.maxPoints)} points
+                  <span className="flex shrink-0 flex-col items-end gap-1 text-sm">
+                    <span className="tabular-nums text-slate-500">
+                      {formatScorePoints(entry.awardedPoints)} / {formatScorePoints(entry.maxPoints)} points
+                    </span>
+                    <span className="font-medium text-roman-red">
+                      {openEntryId === entry.id ? 'Hide answers' : 'Show answers'}
+                    </span>
                   </span>
                 </AccordionTrigger>
                 <AccordionContent className="space-y-4 px-5 py-5">

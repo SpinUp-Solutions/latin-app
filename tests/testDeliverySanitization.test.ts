@@ -174,7 +174,7 @@ describe('fail-closed exercise delivery projections', () => {
       data: {
         leftColumn: [{ id: 'l1', value: 'Alpha' }],
         rightColumn: [{ id: 'r1', value: 'One' }],
-        answers: { l1: 'r1' },
+        answers: { orphaned: 'r1', l1: 'r1' },
         hint: 'secret-hint',
         requiredRepetitions: 2,
         futurePrivate: 'secret-future',

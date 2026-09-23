@@ -109,7 +109,7 @@ export const openAIStructuredOutputExecutor: StructuredAIExecutor = {
                 },
               },
             },
-            { signal }
+            { signal, timeout: context.timeout, maxRetries: context.maxRetries }
           ),
         context.capacityClass ?? 'production',
         context.signal

@@ -16,6 +16,7 @@ import type {
   ExerciseCompletionHandler,
   RuntimeMode,
 } from '@/src/types/runtime-mode';
+import { useSectionedTest } from '../test/sectioned-test-context';
 import { RecordedAnswerControls } from './recorded-answer-controls';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
@@ -39,6 +40,7 @@ const FillExerciseComponent: React.FC<Props> = ({
   const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
+  const sectioned = useSectionedTest();
   const restoredAnswers = initialAnswer?.type === 'fill' ? initialAnswer.answers : [];
   const firstIncompleteIndex = exercise.data.items.findIndex((_, index) => !restoredAnswers[index]?.trim());
   const restoredIndex = firstIncompleteIndex >= 0 ? firstIncompleteIndex : Math.max(exercise.data.items.length - 1, 0);
@@ -98,7 +100,11 @@ const FillExerciseComponent: React.FC<Props> = ({
     if (testAnswerMode) {
       onAnswer?.({ type: 'fill', answers: nextAnswers });
       setTestSubmitted(true);
-      if (isLastItem) onComplete?.(0);
+
+      if (sectioned) {
+        if (isLastItem) onComplete?.(0);
+        else continueTest();
+      } else if (isLastItem) onComplete?.(0);
       return;
     }
 
@@ -189,7 +195,11 @@ const FillExerciseComponent: React.FC<Props> = ({
       {/* Progress indicator */}
       <ExerciseProgress
         currentIndex={currentIndex}
-        completed={mode === 'practice' ? currentIndex + (isCorrect === true ? 1 : 0) : submittedAnswers.filter(answer => Boolean(answer?.trim())).length}
+        completed={
+          mode === 'practice'
+            ? currentIndex + (isCorrect === true ? 1 : 0)
+            : submittedAnswers.filter(answer => Boolean(answer?.trim())).length
+        }
         total={exercise.data.items.length}
         showProgress={exercise.feedbackConfig.progressionRules?.showProgress !== false}
       />
@@ -205,6 +215,7 @@ const FillExerciseComponent: React.FC<Props> = ({
         />
 
         {testAnswerMode ? (
+          !sectioned &&
           testSubmitted && <RecordedAnswerControls isLastItem={isLastItem} onContinue={continueTest} hideFinishAction />
         ) : (
           <FeedbackDisplay

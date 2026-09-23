@@ -20,6 +20,7 @@ import { parseMultiFilterValue, serializeMultiFilterValue } from '@/src/utils/wo
 import { getExerciseDisplayForm, hasSelectedForm } from '@/src/utils/exercises/formSelection';
 import { formatGeneratedPreviewDiagnostics } from '@/src/utils/generated/generatedExercisePreview';
 import { getApiErrorMessage } from '@/src/store/api/baseQuery';
+import { GeneratedQuestionCountField } from './GeneratedQuestionCountField';
 
 export const GeneratedTranslationEditor: React.FC = () => {
   const editingContent = useAppSelector(
@@ -102,6 +103,12 @@ const GeneratedTranslationEditorView: React.FC<{ editingContent: GeneratedTransl
       <VocabularyPoolSelector
         selectedPoolId={editor.config.poolId || undefined}
         onPoolSelect={poolId => editor.updateConfig({ poolId: poolId || null })}
+      />
+
+      <GeneratedQuestionCountField
+        id="translation-question-count"
+        count={editor.config.count}
+        onChange={count => editor.updateConfig({ count })}
       />
 
       <div className="space-y-2">

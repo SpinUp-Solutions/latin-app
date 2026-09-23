@@ -1,3 +1,4 @@
+import { assertPoolHasNoDependents, resolveVocabularyPool } from '@/src/lib/vocabulary-pools/linked-pools.server';
 import { NextRequest, NextResponse } from 'next/server';
 import { FieldValue } from 'firebase-admin/firestore';
 import { adminDb } from '@/src/services/firebase-admin';
@@ -16,6 +17,10 @@ import {
   VOCABULARY_POOL_COLLECTION,
   VOCABULARY_POOL_DELETION_CHALLENGE_COLLECTION,
 } from '@/src/lib/vocabulary-pools/archive.server';
+import {
+  isVocabularyPoolCreationPending,
+  VocabularyPoolStateError,
+} from '@/src/lib/vocabulary-pools/pool-state.server';
 import {
   CONTENT_SYNC_LOCK_COLLECTION,
   CONTENT_SYNC_LOCK_ID,
@@ -65,10 +70,17 @@ export async function POST(
       throw new VocabularyPoolDeletionError('Pool not found', 404, 'VOCABULARY_POOL_NOT_FOUND');
     }
     const poolData = poolSnapshot.data() ?? {};
-    const poolFingerprint = vocabularyPoolContentFingerprint(poolData);
+    if (isVocabularyPoolCreationPending(poolData)) {
+      throw new VocabularyPoolStateError(
+        'Vocabulary pool creation is still in progress. Try again when it finishes.',
+        'VOCABULARY_POOL_PENDING'
+      );
+    }
+    const poolFingerprint = vocabularyPoolContentFingerprint(await resolveVocabularyPool(adminDb, poolId, poolData));
     const poolName = typeof poolData.name === 'string' && poolData.name.trim() ? poolData.name.trim() : poolId;
+    const effectivePoolData = await resolveVocabularyPool(adminDb, poolId, poolData);
     const wordCount = new Set(
-      (Array.isArray(poolData.wordDocIds) ? poolData.wordDocIds : []).filter(
+      (Array.isArray(effectivePoolData.wordDocIds) ? effectivePoolData.wordDocIds : []).filter(
         (wordId): wordId is string => typeof wordId === 'string' && wordId.length > 0
       )
     ).size;
@@ -92,7 +104,18 @@ export async function POST(
       if (!pool.exists) {
         throw new VocabularyPoolDeletionError('Pool not found', 404, 'VOCABULARY_POOL_NOT_FOUND');
       }
-      if (vocabularyPoolContentFingerprint(pool.data() ?? {}) !== poolFingerprint) {
+      if (isVocabularyPoolCreationPending(pool.data())) {
+        throw new VocabularyPoolStateError(
+          'Vocabulary pool creation is still in progress. Try again when it finishes.',
+          'VOCABULARY_POOL_PENDING'
+        );
+      }
+      await assertPoolHasNoDependents(adminDb, transaction, poolId);
+      if (
+        vocabularyPoolContentFingerprint(
+          await resolveVocabularyPool(adminDb, poolId, pool.data() ?? {}, transaction)
+        ) !== poolFingerprint
+      ) {
         throw new VocabularyPoolDeletionError(
           'The pool changed while deletion was being prepared. Review it and try again.',
           409,
@@ -132,6 +155,9 @@ export async function POST(
       return NextResponse.json({ success: false, error: error.message }, { status: error.status });
     }
     if (error instanceof VocabularyPoolDeletionError) {
+      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
+    }
+    if (error instanceof VocabularyPoolStateError) {
       return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
     }
     if (error instanceof VocabularyContentSyncLockError) {

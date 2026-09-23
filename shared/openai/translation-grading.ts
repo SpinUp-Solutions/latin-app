@@ -59,7 +59,9 @@ export function createTranslationGradingService(
   return {
     async grade(mode, request, profileId, context) {
       const task = getTranslationGradingTask(mode);
-      return executor.execute(task, task.buildPrompt(request), profileFor(mode, profileId), context);
+      return context
+        ? executor.execute(task, task.buildPrompt(request), profileFor(mode, profileId), context)
+        : executor.execute(task, task.buildPrompt(request), profileFor(mode, profileId));
     },
   };
 }
