@@ -20,6 +20,4 @@ export function aiCallableAccessError(
   return AI_CALLABLE_ACCESS[callableName] === 'admin' && role !== 'admin' ? 'permission-denied' : null;
 }
 
-export function shouldEnforceAIAppCheck(environment: NodeJS.ProcessEnv = process.env): boolean {
-  return environment.FUNCTIONS_EMULATOR !== 'true';
-}
+export { shouldEnforceAIAppCheck } from '../../shared/openai/app-check-policy.server';

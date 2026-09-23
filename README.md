@@ -502,3 +502,13 @@ const { words, loading, hasMore, filters, loadWords, updateWord, updateFilters, 
 - Add new filters by extending the `VocabularyFilters` type and updating the hook logic
 - Add new fields to the `Word` type as needed
 - Use the provided state and functions to build custom admin UI features
+
+### AI attestation rollout
+
+AI authentication, ownership checks, request quotas, and provider concurrency limits apply independently of App Check. App Check enforcement is opt-in so deploying the web app does not disable grading for clients without attestation configured.
+
+1. Configure `NEXT_PUBLIC_FIREBASE_APP_CHECK_SITE_KEY` for every web deployment, register its domains in reCAPTCHA Enterprise, and deploy the client.
+2. Deploy the Firebase Functions changes and verify client token delivery. The evaluation history UI uses the new `listAiEvaluationRunsFn` callable.
+3. Set server-side `AI_ENFORCE_APP_CHECK=true` in both Next.js and Firebase Functions and redeploy them to require attestation. Both legacy translation grading and section confirmation are protected. Local Firebase emulators bypass attestation.
+
+Merging code does not deploy Firebase Functions, Firestore rules, indexes, or TTL policies; those require the normal infrastructure rollout.

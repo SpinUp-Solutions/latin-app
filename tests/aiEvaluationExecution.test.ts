@@ -370,3 +370,37 @@ describe('AI evaluation execution', () => {
     expect(result.aggregate.costIncurredThisRun?.totalCost).toBeCloseTo(0.0009);
   });
 });
+
+describe('evaluation cache and distributed claim races', () => {
+  it('rechecks a cache populated after the first miss before spending on the provider', async () => {
+    jest.clearAllMocks();
+    const completed = new Set<string>();
+    mockedGetCachedEvaluationResult.mockImplementation(async key => {
+      if (!completed.has(key)) return null;
+      const profileId = key.includes(':baseline:') ? 'baseline' : 'candidateLow';
+      const profile = TRANSLATION_GRADING_PROFILES[profileId];
+      const result = successResult(profile.model, profile.reasoningEffort);
+      return {
+        cacheKey: key,
+        gradingMode: 'lesson',
+        model: profile.model,
+        actualModel: profile.model,
+        output: result.data,
+        usage: result.usage,
+        cost: result.cost,
+        latencyMs: 80,
+        generatedAt: new Date().toISOString(),
+      };
+    });
+    // Another process finishes between this process's cache read and claim acquisition.
+    mockedRunEvaluationSingleFlight.mockImplementation(async (key, _db, operation) => {
+      completed.add(key);
+      return { value: await operation(new AbortController().signal), joined: false };
+    });
+    const result = await runEvaluationCase(evaluationCase, false, db);
+    expect(mockedGradeTranslation).not.toHaveBeenCalled();
+    expect(result.cells).toHaveLength(4);
+    expect(result.cells.every(cell => cell.appCacheHit)).toBe(true);
+    expect(result.aggregate.costIncurredThisRun?.totalCost).toBe(0);
+  });
+});

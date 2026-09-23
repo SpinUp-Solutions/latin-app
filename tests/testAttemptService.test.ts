@@ -1087,7 +1087,7 @@ describe('test attempt submission and sticky completion', () => {
       gradeTestTranslation,
       consumeGlobalAIQuota,
     });
-    const started = await service.startAttempt(startInput, 'student-1');
+    const started = await startLegacyAttempt(service, db, startInput, 'student-1');
 
     await expect(
       service.gradeTranslationItem(

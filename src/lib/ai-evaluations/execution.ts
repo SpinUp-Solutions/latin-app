@@ -261,6 +261,16 @@ async function executeUniqueJob(
   }
 
   const providerOperation = async (signal: AbortSignal): Promise<ExecutionOutcome> => {
+    // Another instance can finish after our first cache miss but before we
+    // acquire its completed claim. Only force-refresh should spend again.
+    if (!forceRefresh) {
+      try {
+        const cached = await cachedOutcome(true);
+        if (cached) return cached;
+      } catch (error) {
+        console.warn('[ai-evaluations] cache recheck failed; running API request', error);
+      }
+    }
     const providerStartedAt = Date.now();
     let result: TranslationGradingRunResult<TranslationGradingOutput | TestTranslationGradingOutput>;
     try {

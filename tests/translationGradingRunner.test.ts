@@ -215,8 +215,10 @@ describe('translation grading runner', () => {
     const lessonTask = getTranslationGradingTask('lesson');
 
     expect(testTask.promptVersion).toBe('translation-grading-test-v2');
-    expect(lessonTask.promptVersion).toBe('translation-grading-lesson-v3');
-    expect(lessonTask.systemPrompt).not.toContain('Deduct points only for actual mistakes in vocabulary and morphology');
+    expect(lessonTask.promptVersion).toBe('translation-grading-lesson-v4');
+    expect(lessonTask.systemPrompt).not.toContain(
+      'Deduct points only for actual mistakes in vocabulary and morphology'
+    );
 
     expect(testTask.systemPrompt).toContain('intermediate student');
     expect(testTask.systemPrompt).toContain('Every word must be accounted for accurately.');

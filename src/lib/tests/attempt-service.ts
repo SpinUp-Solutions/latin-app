@@ -335,12 +335,12 @@ export class TestAttemptService {
     this.gradeTestTranslation =
       options.gradeTestTranslation ??
       (async (request, signal, safetyIdentifier) => {
-        const result = await translationGrader.grade(
-          'test',
-          request,
-          undefined,
-          { signal, safetyIdentifier, timeout: 90_000, maxRetries: 0 }
-        );
+        const result = await translationGrader.grade('test', request, undefined, {
+          signal,
+          safetyIdentifier,
+          timeout: 90_000,
+          maxRetries: 0,
+        });
         if (!result.success) throw new Error(result.error);
         return result.data;
       });
@@ -1194,6 +1194,7 @@ export class TestAttemptService {
     let deadline: ReturnType<typeof setTimeout> | undefined;
     const controller = new AbortController();
     try {
+      await this.consumeGlobalAIQuota(1);
       const output = testTranslationGradingOutputSchema.parse(
         await Promise.race([
           this.gradeTestTranslation(work.request, controller.signal, createOpenAISafetyIdentifier(studentId)),
@@ -1252,6 +1253,13 @@ export class TestAttemptService {
           transaction.set(ref, attempt);
         })
         .catch(() => undefined); // An interrupted cleanup is recovered by lease expiry.
+      if (error instanceof AIRequestThrottleError) {
+        throw new TestServiceError(
+          'ATTEMPT_TRANSLATION_GRADING_RATE_LIMITED',
+          'Translation grading is at capacity. Please try again after the grading window resets.',
+          429
+        );
+      }
       if (error instanceof TestServiceError) throw error;
       throw new TestServiceError(
         'ATTEMPT_GRADING_UNAVAILABLE',

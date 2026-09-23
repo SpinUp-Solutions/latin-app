@@ -362,3 +362,34 @@ describe('test-like PDF layout', () => {
     }
   });
 });
+
+it('keeps each short part heading, question, and answer on the same page across page breaks', async () => {
+  const model = previewModel();
+  model.exercises = [
+    {
+      ...model.exercises[0],
+      groups: Array.from({ length: 24 }, (_, index) => [
+        { heading: `Part ${index + 1}`, tone: 'correct' as const, lines: ['1 / 1 points'] },
+        {
+          heading: 'Question',
+          lines: [`Prompt ${index + 1}`, ...Array.from({ length: index % 3 }, () => 'Additional question text')],
+        },
+        { heading: 'Expected answer', tone: 'answer' as const, lines: [`Expected ${index + 1}`] },
+        { heading: 'Student answer', tone: 'student' as const, lines: [`Response ${index + 1}`] },
+      ]).flat(),
+    },
+  ];
+  const { text, pageCount } = await inspectRender(model);
+  expect(pageCount).toBeGreaterThan(1);
+  for (let index = 1; index <= 24; index += 1) {
+    const heading = text.find(line => line.value === `Part ${index}`)!;
+    const prompt = text.find(line => line.value === `Prompt ${index}`)!;
+    const answer = text.find(line => line.value === `Response ${index}`)!;
+    expect({ part: index, promptPage: prompt.page, answerPage: answer.page }).toEqual({
+      part: index,
+      promptPage: heading.page,
+      answerPage: heading.page,
+    });
+  }
+  expectTextInsidePage(text);
+});
