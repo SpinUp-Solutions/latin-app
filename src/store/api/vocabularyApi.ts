@@ -254,19 +254,6 @@ export const vocabularyApi = createApi({
             ]
           : [],
     }),
-
-    bulkDeleteWords: builder.mutation<{ deletedCount: number }, string[]>({
-      query: wordIds => ({
-        url: '/admin/words/bulk-delete',
-        method: 'POST',
-        body: { wordIds },
-      }),
-      transformResponse: (response: { success: boolean; data: { deletedCount: number } }) => response.data,
-      invalidatesTags: [
-        { type: 'WordList', id: 'LIST' },
-        { type: 'WordCounts', id: 'COUNTS' },
-      ],
-    }),
   }),
 });
 
@@ -278,5 +265,4 @@ export const {
   useSearchWordsQuery,
   useLazySearchWordsQuery,
   useDeleteWordMutation,
-  useBulkDeleteWordsMutation,
 } = vocabularyApi;
