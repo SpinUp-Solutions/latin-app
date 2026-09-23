@@ -2,19 +2,12 @@ import type { DocumentSnapshot, Firestore } from 'firebase-admin/firestore';
 import { TEST_VERSIONS_COLLECTION } from '@/shared/constants/firestore';
 import { normalizeLearningUnit } from '@/src/lib/learning-units/domain';
 import type { TestUnit } from '@/src/types/learning-unit';
-import type {
-  MockTest,
-  TestVersion,
-  TestVersionDraft,
-  TestVersionDraftSummary,
-  TestVersionSummary,
-} from '@/src/types/test';
+import type { MockTest, TestVersion, TestVersionDraft, TestVersionSummary } from '@/src/types/test';
 import { TEST_VERSION_SUMMARY_FIELDS, getTestVersionSummaryFields } from './domain';
 import { TestServiceError } from './errors';
 import {
   mockTestDocumentSchema,
   testVersionDraftDocumentSchema,
-  testVersionDraftSummaryDocumentSchema,
   testVersionDocumentSchema,
   testVersionInputSchema,
   testVersionSummaryDocumentSchema,
@@ -70,18 +63,6 @@ export function parseVersionDraftSnapshot(snapshot: DocumentSnapshot): TestVersi
     );
   }
   return parsed.data as TestVersionDraft;
-}
-
-export function parseVersionDraftSummarySnapshot(snapshot: DocumentSnapshot): TestVersionDraftSummary {
-  const parsed = testVersionDraftSummaryDocumentSchema.safeParse({ ...snapshot.data(), id: snapshot.id });
-  if (!parsed.success) {
-    throw new TestServiceError(
-      'STALE_TEST_VERSION_DATA',
-      `Inactive test version ${snapshot.id} contains invalid persisted summary data`,
-      409
-    );
-  }
-  return parsed.data as TestVersionDraftSummary;
 }
 
 export function parseTestSnapshot(snapshot: DocumentSnapshot): TestUnit {
