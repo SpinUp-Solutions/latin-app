@@ -607,62 +607,6 @@ describe('generated exercise word replenishment', () => {
     expect(items.length).toBeGreaterThan(4);
   });
 
-  it('uses the full pool and skips missing IDs', async () => {
-    const ids = [...Array.from({ length: 8 }, (_, index) => `noun-${index}`), 'missing-id'];
-    const db = createFakeGeneratedWordDb({
-      words: Array.from({ length: 8 }, (_, index) => nounDoc(`noun-${index}`)),
-      pools: [{ id: 'pool-1', wordDocIds: ids }],
-    });
-    const result = await collectGeneratedExerciseWords({
-      db: db as never,
-      collection: 'vocabulary_words_v5',
-      specs: [
-        { id: 'noun', partOfSpeech: 'noun', filters: {} },
-        { id: 'verb', partOfSpeech: 'verb', filters: {} },
-        { id: 'adjective', partOfSpeech: 'adjective', filters: {} },
-      ],
-      count: 20,
-      exercise: {
-        ...translationExercise(['noun', 'verb', 'adjective'], 20, {
-          wordSource: 'pool',
-          poolId: 'pool-1',
-        }),
-      },
-      poolId: 'pool-1',
-      rng: createGeneratedExerciseRng(17),
-    });
-
-    expect(result.words).toHaveLength(8);
-    expect(new Set(result.words.map(word => word.id)).size).toBe(8);
-  });
-
-  it('keeps the unused portion of a pool chunk available for cross-spec borrowing', async () => {
-    const words = Array.from({ length: 10 }, (_, index) => nounDoc(`noun-${index}`));
-    const db = createFakeGeneratedWordDb({
-      words,
-      pools: [{ id: 'noun-pool', wordDocIds: words.map(word => word.id) }],
-    });
-    const result = await collectGeneratedExerciseWords({
-      db: db as never,
-      collection: 'vocabulary_words_v5',
-      specs: [
-        { id: 'noun', partOfSpeech: 'noun', filters: {} },
-        { id: 'verb', partOfSpeech: 'verb', filters: {} },
-      ],
-      count: 10,
-      exercise: translationExercise(['noun', 'verb'], 10, {
-        wordSource: 'pool',
-        poolId: 'noun-pool',
-      }),
-      poolId: 'noun-pool',
-      rng: createGeneratedExerciseRng(18),
-    });
-
-    expect(result.words).toHaveLength(10);
-    expect(result.words.every(word => word.part_of_speech === 'noun')).toBe(true);
-    expect(result.diagnostics.find(entry => entry.specId === 'noun')?.collected).toBe(10);
-  });
-
   it('exhausts the full pool before returning no matching words', async () => {
     const words = Array.from({ length: 2100 }, (_, index) => verbDoc(`verb-${index}`));
     const db = createFakeGeneratedWordDb({

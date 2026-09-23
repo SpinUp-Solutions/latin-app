@@ -45,12 +45,15 @@ describe('pool generation question-count contract', () => {
 
   it('finds all 30 usable words even beyond the former collection scan budgets', async () => {
     const { words, pool, exercise } = generatedPoolFixture(30, 2500);
+    const loadWords = jest.mocked(poolArchive.loadVocabularyPoolWords);
+    loadWords.mockClear();
     const db = createFakeGeneratedWordDb({ words, pools: [pool] });
     const result = await collectWordsForGeneratedExerciseRequest(db as never, exercise, {
       rng: createGeneratedExerciseRng(19),
     });
     expect(result.words).toHaveLength(30);
     expect(result.diagnostics[0].scanned).toBeGreaterThan(2000);
+    expect(loadWords.mock.calls.every(([, ids]) => ids !== undefined && ids.length <= 50)).toBe(true);
     expect(result.diagnostics[0].scanLimitReached).toBe(false);
     expect(result.globalScanLimitReached).toBe(false);
   });
@@ -67,8 +70,10 @@ describe('pool generation question-count contract', () => {
     expect(result.words.map(word => word.id)).not.toContain('valid-1');
   });
 
-  it('shares bounded pool reads across paradigms instead of fetching each candidate repeatedly', async () => {
-    const { words, pool, exercise } = generatedPoolFixture();
+  it('borrows unused words from a cached pool chunk when another paradigm has no matches', async () => {
+    // Both shares fit in one chunk, so the second half must survive the first
+    // paradigm's quota and remain available for borrowing after noun exhaustion.
+    const { words, pool, exercise } = generatedPoolFixture(30, 30);
     exercise.data.paradigmConfigs['noun-declension'] = {
       enabled: true,
       filters: {},
@@ -80,10 +85,12 @@ describe('pool generation question-count contract', () => {
     const db = createFakeGeneratedWordDb({ words, pools: [pool] });
     const result = await collectWordsForGeneratedExerciseRequest(db as never, exercise);
     expect(result.words).toHaveLength(30);
-    const batches = loadWords.mock.calls.map(([, ids]) => ids ?? []);
-    expect(batches.every(ids => ids.length <= 50)).toBe(true);
-    expect(batches.flat()).toHaveLength(100);
-    expect(new Set(batches.flat()).size).toBe(100);
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({ specId: 'verb-conjugation', collected: 30 }),
+      expect.objectContaining({ specId: 'noun-declension', collected: 0, exhausted: true }),
+    ]);
+    expect(loadWords).toHaveBeenCalledTimes(1);
+    expect(new Set(loadWords.mock.calls[0][1])).toEqual(new Set(pool.wordDocIds));
   });
 
   it.each(['single-field', 'step-by-step'] as const)('resolves 30 usable words in %s delivery', async mode => {

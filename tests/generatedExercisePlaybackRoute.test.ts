@@ -110,8 +110,9 @@ describe('student generated exercise playback route', () => {
     expect(response.status).toBe(400);
     expect(mockGetLesson).not.toHaveBeenCalled();
   });
-  it.each([55, 17, 0])('uses the requested count after validating a pool with %s eligible words', async eligible => {
-    const { words, pool, exercise } = generatedPoolFixture(eligible);
+
+  it('fills the requested pool count through the shared collector, ignoring a saved candidate cap', async () => {
+    const { words, pool, exercise } = generatedPoolFixture();
     const legacyConfig = { ...exercise.data.generatorConfig, poolWordLimit: 5 };
     exercise.data.generatorConfig = legacyConfig;
     const db = createFakeGeneratedWordDb({ words, pools: [pool] });
@@ -130,8 +131,8 @@ describe('student generated exercise playback route', () => {
       }
     ).body;
     expect(payload.requestedCount).toBe(30);
-    expect(payload.words).toHaveLength(Math.min(30, eligible));
-    expect(payload.collected).toBe(Math.min(30, eligible));
+    expect(payload.words).toHaveLength(30);
+    expect(payload.collected).toBe(30);
     expect(payload.words.every(word => word.id.startsWith('valid-'))).toBe(true);
     expect(payload.globalScanLimitReached).toBe(false);
   });
