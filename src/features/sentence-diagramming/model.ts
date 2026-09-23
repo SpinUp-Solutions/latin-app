@@ -66,13 +66,6 @@ export interface DiagramAuditSubmission {
   studentAnnotations: DiagramAnnotation[];
 }
 
-/** The complete client-side snapshot available to local practice feedback. */
-export interface DiagramAttempt extends DiagramAuditSubmission {
-  comparison: DiagramComparisonResult;
-  solutionAnnotations: DiagramAnnotation[];
-  tokens: DiagramToken[];
-}
-
 export interface DiagramAnnotationDifference {
   type: 'missing' | 'extra' | 'kind-mismatch';
   span: DiagramSpan;
@@ -449,8 +442,6 @@ export const applyDiagramAnnotation = ({
     annotations: normalizeDiagramAnnotations([...nextAnnotations, candidate], tokens),
   };
 };
-
-export const clearDiagramAnnotations = () => [] as DiagramAnnotation[];
 
 export const resetDiagramColorAnnotations = (annotations: DiagramAnnotation[], tokens: DiagramToken[]) =>
   normalizeDiagramAnnotations(

@@ -207,8 +207,6 @@ const testVersionDraftDocumentShapeSchema = z
   })
   .strict();
 
-export const testVersionDraftSummaryDocumentSchema = testVersionDraftDocumentShapeSchema.omit({ pages: true });
-
 export const testVersionDraftDocumentSchema = testVersionDraftDocumentShapeSchema.superRefine((value, context) => {
   addFormIdentificationConfigurationIssues(value.pages, context);
   const derived = getTestVersionSummaryFields(value.pages);
