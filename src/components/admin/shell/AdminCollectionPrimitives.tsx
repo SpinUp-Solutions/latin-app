@@ -1,9 +1,10 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { Loader2, Search, X, type LucideIcon } from 'lucide-react';
+import { Search, X, type LucideIcon } from 'lucide-react';
 import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
+import { RomanSpinner } from '@/src/components/ui/page-loading';
 import { cn } from '@/src/lib/utils';
 
 interface AdminMetricProps {
@@ -82,7 +83,7 @@ export function AdminSearchInput({
 export function AdminLoadingState({ label, className }: { label: string; className?: string }) {
   return (
     <div className={cn('flex items-center justify-center p-12', className)} role="status">
-      <Loader2 className="h-7 w-7 animate-spin" aria-hidden="true" />
+      <RomanSpinner />
       <span className="sr-only">{label}</span>
     </div>
   );

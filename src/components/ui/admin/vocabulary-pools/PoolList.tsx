@@ -3,10 +3,12 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Button } from '@/src/components/ui/button';
 import { Badge } from '@/src/components/ui/badge';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
+import { RomanSpinner } from '@/src/components/ui/page-loading';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { Skeleton } from '@/src/components/ui/skeleton';
 import { Edit, Trash2, Copy, Library, Calendar, Hash, Loader2 } from 'lucide-react';
 import { useInfiniteScroll } from '@/src/hooks/useInfiniteScroll';
+import { VocabularyInfiniteScrollSentinel } from '@/src/components/ui/admin/vocabulary/VocabularyResultsState';
 import { cn } from '@/src/lib/utils';
 import type { VocabularyPoolSummary, VocabularyPoolUsage } from '@/src/types/vocabulary-pool';
 
@@ -125,7 +127,7 @@ export const PoolList: React.FC<PoolListProps> = ({
   if ((loading || fetching) && pools.length === 0) {
     return (
       <div className="text-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red mx-auto mb-4"></div>
+        <RomanSpinner className="mx-auto mb-4" />
         <p className="text-gray-500">Loading vocabulary pools...</p>
       </div>
     );
@@ -303,16 +305,12 @@ export const PoolList: React.FC<PoolListProps> = ({
         );
       })}
 
-      {(hasMore || loadingMore) && (
-        <div ref={sentinelRef} className="flex justify-center py-6">
-          {loadingMore && (
-            <div className="flex items-center gap-2 text-gray-600">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="text-sm">Loading more pools...</span>
-            </div>
-          )}
-        </div>
-      )}
+      <VocabularyInfiniteScrollSentinel
+        sentinelRef={sentinelRef}
+        loadingMore={loadingMore}
+        hasMore={hasMore}
+        label="Loading more pools..."
+      />
     </div>
   );
 };

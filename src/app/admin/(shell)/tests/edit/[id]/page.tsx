@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 import { AdminEmptyState, AdminMetric, AdminPage, AdminPageHeader } from '@/src/components/admin/shell';
+import { PageLoading } from '@/src/components/ui/page-loading';
 import { MockAssignmentDialog } from '@/src/components/ui/admin/MockAssignmentDialog';
 import { PassingRequirementControl } from '@/src/components/ui/admin/test-version/PassingRequirementControl';
 import { Badge } from '@/src/components/ui/badge';
@@ -389,12 +390,7 @@ function TestOverviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { data: detail, isLoading, isError } = useGetTestByIdQuery(id);
 
   if (isLoading) {
-    return (
-      <AdminPage className="flex items-center justify-center" role="status">
-        <Loader2 className="h-8 w-8 animate-spin" />
-        <span className="sr-only">Loading test</span>
-      </AdminPage>
-    );
+    return <PageLoading label="Loading test" />;
   }
   if (isError || !detail)
     return (

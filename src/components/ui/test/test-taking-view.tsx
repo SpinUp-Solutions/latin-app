@@ -2,8 +2,8 @@
 
 import React, { type ReactNode } from 'react';
 import { ArrowLeft, ArrowRight, Eye, FileCheck2, LogOut, Save } from 'lucide-react';
-import { Button } from '@/src/components/ui/button';
 import { Progress } from '@/src/components/ui/progress';
+import { PlayerActionBar, PlayerBarButton } from '@/src/components/ui/core/player-action-bar';
 import { RomanPlayerShell } from '@/src/components/ui/core/roman-player-shell';
 import { PageTemplate } from '@/src/components/ui/lesson/page-template';
 import { cn } from '@/src/lib/utils';
@@ -126,50 +126,37 @@ export function TestTakingView({
           )}
         </RomanPlayerShell>
 
-        <div
-          className="mt-4 flex flex-col gap-3 rounded-2xl border border-roman-red/15 bg-white/95 p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between"
-          aria-label="Test page navigation">
+        <PlayerActionBar label="Test page navigation" className="mt-4">
           {onExit ? (
-            <Button
-              type="button"
-              variant="outline"
-              className="rounded-xl border-roman-red/20 hover:bg-roman-parchment"
-              disabled={navigationPending}
-              onClick={onExit}>
+            <PlayerBarButton type="button" tone="outline" disabled={navigationPending} onClick={onExit}>
               <LogOut className="mr-2 h-4 w-4" aria-hidden="true" />
               Exit test
-            </Button>
+            </PlayerBarButton>
           ) : null}
           <div className="flex flex-col gap-3 sm:ml-auto sm:flex-row sm:items-center">
             {!sectionNavigation && (
-              <Button
-                variant="outline"
-                className="rounded-xl border-roman-red/20 hover:bg-roman-parchment"
+              <PlayerBarButton
+                type="button"
+                tone="outline"
                 disabled={navigationPending || currentPageIndex === 0}
                 onClick={onPrevious}>
                 <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
                 Previous page
-              </Button>
+              </PlayerBarButton>
             )}
             {!sectionNavigation && !isLastPage ? (
-              <Button
-                className="rounded-xl bg-roman-red hover:bg-roman-red/90"
-                disabled={navigationPending}
-                onClick={onNext}>
+              <PlayerBarButton type="button" disabled={navigationPending} onClick={onNext}>
                 Next page
                 <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
-              </Button>
+              </PlayerBarButton>
             ) : (
-              <Button
-                className="rounded-xl bg-roman-red hover:bg-roman-red/90"
-                disabled={navigationPending}
-                onClick={onReview}>
+              <PlayerBarButton type="button" disabled={navigationPending} onClick={onReview}>
                 {sectionNavigation ? 'Review section' : 'Review answers'}
                 <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
-              </Button>
+              </PlayerBarButton>
             )}
           </div>
-        </div>
+        </PlayerActionBar>
       </main>
     </div>
   );

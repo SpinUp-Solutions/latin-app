@@ -7,9 +7,9 @@ import { FillEmboldedTextExercise } from '@/src/types/exercise';
 import { ExerciseInput, FeedbackDisplay } from '../feedback';
 import { validateFillEmboldedTextExercise } from '@/src/utils/exercises/fillEmboldedTextExercise';
 import { ExerciseProgress } from './exercise-progress';
-import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
+import { ExerciseIntro } from './exercise-intro';
+import { applySequentialItemResult } from './sequential-item-result';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
-import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 import type {
   ExerciseAnswer,
   ExerciseAnswerHandler,
@@ -136,40 +136,25 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
       ? Math.round(gradeExercisePercentage({ exercise }, { type: 'fill-embolded-text', answers: nextAnswers }))
       : null;
 
-    if (validation.isCorrect) {
-      handleCorrect(isLastItem);
-
-      const hasVisibleExplanation =
-        (exercise.feedbackConfig.successMessage?.showExplanation ?? true) &&
-        hasVisibleFeedbackContent(currentWord.explanation);
-
-      if (isLastItem) {
-        if (!assessmentMode) onCompletionAccepted?.(finalScore!);
-        autoAdvanceIfEnabled(() => {
-          onComplete?.(finalScore!);
-        }, hasVisibleExplanation);
-      } else {
-        autoAdvanceIfEnabled(() => {
-          setUserAnswer('');
-          setSelectedWordIndex(null);
-          reset();
-          setIsProcessing(false);
-        }, hasVisibleExplanation);
-      }
-    } else {
-      handleIncorrect();
-      if (assessmentMode) {
-        autoAdvanceIfEnabled(() => {
-          setUserAnswer('');
-          setSelectedWordIndex(null);
-          reset();
-          setIsProcessing(false);
-          if (finalScore !== null) onComplete?.(finalScore);
-        }, false);
-      } else {
-        setIsProcessing(false);
-      }
-    }
+    applySequentialItemResult({
+      isCorrect: validation.isCorrect,
+      isLastItem,
+      assessmentMode,
+      showExplanation: exercise.feedbackConfig.successMessage?.showExplanation,
+      explanation: currentWord.explanation,
+      finalScore,
+      handleCorrect,
+      handleIncorrect,
+      autoAdvanceIfEnabled,
+      onCompletionAccepted,
+      onComplete,
+      clearItem: () => {
+        setUserAnswer('');
+        setSelectedWordIndex(null);
+        reset();
+      },
+      stopProcessing: () => setIsProcessing(false),
+    });
   };
 
   const handleAnswerChange = (value: string) => {
@@ -195,26 +180,12 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
 
   return (
     <div className="space-y-6 max-w-full">
-      <div className="flex justify-between items-start">
-        {exercise.title && (
-          <h3 className="text-xl font-serif text-roman-red mb-4">
-            <SimpleRichDisplay content={exercise.title} />
-          </h3>
-        )}
-        {exercise.audioPath && (
-          <AudioPlayButton
-            audioPath={exercise.audioPath}
-            variant="default"
-            size="sm"
-            className="ml-2 rounded-full border-roman-terracotta/20 hover:border-roman-terracotta hover:bg-roman-parchment"
-          />
-        )}
-      </div>
-      {exercise.instructions && exercise.instructions.replace(/<[^>]*>/g, '').trim() !== '' && (
-        <div className="p-6 bg-roman-parchment rounded-lg mb-4">
-          <SimpleRichDisplay content={exercise.instructions} className="whitespace-pre-wrap break-words" />
-        </div>
-      )}
+      <ExerciseIntro
+        variant="passage"
+        title={exercise.title}
+        audioPath={exercise.audioPath}
+        instructions={exercise.instructions}
+      />
 
       <ExerciseProgress
         currentIndex={currentIndex}

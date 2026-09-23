@@ -2,9 +2,7 @@
 
 import React from 'react';
 import { VocabularyContent } from '@/src/types/lesson';
-import { BookOpen } from 'lucide-react';
-import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
-import { SimpleRichDisplay } from '../core/simple-rich-display';
+import { VocabularyNotice } from './vocabulary-notice';
 import { VocabularyStudyView } from './VocabularyStudyView';
 
 interface VocabularyViewerProps {
@@ -16,20 +14,11 @@ export function VocabularyViewer({ content }: VocabularyViewerProps) {
 
   if (vocabularyItems.length === 0) {
     return (
-      <div className="space-y-6">
-        <div className="text-center space-y-2">
-          <h2 className="text-2xl font-serif text-gray-800">
-            <SimpleRichDisplay content={content.title || 'Special Vocabulary'} />
-          </h2>
-          <p className="text-roman-stone">No vocabulary items available</p>
-        </div>
-        <RomanCard>
-          <RomanCardContent className="p-8 text-center">
-            <BookOpen className="h-12 w-12 mx-auto text-gray-300 mb-4" />
-            <p className="text-gray-500">This vocabulary list is empty.</p>
-          </RomanCardContent>
-        </RomanCard>
-      </div>
+      <VocabularyNotice
+        title={content.title || 'Special Vocabulary'}
+        subtitle="No vocabulary items available"
+        message="This vocabulary list is empty."
+      />
     );
   }
 
