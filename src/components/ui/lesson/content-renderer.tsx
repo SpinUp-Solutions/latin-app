@@ -122,6 +122,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
 
   switch (renderedContent.type) {
     case 'text':
+    case 'emphasis': {
       const textContent = renderedContent as TextContent;
       return (
         <TextComponent
@@ -131,17 +132,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
           audioPath={textContent.audioPath || undefined}
         />
       );
-
-    case 'emphasis': //enum
-      const emphasisContent = renderedContent as TextContent;
-      return (
-        <TextComponent
-          title={emphasisContent.title || ''}
-          content={emphasisContent.content}
-          className=""
-          audioPath={emphasisContent.audioPath || undefined}
-        />
-      );
+    }
 
     case 'table':
       const tableContent = renderedContent as TableContent;

@@ -13,6 +13,7 @@ import { Input } from '@/src/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
 import { Card, CardContent } from '@/src/components/ui/card';
 import { Library, Loader2, Search } from 'lucide-react';
+import { RomanSpinner } from '@/src/components/ui/page-loading';
 import { cn } from '@/src/lib/utils';
 import Link from 'next/link';
 import { useGetPoolsQuery, useGetPoolSummaryQuery } from '@/src/store/api/vocabularyPoolApi';
@@ -153,7 +154,7 @@ export const VocabularyPoolSelector: React.FC<VocabularyPoolSelectorProps> = ({
             <div className="max-h-96 overflow-y-auto">
               {isLoading ? (
                 <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red mx-auto mb-2" />
+                  <RomanSpinner className="mx-auto mb-2" />
                   Loading pools...
                 </div>
               ) : pools.length === 0 ? (

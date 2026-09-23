@@ -1,26 +1,22 @@
 import React, { useCallback } from 'react';
-import { Button } from '@/src/components/ui/button';
 import { Card, CardContent } from '@/src/components/ui/card';
-import { Input } from '@/src/components/ui/input';
 import { GeneratedTranslationExercise } from '@/src/types/exercises';
 import { useAppSelector } from '@/src/store/hooks';
 import { SimpleInput, SimpleTextarea, SimpleSelect } from '@/src/components/ui/form-components';
 import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
-import { AdvancedFiltersPanel } from '../vocabulary/AdvancedFiltersPanel';
-import { VocabularyPoolSelector } from '../vocabulary-pools/VocabularyPoolSelector';
 import { FormSelectionTable } from '../vocabulary/FormSelectionTable';
 import { WordSourceSection } from './WordSourceSection';
 import { MultiPosConfigSection } from './MultiPosConfigSection';
 import { useGeneratedExerciseEditor } from '@/src/hooks/useGeneratedExerciseEditor';
 import { splitTranslationAnswers } from '@/src/utils/exercises/generatedTranslationExercise';
 import type { TranslationDirection } from '@/src/types/exercises/generated-translation';
-import type { PartOfSpeech, PronounType, PronounPerson } from '@/shared/types/vocabulary/schemas/enums';
-import { parseMultiFilterValue, serializeMultiFilterValue } from '@/src/utils/wordFilters';
+import type { PronounType, PronounPerson } from '@/shared/types/vocabulary/schemas/enums';
 import { getExerciseDisplayForm, hasSelectedForm } from '@/src/utils/exercises/formSelection';
-import { formatGeneratedPreviewDiagnostics } from '@/src/utils/generated/generatedExercisePreview';
-import { getApiErrorMessage } from '@/src/store/api/baseQuery';
-import { GeneratedQuestionCountField } from './GeneratedQuestionCountField';
+import { GeneratedVocabularyFilters } from './GeneratedVocabularyFilters';
+import { GeneratedPoolSourceFields } from './GeneratedPoolSourceFields';
+import { GeneratedExerciseSummary } from './GeneratedExerciseSummary';
+import { GeneratedPreviewPanel } from './GeneratedPreviewPanel';
 
 export const GeneratedTranslationEditor: React.FC = () => {
   const editingContent = useAppSelector(
@@ -53,96 +49,30 @@ const GeneratedTranslationEditorView: React.FC<{ editingContent: GeneratedTransl
   );
 
   const filtersContent = (
-    <div>
-      <label className="block text-sm font-medium mb-3">Vocabulary Filters</label>
-      <AdvancedFiltersPanel
-        filters={{
-          partOfSpeech: (editor.derivedFilters.partOfSpeech || 'all') as PartOfSpeech | 'all',
-          search: editor.derivedFilters.search || '',
-          verbConjugation: parseMultiFilterValue(editor.derivedFilters.verbConjugation) as
-            | ('1' | '2' | '3' | '3io' | '4' | 'irregular')[]
-            | 'all',
-          isDeponent: (editor.derivedFilters.isDeponent || 'both') as 'true' | 'false' | 'both',
-          nounDeclension: parseMultiFilterValue(editor.derivedFilters.nounDeclension) as
-            | ('1' | '2' | '3' | '3-istem' | '4' | '5')[]
-            | 'all',
-          adjectiveDeclension: parseMultiFilterValue(editor.derivedFilters.adjectiveDeclension) as
-            | ('1-2' | '3')[]
-            | 'all',
-          pronounType: parseMultiFilterValue(editor.derivedFilters.pronounType) as PronounType[] | 'all',
-          pronounPerson: parseMultiFilterValue(editor.derivedFilters.pronounPerson) as PronounPerson[] | 'all',
-          limit: editor.config.count,
-        }}
-        onFiltersChange={updates => {
-          if ('limit' in updates) {
-            const currentCount = editor.config?.count ?? 5;
-            const nextCount = updates.limit === undefined ? currentCount : (updates.limit as typeof currentCount);
-            editor.updateConfig({ count: nextCount });
-          } else {
-            const serialized: Record<string, string | undefined> = {};
-            for (const [key, value] of Object.entries(updates)) {
-              if (Array.isArray(value)) {
-                serialized[key] = serializeMultiFilterValue(value) ?? 'all';
-              } else {
-                serialized[key] = value as string;
-              }
-            }
-            editor.handleFiltersChange(serialized);
-          }
-        }}
-        onReset={editor.handleResetFilters}
-        onApply={() => editor.setIsPreviewOpen(true)}
-        isLoading={editor.isPreviewFetching}
-      />
-    </div>
+    <GeneratedVocabularyFilters
+      derivedFilters={editor.derivedFilters}
+      count={editor.config.count}
+      limitMode="exclusive"
+      onCountChange={count => editor.updateConfig({ count })}
+      onFiltersChange={editor.handleFiltersChange}
+      onReset={editor.handleResetFilters}
+      onApply={() => editor.setIsPreviewOpen(true)}
+      isLoading={editor.isPreviewFetching}
+    />
   );
 
   const poolContent = (
-    <div className="space-y-4">
-      <label className="block text-sm font-medium mb-3">Vocabulary Pool</label>
-      <VocabularyPoolSelector
-        selectedPoolId={editor.config.poolId || undefined}
-        onPoolSelect={poolId => editor.updateConfig({ poolId: poolId || null })}
-      />
-
-      <GeneratedQuestionCountField
-        id="translation-question-count"
-        count={editor.config.count}
-        onChange={count => editor.updateConfig({ count })}
-      />
-
-      <div className="space-y-2">
-        <label htmlFor="translation-pool-word-limit" className="block text-sm font-medium">
-          Pool Word Limit
-        </label>
-        <Input
-          id="translation-pool-word-limit"
-          type="number"
-          min={1}
-          inputMode="numeric"
-          value={editor.config.poolWordLimit ?? ''}
-          onChange={event => {
-            const { value } = event.target;
-            if (value === '') {
-              editor.updateConfig({ poolWordLimit: null });
-              return;
-            }
-
-            const parsed = Number.parseInt(value, 10);
-            if (!Number.isNaN(parsed) && parsed > 0) {
-              editor.updateConfig({ poolWordLimit: parsed });
-            }
-          }}
-          placeholder="Leave blank to use the full pool"
-        />
-        <p className="text-xs text-gray-500">
-          Randomly sample up to this many unique words from the selected pool. Leave blank to use the full pool.
-        </p>
-      </div>
-    </div>
+    <GeneratedPoolSourceFields
+      poolId={editor.config.poolId}
+      count={editor.config.count}
+      poolWordLimit={editor.config.poolWordLimit}
+      questionCountId="translation-question-count"
+      poolWordLimitId="translation-pool-word-limit"
+      onPoolChange={poolId => editor.updateConfig({ poolId })}
+      onCountChange={count => editor.updateConfig({ count })}
+      onPoolWordLimitChange={poolWordLimit => editor.updateConfig({ poolWordLimit })}
+    />
   );
-
-  const previewWords = editor.previewData?.words;
 
   return (
     <div className="space-y-6">
@@ -218,82 +148,39 @@ const GeneratedTranslationEditorView: React.FC<{ editingContent: GeneratedTransl
         />
       )}
 
-      <div>
-        <label className="block text-sm font-medium mb-3">Preview</label>
-        <Card>
-          <CardContent className="p-4 space-y-4">
-            <Button type="button" onClick={() => editor.setIsPreviewOpen(true)} disabled={editor.isPreviewFetching}>
-              {editor.isPreviewFetching ? 'Loading Preview...' : 'Preview Sample Items'}
-            </Button>
+      <GeneratedPreviewPanel
+        isFetching={editor.isPreviewFetching}
+        isOpen={editor.isPreviewOpen}
+        previewError={editor.previewError}
+        previewData={editor.previewData}
+        idleLabel="Preview Sample Items"
+        onPreview={() => editor.setIsPreviewOpen(true)}
+        renderItems={words =>
+          words.map((word, index) => {
+            const translations = splitTranslationAnswers(word.translation);
+            const displayWord = getExerciseDisplayForm(word);
 
-            {editor.isPreviewOpen && editor.previewError ? (
-              <div className="text-sm text-red-600 mt-4">
-                {getApiErrorMessage(editor.previewError, 'Failed to load preview')}
-              </div>
-            ) : null}
+            return (
+              <Card key={index}>
+                <CardContent className="p-3 space-y-1">
+                  <div className="font-medium">{displayWord}</div>
+                  {hasSelectedForm(word) && word.selected_form !== word.root_word && (
+                    <div className="text-xs text-gray-500">Root: {word.dictionary_entry || word.root_word}</div>
+                  )}
+                  <div className="text-sm text-gray-600">Accepted answers: {translations.join(' OR ')}</div>
+                </CardContent>
+              </Card>
+            );
+          })
+        }
+      />
 
-            {editor.isPreviewOpen && editor.previewData?.diagnostics?.length ? (
-              <p className="text-xs text-gray-500 mt-2">
-                {formatGeneratedPreviewDiagnostics(editor.previewData)}
-              </p>
-            ) : null}
-
-            {editor.isPreviewOpen && previewWords && previewWords.length > 0 && (
-              <div className="space-y-2 mt-4">
-                <label className="block text-sm font-medium">Preview ({previewWords.length} items)</label>
-                {previewWords.map((word, index) => {
-                  const translations = splitTranslationAnswers(word.translation);
-
-                  const displayWord = getExerciseDisplayForm(word);
-
-                  return (
-                    <Card key={index}>
-                      <CardContent className="p-3 space-y-1">
-                        <div className="font-medium">{displayWord}</div>
-                        {hasSelectedForm(word) && word.selected_form !== word.root_word && (
-                          <div className="text-xs text-gray-500">Root: {word.dictionary_entry || word.root_word}</div>
-                        )}
-                        <div className="text-sm text-gray-600">Accepted answers: {translations.join(' OR ')}</div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
-            )}
-
-            {editor.isPreviewOpen && previewWords && previewWords.length === 0 && (
-              <div className="text-sm text-amber-600 mt-4">
-                No words match the current filters. Try adjusting your filter criteria.
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium mb-2">Exercise Summary</label>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-sm space-y-2">
-              <div>
-                <strong>Collection:</strong> {editor.config.collection}
-              </div>
-              <div>
-                <strong>Number of Questions:</strong>{' '}
-                {editor.config.count === 'all' ? 'All matching words' : editor.config.count}
-              </div>
-              <div>
-                <strong>Part of Speech:</strong> {editor.derivedFilters.partOfSpeech || 'All'}
-              </div>
-              {editor.derivedFormSelection && editor.derivedFormSelection.selectedCellPaths.length > 0 && (
-                <div>
-                  <strong>Selected Forms:</strong> {editor.derivedFormSelection.selectedCellPaths.length} form(s)
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <GeneratedExerciseSummary
+        collection={editor.config.collection}
+        count={editor.config.count}
+        partOfSpeech={editor.derivedFilters.partOfSpeech}
+        selectedFormCount={editor.derivedFormSelection?.selectedCellPaths.length}
+      />
 
       <ExerciseFeedbackSection
         feedbackConfig={editingContent.feedbackConfig}

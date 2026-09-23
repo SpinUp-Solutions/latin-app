@@ -5,6 +5,7 @@ import * as Sentry from '@sentry/nextjs';
 import { LessonWithProgress } from '@/src/types/lesson';
 import { BookOpen, Headphones, CheckCircle } from 'lucide-react';
 import { RomanPlayerShell } from '@/src/components/ui/core/roman-player-shell';
+import { RomanSpinner } from '@/src/components/ui/page-loading';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { Button } from '@/src/components/ui/button';
 import PageTemplate from './page-template';
@@ -341,7 +342,8 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
     if (!hasExercise) handleNext();
   }, [currentPage?.items, handleNext]);
 
-  const { audioRef, isPlaying, togglePlay } = useAudio(currentPage?.audioPath, handleAudioEnded);
+  const audioPlaybackKey = `${lesson.id}:${currentPage?.id}`;
+  const { audioRef, isPlaying, togglePlay } = useAudio(currentPage?.audioPath, handleAudioEnded, audioPlaybackKey);
 
   const trackPendingExerciseWrite = useCallback((write: Promise<unknown>) => {
     pendingExerciseWritesRef.current.add(write);
@@ -537,7 +539,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   if (!lesson || !currentPage) {
     return (
       <div className="min-h-[300px] flex items-center justify-center bg-roman-marble">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>
+        <RomanSpinner />
       </div>
     );
   }
@@ -546,7 +548,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
 
   return (
     <div className="lesson-player">
-      <audio ref={audioRef} className="hidden" controls preload="auto" />
+      <audio key={audioPlaybackKey} ref={audioRef} className="hidden" controls preload="auto" />
 
       <RomanPlayerShell
         icon={isListeningLesson ? Headphones : BookOpen}
