@@ -22,6 +22,7 @@ jest.mock('@/src/lib/learning-units/student-dashboard-service', () => ({
 }));
 
 import { POST } from '@/src/app/api/words/generated-exercise/route';
+import { generatedPoolFixture } from './helpers/generatedPoolFixture';
 import { createFakeGeneratedWordDb } from './helpers/fakeGeneratedWordFirestore';
 
 const translationExercise = {
@@ -108,5 +109,30 @@ describe('student generated exercise playback route', () => {
 
     expect(response.status).toBe(400);
     expect(mockGetLesson).not.toHaveBeenCalled();
+  });
+  it.each([55, 17, 0])('uses the requested count after validating a pool with %s eligible words', async eligible => {
+    const { words, pool, exercise } = generatedPoolFixture(eligible);
+    const legacyConfig = { ...exercise.data.generatorConfig, poolWordLimit: 5 };
+    exercise.data.generatorConfig = legacyConfig;
+    const db = createFakeGeneratedWordDb({ words, pools: [pool] });
+    dbState.collection = db.collection;
+    mockGetLesson.mockResolvedValue({ id: 'lesson-1', pages: [{ id: 'page-1', items: [exercise] }] });
+    const response = await POST({ json: async () => playbackBody } as never);
+    expect(response.status).toBe(200);
+    const payload = (
+      response as unknown as {
+        body: {
+          words: Array<{ id: string }>;
+          requestedCount: number;
+          collected: number;
+          globalScanLimitReached: boolean;
+        };
+      }
+    ).body;
+    expect(payload.requestedCount).toBe(30);
+    expect(payload.words).toHaveLength(Math.min(30, eligible));
+    expect(payload.collected).toBe(Math.min(30, eligible));
+    expect(payload.words.every(word => word.id.startsWith('valid-'))).toBe(true);
+    expect(payload.globalScanLimitReached).toBe(false);
   });
 });

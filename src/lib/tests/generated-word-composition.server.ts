@@ -15,10 +15,7 @@ import { prepareGeneratedFormIdentificationWord } from '@/src/utils/exercises/fo
 import { isRejectedBySpecAwarePronounOverlap } from '@/src/utils/generated/pronounParadigmFiltering';
 import { isSelectableMorphologyForm } from '@/src/utils/morphologyForms';
 import type { GeneratedExercisePreviewDiagnostics } from './generated-preview-schema';
-import {
-  isUsableGeneratedTranslationWord,
-  type GeneratedExercise,
-} from './generated-exercises';
+import { isUsableGeneratedTranslationWord, type GeneratedExercise } from './generated-exercises';
 
 export const PER_SPEC_SCAN_FLOOR = 400;
 const BASE_GLOBAL_SCAN = 2000;
@@ -181,11 +178,7 @@ function selectForm(
   return { selected, ...paths };
 }
 
-function mapWord(
-  doc: QueryDocumentSnapshot,
-  spec: WordQuerySpec,
-  formRng: () => number
-): ExerciseWordResponse | null {
+function mapWord(doc: QueryDocumentSnapshot, spec: WordQuerySpec, formRng: () => number): ExerciseWordResponse | null {
   const data = doc.data() as Record<string, unknown>;
   const selectedPaths = spec.formSelection?.selectedCellPaths || [];
   const selection =
@@ -235,6 +228,7 @@ function evaluateCandidate(
   formRng: () => number,
   paradigmConfigs: ParadigmConfigs
 ): ExerciseWordResponse | null {
+  if (doc.data()._deletionPending) return null;
   const word = mapWord(doc, spec, formRng);
   if (!word) return null;
   if (isRejectedBySpecAwarePronounOverlap(word, spec.paradigm, paradigmConfigs)) return null;
@@ -283,9 +277,7 @@ class QueryCandidateStream implements CandidateStream {
 
   async nextBatch(limit: number, scanAllowance: number): Promise<QueryDocumentSnapshot[]> {
     if (this.exhausted || this.scanLimitReached || limit <= 0 || scanAllowance <= 0) return [];
-    const remainingCeiling = this.unbounded
-      ? limit
-      : Math.max(0, this.scanCeiling - this.totalScanned);
+    const remainingCeiling = this.unbounded ? limit : Math.max(0, this.scanCeiling - this.totalScanned);
     if (!this.unbounded && remainingCeiling <= 0) {
       this.scanLimitReached = true;
       return [];
@@ -388,6 +380,8 @@ class QueryCandidateStream implements CandidateStream {
 }
 
 class PoolCandidateStream implements CandidateStream {
+  // A pool is already a finite candidate set. Scan it to exhaustion if needed.
+  readonly scanCeiling = Number.POSITIVE_INFINITY;
   totalScanned = 0;
   exhausted = false;
   scanLimitReached = false;
@@ -398,41 +392,20 @@ class PoolCandidateStream implements CandidateStream {
 
   constructor(
     readonly spec: WordQuerySpec,
-    readonly scanCeiling: number,
     private readonly ids: string[],
-    private readonly loadDocs: (ids: string[]) => Promise<QueryDocumentSnapshot[]>,
-    private readonly unbounded: boolean
+    private readonly loadDocs: (ids: string[]) => Promise<QueryDocumentSnapshot[]>
   ) {}
 
-  async nextBatch(limit: number, scanAllowance: number): Promise<QueryDocumentSnapshot[]> {
-    if (this.exhausted || this.scanLimitReached || limit <= 0 || scanAllowance <= 0) return [];
-    if (!this.unbounded && this.totalScanned >= this.scanCeiling) {
-      this.scanLimitReached = true;
-      return [];
-    }
-
+  async nextBatch(limit: number): Promise<QueryDocumentSnapshot[]> {
+    if (this.exhausted || limit <= 0) return [];
     const docs: QueryDocumentSnapshot[] = [];
-    const initialScanned = this.totalScanned;
     while (docs.length < limit && this.cursor < this.ids.length) {
-      const remainingAllowance = this.unbounded
-        ? POOL_STREAM_CHUNK
-        : scanAllowance - (this.totalScanned - initialScanned);
-      if (!this.unbounded && remainingAllowance <= 0) break;
-      const remainingScan = this.unbounded ? POOL_STREAM_CHUNK : Math.max(0, this.scanCeiling - this.totalScanned);
-      if (!this.unbounded && remainingScan <= 0) {
-        this.scanLimitReached = true;
-        break;
-      }
-      // Examine up to a chunk (or remaining ceiling), not only the remaining
-      // match quota — sparse POS still needs to scan mixed IDs to find hits.
-      const sliceSize = Math.min(POOL_STREAM_CHUNK, remainingScan, remainingAllowance);
-      if (sliceSize <= 0) break;
-
-      const slice = this.ids.slice(this.cursor, this.cursor + sliceSize);
+      // Keep reads batched even for a small quota in a sparse pool. Any extra
+      // matches stay in the stream's unread buffer for replenishment/borrowing.
+      const slice = this.ids.slice(this.cursor, this.cursor + POOL_STREAM_CHUNK);
       this.cursor += slice.length;
       const loaded = await this.loadDocs(slice);
       this.totalScanned += loaded.length;
-      if (!this.unbounded && this.totalScanned >= this.scanCeiling) this.scanLimitReached = true;
 
       for (const doc of loaded) {
         if (this.seenIds.has(doc.id)) continue;
@@ -440,7 +413,6 @@ class PoolCandidateStream implements CandidateStream {
         this.seenIds.add(doc.id);
         docs.push(doc);
       }
-      if (this.scanLimitReached) break;
     }
     if (this.cursor >= this.ids.length) this.exhausted = true;
     return docs;
@@ -457,9 +429,7 @@ function createSharedPoolLoader(pool: NonNullable<Awaited<ReturnType<typeof getR
       loaded.forEach(doc => cache.set(doc.id, doc));
       missing.filter(id => !found.has(id)).forEach(id => cache.set(id, null));
     }
-    return ids
-      .map(id => cache.get(id))
-      .filter((doc): doc is QueryDocumentSnapshot => Boolean(doc));
+    return ids.map(id => cache.get(id)).filter((doc): doc is QueryDocumentSnapshot => Boolean(doc));
   };
 }
 
@@ -507,7 +477,6 @@ export async function collectGeneratedExerciseWords(options: {
   count: number | 'all';
   exercise: GeneratedExercise;
   poolId?: string | null;
-  poolWordLimit?: number | null;
   rng?: () => number;
   paradigmConfigs?: ParadigmConfigs;
 }): Promise<CollectGeneratedExerciseWordsResult> {
@@ -532,13 +501,16 @@ export async function collectGeneratedExerciseWords(options: {
   if (options.poolId) {
     const pool = await getReadableVocabularyPool(options.db, options.poolId);
     if (!pool) {
-      throw new GeneratedVocabularySourceError(`Vocabulary pool ${options.poolId} was not found`, 404, 'POOL_NOT_FOUND');
+      throw new GeneratedVocabularySourceError(
+        `Vocabulary pool ${options.poolId} was not found`,
+        404,
+        'POOL_NOT_FOUND'
+      );
     }
     const wordIds = Array.isArray(pool.data.wordDocIds)
       ? pool.data.wordDocIds.filter((id: unknown): id is string => typeof id === 'string' && Boolean(id))
       : [];
-    const cap = options.poolWordLimit && options.poolWordLimit > 0 ? options.poolWordLimit : Infinity;
-    poolIds = shuffleWithRng(wordIds, poolRng).slice(0, Number.isFinite(cap) ? cap : wordIds.length);
+    poolIds = shuffleWithRng([...new Set(wordIds)], poolRng);
     loadPoolDocs = createSharedPoolLoader(pool);
   }
 
@@ -553,7 +525,9 @@ export async function collectGeneratedExerciseWords(options: {
     ? specs.map(() => Number.POSITIVE_INFINITY)
     : allocateFairShares(specs.length, numericCount, allocationRng);
   const budget = {
-    remaining: unbounded ? Number.POSITIVE_INFINITY : globalScanBudget(numericCount),
+    // Pool reads are bounded by its unique IDs and shared across all paradigms.
+    // Collection queries retain their scan budget.
+    remaining: unbounded || poolIds !== null ? Number.POSITIVE_INFINITY : globalScanBudget(numericCount),
   };
   const initialBudget = budget.remaining;
 
@@ -561,7 +535,7 @@ export async function collectGeneratedExerciseWords(options: {
     const share = unbounded ? 0 : shares[index];
     const ceiling = unbounded ? Number.POSITIVE_INFINITY : perSpecScanCeiling(share);
     if (poolIds && loadPoolDocs) {
-      return new PoolCandidateStream(spec, ceiling, poolIds, loadPoolDocs, unbounded);
+      return new PoolCandidateStream(spec, poolIds, loadPoolDocs);
     }
     return new QueryCandidateStream(spec, ceiling, options.db, options.collection, queryRng, unbounded);
   });

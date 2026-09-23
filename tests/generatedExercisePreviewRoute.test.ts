@@ -22,6 +22,7 @@ jest.mock('@/src/lib/learning-units/student-dashboard-service', () => ({
 }));
 
 import { POST } from '@/src/app/api/admin/exercises/generated-preview/route';
+import { generatedPoolFixture } from './helpers/generatedPoolFixture';
 import { createFakeGeneratedWordDb } from './helpers/fakeGeneratedWordFirestore';
 import { AdminAccessError } from '@/src/lib/admin-access-error';
 import { MAX_GENERATED_WORD_COUNT } from '@/src/config/generatedExerciseLimits';
@@ -79,10 +80,7 @@ describe('admin generated exercise preview route', () => {
     expect(payload.words).toHaveLength(10);
     expect(payload.collected).toBe(10);
     expect(payload.diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ specId: 'noun' }),
-        expect.objectContaining({ specId: 'verb' }),
-      ])
+      expect.arrayContaining([expect.objectContaining({ specId: 'noun' }), expect.objectContaining({ specId: 'verb' })])
     );
   });
 
@@ -193,5 +191,29 @@ describe('admin generated exercise preview route', () => {
       }),
     } as never);
     expect(response.status).toBe(400);
+  });
+  it.each([55, 17, 0])('uses the requested count after validating a pool with %s eligible words', async eligible => {
+    const { words, pool, exercise } = generatedPoolFixture(eligible);
+    const legacyConfig = { ...exercise.data.generatorConfig, poolWordLimit: 5 };
+    exercise.data.generatorConfig = legacyConfig;
+    const db = createFakeGeneratedWordDb({ words, pools: [pool] });
+    dbState.collection = db.collection;
+    const response = await POST({ json: async () => exercise } as never);
+    expect(response.status).toBe(200);
+    const payload = (
+      response as unknown as {
+        body: {
+          words: Array<{ id: string }>;
+          requestedCount: number;
+          collected: number;
+          globalScanLimitReached: boolean;
+        };
+      }
+    ).body;
+    expect(payload.requestedCount).toBe(30);
+    expect(payload.words).toHaveLength(Math.min(30, eligible));
+    expect(payload.collected).toBe(Math.min(30, eligible));
+    expect(payload.words.every(word => word.id.startsWith('valid-'))).toBe(true);
+    expect(payload.globalScanLimitReached).toBe(false);
   });
 });

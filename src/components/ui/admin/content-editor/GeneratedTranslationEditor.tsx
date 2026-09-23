@@ -65,12 +65,9 @@ const GeneratedTranslationEditorView: React.FC<{ editingContent: GeneratedTransl
     <GeneratedPoolSourceFields
       poolId={editor.config.poolId}
       count={editor.config.count}
-      poolWordLimit={editor.config.poolWordLimit}
       questionCountId="translation-question-count"
-      poolWordLimitId="translation-pool-word-limit"
       onPoolChange={poolId => editor.updateConfig({ poolId })}
       onCountChange={count => editor.updateConfig({ count })}
-      onPoolWordLimitChange={poolWordLimit => editor.updateConfig({ poolWordLimit })}
     />
   );
 

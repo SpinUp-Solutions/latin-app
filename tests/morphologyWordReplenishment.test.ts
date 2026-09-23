@@ -6,13 +6,9 @@ import {
   collectGeneratedExerciseWords,
   createGeneratedExerciseRng,
   PER_SPEC_SCAN_FLOOR,
-  perSpecScanCeiling,
 } from '@/src/lib/tests/generated-word-composition.server';
 import { createFirestoreGeneratedWordLoader } from '@/src/lib/tests/generated-word-loader.server';
-import {
-  isUsableGeneratedTranslationWord,
-  resolveGeneratedExerciseItems,
-} from '@/src/lib/tests/generated-exercises';
+import { isUsableGeneratedTranslationWord, resolveGeneratedExerciseItems } from '@/src/lib/tests/generated-exercises';
 import type { GeneratedFormIdentificationExercise, GeneratedTranslationExercise } from '@/src/types/exercises';
 import { isRejectedBySpecAwarePronounOverlap } from '@/src/utils/generated/pronounParadigmFiltering';
 
@@ -389,11 +385,7 @@ describe('generated exercise word replenishment', () => {
 
   it('skips morphology words that map but cannot be prepared', async () => {
     const db = createFakeGeneratedWordDb({
-      words: [
-        verbDoc('amo'),
-        nounDoc('puella'),
-        verbDoc('laudo'),
-      ],
+      words: [verbDoc('amo'), nounDoc('puella'), verbDoc('laudo')],
     });
     const exercise = morphologyExercise(
       {
@@ -461,14 +453,10 @@ describe('generated exercise word replenishment', () => {
       },
     };
     expect(
-      isRejectedBySpecAwarePronounOverlap(
-        ego.data,
-        'pronoun-gendered',
-        {
-          'pronoun-gendered': { enabled: true, steps: ['case'], filters: {} },
-          'pronoun-personal': { enabled: true, steps: ['case'], filters: {} },
-        }
-      )
+      isRejectedBySpecAwarePronounOverlap(ego.data, 'pronoun-gendered', {
+        'pronoun-gendered': { enabled: true, steps: ['case'], filters: {} },
+        'pronoun-personal': { enabled: true, steps: ['case'], filters: {} },
+      })
     ).toBe(true);
     expect(
       isRejectedBySpecAwarePronounOverlap(ego.data, 'pronoun-personal', {
@@ -619,7 +607,7 @@ describe('generated exercise word replenishment', () => {
     expect(items.length).toBeGreaterThan(4);
   });
 
-  it('caps pool sampling to a shared universe and consumes missing ids without extending it', async () => {
+  it('uses the full pool and skips missing IDs', async () => {
     const ids = [...Array.from({ length: 8 }, (_, index) => `noun-${index}`), 'missing-id'];
     const db = createFakeGeneratedWordDb({
       words: Array.from({ length: 8 }, (_, index) => nounDoc(`noun-${index}`)),
@@ -638,16 +626,14 @@ describe('generated exercise word replenishment', () => {
         ...translationExercise(['noun', 'verb', 'adjective'], 20, {
           wordSource: 'pool',
           poolId: 'pool-1',
-          poolWordLimit: 5,
         }),
       },
       poolId: 'pool-1',
-      poolWordLimit: 5,
       rng: createGeneratedExerciseRng(17),
     });
 
-    expect(result.words.length).toBeLessThanOrEqual(5);
-    expect(new Set(result.words.map(word => word.id)).size).toBeLessThanOrEqual(5);
+    expect(result.words).toHaveLength(8);
+    expect(new Set(result.words.map(word => word.id)).size).toBe(8);
   });
 
   it('keeps the unused portion of a pool chunk available for cross-spec borrowing', async () => {
@@ -677,7 +663,7 @@ describe('generated exercise word replenishment', () => {
     expect(result.diagnostics.find(entry => entry.specId === 'noun')?.collected).toBe(10);
   });
 
-  it('charges non-matching pool documents against the global scan budget', async () => {
+  it('exhausts the full pool before returning no matching words', async () => {
     const words = Array.from({ length: 2100 }, (_, index) => verbDoc(`verb-${index}`));
     const db = createFakeGeneratedWordDb({
       words,
@@ -697,12 +683,13 @@ describe('generated exercise word replenishment', () => {
     });
 
     expect(result.words).toHaveLength(0);
-    expect(result.diagnostics[0]?.scanned).toBe(2000);
+    expect(result.diagnostics[0]?.scanned).toBe(2100);
+    expect(result.diagnostics[0]?.exhausted).toBe(true);
     expect(result.diagnostics[0]?.scanLimitReached).toBe(false);
-    expect(result.globalScanLimitReached).toBe(true);
+    expect(result.globalScanLimitReached).toBe(false);
   });
 
-  it('stops a sparse pool POS scan at the per-spec ceiling instead of walking the whole ID list', async () => {
+  it('finds every sparse pool POS candidate and borrows the remaining questions', async () => {
     const nouns = Array.from({ length: 600 }, (_, index) => nounDoc(`noun-${index}`));
     const verbs = Array.from({ length: 4 }, (_, index) => verbDoc(`verb-${index}`));
     const words = [...nouns, ...verbs];
@@ -729,14 +716,10 @@ describe('generated exercise word replenishment', () => {
       rng: createGeneratedExerciseRng(18),
     });
 
-    const verbShare = 5;
     const verb = result.diagnostics.find(entry => entry.specId === 'verb');
-    expect(verb).toBeDefined();
-    expect(perSpecScanCeiling(verbShare)).toBe(PER_SPEC_SCAN_FLOOR);
-    expect(verb?.scanned).toBeLessThanOrEqual(perSpecScanCeiling(verbShare));
-    expect(verb?.scanned).toBeLessThan(ids.length);
-    expect(verb?.scanLimitReached).toBe(true);
-    expect(result.words.length).toBeLessThanOrEqual(10);
+    expect(verb).toMatchObject({ collected: 4, scanned: ids.length, exhausted: true, scanLimitReached: false });
+    expect(result.words).toHaveLength(10);
+    expect(result.words.filter(word => word.part_of_speech === 'noun')).toHaveLength(6);
   });
 
   it('replays the same seeded rng to the same word set', async () => {
