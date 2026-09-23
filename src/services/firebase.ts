@@ -57,8 +57,6 @@ if (typeof window !== 'undefined' && !usingFirebaseEmulators) {
       provider: new ReCaptchaEnterpriseProvider(siteKey),
       isTokenAutoRefreshEnabled: true,
     });
-  } else if (process.env.NODE_ENV === 'production') {
-    console.error('[Firebase] NEXT_PUBLIC_FIREBASE_APP_CHECK_SITE_KEY is required for callable AI requests.');
   }
 }
 

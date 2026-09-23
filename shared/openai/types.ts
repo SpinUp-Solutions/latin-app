@@ -104,6 +104,8 @@ export interface OpenAIRequestContext {
   capacityClass?: 'production' | 'evaluation';
   /** Cancels provider work when a higher-level distributed claim is lost. */
   signal?: AbortSignal;
+  timeout?: number;
+  maxRetries?: number;
 }
 
 export interface TranslationGradingResponse<T = unknown> {

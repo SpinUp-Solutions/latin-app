@@ -151,15 +151,19 @@ describe('AI request hardening', () => {
     jest.useRealTimers();
   });
 
-  it('requires App Check outside emulators and keeps callable access explicit', () => {
-    expect(shouldEnforceAIAppCheck({ NODE_ENV: 'test' } as NodeJS.ProcessEnv)).toBe(true);
-    expect(shouldEnforceAIAppCheck({ NODE_ENV: 'test', FUNCTIONS_EMULATOR: 'true' })).toBe(false);
+  it('enables App Check explicitly after client rollout and keeps callable access explicit', () => {
+    expect(shouldEnforceAIAppCheck({ NODE_ENV: 'test' })).toBe(false);
+    expect(shouldEnforceAIAppCheck({ NODE_ENV: 'test', AI_ENFORCE_APP_CHECK: 'true' })).toBe(true);
+    expect(
+      shouldEnforceAIAppCheck({ NODE_ENV: 'test', AI_ENFORCE_APP_CHECK: 'true', FUNCTIONS_EMULATOR: 'true' })
+    ).toBe(false);
     expect(AI_CALLABLE_ACCESS.gradeTranslationFn).toBe('authenticated');
     expect(aiCallableAccessError('gradeTranslationFn', undefined)).toBe('unauthenticated');
     expect(aiCallableAccessError('gradeTranslationFn', 'student-1')).toBeNull();
     expect(aiCallableAccessError('autocompleteWord', 'student-1', 'student')).toBe('permission-denied');
     expect(aiCallableAccessError('autocompleteWord', 'admin-1', 'admin')).toBeNull();
     expect(apiEndpointRequiresAppCheck('gradeTestTranslation')).toBe(true);
+    expect(apiEndpointRequiresAppCheck('confirmTestSection')).toBe(true);
     expect(apiEndpointRequiresAppCheck('saveTestAttemptAnswers')).toBe(false);
   });
 
