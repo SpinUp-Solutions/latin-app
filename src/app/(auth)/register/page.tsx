@@ -15,6 +15,7 @@ import { DateOfBirthField } from '@/src/components/ui/core/date-of-birth-field';
 import { useAuth } from '@/src/hooks/useAuth';
 import { z } from 'zod';
 import { AuthScreen } from '../auth-screen';
+import { getAuthErrorMessage } from '@/src/lib/auth-errors';
 
 const RegistrationSchema = z
   .object({
@@ -117,8 +118,7 @@ export default function RegisterPage() {
       router.replace('/dashboard');
     } catch (error: unknown) {
       console.error('Registration error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to create account. Please try again.';
-      toast.error(errorMessage);
+      toast.error(getAuthErrorMessage(error, 'registration'));
     } finally {
       setFormLoading(false);
     }
