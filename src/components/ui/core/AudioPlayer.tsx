@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useContext } from 'react';
 import { PlayCircle, PauseCircle, Loader2 } from 'lucide-react';
 import { useAudio } from '@/src/hooks/useAudio';
+import { LessonPageVisibilityContext } from '@/src/components/ui/lesson/page-visibility-context';
 
 interface AudioPlayerProps {
   audioPath: string;
@@ -18,7 +19,11 @@ const formatTime = (seconds: number): string => {
 };
 
 export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioPath, onEnded, className = '' }) => {
-  const { audioRef, isPlaying, isLoading, togglePlay } = useAudio(audioPath, onEnded);
+  const { audioRef, isPlaying, isLoading, togglePlay, pause } = useAudio(audioPath, onEnded);
+  const pageIsVisible = useContext(LessonPageVisibilityContext);
+  useEffect(() => {
+    if (!pageIsVisible) pause();
+  }, [pageIsVisible, pause]);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isSeeking, setIsSeeking] = useState(false);

@@ -18,6 +18,7 @@ import type {
   GeneratedExercisePreviewRequest,
   GeneratedExercisePreviewResult,
 } from '@/src/lib/tests/generated-preview-schema';
+import type { SingleFieldFormIdentificationItem } from '@/src/types/exercises/schemas/form-identification';
 
 export type {
   GeneratedExercisePreviewDiagnostics,
@@ -27,12 +28,17 @@ export type {
 
 export type GeneratedExerciseQuerySource =
   | { kind: 'admin-preview' }
-  | ({ kind: 'lesson' } & GeneratedExercisePlaybackRequest);
+  | ({ kind: 'lesson'; lessonVersion?: number } & GeneratedExercisePlaybackRequest);
 
 export interface GeneratedExerciseWordsQueryArgs {
   exercise: GeneratedExercisePreviewRequest;
   source: GeneratedExerciseQuerySource;
 }
+
+type GeneratedExerciseWordsResult = GeneratedExercisePreviewResult & {
+  draftItems?: SingleFieldFormIdentificationItem[];
+  draftAnswers?: Record<string, string>;
+};
 
 export const normalizeAdvancedVocabularyCollection = (collection?: string) => normalizeCollection(collection);
 
@@ -657,7 +663,7 @@ export const advancedVocabularyApi = createApi({
         body,
       }),
     }),
-    getGeneratedExerciseWords: builder.query<GeneratedExercisePreviewResult, GeneratedExerciseWordsQueryArgs>({
+    getGeneratedExerciseWords: builder.query<GeneratedExerciseWordsResult, GeneratedExerciseWordsQueryArgs>({
       query: ({ exercise, source }) =>
         source.kind === 'admin-preview'
           ? {
@@ -665,18 +671,71 @@ export const advancedVocabularyApi = createApi({
               method: 'POST',
               body: exercise,
             }
-          : {
-              url: '/words/generated-exercise',
-              method: 'POST',
-              body: {
-                lessonId: source.lessonId,
-                pageIndex: source.pageIndex,
-                itemIndex: source.itemIndex,
-                exerciseId: source.exerciseId,
+          : exercise.type === 'generated-form-identification' && exercise.data.mode === 'single-field'
+            ? {
+                url: `/lesson-exercise-drafts/${encodeURIComponent(source.lessonId)}/${encodeURIComponent(source.exerciseId)}`,
+              }
+            : {
+                url: '/words/generated-exercise',
+                method: 'POST',
+                body: {
+                  lessonId: source.lessonId,
+                  pageIndex: source.pageIndex,
+                  itemIndex: source.itemIndex,
+                  exerciseId: source.exerciseId,
+                },
               },
-            },
       serializeQueryArgs: ({ queryArgs }) => JSON.stringify(queryArgs),
       keepUnusedDataFor: 60,
+    }),
+    saveGeneratedFormDraft: builder.mutation<
+      { draftAnswers: Record<string, string> },
+      { queryArgs: GeneratedExerciseWordsQueryArgs; itemId: string; answer: string }
+    >({
+      query: ({ queryArgs, itemId, answer }) => {
+        if (queryArgs.source.kind !== 'lesson') throw new Error('A lesson is required to save an exercise draft');
+        return {
+          url: `/lesson-exercise-drafts/${encodeURIComponent(queryArgs.source.lessonId)}/${encodeURIComponent(queryArgs.source.exerciseId)}`,
+          method: 'PUT',
+          body: { itemId, answer },
+        };
+      },
+      async onQueryStarted({ queryArgs }, { dispatch, queryFulfilled }) {
+        try {
+          const { data } = await queryFulfilled;
+          dispatch(
+            advancedVocabularyApi.util.updateQueryData('getGeneratedExerciseWords', queryArgs, draft => {
+              draft.draftAnswers = data.draftAnswers;
+            })
+          );
+        } catch {
+          // The component surfaces the failed save and keeps the current item editable.
+        }
+      },
+    }),
+    resetGeneratedFormDraft: builder.mutation<
+      { draftAnswers: Record<string, string> },
+      GeneratedExerciseWordsQueryArgs
+    >({
+      query: ({ source }) => {
+        if (source.kind !== 'lesson') throw new Error('A lesson is required to reset an exercise draft');
+        return {
+          url: `/lesson-exercise-drafts/${encodeURIComponent(source.lessonId)}/${encodeURIComponent(source.exerciseId)}`,
+          method: 'DELETE',
+        };
+      },
+      async onQueryStarted(queryArgs, { dispatch, queryFulfilled }) {
+        try {
+          await queryFulfilled;
+          dispatch(
+            advancedVocabularyApi.util.updateQueryData('getGeneratedExerciseWords', queryArgs, draft => {
+              draft.draftAnswers = {};
+            })
+          );
+        } catch {
+          // The component leaves the exercise in place and reports the failed reset.
+        }
+      },
     }),
   }),
 });
@@ -687,4 +746,6 @@ export const {
   useGetMultiParadigmWordsQuery,
   usePreviewGeneratedExerciseMutation,
   useGetGeneratedExerciseWordsQuery,
+  useSaveGeneratedFormDraftMutation,
+  useResetGeneratedFormDraftMutation,
 } = advancedVocabularyApi;
