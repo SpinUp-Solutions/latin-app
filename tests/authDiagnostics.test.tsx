@@ -243,6 +243,18 @@ describe('authentication diagnostics through the login page and auth provider', 
     }
   );
 
+  it('shows a user-friendly toast instead of raw Firebase errors on sign-in failure', async () => {
+    (signInWithEmailAndPassword as jest.Mock).mockRejectedValue({
+      code: 'auth/invalid-credential',
+      message: 'Firebase: Error (auth/invalid-credential).',
+    });
+    renderAuth(true);
+    emitAuth(null);
+    await submitLogin();
+    expect(toast.error).toHaveBeenCalledWith('Incorrect email or password. Please try again.');
+    expect(JSON.stringify((toast.error as jest.Mock).mock.calls)).not.toMatch(/Firebase|auth\//);
+  });
+
   it('reports network failures without serializing error messages, stack or customData', async () => {
     const error = Object.assign(new Error('Failed to fetch private-token-sentinel'), {
       code: 'auth/network-request-failed',

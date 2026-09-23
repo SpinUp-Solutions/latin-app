@@ -12,6 +12,7 @@ import { Loader2 } from 'lucide-react';
 import { PageLoading } from '@/src/components/ui/page-loading';
 import { AuthScreen } from '../auth-screen';
 import { useAuth } from '@/src/hooks/useAuth';
+import { getAuthErrorMessage } from '@/src/lib/auth-errors';
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
@@ -34,8 +35,8 @@ export default function ForgotPasswordPage() {
       await sendPasswordResetEmail(auth, email);
       toast.success('Password reset email sent! Check your inbox.');
       setEmail('');
-    } catch {
-      toast.error('Failed to send reset email. Please try again.');
+    } catch (error: unknown) {
+      toast.error(getAuthErrorMessage(error, 'password-reset'));
     } finally {
       setLoading(false);
     }

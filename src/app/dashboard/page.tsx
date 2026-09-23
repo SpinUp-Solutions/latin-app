@@ -7,6 +7,7 @@ import { auth } from '@/src/services/firebase';
 import { useGetStudentDashboardQuery } from '@/src/store/api/lessonApi';
 import { persistStudentDashboard } from '@/src/store/api/dashboardCache';
 import { useAuth } from '@/src/hooks/useAuth';
+import { getAuthErrorMessage } from '@/src/lib/auth-errors';
 import {
   LessonStatus,
   StudentLessonSummary,
@@ -401,8 +402,8 @@ export default function DashboardPage() {
       await signOut(auth);
       router.push('/login');
       toast.success('Successfully logged out!');
-    } catch {
-      toast.error('Failed to log out. Please try again.');
+    } catch (error: unknown) {
+      toast.error(getAuthErrorMessage(error, 'sign-out'));
     }
   };
 

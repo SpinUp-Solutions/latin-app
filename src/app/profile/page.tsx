@@ -15,6 +15,7 @@ import { RomanCard, RomanCardHeader, RomanCardContent } from '@/src/components/u
 import { DateOfBirthField } from '@/src/components/ui/core/date-of-birth-field';
 import { PageLoading } from '@/src/components/ui/page-loading';
 import { useAuth } from '@/src/hooks/useAuth';
+import { getAuthErrorMessage } from '@/src/lib/auth-errors';
 import { z } from 'zod';
 
 const ProfileSchema = z.object({
@@ -154,14 +155,7 @@ export default function ProfilePage() {
       toast.success('Password changed successfully!');
     } catch (error: unknown) {
       console.error('Password change error:', error);
-      const code = (error as { code?: string })?.code;
-      if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
-        toast.error('Current password is incorrect.');
-      } else if (code === 'auth/weak-password') {
-        toast.error('New password is too weak. Please choose a stronger one.');
-      } else {
-        toast.error('Failed to change password. Please try again.');
-      }
+      toast.error(getAuthErrorMessage(error, 'password-change'));
     } finally {
       setChangingPassword(false);
     }

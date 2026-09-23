@@ -18,6 +18,7 @@ import {
   reportAuthIssue,
   watchAuthStage,
 } from '@/src/lib/auth-diagnostics';
+import { getAuthErrorMessage } from '@/src/lib/auth-errors';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -92,8 +93,7 @@ export default function LoginPage() {
         recordAuthBreadcrumb('sign_in_failed', { elapsedMs: Date.now() - startedAt }, error);
         if (!isExpectedSignInError(error)) reportAuthIssue('sign_in_failed', getDiagnosticDetails(), error);
       }
-      const errorMessage = error instanceof Error ? error.message : 'Failed to log in. Please check your credentials.';
-      toast.error(errorMessage);
+      toast.error(getAuthErrorMessage(error, 'sign-in'));
     } finally {
       setFormLoading(false);
     }
