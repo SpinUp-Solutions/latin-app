@@ -341,7 +341,8 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
     if (!hasExercise) handleNext();
   }, [currentPage?.items, handleNext]);
 
-  const { audioRef, isPlaying, togglePlay } = useAudio(currentPage?.audioPath, handleAudioEnded);
+  const audioPlaybackKey = `${lesson.id}:${currentPage?.id}`;
+  const { audioRef, isPlaying, togglePlay } = useAudio(currentPage?.audioPath, handleAudioEnded, audioPlaybackKey);
 
   const trackPendingExerciseWrite = useCallback((write: Promise<unknown>) => {
     pendingExerciseWritesRef.current.add(write);
@@ -546,7 +547,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
 
   return (
     <div className="lesson-player">
-      <audio ref={audioRef} className="hidden" controls preload="auto" />
+      <audio key={audioPlaybackKey} ref={audioRef} className="hidden" controls preload="auto" />
 
       <RomanPlayerShell
         icon={isListeningLesson ? Headphones : BookOpen}

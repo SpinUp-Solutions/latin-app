@@ -164,9 +164,6 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
       if (isLastItem) {
         if (!assessmentMode) onCompletionAccepted?.(finalScore!);
         autoAdvanceIfEnabled(() => {
-          setUserAnswer('');
-          reset();
-          setIsProcessing(false);
           onComplete?.(finalScore!);
         }, false);
       } else {
