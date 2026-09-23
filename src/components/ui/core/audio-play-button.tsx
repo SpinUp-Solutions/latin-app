@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useContext, useEffect } from 'react';
 import { Button } from '@/src/components/ui/button';
 import { PlayCircle, PauseCircle, Loader2, Volume2 } from 'lucide-react';
 import { useAudio } from '@/src/hooks/useAudio';
+import { LessonPageVisibilityContext } from '@/src/components/ui/lesson/page-visibility-context';
 
 interface AudioPlayButtonProps {
   audioPath: string;
@@ -24,6 +25,11 @@ const AudioPlayButton: React.FC<AudioPlayButtonProps> = props => {
   } = props;
 
   const { audioRef, isPlaying, isLoading, play, pause } = useAudio(audioPath);
+  const pageIsVisible = useContext(LessonPageVisibilityContext);
+
+  useEffect(() => {
+    if (!pageIsVisible) pause();
+  }, [pageIsVisible, pause]);
 
   if (variant === 'vocabulary') {
     const handlePlay = (e: React.MouseEvent) => {

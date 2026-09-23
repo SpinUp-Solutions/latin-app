@@ -69,20 +69,24 @@ jest.mock('sonner', () => ({
 
 jest.mock('@/src/components/ui/lesson/page-template', () => ({
   __esModule: true,
-  default: ({
+  default: function MockPageTemplate({
     page,
     onCompletionAccepted,
   }: {
     page: { id: string };
     onCompletionAccepted?: (exerciseId: string, score: number) => void;
-  }) => (
-    <div>
-      <span>Page content: {page.id}</span>
-      <button type="button" onClick={() => onCompletionAccepted?.('exercise-1', 100)}>
-        Accept exercise
-      </button>
-    </div>
-  ),
+  }) {
+    const [answer, setAnswer] = React.useState('');
+    return (
+      <div>
+        <span>Page content: {page.id}</span>
+        <input aria-label={`Answer for ${page.id}`} value={answer} onChange={event => setAnswer(event.target.value)} />
+        <button type="button" onClick={() => onCompletionAccepted?.('exercise-1', 100)}>
+          Accept exercise
+        </button>
+      </div>
+    );
+  },
 }));
 
 jest.mock('@/src/components/ui/exercises/lesson-navigation', () => ({
@@ -126,9 +130,7 @@ jest.mock('@/src/components/ui/exercises/lesson-navigation', () => ({
         <button
           type="button"
           onClick={canGoNext ? onNext : onFinish}
-          disabled={
-            !canGoNext && (Boolean(isFinishing) || Boolean(isLessonCompleted) || Boolean(isFinishBlocked))
-          }>
+          disabled={!canGoNext && (Boolean(isFinishing) || Boolean(isLessonCompleted) || Boolean(isFinishBlocked))}>
           {label}
         </button>
       </nav>
@@ -138,7 +140,9 @@ jest.mock('@/src/components/ui/exercises/lesson-navigation', () => ({
 
 const createLesson = (
   pageCount = 1,
-  overrides: Partial<LessonWithProgress> & { pageItems?: Array<Array<{ id: string; type: string; title?: string }>> } = {}
+  overrides: Partial<LessonWithProgress> & {
+    pageItems?: Array<Array<{ id: string; type: string; title?: string }>>;
+  } = {}
 ) => {
   const { pageItems, ...lessonOverrides } = overrides;
   return {
@@ -208,7 +212,21 @@ describe('LessonPlayer accepted completion tracking', () => {
 
     expect(screen.getByText('Progress 100%')).toBeInTheDocument();
     expect(screen.getByText('Page content: page-2')).toBeInTheDocument();
-    expect(screen.queryByText('Page content: page-1')).not.toBeInTheDocument();
+    expect(screen.getByText('Page content: page-1')).not.toBeVisible();
+  });
+
+  it('keeps an unfinished answer when Previous is pressed and the page is reopened', () => {
+    render(<LessonPlayer lesson={createLesson(2)} trackProgress={false} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Answer for page-2' }), {
+      target: { value: 'unfinished answer' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Previous page' }));
+    expect(screen.getByRole('textbox', { name: 'Answer for page-2', hidden: true })).toHaveValue('unfinished answer');
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+
+    expect(screen.getByRole('textbox', { name: 'Answer for page-2' })).toHaveValue('unfinished answer');
   });
 
   it('does not reduce tracked progress when a student revisits a previous page', () => {
@@ -399,10 +417,12 @@ describe('LessonPlayer mutation summaries and retries', () => {
           status: 'in-progress',
           completedExerciseCount: 0,
           requiredExerciseCount: 2,
-          pageItems: [[
-            { id: 'exercise-1', type: 'fill', title: 'First exercise' },
-            { id: 'exercise-2', type: 'fill', title: 'Second exercise' },
-          ]],
+          pageItems: [
+            [
+              { id: 'exercise-1', type: 'fill', title: 'First exercise' },
+              { id: 'exercise-2', type: 'fill', title: 'Second exercise' },
+            ],
+          ],
         })}
       />
     );
@@ -581,9 +601,7 @@ describe('LessonPlayer mutation summaries and retries', () => {
         tags: { surface: 'page_progress', lessonId: 'lesson-1', pageId: 'page-1' },
       })
     );
-    expect(jest.mocked(captureException).mock.calls[0]?.[1]).not.toEqual(
-      expect.objectContaining({ level: 'warning' })
-    );
+    expect(jest.mocked(captureException).mock.calls[0]?.[1]).not.toEqual(expect.objectContaining({ level: 'warning' }));
     jest.useRealTimers();
   });
 
@@ -650,9 +668,7 @@ describe('LessonPlayer mutation summaries and retries', () => {
       jest.advanceTimersByTime(8000);
     });
     await waitFor(() => expect(mockFinishLesson).toHaveBeenCalledTimes(1));
-    expect(toast.info).toHaveBeenCalledWith(
-      'Some exercise progress is still saving. Checking lesson completion now.'
-    );
+    expect(toast.info).toHaveBeenCalledWith('Some exercise progress is still saving. Checking lesson completion now.');
     expect(captureMessage).toHaveBeenCalledWith(
       'Lesson finish proceeded after pending-write timeout',
       expect.objectContaining({
@@ -689,9 +705,7 @@ describe('LessonPlayer mutation summaries and retries', () => {
         status: 422,
         data: {
           error: 'Complete all required exercises before finishing the lesson.',
-          missingExercises: [
-            { exerciseId: 'exercise-1', title: 'Exercise', pageId: 'page-1', pageIndex: 0 },
-          ],
+          missingExercises: [{ exerciseId: 'exercise-1', title: 'Exercise', pageId: 'page-1', pageIndex: 0 }],
         },
       });
     });

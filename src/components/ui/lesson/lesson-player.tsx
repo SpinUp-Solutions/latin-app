@@ -59,6 +59,14 @@ const createRetryController = (): RetryController => ({ cancelled: false, waiter
 const safeCount = (value: unknown, fallback = 0) =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.trunc(value) : fallback;
 
+const initialPageIndexFor = (lesson: LessonWithProgress) =>
+  Math.max(0, Math.min(lesson.furthestPageIndex ?? lesson.currentPageIndex ?? 0, lesson.pages.length - 1));
+
+const initialVisitedPagesFor = (lesson: LessonWithProgress) => {
+  const pageId = lesson.pages[initialPageIndexFor(lesson)]?.id;
+  return new Set(pageId ? [pageId] : []);
+};
+
 const cancelRetryController = (controller: RetryController) => {
   if (controller.cancelled) return;
   controller.cancelled = true;
@@ -87,10 +95,7 @@ const waitForRetry = (controller: RetryController, delayMs: number): Promise<boo
     controller.waiters.add(cancel);
   });
 
-async function runWithBoundedRetries<T>(
-  request: () => Promise<T>,
-  controller: RetryController
-): Promise<T | null> {
+async function runWithBoundedRetries<T>(request: () => Promise<T>, controller: RetryController): Promise<T | null> {
   for (let attempt = 0; ; attempt += 1) {
     if (controller.cancelled) return null;
     try {
@@ -163,12 +168,9 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   const lessonIdRef = useRef(lesson.id);
   lessonIdRef.current = lesson.id;
 
-  const [currentPageIndex, setCurrentPageIndex] = useState(
-    Math.max(0, Math.min(lesson.furthestPageIndex ?? lesson.currentPageIndex ?? 0, lesson.pages.length - 1))
-  );
-  const [furthestPageIndex, setFurthestPageIndex] = useState(
-    Math.max(0, Math.min(lesson.furthestPageIndex ?? lesson.currentPageIndex ?? 0, lesson.pages.length - 1))
-  );
+  const [currentPageIndex, setCurrentPageIndex] = useState(() => initialPageIndexFor(lesson));
+  const [visitedPageIds, setVisitedPageIds] = useState<Set<string>>(() => initialVisitedPagesFor(lesson));
+  const [furthestPageIndex, setFurthestPageIndex] = useState(() => initialPageIndexFor(lesson));
 
   const currentPage = lesson.pages[currentPageIndex];
   const totalPages = lesson.pages.length;
@@ -216,12 +218,9 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
       )
     );
     setRequiredExerciseCount(Math.max(safeCount(lesson.requiredExerciseCount), requiredExercises.length));
-    setCurrentPageIndex(
-      Math.max(0, Math.min(lesson.furthestPageIndex ?? lesson.currentPageIndex ?? 0, lesson.pages.length - 1))
-    );
-    setFurthestPageIndex(
-      Math.max(0, Math.min(lesson.furthestPageIndex ?? lesson.currentPageIndex ?? 0, lesson.pages.length - 1))
-    );
+    setCurrentPageIndex(initialPageIndexFor(lesson));
+    setVisitedPageIds(initialVisitedPagesFor(lesson));
+    setFurthestPageIndex(initialPageIndexFor(lesson));
   }, [lesson.id]); // eslint-disable-line react-hooks/exhaustive-deps -- reset local completion only when switching lessons
 
   useEffect(() => {
@@ -314,9 +313,10 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
     if (currentPageIndex < totalPages - 1) {
       const newPageIndex = currentPageIndex + 1;
       setCurrentPageIndex(newPageIndex);
+      setVisitedPageIds(current => new Set(current).add(lesson.pages[newPageIndex].id));
       setFurthestPageIndex(current => Math.max(current, newPageIndex));
     }
-  }, [currentPageIndex, totalPages]);
+  }, [currentPageIndex, lesson.pages, totalPages]);
 
   const handlePageComplete = useCallback(() => {
     handleNext();
@@ -324,17 +324,20 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
 
   const handlePrevious = useCallback(() => {
     if (currentPageIndex > 0) {
-      setCurrentPageIndex(currentPageIndex - 1);
+      const newPageIndex = currentPageIndex - 1;
+      setCurrentPageIndex(newPageIndex);
+      setVisitedPageIds(current => new Set(current).add(lesson.pages[newPageIndex].id));
     }
-  }, [currentPageIndex]);
+  }, [currentPageIndex, lesson.pages]);
 
   const handleGoToPage = useCallback(
     (newPageIndex: number) => {
       if (newPageIndex < 0 || newPageIndex >= totalPages || newPageIndex === currentPageIndex) return;
       setCurrentPageIndex(newPageIndex);
+      setVisitedPageIds(current => new Set(current).add(lesson.pages[newPageIndex].id));
       setFurthestPageIndex(current => Math.max(current, newPageIndex));
     },
-    [currentPageIndex, totalPages]
+    [currentPageIndex, lesson.pages, totalPages]
   );
 
   const handleAudioEnded = useCallback(() => {
@@ -545,6 +548,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   }
 
   const hasAudio = Boolean(currentPage.audioPath);
+  const retainVisitedPages = effectiveRuntimeMode === 'practice';
 
   return (
     <div className="lesson-player">
@@ -560,10 +564,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
         contentClassName={navigationPlacement === 'fixed' ? 'pb-28 sm:pb-24' : undefined}
         headerAside={
           shouldShowExerciseRing ? (
-            <ExerciseCompletionRing
-              completedCount={completedExerciseCount}
-              requiredCount={requiredExerciseCount}
-            />
+            <ExerciseCompletionRing completedCount={completedExerciseCount} requiredCount={requiredExerciseCount} />
           ) : undefined
         }
         iconAdornment={
@@ -575,19 +576,25 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
         }>
         <div className="mb-6">
           <div className="lesson-content">
-            <PageTemplate
-              key={currentPage.id}
-              page={currentPage}
-              pageIndex={currentPageIndex}
-              lessonId={lesson.id}
-              runtimeMode={effectiveRuntimeMode}
-              onAnswer={onAnswer}
-              resolvedExerciseState={resolvedExerciseState}
-              generatedExerciseContext={resolvedGeneratedExerciseContext}
-              onCompletionAccepted={handleCompletionAccepted}
-              onPageComplete={handlePageComplete}
-              onDiagrammingAttempt={handleDiagrammingAttempt}
-            />
+            {lesson.pages.map((page, pageIndex) =>
+              (retainVisitedPages && visitedPageIds.has(page.id)) || pageIndex === currentPageIndex ? (
+                <div key={`${lesson.id}:${page.id}`} hidden={pageIndex !== currentPageIndex}>
+                  <PageTemplate
+                    page={page}
+                    active={pageIndex === currentPageIndex}
+                    pageIndex={pageIndex}
+                    lessonId={lesson.id}
+                    runtimeMode={effectiveRuntimeMode}
+                    onAnswer={onAnswer}
+                    resolvedExerciseState={resolvedExerciseState}
+                    generatedExerciseContext={resolvedGeneratedExerciseContext}
+                    onCompletionAccepted={handleCompletionAccepted}
+                    onPageComplete={handlePageComplete}
+                    onDiagrammingAttempt={handleDiagrammingAttempt}
+                  />
+                </div>
+              ) : null
+            )}
           </div>
         </div>
 
