@@ -104,7 +104,8 @@ interface Column {
   fill?: RGB;
 }
 
-interface Block {
+interface ContentBlock {
+  kind?: undefined;
   columns: Column[];
   size?: number;
   serif?: boolean;
@@ -113,12 +114,18 @@ interface Block {
   grid?: boolean;
   headerRow?: boolean;
   maxWidth?: number;
-  kind?: 'part';
-  divided?: boolean;
-  partHeading?: string;
-  partScore?: string;
-  partColor?: RGB;
 }
+
+interface PartBlock {
+  kind: 'part';
+  divided: boolean;
+  heading: string;
+  score: string;
+  color: RGB;
+  gap: number;
+}
+
+type Block = ContentBlock | PartBlock;
 
 const isStudent = (group: TestResultPdfLineGroup) => group.heading?.startsWith('Student') || group.tone === 'student';
 const isExpected = (group: TestResultPdfLineGroup) => group.heading?.startsWith('Expected') || group.tone === 'answer';
@@ -132,15 +139,6 @@ const answerStyle = (group: TestResultPdfLineGroup) =>
       : group.tone === 'incorrect'
         ? STATUS.Incorrect
         : { ink: MUTED, fill: WHITE };
-
-const scoreColor = (tone?: TestResultPdfLineGroup['tone']): RGB =>
-  tone === 'correct'
-    ? STATUS.Correct.ink
-    : tone === 'partial'
-      ? STATUS['Partly correct'].ink
-      : tone === 'incorrect'
-        ? STATUS.Incorrect.ink
-        : MUTED;
 
 /** Presentation only: never infer scores or answers from the displayed text. */
 function exerciseBlocks(exercise: TestResultPdfExercise): Block[] {
@@ -216,15 +214,12 @@ function exerciseBlocks(exercise: TestResultPdfExercise): Block[] {
         gap: 12,
       });
     } else if (isScore(group) && group.heading) {
-      // Each blank, choice, or sub-question gets its own heading and score
-      // so later parts do not run into the previous answer.
       blocks.push({
         kind: 'part',
         divided: blocks.length > 0,
-        partHeading: group.heading,
-        partScore: group.lines.filter(Boolean).join(' · '),
-        partColor: scoreColor(group.tone),
-        columns: [],
+        heading: group.heading,
+        score: group.lines.filter(Boolean).join(' · '),
+        color: answerStyle(group).ink,
         gap: 10,
       });
     } else if (isScore(group)) {
@@ -351,7 +346,7 @@ class PdfWriter {
     this.y = Math.min(this.y, top - 72) - 20;
   }
 
-  private measure(block: Block, showLabels = !block.grid || Boolean(block.headerRow)) {
+  private measure(block: ContentBlock, showLabels = !block.grid || Boolean(block.headerRow)) {
     const size = block.size ?? BODY_SIZE;
     const leading = Math.max(LEADING, size + 5);
     const font = block.serif ? this.serif : this.regular;
@@ -372,7 +367,7 @@ class PdfWriter {
     return { size, leading, font, inset, gutter, width, columns, labelHeight, rows, height };
   }
 
-  private replayTableHeader(block: Block) {
+  private replayTableHeader(block: ContentBlock) {
     if (!block.grid || block.headerRow || !block.columns.some(column => column.label)) return;
     this.block({
       columns: block.columns.map(column => ({ label: column.label, lines: [] })),
@@ -384,7 +379,7 @@ class PdfWriter {
     });
   }
 
-  block(block: Block) {
+  block(block: ContentBlock) {
     const headerRow = Boolean(block.headerRow);
     let showLabels = !block.grid || headerRow;
     let layout = this.measure(block, showLabels);
@@ -463,44 +458,37 @@ class PdfWriter {
     }
   }
 
-  private scoreLabel(exercise: TestResultPdfExercise) {
+  private scoreLabel(exercise: { awardedPoints: string; maxPoints: string }) {
     return `${exercise.awardedPoints} / ${exercise.maxPoints} points`;
   }
 
-  private headerLines(exercise: TestResultPdfExercise, continued: boolean) {
+  private titleWidth(exercise: TestResultPdfExercise) {
     const scoreWidth = this.bold.widthOfTextAtSize(this.scoreLabel(exercise), 10);
-    const titleWidth = Math.max(180, CONTENT_WIDTH - scoreWidth - 64);
-    return this.lines(`${exercise.title}${continued ? ' (continued)' : ''}`, this.serif, 14, titleWidth);
+    return Math.max(180, CONTENT_WIDTH - scoreWidth - 64);
+  }
+
+  private headerLines(exercise: TestResultPdfExercise, continued: boolean) {
+    const title = `${exercise.title}${continued ? ' (continued)' : ''}`;
+    return this.lines(title, this.serif, 14, this.titleWidth(exercise));
   }
 
   private blockHeight(block: Block) {
     return block.kind === 'part' ? this.measurePart(block).height : this.measure(block).height;
   }
 
-  private measurePart(block: Block) {
-    const score = block.partScore ?? '';
+  private measurePart(block: PartBlock) {
+    const { score } = block;
     const scoreWidth = score ? this.regular.widthOfTextAtSize(score, 9) : 0;
     const stacked = scoreWidth > CONTENT_WIDTH * 0.42;
     const headingWidth = stacked ? CONTENT_WIDTH : Math.max(160, CONTENT_WIDTH - scoreWidth - 16);
-    const headingLines = this.lines(block.partHeading ?? '', this.bold, 11, headingWidth);
+    const headingLines = this.lines(block.heading, this.bold, 11, headingWidth);
     const scoreLines = stacked && score ? this.lines(score, this.regular, 9, CONTENT_WIDTH) : [];
     const ruleSpace = block.divided ? 22 : 2;
     const textHeight = Math.max(headingLines.length, 1) * 15 + scoreLines.length * 13;
-    const gap = block.gap ?? 8;
-    return {
-      headingLines,
-      scoreLines,
-      stacked,
-      scoreWidth,
-      score,
-      ruleSpace,
-      textHeight,
-      gap,
-      height: ruleSpace + textHeight + gap,
-    };
+    return { headingLines, scoreLines, stacked, scoreWidth, score, height: ruleSpace + textHeight + block.gap };
   }
 
-  private drawPart(block: Block) {
+  private drawPart(block: PartBlock) {
     const layout = this.measurePart(block);
     const fresh = PAGE_HEIGHT - MARGIN_TOP - MARGIN_BOTTOM - this.continuationHeight();
     if (layout.height > this.remaining() && layout.height <= fresh) this.addPage();
@@ -517,14 +505,13 @@ class PdfWriter {
       this.draw(line, MARGIN_X, cursor, 11, this.bold, INK);
       cursor -= 15;
     }
-    const color = block.partColor ?? MUTED;
     if (layout.stacked) {
       for (const line of layout.scoreLines) {
-        this.draw(line, MARGIN_X, cursor, 9, this.regular, color);
+        this.draw(line, MARGIN_X, cursor, 9, this.regular, block.color);
         cursor -= 13;
       }
     } else if (layout.score) {
-      this.draw(layout.score, PAGE_WIDTH - MARGIN_X - layout.scoreWidth, textTop, 9, this.regular, color);
+      this.draw(layout.score, PAGE_WIDTH - MARGIN_X - layout.scoreWidth, textTop, 9, this.regular, block.color);
     }
     this.y -= layout.height;
   }
@@ -537,9 +524,7 @@ class PdfWriter {
   private exerciseHeader(exercise: TestResultPdfExercise, continued = false) {
     const lines = this.headerLines(exercise, continued);
     const visible = lines.slice(0, 3);
-    const scoreWidth = this.bold.widthOfTextAtSize(this.scoreLabel(exercise), 10);
-    const titleWidth = Math.max(180, CONTENT_WIDTH - scoreWidth - 64);
-    if (lines.length > 3) visible[2] = this.fit(`${visible[2]}…`, this.serif, 14, titleWidth);
+    if (lines.length > 3) visible[2] = this.fit(`${visible[2]}…`, this.serif, 14, this.titleWidth(exercise));
     const height = visible.length * 19 + 16;
     this.page.drawRectangle({ x: MARGIN_X, y: this.y - height, width: CONTENT_WIDTH, height, color: PARCHMENT });
     this.draw(String(exercise.number).padStart(2, '0'), MARGIN_X + 12, this.y - 10, 10, this.bold, ROMAN_RED);
@@ -583,12 +568,13 @@ class PdfWriter {
       const block = blocks[index];
       const next = blocks[index + 1];
       // Keep a question/part label with its answer when both fit a fresh page.
-      if (!block.inset && next) {
+      if (block.kind !== 'part' && !block.inset && next) {
         let cluster = this.blockHeight(block);
         for (let ahead = index + 1; ahead < blocks.length; ahead += 1) {
-          if (blocks[ahead].kind === 'part') break;
-          cluster += this.blockHeight(blocks[ahead]);
-          if (blocks[ahead].inset) break;
+          const upcoming = blocks[ahead];
+          if (upcoming.kind === 'part') break;
+          cluster += this.blockHeight(upcoming);
+          if (upcoming.inset) break;
         }
         if (cluster > this.remaining() && cluster <= freshSpace - this.continuationHeight()) this.addPage();
       }
@@ -605,9 +591,7 @@ class PdfWriter {
         columns: [
           { lines: [`${exercise.number}. ${exercise.title}`] },
           {
-            lines: [
-              `${exercise.awardedPoints} / ${exercise.maxPoints} points${exercise.statusLabel ? ` · ${exercise.statusLabel}` : ''}`,
-            ],
+            lines: [`${this.scoreLabel(exercise)}${exercise.statusLabel ? ` · ${exercise.statusLabel}` : ''}`],
           },
         ],
         gap: 10,
