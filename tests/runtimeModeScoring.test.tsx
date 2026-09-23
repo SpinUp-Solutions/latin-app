@@ -16,8 +16,6 @@ jest.mock('@/src/hooks/useTranslationGrading', () => ({ useTranslationGrading: (
 const mockUseGetMultiPosWordsQuery = jest.fn();
 jest.mock('@/src/store/api/advancedVocabularyApi', () => ({
   useGetGeneratedExerciseWordsQuery: (...args: unknown[]) => mockUseGetMultiPosWordsQuery(...args),
-  useSaveGeneratedFormDraftMutation: () => [jest.fn()],
-  useResetGeneratedFormDraftMutation: () => [jest.fn()],
   useGetMultiPosWordsQuery: (...args: unknown[]) => mockUseGetMultiPosWordsQuery(...args),
   useGetMultiParadigmWordsQuery: () => ({ data: undefined, isLoading: false, isError: false }),
 }));

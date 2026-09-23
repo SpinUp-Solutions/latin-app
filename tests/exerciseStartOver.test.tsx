@@ -18,8 +18,6 @@ jest.mock('@/src/components/ui/core/simple-rich-editor', () => ({ SimpleRichEdit
 
 jest.mock('@/src/store/api/advancedVocabularyApi', () => ({
   useGetGeneratedExerciseWordsQuery: () => ({ data: undefined, isLoading: false, isError: false }),
-  useSaveGeneratedFormDraftMutation: () => [jest.fn()],
-  useResetGeneratedFormDraftMutation: () => [jest.fn()],
 }));
 
 jest.mock('@/src/hooks/useTranslationGrading', () => ({

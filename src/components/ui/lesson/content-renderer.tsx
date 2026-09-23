@@ -57,9 +57,7 @@ export interface ResolvedGeneratedExerciseState {
   items: unknown[];
 }
 
-export type GeneratedExerciseRenderContext =
-  | { kind: 'admin-preview' }
-  | { kind: 'lesson'; lessonId: string; lessonVersion?: number };
+export type GeneratedExerciseRenderContext = { kind: 'admin-preview' } | { kind: 'lesson'; lessonId: string };
 
 interface ContentRendererProps {
   content: ContentItem;
@@ -114,7 +112,6 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
       ? {
           kind: 'lesson',
           lessonId: generatedExerciseContext.lessonId,
-          lessonVersion: generatedExerciseContext.lessonVersion,
           pageIndex,
           itemIndex,
           exerciseId: content.id,

@@ -19,8 +19,6 @@ import { createAnnotationId, createEmptySentenceDiagramDocument } from '@/src/fe
 
 jest.mock('@/src/store/api/advancedVocabularyApi', () => ({
   useGetGeneratedExerciseWordsQuery: () => ({ data: undefined, isLoading: false, isError: false }),
-  useSaveGeneratedFormDraftMutation: () => [jest.fn()],
-  useResetGeneratedFormDraftMutation: () => [jest.fn()],
   useGetMultiPosWordsQuery: () => ({ data: undefined, isLoading: false, isError: false }),
   useGetMultiParadigmWordsQuery: () => ({ data: undefined, isLoading: false, isError: false }),
 }));

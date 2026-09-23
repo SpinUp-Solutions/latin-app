@@ -10,8 +10,6 @@ jest.mock('@/src/components/ui/core/simple-rich-editor', () => ({ SimpleRichEdit
 jest.mock('@/src/hooks/useTranslationGrading', () => ({ useTranslationGrading: () => ({ grade: jest.fn() }) }));
 jest.mock('@/src/store/api/advancedVocabularyApi', () => ({
   useGetGeneratedExerciseWordsQuery: () => ({}),
-  useSaveGeneratedFormDraftMutation: () => [jest.fn()],
-  useResetGeneratedFormDraftMutation: () => [jest.fn()],
   useGetMultiPosWordsQuery: () => ({}),
   useGetMultiParadigmWordsQuery: () => ({}),
 }));

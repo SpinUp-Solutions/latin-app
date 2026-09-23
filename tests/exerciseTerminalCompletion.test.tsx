@@ -10,8 +10,6 @@ import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 
 jest.mock('@/src/store/api/advancedVocabularyApi', () => ({
   useGetGeneratedExerciseWordsQuery: () => ({ data: undefined, isLoading: false, isError: false }),
-  useSaveGeneratedFormDraftMutation: () => [jest.fn()],
-  useResetGeneratedFormDraftMutation: () => [jest.fn()],
 }));
 
 const base = { id: 'terminal', title: 'Terminal exercise', instructions: '', itemProgressionDelay: 100 };

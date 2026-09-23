@@ -174,11 +174,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
 
   const currentPage = lesson.pages[currentPageIndex];
   const totalPages = lesson.pages.length;
-  const resolvedGeneratedExerciseContext = generatedExerciseContext ?? {
-    kind: 'lesson' as const,
-    lessonId: lesson.id,
-    lessonVersion: lesson.version,
-  };
+  const resolvedGeneratedExerciseContext = generatedExerciseContext ?? { kind: 'lesson' as const, lessonId: lesson.id };
 
   const applyProgressMutation = useCallback((result: ProgressMutationSummary, requestLessonId: string) => {
     if (!mountedRef.current || requestLessonId !== lessonIdRef.current) return;

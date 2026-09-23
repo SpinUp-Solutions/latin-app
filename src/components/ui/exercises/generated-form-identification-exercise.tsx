@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import { GeneratedFormIdentificationExercise } from '@/src/types/exercises/generated-form-identification';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
@@ -10,12 +10,8 @@ import { ExerciseIntro } from './exercise-intro';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import {
   useGetGeneratedExerciseWordsQuery,
-  useSaveGeneratedFormDraftMutation,
-  useResetGeneratedFormDraftMutation,
   type GeneratedExerciseQuerySource,
 } from '@/src/store/api/advancedVocabularyApi';
-import { getApiErrorMessage } from '@/src/store/api/baseQuery';
-import { toast } from 'sonner';
 import { Card, CardContent } from '../card';
 import { ExerciseLoadingCard, ExerciseMessageCard } from './exercise-status-card';
 import {
@@ -83,9 +79,6 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
   const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
   const sectioned = useSectionedTest();
-  const [saveGeneratedFormDraft] = useSaveGeneratedFormDraftMutation();
-  const [resetGeneratedFormDraft] = useResetGeneratedFormDraftMutation();
-  const draftHydratedRef = useRef(false);
   const [wordAnswers, setWordAnswers] = useState<Record<string, Record<string, string>>>({});
   const [multiAnswerSlots, setMultiAnswerSlots] = useState<Record<string, string[][]>>({});
 
@@ -111,10 +104,9 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
 
   const items: ItemType[] = useMemo(() => {
     if (resolvedItems) return resolvedItems;
-    if (data?.draftItems) return data.draftItems;
     if (!data?.words) return [];
     return createGeneratedFormIdentificationItems(exercise, data.words, wordAnswers);
-  }, [data?.draftItems, data?.words, exercise, wordAnswers, resolvedItems]);
+  }, [data?.words, exercise, wordAnswers, resolvedItems]);
 
   const validatedItems = useMemo(() => {
     if (mode === 'test') return items;
@@ -163,12 +155,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
       .filter((result): result is { success: true; data: FormIdentificationItem } => result.success)
       .map(result => result.data);
   }, [items, isSingleField, isMultiAnswerMode, mode]);
-  const restoredAnswers =
-    initialAnswer?.type === 'generated-form-identification'
-      ? initialAnswer.answers
-      : mode === 'practice'
-        ? (data?.draftAnswers ?? {})
-        : {};
+  const restoredAnswers = initialAnswer?.type === 'generated-form-identification' ? initialAnswer.answers : {};
   const firstUnansweredIndex = validatedItems.findIndex(item => !restoredAnswers[item.id]?.trim());
   const restoredIndex = firstUnansweredIndex >= 0 ? firstUnansweredIndex : Math.max(validatedItems.length - 1, 0);
   const restoredItemId = validatedItems[restoredIndex]?.id;
@@ -187,7 +174,6 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
     confirmAdvance,
     resetIndex,
     nextItem,
-    goToItem,
     cancelPendingAdvance,
   } = useExerciseProgression({
     totalItems: validatedItems.length,
@@ -210,29 +196,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
 
   const resetRequired = mode === 'practice' && shouldResetExercise;
 
-  useEffect(() => {
-    if (draftHydratedRef.current || mode !== 'practice' || !data?.draftItems || validatedItems.length === 0) return;
-    draftHydratedRef.current = true;
-    const answers = data.draftAnswers ?? {};
-    const firstUnanswered = validatedItems.findIndex(item => !answers[item.id]);
-    const index = firstUnanswered >= 0 ? firstUnanswered : validatedItems.length - 1;
-    setSubmittedAnswers(answers);
-    setUserAnswer(answers[validatedItems[index].id] ?? '');
-    goToItem(index);
-  }, [data?.draftAnswers, data?.draftItems, goToItem, mode, validatedItems]);
-
-  const handleExerciseReset = async () => {
-    if (mode === 'practice' && isSingleField && generatedExerciseSource?.kind === 'lesson') {
-      try {
-        await resetGeneratedFormDraft({
-          exercise: { type: 'generated-form-identification', data: exercise.data },
-          source: generatedExerciseSource,
-        }).unwrap();
-      } catch (error) {
-        toast.error(getApiErrorMessage(error, 'Unable to restart this exercise. Please try again.'));
-        return;
-      }
-    }
+  const handleExerciseReset = () => {
     cancelPendingAdvance();
     setUserAnswer('');
     setWordAnswers({});
@@ -244,7 +208,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
     resetExercise();
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (isProcessing || validatedItems.length === 0 || !userAnswer.trim() || resetRequired) return;
     if (currentIndex >= validatedItems.length) return;
 
@@ -369,23 +333,6 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
       : validateGeneratedFormIdentificationExercise(userAnswer, currentItem as FormIdentificationItem);
 
     if (validation.isCorrect) {
-      if (mode === 'practice' && isSingleField && generatedExerciseSource?.kind === 'lesson') {
-        try {
-          await saveGeneratedFormDraft({
-            queryArgs: {
-              exercise: { type: 'generated-form-identification', data: exercise.data },
-              source: generatedExerciseSource,
-            },
-            itemId: currentItem.id,
-            answer: userAnswer,
-          }).unwrap();
-        } catch (error) {
-          setIsProcessing(false);
-          setSubmittedAnswers(submittedAnswers);
-          toast.error(getApiErrorMessage(error, 'Unable to save this answer. Please try again.'));
-          return;
-        }
-      }
       if (!isSingleField) {
         const stepItem = currentItem as FormIdentificationItem;
         setWordAnswers(prev => ({
