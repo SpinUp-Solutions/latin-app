@@ -39,8 +39,7 @@ export function applySequentialItemResult({
     if (isLastItem) {
       if (!assessmentMode) onCompletionAccepted?.(finalScore!);
       autoAdvanceIfEnabled(() => {
-        clearItem();
-        stopProcessing();
+        // Retain the final answer and success state after completion.
         onComplete?.(finalScore!);
       }, hasVisibleExplanation);
       return;

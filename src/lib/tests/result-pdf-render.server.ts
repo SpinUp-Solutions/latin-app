@@ -568,7 +568,7 @@ class PdfWriter {
       const block = blocks[index];
       const next = blocks[index + 1];
       // Keep a question/part label with its answer when both fit a fresh page.
-      if (block.kind !== 'part' && !block.inset && next) {
+      if ((block.kind === 'part' || !block.inset) && next) {
         let cluster = this.blockHeight(block);
         for (let ahead = index + 1; ahead < blocks.length; ahead += 1) {
           const upcoming = blocks[ahead];

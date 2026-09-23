@@ -122,7 +122,7 @@ export const TableEditor: React.FC = () => {
 
       <div>
         <label className="block text-sm font-medium mb-2">Table Data</label>
-        <EditableTableGrid
+        <EditableTableGrid<TableRow>
           columns={editingContent.tableData.columns}
           rows={editingContent.tableData.rows}
           onAddColumn={addColumn}

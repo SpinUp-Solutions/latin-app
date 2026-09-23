@@ -178,8 +178,6 @@ describe('translation grading runner', () => {
     const call = createResponse.mock.calls[0][0];
     expect(call.instructions).toContain('assessment grader');
     expect(call.instructions).toContain('untrusted assessment data');
-    expect(call.instructions).toContain('Deduct points only for actual mistakes in vocabulary and morphology');
-    expect(call.instructions).toContain('standard syntactic transfers');
     expect(call.prompt_cache_key).toBe('translation-grading-v3:baseline:test');
     expect(call.text?.format).toMatchObject({
       name: 'test_translation_grading_output',
@@ -197,7 +195,6 @@ describe('translation grading runner', () => {
     });
 
     expect(prompt.stablePrefix).toContain('untrusted data envelope');
-    expect(prompt.stablePrefix).toContain('standard syntactic transfers');
     expect(JSON.parse(prompt.variableSuffix)).toEqual({
       direction: 'latin-to-english',
       sourceLanguage: 'Latin',

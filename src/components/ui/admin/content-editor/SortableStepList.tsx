@@ -22,7 +22,7 @@ import { restrictToVerticalAxis, restrictToParentElement } from '@dnd-kit/modifi
 import { GripVertical } from 'lucide-react';
 
 interface SortableStepListProps {
-  availableSteps: FormIdentificationStep[];
+  availableSteps: readonly FormIdentificationStep[];
   selectedSteps: FormIdentificationStep[];
   onChange: (steps: FormIdentificationStep[]) => void;
   formatLabel?: (step: FormIdentificationStep) => string;
