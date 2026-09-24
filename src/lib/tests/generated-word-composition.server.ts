@@ -57,16 +57,49 @@ export class GeneratedVocabularySourceError extends Error {
   }
 }
 
-export const applyValueFilter = (query: Query, field: string, value?: unknown): Query => {
-  if (typeof value !== 'string' || !value || value === 'all' || value === 'both') return query;
-  const values = value
+const parseFilterValues = (value?: unknown): string[] => {
+  if (typeof value !== 'string' || !value || value === 'all' || value === 'both') return [];
+  return value
     .split(',')
     .map(entry => entry.trim())
     .filter(Boolean)
     .slice(0, MAX_GENERATED_FILTER_OPERANDS);
+};
+
+export const applyValueFilter = (query: Query, field: string, value?: unknown): Query => {
+  const values = parseFilterValues(value);
   if (values.length === 0) return query;
   return values.length === 1 ? query.where(field, '==', values[0]) : query.where(field, 'in', values);
 };
+
+function matchesPoolFilters(data: Record<string, unknown>, spec: WordQuerySpec): boolean {
+  if (spec.partOfSpeech && data.part_of_speech !== spec.partOfSpeech) return false;
+
+  const matchesValue = (field: string, value?: unknown) => {
+    const values = parseFilterValues(value);
+    return values.length === 0 || (typeof data[field] === 'string' && values.includes(data[field]));
+  };
+  const filters = spec.filters;
+  if (filters.search) {
+    const search = stripMacrons(filters.search);
+    if (typeof data.sort_key !== 'string' || !data.sort_key.startsWith(search)) return false;
+  }
+
+  if (spec.partOfSpeech === 'verb') {
+    if (!matchesValue('conjugation', filters.verbConjugation)) return false;
+    if (filters.isDeponent === 'true' && data.is_deponent !== true) return false;
+    if (filters.isDeponent === 'false' && data.is_deponent !== false) return false;
+  } else if (spec.partOfSpeech === 'noun') {
+    if (!matchesValue('declension', filters.nounDeclension)) return false;
+  } else if (spec.partOfSpeech === 'adjective') {
+    if (!matchesValue('declension', filters.adjectiveDeclension)) return false;
+  } else if (spec.partOfSpeech === 'pronoun') {
+    if (!matchesValue('pronoun_type', filters.pronounType)) return false;
+    if (!matchesValue('person', filters.pronounPerson)) return false;
+  }
+
+  return true;
+}
 
 function applyFilters(query: Query, spec: WordQuerySpec): Query {
   const filters = spec.filters;
@@ -436,7 +469,7 @@ class PoolCandidateStream implements CandidateStream {
 
       for (const doc of loaded) {
         if (this.seenIds.has(doc.id)) continue;
-        if (this.spec.partOfSpeech && doc.data().part_of_speech !== this.spec.partOfSpeech) continue;
+        if (!matchesPoolFilters(doc.data(), this.spec)) continue;
         this.seenIds.add(doc.id);
         docs.push(doc);
       }

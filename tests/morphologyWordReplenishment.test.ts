@@ -677,6 +677,77 @@ describe('generated exercise word replenishment', () => {
     expect(result.diagnostics.find(entry => entry.specId === 'noun')?.collected).toBe(10);
   });
 
+  it('honors the selected noun declension in a pool-backed morphology lesson', async () => {
+    const words = [
+      nounDoc('ager', { declension: '2' }),
+      nounDoc('puella', { declension: '1' }),
+      nounDoc('rex', { declension: '3' }),
+      nounDoc('rosa', { declension: '1' }),
+    ];
+    const db = createFakeGeneratedWordDb({
+      words,
+      pools: [{ id: 'morphology-nouns', wordDocIds: words.map(word => word.id) }],
+    });
+    const exercise = morphologyExercise(
+      {
+        'noun-declension': {
+          enabled: true,
+          filters: { nounDeclension: '1' },
+          steps: ['case'],
+          formSelection: { tableType: 'declension', selectedCellPaths: ['singular.nominative'] },
+        },
+      },
+      'all'
+    );
+    exercise.data.generatorConfig = {
+      ...exercise.data.generatorConfig,
+      wordSource: 'pool',
+      poolId: 'morphology-nouns',
+    };
+
+    const wordsForLesson = await createFirestoreGeneratedWordLoader(db as never, {
+      rng: createGeneratedExerciseRng(24),
+    })(exercise);
+
+    expect(wordsForLesson.map(word => word.root_word).sort()).toEqual(['puella', 'rosa']);
+    expect(wordsForLesson.every(word => word.part_of_speech === 'noun' && word.declension === '1')).toBe(true);
+  });
+
+  it('honors verb, adjective, and pronoun filters within a vocabulary pool', async () => {
+    const words = [
+      verbDoc('verb-keep', { conjugation: '1', is_deponent: false }),
+      verbDoc('verb-other-conjugation', { conjugation: '2', is_deponent: false }),
+      verbDoc('verb-deponent', { conjugation: '1', is_deponent: true }),
+      nounDoc('adjective-keep', { part_of_speech: 'adjective', declension: '3' }),
+      nounDoc('adjective-other-declension', { part_of_speech: 'adjective', declension: '1-2' }),
+      nounDoc('pronoun-keep', { part_of_speech: 'pronoun', pronoun_type: 'personal', person: '1st' }),
+      nounDoc('pronoun-other-person', { part_of_speech: 'pronoun', pronoun_type: 'personal', person: '3rd' }),
+      nounDoc('pronoun-other-type', { part_of_speech: 'pronoun', pronoun_type: 'relative', person: null }),
+    ];
+    const db = createFakeGeneratedWordDb({
+      words,
+      pools: [{ id: 'mixed-pool', wordDocIds: words.map(word => word.id) }],
+    });
+    const result = await collectGeneratedExerciseWords({
+      db: db as never,
+      collection: 'vocabulary_words_v5',
+      specs: [
+        { id: 'verb', partOfSpeech: 'verb', filters: { verbConjugation: '1', isDeponent: 'false' } },
+        { id: 'adjective', partOfSpeech: 'adjective', filters: { adjectiveDeclension: '3' } },
+        { id: 'pronoun', partOfSpeech: 'pronoun', filters: { pronounType: 'personal', pronounPerson: '1st' } },
+      ],
+      count: 'all',
+      exercise: translationExercise(['verb', 'adjective', 'pronoun'], 'all', {
+        wordSource: 'pool',
+        poolId: 'mixed-pool',
+      }),
+      poolId: 'mixed-pool',
+      rng: createGeneratedExerciseRng(25),
+    });
+
+    expect(result.words.map(word => word.id).sort()).toEqual(['adjective-keep', 'pronoun-keep', 'verb-keep']);
+  });
+
   it('charges non-matching pool documents against the global scan budget', async () => {
     const words = Array.from({ length: 2100 }, (_, index) => verbDoc(`verb-${index}`));
     const db = createFakeGeneratedWordDb({
