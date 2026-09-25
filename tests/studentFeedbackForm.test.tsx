@@ -28,7 +28,9 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockAuthUid = 'student-1';
   mockAttachmentItems = [];
-  Object.defineProperty(globalThis.crypto, 'randomUUID', { configurable: true, value: () => 'a5361411-a326-4845-8465-259154c05e14' });
+  mockResetAttachments.mockImplementation(() => { mockAttachmentItems = []; });
+  let uuid = 0;
+  Object.defineProperty(globalThis.crypto, 'randomUUID', { configurable: true, value: () => `a5361411-a326-4845-8465-${String(++uuid).padStart(12, '0')}` });
   mockCreateSession.mockReturnValue({ unwrap: () => Promise.resolve({ session: { status: 'open' } }) });
   mockSubmit.mockReturnValue({ unwrap: () => Promise.resolve({ receipt: { feedbackId: 'a5361411-a326-4845-8465-259154c05e14', submittedAt: '2026-09-24T10:00:00.000Z' } }) });
   mockGetSession.mockReturnValue({ unwrap: () => Promise.resolve({ session: { status: 'open', receipt: null } }) });
@@ -92,8 +94,6 @@ test('lesson dialog preserves the draft after closing and releases the modal lay
 });
 
 test('expired submission session retains the draft and retries with a new session ID', async () => {
-  let uuid = 0;
-  Object.defineProperty(globalThis.crypto, 'randomUUID', { configurable: true, value: () => `a5361411-a326-4845-8465-${String(++uuid).padStart(12, '0')}` });
   mockSubmit.mockReturnValueOnce({ unwrap: () => Promise.reject({ status: 409, data: { code: 'FEEDBACK_SESSION_EXPIRED', error: 'Expired' } }) });
   render(<FeedbackComposer entryPoint="standalone" />);
   completeRequiredFields();
@@ -106,10 +106,7 @@ test('expired submission session retains the draft and retries with a new sessio
 });
 
 test('failed upload can be discarded with its expired session without losing written feedback', async () => {
-  let uuid = 0;
-  Object.defineProperty(globalThis.crypto, 'randomUUID', { configurable: true, value: () => `a5361411-a326-4845-8465-${String(++uuid).padStart(12, '0')}` });
   mockAttachmentItems = [{ id: 'attachment-1', name: 'screen.png', size: 1024, status: 'error', progress: 1, error: 'Feedback session expired' }];
-  mockResetAttachments.mockImplementation(() => { mockAttachmentItems = []; });
   render(<FeedbackComposer entryPoint="standalone" />);
   completeRequiredFields();
   expect(screen.getByRole('button', { name: 'Submit feedback' })).toBeDisabled();
@@ -117,4 +114,58 @@ test('failed upload can be discarded with its expired session without losing wri
   expect(mockResetAttachments).toHaveBeenCalled();
   expect(screen.getByLabelText(/Describe the issue or suggestion/)).toHaveValue('  A broken thing\nOn the next line  ');
   expect(screen.getByRole('button', { name: 'Submit feedback' })).toBeEnabled();
+});
+
+test.each(['Return to lesson', 'Close feedback', 'Escape'])('a completed lesson report resets after %s and captures the next page', async closeAction => {
+  function Harness() {
+    const [open, setOpen] = useState(false);
+    const [pageIndex, setPageIndex] = useState(0);
+    return <>
+      <button onClick={() => setPageIndex(1)}>Next lesson page</button>
+      <FeedbackLessonDialog open={open} onOpenChange={setOpen} context={{ lessonId: 'lesson-1', pageId: `page-${pageIndex + 1}`, pageIndex, revision: 3 }} />
+    </>;
+  }
+  render(<Harness />);
+  fireEvent.click(screen.getByRole('button', { name: 'Feedback' }));
+  completeRequiredFields();
+  fireEvent.submit(screen.getByRole('form', { name: 'Student feedback form' }));
+  expect(await screen.findByText(/Reference:/)).toBeInTheDocument();
+  if (closeAction === 'Escape') fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+  else fireEvent.click(screen.getByRole('button', { name: closeAction }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  fireEvent.click(screen.getByRole('button', { name: 'Next lesson page' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Feedback' }));
+  expect(screen.queryByText(/Reference:/)).not.toBeInTheDocument();
+  expect(screen.getByLabelText(/Describe the issue or suggestion/)).toHaveValue('');
+  expect(screen.getByLabelText('Bug report')).not.toBeChecked();
+  completeRequiredFields();
+  fireEvent.submit(screen.getByRole('form', { name: 'Student feedback form' }));
+  await waitFor(() => expect(mockSubmit).toHaveBeenCalledTimes(2));
+  expect(mockSubmit.mock.calls[1][0]).toMatchObject({ lessonId: 'lesson-1', pageContext: { pageId: 'page-2', pageIndex: 1, revision: 3 } });
+  expect(mockSubmit.mock.calls[1][0].sessionId).not.toBe(mockSubmit.mock.calls[0][0].sessionId);
+});
+
+test('standalone submit-another clears the entire form and starts a new session', async () => {
+  render(<FeedbackComposer entryPoint="standalone" />);
+  completeRequiredFields();
+  fireEvent.change(screen.getByLabelText('Search lessons'), { target: { value: 'First' } });
+  fireEvent.change(screen.getByLabelText('Related lesson (optional)'), { target: { value: 'lesson-1' } });
+  fireEvent.submit(screen.getByRole('form', { name: 'Student feedback form' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Submit another' }));
+  expect(screen.getByLabelText('Search lessons')).toHaveValue('');
+  expect(screen.getByLabelText('Related lesson (optional)')).toHaveValue('');
+  expect(screen.getByLabelText(/Describe the issue or suggestion/)).toHaveValue('');
+  completeRequiredFields();
+  fireEvent.submit(screen.getByRole('form', { name: 'Student feedback form' }));
+  await waitFor(() => expect(mockSubmit).toHaveBeenCalledTimes(2));
+  expect(mockSubmit.mock.calls[1][0].sessionId).not.toBe(mockSubmit.mock.calls[0][0].sessionId);
+});
+
+test('changing accounts discards the previous account’s draft', () => {
+  const { rerender } = render(<FeedbackComposer entryPoint="standalone" />);
+  completeRequiredFields();
+  mockAuthUid = 'student-2';
+  rerender(<FeedbackComposer entryPoint="standalone" />);
+  expect(screen.getByLabelText(/Describe the issue or suggestion/)).toHaveValue('');
+  expect(screen.getByLabelText('Bug report')).not.toBeChecked();
 });

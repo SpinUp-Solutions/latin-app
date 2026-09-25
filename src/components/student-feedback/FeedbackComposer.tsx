@@ -9,6 +9,11 @@ import {
   FEEDBACK_MAX_COMMENTS_LENGTH,
   FEEDBACK_MAX_DESCRIPTION_LENGTH,
   FEEDBACK_MAX_OTHER_EXPLANATION_LENGTH,
+  FEEDBACK_MAX_ATTACHMENTS,
+  FEEDBACK_MAX_IMAGE_BYTES,
+  FEEDBACK_MAX_TOTAL_BYTES,
+  FEEDBACK_MAX_VIDEO_BYTES,
+  FEEDBACK_MIME_TYPES,
   feedbackFormSchema,
   submitFeedbackRequestSchema,
   type FeedbackArea,
@@ -28,7 +33,6 @@ import {
 import { useAuth } from '@/src/hooks/useAuth';
 import type { FeedbackLessonOption } from '@/src/store/api/studentFeedbackApi';
 import { useFeedbackAttachments } from '@/src/hooks/useFeedbackAttachments';
-import { FEEDBACK_MAX_ATTACHMENTS, FEEDBACK_MAX_IMAGE_BYTES, FEEDBACK_MAX_TOTAL_BYTES, FEEDBACK_MAX_VIDEO_BYTES, FEEDBACK_MIME_TYPES } from '@/shared/student-feedback';
 import { useUnsavedNavigationGuard } from '@/src/hooks/useUnsavedNavigationGuard';
 import { UnsavedNavigationDialog } from '@/src/components/ui/core/UnsavedNavigationDialog';
 
@@ -61,9 +65,13 @@ const EMPTY_DRAFT = { type: '' as FeedbackType | '', severity: '' as FeedbackSev
 const EMPTY_LESSONS: FeedbackLessonOption[] = [];
 const fieldClass = 'w-full rounded-md border border-roman-gold/30 bg-white px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
-/** Kept mounted by the lesson dialog so closing it preserves the draft and uploads. */
-export function FeedbackComposer({ entryPoint, lessonContext, active = true, onReturn, renderContent }: FeedbackComposerProps) {
+export function FeedbackComposer(props: FeedbackComposerProps) {
   const { authUid } = useAuth();
+  return <FeedbackComposerForm key={authUid} {...props} />;
+}
+
+/** Closing preserves unfinished drafts; account changes remount the entire form. */
+function FeedbackComposerForm({ entryPoint, lessonContext, active = true, onReturn, renderContent }: FeedbackComposerProps) {
   const [draft, setDraft] = useState({ ...EMPTY_DRAFT });
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(lessonContext?.lessonId ?? null);
   const [pageContext, setPageContext] = useState<FeedbackLessonContext | null>(lessonContext ?? null);
@@ -96,27 +104,29 @@ export function FeedbackComposer({ entryPoint, lessonContext, active = true, onR
     }
   }, [sessionId, createSession, getSession]);
   const attachments = useFeedbackAttachments({ sessionId, ensureSession });
-  const startFreshUploadSession = () => {
-    attachments.reset();
+  const { reset: resetAttachments } = attachments;
+  const startFreshUploadSession = useCallback(() => {
+    resetAttachments();
     setSessionId(crypto.randomUUID());
     sessionReady.current = false;
     setUploadRemovalFailed(false);
-  };
+  }, [resetAttachments]);
 
-  useEffect(() => {
+  const resetDraft = useCallback(() => {
+    startFreshUploadSession();
     setDraft({ ...EMPTY_DRAFT });
     setSelectedLessonId(lessonContext?.lessonId ?? null);
     setPageContext(lessonContext ?? null);
     setSelectionTouched(false);
-    setSessionId(crypto.randomUUID());
-    sessionReady.current = false;
+    setLessonSearch('');
     setReceipt(null);
     setContextError(false);
-    setUploadRemovalFailed(false);
     setFieldErrors({});
-    // Intentionally reset when the account changes, not when a dialog closes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authUid]);
+  }, [startFreshUploadSession, lessonContext]);
+
+  useEffect(() => {
+    if (!active && receipt) resetDraft();
+  }, [active, receipt, resetDraft]);
 
   const draftIsDirty = Boolean(draft.type || draft.areas.length || draft.description || draft.comments || draft.rating || draft.otherAreaExplanation || attachments.items.length || selectionTouched);
   const navigationGuard = useUnsavedNavigationGuard(draftIsDirty && !receipt, 'Discard your unfinished feedback?');
@@ -212,8 +222,7 @@ export function FeedbackComposer({ entryPoint, lessonContext, active = true, onR
     }
   };
 
-  if (receipt) {
-    const result = (
+  const content = receipt ? (
     <div className="space-y-5" role="status">
       <h2 className="font-serif text-2xl text-roman-red">Thank you for your feedback</h2>
       <p>Reference: <strong className="break-all">{receipt.feedbackId}</strong></p>
@@ -221,14 +230,10 @@ export function FeedbackComposer({ entryPoint, lessonContext, active = true, onR
       <div className="flex flex-wrap gap-3">
         {onReturn ? <Button type="button" onClick={onReturn}>Return to lesson</Button> : null}
         <Button asChild variant={onReturn ? 'outline' : 'default'}><Link href="/dashboard">Back to dashboard</Link></Button>
-        {entryPoint === 'standalone' ? <Button type="button" variant="outline" onClick={() => { attachments.reset(); setDraft({ ...EMPTY_DRAFT }); setSessionId(crypto.randomUUID()); sessionReady.current = false; setReceipt(null); setSelectedLessonId(null); setPageContext(null); }}>Submit another</Button> : null}
+        {entryPoint === 'standalone' ? <Button type="button" variant="outline" onClick={resetDraft}>Submit another</Button> : null}
       </div>
     </div>
-    );
-    return <>{renderContent ? renderContent(result) : result}<UnsavedNavigationDialog guard={navigationGuard} /></>;
-  }
-
-  const result = (
+  ) : (
     <form onSubmit={submit} className="space-y-6" aria-label="Student feedback form" onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); attachments.addFiles(Array.from(event.dataTransfer.files)); }} onPaste={event => {
       const images = Array.from(event.clipboardData.files).filter(file => file.type.startsWith('image/'));
       if (images.length) { event.preventDefault(); attachments.addFiles(images); }
@@ -311,5 +316,5 @@ export function FeedbackComposer({ entryPoint, lessonContext, active = true, onR
       <Button type="submit" disabled={submitState.isLoading || attachments.hasPendingOrFailed || !active}>{submitState.isLoading ? 'Submitting…' : 'Submit feedback'}</Button>
     </form>
   );
-  return <>{renderContent ? renderContent(result) : result}<UnsavedNavigationDialog guard={navigationGuard} /></>;
+  return <>{renderContent ? renderContent(content) : content}<UnsavedNavigationDialog guard={navigationGuard} /></>;
 }

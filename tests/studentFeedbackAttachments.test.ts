@@ -135,6 +135,17 @@ function fixture() {
 }
 
 describe('feedback attachment lifecycle', () => {
+  it.each(['open', 'cleanup', 'expired'] as const)('returns recoverable expiry when reserving against a %s session', async status => {
+    const f = fixture();
+    const path = `studentFeedbackSessions/${sessionId}`;
+    f.db.records.set(path, { ...f.db.records.get(path), status, expiresAtMs: Date.now() - 1 });
+    await expect(reserveFeedbackAttachment('student-1', sessionId, f.input, f.asDb))
+      .rejects.toMatchObject({ code: 'FEEDBACK_SESSION_EXPIRED' });
+    await expect(reserveFeedbackAttachment('other', sessionId, f.input, f.asDb))
+      .rejects.toMatchObject({ code: 'FEEDBACK_NOT_FOUND' });
+    expect(f.db.records.get(path)?.attachmentCount).toBe(0);
+  });
+
   it('reserves only for the owner and maintains bounded active totals idempotently', async () => {
     const f = fixture();
     await expect(reserveFeedbackAttachment('other', sessionId, f.input, f.asDb)).rejects.toMatchObject({ code: 'FEEDBACK_NOT_FOUND' });

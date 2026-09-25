@@ -21,7 +21,7 @@ export default function FeedbackPage() {
         <h1 className="mt-3 font-serif text-3xl text-roman-red">Share your feedback</h1>
         <p className="mt-2 text-roman-stone">Tell us what happened or what you would like to see improved.</p>
       </div>
-      <FeedbackComposer key={authUid} entryPoint="standalone" />
+      <FeedbackComposer entryPoint="standalone" />
     </div>
   </main>;
 }

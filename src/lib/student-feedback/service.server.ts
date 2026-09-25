@@ -29,26 +29,15 @@ import {
 import { FeedbackError, invalidFeedbackDocument } from './http.server';
 import { validateFeedbackLessonInTransaction } from './lessons.server';
 import { estimateFirestoreDocumentBytes } from '@/src/lib/tests/firestore-size';
+import {
+  assertFeedbackSessionOwner as assertSessionOwner,
+  assertOpenFeedbackSession,
+  feedbackSessionNotFound as sessionNotFound,
+  parseFeedbackSession as parseSession,
+} from '@/src/lib/student-feedback/session.server';
 
 const HOUR_MS = 60 * 60 * 1000;
 const ACTIVE_ATTACHMENT_STATUSES = ['reserved', 'finalizing', 'ready'] as const;
-
-function parseSession(data: unknown, id: string): FeedbackSessionDocument {
-  const parsed = feedbackSessionDocumentSchema.safeParse(data);
-  if (!parsed.success || parsed.data.id !== id) invalidFeedbackDocument('Feedback session data is invalid');
-  if (parsed.data.receipt && parsed.data.receipt.feedbackId !== id) {
-    invalidFeedbackDocument('Feedback session receipt is invalid');
-  }
-  return parsed.data;
-}
-
-function sessionNotFound(): never {
-  throw new FeedbackError('FEEDBACK_NOT_FOUND', 'Feedback session not found', 404);
-}
-
-function assertSessionOwner(session: FeedbackSessionDocument, uid: string): void {
-  if (session.ownerUid !== uid) sessionNotFound();
-}
 
 export async function createFeedbackSession(
   uid: string,
@@ -221,12 +210,7 @@ export async function submitFeedback(
       ) invalidFeedbackDocument('Feedback receipt has no matching report');
       return session.receipt;
     }
-    if (session.status !== 'open') {
-      throw new FeedbackError('FEEDBACK_SESSION_CLOSED', 'This feedback session is closed', 409);
-    }
-    if (attemptNowMs >= session.expiresAtMs) {
-      throw new FeedbackError('FEEDBACK_SESSION_EXPIRED', 'This feedback session expired', 409);
-    }
+    assertOpenFeedbackSession(session, uid, attemptNowMs);
 
     const [reportSnapshot, intentSnapshot, profileSnapshot, throttleSnapshot] = await Promise.all([
       transaction.get(reportRef),

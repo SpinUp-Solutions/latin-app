@@ -13,12 +13,15 @@ import {
   FEEDBACK_SCHEMA_VERSION,
   feedbackAttachmentIntentDocumentSchema,
   feedbackReportDocumentSchema,
-  feedbackSessionDocumentSchema,
   type FeedbackAttachmentDescriptor,
   type FeedbackAttachmentIntentDocument,
-  type FeedbackSessionDocument,
+  type FeedbackPublicAttachment,
 } from '@/shared/student-feedback';
 import { FeedbackError, invalidFeedbackDocument } from './http.server';
+import {
+  assertOpenFeedbackSession as assertOpenSession,
+  parseFeedbackSession as parseSession,
+} from '@/src/lib/student-feedback/session.server';
 import {
   assertFeedbackPrivatePath,
   deleteFeedbackObjectGeneration,
@@ -34,13 +37,7 @@ const FINALIZE_LEASE_MS = 5 * 60 * 1000;
 const CANCELLED_COPY_CLEANUP_HOLD_MS = 24 * 60 * 60 * 1000;
 const ADMIN_URL_TTL_MS = 5 * 60 * 1000;
 
-export interface FeedbackAttachmentPublic {
-  id: string;
-  originalName: string;
-  contentType: FeedbackAttachmentIntentDocument['contentType'];
-  sizeBytes: number;
-  status: FeedbackAttachmentIntentDocument['status'];
-}
+export type FeedbackAttachmentPublic = FeedbackPublicAttachment;
 
 export function publicFeedbackAttachment(intent: FeedbackAttachmentIntentDocument): FeedbackAttachmentPublic {
   return {
@@ -60,24 +57,12 @@ function intentRef(db: Firestore, sessionId: string, attachmentId: string) {
   return sessionRef(db, sessionId).collection(STUDENT_FEEDBACK_ATTACHMENTS_SUBCOLLECTION).doc(attachmentId);
 }
 
-function parseSession(raw: unknown, sessionId: string): FeedbackSessionDocument {
-  const result = feedbackSessionDocumentSchema.safeParse(raw);
-  if (!result.success || result.data.id !== sessionId) invalidFeedbackDocument('Feedback session data is invalid');
-  return result.data;
-}
-
 function parseIntent(raw: unknown, sessionId: string, attachmentId: string): FeedbackAttachmentIntentDocument {
   const result = feedbackAttachmentIntentDocumentSchema.safeParse(raw);
   if (!result.success || result.data.id !== attachmentId || result.data.sessionId !== sessionId) {
     invalidFeedbackDocument('Feedback attachment data is invalid');
   }
   return result.data;
-}
-
-function assertOpenSession(session: FeedbackSessionDocument, uid: string, nowMs: number): void {
-  if (session.ownerUid !== uid) throw new FeedbackError('FEEDBACK_NOT_FOUND', 'Feedback session not found', 404);
-  if (session.status !== 'open') throw new FeedbackError('FEEDBACK_SESSION_CLOSED', 'Feedback session is closed', 409);
-  if (nowMs >= session.expiresAtMs) throw new FeedbackError('FEEDBACK_SESSION_EXPIRED', 'Feedback session expired', 409);
 }
 
 function assertIntentOwner(intent: FeedbackAttachmentIntentDocument, uid: string): void {

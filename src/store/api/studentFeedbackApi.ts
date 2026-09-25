@@ -2,19 +2,23 @@ import type { ThunkDispatch, UnknownAction } from '@reduxjs/toolkit';
 import { createApi } from '@reduxjs/toolkit/query/react';
 import type {
   FeedbackActivityDocument,
+  FeedbackActivityListResponse,
+  FeedbackAdminListItem,
+  FeedbackAdminListResponse,
   FeedbackAdminListQuery,
   FeedbackReceipt,
   FeedbackReportDocument,
-  FeedbackSessionDocument,
+  FeedbackPublicSession,
   FeedbackSubmitRequest,
+  FeedbackLessonOption,
 } from '@/shared/student-feedback';
 import { createAuthenticatedBaseQuery } from './baseQuery';
 
 export type FeedbackListArgs = Omit<FeedbackAdminListQuery, 'cursor'> & { cursor?: string | null };
-export type FeedbackListItem = Pick<FeedbackReportDocument, 'id' | 'type' | 'severity' | 'areas' | 'description' | 'submitter' | 'lesson' | 'createdAt' | 'status' | 'archived' | 'stateRevision' | 'attachments'>;
-export interface FeedbackListResult { items: FeedbackListItem[]; nextCursor: string | null }
-export interface FeedbackActivityResult { items: FeedbackActivityDocument[]; nextCursor: string | null }
-export interface FeedbackLessonOption { id: string; title: string; revision: number }
+export type FeedbackListItem = FeedbackAdminListItem;
+export type FeedbackListResult = FeedbackAdminListResponse;
+export type FeedbackActivityResult = FeedbackActivityListResponse;
+export type { FeedbackLessonOption } from '@/shared/student-feedback';
 
 const queryString = (values: Record<string, unknown>) => {
   const params = new URLSearchParams();
@@ -36,10 +40,10 @@ export const studentFeedbackApi = createApi({
       query: () => '/feedback/lessons',
       providesTags: [{ type: 'FeedbackLessons', id: 'LIST' }],
     }),
-    createFeedbackSession: builder.mutation<{ session: FeedbackSessionDocument }, { sessionId: string }>({
+    createFeedbackSession: builder.mutation<{ session: FeedbackPublicSession }, { sessionId: string }>({
       query: body => ({ url: '/feedback/sessions', method: 'POST', body }),
     }),
-    getFeedbackSession: builder.query<{ session: FeedbackSessionDocument }, string>({
+    getFeedbackSession: builder.query<{ session: FeedbackPublicSession }, string>({
       query: sessionId => `/feedback/sessions/${encodeURIComponent(sessionId)}`,
     }),
     submitFeedback: builder.mutation<{ receipt: FeedbackReceipt }, FeedbackSubmitRequest>({

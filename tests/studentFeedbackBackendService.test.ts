@@ -132,6 +132,26 @@ describe('student feedback transaction boundaries', () => {
     expect(publicSession).not.toHaveProperty('cleanupLease');
   });
 
+  it.each(['open', 'cleanup', 'expired'] as const)('returns recoverable expiry for a %s session after its deadline', async status => {
+    const db = new FakeDb();
+    const session = await createFeedbackSession('student-1', sessionId, db as never, nowMs);
+    db.documents.set(`studentFeedbackSessions/${sessionId}`, { ...session, status });
+    const input = submission({ lessonId: null });
+    await expect(submitFeedback(token, input, db as never, session.expiresAtMs + 1))
+      .rejects.toMatchObject({ code: 'FEEDBACK_SESSION_EXPIRED' });
+    await expect(submitFeedback({ uid: 'other' } as never, input, db as never, session.expiresAtMs + 1))
+      .rejects.toMatchObject({ code: 'FEEDBACK_NOT_FOUND' });
+    expect(db.writes).toHaveLength(1);
+  });
+
+  it('keeps an explicitly cancelled session closed rather than treating it as expired', async () => {
+    const db = new FakeDb();
+    const session = await createFeedbackSession('student-1', sessionId, db as never, nowMs);
+    db.documents.set(`studentFeedbackSessions/${sessionId}`, { ...session, status: 'cancelled' });
+    await expect(submitFeedback(token, submission({ lessonId: null }), db as never, session.expiresAtMs + 1))
+      .rejects.toMatchObject({ code: 'FEEDBACK_SESSION_CLOSED' });
+  });
+
   it('submits a generic lesson with historical snapshot, verified email, one quota entry, and replays without another write', async () => {
     const db = new FakeDb();
     await createFeedbackSession('student-1', sessionId, db as never, nowMs);
