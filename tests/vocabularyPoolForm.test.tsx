@@ -26,6 +26,25 @@ jest.mock('@/src/components/ui/admin/vocabulary-pools/VocabularyPoolImportSelect
     </button>
   ),
 }));
+jest.mock('@/src/components/ui/switch', () => ({
+  Switch: ({
+    checked,
+    onCheckedChange,
+    'aria-label': ariaLabel,
+  }: {
+    checked?: boolean;
+    onCheckedChange?: (checked: boolean) => void;
+    'aria-label'?: string;
+  }) => (
+    <button
+      type="button"
+      role="switch"
+      aria-label={ariaLabel}
+      aria-checked={checked}
+      onClick={() => onCheckedChange?.(!checked)}
+    />
+  ),
+}));
 
 import { PoolForm } from '@/src/components/ui/admin/vocabulary-pools/PoolForm';
 
@@ -147,4 +166,43 @@ it('edits only direct words and keeps source links when saving a combined pool',
     )
   );
   expect(mockSubmit.mock.calls.at(-1)?.[0].wordDocIds).toBeUndefined();
+});
+
+it('includes the active toggle state when saving an edited pool', async () => {
+  mockSelectedIds = [];
+  mockSubmit.mockResolvedValue(true);
+  render(
+    <PoolForm
+      mode="edit"
+      initialData={{
+        id: 'inactive-copy',
+        name: 'Lesson 5 (Copy)',
+        description: 'Review',
+        wordDocIds: ['a'],
+        directWordDocIds: ['a'],
+        metadata: {
+          createdAt: new Date(),
+          createdBy: 'admin',
+          updatedAt: new Date(),
+          updatedBy: 'admin',
+          wordCount: 1,
+          isActive: false,
+          tags: [],
+          difficulty: 'beginner',
+        },
+      }}
+      onSubmit={mockSubmit}
+      onCancel={jest.fn()}
+      isLoading={false}
+    />
+  );
+
+  fireEvent.click(screen.getByRole('switch', { name: 'Active pool' }));
+  fireEvent.submit(screen.getByRole('button', { name: 'Save Changes' }).closest('form')!);
+
+  await waitFor(() =>
+    expect(mockSubmit).toHaveBeenLastCalledWith(
+      expect.objectContaining({ isActive: true, directWordDocIds: [] })
+    )
+  );
 });
