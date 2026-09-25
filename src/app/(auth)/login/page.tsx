@@ -19,6 +19,7 @@ import {
   watchAuthStage,
 } from '@/src/lib/auth-diagnostics';
 import { getAuthErrorMessage } from '@/src/lib/auth-errors';
+import { getAllowedLoginReturnPath } from '@/src/lib/student-feedback/login-return';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -44,12 +45,9 @@ export default function LoginPage() {
   useEffect(() => {
     if (user && !authLoading) {
       redirectRequested.current = true;
-      recordAuthBreadcrumb('redirect_requested', { destination: isAdmin ? '/admin' : '/dashboard' });
-      if (isAdmin) {
-        router.replace('/admin');
-      } else {
-        router.replace('/dashboard');
-      }
+      const destination = getAllowedLoginReturnPath(window.location.search) ?? (isAdmin ? '/admin' : '/dashboard');
+      recordAuthBreadcrumb('redirect_requested', { destination });
+      router.replace(destination);
     }
   }, [user, authLoading, isAdmin, router]);
 

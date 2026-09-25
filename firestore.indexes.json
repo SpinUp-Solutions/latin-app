@@ -64,10 +64,22 @@
       "collectionGroup": "mockTests",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "parent.testId", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "isLive", "order": "ASCENDING" },
-        { "fieldPath": "mockOrder", "order": "ASCENDING" }
+        {
+          "fieldPath": "parent.testId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "isLive",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "mockOrder",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
@@ -733,6 +745,538 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "archived",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "archived",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "severity",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "severity",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "lesson.id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "lesson.id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "submitter.uid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "submitter.uid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "submitter.emailNormalized",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "submitter.emailNormalized",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "areaFlags.lessons",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "areaFlags.lessons",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "areaFlags.exercises",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "areaFlags.exercises",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "areaFlags.vocabulary",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "areaFlags.vocabulary",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "areaFlags.dashboard",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "areaFlags.dashboard",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "areaFlags.account",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "areaFlags.account",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "areaFlags.performance",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "areaFlags.performance",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "areaFlags.other",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "areaFlags.other",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "attachments",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "cleanupPending",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "cleanupAfterMs",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "studentFeedbackSessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "expiresAtMs",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": [
@@ -762,6 +1306,76 @@
       "collectionGroup": "testResultReviews",
       "fieldPath": "content",
       "indexes": []
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "fieldPath": "description",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "fieldPath": "comments",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "fieldPath": "otherAreaExplanation",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "fieldPath": "attachments",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "fieldPath": "diagnostics",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "fieldPath": "lesson.title",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "fieldPath": "lesson.pageTitle",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "fieldPath": "submitter.displayName",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "studentFeedback",
+      "fieldPath": "submitter.email",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "activity",
+      "fieldPath": "note",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "activity",
+      "fieldPath": "reason",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "activity",
+      "fieldPath": "actorDisplayName",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "attachments",
+      "fieldPath": "cleanupPending",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
     }
   ]
 }

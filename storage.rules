@@ -2,6 +2,36 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
+    function feedbackSession(sessionId) {
+      return firestore.get(/databases/(default)/documents/studentFeedbackSessions/$(sessionId));
+    }
+
+    function feedbackIntent(sessionId, attachmentId) {
+      return firestore.get(/databases/(default)/documents/studentFeedbackSessions/$(sessionId)/attachments/$(attachmentId));
+    }
+
+    match /student-feedback/staging/{uid}/{sessionId}/{attachmentId} {
+      // One create-only write per exact server reservation. A failed upload
+      // must be reconciled/finalized or removed before another ID is used.
+      allow create: if request.auth != null
+        && request.auth.uid == uid
+        && resource == null
+        && feedbackSession(sessionId).data.ownerUid == uid
+        && feedbackSession(sessionId).data.status == 'open'
+        && feedbackSession(sessionId).data.expiresAtMs > request.time.toMillis()
+        && feedbackIntent(sessionId, attachmentId).data.ownerUid == uid
+        && feedbackIntent(sessionId, attachmentId).data.sessionId == sessionId
+        && feedbackIntent(sessionId, attachmentId).data.id == attachmentId
+        && feedbackIntent(sessionId, attachmentId).data.status == 'reserved'
+        && request.resource.size == feedbackIntent(sessionId, attachmentId).data.reservedBytes
+        && request.resource.contentType == feedbackIntent(sessionId, attachmentId).data.contentType;
+      allow read, update, delete: if false;
+    }
+
+    match /student-feedback/private/{sessionId}/{attachmentId} {
+      allow read, write: if false;
+    }
+
     // Lesson migration snapshots are created and restored only through
     // server-side Admin SDK routes. Client SDK access stays disabled.
     match /lesson-snapshots/{allPaths=**} {

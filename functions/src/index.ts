@@ -25,6 +25,7 @@ import {
   updateEvaluationCase,
 } from '../../src/lib/ai-evaluations/persistence';
 import { AIEvaluationThrottleError, consumeEvaluationRunQuota } from '../../src/lib/ai-evaluations/throttle';
+export { cleanupStudentFeedback, guardFinalizedStudentFeedbackObject } from './student-feedback/cleanup';
 
 const openaiApiKey = defineSecret('OPENAI_API_KEY');
 const adminApp = getApps()[0] ?? initializeApp();

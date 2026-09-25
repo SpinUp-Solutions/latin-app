@@ -7,6 +7,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '@/src/services/firebase';
 import { setAuthUid, setUser, CustomUser, FirestoreUserDataSchema } from '@/src/store/slices/authSlice';
 import { appApi } from '@/src/store/api/appApi';
+import { studentFeedbackApi } from '@/src/store/api/studentFeedbackApi';
 import {
   clearPersistedStudentDashboard,
   resetStudentDashboardCacheSeed,
@@ -70,6 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           });
           if (previousUid !== undefined && previousUid !== nextUid) {
             dispatch(appApi.util.resetApiState());
+            dispatch(studentFeedbackApi.util.resetApiState());
             if (previousUid) clearPersistedStudentDashboard(previousUid);
             resetStudentDashboardCacheSeed();
           }

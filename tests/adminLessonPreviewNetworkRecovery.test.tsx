@@ -7,6 +7,8 @@ import { lessonApi } from '@/src/store/api/lessonApi';
 import lessonEditorReducer from '@/src/store/slices/lessonEditorSlice';
 import AdminLessonPreviewPage from '@/src/app/admin/(standalone)/lessons/preview/[id]/page';
 
+jest.mock('@/src/components/student-feedback/FeedbackLessonDialog', () => ({ FeedbackLessonDialog: () => null }));
+
 const mockBaseQuery = jest.fn();
 let mockLessonId = 'lesson-1';
 let mockIsAdmin = true;

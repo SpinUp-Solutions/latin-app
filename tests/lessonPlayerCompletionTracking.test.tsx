@@ -10,6 +10,8 @@ import {
 import { toast } from 'sonner';
 import { captureException, captureMessage } from '@sentry/nextjs';
 
+jest.mock('@/src/components/student-feedback/FeedbackLessonDialog', () => ({ FeedbackLessonDialog: () => null }));
+
 let audioEndedHandler: (() => void) | undefined;
 
 type Deferred<T> = {

@@ -1,4 +1,7 @@
+// Next.js loads this configuration as CommonJS; keep these imports in its native format.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { withSentryConfig } = require('@sentry/nextjs');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { version } = require('./package.json');
 
 /** @type {import('next').NextConfig} */

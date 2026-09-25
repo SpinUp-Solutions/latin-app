@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { LessonPlayer } from '@/src/components/ui/lesson/lesson-player';
 import type { LessonWithProgress } from '@/src/types/lesson';
 import {
@@ -11,6 +11,8 @@ import { toast } from 'sonner';
 const mockMarkExerciseComplete = jest.fn(() => ({ unwrap: () => Promise.resolve({ success: true }) }));
 const mockUpdatePageProgress = jest.fn(() => ({ unwrap: () => Promise.resolve({ success: true }) }));
 const mockFinishLesson = jest.fn(() => ({ unwrap: () => Promise.resolve({ success: true }) }));
+const mockPause = jest.fn();
+let mockAudioEnded: (() => void) | undefined;
 
 jest.mock('@/src/store/api/lessonApi', () => ({
   useMarkExerciseCompleteMutation: jest.fn(),
@@ -19,12 +21,20 @@ jest.mock('@/src/store/api/lessonApi', () => ({
 }));
 
 jest.mock('@/src/hooks/useAuth', () => ({
-  useAuth: () => ({ user: { uid: 'admin-1' } }),
+  useAuth: () => ({ user: { uid: 'admin-1' }, authUid: 'admin-1' }),
 }));
 
 jest.mock('@/src/hooks/useAudio', () => ({
   __esModule: true,
-  default: () => ({ audioRef: { current: null }, isPlaying: false, togglePlay: jest.fn() }),
+  default: (_path: string, onEnded: () => void) => {
+    mockAudioEnded = onEnded;
+    return { audioRef: { current: null }, isPlaying: false, togglePlay: jest.fn(), pause: mockPause };
+  },
+}));
+
+jest.mock('@/src/components/student-feedback/FeedbackLessonDialog', () => ({
+  FeedbackLessonDialog: ({ onOpenChange }: { onOpenChange: (open: boolean) => void }) =>
+    <button type="button" onClick={() => onOpenChange(true)}>Feedback</button>,
 }));
 
 jest.mock('sonner', () => ({
@@ -86,6 +96,7 @@ describe('LessonPlayer preview mode', () => {
     render(<LessonPlayer lesson={lesson} trackProgress={false} />);
 
     expect(screen.getByText('Runtime mode: practice')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Feedback' })).not.toBeInTheDocument();
     await waitFor(() => expect(mockUpdatePageProgress).not.toHaveBeenCalled());
     fireEvent.click(screen.getByRole('button', { name: 'Complete exercise' }));
     fireEvent.click(screen.getByRole('button', { name: 'Finish lesson' }));
@@ -99,10 +110,22 @@ describe('LessonPlayer preview mode', () => {
     render(<LessonPlayer lesson={lesson} trackProgress runtimeMode="test" />);
 
     await waitFor(() => expect(mockUpdatePageProgress).not.toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: 'Feedback' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Complete exercise' }));
     fireEvent.click(screen.getByRole('button', { name: 'Finish lesson' }));
 
     expect(mockMarkExerciseComplete).not.toHaveBeenCalled();
     expect(mockFinishLesson).not.toHaveBeenCalled();
+  });
+
+  it('pauses audio and blocks auto-advance when real lesson feedback opens while retaining the page', () => {
+    const twoPageLesson = { ...lesson, pages: [...lesson.pages, { id: 'page-2', items: [] }] } as LessonWithProgress;
+    render(<LessonPlayer lesson={twoPageLesson} />);
+    expect(screen.getByText('Page 1 of 2')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Feedback' }));
+    expect(mockPause).toHaveBeenCalledTimes(1);
+    act(() => mockAudioEnded?.());
+    expect(screen.getByText('Page 1 of 2')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Complete exercise' })).toBeInTheDocument();
   });
 });

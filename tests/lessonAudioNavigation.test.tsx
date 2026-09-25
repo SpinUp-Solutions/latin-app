@@ -4,6 +4,8 @@ import { LessonPlayer } from '@/src/components/ui/lesson/lesson-player';
 import { auth } from '@/src/services/firebase';
 import type { LessonWithProgress } from '@/src/types/lesson';
 
+jest.mock('@/src/components/student-feedback/FeedbackLessonDialog', () => ({ FeedbackLessonDialog: () => null }));
+
 jest.mock('@/src/hooks/useAuth', () => ({ useAuth: () => ({ user: { uid: 'student-1' } }) }));
 jest.mock('@/src/store/api/lessonApi', () => ({
   useMarkExerciseCompleteMutation: () => [jest.fn()],
