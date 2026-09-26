@@ -1,22 +1,17 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Checkbox } from '@/src/components/ui/checkbox';
+import React, { useEffect, useState } from 'react';
 import { Input } from '@/src/components/ui/input';
 import { Label } from '@/src/components/ui/label';
 import { MAX_GENERATED_WORD_COUNT } from '@/src/config/generatedExerciseLimits';
 
-const DEFAULT_GENERATED_QUESTION_COUNT = 5;
-
 interface GeneratedQuestionCountFieldProps {
   id: string;
   count: number | 'all';
-  onChange: (count: number | 'all') => void;
+  onChange: (count: number) => void;
 }
 
 export const GeneratedQuestionCountField: React.FC<GeneratedQuestionCountFieldProps> = ({ id, count, onChange }) => {
   const numericCount = typeof count === 'number' ? count : null;
   const [inputValue, setInputValue] = useState(numericCount === null ? '' : String(numericCount));
-  const lastNumericCount = useRef(numericCount ?? DEFAULT_GENERATED_QUESTION_COUNT);
-  const useAllWords = count === 'all';
 
   useEffect(() => {
     if (numericCount === null) {
@@ -24,19 +19,17 @@ export const GeneratedQuestionCountField: React.FC<GeneratedQuestionCountFieldPr
       return;
     }
 
-    lastNumericCount.current = numericCount;
     setInputValue(String(numericCount));
   }, [numericCount]);
 
   const commitInputValue = () => {
-    const parsed = Number.parseInt(inputValue, 10);
-    if (!Number.isFinite(parsed) || parsed < 1) {
-      setInputValue(String(lastNumericCount.current));
+    const parsed = Number(inputValue);
+    if (!Number.isInteger(parsed) || parsed < 1) {
+      setInputValue(numericCount === null ? '' : String(numericCount));
       return;
     }
 
     const nextCount = Math.min(parsed, MAX_GENERATED_WORD_COUNT);
-    lastNumericCount.current = nextCount;
     setInputValue(String(nextCount));
     onChange(nextCount);
   };
@@ -51,23 +44,15 @@ export const GeneratedQuestionCountField: React.FC<GeneratedQuestionCountFieldPr
         max={MAX_GENERATED_WORD_COUNT}
         inputMode="numeric"
         value={inputValue}
-        disabled={useAllWords}
-        placeholder={useAllWords ? 'Using all eligible words' : 'Number of questions'}
+        placeholder={count === 'all' ? 'All eligible words (saved setting)' : 'Number of questions'}
+        aria-describedby={`${id}-description`}
         onChange={event => setInputValue(event.target.value)}
         onBlur={commitInputValue}
       />
-      <div className="flex items-center gap-2">
-        <Checkbox
-          id={`${id}-all`}
-          checked={useAllWords}
-          onCheckedChange={checked => onChange(checked === true ? 'all' : lastNumericCount.current)}
-        />
-        <Label htmlFor={`${id}-all`} className="text-sm font-normal text-gray-700">
-          Use all eligible pool words
-        </Label>
-      </div>
-      <p className="text-xs text-gray-500">
-        Controls how many unique words become questions. Choose all to follow the full pool as it changes.
+      <p id={`${id}-description`} className="text-xs text-gray-500">
+        {count === 'all'
+          ? 'This saved exercise uses all eligible words. Enter a number to set its question count.'
+          : 'Choose how many words to use from this pool. Words without valid selected forms are skipped; fewer questions appear only when there are not enough eligible words.'}
       </p>
     </div>
   );
