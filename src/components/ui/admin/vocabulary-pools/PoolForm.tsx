@@ -5,6 +5,7 @@ import { Input } from '@/src/components/ui/input';
 import { Label } from '@/src/components/ui/label';
 import { Textarea } from '@/src/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
+import { Switch } from '@/src/components/ui/switch';
 import { Badge } from '@/src/components/ui/badge';
 import { X, BookOpen } from 'lucide-react';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
@@ -68,6 +69,7 @@ export const PoolForm: React.FC<PoolFormProps> = ({
     description: initialData?.description || '',
     difficulty: initialData?.metadata?.difficulty || 'beginner',
     tags: initialData?.metadata?.tags || [],
+    isActive: initialData?.metadata?.isActive ?? true,
   });
 
   const [newTag, setNewTag] = useState('');
@@ -129,6 +131,7 @@ export const PoolForm: React.FC<PoolFormProps> = ({
     if (mode === 'edit') {
       submitData.sourcePoolIds = sourcePoolIds;
       submitData.directWordDocIds = selectedIds;
+      submitData.isActive = formData.isActive;
       delete submitData.wordDocIds;
     }
     submittingRef.current = true;
@@ -216,6 +219,26 @@ export const PoolForm: React.FC<PoolFormProps> = ({
                 </SelectContent>
               </Select>
             </div>
+
+            {mode === 'edit' && (
+              <div className="flex items-start justify-between gap-4 rounded-lg border bg-stone-50 p-4">
+                <div>
+                  <Label htmlFor="pool-active" className="text-sm font-medium text-gray-800">
+                    Active pool
+                  </Label>
+                  <p className="mt-1 text-sm text-gray-600">
+                    Active pools appear when assigning vocabulary to lessons and tests. Duplicated pools start inactive
+                    until you activate them here.
+                  </p>
+                </div>
+                <Switch
+                  id="pool-active"
+                  checked={formData.isActive}
+                  onCheckedChange={isActive => setFormData(prev => ({ ...prev, isActive }))}
+                  aria-label="Active pool"
+                />
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label>Tags</Label>

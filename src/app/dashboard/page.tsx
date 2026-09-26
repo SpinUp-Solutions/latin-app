@@ -7,6 +7,7 @@ import { auth } from '@/src/services/firebase';
 import { useGetStudentDashboardQuery } from '@/src/store/api/lessonApi';
 import { persistStudentDashboard } from '@/src/store/api/dashboardCache';
 import { useAuth } from '@/src/hooks/useAuth';
+import { getAuthErrorMessage } from '@/src/lib/auth-errors';
 import {
   LessonStatus,
   StudentLessonSummary,
@@ -14,6 +15,7 @@ import {
   type StudentTestSummary,
 } from '@/src/types/lesson';
 import { Button } from '@/src/components/ui/button';
+import { PageLoading } from '@/src/components/ui/page-loading';
 import { toast } from 'sonner';
 import { BookOpen, User } from 'lucide-react';
 import Image from 'next/image';
@@ -400,8 +402,8 @@ export default function DashboardPage() {
       await signOut(auth);
       router.push('/login');
       toast.success('Successfully logged out!');
-    } catch {
-      toast.error('Failed to log out. Please try again.');
+    } catch (error: unknown) {
+      toast.error(getAuthErrorMessage(error, 'sign-out'));
     }
   };
 
@@ -409,11 +411,7 @@ export default function DashboardPage() {
   // profile loading no longer holds the learning path hostage — and a failed
   // background revalidation keeps the last good projection on screen.
   if (!uid || (lessonsLoading && !studentDashboard)) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-roman-marble">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>
-      </div>
-    );
+    return <PageLoading label="Loading dashboard" />;
   }
 
   if (dashboardError && !studentDashboard) {

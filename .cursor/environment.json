@@ -1,0 +1,14 @@
+{
+  "name": "Latin App",
+  "install": "bash .cursor/install.sh",
+  "terminals": [
+    {
+      "name": "firebase-emulators",
+      "command": "npm run firebase:emulators:e2e"
+    },
+    {
+      "name": "dev-server",
+      "command": "npm run dev"
+    }
+  ]
+}

@@ -3,20 +3,15 @@ import { Button } from '@/src/components/ui/button';
 import { Card, CardContent } from '@/src/components/ui/card';
 import { Checkbox } from '@/src/components/ui/checkbox';
 import { Alert, AlertDescription, AlertTitle } from '@/src/components/ui/alert';
-import { Input } from '@/src/components/ui/input';
 import { Label } from '@/src/components/ui/label';
 import { GeneratedFormIdentificationExercise } from '@/src/types/exercises/generated-form-identification';
 import { useAppSelector } from '@/src/store/hooks';
 import { SimpleInput, SimpleTextarea } from '@/src/components/ui/form-components';
 import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
 import { AudioUploadSection } from './AudioUploadSection';
-import { AdvancedFiltersPanel } from '../vocabulary/AdvancedFiltersPanel';
-import { VocabularyPoolSelector } from '../vocabulary-pools/VocabularyPoolSelector';
 import { WordSourceSection } from './WordSourceSection';
 import { MultiParadigmConfigSection } from './MultiParadigmConfigSection';
 import { useFormIdentificationEditor } from '@/src/hooks/useFormIdentificationEditor';
-import type { PartOfSpeech, PronounType, PronounPerson } from '@/shared/types/vocabulary/schemas/enums';
-import { parseMultiFilterValue, serializeMultiFilterValue } from '@/src/utils/wordFilters';
 import {
   extractStepValue,
   getAcceptedAnswersForStep,
@@ -25,10 +20,11 @@ import {
 import { getExerciseDisplayForm, hasSelectedForm } from '@/src/utils/exercises/formSelection';
 import { getGeneratedFormIdentificationConfigurationMessages } from '@/src/utils/exercises/formIdentificationConfiguration';
 import { prepareGeneratedFormIdentificationWord } from '@/src/utils/exercises/formIdentificationPreparation';
-import { formatGeneratedPreviewDiagnostics } from '@/src/utils/generated/generatedExercisePreview';
-import { getApiErrorMessage } from '@/src/store/api/baseQuery';
 import { AlertTriangle, Loader2 } from 'lucide-react';
-import { GeneratedQuestionCountField } from './GeneratedQuestionCountField';
+import { GeneratedVocabularyFilters } from './GeneratedVocabularyFilters';
+import { GeneratedPoolSourceFields } from './GeneratedPoolSourceFields';
+import { GeneratedExerciseSummary } from './GeneratedExerciseSummary';
+import { GeneratedPreviewPanel } from './GeneratedPreviewPanel';
 
 export const GeneratedFormIdentificationEditor: React.FC = () => {
   const editingContent = useAppSelector(
@@ -70,98 +66,27 @@ const GeneratedFormIdentificationEditorView: React.FC<{
   };
 
   const filtersContent = (
-    <div>
-      <label className="block text-sm font-medium mb-3">Vocabulary Filters</label>
-      <AdvancedFiltersPanel
-        filters={{
-          partOfSpeech: (editor.derivedFilters.partOfSpeech || 'all') as PartOfSpeech | 'all',
-          search: editor.derivedFilters.search || '',
-          verbConjugation: parseMultiFilterValue(editor.derivedFilters.verbConjugation) as
-            | ('1' | '2' | '3' | '3io' | '4' | 'irregular')[]
-            | 'all',
-          isDeponent: (editor.derivedFilters.isDeponent || 'both') as 'true' | 'false' | 'both',
-          nounDeclension: parseMultiFilterValue(editor.derivedFilters.nounDeclension) as
-            | ('1' | '2' | '3' | '3-istem' | '4' | '5')[]
-            | 'all',
-          adjectiveDeclension: parseMultiFilterValue(editor.derivedFilters.adjectiveDeclension) as
-            | ('1-2' | '3')[]
-            | 'all',
-          pronounType: parseMultiFilterValue(editor.derivedFilters.pronounType) as PronounType[] | 'all',
-          pronounPerson: parseMultiFilterValue(editor.derivedFilters.pronounPerson) as PronounPerson[] | 'all',
-          limit: editor.config.count,
-        }}
-        onFiltersChange={updates => {
-          const { limit, ...filterUpdates } = updates;
-
-          if (limit !== undefined) {
-            editor.updateConfig({ count: limit });
-          }
-
-          if (Object.keys(filterUpdates).length > 0) {
-            const serialized: Record<string, string | undefined> = {};
-            for (const [key, value] of Object.entries(filterUpdates)) {
-              if (Array.isArray(value)) {
-                serialized[key] = serializeMultiFilterValue(value) ?? 'all';
-              } else {
-                serialized[key] = value as string;
-              }
-            }
-            editor.handleGlobalFiltersChange(serialized);
-          }
-        }}
-        onReset={handleResetFilters}
-        onApply={() => editor.setIsPreviewOpen(true)}
-        isLoading={editor.isPreviewFetching}
-      />
-    </div>
+    <GeneratedVocabularyFilters
+      derivedFilters={editor.derivedFilters}
+      count={editor.config.count}
+      limitMode="combined"
+      onCountChange={count => editor.updateConfig({ count })}
+      onFiltersChange={editor.handleGlobalFiltersChange}
+      onReset={handleResetFilters}
+      onApply={() => editor.setIsPreviewOpen(true)}
+      isLoading={editor.isPreviewFetching}
+    />
   );
 
   const poolContent = (
-    <div className="space-y-4">
-      <label className="block text-sm font-medium mb-3">Vocabulary Pool</label>
-      <VocabularyPoolSelector
-        selectedPoolId={editor.config.poolId || undefined}
-        onPoolSelect={poolId => editor.updateConfig({ poolId: poolId || null })}
-      />
-
-      <GeneratedQuestionCountField
-        id="form-identification-question-count"
-        count={editor.config.count}
-        onChange={count => editor.updateConfig({ count })}
-      />
-
-      <div className="space-y-2">
-        <Label htmlFor="form-identification-pool-word-limit" className="block text-sm font-medium">
-          Pool Word Limit
-        </Label>
-        <Input
-          id="form-identification-pool-word-limit"
-          type="number"
-          min={1}
-          inputMode="numeric"
-          value={editor.config.poolWordLimit ?? ''}
-          onChange={event => {
-            const { value } = event.target;
-            if (value === '') {
-              editor.updateConfig({ poolWordLimit: null });
-              return;
-            }
-
-            const parsed = Number.parseInt(value, 10);
-            if (!Number.isNaN(parsed) && parsed > 0) {
-              editor.updateConfig({ poolWordLimit: parsed });
-            }
-          }}
-          placeholder="Leave blank to use the full pool"
-        />
-        <p className="text-xs text-gray-500">
-          Randomly sample up to this many unique words from the selected pool. Leave blank to use the full pool.
-        </p>
-      </div>
-    </div>
+    <GeneratedPoolSourceFields
+      poolId={editor.config.poolId}
+      count={editor.config.count}
+      questionCountId="form-identification-question-count"
+      onPoolChange={poolId => editor.updateConfig({ poolId })}
+      onCountChange={count => editor.updateConfig({ count })}
+    />
   );
-
-  const previewWords = editor.previewData?.words;
 
   return (
     <div className="space-y-6">
@@ -305,149 +230,105 @@ const GeneratedFormIdentificationEditorView: React.FC<{
         </Card>
       )}
 
-      <div>
-        <label className="block text-sm font-medium mb-3">Preview</label>
-        <Card>
-          <CardContent className="p-4 space-y-4">
-            <Button type="button" onClick={() => editor.setIsPreviewOpen(true)} disabled={editor.isPreviewFetching}>
-              {editor.isPreviewFetching
-                ? 'Loading Preview...'
-                : `Preview Sample Items${editor.config.count !== 'all' ? ` (${editor.config.count})` : ''}`}
-            </Button>
+      <GeneratedPreviewPanel
+        isFetching={editor.isPreviewFetching}
+        isOpen={editor.isPreviewOpen}
+        previewError={editor.previewError}
+        previewData={editor.previewData}
+        idleLabel={`Preview Sample Items${editor.config.count !== 'all' ? ` (${editor.config.count})` : ''}`}
+        onPreview={() => editor.setIsPreviewOpen(true)}
+        renderItems={previewWords =>
+          previewWords.map((word, index) => {
+            const prepared = prepareGeneratedFormIdentificationWord(editingContent, word);
+            const wordSteps = prepared?.steps ?? [];
 
-            {editor.isPreviewOpen && editor.previewError ? (
-              <div className="text-sm text-red-600 mt-4">
-                {getApiErrorMessage(editor.previewError, 'Failed to load preview')}
-              </div>
-            ) : null}
+            let primaryAnswersDisplay = '';
+            let optionalAnswersDisplay = '';
 
-            {editor.isPreviewOpen && editor.previewData?.diagnostics?.length ? (
-              <p className="text-xs text-gray-500 mt-2">
-                {formatGeneratedPreviewDiagnostics(editor.previewData)}
-              </p>
-            ) : null}
+            if (isSingleField && prepared) {
+              const formatPath = (path: Record<string, string | undefined>) =>
+                wordSteps
+                  .map(step => (path[step] ? getDisplayForm(path[step]) : null))
+                  .filter(Boolean)
+                  .join(',');
 
-            {editor.isPreviewOpen && previewWords && previewWords.length > 0 && (
-              <div className="space-y-2 mt-4">
-                <label className="block text-sm font-medium">Preview ({previewWords.length} items)</label>
-                {previewWords.map((word, index) => {
-                  const prepared = prepareGeneratedFormIdentificationWord(editingContent, word);
-                  const wordSteps = prepared?.steps ?? [];
+              primaryAnswersDisplay = prepared.primary.map(formatPath).filter(Boolean).join(';');
+              optionalAnswersDisplay = prepared.optional.map(formatPath).filter(Boolean).join(';');
+            }
 
-                  let primaryAnswersDisplay = '';
-                  let optionalAnswersDisplay = '';
+            const displayWord = getExerciseDisplayForm(word);
 
-                  if (isSingleField && prepared) {
-                    const formatPath = (path: Record<string, string | undefined>) =>
-                      wordSteps
-                        .map(step => (path[step] ? getDisplayForm(path[step]) : null))
-                        .filter(Boolean)
-                        .join(',');
-
-                    primaryAnswersDisplay = prepared.primary.map(formatPath).filter(Boolean).join(';');
-                    optionalAnswersDisplay = prepared.optional.map(formatPath).filter(Boolean).join(';');
-                  }
-
-                  const displayWord = getExerciseDisplayForm(word);
-
-                  return (
-                    <Card key={index}>
-                      <CardContent className="p-3 space-y-1">
-                        <div className="font-medium">{displayWord}</div>
-                        {hasSelectedForm(word) && word.selected_form !== word.root_word && (
-                          <div className="text-xs text-gray-500">Root: {word.dictionary_entry || word.root_word}</div>
-                        )}
-                        <div className="text-sm space-y-0.5">
-                          {isSingleField ? (
-                            <>
-                              <div className="text-gray-600">
-                                <strong>Answer:</strong> {primaryAnswersDisplay}
-                              </div>
-                              {optionalAnswersDisplay && (
-                                <div className="text-gray-500 text-xs">
-                                  <strong>Optional:</strong> {optionalAnswersDisplay}
-                                </div>
-                              )}
-                            </>
-                          ) : (
-                            wordSteps.map(step => {
-                              const primaryValues = (prepared?.primary ?? [])
-                                .map(path => path[step])
-                                .filter((value): value is string => Boolean(value));
-                              const optionalValues = (prepared?.optional ?? [])
-                                .map(path => path[step])
-                                .filter((value): value is string => Boolean(value));
-
-                              const uniquePrimaryValues = Array.from(new Set(primaryValues));
-                              const uniqueOptionalValues = Array.from(
-                                new Set(optionalValues.filter(value => !uniquePrimaryValues.includes(value)))
-                              );
-
-                              const displayValue =
-                                uniquePrimaryValues.length > 0
-                                  ? uniquePrimaryValues.join(' OR ')
-                                  : extractStepValue(word, step);
-
-                              if (!displayValue) return null;
-
-                              const answers = getAcceptedAnswersForStep(
-                                uniquePrimaryValues.length > 0 ? uniquePrimaryValues[0] : displayValue
-                              );
-
-                              return (
-                                <div key={step} className="text-gray-600">
-                                  <strong className="capitalize">{step.replace(/_/g, ' ')}:</strong> {displayValue}{' '}
-                                  {answers.length > 1 && `(or ${answers.slice(1).join(', ')})`}
-                                  {uniqueOptionalValues.length > 0 && (
-                                    <span className="text-gray-400 text-xs ml-1">
-                                      [optional: {uniqueOptionalValues.join(' OR ')}]
-                                    </span>
-                                  )}
-                                </div>
-                              );
-                            })
-                          )}
+            return (
+              <Card key={index}>
+                <CardContent className="p-3 space-y-1">
+                  <div className="font-medium">{displayWord}</div>
+                  {hasSelectedForm(word) && word.selected_form !== word.root_word && (
+                    <div className="text-xs text-gray-500">Root: {word.dictionary_entry || word.root_word}</div>
+                  )}
+                  <div className="text-sm space-y-0.5">
+                    {isSingleField ? (
+                      <>
+                        <div className="text-gray-600">
+                          <strong>Answer:</strong> {primaryAnswersDisplay}
                         </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
-            )}
+                        {optionalAnswersDisplay && (
+                          <div className="text-gray-500 text-xs">
+                            <strong>Optional:</strong> {optionalAnswersDisplay}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      wordSteps.map(step => {
+                        const primaryValues = (prepared?.primary ?? [])
+                          .map(path => path[step])
+                          .filter((value): value is string => Boolean(value));
+                        const optionalValues = (prepared?.optional ?? [])
+                          .map(path => path[step])
+                          .filter((value): value is string => Boolean(value));
 
-            {editor.isPreviewOpen && previewWords && previewWords.length === 0 && (
-              <div className="text-sm text-amber-600 mt-4">
-                No words match the current filters. Try adjusting your filter criteria.
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+                        const uniquePrimaryValues = Array.from(new Set(primaryValues));
+                        const uniqueOptionalValues = Array.from(
+                          new Set(optionalValues.filter(value => !uniquePrimaryValues.includes(value)))
+                        );
 
-      <div>
-        <label className="block text-sm font-medium mb-2">Exercise Summary</label>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-sm space-y-2">
-              <div>
-                <strong>Collection:</strong> {editor.config.collection}
-              </div>
-              <div>
-                <strong>Number of Questions:</strong>{' '}
-                {editor.config.count === 'all' ? 'All matching words' : editor.config.count}
-              </div>
-              <div>
-                <strong>Part of Speech:</strong> {editor.derivedFilters.partOfSpeech || 'All'}
-              </div>
-              {editor.derivedFormSelection && editor.derivedFormSelection.selectedCellPaths.length > 0 && (
-                <div>
-                  <strong>Selected Forms:</strong> {editor.derivedFormSelection.selectedCellPaths.length} form(s)
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+                        const displayValue =
+                          uniquePrimaryValues.length > 0
+                            ? uniquePrimaryValues.join(' OR ')
+                            : extractStepValue(word, step);
+
+                        if (!displayValue) return null;
+
+                        const answers = getAcceptedAnswersForStep(
+                          uniquePrimaryValues.length > 0 ? uniquePrimaryValues[0] : displayValue
+                        );
+
+                        return (
+                          <div key={step} className="text-gray-600">
+                            <strong className="capitalize">{step.replace(/_/g, ' ')}:</strong> {displayValue}{' '}
+                            {answers.length > 1 && `(or ${answers.slice(1).join(', ')})`}
+                            {uniqueOptionalValues.length > 0 && (
+                              <span className="text-gray-400 text-xs ml-1">
+                                [optional: {uniqueOptionalValues.join(' OR ')}]
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })
+        }
+      />
+
+      <GeneratedExerciseSummary
+        collection={editor.config.collection}
+        count={editor.config.count}
+        partOfSpeech={editor.derivedFilters.partOfSpeech}
+        selectedFormCount={editor.derivedFormSelection?.selectedCellPaths.length}
+      />
 
       <ExerciseFeedbackSection
         feedbackConfig={editingContent.feedbackConfig}

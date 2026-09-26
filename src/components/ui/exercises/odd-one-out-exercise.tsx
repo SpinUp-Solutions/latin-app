@@ -7,8 +7,8 @@ import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { FeedbackDisplay } from '../feedback';
 import { validateOddOneOutExercise } from '@/src/utils/exercises/oddOneOutExercise';
-import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
+import { ExerciseIntro } from './exercise-intro';
 import { SimpleRichEditor } from '../core/simple-rich-editor';
 import { Button } from '../button';
 import { CheckCircle2 } from 'lucide-react';
@@ -133,28 +133,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({
   return (
     <div className="space-y-4">
       {/* Header with title and audio */}
-      <div className="flex justify-between items-start">
-        {exercise.title && (
-          <h3 className="text-lg font-serif text-roman-red mb-2">
-            <SimpleRichDisplay content={exercise.title} />
-          </h3>
-        )}
-        {exercise.audioPath && (
-          <AudioPlayButton
-            audioPath={exercise.audioPath}
-            variant="default"
-            size="sm"
-            className="ml-2 rounded-full border-roman-terracotta/20 hover:border-roman-terracotta hover:bg-roman-parchment"
-          />
-        )}
-      </div>
-
-      {/* Instructions */}
-      {exercise.instructions && exercise.instructions.replace(/<[^>]*>/g, '').trim() !== '' && (
-        <div className="p-4 bg-roman-parchment rounded-lg mb-4">
-          <SimpleRichDisplay content={exercise.instructions} />
-        </div>
-      )}
+      <ExerciseIntro title={exercise.title} audioPath={exercise.audioPath} instructions={exercise.instructions} />
 
       <div className="p-6 bg-white rounded-lg border border-gray-200">
         {/* Question */}

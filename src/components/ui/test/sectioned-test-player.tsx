@@ -24,8 +24,8 @@ import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display'
 import { Button } from '@/src/components/ui/button';
 import { Textarea } from '@/src/components/ui/textarea';
 import { Checkbox } from '@/src/components/ui/checkbox';
+import { PlayerActionBar, PlayerBarButton } from '@/src/components/ui/core/player-action-bar';
 import { RomanPlayerShell } from '@/src/components/ui/core/roman-player-shell';
-import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { SectionAnswerReview } from './section-answer-review';
 import { SectionedTestProvider } from './sectioned-test-context';
 import { TestTakingView } from './test-taking-view';
@@ -346,41 +346,42 @@ export function SectionedTestPlayer({ attempt, onAttempt, buffer, title, uid, or
                 <span>I understand this section has unanswered parts and those parts will receive zero credit.</span>
               </label>
             )}
-            <RomanCard className="rounded-2xl border-roman-red/15 bg-white/95 shadow-sm">
-              <RomanCardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-center">
-                <Button
-                  variant="outline"
-                  className="min-h-11 rounded-xl border-roman-red/20 text-roman-red hover:bg-roman-parchment"
-                  disabled={busy || buffer.conflict}
-                  onClick={() => void changePhase('answering')}>
-                  <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" /> Return to section
-                </Button>
-                <Button
-                  className="h-auto min-h-11 whitespace-normal rounded-xl bg-roman-red px-5 py-3 text-white shadow-sm hover:bg-roman-red/90 sm:ml-auto"
-                  disabled={
-                    busy || buffer.conflict || (incomplete && !acknowledged && attempt.section.phase !== 'confirming')
-                  }
-                  onClick={() => void confirm(attempt.section.phase === 'confirming')}>
-                  {pendingAction === 'confirmation'
-                    ? 'Confirming section…'
-                    : attempt.section.pageIndex === attempt.section.totalPages - 1
-                      ? 'Confirm section and submit'
-                      : 'Confirm section and continue'}
-                  {pendingAction === 'confirmation' ? (
-                    <Loader2 className="ml-2 h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <ArrowRight className="ml-2 h-4 w-4 shrink-0" aria-hidden="true" />
-                  )}
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="min-h-11 rounded-xl text-slate-600 hover:bg-slate-100"
-                  disabled={busy}
-                  onClick={() => void onExit()}>
-                  <LogOut className="mr-2 h-4 w-4" aria-hidden="true" /> Exit test
-                </Button>
-              </RomanCardContent>
-            </RomanCard>
+            <PlayerActionBar className="p-4">
+              <PlayerBarButton
+                type="button"
+                tone="outline"
+                className="min-h-11 text-roman-red"
+                disabled={busy || buffer.conflict}
+                onClick={() => void changePhase('answering')}>
+                <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" /> Return to section
+              </PlayerBarButton>
+              <PlayerBarButton
+                type="button"
+                className="h-auto min-h-11 whitespace-normal px-5 py-3 shadow-sm sm:ml-auto"
+                disabled={
+                  busy || buffer.conflict || (incomplete && !acknowledged && attempt.section.phase !== 'confirming')
+                }
+                onClick={() => void confirm(attempt.section.phase === 'confirming')}>
+                {pendingAction === 'confirmation'
+                  ? 'Confirming section…'
+                  : attempt.section.pageIndex === attempt.section.totalPages - 1
+                    ? 'Confirm section and submit'
+                    : 'Confirm section and continue'}
+                {pendingAction === 'confirmation' ? (
+                  <Loader2 className="ml-2 h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />
+                ) : (
+                  <ArrowRight className="ml-2 h-4 w-4 shrink-0" aria-hidden="true" />
+                )}
+              </PlayerBarButton>
+              <PlayerBarButton
+                type="button"
+                tone="ghost"
+                className="min-h-11"
+                disabled={busy}
+                onClick={() => void onExit()}>
+                <LogOut className="mr-2 h-4 w-4" aria-hidden="true" /> Exit test
+              </PlayerBarButton>
+            </PlayerActionBar>
           </div>
         </main>
       )}

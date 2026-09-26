@@ -1,4 +1,4 @@
-import { testRouteErrorResponse } from '@/src/app/api/admin/tests/errorResponse';
+import { testRouteErrorResponse } from '@/src/lib/tests/api';
 import { AdminAccessError } from '@/src/lib/verifyAdminAccess';
 
 jest.mock('next/server', () => jest.requireActual('./helpers/routeMocks'));

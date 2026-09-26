@@ -72,7 +72,6 @@ export const generatedPreviewGeneratorConfigSchema = z
     collection: z.string().optional(),
     wordSource: z.enum(['filters', 'pool']).default('filters'),
     poolId: z.string().trim().min(1).nullable().optional(),
-    poolWordLimit: z.number().int().positive().nullable().optional(),
     count: generatedWordCountSchema,
     filters: generatedPreviewFiltersSchema.optional(),
     formSelection: formSelectionSchema,

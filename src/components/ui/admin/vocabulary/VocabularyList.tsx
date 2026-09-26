@@ -1,4 +1,5 @@
 import React from 'react';
+import { RomanSpinner } from '@/src/components/ui/page-loading';
 import { VocabularyWordWithId } from '@/src/types/vocabulary/index';
 import { WordCard } from './WordCard';
 import { useInfiniteScroll } from '@/src/hooks/useInfiniteScroll';
@@ -23,7 +24,7 @@ interface VocabularyListProps {
 const LoadingSpinner: React.FC = () => (
   <div className="flex items-center justify-center min-h-64" role="status" aria-label="Loading vocabulary">
     <div className="flex flex-col items-center gap-3">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>
+      <RomanSpinner />
       <p className="text-sm text-gray-600">Loading vocabulary...</p>
     </div>
   </div>

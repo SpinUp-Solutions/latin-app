@@ -1,4 +1,3 @@
-import type { Lesson } from '@/src/types/lesson';
 import type { SentenceDiagrammingExercise } from '@/src/types/exercises/sentence-diagramming';
 import {
   ANNOTATION_SPECS,
@@ -8,7 +7,6 @@ import {
   WRAPPER_KINDS,
 } from './annotation-spec';
 import {
-  canonicalizeDiagramAnnotations,
   createAnnotationId,
   createSpanKey,
   DiagramAnnotation,
@@ -204,27 +202,5 @@ export const validateSentenceDiagramDocument = (document: SentenceDiagramDocumen
   return issues;
 };
 
-export const getSentenceDiagramAnnotationCounts = (document: SentenceDiagramDocument) => ({
-  authored: document.solutionAnnotations.length,
-  canonical: canonicalizeDiagramAnnotations(document.solutionAnnotations, document.tokens).length,
-});
-
 export const validateSentenceDiagramExercise = (exercise: SentenceDiagrammingExercise) =>
   validateSentenceDiagramDocument(exercise.data);
-
-export const validateSentenceDiagramLesson = (lesson: Lesson) =>
-  lesson.pages.flatMap((page, pageIndex) =>
-    page.items.flatMap((item, itemIndex) => {
-      if (item.type !== 'sentence-diagramming') {
-        return [];
-      }
-
-      return validateSentenceDiagramExercise(item).map(issue => ({
-        ...issue,
-        path: `pages[${pageIndex}].items[${itemIndex}].${issue.path}`,
-        pageIndex,
-        itemIndex,
-        exerciseId: item.id,
-      }));
-    })
-  );

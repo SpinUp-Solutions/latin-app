@@ -589,6 +589,26 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
   };
 
   const isSubmitting = form.formState.isSubmitting;
+  const renderEditableSchemaTable = ({
+    tableType,
+    ...props
+  }: Pick<React.ComponentProps<typeof SchemaTable>, 'schema' | 'data' | 'title' | 'color'> & { tableType: string }) => (
+    <SchemaTable
+      {...props}
+      tableType={tableType}
+      isExpanded={isEditTableExpanded(tableType)}
+      onToggle={() => toggleEditTableExpansion(tableType)}
+      isEditMode={true}
+      editingCell={editingCell}
+      editingCellValue={editingCellValue}
+      editCallbacks={{
+        onCellDoubleClick: handleCellDoubleClick,
+        onCellEditSave: handleCellEditSave,
+        onCellEditCancel: handleCellEditCancel,
+        onEditingCellValueChange: setEditingCellValue,
+      }}
+    />
+  );
 
   if (!word) {
     return <EmptyState />;
@@ -645,89 +665,41 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
               <BaseWordForm />
               {renderPosForm()}
 
-              {word?.part_of_speech === 'noun' && (
-                <SchemaTable
-                  schema={DeclensionTableSchema}
-                  data={declensionTable}
-                  tableType={TABLE_TYPES.DECLENSION}
-                  title="Declension Table"
-                  color="text-blue-700"
-                  isExpanded={isEditTableExpanded(TABLE_TYPES.DECLENSION)}
-                  onToggle={() => toggleEditTableExpansion(TABLE_TYPES.DECLENSION)}
-                  isEditMode={true}
-                  editingCell={editingCell}
-                  editingCellValue={editingCellValue}
-                  editCallbacks={{
-                    onCellDoubleClick: handleCellDoubleClick,
-                    onCellEditSave: handleCellEditSave,
-                    onCellEditCancel: handleCellEditCancel,
-                    onEditingCellValueChange: setEditingCellValue,
-                  }}
-                />
-              )}
+              {word.part_of_speech === 'noun' &&
+                renderEditableSchemaTable({
+                  schema: DeclensionTableSchema,
+                  data: declensionTable,
+                  tableType: TABLE_TYPES.DECLENSION,
+                  title: 'Declension Table',
+                  color: 'text-blue-700',
+                })}
 
-              {word?.part_of_speech === 'pronoun' && (
-                <SchemaTable
-                  schema={getPronounTableSchema(watchedPronounType, watchedPerson)}
-                  data={declensionTable}
-                  tableType={TABLE_TYPES.DECLENSION}
-                  title={getPronounTableTitle(watchedPronounType, watchedPerson)}
-                  color="text-indigo-700"
-                  isExpanded={isEditTableExpanded(TABLE_TYPES.DECLENSION)}
-                  onToggle={() => toggleEditTableExpansion(TABLE_TYPES.DECLENSION)}
-                  isEditMode={true}
-                  editingCell={editingCell}
-                  editingCellValue={editingCellValue}
-                  editCallbacks={{
-                    onCellDoubleClick: handleCellDoubleClick,
-                    onCellEditSave: handleCellEditSave,
-                    onCellEditCancel: handleCellEditCancel,
-                    onEditingCellValueChange: setEditingCellValue,
-                  }}
-                />
-              )}
+              {word.part_of_speech === 'pronoun' &&
+                renderEditableSchemaTable({
+                  schema: getPronounTableSchema(watchedPronounType, watchedPerson),
+                  data: declensionTable,
+                  tableType: TABLE_TYPES.DECLENSION,
+                  title: getPronounTableTitle(watchedPronounType, watchedPerson),
+                  color: 'text-indigo-700',
+                })}
 
-              {word?.part_of_speech === 'adjective' && (
-                <SchemaTable
-                  schema={DegreesTableSchema}
-                  data={degreesTable}
-                  tableType={TABLE_TYPES.ADJECTIVE_DECLENSION}
-                  title="Degrees of Comparison"
-                  color="text-purple-700"
-                  isExpanded={isEditTableExpanded(TABLE_TYPES.ADJECTIVE_DECLENSION)}
-                  onToggle={() => toggleEditTableExpansion(TABLE_TYPES.ADJECTIVE_DECLENSION)}
-                  isEditMode={true}
-                  editingCell={editingCell}
-                  editingCellValue={editingCellValue}
-                  editCallbacks={{
-                    onCellDoubleClick: handleCellDoubleClick,
-                    onCellEditSave: handleCellEditSave,
-                    onCellEditCancel: handleCellEditCancel,
-                    onEditingCellValueChange: setEditingCellValue,
-                  }}
-                />
-              )}
+              {word.part_of_speech === 'adjective' &&
+                renderEditableSchemaTable({
+                  schema: DegreesTableSchema,
+                  data: degreesTable,
+                  tableType: TABLE_TYPES.ADJECTIVE_DECLENSION,
+                  title: 'Degrees of Comparison',
+                  color: 'text-purple-700',
+                })}
 
-              {word?.part_of_speech === 'verb' && (
-                <SchemaTable
-                  schema={ConjugationTableSchema}
-                  data={conjugationTable}
-                  tableType={TABLE_TYPES.CONJUGATION}
-                  title="Conjugation Table"
-                  color="text-green-700"
-                  isExpanded={isEditTableExpanded(TABLE_TYPES.CONJUGATION)}
-                  onToggle={() => toggleEditTableExpansion(TABLE_TYPES.CONJUGATION)}
-                  isEditMode={true}
-                  editingCell={editingCell}
-                  editingCellValue={editingCellValue}
-                  editCallbacks={{
-                    onCellDoubleClick: handleCellDoubleClick,
-                    onCellEditSave: handleCellEditSave,
-                    onCellEditCancel: handleCellEditCancel,
-                    onEditingCellValueChange: setEditingCellValue,
-                  }}
-                />
-              )}
+              {word.part_of_speech === 'verb' &&
+                renderEditableSchemaTable({
+                  schema: ConjugationTableSchema,
+                  data: conjugationTable,
+                  tableType: TABLE_TYPES.CONJUGATION,
+                  title: 'Conjugation Table',
+                  color: 'text-green-700',
+                })}
             </div>
           </div>
         </form>

@@ -217,7 +217,13 @@ export async function PUT(
         sourcePoolIds: sourcePoolIdsSchema.optional(),
         tags: z.array(z.string().max(100)).max(100).optional(),
         difficulty: z.enum(['beginner', 'intermediate', 'advanced']).optional(),
-        metadata: z.object({ difficulty: z.enum(['beginner', 'intermediate', 'advanced']).optional() }).optional(),
+        isActive: z.boolean().optional(),
+        metadata: z
+          .object({
+            difficulty: z.enum(['beginner', 'intermediate', 'advanced']).optional(),
+            isActive: z.boolean().optional(),
+          })
+          .optional(),
       })
       .strict()
       .parse(await request.json());
@@ -242,6 +248,10 @@ export async function PUT(
     }
     if (updates.metadata?.difficulty !== undefined) {
       updateData['metadata.difficulty'] = updates.metadata.difficulty;
+    }
+    const isActive = updates.isActive ?? updates.metadata?.isActive;
+    if (isActive !== undefined) {
+      updateData['metadata.isActive'] = isActive;
     }
 
     const poolRef = adminDb.collection(VOCABULARY_POOL_COLLECTION).doc(poolId);
