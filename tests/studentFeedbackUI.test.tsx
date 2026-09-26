@@ -56,12 +56,7 @@ jest.mock('@/src/store/api/studentFeedbackApi', () => ({
         createdAt: '2026-09-24T10:00:00.000Z',
         updatedAt: '2026-09-24T10:00:00.000Z',
         status: 'unresolved',
-        resolvedBy: null,
-        resolvedAt: null,
-        resolutionReason: null,
         archived: false,
-        archivedBy: null,
-        archivedAt: null,
       },
       activity: [
         { id: 'submitted', kind: 'submitted', actorUid: 'student-1', actorDisplayName: 'Ada Lovelace', createdAt: '2026-09-24T10:00:00.000Z', reason: null, note: null },

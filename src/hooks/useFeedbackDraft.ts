@@ -51,13 +51,7 @@ type LessonChoice = { source: 'context' } | { source: 'picked'; lessonId: string
  * Holds one feedback draft. Callers keep this hook mounted while a dialog closes
  * so the draft survives, and key it by account so signing out discards it.
  */
-export function useFeedbackDraft({
-  entryPoint,
-  lessonContext,
-}: {
-  entryPoint: 'standalone' | 'lesson';
-  lessonContext?: FeedbackLessonContext;
-}) {
+export function useFeedbackDraft(lessonContext?: FeedbackLessonContext) {
   const dispatch = useAppDispatch();
   const [draftId, setDraftId] = useState(() => crypto.randomUUID());
   const [fields, setFields] = useState(EMPTY_FIELDS);
@@ -137,7 +131,7 @@ export function useFeedbackDraft({
         pageId,
         attachments: uploads.ready,
         diagnostics: {
-          entryPoint,
+          entryPoint: lessonContext ? 'lesson' : 'standalone',
           ...(process.env.NEXT_PUBLIC_APP_VERSION ? { appVersion: process.env.NEXT_PUBLIC_APP_VERSION.slice(0, 100) } : {}),
           browser: navigator.userAgent.slice(0, 300),
           viewport: { width: Math.max(1, window.innerWidth), height: Math.max(1, window.innerHeight) },
@@ -158,7 +152,6 @@ export function useFeedbackDraft({
   };
 
   return {
-    entryPoint,
     fields,
     setField,
     errors,

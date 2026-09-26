@@ -8,9 +8,8 @@ import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display'
 import { useGetFeedbackLessonsQuery } from '@/src/store/api/studentFeedbackApi';
 import type { FeedbackLessonContext } from '@/src/hooks/useFeedbackDraft';
 import { cn } from '@/src/lib/utils';
+import { richTextToPlainText } from '@/src/utils/exercises/helpers';
 import { FieldHeading } from './FeedbackFields';
-
-const plainText = (html: string) => html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 
 export function FeedbackLessonPicker({
   id,
@@ -26,14 +25,15 @@ export function FeedbackLessonPicker({
   onChoose: (lessonId: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const { data, isLoading, isError, refetch } = useGetFeedbackLessonsQuery();
-  const lessons = data?.lessons ?? [];
-  const selectedTitle =
-    lessonId === null
-      ? null
-      : lessonId === lessonContext?.lessonId
-        ? lessonContext.lessonTitle
-        : (lessons.find(lesson => lesson.id === lessonId)?.title ?? null);
+  // The list is only needed once the picker opens or a lesson other than the current one is chosen.
+  const needsList = open || (lessonId !== null && lessonId !== lessonContext?.lessonId);
+  const { data, isLoading, isError, refetch } = useGetFeedbackLessonsQuery(undefined, { skip: !needsList });
+  const fetched = data?.lessons ?? [];
+  const lessons =
+    lessonContext && !fetched.some(lesson => lesson.id === lessonContext.lessonId)
+      ? [{ id: lessonContext.lessonId, title: lessonContext.lessonTitle }, ...fetched]
+      : fetched;
+  const selectedTitle = lessons.find(lesson => lesson.id === lessonId)?.title ?? null;
   const choose = (next: string | null) => {
     onChoose(next);
     setOpen(false);
@@ -82,14 +82,8 @@ export function FeedbackLessonPicker({
                   <Check className={cn('mr-2 h-4 w-4', lessonId === null ? 'opacity-100' : 'opacity-0')} aria-hidden="true" />
                   Not about a specific lesson
                 </CommandItem>
-                {lessonContext && !lessons.some(lesson => lesson.id === lessonContext.lessonId) && (
-                  <CommandItem value={`${plainText(lessonContext.lessonTitle)} ${lessonContext.lessonId}`} onSelect={() => choose(lessonContext.lessonId)}>
-                    <Check className={cn('mr-2 h-4 w-4', lessonId === lessonContext.lessonId ? 'opacity-100' : 'opacity-0')} aria-hidden="true" />
-                    <SimpleRichDisplay content={lessonContext.lessonTitle} />
-                  </CommandItem>
-                )}
                 {lessons.map(lesson => (
-                  <CommandItem key={lesson.id} value={`${plainText(lesson.title)} ${lesson.id}`} onSelect={() => choose(lesson.id)}>
+                  <CommandItem key={lesson.id} value={`${richTextToPlainText(lesson.title)} ${lesson.id}`} onSelect={() => choose(lesson.id)}>
                     <Check className={cn('mr-2 h-4 w-4 shrink-0', lessonId === lesson.id ? 'opacity-100' : 'opacity-0')} aria-hidden="true" />
                     <SimpleRichDisplay content={lesson.title} />
                   </CommandItem>

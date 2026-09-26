@@ -24,6 +24,7 @@ jest.mock('@/src/lib/ai-evaluations/firebase-client', () => ({
   saveEvaluationCaseInFirebase: jest.fn(),
 }));
 jest.mock('next/navigation', () => ({ usePathname: () => pathname }));
+jest.mock('@/src/store/api/studentFeedbackApi', () => ({ useGetAdminFeedbackCountQuery: () => ({ data: undefined }) }));
 jest.mock('sonner', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
 
 describe('AI evaluation admin workspace', () => {

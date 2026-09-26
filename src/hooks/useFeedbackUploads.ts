@@ -5,6 +5,7 @@ import { ref, uploadBytesResumable, type UploadTask } from 'firebase/storage';
 import {
   FEEDBACK_MAX_ATTACHMENTS,
   FEEDBACK_MAX_TOTAL_BYTES,
+  formatFileSize,
   feedbackMediaLimit,
   feedbackUploadPath,
 } from '@/shared/student-feedback';
@@ -12,6 +13,7 @@ import { auth, storage } from '@/src/services/firebase';
 
 export interface FeedbackUpload {
   id: string;
+  file: File;
   name: string;
   size: number;
   contentType: string;
@@ -21,19 +23,13 @@ export interface FeedbackUpload {
   progress: number;
 }
 
-interface TrackedUpload extends FeedbackUpload {
-  file: File;
-}
-
-const MB = 1024 * 1024;
-
 function rejectionFor(file: File, count: number, totalBytes: number): string | null {
   const limit = feedbackMediaLimit(file.type);
   if (!limit) return `${file.name} isn't supported. Use PNG, JPG, WebP, MP4, WebM or MOV.`;
   if (file.size === 0) return `${file.name} is empty.`;
-  if (file.size > limit) return `${file.name} is larger than ${limit / MB} MB.`;
+  if (file.size > limit) return `${file.name} is larger than ${formatFileSize(limit)}.`;
   if (count >= FEEDBACK_MAX_ATTACHMENTS) return `You can attach up to ${FEEDBACK_MAX_ATTACHMENTS} files.`;
-  if (totalBytes + file.size > FEEDBACK_MAX_TOTAL_BYTES) return `Attachments can total at most ${FEEDBACK_MAX_TOTAL_BYTES / MB} MB.`;
+  if (totalBytes + file.size > FEEDBACK_MAX_TOTAL_BYTES) return `Attachments can total at most ${formatFileSize(FEEDBACK_MAX_TOTAL_BYTES)}.`;
   return null;
 }
 
@@ -43,23 +39,23 @@ function releasePreview(upload: FeedbackUpload) {
 
 /** Uploads straight to Storage. The server verifies and copies the files when the report is submitted. */
 export function useFeedbackUploads(draftId: string) {
-  const [uploads, setUploads] = useState<TrackedUpload[]>([]);
-  const uploadsRef = useRef<TrackedUpload[]>([]);
+  const [uploads, setUploads] = useState<FeedbackUpload[]>([]);
+  const uploadsRef = useRef<FeedbackUpload[]>([]);
   const tasksRef = useRef(new Map<string, UploadTask>());
 
-  const commit = useCallback((update: (current: TrackedUpload[]) => TrackedUpload[]) => {
+  const commit = useCallback((update: (current: FeedbackUpload[]) => FeedbackUpload[]) => {
     uploadsRef.current = update(uploadsRef.current);
     setUploads(uploadsRef.current);
   }, []);
 
   const patch = useCallback(
-    (id: string, changes: Partial<TrackedUpload>) =>
+    (id: string, changes: Partial<FeedbackUpload>) =>
       commit(current => current.map(upload => (upload.id === id ? { ...upload, ...changes } : upload))),
     [commit]
   );
 
   const start = useCallback(
-    (upload: TrackedUpload) => {
+    (upload: FeedbackUpload) => {
       const uid = auth.currentUser?.uid;
       if (!uid) {
         patch(upload.id, { status: 'error' });
@@ -89,7 +85,7 @@ export function useFeedbackUploads(draftId: string) {
   const addFiles = useCallback(
     (files: File[]): string[] => {
       const rejected: string[] = [];
-      const added: TrackedUpload[] = [];
+      const added: FeedbackUpload[] = [];
       let count = uploadsRef.current.length;
       let totalBytes = uploadsRef.current.reduce((sum, upload) => sum + upload.size, 0);
       for (const file of files) {
@@ -123,7 +119,7 @@ export function useFeedbackUploads(draftId: string) {
       const upload = uploadsRef.current.find(item => item.id === id);
       if (!upload || upload.status !== 'error') return;
       // Uploads are create-only, so a retry writes to a fresh path.
-      const next: TrackedUpload = { ...upload, id: crypto.randomUUID(), status: 'uploading', progress: 0 };
+      const next: FeedbackUpload = { ...upload, id: crypto.randomUUID(), status: 'uploading', progress: 0 };
       commit(current => current.map(item => (item.id === id ? next : item)));
       start(next);
     },
@@ -148,17 +144,11 @@ export function useFeedbackUploads(draftId: string) {
     commit(() => []);
   }, [commit]);
 
-  useEffect(() => {
-    const tasks = tasksRef.current;
-    return () => {
-      for (const task of tasks.values()) task.cancel();
-      uploadsRef.current.forEach(releasePreview);
-    };
-  }, []);
+  useEffect(() => reset, [reset]);
 
   return useMemo(
     () => ({
-      uploads: uploads as FeedbackUpload[],
+      uploads,
       addFiles,
       retry,
       remove,

@@ -64,22 +64,10 @@
       "collectionGroup": "mockTests",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "parent.testId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "isLive",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "mockOrder",
-          "order": "ASCENDING"
-        }
+        { "fieldPath": "parent.testId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "isLive", "order": "ASCENDING" },
+        { "fieldPath": "mockOrder", "order": "ASCENDING" }
       ]
     },
     {
@@ -757,10 +745,6 @@
         {
           "fieldPath": "createdAt",
           "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "__name__",
-          "order": "ASCENDING"
         }
       ]
     },
@@ -775,10 +759,6 @@
         {
           "fieldPath": "createdAt",
           "order": "DESCENDING"
-        },
-        {
-          "fieldPath": "__name__",
-          "order": "DESCENDING"
         }
       ]
     },
@@ -792,10 +772,6 @@
         },
         {
           "fieldPath": "createdAt",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "__name__",
           "order": "ASCENDING"
         }
       ]
@@ -811,10 +787,6 @@
         {
           "fieldPath": "createdAt",
           "order": "DESCENDING"
-        },
-        {
-          "fieldPath": "__name__",
-          "order": "DESCENDING"
         }
       ]
     },
@@ -828,10 +800,6 @@
         },
         {
           "fieldPath": "createdAt",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "__name__",
           "order": "ASCENDING"
         }
       ]
@@ -847,10 +815,6 @@
         {
           "fieldPath": "createdAt",
           "order": "DESCENDING"
-        },
-        {
-          "fieldPath": "__name__",
-          "order": "DESCENDING"
         }
       ]
     },
@@ -864,10 +828,6 @@
         },
         {
           "fieldPath": "createdAt",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "__name__",
           "order": "ASCENDING"
         }
       ]
@@ -883,10 +843,6 @@
         {
           "fieldPath": "createdAt",
           "order": "DESCENDING"
-        },
-        {
-          "fieldPath": "__name__",
-          "order": "DESCENDING"
         }
       ]
     },
@@ -900,10 +856,6 @@
         },
         {
           "fieldPath": "createdAt",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "__name__",
           "order": "ASCENDING"
         }
       ]
@@ -919,10 +871,6 @@
         {
           "fieldPath": "createdAt",
           "order": "DESCENDING"
-        },
-        {
-          "fieldPath": "__name__",
-          "order": "DESCENDING"
         }
       ]
     },
@@ -936,10 +884,6 @@
         },
         {
           "fieldPath": "createdAt",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "__name__",
           "order": "ASCENDING"
         }
       ]
@@ -955,10 +899,6 @@
         {
           "fieldPath": "createdAt",
           "order": "DESCENDING"
-        },
-        {
-          "fieldPath": "__name__",
-          "order": "DESCENDING"
         }
       ]
     },
@@ -972,10 +912,6 @@
         },
         {
           "fieldPath": "createdAt",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "__name__",
           "order": "ASCENDING"
         }
       ]
@@ -991,10 +927,6 @@
         {
           "fieldPath": "createdAt",
           "order": "DESCENDING"
-        },
-        {
-          "fieldPath": "__name__",
-          "order": "DESCENDING"
         }
       ]
     },
@@ -1009,10 +941,6 @@
         {
           "fieldPath": "createdAt",
           "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "__name__",
-          "order": "ASCENDING"
         }
       ]
     },
@@ -1026,10 +954,6 @@
         },
         {
           "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        },
-        {
-          "fieldPath": "__name__",
           "order": "DESCENDING"
         }
       ]
@@ -1071,56 +995,6 @@
     {
       "collectionGroup": "studentFeedback",
       "fieldPath": "comments",
-      "indexes": []
-    },
-    {
-      "collectionGroup": "studentFeedback",
-      "fieldPath": "otherAreaExplanation",
-      "indexes": []
-    },
-    {
-      "collectionGroup": "studentFeedback",
-      "fieldPath": "attachments",
-      "indexes": []
-    },
-    {
-      "collectionGroup": "studentFeedback",
-      "fieldPath": "diagnostics",
-      "indexes": []
-    },
-    {
-      "collectionGroup": "studentFeedback",
-      "fieldPath": "lesson.title",
-      "indexes": []
-    },
-    {
-      "collectionGroup": "studentFeedback",
-      "fieldPath": "lesson.pageTitle",
-      "indexes": []
-    },
-    {
-      "collectionGroup": "studentFeedback",
-      "fieldPath": "submitter.displayName",
-      "indexes": []
-    },
-    {
-      "collectionGroup": "studentFeedback",
-      "fieldPath": "submitter.email",
-      "indexes": []
-    },
-    {
-      "collectionGroup": "activity",
-      "fieldPath": "note",
-      "indexes": []
-    },
-    {
-      "collectionGroup": "activity",
-      "fieldPath": "reason",
-      "indexes": []
-    },
-    {
-      "collectionGroup": "activity",
-      "fieldPath": "actorDisplayName",
       "indexes": []
     }
   ]

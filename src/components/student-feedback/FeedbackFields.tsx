@@ -6,6 +6,7 @@ import { Bug, Check, Lightbulb, MessageCircle, Star, type LucideIcon } from 'luc
 import {
   FEEDBACK_AREAS,
   FEEDBACK_AREA_LABELS,
+  FEEDBACK_SEVERITY_LABELS,
   FEEDBACK_TYPE_LABELS,
   type FeedbackArea,
   type FeedbackSeverity,
@@ -42,28 +43,30 @@ export function FieldHeading({ children, optional, htmlFor }: { children: ReactN
 /** A transparent native input over the whole card keeps clicks, keyboard use and form semantics native. */
 const OVERLAY_INPUT = 'absolute inset-0 h-full w-full cursor-pointer appearance-none opacity-0';
 
-const TYPE_OPTIONS: Array<{ value: FeedbackType; icon: LucideIcon; hint: string }> = [
-  { value: 'bug_report', icon: Bug, hint: "Something isn't working" },
-  { value: 'feature_suggestion', icon: Lightbulb, hint: 'An idea or improvement' },
-  { value: 'general', icon: MessageCircle, hint: 'Anything else on your mind' },
-];
+type ChoiceOption<T extends string> = { value: T; hint: string; icon?: LucideIcon };
 
-export function TypePicker({
+function ChoiceCards<T extends string>({
   id,
+  heading,
+  labels,
+  options,
   value,
   error,
   onChange,
 }: {
   id: string;
-  value: FeedbackType | null;
+  heading: string;
+  labels: Record<T, string>;
+  options: Array<ChoiceOption<T>>;
+  value: T | null;
   error?: string;
-  onChange: (value: FeedbackType) => void;
+  onChange: (value: T) => void;
 }) {
   return (
     <fieldset aria-invalid={Boolean(error)} aria-describedby={error ? `${id}-error` : undefined}>
-      <FieldHeading>What kind of feedback is this?</FieldHeading>
+      <FieldHeading>{heading}</FieldHeading>
       <div className="grid gap-2.5 sm:grid-cols-3">
-        {TYPE_OPTIONS.map(({ value: option, icon: Icon, hint }, index) => {
+        {options.map(({ value: option, icon: Icon, hint }, index) => {
           const checked = value === option;
           return (
             <label
@@ -75,22 +78,24 @@ export function TypePicker({
               <input
                 id={index === 0 ? id : undefined}
                 type="radio"
-                name={`${id}-type`}
+                name={id}
                 className={OVERLAY_INPUT}
                 checked={checked}
                 onChange={() => onChange(option)}
-                aria-label={FEEDBACK_TYPE_LABELS[option]}
+                aria-label={labels[option]}
                 aria-describedby={`${id}-${option}-hint`}
               />
-              <span
-                className={cn(
-                  'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors',
-                  checked ? 'bg-roman-red text-white' : 'bg-roman-parchment text-roman-red'
-                )}>
-                <Icon className="h-4 w-4" aria-hidden="true" />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-sm font-semibold text-foreground">{FEEDBACK_TYPE_LABELS[option]}</span>
+              {Icon && (
+                <span
+                  className={cn(
+                    'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors',
+                    checked ? 'bg-roman-red text-white' : 'bg-roman-parchment text-roman-red'
+                  )}>
+                  <Icon className="h-4 w-4" aria-hidden="true" />
+                </span>
+              )}
+              <span className="min-w-0 pr-5">
+                <span className="block text-sm font-semibold text-foreground">{labels[option]}</span>
                 <span id={`${id}-${option}-hint`} className="block text-xs text-roman-stone">
                   {hint}
                 </span>
@@ -105,58 +110,27 @@ export function TypePicker({
   );
 }
 
-const SEVERITY_OPTIONS: Array<{ value: FeedbackSeverity; label: string; hint: string }> = [
-  { value: 'blocking', label: 'Blocking', hint: "I can't continue" },
-  { value: 'major', label: 'Major', hint: 'Broken, but I found a way around it' },
-  { value: 'minor', label: 'Minor', hint: 'Looks off or is awkward to use' },
+const TYPE_OPTIONS: Array<ChoiceOption<FeedbackType>> = [
+  { value: 'bug_report', icon: Bug, hint: "Something isn't working" },
+  { value: 'feature_suggestion', icon: Lightbulb, hint: 'An idea or improvement' },
+  { value: 'general', icon: MessageCircle, hint: 'Anything else on your mind' },
 ];
 
-export function SeverityPicker({
-  id,
-  value,
-  error,
-  onChange,
-}: {
-  id: string;
-  value: FeedbackSeverity | null;
-  error?: string;
-  onChange: (value: FeedbackSeverity) => void;
-}) {
-  return (
-    <fieldset aria-invalid={Boolean(error)} aria-describedby={error ? `${id}-error` : undefined}>
-      <FieldHeading>How much does it affect you?</FieldHeading>
-      <div className="grid gap-2 sm:grid-cols-3">
-        {SEVERITY_OPTIONS.map(({ value: option, label, hint }, index) => {
-          const checked = value === option;
-          return (
-            <label
-              key={option}
-              className={cn(
-                'relative cursor-pointer rounded-lg border px-3 py-2.5 transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2',
-                checked ? 'border-roman-red bg-roman-red text-white' : 'border-border bg-white hover:border-roman-red/40'
-              )}>
-              <input
-                id={index === 0 ? id : undefined}
-                type="radio"
-                name={`${id}-severity`}
-                className={OVERLAY_INPUT}
-                checked={checked}
-                onChange={() => onChange(option)}
-                aria-label={label}
-                aria-describedby={`${id}-${option}-hint`}
-              />
-              <span className="block text-sm font-semibold">{label}</span>
-              <span id={`${id}-${option}-hint`} className={cn('block text-xs', checked ? 'text-white/85' : 'text-roman-stone')}>
-                {hint}
-              </span>
-            </label>
-          );
-        })}
-      </div>
-      <FieldError id={`${id}-error`} message={error} />
-    </fieldset>
-  );
-}
+const SEVERITY_OPTIONS: Array<ChoiceOption<FeedbackSeverity>> = [
+  { value: 'blocking', hint: "I can't continue" },
+  { value: 'major', hint: 'Broken, but I found a way around it' },
+  { value: 'minor', hint: 'Looks off or is awkward to use' },
+];
+
+type PickerProps<T> = { id: string; value: T | null; error?: string; onChange: (value: T) => void };
+
+export const TypePicker = (props: PickerProps<FeedbackType>) => (
+  <ChoiceCards {...props} heading="What kind of feedback is this?" labels={FEEDBACK_TYPE_LABELS} options={TYPE_OPTIONS} />
+);
+
+export const SeverityPicker = (props: PickerProps<FeedbackSeverity>) => (
+  <ChoiceCards {...props} heading="How much does it affect you?" labels={FEEDBACK_SEVERITY_LABELS} options={SEVERITY_OPTIONS} />
+);
 
 export function AreaChips({
   id,

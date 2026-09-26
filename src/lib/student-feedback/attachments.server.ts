@@ -2,6 +2,7 @@ import type { Bucket } from '@google-cloud/storage';
 import { adminStorage } from '@/src/services/firebase-admin';
 import {
   FEEDBACK_MAX_TOTAL_BYTES,
+  formatFileSize,
   feedbackMediaLimit,
   feedbackUploadPath,
   type FeedbackAttachment,
@@ -100,7 +101,7 @@ export async function storeFeedbackAttachments(
 ): Promise<FeedbackAttachment[]> {
   const verified = await Promise.all(inputs.map(input => verifyUpload(bucket, uid, draftId, input)));
   if (verified.reduce((total, item) => total + item.attachment.sizeBytes, 0) > FEEDBACK_MAX_TOTAL_BYTES) {
-    invalidAttachment('Attachments can total at most 200 MB.');
+    invalidAttachment(`Attachments can total at most ${formatFileSize(FEEDBACK_MAX_TOTAL_BYTES)}.`);
   }
   await Promise.all(
     verified.map(({ source, attachment }) =>

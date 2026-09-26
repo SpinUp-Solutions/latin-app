@@ -100,7 +100,6 @@ const getPathSegment = (pathname: string, index: number) =>
 
 const SEGMENT_LABELS: Record<string, string> = {
   lessons: 'Lessons',
-  feedback: 'Feedback',
   manage: 'Manage',
   create: 'Create',
   edit: 'Edit',

@@ -68,28 +68,10 @@ function FeedbackSuccess({ draft, onReturn }: { draft: FeedbackDraft; onReturn?:
   );
 }
 
-export function FeedbackForm({
-  draft,
-  variant,
-  onReturn,
-}: {
-  draft: FeedbackDraft;
-  /** "panel" scrolls the fields above a pinned submit bar. */
-  variant: 'page' | 'panel';
-  onReturn?: () => void;
-}) {
+/** With `onReturn` the form sits in the lesson panel: fields scroll above a pinned submit bar. */
+export function FeedbackForm({ draft, onReturn }: { draft: FeedbackDraft; onReturn?: () => void }) {
   const prefix = useId();
-  const ids = {
-    type: `${prefix}-type`,
-    severity: `${prefix}-severity`,
-    areas: `${prefix}-areas`,
-    otherAreaExplanation: `${prefix}-other`,
-    description: `${prefix}-description`,
-    lesson: `${prefix}-lesson`,
-    attachments: `${prefix}-attachments`,
-    rating: `${prefix}-rating`,
-    comments: `${prefix}-comments`,
-  };
+  const id = (key: string) => `${prefix}-${key}`;
   const { fields, errors, setField, uploads } = draft;
 
   if (draft.receipt) return <FeedbackSuccess draft={draft} onReturn={onReturn} />;
@@ -102,11 +84,11 @@ export function FeedbackForm({
     event.preventDefault();
     const fieldErrors = await draft.submit();
     const first = fieldErrors && FIELD_ORDER.find(key => fieldErrors[key]);
-    if (first) document.getElementById(ids[first as keyof typeof ids])?.focus();
+    if (first) document.getElementById(id(first))?.focus();
   };
 
   const submitLabel = draft.submitting ? 'Sending…' : uploads.uploading ? 'Waiting for uploads…' : 'Send feedback';
-  const panel = variant === 'panel';
+  const panel = Boolean(onReturn);
 
   return (
     <form
@@ -122,11 +104,11 @@ export function FeedbackForm({
       }}
       className={cn(panel && 'flex min-h-0 flex-1 flex-col')}>
       <div className={cn('space-y-8', panel && 'min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-6')}>
-        <TypePicker id={ids.type} value={fields.type} error={errors.type} onChange={value => setField('type', value)} />
+        <TypePicker id={id('type')} value={fields.type} error={errors.type} onChange={value => setField('type', value)} />
 
         {fields.type === 'bug_report' && (
           <SeverityPicker
-            id={ids.severity}
+            id={id('severity')}
             value={fields.severity}
             error={errors.severity}
             onChange={value => setField('severity', value)}
@@ -134,59 +116,59 @@ export function FeedbackForm({
         )}
 
         <div>
-          <AreaChips id={ids.areas} value={fields.areas} error={errors.areas} onChange={value => setField('areas', value)} />
+          <AreaChips id={id('areas')} value={fields.areas} error={errors.areas} onChange={value => setField('areas', value)} />
           {fields.areas.includes('other') && (
             <div className="mt-3">
               <Input
-                id={ids.otherAreaExplanation}
+                id={id('otherAreaExplanation')}
                 aria-label="Which other area?"
                 placeholder="Which other area?"
                 maxLength={FEEDBACK_MAX_OTHER_EXPLANATION_LENGTH}
                 value={fields.otherAreaExplanation}
                 aria-invalid={Boolean(errors.otherAreaExplanation)}
-                aria-describedby={errors.otherAreaExplanation ? `${ids.otherAreaExplanation}-error` : undefined}
+                aria-describedby={errors.otherAreaExplanation ? id('otherAreaExplanation-error') : undefined}
                 onChange={event => setField('otherAreaExplanation', event.target.value)}
               />
-              <FieldError id={`${ids.otherAreaExplanation}-error`} message={errors.otherAreaExplanation} />
+              <FieldError id={id('otherAreaExplanation-error')} message={errors.otherAreaExplanation} />
             </div>
           )}
         </div>
 
         <div>
-          <FieldHeading htmlFor={ids.description}>Tell us more</FieldHeading>
+          <FieldHeading htmlFor={id('description')}>Tell us more</FieldHeading>
           <Textarea
-            id={ids.description}
+            id={id('description')}
             rows={6}
             className="resize-y bg-white text-base sm:text-sm"
             placeholder={DESCRIPTION_PLACEHOLDERS[fields.type ?? 'none']}
             maxLength={FEEDBACK_MAX_DESCRIPTION_LENGTH}
             value={fields.description}
             aria-invalid={Boolean(errors.description)}
-            aria-describedby={errors.description ? `${ids.description}-error` : undefined}
+            aria-describedby={errors.description ? id('description-error') : undefined}
             onChange={event => setField('description', event.target.value)}
           />
           <CharacterCount value={fields.description} max={FEEDBACK_MAX_DESCRIPTION_LENGTH} />
-          <FieldError id={`${ids.description}-error`} message={errors.description} />
+          <FieldError id={id('description-error')} message={errors.description} />
         </div>
 
         <FeedbackLessonPicker
-          id={ids.lesson}
+          id={id('lesson')}
           lessonId={draft.lessonId}
           lessonContext={draft.lessonContext}
           pageNumber={draft.pageNumber}
           onChoose={draft.chooseLesson}
         />
 
-        <FeedbackAttachmentsField id={ids.attachments} uploads={uploads} onAddFiles={addFiles} />
+        <FeedbackAttachmentsField id={id('attachments')} uploads={uploads} onAddFiles={addFiles} />
 
-        <RatingField id={ids.rating} value={fields.rating} onChange={value => setField('rating', value)} />
+        <RatingField id={id('rating')} value={fields.rating} onChange={value => setField('rating', value)} />
 
         <div>
-          <FieldHeading htmlFor={ids.comments} optional>
+          <FieldHeading htmlFor={id('comments')} optional>
             Anything else you would like to add?
           </FieldHeading>
           <Textarea
-            id={ids.comments}
+            id={id('comments')}
             rows={3}
             className="resize-y bg-white text-base sm:text-sm"
             maxLength={FEEDBACK_MAX_COMMENTS_LENGTH}

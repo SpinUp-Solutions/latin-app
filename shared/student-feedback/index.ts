@@ -17,9 +17,9 @@ export const FEEDBACK_MAX_ACTIVITY_ITEMS = 200;
 export const FEEDBACK_TYPES = ['bug_report', 'feature_suggestion', 'general'] as const;
 export const FEEDBACK_SEVERITIES = ['blocking', 'major', 'minor'] as const;
 export const FEEDBACK_AREAS = ['lessons', 'exercises', 'vocabulary', 'dashboard', 'account', 'performance', 'other'] as const;
-export const FEEDBACK_STATUSES = ['unresolved', 'resolved'] as const;
-export const FEEDBACK_ADMIN_ACTIONS = ['resolve', 'reopen', 'archive', 'unarchive'] as const;
-export const FEEDBACK_ACTIVITY_KINDS = ['submitted', 'resolved', 'reopened', 'archived', 'unarchived', 'note'] as const;
+const FEEDBACK_STATUSES = ['unresolved', 'resolved'] as const;
+const FEEDBACK_ADMIN_ACTIONS = ['resolve', 'reopen', 'archive', 'unarchive'] as const;
+const FEEDBACK_ACTIVITY_KINDS = ['submitted', 'resolved', 'reopened', 'archived', 'unarchived', 'note'] as const;
 
 export type FeedbackType = (typeof FEEDBACK_TYPES)[number];
 export type FeedbackSeverity = (typeof FEEDBACK_SEVERITIES)[number];
@@ -48,8 +48,8 @@ export const FEEDBACK_AREA_LABELS: Record<FeedbackArea, string> = {
   other: 'Other',
 };
 
-export const FEEDBACK_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'] as const;
-export const FEEDBACK_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime'] as const;
+const FEEDBACK_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'] as const;
+const FEEDBACK_VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime'] as const;
 export const FEEDBACK_MEDIA_TYPES = [...FEEDBACK_IMAGE_TYPES, ...FEEDBACK_VIDEO_TYPES] as const;
 export type FeedbackMediaType = (typeof FEEDBACK_MEDIA_TYPES)[number];
 
@@ -60,12 +60,18 @@ export function feedbackMediaLimit(contentType: string): number | null {
   return null;
 }
 
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  const megabytes = bytes / (1024 * 1024);
+  return `${Number.isInteger(megabytes) ? megabytes : megabytes.toFixed(1)} MB`;
+}
+
 /** Students upload here; Storage rules allow owner-only creates and a bucket lifecycle rule removes leftovers. */
 export function feedbackUploadPath(uid: string, draftId: string, attachmentId: string): string {
   return `student-feedback/uploads/${uid}/${draftId}/${attachmentId}`;
 }
 
-export const feedbackDocumentIdSchema = z
+const feedbackDocumentIdSchema = z
   .string()
   .min(1)
   .max(200)
@@ -110,7 +116,7 @@ function refineFeedbackForm(value: FeedbackFormShape, context: z.RefinementCtx) 
 
 export const feedbackFormSchema = z.object(feedbackFormFields).superRefine(refineFeedbackForm);
 
-export const feedbackDiagnosticsSchema = z.object({
+const feedbackDiagnosticsSchema = z.object({
   entryPoint: z.enum(['standalone', 'lesson']),
   appVersion: z.string().max(100).optional(),
   browser: z.string().max(300).optional(),
@@ -140,16 +146,14 @@ export const submitFeedbackRequestSchema = z
     }
   });
 
-export const feedbackReceiptSchema = z.object({ feedbackId: feedbackUuidSchema, submittedAt: timestampSchema });
-
-export const feedbackAttachmentSchema = z.object({
+const feedbackAttachmentSchema = z.object({
   id: feedbackUuidSchema,
   name: z.string().min(1).max(255),
   contentType: z.enum(FEEDBACK_MEDIA_TYPES),
   sizeBytes: z.number().int().positive(),
 });
 
-export const feedbackLessonSnapshotSchema = z.object({
+const feedbackLessonSnapshotSchema = z.object({
   id: feedbackDocumentIdSchema,
   title: z.string().min(1).max(500),
   pageId: feedbackDocumentIdSchema.nullable(),
@@ -172,12 +176,7 @@ export const feedbackReportSchema = z.object({
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
   status: z.enum(FEEDBACK_STATUSES),
-  resolvedBy: z.string().nullable(),
-  resolvedAt: timestampSchema.nullable(),
-  resolutionReason: z.string().max(FEEDBACK_MAX_REASON_LENGTH).nullable(),
   archived: z.boolean(),
-  archivedBy: z.string().nullable(),
-  archivedAt: timestampSchema.nullable(),
 });
 
 export const feedbackActivitySchema = z.object({
@@ -189,8 +188,6 @@ export const feedbackActivitySchema = z.object({
   reason: z.string().max(FEEDBACK_MAX_REASON_LENGTH).nullable(),
   note: z.string().max(FEEDBACK_MAX_NOTE_LENGTH).nullable(),
 });
-
-export const feedbackLessonOptionSchema = z.object({ id: feedbackDocumentIdSchema, title: z.string().min(1).max(500) });
 
 export const feedbackAdminListQuerySchema = z.object({
   status: z.enum(['unresolved', 'resolved', 'all']).default('unresolved'),
@@ -216,39 +213,27 @@ export const feedbackAdminNoteRequestSchema = z.object({
   note: z.string().trim().min(1).max(FEEDBACK_MAX_NOTE_LENGTH),
 });
 
-export const FEEDBACK_ERROR_CODES = [
-  'FEEDBACK_INVALID_DOCUMENT',
-  'FEEDBACK_NOT_FOUND',
-  'FEEDBACK_FORBIDDEN',
-  'FEEDBACK_INVALID_ATTACHMENT',
-  'FEEDBACK_LESSON_UNAVAILABLE',
-  'FEEDBACK_REPORT_QUOTA',
-  'FEEDBACK_INVALID_CURSOR',
-] as const;
-
-export type FeedbackErrorCode = (typeof FEEDBACK_ERROR_CODES)[number];
+export type FeedbackErrorCode =
+  | 'FEEDBACK_INVALID_DOCUMENT'
+  | 'FEEDBACK_NOT_FOUND'
+  | 'FEEDBACK_FORBIDDEN'
+  | 'FEEDBACK_INVALID_ATTACHMENT'
+  | 'FEEDBACK_LESSON_UNAVAILABLE'
+  | 'FEEDBACK_REPORT_QUOTA'
+  | 'FEEDBACK_INVALID_CURSOR';
 export type FeedbackSubmitRequest = z.infer<typeof submitFeedbackRequestSchema>;
-export type FeedbackReceipt = z.infer<typeof feedbackReceiptSchema>;
+export type FeedbackReceipt = { feedbackId: string; submittedAt: string };
 export type FeedbackAttachment = z.infer<typeof feedbackAttachmentSchema>;
 export type FeedbackLessonSnapshot = z.infer<typeof feedbackLessonSnapshotSchema>;
 export type FeedbackReport = z.infer<typeof feedbackReportSchema>;
 export type FeedbackActivity = z.infer<typeof feedbackActivitySchema>;
-export type FeedbackLessonOption = z.infer<typeof feedbackLessonOptionSchema>;
+export type FeedbackLessonOption = { id: string; title: string };
 export type FeedbackAdminListQuery = z.infer<typeof feedbackAdminListQuerySchema>;
 
-export interface FeedbackAdminListItem {
-  id: string;
-  type: FeedbackType;
-  severity?: FeedbackSeverity;
-  areas: FeedbackArea[];
-  excerpt: string;
-  submitter: FeedbackReport['submitter'];
-  lesson: FeedbackLessonSnapshot | null;
-  createdAt: string;
-  status: FeedbackReport['status'];
-  archived: boolean;
-  attachmentCount: number;
-}
+export type FeedbackAdminListItem = Pick<
+  FeedbackReport,
+  'id' | 'type' | 'severity' | 'areas' | 'submitter' | 'lesson' | 'createdAt' | 'status' | 'archived'
+> & { excerpt: string; attachmentCount: number };
 
 export interface FeedbackAdminListResponse {
   items: FeedbackAdminListItem[];

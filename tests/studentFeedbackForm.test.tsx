@@ -9,6 +9,7 @@ import type { FeedbackUpload } from '@/src/hooks/useFeedbackUploads';
 const mockSubmit = jest.fn();
 const mockDispatch = jest.fn();
 const mockResetUploads = jest.fn();
+const mockPauseAudio = jest.fn();
 const mockUploads: { uploads: FeedbackUpload[]; uploading: boolean; failed: boolean; ready: Array<{ id: string; name: string }> } = {
   uploads: [],
   uploading: false,
@@ -45,19 +46,17 @@ const form = () => screen.getByRole('form', { name: 'Student feedback form' });
 const description = () => screen.getByLabelText('Tell us more');
 
 function Standalone() {
-  const draft = useFeedbackDraft({ entryPoint: 'standalone' });
-  return <FeedbackForm draft={draft} variant="page" />;
+  const draft = useFeedbackDraft();
+  return <FeedbackForm draft={draft} />;
 }
 
 function LessonHarness() {
-  const [open, setOpen] = useState(false);
   const [page, setPage] = useState(1);
   return (
     <>
       <button onClick={() => setPage(2)}>Next lesson page</button>
       <FeedbackLessonDialog
-        open={open}
-        onOpenChange={setOpen}
+        onOpen={mockPauseAudio}
         context={{ lessonId: 'lesson-1', lessonTitle: '<strong>First lesson</strong>', pageId: `page-${page}`, pageNumber: page }}
       />
     </>
@@ -173,9 +172,10 @@ test('a removed lesson is cleared from the draft so the student can send again',
   expect(mockSubmit.mock.calls[1][0]).toMatchObject({ lessonId: null, draftId: mockSubmit.mock.calls[0][0].draftId });
 });
 
-test('the lesson panel keeps the draft when closed and follows the current page', async () => {
+test('the lesson panel pauses audio, keeps the draft when closed and follows the current page', async () => {
   render(<LessonHarness />);
   fireEvent.click(screen.getByRole('button', { name: 'Feedback' }));
+  expect(mockPauseAudio).toHaveBeenCalledTimes(1);
   expect(screen.getByRole('combobox')).toHaveTextContent('First lesson');
   expect(screen.getByRole('combobox')).toHaveTextContent('Page 1');
   fireEvent.change(description(), { target: { value: 'A draft that stays' } });

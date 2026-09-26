@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminDb, adminStorage } from '@/src/services/firebase-admin';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import { runVocabularyContentStorageMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
-import { parseLegacyLessonAudioPath } from '@/src/lib/student-feedback/legacy-audio-path.server';
+import { parseLessonAudioPath } from '@/src/lib/lesson-audio-path.server';
 
 export async function POST(req: NextRequest) {
   try {
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     if (!bucketName) {
       throw new Error('Firebase Storage bucket name is not configured.');
     }
-    const filePath = parseLegacyLessonAudioPath(audioPath, bucketName);
+    const filePath = parseLessonAudioPath(audioPath, bucketName);
     if (!filePath) {
       return new NextResponse(JSON.stringify({ error: 'Invalid audio path format' }), { status: 400 });
     }

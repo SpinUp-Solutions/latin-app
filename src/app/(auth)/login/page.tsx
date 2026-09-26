@@ -19,7 +19,6 @@ import {
   watchAuthStage,
 } from '@/src/lib/auth-diagnostics';
 import { getAuthErrorMessage } from '@/src/lib/auth-errors';
-import { getAllowedLoginReturnPath } from '@/src/lib/student-feedback/login-return';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -45,7 +44,9 @@ export default function LoginPage() {
   useEffect(() => {
     if (user && !authLoading) {
       redirectRequested.current = true;
-      const destination = getAllowedLoginReturnPath(window.location.search) ?? (isAdmin ? '/admin' : '/dashboard');
+      // The feedback page is the only return path accepted from the URL.
+      const returnToFeedback = new URLSearchParams(window.location.search).get('return') === '/feedback';
+      const destination = returnToFeedback ? '/feedback' : isAdmin ? '/admin' : '/dashboard';
       recordAuthBreadcrumb('redirect_requested', { destination });
       router.replace(destination);
     }

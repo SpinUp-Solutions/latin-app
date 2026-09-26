@@ -42,6 +42,7 @@ jest.mock('@/src/components/ui/lesson/lesson-player', () => ({
 jest.mock('@/src/components/ui/lesson/lesson-sidebar', () => ({ __esModule: true, default: () => null }));
 jest.mock('@/src/components/ui/lesson/practice-sidebar', () => ({ __esModule: true, default: () => null }));
 jest.mock('@/src/components/ui/core/feedback-banner', () => ({ FeedbackBanner: () => null }));
+jest.mock('@/src/components/student-feedback/FeedbackLessonDialog', () => ({ FeedbackLessonDialog: () => null }));
 
 const createStore = () =>
   configureStore({

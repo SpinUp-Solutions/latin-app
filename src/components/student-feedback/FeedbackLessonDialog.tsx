@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { MessageSquarePlus } from 'lucide-react';
 import { Button } from '@/src/components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from '@/src/components/ui/sheet';
@@ -8,19 +9,13 @@ import { useFeedbackDraft, type FeedbackLessonContext } from '@/src/hooks/useFee
 import { FeedbackForm } from './FeedbackForm';
 
 /** The draft lives outside the sheet, so closing it keeps what the student wrote. */
-export function FeedbackLessonDialog({
-  open,
-  onOpenChange,
-  context,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  context: FeedbackLessonContext;
-}) {
-  const draft = useFeedbackDraft({ entryPoint: 'lesson', lessonContext: context });
+export function FeedbackLessonDialog({ context, onOpen }: { context: FeedbackLessonContext; onOpen: () => void }) {
+  const [open, setOpen] = useState(false);
+  const draft = useFeedbackDraft(context);
   const changeOpen = (next: boolean) => {
-    if (!next && draft.receipt) draft.reset();
-    onOpenChange(next);
+    if (next) onOpen();
+    else if (draft.receipt) draft.reset();
+    setOpen(next);
   };
 
   return (
@@ -39,7 +34,7 @@ export function FeedbackLessonDialog({
               Your lesson stays where you left it while you write.
             </SheetDescription>
           </div>
-          <FeedbackForm draft={draft} variant="panel" onReturn={() => changeOpen(false)} />
+          <FeedbackForm draft={draft} onReturn={() => changeOpen(false)} />
         </SheetContent>
       </Sheet>
       <UnsavedNavigationDialog guard={draft.navigationGuard} />

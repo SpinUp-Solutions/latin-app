@@ -42,6 +42,10 @@ jest.mock('@/src/components/ui/core/feedback-banner', () => ({
   FeedbackBanner: () => null,
 }));
 
+jest.mock('@/src/components/student-feedback/FeedbackLessonDialog', () => ({
+  FeedbackLessonDialog: () => null,
+}));
+
 const lesson = (id: string) => ({
   id,
   title: id,

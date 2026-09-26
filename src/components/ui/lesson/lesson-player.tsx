@@ -32,7 +32,6 @@ import {
   reportWatchedEvent,
 } from '@/src/lib/report-unexpected-error';
 import ExerciseCompletionRing from './exercise-completion-ring';
-import { FeedbackLessonDialog } from '@/src/components/student-feedback/FeedbackLessonDialog';
 
 const RETRY_DELAYS_MS = [1000, 3000];
 const PENDING_WRITE_FINISH_GRACE_MS = 8_000;
@@ -119,6 +118,8 @@ interface LessonPlayerProps {
   resolvedExerciseState?: Record<string, ResolvedGeneratedExerciseState>;
   testAttemptId?: string;
   generatedExerciseContext?: GeneratedExerciseRenderContext;
+  /** Extra header controls, such as the student feedback button, rendered for the current page. */
+  headerActions?: (page: { pageId: string; pageNumber: number; pauseAudio: () => void }) => React.ReactNode;
 }
 
 export const LessonPlayer: React.FC<LessonPlayerProps> = ({
@@ -130,13 +131,14 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   resolvedExerciseState,
   testAttemptId,
   generatedExerciseContext,
+  headerActions,
 }) => {
   // Lesson previews should preserve the normal student feedback experience.
   // `trackProgress` controls persistence independently; assessment callers pass
   // an explicit runtime mode when answer-revealing feedback must be withheld.
   const effectiveRuntimeMode = runtimeMode ?? 'practice';
   const shouldTrackProgress = trackProgress && effectiveRuntimeMode === 'practice';
-  const { user, authUid } = useAuth();
+  const { user } = useAuth();
   const [markExerciseComplete] = useMarkExerciseCompleteMutation();
   const [updatePageProgress] = useUpdatePageProgressMutation();
   const [finishLesson, { isLoading: isFinishMutationLoading }] = useFinishLessonMutation();
@@ -172,8 +174,6 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   const [currentPageIndex, setCurrentPageIndex] = useState(() => initialPageIndexFor(lesson));
   const [visitedPageIds, setVisitedPageIds] = useState<Set<string>>(() => initialVisitedPagesFor(lesson));
   const [furthestPageIndex, setFurthestPageIndex] = useState(() => initialPageIndexFor(lesson));
-  const [feedbackOpen, setFeedbackOpen] = useState(false);
-  const feedbackOpenRef = useRef(false);
 
   const currentPage = lesson.pages[currentPageIndex];
   const totalPages = lesson.pages.length;
@@ -344,18 +344,12 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   );
 
   const handleAudioEnded = useCallback(() => {
-    if (feedbackOpenRef.current) return;
     const hasExercise = Boolean(currentPage?.items?.some(item => isExerciseType(item.type)));
     if (!hasExercise) handleNext();
   }, [currentPage?.items, handleNext]);
 
   const audioPlaybackKey = `${lesson.id}:${currentPage?.id}`;
   const { audioRef, isPlaying, togglePlay, pause } = useAudio(currentPage?.audioPath, handleAudioEnded, audioPlaybackKey);
-  const setFeedbackDialogOpen = (open: boolean) => {
-    feedbackOpenRef.current = open;
-    if (open) pause();
-    setFeedbackOpen(open);
-  };
 
   const trackPendingExerciseWrite = useCallback((write: Promise<unknown>) => {
     pendingExerciseWritesRef.current.add(write);
@@ -572,24 +566,14 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
         description={lesson.description ? <SimpleRichDisplay content={lesson.description} /> : undefined}
         contentClassName={navigationPlacement === 'fixed' ? 'pb-28 sm:pb-24' : undefined}
         headerAside={
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-            {shouldShowExerciseRing && (
-              <ExerciseCompletionRing completedCount={completedExerciseCount} requiredCount={requiredExerciseCount} />
-            )}
-            {shouldTrackProgress && authUid && (
-              <FeedbackLessonDialog
-                key={authUid}
-                open={feedbackOpen}
-                onOpenChange={setFeedbackDialogOpen}
-                context={{
-                  lessonId: lesson.id,
-                  lessonTitle: lesson.title,
-                  pageId: currentPage.id,
-                  pageNumber: currentPageIndex + 1,
-                }}
-              />
-            )}
-          </div>
+          shouldShowExerciseRing || headerActions ? (
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+              {shouldShowExerciseRing && (
+                <ExerciseCompletionRing completedCount={completedExerciseCount} requiredCount={requiredExerciseCount} />
+              )}
+              {headerActions?.({ pageId: currentPage.id, pageNumber: currentPageIndex + 1, pauseAudio: pause })}
+            </div>
+          ) : undefined
         }
         iconAdornment={
           lessonCompleted ? (

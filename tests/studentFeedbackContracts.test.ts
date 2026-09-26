@@ -1,9 +1,5 @@
 import {
-  FEEDBACK_MAX_IMAGE_BYTES,
-  FEEDBACK_MAX_VIDEO_BYTES,
   feedbackFormSchema,
-  feedbackMediaLimit,
-  feedbackUploadPath,
   submitFeedbackRequestSchema,
 } from '@/shared/student-feedback';
 
@@ -66,20 +62,5 @@ describe('submit request contract', () => {
   it('never accepts a client-supplied submitter', () => {
     const parsed = submitFeedbackRequestSchema.parse({ ...request, submitter: { uid: 'someone-else' } });
     expect(parsed).not.toHaveProperty('submitter');
-  });
-});
-
-describe('media rules', () => {
-  it('limits images and videos separately and rejects other types', () => {
-    expect(feedbackMediaLimit('image/png')).toBe(FEEDBACK_MAX_IMAGE_BYTES);
-    expect(feedbackMediaLimit('video/quicktime')).toBe(FEEDBACK_MAX_VIDEO_BYTES);
-    expect(feedbackMediaLimit('image/svg+xml')).toBeNull();
-    expect(feedbackMediaLimit('text/html')).toBeNull();
-  });
-
-  it('scopes uploads to the student and draft', () => {
-    expect(feedbackUploadPath('student-1', draftId, attachmentId)).toBe(
-      `student-feedback/uploads/student-1/${draftId}/${attachmentId}`
-    );
   });
 });

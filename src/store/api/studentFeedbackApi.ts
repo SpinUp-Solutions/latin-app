@@ -1,5 +1,4 @@
 import type { ThunkDispatch, UnknownAction } from '@reduxjs/toolkit';
-import { createApi } from '@reduxjs/toolkit/query/react';
 import type {
   FeedbackActivity,
   FeedbackAdminAction,
@@ -12,7 +11,7 @@ import type {
   FeedbackReport,
   FeedbackSubmitRequest,
 } from '@/shared/student-feedback';
-import { createAuthenticatedBaseQuery } from './baseQuery';
+import { appApi } from './appApi';
 
 export type FeedbackListArgs = Partial<Omit<FeedbackAdminListQuery, 'cursor'>> & { cursor?: string | null };
 type Dispatch = ThunkDispatch<unknown, unknown, UnknownAction>;
@@ -27,11 +26,7 @@ const queryString = (values: Record<string, unknown>) => {
 /** Every page of one filter combination shares a cache entry. */
 const listKey = (args: FeedbackListArgs) => queryString({ ...args, cursor: undefined });
 
-export const studentFeedbackApi = createApi({
-  reducerPath: 'studentFeedbackApi',
-  baseQuery: createAuthenticatedBaseQuery(),
-  tagTypes: ['FeedbackLessons', 'FeedbackList', 'FeedbackDetail', 'FeedbackCount', 'FeedbackAttachments'],
-  refetchOnReconnect: true,
+export const studentFeedbackApi = appApi.injectEndpoints({
   endpoints: builder => ({
     getFeedbackLessons: builder.query<{ lessons: FeedbackLessonOption[] }, void>({
       query: () => '/feedback/lessons',
@@ -61,7 +56,6 @@ export const studentFeedbackApi = createApi({
     }),
     getAdminFeedbackAttachments: builder.query<FeedbackAttachmentLinksResponse, string>({
       query: id => `/admin/feedback/${encodeURIComponent(id)}/attachments`,
-      providesTags: (_result, _error, id) => [{ type: 'FeedbackAttachments', id }],
       keepUnusedDataFor: 0,
     }),
     updateAdminFeedbackState: builder.mutation<
@@ -99,7 +93,7 @@ export const studentFeedbackApi = createApi({
   }),
 });
 
-type FeedbackCacheState = { studentFeedbackApi: ReturnType<typeof studentFeedbackApi.reducer> };
+type FeedbackCacheState = { appApi: ReturnType<typeof appApi.reducer> };
 
 /**
  * Status changes move reports between filtered lists, so reload page one of every cached

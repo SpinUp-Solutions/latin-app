@@ -4,11 +4,11 @@ import { LEARNING_UNITS_COLLECTION } from '@/shared/constants/firestore';
 import type { FeedbackLessonOption, FeedbackLessonSnapshot } from '@/shared/student-feedback';
 import { isLessonDocumentData, normalizeLearningUnit } from '@/src/lib/learning-units/domain';
 import { studentDashboardService } from '@/src/lib/learning-units/student-dashboard-service';
-import { stripHtmlTags } from '@/src/utils/exercises/helpers';
+import { richTextToPlainText } from '@/src/utils/exercises/helpers';
 import { FeedbackError } from './http.server';
 
 export function boundedFeedbackTitle(title: string): string {
-  return (title.length <= 500 ? title : stripHtmlTags(title).slice(0, 500)).trim() || 'Untitled lesson';
+  return (title.length <= 500 ? title : richTextToPlainText(title).slice(0, 500)).trim() || 'Untitled lesson';
 }
 
 /** The dashboard already applies the student's progression and live-practice policy. */

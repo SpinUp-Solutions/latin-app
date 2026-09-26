@@ -32,7 +32,7 @@ Use the intended Firebase project and bucket. Nothing in this repository deploys
 
    Merge this with any existing lifecycle rules rather than replacing them (for example with `gcloud storage buckets describe` first, then `gcloud storage buckets update --lifecycle-file=...`).
 4. Confirm the app's server identity can read, copy and delete objects under `student-feedback/` and can sign URLs, as it already does for lesson audio.
-5. Deploy the application, including the restricted legacy audio signing and deletion paths.
+5. Deploy the application, including the lesson audio signing and deletion routes, which now only accept lesson audio paths.
 
 ## Smoke checks
 
@@ -43,6 +43,6 @@ Run these with test accounts outside production first.
 - In a lesson, the panel captures the lesson and page, pauses audio, and keeps the draft after closing.
 - Admin filters, paging, the unresolved badge, notes, resolve/reopen and archive/unarchive work and appear in the activity log.
 - Admin previews and downloads load; direct client requests for `student-feedback/reports/...` fail.
-- The legacy audio endpoints reject feedback object paths while lesson audio still plays.
+- The audio signing and deletion endpoints reject feedback object paths while lesson audio still plays.
 
 Local emulator tests cover the rules, the upload/submit/copy flow and admin review. They do not cover production IAM, URL signing or the lifecycle rule.

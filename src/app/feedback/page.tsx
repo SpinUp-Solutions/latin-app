@@ -12,7 +12,7 @@ import { useAuth } from '@/src/hooks/useAuth';
 import { useFeedbackDraft } from '@/src/hooks/useFeedbackDraft';
 
 function StandaloneFeedback() {
-  const draft = useFeedbackDraft({ entryPoint: 'standalone' });
+  const draft = useFeedbackDraft();
   return (
     <div className="min-h-screen bg-gradient-to-br from-roman-marble via-white to-roman-parchment">
       <header className="border-b border-roman-gold/20 bg-white/80 backdrop-blur-sm">
@@ -41,7 +41,7 @@ function StandaloneFeedback() {
           </p>
         </div>
         <div className="rounded-2xl border border-roman-gold/20 bg-white/90 p-5 shadow-xl shadow-roman-stone/5 sm:p-8">
-          <FeedbackForm draft={draft} variant="page" />
+          <FeedbackForm draft={draft} />
         </div>
       </main>
       <UnsavedNavigationDialog guard={draft.navigationGuard} />

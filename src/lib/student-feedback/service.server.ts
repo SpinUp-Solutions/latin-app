@@ -94,12 +94,7 @@ export async function submitFeedback(
       createdAt: now,
       updatedAt: now,
       status: 'unresolved',
-      resolvedBy: null,
-      resolvedAt: null,
-      resolutionReason: null,
       archived: false,
-      archivedBy: null,
-      archivedAt: null,
     };
     const activity: FeedbackActivity = {
       id: 'submitted',

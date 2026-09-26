@@ -171,12 +171,7 @@ const seedReport = (db: FakeDb, overrides: Data = {}) =>
     createdAt: '2026-09-24T11:00:00.000Z',
     updatedAt: '2026-09-24T11:00:00.000Z',
     status: 'unresolved',
-    resolvedBy: null,
-    resolvedAt: null,
-    resolutionReason: null,
     archived: false,
-    archivedBy: null,
-    archivedAt: null,
     ...overrides,
   });
 
@@ -288,8 +283,9 @@ describe('admin review', () => {
     const activity = () => db.children(`studentFeedback/${draftId}/activity`).map(([, data]) => data);
 
     const resolved = await updateFeedbackState(draftId, admin, { action: 'resolve', reason: 'Fixed in 2.3' }, db as never, nowMs);
-    expect(resolved).toMatchObject({ status: 'resolved', resolvedBy: 'admin-1', resolutionReason: 'Fixed in 2.3' });
-    expect(db.documents.get(`studentFeedback/${draftId}`)).toMatchObject({ status: 'resolved', resolvedAt: '2026-09-24T12:00:00.000Z' });
+    expect(resolved).toMatchObject({ status: 'resolved', updatedAt: '2026-09-24T12:00:00.000Z' });
+    expect(db.documents.get(`studentFeedback/${draftId}`)).toMatchObject({ status: 'resolved' });
+    expect(activity()[0]).toMatchObject({ kind: 'resolved', actorUid: 'admin-1', reason: 'Fixed in 2.3' });
 
     await updateFeedbackState(draftId, admin, { action: 'resolve' }, db as never, nowMs + 1000);
     expect(activity()).toHaveLength(1);
@@ -298,10 +294,7 @@ describe('admin review', () => {
     await updateFeedbackState(draftId, admin, { action: 'archive' }, db as never, nowMs + 3000);
     expect(db.documents.get(`studentFeedback/${draftId}`)).toMatchObject({
       status: 'unresolved',
-      resolvedBy: null,
-      resolutionReason: null,
       archived: true,
-      archivedBy: 'admin-1',
     });
     expect(activity().map(item => [item.kind, item.actorDisplayName])).toEqual([
       ['resolved', 'Grace Hopper'],

@@ -1,7 +1,5 @@
 'use client';
 
-import { useContext } from 'react';
-import { ReactReduxContext } from 'react-redux';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -24,15 +22,15 @@ import { cn } from '@/src/lib/utils';
 import { getActiveAdminNavigationHref, type AdminNavigationItem } from './navigation-utils';
 import { useGetAdminFeedbackCountQuery } from '@/src/store/api/studentFeedbackApi';
 
-function ConnectedFeedbackCount() {
-  const { data } = useGetAdminFeedbackCountQuery(undefined, { refetchOnFocus: true });
-  return data?.count ? <span className="rounded-full bg-roman-red px-1.5 py-0.5 text-xs font-semibold text-white" aria-label={`${data.count} unresolved feedback reports`}>{data.count}</span> : null;
-}
-
 function FeedbackCount() {
-  // The shell is also rendered as a standalone component in route tests.
-  const redux = useContext(ReactReduxContext);
-  return redux?.store ? <ConnectedFeedbackCount /> : null;
+  const { data } = useGetAdminFeedbackCountQuery();
+  return data?.count ? (
+    <span
+      className="rounded-full bg-roman-red px-1.5 py-0.5 text-xs font-semibold text-white"
+      aria-label={`${data.count} unresolved feedback reports`}>
+      {data.count}
+    </span>
+  ) : null;
 }
 
 interface NavigationEntry extends AdminNavigationItem {

@@ -11,6 +11,7 @@ import {
   FEEDBACK_SEVERITY_LABELS,
   FEEDBACK_TYPES,
   FEEDBACK_TYPE_LABELS,
+  feedbackUuidSchema,
   type FeedbackAdminListItem,
 } from '@/shared/student-feedback';
 import {
@@ -38,7 +39,6 @@ import { useAppDispatch } from '@/src/store/hooks';
 import { cn } from '@/src/lib/utils';
 import { FeedbackBadges, FeedbackTypeIcon, formatDateTime, formatRelativeTime, submitterName } from './feedback-ui';
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ANY = 'any';
 const STATUS_TABS = [
   { value: 'unresolved', label: 'Open' },
@@ -206,7 +206,7 @@ export function FeedbackList() {
     event.preventDefault();
     const value = search.trim();
     if (!value) return;
-    if (UUID_PATTERN.test(value)) {
+    if (feedbackUuidSchema.safeParse(value).success) {
       router.push(`/admin/feedback/${value.toLowerCase()}?return=${encodeURIComponent(returnHref)}`);
       return;
     }

@@ -78,7 +78,7 @@ function listItem(report: FeedbackReport): FeedbackAdminListItem {
   return {
     id: report.id,
     type: report.type,
-    ...(report.severity ? { severity: report.severity } : {}),
+    severity: report.severity,
     areas: report.areas,
     excerpt: report.description.slice(0, EXCERPT_LENGTH),
     submitter: report.submitter,
@@ -117,8 +117,8 @@ export async function getFeedbackReport(feedbackId: string, db: Firestore = admi
 }
 
 export async function getFeedbackDetail(feedbackId: string, db: Firestore = adminDb): Promise<FeedbackAdminDetailResponse> {
-  const feedback = await getFeedbackReport(feedbackId, db);
-  const [activitySnapshot, currentLesson] = await Promise.all([
+  const [feedback, activitySnapshot] = await Promise.all([
+    getFeedbackReport(feedbackId, db),
     db
       .collection(STUDENT_FEEDBACK_COLLECTION)
       .doc(feedbackId)
@@ -126,8 +126,8 @@ export async function getFeedbackDetail(feedbackId: string, db: Firestore = admi
       .orderBy('createdAt', 'asc')
       .limit(FEEDBACK_MAX_ACTIVITY_ITEMS)
       .get(),
-    getCurrentFeedbackLesson(feedback.lesson?.id, db),
   ]);
+  const currentLesson = await getCurrentFeedbackLesson(feedback.lesson?.id, db);
   const activity = activitySnapshot.docs.map(document => {
     const parsed = feedbackActivitySchema.safeParse(document.data());
     if (!parsed.success || parsed.data.id !== document.id) invalidFeedbackDocument('Feedback activity data is invalid');
@@ -136,31 +136,23 @@ export async function getFeedbackDetail(feedbackId: string, db: Firestore = admi
   return { feedback, activity, currentLesson };
 }
 
-function statePatch(report: FeedbackReport, action: FeedbackAdminAction, uid: string, reason: string | null, now: string) {
+function statePatch(report: FeedbackReport, action: FeedbackAdminAction) {
   switch (action) {
     case 'resolve':
-      return report.status === 'resolved'
-        ? null
-        : { status: 'resolved' as const, resolvedBy: uid, resolvedAt: now, resolutionReason: reason };
+      return report.status === 'resolved' ? null : { status: 'resolved' as const };
     case 'reopen':
-      return report.status === 'unresolved'
-        ? null
-        : { status: 'unresolved' as const, resolvedBy: null, resolvedAt: null, resolutionReason: null };
+      return report.status === 'unresolved' ? null : { status: 'unresolved' as const };
     case 'archive':
-      return report.archived ? null : { archived: true, archivedBy: uid, archivedAt: now };
+      return report.archived ? null : { archived: true };
     case 'unarchive':
-      return report.archived ? { archived: false, archivedBy: null, archivedAt: null } : null;
+      return report.archived ? { archived: false } : null;
   }
 }
 
-/** Actions are toggles: repeating one that already applies changes nothing. */
-export async function updateFeedbackState(
-  feedbackId: string,
-  token: DecodedIdToken,
-  input: { action: FeedbackAdminAction; reason?: string },
-  db: Firestore = adminDb,
-  nowMs = Date.now()
-): Promise<FeedbackReport> {
+type AdminChange = { action: FeedbackAdminAction; reason?: string } | { note: string };
+
+/** Records a state action or a note, with its activity entry, in one transaction. */
+async function recordAdminChange(feedbackId: string, token: DecodedIdToken, change: AdminChange, db: Firestore, nowMs: number) {
   const reportRef = db.collection(STUDENT_FEEDBACK_COLLECTION).doc(feedbackId);
   return db.runTransaction(async transaction => {
     const [snapshot, actorSnapshot] = await Promise.all([
@@ -169,25 +161,36 @@ export async function updateFeedbackState(
     ]);
     if (!snapshot.exists) feedbackNotFound();
     const report = parseReport(snapshot.data(), feedbackId);
-    const now = new Date(nowMs).toISOString();
-    const reason = input.reason ?? null;
-    const patch = statePatch(report, input.action, token.uid, reason, now);
-    if (!patch) return report;
+    const isAction = 'action' in change;
+    const patch = isAction ? statePatch(report, change.action) : null;
+    // Actions are toggles: repeating one that already applies changes nothing.
+    if (isAction && !patch) return { feedback: report, activity: null };
 
+    const now = new Date(nowMs).toISOString();
     const activityRef = reportRef.collection(STUDENT_FEEDBACK_ACTIVITY_SUBCOLLECTION).doc(randomUUID());
     const activity: FeedbackActivity = {
       id: activityRef.id,
-      kind: ACTIVITY_KIND[input.action],
+      kind: isAction ? ACTIVITY_KIND[change.action] : 'note',
       actorUid: token.uid,
       actorDisplayName: feedbackActorName(token, actorSnapshot.data()),
       createdAt: now,
-      reason,
-      note: null,
+      reason: isAction ? (change.reason ?? null) : null,
+      note: isAction ? null : change.note,
     };
-    transaction.update(reportRef, { ...patch, updatedAt: now });
+    if (patch) transaction.update(reportRef, { ...patch, updatedAt: now });
     transaction.create(activityRef, activity);
-    return { ...report, ...patch, updatedAt: now };
+    return { feedback: patch ? { ...report, ...patch, updatedAt: now } : report, activity };
   });
+}
+
+export async function updateFeedbackState(
+  feedbackId: string,
+  token: DecodedIdToken,
+  input: { action: FeedbackAdminAction; reason?: string },
+  db: Firestore = adminDb,
+  nowMs = Date.now()
+): Promise<FeedbackReport> {
+  return (await recordAdminChange(feedbackId, token, input, db, nowMs)).feedback;
 }
 
 export async function addFeedbackNote(
@@ -197,25 +200,5 @@ export async function addFeedbackNote(
   db: Firestore = adminDb,
   nowMs = Date.now()
 ): Promise<FeedbackActivity> {
-  const reportRef = db.collection(STUDENT_FEEDBACK_COLLECTION).doc(feedbackId);
-  return db.runTransaction(async transaction => {
-    const [snapshot, actorSnapshot] = await Promise.all([
-      transaction.get(reportRef),
-      transaction.get(db.collection(USERS_COLLECTION).doc(token.uid)),
-    ]);
-    if (!snapshot.exists) feedbackNotFound();
-    parseReport(snapshot.data(), feedbackId);
-    const activityRef = reportRef.collection(STUDENT_FEEDBACK_ACTIVITY_SUBCOLLECTION).doc(randomUUID());
-    const activity: FeedbackActivity = {
-      id: activityRef.id,
-      kind: 'note',
-      actorUid: token.uid,
-      actorDisplayName: feedbackActorName(token, actorSnapshot.data()),
-      createdAt: new Date(nowMs).toISOString(),
-      reason: null,
-      note,
-    };
-    transaction.create(activityRef, activity);
-    return activity;
-  });
+  return (await recordAdminChange(feedbackId, token, { note }, db, nowMs)).activity!;
 }

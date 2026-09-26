@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { parseLegacyLessonAudioPath } from '@/src/lib/student-feedback/legacy-audio-path.server';
+import { parseLessonAudioPath } from '@/src/lib/lesson-audio-path.server';
 
 const mockFile = jest.fn(() => ({
   getSignedUrl: jest.fn(async () => ['https://example.test/signed']),
@@ -21,16 +21,16 @@ import { POST as deleteAudio } from '@/src/app/api/admin/delete-audio/route';
 const bucket = 'demo-latin-app.appspot.com';
 const url = (path: string) => `https://storage.googleapis.com/${bucket}/${path}`;
 
-describe('legacy audio namespace isolation', () => {
+describe('lesson audio path isolation', () => {
   beforeEach(() => {
     process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET = bucket;
     mockFile.mockClear();
   });
 
   it('accepts canonical lesson audio while rejecting private media and encoded traversal', () => {
-    expect(parseLegacyLessonAudioPath(url('lessons/lesson-1/content_audio/page-1.mp3'), bucket))
+    expect(parseLessonAudioPath(url('lessons/lesson-1/content_audio/page-1.mp3'), bucket))
       .toBe('lessons/lesson-1/content_audio/page-1.mp3');
-    expect(parseLegacyLessonAudioPath(url('lessons/lesson-1/content_audio/page-1.m4a'), bucket))
+    expect(parseLessonAudioPath(url('lessons/lesson-1/content_audio/page-1.m4a'), bucket))
       .toBe('lessons/lesson-1/content_audio/page-1.m4a');
     for (const path of [
       'student-feedback/private/session/file.mp4',
@@ -40,7 +40,7 @@ describe('legacy audio namespace isolation', () => {
       'lessons/lesson-1/content_audio/file.mp3?generation=1',
       'lessons/lesson-1/other/file.mp3',
     ]) {
-      expect(parseLegacyLessonAudioPath(url(path), bucket)).toBeNull();
+      expect(parseLessonAudioPath(url(path), bucket)).toBeNull();
     }
   });
 

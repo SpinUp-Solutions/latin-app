@@ -1,15 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Download, Film, Play } from 'lucide-react';
-import type { FeedbackAttachment } from '@/shared/student-feedback';
+import { formatFileSize, type FeedbackAttachment } from '@/shared/student-feedback';
 import { Button } from '@/src/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/src/components/ui/dialog';
 import { getApiErrorMessage } from '@/src/store/api/baseQuery';
 import { useGetAdminFeedbackAttachmentsQuery } from '@/src/store/api/studentFeedbackApi';
-import { formatFileSize } from '@/src/components/student-feedback/FeedbackAttachmentsField';
 
-// Signed links last 15 minutes; refresh them well before they expire.
+// Signed links last 15 minutes; refresh them well before they expire for new previews and downloads.
 const LINK_REFRESH_MS = 10 * 60 * 1000;
 
 type Links = { viewUrl: string | null; downloadUrl: string };
@@ -33,10 +32,13 @@ function Thumbnail({ attachment, viewUrl }: { attachment: FeedbackAttachment; vi
 export function FeedbackAttachments({ feedbackId, attachments }: { feedbackId: string; attachments: FeedbackAttachment[] }) {
   const { data, isLoading, isError, error, refetch } = useGetAdminFeedbackAttachmentsQuery(feedbackId, {
     pollingInterval: LINK_REFRESH_MS,
+    skipPollingIfUnfocused: true,
   });
-  const [open, setOpen] = useState<FeedbackAttachment | null>(null);
+  const [open, setOpen] = useState<{ attachment: FeedbackAttachment; links: Links } | null>(null);
   const links = new Map<string, Links>(data?.items.map(item => [item.id, item]));
-  const openLinks = open ? links.get(open.id) : undefined;
+  // Loaded thumbnails keep their first URL so refreshed links don't download every file again.
+  const thumbnails = useRef<Map<string, Links> | null>(null);
+  if (data && !thumbnails.current) thumbnails.current = links;
 
   if (isError) {
     return (
@@ -54,18 +56,19 @@ export function FeedbackAttachments({ feedbackId, attachments }: { feedbackId: s
       <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {attachments.map(attachment => {
           const itemLinks = links.get(attachment.id);
+          const thumbnailUrl = thumbnails.current?.get(attachment.id)?.viewUrl ?? null;
           return (
             <li key={attachment.id} className="overflow-hidden rounded-lg border border-border bg-white">
               <button
                 type="button"
                 disabled={!itemLinks?.viewUrl}
-                onClick={() => setOpen(attachment)}
+                onClick={() => itemLinks && setOpen({ attachment, links: itemLinks })}
                 className="relative flex aspect-video w-full items-center justify-center overflow-hidden bg-roman-parchment/60 transition-opacity hover:opacity-90 disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 aria-label={`Open ${attachment.name}`}>
                 {isLoading ? (
                   <span className="h-full w-full animate-pulse bg-roman-parchment" />
                 ) : (
-                  <Thumbnail attachment={attachment} viewUrl={itemLinks?.viewUrl ?? null} />
+                  <Thumbnail attachment={attachment} viewUrl={thumbnailUrl} />
                 )}
               </button>
               <div className="flex items-center gap-2 px-3 py-2">
@@ -93,21 +96,21 @@ export function FeedbackAttachments({ feedbackId, attachments }: { feedbackId: s
 
       <Dialog open={Boolean(open)} onOpenChange={next => !next && setOpen(null)}>
         <DialogContent className="max-w-4xl gap-3 p-3 sm:p-4">
-          <DialogTitle className="truncate pr-8 text-sm font-medium">{open?.name}</DialogTitle>
-          {open && openLinks?.viewUrl && (
+          <DialogTitle className="truncate pr-8 text-sm font-medium">{open?.attachment.name}</DialogTitle>
+          {open?.links.viewUrl && (
             <div className="flex max-h-[75vh] items-center justify-center overflow-hidden rounded-md bg-black/90">
-              {open.contentType.startsWith('image/') ? (
+              {open.attachment.contentType.startsWith('image/') ? (
                 // eslint-disable-next-line @next/next/no-img-element -- short-lived signed URL
-                <img src={openLinks.viewUrl} alt={open.name} className="max-h-[75vh] w-auto object-contain" />
+                <img src={open.links.viewUrl} alt={open.attachment.name} className="max-h-[75vh] w-auto object-contain" />
               ) : (
-                <video src={openLinks.viewUrl} controls autoPlay className="max-h-[75vh] w-full" />
+                <video src={open.links.viewUrl} controls autoPlay className="max-h-[75vh] w-full" />
               )}
             </div>
           )}
-          {openLinks && (
+          {open && (
             <div className="flex justify-end">
               <Button asChild variant="outline" size="sm" className="gap-2">
-                <a href={openLinks.downloadUrl}>
+                <a href={(links.get(open.attachment.id) ?? open.links).downloadUrl}>
                   <Download className="h-4 w-4" aria-hidden="true" />
                   Download
                 </a>

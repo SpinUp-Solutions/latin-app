@@ -2,18 +2,19 @@
 
 import { useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, Film, ImagePlus, RotateCcw, X } from 'lucide-react';
-import { FEEDBACK_MAX_ATTACHMENTS, FEEDBACK_MEDIA_TYPES } from '@/shared/student-feedback';
+import {
+  FEEDBACK_MAX_ATTACHMENTS,
+  FEEDBACK_MAX_IMAGE_BYTES,
+  FEEDBACK_MAX_VIDEO_BYTES,
+  FEEDBACK_MEDIA_TYPES,
+  formatFileSize,
+} from '@/shared/student-feedback';
 import type { useFeedbackUploads } from '@/src/hooks/useFeedbackUploads';
 import { Button } from '@/src/components/ui/button';
 import { cn } from '@/src/lib/utils';
 import { FieldHeading } from './FeedbackFields';
 
 type Uploads = ReturnType<typeof useFeedbackUploads>;
-
-export function formatFileSize(bytes: number): string {
-  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 export function FeedbackAttachmentsField({
   id,
@@ -63,7 +64,8 @@ export function FeedbackAttachmentsField({
           , drop them here, or paste a screenshot
         </p>
         <p className="text-xs text-roman-stone">
-          Up to {FEEDBACK_MAX_ATTACHMENTS} files · Images up to 10 MB · Videos up to 100 MB
+          Up to {FEEDBACK_MAX_ATTACHMENTS} files · Images up to {formatFileSize(FEEDBACK_MAX_IMAGE_BYTES)} · Videos up to{' '}
+          {formatFileSize(FEEDBACK_MAX_VIDEO_BYTES)}
         </p>
         <input
           ref={inputRef}
