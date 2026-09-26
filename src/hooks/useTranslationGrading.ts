@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/src/lib/firebase';
+import { functions } from '@/src/services/firebase';
 import { TranslationGradingRequest, TranslationGradingResponse, CostBreakdown } from '@/shared/openai/types';
 import type { TranslationGradingOutput } from '@/shared/openai/translation-grading';
 
