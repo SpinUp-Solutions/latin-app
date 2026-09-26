@@ -40,6 +40,7 @@ export interface CollectGeneratedExerciseWordsResult {
   diagnostics: GeneratedExercisePreviewDiagnostics[];
   globalScanLimitReached: boolean;
   requestedCount: number | 'all';
+  uniqueWords?: number;
 }
 
 export class GeneratedVocabularySourceError extends Error {
@@ -182,42 +183,50 @@ const getPathValues = (value: Record<string, unknown>, path: string): string[] =
   return Array.isArray(current) ? current.filter(isSelectableMorphologyForm) : [];
 };
 
-function selectForm(
-  word: Record<string, unknown>,
-  tableType: TableType,
-  selectedPaths: string[],
-  formRng: () => number,
-  steps?: readonly FormIdentificationStep[]
-) {
+type FormCandidate = { form: string; path: string };
+type FormPicker = (candidates: FormCandidate[]) => FormCandidate | undefined;
+
+const randomFormPicker =
+  (formRng: () => number): FormPicker =>
+  candidates =>
+    candidates[Math.floor(formRng() * candidates.length)];
+
+function getFormCandidates(word: Record<string, unknown>, spec: WordQuerySpec) {
+  const tableType = spec.tableType;
+  const selectedPaths = spec.formSelection?.selectedCellPaths || [];
+  if (!tableType || !selectedPaths.length) return null;
   const tableField = TABLE_TYPE_CONFIG[tableType];
   const table = word[tableField];
   if (!table) return null;
 
-  const compatiblePaths =
-    steps && tableType
-      ? selectedPaths.filter(
-          path => (getApplicableStepsForFormPath(path, tableType, steps)?.applicableSteps.length ?? 0) > 0
-        )
-      : selectedPaths;
-  const candidates = compatiblePaths.flatMap(path =>
+  const steps = spec.steps;
+  const compatiblePaths = steps
+    ? selectedPaths.filter(
+        path => (getApplicableStepsForFormPath(path, tableType, steps)?.applicableSteps.length ?? 0) > 0
+      )
+    : selectedPaths;
+  const candidates: FormCandidate[] = compatiblePaths.flatMap(path =>
     getPathValues(word, `${tableField}.${path}`).map(form => ({ form, path }))
   );
-  if (!candidates.length) return null;
+  return { table, tableType, compatiblePaths, candidates };
+}
 
-  const selected = candidates[Math.floor(formRng() * candidates.length)];
-  const matchingPaths = scanTableForMatchingForms(table, selected.form, tableType);
-  const paths = categorizeMatchingPaths(matchingPaths, compatiblePaths);
+function selectForm(word: Record<string, unknown>, spec: WordQuerySpec, pickForm: FormPicker) {
+  const available = getFormCandidates(word, spec);
+  if (!available?.candidates.length) return null;
+
+  const selected = pickForm(available.candidates);
+  if (!selected) return null;
+  const matchingPaths = scanTableForMatchingForms(available.table, selected.form, available.tableType);
+  const paths = categorizeMatchingPaths(matchingPaths, available.compatiblePaths);
   if (!paths.primaryPaths.includes(selected.path)) paths.primaryPaths.unshift(selected.path);
   return { selected, ...paths };
 }
 
-function mapWord(doc: QueryDocumentSnapshot, spec: WordQuerySpec, formRng: () => number): ExerciseWordResponse | null {
+function mapWord(doc: QueryDocumentSnapshot, spec: WordQuerySpec, pickForm: FormPicker): ExerciseWordResponse | null {
   const data = doc.data() as Record<string, unknown>;
   const selectedPaths = spec.formSelection?.selectedCellPaths || [];
-  const selection =
-    spec.tableType && selectedPaths.length
-      ? selectForm(data, spec.tableType, selectedPaths, formRng, spec.steps)
-      : null;
+  const selection = spec.tableType && selectedPaths.length ? selectForm(data, spec, pickForm) : null;
   if (selectedPaths.length && !selection) return null;
 
   const parsedTableType = spec.tableType;
@@ -258,11 +267,11 @@ function evaluateCandidate(
   doc: QueryDocumentSnapshot,
   spec: WordQuerySpec,
   exercise: GeneratedExercise,
-  formRng: () => number,
+  pickForm: FormPicker,
   paradigmConfigs: ParadigmConfigs
 ): ExerciseWordResponse | null {
   if (doc.data()._deletionPending) return null;
-  const word = mapWord(doc, spec, formRng);
+  const word = mapWord(doc, spec, pickForm);
   if (!word) return null;
   if (isRejectedBySpecAwarePronounOverlap(word, spec.paradigm, paradigmConfigs)) return null;
   if (exercise.type === 'generated-form-identification') {
@@ -466,6 +475,12 @@ function createSharedPoolLoader(pool: NonNullable<Awaited<ReturnType<typeof getR
   };
 }
 
+interface AcceptedWord {
+  word: ExerciseWordResponse;
+  doc: QueryDocumentSnapshot;
+  spec: WordQuerySpec;
+}
+
 async function takeEligible(
   stream: CandidateStream,
   target: number,
@@ -474,9 +489,10 @@ async function takeEligible(
   paradigmConfigs: ParadigmConfigs,
   budget: { remaining: number },
   deficit: number,
-  unbounded: boolean
-): Promise<ExerciseWordResponse[]> {
-  const accepted: ExerciseWordResponse[] = [];
+  unbounded: boolean,
+  acceptedIds?: Set<string>
+): Promise<AcceptedWord[]> {
+  const accepted: AcceptedWord[] = [];
   while (
     accepted.length < target &&
     (stream.unread.length > 0 || canStreamContinue(stream, unbounded ? 1 : budget.remaining))
@@ -497,10 +513,71 @@ async function takeEligible(
     }
     const doc = stream.unread.shift();
     if (!doc) break;
-    const word = evaluateCandidate(doc, stream.spec, exercise, formRng, paradigmConfigs);
-    if (word) accepted.push(word);
+    if (acceptedIds?.has(doc.id)) continue;
+    const word = evaluateCandidate(doc, stream.spec, exercise, randomFormPicker(formRng), paradigmConfigs);
+    if (!word) continue;
+    acceptedIds?.add(doc.id);
+    accepted.push({ word, doc, spec: stream.spec });
   }
   return accepted;
+}
+
+/** Yields validated questions for further distinct surface forms of an already accepted word. */
+function createFormRotation(
+  entry: AcceptedWord,
+  exercise: GeneratedExercise,
+  formRng: () => number,
+  paradigmConfigs: ParadigmConfigs
+) {
+  const candidatesByForm = new Map<string, FormCandidate[]>();
+  for (const candidate of getFormCandidates(entry.doc.data(), entry.spec)?.candidates ?? []) {
+    if (candidate.form === entry.word.selected_form) continue;
+    candidatesByForm.set(candidate.form, [...(candidatesByForm.get(candidate.form) ?? []), candidate]);
+  }
+  const remainingForms = shuffleWithRng([...candidatesByForm.keys()], formRng);
+
+  return (): AcceptedWord | null => {
+    while (remainingForms.length > 0) {
+      const sameForm = candidatesByForm.get(remainingForms.shift()!)!;
+      const pickForm = () => sameForm[Math.floor(formRng() * sameForm.length)];
+      const word = evaluateCandidate(entry.doc, entry.spec, exercise, pickForm, paradigmConfigs);
+      if (word) return { ...entry, word };
+    }
+    return null;
+  };
+}
+
+/**
+ * Cycles through the accepted words, giving each one a new surface form per pass, until
+ * `count` questions exist or every word has run out of forms. The first pass is `firstPass`.
+ */
+function rotateWordForms(
+  firstPass: AcceptedWord[],
+  count: number,
+  exercise: GeneratedExercise,
+  formRng: () => number,
+  shuffleRng: () => number,
+  paradigmConfigs: ParadigmConfigs
+): AcceptedWord[] {
+  const questions = firstPass.slice(0, count);
+  let rotations = firstPass.map(entry => createFormRotation(entry, exercise, formRng, paradigmConfigs));
+
+  while (questions.length < count && rotations.length > 0) {
+    const pass: AcceptedWord[] = [];
+    rotations = rotations.filter(nextForm => {
+      const question = nextForm();
+      if (question) pass.push(question);
+      return question !== null;
+    });
+
+    const ordered = shuffleWithRng(pass, shuffleRng);
+    // Passes hold distinct words, so only the boundary with the previous pass can repeat a word.
+    if (ordered.length > 1 && ordered[0].doc.id === questions[questions.length - 1]?.doc.id) {
+      [ordered[0], ordered[1]] = [ordered[1], ordered[0]];
+    }
+    questions.push(...ordered.slice(0, count - questions.length));
+  }
+  return questions;
 }
 
 export async function collectGeneratedExerciseWords(options: {
@@ -510,6 +587,8 @@ export async function collectGeneratedExerciseWords(options: {
   count: number | 'all';
   exercise: GeneratedExercise;
   poolId?: string | null;
+  /** Caps distinct words; each is repeated with different forms until `count` is filled. */
+  uniqueWordCount?: number | null;
   rng?: () => number;
   paradigmConfigs?: ParadigmConfigs;
 }): Promise<CollectGeneratedExerciseWordsResult> {
@@ -554,13 +633,20 @@ export async function collectGeneratedExerciseWords(options: {
     numericCount = Math.min(Math.max(1, options.count), MAX_GENERATED_WORD_COUNT);
     requestedCount = numericCount;
   }
+  const uniqueWordTarget =
+    !unbounded && options.uniqueWordCount && options.uniqueWordCount > 0
+      ? Math.min(options.uniqueWordCount, numericCount)
+      : null;
+  // Number of distinct words to collect; unique-word mode fills the rest with further forms.
+  const wordTarget = uniqueWordTarget ?? numericCount;
+  const acceptedIds = uniqueWordTarget === null ? undefined : new Set<string>();
   const shares = unbounded
     ? specs.map(() => Number.POSITIVE_INFINITY)
-    : allocateFairShares(specs.length, numericCount, allocationRng);
+    : allocateFairShares(specs.length, wordTarget, allocationRng);
   const budget = {
     // Pool reads are bounded by its unique IDs and shared across all paradigms.
     // Collection queries retain their scan budget.
-    remaining: unbounded || poolIds !== null ? Number.POSITIVE_INFINITY : globalScanBudget(numericCount),
+    remaining: unbounded || poolIds !== null ? Number.POSITIVE_INFINITY : globalScanBudget(wordTarget),
   };
   const initialBudget = budget.remaining;
 
@@ -573,7 +659,7 @@ export async function collectGeneratedExerciseWords(options: {
     return new QueryCandidateStream(spec, ceiling, options.db, options.collection, queryRng, unbounded);
   });
 
-  const collected: ExerciseWordResponse[][] = streams.map(() => []);
+  const collected: AcceptedWord[][] = streams.map(() => []);
 
   if (unbounded) {
     for (let index = 0; index < streams.length; index += 1) {
@@ -598,17 +684,18 @@ export async function collectGeneratedExerciseWords(options: {
         paradigmConfigs,
         budget,
         shares[index],
-        false
+        false,
+        acceptedIds
       );
     }
 
     let total = collected.reduce((sum, words) => sum + words.length, 0);
     const hasCapacity = (stream: CandidateStream) =>
       stream.unread.length > 0 || canStreamContinue(stream, budget.remaining);
-    while (total < numericCount && streams.some(hasCapacity)) {
-      const deficit = numericCount - total;
+    while (total < wordTarget && streams.some(hasCapacity)) {
+      const deficit = wordTarget - total;
       let progressed = false;
-      for (let index = 0; index < streams.length && total < numericCount; index += 1) {
+      for (let index = 0; index < streams.length && total < wordTarget; index += 1) {
         if (!hasCapacity(streams[index])) continue;
         const extra = await takeEligible(
           streams[index],
@@ -618,7 +705,8 @@ export async function collectGeneratedExerciseWords(options: {
           paradigmConfigs,
           budget,
           deficit,
-          false
+          false,
+          acceptedIds
         );
         if (extra.length > 0) {
           collected[index].push(...extra);
@@ -630,21 +718,29 @@ export async function collectGeneratedExerciseWords(options: {
     }
   }
 
-  const diagnostics: GeneratedExercisePreviewDiagnostics[] = streams.map((stream, index) => ({
+  const acceptedCount = collected.reduce((sum, words) => sum + words.length, 0);
+  const combined = shuffleWithRng(collected.flat(), shuffleRng);
+  const questions =
+    uniqueWordTarget !== null
+      ? rotateWordForms(combined, numericCount, options.exercise, formRng, shuffleRng, paradigmConfigs)
+      : unbounded
+        ? combined
+        : combined.slice(0, numericCount);
+
+  const diagnostics: GeneratedExercisePreviewDiagnostics[] = streams.map(stream => ({
     specId: stream.spec.id,
-    collected: collected[index].length,
+    collected: questions.filter(question => question.spec === stream.spec).length,
     scanned: stream.totalScanned,
     exhausted: stream.exhausted,
     scanLimitReached: stream.scanLimitReached,
   }));
-
-  const combined = shuffleWithRng(collected.flat(), shuffleRng);
-  const words = unbounded ? combined : combined.slice(0, numericCount);
+  const words = questions.map(question => question.word);
 
   return {
     words,
     diagnostics,
-    globalScanLimitReached: !unbounded && budget.remaining <= 0 && initialBudget > 0 && words.length < numericCount,
+    globalScanLimitReached: !unbounded && budget.remaining <= 0 && initialBudget > 0 && acceptedCount < wordTarget,
     requestedCount,
+    ...(uniqueWordTarget !== null ? { uniqueWords: new Set(questions.map(question => question.doc.id)).size } : {}),
   };
 }

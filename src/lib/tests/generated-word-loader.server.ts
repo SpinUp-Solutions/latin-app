@@ -101,6 +101,7 @@ export async function collectWordsForGeneratedExerciseRequest(
     count: config.count || 'all',
     exercise,
     poolId,
+    uniqueWordCount: poolId && exercise.type === 'generated-form-identification' ? config.uniqueWordCount : null,
     rng: options?.rng,
     paradigmConfigs: exercise.type === 'generated-form-identification' ? getParadigmConfigs(exercise) : {},
   });

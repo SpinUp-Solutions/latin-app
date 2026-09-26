@@ -19,6 +19,8 @@ export const generatedWordCountSchema = z.union([
   z.number().int().positive().max(MAX_GENERATED_WORD_COUNT),
 ]);
 
+export const generatedUniqueWordCountSchema = z.number().int().positive().max(MAX_GENERATED_WORD_COUNT).nullable();
+
 const formSelectionSchema = z
   .object({
     tableType: z.string().trim().min(1),
@@ -73,6 +75,7 @@ export const generatedPreviewGeneratorConfigSchema = z
     wordSource: z.enum(['filters', 'pool']).default('filters'),
     poolId: z.string().trim().min(1).nullable().optional(),
     count: generatedWordCountSchema,
+    uniqueWordCount: generatedUniqueWordCountSchema.optional(),
     filters: generatedPreviewFiltersSchema.optional(),
     formSelection: formSelectionSchema,
   })
@@ -155,5 +158,7 @@ export type GeneratedExercisePreviewResult = {
   diagnostics: GeneratedExercisePreviewDiagnostics[];
   requestedCount: number | 'all';
   collected: number;
+  /** Distinct words behind the questions; present when a unique-word limit was applied. */
+  uniqueWords?: number;
   globalScanLimitReached: boolean;
 };
