@@ -128,8 +128,28 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({
     };
   }, []);
 
-  // this is for the live preview :/
+  const previousSource = useRef({
+    leftColumn,
+    rightColumn,
+    finalAnswer,
+    restoredMatches,
+    restoredRound,
+    restoredRounds,
+  });
+
+  // Reset when the preview data changes, not when an Activity restores effects.
   useEffect(() => {
+    const previous = previousSource.current;
+    if (
+      previous.leftColumn === leftColumn &&
+      previous.rightColumn === rightColumn &&
+      previous.finalAnswer === finalAnswer &&
+      previous.restoredMatches === restoredMatches &&
+      previous.restoredRound === restoredRound &&
+      previous.restoredRounds === restoredRounds
+    )
+      return;
+    previousSource.current = { leftColumn, rightColumn, finalAnswer, restoredMatches, restoredRound, restoredRounds };
     clearIncorrectFlashTimeout();
     setShuffledLeftColumn(leftColumn);
     setShuffledRightColumn(rightColumn);

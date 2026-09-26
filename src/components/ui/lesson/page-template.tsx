@@ -51,39 +51,38 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({
   onDiagrammingAttempt,
 }) => {
   const [completedExercises, setCompletedExercises] = useState<Set<number>>(() => new Set());
-  const hasAutoAdvancedRef = useRef(false);
-  const pageIdRef = useRef(page.id);
 
   const exerciseItems = page.items.filter(item => isExerciseType(item.type));
   const totalExercises = exerciseItems.length;
 
+  const previousPageId = useRef(page.id);
+  const scheduledCompletion = useRef<Set<number> | null>(null);
+  const onPageCompleteRef = useRef(onPageComplete);
+  onPageCompleteRef.current = onPageComplete;
+  const canAutoAdvance = Boolean(onPageComplete);
+
   useEffect(() => {
-    if (pageIdRef.current === page.id) return;
-    pageIdRef.current = page.id;
+    if (previousPageId.current === page.id) return;
+    previousPageId.current = page.id;
+    scheduledCompletion.current = null;
     setCompletedExercises(new Set());
-    hasAutoAdvancedRef.current = false;
   }, [page.id]);
 
   useEffect(() => {
-    if (
-      !active ||
-      !onPageComplete ||
-      hasAutoAdvancedRef.current ||
-      totalExercises === 0 ||
-      completedExercises.size !== totalExercises
-    )
-      return;
+    if (!active || !canAutoAdvance || totalExercises === 0 || completedExercises.size !== totalExercises) return;
 
     const autoAdvance = page.autoAdvance || { enabled: true, delay: 2000 };
     if (!autoAdvance.enabled) return;
 
+    // Leaving a completed page cancels its navigation; revisiting must not jump away again.
+    if (scheduledCompletion.current === completedExercises) return;
+    scheduledCompletion.current = completedExercises;
     const timer = setTimeout(() => {
-      hasAutoAdvancedRef.current = true;
-      onPageComplete();
+      onPageCompleteRef.current?.();
     }, autoAdvance.delay);
 
     return () => clearTimeout(timer);
-  }, [active, completedExercises, onPageComplete, page.autoAdvance, totalExercises]);
+  }, [active, completedExercises, canAutoAdvance, page.autoAdvance, totalExercises]);
 
   const handleItemComplete = useCallback(
     (itemIndex: number, score: number) => {

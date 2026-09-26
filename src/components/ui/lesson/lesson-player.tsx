@@ -9,6 +9,7 @@ import { RomanSpinner } from '@/src/components/ui/page-loading';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { Button } from '@/src/components/ui/button';
 import PageTemplate from './page-template';
+import { RetainedLessonPages } from '@/src/components/ui/lesson/retained-lesson-pages';
 import useAudio from '@/src/hooks/useAudio';
 import LessonNavigation from '../exercises/lesson-navigation';
 import {
@@ -61,11 +62,6 @@ const safeCount = (value: unknown, fallback = 0) =>
 
 const initialPageIndexFor = (lesson: LessonWithProgress) =>
   Math.max(0, Math.min(lesson.furthestPageIndex ?? lesson.currentPageIndex ?? 0, lesson.pages.length - 1));
-
-const initialVisitedPagesFor = (lesson: LessonWithProgress) => {
-  const pageId = lesson.pages[initialPageIndexFor(lesson)]?.id;
-  return new Set(pageId ? [pageId] : []);
-};
 
 const cancelRetryController = (controller: RetryController) => {
   if (controller.cancelled) return;
@@ -169,7 +165,6 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   lessonIdRef.current = lesson.id;
 
   const [currentPageIndex, setCurrentPageIndex] = useState(() => initialPageIndexFor(lesson));
-  const [visitedPageIds, setVisitedPageIds] = useState<Set<string>>(() => initialVisitedPagesFor(lesson));
   const [furthestPageIndex, setFurthestPageIndex] = useState(() => initialPageIndexFor(lesson));
 
   const currentPage = lesson.pages[currentPageIndex];
@@ -219,7 +214,6 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
     );
     setRequiredExerciseCount(Math.max(safeCount(lesson.requiredExerciseCount), requiredExercises.length));
     setCurrentPageIndex(initialPageIndexFor(lesson));
-    setVisitedPageIds(initialVisitedPagesFor(lesson));
     setFurthestPageIndex(initialPageIndexFor(lesson));
   }, [lesson.id]); // eslint-disable-line react-hooks/exhaustive-deps -- reset local completion only when switching lessons
 
@@ -313,10 +307,9 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
     if (currentPageIndex < totalPages - 1) {
       const newPageIndex = currentPageIndex + 1;
       setCurrentPageIndex(newPageIndex);
-      setVisitedPageIds(current => new Set(current).add(lesson.pages[newPageIndex].id));
       setFurthestPageIndex(current => Math.max(current, newPageIndex));
     }
-  }, [currentPageIndex, lesson.pages, totalPages]);
+  }, [currentPageIndex, totalPages]);
 
   const handlePageComplete = useCallback(() => {
     handleNext();
@@ -326,18 +319,16 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
     if (currentPageIndex > 0) {
       const newPageIndex = currentPageIndex - 1;
       setCurrentPageIndex(newPageIndex);
-      setVisitedPageIds(current => new Set(current).add(lesson.pages[newPageIndex].id));
     }
-  }, [currentPageIndex, lesson.pages]);
+  }, [currentPageIndex]);
 
   const handleGoToPage = useCallback(
     (newPageIndex: number) => {
       if (newPageIndex < 0 || newPageIndex >= totalPages || newPageIndex === currentPageIndex) return;
       setCurrentPageIndex(newPageIndex);
-      setVisitedPageIds(current => new Set(current).add(lesson.pages[newPageIndex].id));
       setFurthestPageIndex(current => Math.max(current, newPageIndex));
     },
-    [currentPageIndex, lesson.pages, totalPages]
+    [currentPageIndex, totalPages]
   );
 
   const handleAudioEnded = useCallback(() => {
@@ -548,7 +539,6 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   }
 
   const hasAudio = Boolean(currentPage.audioPath);
-  const retainVisitedPages = effectiveRuntimeMode === 'practice';
 
   return (
     <div className="lesson-player">
@@ -576,9 +566,12 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
         }>
         <div className="mb-6">
           <div className="lesson-content">
-            {lesson.pages.map((page, pageIndex) =>
-              (retainVisitedPages && visitedPageIds.has(page.id)) || pageIndex === currentPageIndex ? (
-                <div key={`${lesson.id}:${page.id}`} hidden={pageIndex !== currentPageIndex}>
+            {effectiveRuntimeMode === 'practice' ? (
+              <RetainedLessonPages
+                key={`${lesson.id}:${lesson.version ?? 0}`}
+                pages={lesson.pages}
+                currentPageIndex={currentPageIndex}>
+                {(page, pageIndex) => (
                   <PageTemplate
                     page={page}
                     active={pageIndex === currentPageIndex}
@@ -589,11 +582,25 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
                     resolvedExerciseState={resolvedExerciseState}
                     generatedExerciseContext={resolvedGeneratedExerciseContext}
                     onCompletionAccepted={handleCompletionAccepted}
-                    onPageComplete={handlePageComplete}
-                    onDiagrammingAttempt={handleDiagrammingAttempt}
+                    onPageComplete={pageIndex === currentPageIndex ? handlePageComplete : undefined}
+                    onDiagrammingAttempt={pageIndex === currentPageIndex ? handleDiagrammingAttempt : undefined}
                   />
-                </div>
-              ) : null
+                )}
+              </RetainedLessonPages>
+            ) : (
+              <PageTemplate
+                key={currentPage.id}
+                page={currentPage}
+                pageIndex={currentPageIndex}
+                lessonId={lesson.id}
+                runtimeMode={effectiveRuntimeMode}
+                onAnswer={onAnswer}
+                resolvedExerciseState={resolvedExerciseState}
+                generatedExerciseContext={resolvedGeneratedExerciseContext}
+                onCompletionAccepted={handleCompletionAccepted}
+                onPageComplete={handlePageComplete}
+                onDiagrammingAttempt={handleDiagrammingAttempt}
+              />
             )}
           </div>
         </div>
