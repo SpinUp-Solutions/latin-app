@@ -8,8 +8,8 @@ type HeadingElement = 'h1' | 'h2' | 'h3' | 'div';
 interface RomanPlayerShellProps {
   icon: PlayerIcon;
   label: string;
-  currentPage: number;
-  totalPages: number;
+  currentPage?: number;
+  totalPages?: number;
   title: ReactNode;
   description?: ReactNode;
   headingAs?: HeadingElement;
@@ -54,9 +54,11 @@ export function RomanPlayerShell({
                 <Icon className="h-3 w-3" aria-hidden="true" />
                 {label}
               </span>
-              <span className="text-xs tabular-nums text-roman-stone">
-                Page {currentPage} of {totalPages}
-              </span>
+              {currentPage !== undefined && totalPages !== undefined && (
+                <span className="text-xs tabular-nums text-roman-stone">
+                  Page {currentPage} of {totalPages}
+                </span>
+              )}
             </div>
             <Heading className="min-w-0 overflow-hidden font-serif text-2xl leading-tight tracking-wide text-roman-red">
               <span className="block truncate [&_*]:inline [&_*]:whitespace-nowrap">{title}</span>

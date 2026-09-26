@@ -17,15 +17,19 @@ export function dashboardCard(page: Page, title: string) {
     .filter({ has: page.getByRole('heading', { name: title, exact: true }) });
 }
 
-export async function recordFillAnswer(page: Page, answer: string) {
+export async function recordFillAnswerAndReview(page: Page, answer: string) {
   await page.getByPlaceholder(/Type your answer/).fill(answer);
   await page.getByRole('button', { name: 'Check' }).click();
-  await expect(page.getByText('Answer recorded.', { exact: true })).toBeVisible();
-  await expect(page.getByRole('status')).toContainText('Answer saved.');
+  await expect(page.getByRole('status')).toContainText('Answers saved.');
+  await expect(page.getByRole('heading', { name: 'Review section', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Review section', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Review section', exact: true })).toBeVisible();
 }
 
 export async function submitCurrentTest(page: Page) {
-  await page.getByRole('button', { name: 'Review answers' }).click();
-  await expect(page.getByRole('heading', { name: 'Review before submitting' })).toBeVisible();
-  await page.getByRole('button', { name: 'Submit Test' }).click();
+  if (!(await page.getByRole('heading', { name: 'Review section', exact: true }).isVisible()))
+    await page.getByRole('button', { name: 'Review section' }).click();
+  const omissions = page.getByRole('checkbox', { name: /I understand this section/ });
+  if (await omissions.isVisible()) await omissions.check();
+  await page.getByRole('button', { name: 'Confirm section and submit' }).click();
 }

@@ -1,12 +1,15 @@
+import {
+  listVocabularyPoolsByWordCount,
+  POOL_SUMMARY_FIELDS,
+  summarizeVocabularyPool,
+} from '@/src/lib/vocabulary-pools/list.server';
+import { VocabularyPoolStateError } from '@/src/lib/vocabulary-pools/pool-state.server';
+import { VOCABULARY_POOL_COLLECTION } from '@/shared/constants/firestore';
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { Query } from 'firebase-admin/firestore';
-import type { VocabularyPool, CreatePoolRequest } from '@/src/types/vocabulary-pool';
-import {
-  buildPoolSearchTokens,
-  normalizePoolSearchText,
-  toVocabularyPoolSummary,
-} from '@/src/utils/vocabularyPoolSummary';
+import type { VocabularyPoolSummary, CreatePoolRequest } from '@/src/types/vocabulary-pool';
+import { buildPoolSearchTokens, normalizePoolSearchText } from '@/src/utils/vocabularyPoolSummary';
 import { AdminAccessError, verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import {
   prepareVocabularyPoolWordMembership,
@@ -16,33 +19,12 @@ import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lo
 
 export const dynamic = 'force-dynamic';
 
-const POOL_SUMMARY_FIELDS = ['name', 'description', 'metadata'];
-
-const toDateValue = (value: unknown) =>
-  value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function'
-    ? value.toDate()
-    : value;
-
-const serializePoolSummary = (doc: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot) => {
-  const data = doc.data() as Partial<VocabularyPool>;
-
-  return toVocabularyPoolSummary(doc.id, {
-    ...data,
-    metadata: data.metadata
-      ? {
-          ...data.metadata,
-          createdAt: toDateValue(data.metadata.createdAt),
-          updatedAt: toDateValue(data.metadata.updatedAt),
-        }
-      : undefined,
-  });
-};
-
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     await verifyAdminAccess(request);
     const { searchParams } = new URL(request.url);
-    const limit = parseInt(searchParams.get('limit') || '20');
+    const limit = Math.max(1, Math.min(100, parseInt(searchParams.get('limit') || '20') || 20));
+    const summarize = (doc: FirebaseFirestore.DocumentSnapshot) => summarizeVocabularyPool(adminDb, doc);
     const lastPoolId = searchParams.get('lastPoolId');
     const search = searchParams.get('search');
     const difficulty = searchParams.get('difficulty');
@@ -62,7 +44,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     if (search) {
       const searchToken = normalizePoolSearchText(search).slice(0, 40);
       let query: Query = adminDb
-        .collection('vocabulary_pools')
+        .collection(VOCABULARY_POOL_COLLECTION)
         .where('searchTokens', 'array-contains', searchToken)
         .orderBy('name')
         .select(...POOL_SUMMARY_FIELDS);
@@ -74,14 +56,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         query = query.where('metadata.difficulty', '==', difficulty);
       }
       if (lastPoolId) {
-        const lastDoc = await adminDb.collection('vocabulary_pools').doc(lastPoolId).get();
+        const lastDoc = await adminDb.collection(VOCABULARY_POOL_COLLECTION).doc(lastPoolId).get();
         if (lastDoc.exists) {
           query = query.startAfter(lastDoc);
         }
       }
 
       const snapshot = await query.limit(limit).get();
-      const pools = snapshot.docs.map(serializePoolSummary);
+      const pools = (await Promise.all(snapshot.docs.map(summarize))).filter(Boolean) as VocabularyPoolSummary[];
       const lastDoc = snapshot.docs[snapshot.docs.length - 1];
 
       return NextResponse.json({
@@ -94,8 +76,24 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       });
     }
 
+    // Effective counts cannot be ordered by the persisted direct-word count.
+    if (sortBy === 'wordCount') {
+      const data = await listVocabularyPoolsByWordCount(adminDb, {
+        limit,
+        sortOrder,
+        lastPoolId,
+        difficulty,
+        isActive,
+        tags,
+      });
+      return NextResponse.json({
+        success: true,
+        data,
+      });
+    }
+
     const useFirestoreFilters = sortBy === 'createdAt';
-    let query: Query = adminDb.collection('vocabulary_pools').orderBy(firestoreSortField, sortOrder);
+    let query: Query = adminDb.collection(VOCABULARY_POOL_COLLECTION).orderBy(firestoreSortField, sortOrder);
 
     if (useFirestoreFilters) {
       if (difficulty) {
@@ -110,7 +108,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
 
     if (lastPoolId) {
-      const lastDoc = await adminDb.collection('vocabulary_pools').doc(lastPoolId).get();
+      const lastDoc = await adminDb.collection(VOCABULARY_POOL_COLLECTION).doc(lastPoolId).get();
       if (lastDoc.exists) {
         query = query.startAfter(lastDoc);
       }
@@ -120,7 +118,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     query = query.limit(fetchLimit).select(...POOL_SUMMARY_FIELDS);
     const snapshot = await query.get();
 
-    let pools = snapshot.docs.map(serializePoolSummary);
+    let pools = (await Promise.all(snapshot.docs.map(summarize))).filter(Boolean) as VocabularyPoolSummary[];
 
     if (!useFirestoreFilters) {
       if (difficulty) {
@@ -134,9 +132,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }
     }
 
-    const hasMore = useFirestoreFilters ? snapshot.docs.length === limit : pools.length > limit;
+    const visibleOverflow = pools.length > limit;
+    const hasMore = useFirestoreFilters
+      ? snapshot.docs.length === limit
+      : snapshot.docs.length === fetchLimit || visibleOverflow;
     pools = pools.slice(0, limit);
-    const lastDoc = snapshot.docs.find(d => d.id === pools[pools.length - 1]?.id);
+    // If filtering removed records from a scanned page, advance from the last
+    // scanned document. Once enough visible records were returned, keep the
+    // cursor at the last visible record so no filtered records are skipped.
+    const lastDoc = visibleOverflow
+      ? snapshot.docs.find(d => d.id === pools[pools.length - 1]?.id)
+      : snapshot.docs[snapshot.docs.length - 1];
 
     return NextResponse.json({
       success: true,
@@ -147,6 +153,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       },
     });
   } catch (error) {
+    if (error instanceof VocabularyPoolStateError)
+      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
     if (error instanceof AdminAccessError) {
       return NextResponse.json({ success: false, error: error.message }, { status: error.status });
     }
@@ -217,7 +225,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       tagsCount: poolData.metadata.tags.length,
     });
 
-    const docRef = adminDb.collection('vocabulary_pools').doc();
+    const docRef = adminDb.collection(VOCABULARY_POOL_COLLECTION).doc();
     await runVocabularyContentMutation(adminDb, async transaction => {
       const applyWordReferenceRevisions = await prepareVocabularyPoolWordMembership(
         transaction,
@@ -241,6 +249,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
     });
   } catch (error) {
+    if (error instanceof VocabularyPoolStateError)
+      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
     if (error instanceof AdminAccessError) {
       return NextResponse.json({ success: false, error: error.message }, { status: error.status });
     }

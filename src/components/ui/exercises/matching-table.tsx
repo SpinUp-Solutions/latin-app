@@ -6,12 +6,9 @@ import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { FeedbackDisplay } from '../feedback';
 import FieldSelect from '../core/field-select';
-import {
-  getSelectableMatchingAnswers,
-  validateMatchingExercise,
-} from '@/src/utils/exercises/matchingExercise';
+import { getSelectableMatchingAnswers, validateMatchingExercise } from '@/src/utils/exercises/matchingExercise';
 import { ExerciseProgress } from './exercise-progress';
-import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
+import { ExerciseIntro } from './exercise-intro';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import type {
   ExerciseAnswer,
@@ -316,26 +313,12 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-start">
-        {exercise.title && (
-          <h3 className="text-xl font-serif text-roman-red mb-4">
-            <SimpleRichDisplay content={exercise.title} />
-          </h3>
-        )}
-        {exercise.audioPath && (
-          <AudioPlayButton
-            audioPath={exercise.audioPath}
-            variant="default"
-            size="sm"
-            className="ml-2 rounded-full border-roman-terracotta/20 hover:border-roman-terracotta hover:bg-roman-parchment"
-          />
-        )}
-      </div>
-      {exercise.instructions && exercise.instructions.replace(/<[^>]*>/g, '').trim() !== '' && (
-        <div className="p-6 bg-roman-parchment rounded-lg mb-4">
-          <SimpleRichDisplay content={exercise.instructions} className="whitespace-pre-wrap break-words" />
-        </div>
-      )}
+      <ExerciseIntro
+        variant="passage"
+        title={exercise.title}
+        audioPath={exercise.audioPath}
+        instructions={exercise.instructions}
+      />
 
       {/* Round indicator */}
       {totalRounds > 1 && (
@@ -421,9 +404,7 @@ export const MatchingTable: React.FC<MatchingTableProps> = ({
             level={level}
             hint={exercise.data.hint}
             showExplanation={showExplanation}
-            correctAnswer={
-              selectedCorrectAnswer ? <SimpleRichDisplay content={selectedCorrectAnswer} /> : undefined
-            }
+            correctAnswer={selectedCorrectAnswer ? <SimpleRichDisplay content={selectedCorrectAnswer} /> : undefined}
             onContinue={isAwaitingConfirmation ? confirmAdvance : undefined}
             onStartOver={resetRequired ? handleExerciseReset : undefined}
           />

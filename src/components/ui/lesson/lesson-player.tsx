@@ -5,10 +5,11 @@ import * as Sentry from '@sentry/nextjs';
 import { LessonWithProgress } from '@/src/types/lesson';
 import { BookOpen, Headphones, CheckCircle } from 'lucide-react';
 import { RomanPlayerShell } from '@/src/components/ui/core/roman-player-shell';
+import { RomanSpinner } from '@/src/components/ui/page-loading';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { Button } from '@/src/components/ui/button';
 import PageTemplate from './page-template';
-import { RetainedLessonPages } from './retained-lesson-pages';
+import { RetainedLessonPages } from '@/src/components/ui/lesson/retained-lesson-pages';
 import useAudio from '@/src/hooks/useAudio';
 import LessonNavigation from '../exercises/lesson-navigation';
 import {
@@ -26,7 +27,11 @@ import { stripHtmlTags } from '@/src/utils/exercises';
 import type { ExerciseAnswerEvent, RuntimeMode } from '@/src/types/runtime-mode';
 import type { GeneratedExerciseRenderContext, ResolvedGeneratedExerciseState } from './content-renderer';
 import { getApiErrorMessage, isRetryableApiError } from '@/src/store/api/baseQuery';
-import { reportUnexpectedError, reportWatchedEvent } from '@/src/lib/report-unexpected-error';
+import {
+  isClientFetchOrParseFailure,
+  reportUnexpectedError,
+  reportWatchedEvent,
+} from '@/src/lib/report-unexpected-error';
 import ExerciseCompletionRing from './exercise-completion-ring';
 
 const RETRY_DELAYS_MS = [1000, 3000];
@@ -54,6 +59,9 @@ const createRetryController = (): RetryController => ({ cancelled: false, waiter
 
 const safeCount = (value: unknown, fallback = 0) =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.trunc(value) : fallback;
+
+const initialPageIndexFor = (lesson: LessonWithProgress) =>
+  Math.max(0, Math.min(lesson.furthestPageIndex ?? lesson.currentPageIndex ?? 0, lesson.pages.length - 1));
 
 const cancelRetryController = (controller: RetryController) => {
   if (controller.cancelled) return;
@@ -83,10 +91,7 @@ const waitForRetry = (controller: RetryController, delayMs: number): Promise<boo
     controller.waiters.add(cancel);
   });
 
-async function runWithBoundedRetries<T>(
-  request: () => Promise<T>,
-  controller: RetryController
-): Promise<T | null> {
+async function runWithBoundedRetries<T>(request: () => Promise<T>, controller: RetryController): Promise<T | null> {
   for (let attempt = 0; ; attempt += 1) {
     if (controller.cancelled) return null;
     try {
@@ -159,12 +164,8 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   const lessonIdRef = useRef(lesson.id);
   lessonIdRef.current = lesson.id;
 
-  const [currentPageIndex, setCurrentPageIndex] = useState(
-    Math.max(0, Math.min(lesson.furthestPageIndex ?? lesson.currentPageIndex ?? 0, lesson.pages.length - 1))
-  );
-  const [furthestPageIndex, setFurthestPageIndex] = useState(
-    Math.max(0, Math.min(lesson.furthestPageIndex ?? lesson.currentPageIndex ?? 0, lesson.pages.length - 1))
-  );
+  const [currentPageIndex, setCurrentPageIndex] = useState(() => initialPageIndexFor(lesson));
+  const [furthestPageIndex, setFurthestPageIndex] = useState(() => initialPageIndexFor(lesson));
 
   const currentPage = lesson.pages[currentPageIndex];
   const totalPages = lesson.pages.length;
@@ -212,12 +213,8 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
       )
     );
     setRequiredExerciseCount(Math.max(safeCount(lesson.requiredExerciseCount), requiredExercises.length));
-    setCurrentPageIndex(
-      Math.max(0, Math.min(lesson.furthestPageIndex ?? lesson.currentPageIndex ?? 0, lesson.pages.length - 1))
-    );
-    setFurthestPageIndex(
-      Math.max(0, Math.min(lesson.furthestPageIndex ?? lesson.currentPageIndex ?? 0, lesson.pages.length - 1))
-    );
+    setCurrentPageIndex(initialPageIndexFor(lesson));
+    setFurthestPageIndex(initialPageIndexFor(lesson));
   }, [lesson.id]); // eslint-disable-line react-hooks/exhaustive-deps -- reset local completion only when switching lessons
 
   useEffect(() => {
@@ -286,6 +283,8 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
         reportUnexpectedError(error, {
           tags: { surface: 'page_progress', lessonId: requestLessonId, pageId },
           includeExpected: true,
+          ...(isClientFetchOrParseFailure(error) ? { level: 'warning' as const } : {}),
+          extra: { online: navigator.onLine, visibilityState: document.visibilityState },
         });
         toast.error(getApiErrorMessage(error, 'Unable to save your page progress.'));
       }
@@ -310,7 +309,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
       setCurrentPageIndex(newPageIndex);
       setFurthestPageIndex(current => Math.max(current, newPageIndex));
     }
-  }, [currentPageIndex, totalPages]);
+  }, [currentPageIndex, lesson.pages, totalPages]);
 
   const handlePageComplete = useCallback(() => {
     handleNext();
@@ -318,9 +317,10 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
 
   const handlePrevious = useCallback(() => {
     if (currentPageIndex > 0) {
-      setCurrentPageIndex(currentPageIndex - 1);
+      const newPageIndex = currentPageIndex - 1;
+      setCurrentPageIndex(newPageIndex);
     }
-  }, [currentPageIndex]);
+  }, [currentPageIndex, lesson.pages]);
 
   const handleGoToPage = useCallback(
     (newPageIndex: number) => {
@@ -328,7 +328,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
       setCurrentPageIndex(newPageIndex);
       setFurthestPageIndex(current => Math.max(current, newPageIndex));
     },
-    [currentPageIndex, totalPages]
+    [currentPageIndex, lesson.pages, totalPages]
   );
 
   const handleAudioEnded = useCallback(() => {
@@ -533,7 +533,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   if (!lesson || !currentPage) {
     return (
       <div className="min-h-[300px] flex items-center justify-center bg-roman-marble">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>
+        <RomanSpinner />
       </div>
     );
   }
@@ -554,10 +554,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
         contentClassName={navigationPlacement === 'fixed' ? 'pb-28 sm:pb-24' : undefined}
         headerAside={
           shouldShowExerciseRing ? (
-            <ExerciseCompletionRing
-              completedCount={completedExerciseCount}
-              requiredCount={requiredExerciseCount}
-            />
+            <ExerciseCompletionRing completedCount={completedExerciseCount} requiredCount={requiredExerciseCount} />
           ) : undefined
         }
         iconAdornment={
@@ -577,6 +574,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
                 {(page, pageIndex) => (
                   <PageTemplate
                     page={page}
+                    active={pageIndex === currentPageIndex}
                     pageIndex={pageIndex}
                     lessonId={lesson.id}
                     runtimeMode={effectiveRuntimeMode}

@@ -11,7 +11,62 @@ import PracticeSidebar from '@/src/components/ui/lesson/practice-sidebar';
 import { FeedbackBanner } from '@/src/components/ui/core/feedback-banner';
 import { useAuth } from '@/src/hooks/useAuth';
 import { BookOpen, Pencil } from 'lucide-react';
+import { PageLoading } from '@/src/components/ui/page-loading';
+import { ConnectionRetryBanner } from '@/src/components/ui/core/connection-retry-banner';
 import { shouldReportClientHardFail, reportUnexpectedError } from '@/src/lib/report-unexpected-error';
+import { isRetryableApiError } from '@/src/store/api/baseQuery';
+
+function LessonUnavailableScreen({
+  title,
+  message,
+  onReturn,
+  retry,
+}: {
+  title: string;
+  message: string;
+  onReturn: () => void;
+  retry?: { fetching: boolean; onRetry: () => void };
+}) {
+  return (
+    <div className="min-h-screen bg-roman-marble">
+      <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between">
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-3 rounded hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-roman-red">
+          <Image
+            src="/assets/logos/wakeforest.png"
+            alt="Wake Forest University"
+            width={120}
+            height={75}
+            className="w-14 h-auto"
+            priority
+          />
+          <h1 className="text-xl font-serif tracking-wide">Latin</h1>
+        </Link>
+      </header>
+      <main className="container mx-auto py-8 px-4">
+        <div className="max-w-3xl mx-auto">
+          <div className="p-8 bg-white rounded-lg border border-border text-center">
+            <h2 className="text-2xl font-serif text-gray-800 mb-4">{title}</h2>
+            <p className="text-roman-stone">{message}</p>
+            {retry && (
+              <button
+                type="button"
+                onClick={retry.onRetry}
+                disabled={retry.fetching}
+                className="mt-4 mr-3 px-4 py-2 bg-roman-red text-white rounded hover:bg-roman-red/90 disabled:opacity-50">
+                {retry.fetching ? 'Trying again…' : 'Try again'}
+              </button>
+            )}
+            <button onClick={onReturn} className="mt-4 px-4 py-2 bg-roman-red text-white rounded hover:bg-roman-red/90">
+              Return to Dashboard
+            </button>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
 
 const SIDEBAR_COLLAPSE_KEY = 'lesson-sidebar-collapse';
 
@@ -27,6 +82,8 @@ export default function DynamicLessonPage() {
   const {
     currentData: currentLesson,
     isLoading: lessonsLoading,
+    isFetching,
+    refetch,
     error,
   } = useGetStudentLessonQuery(
     { lessonId, userId: user?.uid ?? '' },
@@ -77,100 +134,56 @@ export default function DynamicLessonPage() {
         error.data.code === 'LESSON_LOCKED'
     );
 
+  const hasCurrentLesson = currentLesson?.id === lessonId;
+  const [allowCachedLesson, setAllowCachedLesson] = useState(true);
+  const isRefreshFailure = allowCachedLesson && hasCurrentLesson && isRetryableApiError(error);
+
   useEffect(() => {
-    if (!error || isLockedError) return;
+    if (isFetching) return;
+    // Once the server rejects cached content, a later network failure must not
+    // restore it. Only a successful load makes that content usable again.
+    if (error && !isRetryableApiError(error)) setAllowCachedLesson(false);
+    else if (!error && hasCurrentLesson) setAllowCachedLesson(true);
+  }, [error, hasCurrentLesson, isFetching]);
+
+  useEffect(() => {
+    if (!error || isLockedError || isFetching) return;
     if (!shouldReportClientHardFail(error)) return;
     reportUnexpectedError(error, {
-      tags: { surface: 'lesson_load', lessonId },
+      tags: { surface: isRefreshFailure ? 'lesson_refresh' : 'lesson_load', lessonId },
+      level: isRefreshFailure ? 'warning' : 'error',
+      extra: { hasCurrentLesson, online: navigator.onLine, visibilityState: document.visibilityState },
     });
-  }, [error, isLockedError, lessonId]);
+  }, [error, isLockedError, isFetching, isRefreshFailure, hasCurrentLesson, lessonId]);
 
-  const isRequestedLessonLoading = lessonsLoading || Boolean(currentLesson && currentLesson.id !== lessonId);
+  const isRequestedLessonLoading =
+    lessonsLoading || (!hasCurrentLesson && isFetching) || Boolean(currentLesson && !hasCurrentLesson && !error);
 
   if (authLoading || !user || isRequestedLessonLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-roman-marble">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red"></div>
-      </div>
-    );
+    return <PageLoading label="Loading lesson" />;
   }
 
-  if (error) {
+  if (error && !isRefreshFailure) {
     const errorMessage = isLockedError
       ? 'Complete the previous lesson to unlock this one.'
-      : 'The requested lesson could not be loaded.';
+      : 'This lesson isn’t available right now.';
     return (
-      <div className="min-h-screen bg-roman-marble">
-        <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between">
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-3 rounded hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-roman-red">
-            <Image
-              src="/assets/logos/wakeforest.png"
-              alt="Wake Forest University"
-              width={120}
-              height={75}
-              className="w-14 h-auto"
-              priority
-            />
-            <h1 className="text-xl font-serif tracking-wide">Latin</h1>
-          </Link>
-        </header>
-        <main className="container mx-auto py-8 px-4">
-          <div className="max-w-3xl mx-auto">
-            <div className="p-8 bg-white rounded-lg border border-border text-center">
-              <h2 className="text-2xl font-serif text-gray-800 mb-4">
-                {isLockedError ? 'Lesson Locked' : 'Failed to Load Lesson'}
-              </h2>
-              <p className="text-roman-stone">{errorMessage}</p>
-              <button
-                onClick={() => router.push('/dashboard')}
-                className="mt-4 px-4 py-2 bg-roman-red text-white rounded hover:bg-roman-red/90">
-                Return to Dashboard
-              </button>
-            </div>
-          </div>
-        </main>
-      </div>
+      <LessonUnavailableScreen
+        title={isLockedError ? 'Lesson Locked' : 'We couldn’t open this lesson'}
+        message={errorMessage}
+        onReturn={() => router.push('/dashboard')}
+        retry={isRetryableApiError(error) ? { fetching: isFetching, onRetry: () => void refetch() } : undefined}
+      />
     );
   }
 
   if (!currentLesson) {
     return (
-      <div className="min-h-screen bg-roman-marble">
-        <header className="bg-white border-b border-border px-4 py-3 flex items-center justify-between">
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-3 rounded hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-roman-red">
-            <Image
-              src="/assets/logos/wakeforest.png"
-              alt="Wake Forest University"
-              width={120}
-              height={75}
-              className="w-14 h-auto"
-              priority
-            />
-            <h1 className="text-xl font-serif tracking-wide">Latin</h1>
-          </Link>
-        </header>
-        <main className="container mx-auto py-8 px-4">
-          <div className="max-w-3xl mx-auto">
-            <div className="p-8 bg-white rounded-lg border border-border text-center">
-              <h2 className="text-2xl font-serif text-gray-800 mb-4">
-                Lesson Not Found
-              </h2>
-              <p className="text-roman-stone">
-                The requested lesson could not be found.
-              </p>
-              <button
-                onClick={() => router.push('/dashboard')}
-                className="mt-4 px-4 py-2 bg-roman-red text-white rounded hover:bg-roman-red/90">
-                Return to Dashboard
-              </button>
-            </div>
-          </div>
-        </main>
-      </div>
+      <LessonUnavailableScreen
+        title="Lesson Not Found"
+        message="We couldn’t find this lesson."
+        onReturn={() => router.push('/dashboard')}
+      />
     );
   }
 
@@ -211,12 +224,17 @@ export default function DynamicLessonPage() {
 
       <FeedbackBanner />
 
-      <div className="flex flex-1 overflow-hidden">
-        <LessonSidebar
-          currentLessonId={lessonId}
-          isCollapsed={collapsed.left}
-          onToggleCollapse={toggleLeft}
+      {isRefreshFailure && (
+        <ConnectionRetryBanner
+          className="shrink-0"
+          retrying={isFetching}
+          onRetry={() => void refetch()}
+          message="We’re having trouble connecting. Your place and answers are still here, but your progress may not be saved. Please try again."
         />
+      )}
+
+      <div className="flex flex-1 overflow-hidden">
+        <LessonSidebar currentLessonId={lessonId} isCollapsed={collapsed.left} onToggleCollapse={toggleLeft} />
         <main className="min-w-0 flex-1 overflow-y-auto px-3 pb-6 pt-4 sm:px-6 sm:pt-6">
           <div className="max-w-3xl mx-auto">
             <LessonPlayer key={currentLesson.id} lesson={currentLesson} />

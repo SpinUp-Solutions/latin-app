@@ -507,12 +507,6 @@ export const {
 export const selectHasDraft = (state: { lessonEditor: LessonEditorState }, lessonId: string) =>
   Boolean(state.lessonEditor.drafts[getPageDocumentDraftKey('lesson', lessonId)]);
 
-export const selectDraftLastModified = (state: { lessonEditor: LessonEditorState }, lessonId: string) =>
-  state.lessonEditor.drafts[getPageDocumentDraftKey('lesson', lessonId)]?.lastModified;
-
-export const selectDraft = (state: { lessonEditor: LessonEditorState }, lessonId: string) =>
-  state.lessonEditor.drafts[getPageDocumentDraftKey('lesson', lessonId)];
-
 export const selectPageDocumentDraft = (
   state: { lessonEditor: LessonEditorState },
   editorKind: PageDocumentDraft['editorKind'],

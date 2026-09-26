@@ -1,3 +1,4 @@
+import { sectionStateSchema, sectionWriteSchema } from '@/shared/tests/sections';
 import { z } from 'zod';
 import { isExerciseType, isKnownContentType, isTestEligibleExerciseType } from '@/src/lib/content/registry';
 import { firestoreDocumentIdSchema, pageSchema, passingPercentageSchema } from '@/src/lib/learning-units/schemas';
@@ -206,8 +207,6 @@ const testVersionDraftDocumentShapeSchema = z
   })
   .strict();
 
-export const testVersionDraftSummaryDocumentSchema = testVersionDraftDocumentShapeSchema.omit({ pages: true });
-
 export const testVersionDraftDocumentSchema = testVersionDraftDocumentShapeSchema.superRefine((value, context) => {
   addFormIdentificationConfigurationIssues(value.pages, context);
   const derived = getTestVersionSummaryFields(value.pages);
@@ -383,6 +382,8 @@ const inProgressTestAttemptDocumentSchema = z
   .object({
     ...testAttemptBaseShape,
     status: z.literal('in-progress'),
+    flowVersion: z.literal(1).optional(),
+    sections: z.record(z.string(), sectionStateSchema).optional(),
     answers: z.record(z.string(), z.unknown()),
     translationGrades: z.record(z.string(), z.record(z.string(), testTranslationItemGradeSchema)).default({}),
     translationGradeReservations: z
@@ -395,6 +396,46 @@ const inProgressTestAttemptDocumentSchema = z
   })
   .strict()
   .superRefine((value, context) => {
+    const pages = value.deliveryState.pages;
+    if (value.flowVersion === 1) {
+      const sections = value.sections;
+      let unlocked = false;
+      let invalid =
+        !sections ||
+        Object.keys(sections).length !== pages.length ||
+        new Set(pages.map(p => p.id)).size !== pages.length;
+      for (const page of pages) {
+        const section = sections?.[page.id];
+        if (!section) {
+          invalid = true;
+          continue;
+        }
+        if (section.phase === 'confirmed') {
+          if (unlocked || !section.confirmedAt || section.confirmation) invalid = true;
+        } else {
+          if (section.confirmedAt || (unlocked && section.phase !== 'answering')) invalid = true;
+          if (
+            unlocked &&
+            (section.revision !== 0 ||
+              section.saveMutations ||
+              page.items.some(item => value.answers[item.id] !== undefined))
+          )
+            invalid = true;
+          unlocked = true;
+        }
+        const receipts = Object.values(section.saveMutations ?? {});
+        if (
+          receipts.some(receipt => receipt.expectedRevision >= section.revision) ||
+          new Set(receipts.map(receipt => receipt.expectedRevision)).size !== receipts.length
+        )
+          invalid = true;
+        if ((section.phase === 'confirming') !== Boolean(section.confirmation)) invalid = true;
+      }
+      if (invalid || !unlocked)
+        context.addIssue({ code: 'custom', message: 'Invalid section workflow state', path: ['sections'] });
+    } else if (value.sections) {
+      context.addIssue({ code: 'custom', message: 'Legacy attempts cannot contain section state', path: ['sections'] });
+    }
     if (value.versionId !== value.deliveryState.versionId) {
       context.addIssue({
         code: 'custom',
@@ -408,6 +449,8 @@ export const submittedTestAttemptDocumentSchema = z
   .object({
     ...testAttemptBaseShape,
     status: z.literal('submitted'),
+    flowVersion: z.literal(1).optional(),
+    confirmedSections: z.record(z.string(), isoTimestampSchema).optional(),
     exerciseResults: z.record(
       z.string(),
       z
@@ -437,6 +480,9 @@ export const submittedTestAttemptDocumentSchema = z
         message: 'Attempt versionId must match deliveryState.versionId',
         path: ['deliveryState', 'versionId'],
       });
+    }
+    if (value.flowVersion === 1 ? !Object.keys(value.confirmedSections ?? {}).length : value.confirmedSections) {
+      context.addIssue({ code: 'custom', message: 'Invalid submitted section state', path: ['confirmedSections'] });
     }
   });
 
@@ -496,6 +542,7 @@ export const startTestAttemptInputSchema = z.object({ origin: testAttemptOriginS
 
 export const saveTestAttemptAnswersInputSchema = z
   .object({
+    section: sectionWriteSchema.optional(),
     answers: z.record(
       z.string().trim().min(1).max(1500),
       z.unknown().refine(value => value !== undefined, 'answer is required; use null to clear it')

@@ -3,10 +3,12 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Button } from '@/src/components/ui/button';
 import { Badge } from '@/src/components/ui/badge';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
+import { RomanSpinner } from '@/src/components/ui/page-loading';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { Skeleton } from '@/src/components/ui/skeleton';
 import { Edit, Trash2, Copy, Library, Calendar, Hash, Loader2 } from 'lucide-react';
 import { useInfiniteScroll } from '@/src/hooks/useInfiniteScroll';
+import { VocabularyInfiniteScrollSentinel } from '@/src/components/ui/admin/vocabulary/VocabularyResultsState';
 import { cn } from '@/src/lib/utils';
 import type { VocabularyPoolSummary, VocabularyPoolUsage } from '@/src/types/vocabulary-pool';
 
@@ -27,6 +29,8 @@ interface PoolListProps {
   onDuplicate?: (pool: VocabularyPoolSummary) => void;
   duplicatingPoolIds?: Set<string>;
   onDelete: (poolId: string, poolName: string) => void;
+  deletingPoolIds?: Set<string>;
+  deletionErrors?: Record<string, string>;
   usagesByPoolId: Record<string, VocabularyPoolUsage[]>;
   usagesLoading?: boolean;
 }
@@ -103,13 +107,17 @@ export const PoolList: React.FC<PoolListProps> = ({
   onDuplicate,
   duplicatingPoolIds,
   onDelete,
+  deletingPoolIds,
+  deletionErrors,
   usagesByPoolId,
   usagesLoading = false,
 }) => {
   const reduceMotion = useReducedMotion();
   const revealTransition = assignmentTransition(reduceMotion);
   const [expandedPoolIds, setExpandedPoolIds] = useState<Set<string>>(() => new Set());
-  const uniquePools = pools.filter((pool, index, list) => list.findIndex(candidate => candidate.id === pool.id) === index);
+  const uniquePools = pools.filter(
+    (pool, index, list) => list.findIndex(candidate => candidate.id === pool.id) === index
+  );
   const sentinelRef = useInfiniteScroll({
     onLoadMore,
     hasMore,
@@ -119,7 +127,7 @@ export const PoolList: React.FC<PoolListProps> = ({
   if ((loading || fetching) && pools.length === 0) {
     return (
       <div className="text-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red mx-auto mb-4"></div>
+        <RomanSpinner className="mx-auto mb-4" />
         <p className="text-gray-500">Loading vocabulary pools...</p>
       </div>
     );
@@ -144,6 +152,8 @@ export const PoolList: React.FC<PoolListProps> = ({
         const usages = usagesByPoolId[pool.id] ?? [];
         const assigned = usages.length > 0;
         const expanded = expandedPoolIds.has(pool.id);
+        const isDeleting = deletingPoolIds?.has(pool.id) ?? false;
+        const deletionError = deletionErrors?.[pool.id];
         const isDuplicating = duplicatingPoolIds?.has(pool.id) ?? false;
         return (
           <RomanCard key={pool.id} className="hover:shadow-lg transition-shadow">
@@ -268,27 +278,39 @@ export const PoolList: React.FC<PoolListProps> = ({
                     variant="ghost"
                     onClick={() => onDelete(pool.id, pool.name)}
                     title="Delete pool"
+                    disabled={isDeleting}
+                    aria-busy={isDeleting}
+                    aria-describedby={deletionError ? `pool-deletion-error-${pool.id}` : undefined}
                     aria-label={`Delete ${pool.name}`}
                     className="h-9 w-9 shrink-0 border border-border bg-white p-0 font-sans text-roman-stone hover:bg-primary/10 hover:text-primary">
-                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    {isDeleting ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    )}
                   </Button>
                 </div>
               </div>
+              {deletionError && (
+                <div
+                  id={`pool-deletion-error-${pool.id}`}
+                  role="alert"
+                  className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                  <p className="font-medium">Pool was not deleted</p>
+                  <p>{deletionError}</p>
+                </div>
+              )}
             </RomanCardContent>
           </RomanCard>
         );
       })}
 
-      {(hasMore || loadingMore) && (
-        <div ref={sentinelRef} className="flex justify-center py-6">
-          {loadingMore && (
-            <div className="flex items-center gap-2 text-gray-600">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="text-sm">Loading more pools...</span>
-            </div>
-          )}
-        </div>
-      )}
+      <VocabularyInfiniteScrollSentinel
+        sentinelRef={sentinelRef}
+        loadingMore={loadingMore}
+        hasMore={hasMore}
+        label="Loading more pools..."
+      />
     </div>
   );
 };

@@ -204,6 +204,27 @@ describe('translation grading runner', () => {
     });
   });
 
+  it('encodes a literal-first test rubric that still awards full credit for standard transfers', () => {
+    const testTask = getTranslationGradingTask('test');
+    const lessonTask = getTranslationGradingTask('lesson');
+
+    expect(testTask.promptVersion).toBe('translation-grading-test-v2');
+    expect(lessonTask.promptVersion).toBe('translation-grading-lesson-v3');
+    expect(lessonTask.systemPrompt).not.toContain('Deduct points only for actual mistakes in vocabulary and morphology');
+
+    expect(testTask.systemPrompt).toContain('intermediate student');
+    expect(testTask.systemPrompt).toContain('Every word must be accounted for accurately.');
+    expect(testTask.systemPrompt).toContain('indirect command');
+    expect(testTask.systemPrompt).toContain('English infinitive');
+    expect(testTask.systemPrompt).toContain('hostes');
+    expect(testTask.systemPrompt).toContain('gerunds as English verbal nouns');
+    expect(testTask.systemPrompt).toContain(
+      'Deduct points only for actual mistakes in vocabulary and morphology, dropped words, or where a syntactic transfer is explicitly incorrect.'
+    );
+    expect(testTask.systemPrompt).toContain('do not provide a full suggested translation');
+    expect(testTask.systemPrompt).toContain('Return a score from 0 through 10');
+  });
+
   it.each([
     ['incomplete', 'response-incomplete', 'Response was incomplete'],
     ['malformed JSON', 'response-malformed-json', 'not-json'],

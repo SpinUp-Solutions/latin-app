@@ -47,6 +47,7 @@ export function vocabularyPoolContentFingerprint(poolData: Record<string, unknow
       name: poolData.name ?? null,
       description: poolData.description ?? null,
       wordDocIds: Array.isArray(poolData.wordDocIds) ? poolData.wordDocIds : [],
+      sourcePoolIds: poolData.sourcePoolIds ?? [],
       assignmentRevision: poolData._assignmentRevision ?? null,
       wordContentRevision: poolData._wordContentRevision ?? null,
       updatedAt: timestampValue(metadata.updatedAt),

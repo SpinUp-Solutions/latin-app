@@ -7,8 +7,8 @@ import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { FeedbackDisplay } from '../feedback';
 import { validateMultipleChoiceExercise } from '@/src/utils/exercises/multipleChoiceExercise';
 import { Button } from '@/src/components/ui/button';
-import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
+import { ExerciseIntro } from './exercise-intro';
 import { cn } from '@/src/lib/utils';
 import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 import type {
@@ -18,6 +18,7 @@ import type {
   RuntimeMode,
 } from '@/src/types/runtime-mode';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
+import { useSectionedTest } from '@/src/components/ui/test/sectioned-test-context';
 
 interface Props {
   exercise: MultipleChoiceExercise;
@@ -40,15 +41,20 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({
   const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
+  const sectioned = useSectionedTest() && testAnswerMode;
   const restoredOptionIds = initialAnswer?.type === 'multiple-choice' ? initialAnswer.selectedOptionIds : [];
   const [selectedOptionIds, setSelectedOptionIds] = useState<string[]>(restoredOptionIds);
-  const [hasSubmitted, setHasSubmitted] = useState(restoredOptionIds.length > 0);
+  // Sectioned selections are saved drafts. Resuming must still let students
+  // finish selecting options before they mark this exercise complete.
+  const [hasSubmitted, setHasSubmitted] = useState(!sectioned && restoredOptionIds.length > 0);
   const [isProcessing, setIsProcessing] = useState(false);
-  const { isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance, cancelPendingAdvance } = useExerciseProgression({
-    totalItems: 1,
-    itemProgressionDelay: exercise.itemProgressionDelay,
-    progressionRules: exercise.feedbackConfig.progressionRules,
-  });
+  const { isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance, cancelPendingAdvance } = useExerciseProgression(
+    {
+      totalItems: 1,
+      itemProgressionDelay: exercise.itemProgressionDelay,
+      progressionRules: exercise.feedbackConfig.progressionRules,
+    }
+  );
 
   const {
     isCorrect,
@@ -78,17 +84,17 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({
     const hasMultipleCorrect = exercise.data.options.filter(opt => opt.isCorrect).length > 1;
     const allowMultiple = hasMultipleCorrect || exercise.data.allowMultipleSelections;
 
-    if (allowMultiple) {
-      setSelectedOptionIds(prev =>
-        prev.includes(optionId) ? prev.filter(id => id !== optionId) : [...prev, optionId]
-      );
-    } else {
-      setSelectedOptionIds([optionId]);
-    }
+    const nextOptionIds = allowMultiple
+      ? selectedOptionIds.includes(optionId)
+        ? selectedOptionIds.filter(id => id !== optionId)
+        : [...selectedOptionIds, optionId]
+      : [optionId];
+    setSelectedOptionIds(nextOptionIds);
+    if (sectioned) onAnswer?.({ type: 'multiple-choice', selectedOptionIds: nextOptionIds });
   };
 
   const handleSubmit = () => {
-    if (selectedOptionIds.length === 0 || isProcessing || resetRequired) return;
+    if (selectedOptionIds.length === 0 || hasSubmitted || isProcessing || resetRequired) return;
 
     setIsProcessing(true);
     setHasSubmitted(true);
@@ -146,27 +152,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-start">
-        {exercise.title && (
-          <h3 className="text-lg font-serif text-roman-red mb-2">
-            <SimpleRichDisplay content={exercise.title} />
-          </h3>
-        )}
-        {exercise.audioPath && (
-          <AudioPlayButton
-            audioPath={exercise.audioPath}
-            variant="default"
-            size="sm"
-            className="ml-2 rounded-full border-roman-terracotta/20 hover:border-roman-terracotta hover:bg-roman-parchment"
-          />
-        )}
-      </div>
-
-      {exercise.instructions && exercise.instructions.replace(/<[^>]*>/g, '').trim() !== '' && (
-        <div className="p-4 bg-roman-parchment rounded-lg mb-4">
-          <SimpleRichDisplay content={exercise.instructions} />
-        </div>
-      )}
+      <ExerciseIntro title={exercise.title} audioPath={exercise.audioPath} instructions={exercise.instructions} />
 
       <div className="p-6 bg-white rounded-lg border border-gray-200">
         {/* Question */}
@@ -181,6 +167,8 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({
           {exercise.data.options.map((option, index) => (
             <button
               key={option.id}
+              type="button"
+              aria-pressed={selectedOptionIds.includes(option.id)}
               onClick={() => handleOptionSelect(option.id)}
               disabled={hasSubmitted || isProcessing || resetRequired}
               className={cn(

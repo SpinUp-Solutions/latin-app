@@ -3,12 +3,16 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { AlertTriangle, ArrowLeft, CheckCircle2, FileCheck2, Loader2, RotateCcw } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CheckCircle2, ClipboardCheck, FileCheck2, Loader2, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/src/components/ui/button';
+import { PageLoading } from '@/src/components/ui/page-loading';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
+import { PlayerActionBar, PlayerBarButton } from '@/src/components/ui/core/player-action-bar';
+import { RomanPlayerShell } from '@/src/components/ui/core/roman-player-shell';
 import { TestTakingView } from '@/src/components/ui/test/test-taking-view';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
+import { SectionedTestPlayer } from '@/src/components/ui/test/sectioned-test-player';
 import { TestTranslationGradingProvider } from '@/src/components/ui/test/test-translation-grading-context';
 import { useAuth } from '@/src/hooks/useAuth';
 import { useBufferedAttemptAnswers } from '@/src/hooks/useBufferedAttemptAnswers';
@@ -54,6 +58,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
   const [startAttempt, { isLoading: starting }] = useStartTestAttemptMutation();
   const [gradeTestTranslation, { isLoading: translationGrading }] = useGradeTestTranslationMutation();
   const [submitAttempt, { isLoading: submitting }] = useSubmitTestAttemptMutation();
+  const answerBuffer = useBufferedAttemptAnswers();
   const {
     activateAttempt,
     adoptPersistedAnswer,
@@ -65,7 +70,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
     reset: resetAnswerBuffer,
     saveError,
     saveStatus: answerSaveStatus,
-  } = useBufferedAttemptAnswers();
+  } = answerBuffer;
 
   const [screen, setScreen] = useState<Screen>('expectations');
   const [attempt, setAttempt] = useState<StudentInProgressTestAttempt | null>(null);
@@ -130,6 +135,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
         if (activeOriginKeyRef.current !== originKey) return;
         activateAttempt({
           answers: response.attempt.answers,
+          section: response.attempt.section,
           attemptId: response.attempt.id,
           originKey,
           uid: user.uid,
@@ -174,6 +180,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
   );
 
   useEffect(() => {
+    if (screen !== 'taking' && screen !== 'review') return;
     let effectActive = true;
     historyEffectActiveRef.current = true;
     const guardValue = `test:${originKey}`;
@@ -237,7 +244,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
       historyEffectActiveRef.current = false;
       window.removeEventListener('popstate', protectHistoryNavigation);
     };
-  }, [flushPendingAnswers, hasUnsavedAnswers, originKey]);
+  }, [flushPendingAnswers, hasUnsavedAnswers, originKey, screen]);
 
   const startFreshAttempt = async () => {
     if (!user || !test || (isMockTest && !mockTest) || normalTest?.status === 'locked') return;
@@ -247,6 +254,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
       if (activeOriginKeyRef.current !== requestedOriginKey) return;
       activateAttempt({
         answers: response.attempt.answers,
+        section: response.attempt.section,
         attemptId: response.attempt.id,
         originKey: requestedOriginKey,
         uid: user.uid,
@@ -333,6 +341,30 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
     }
   };
 
+  const acceptSubmission = (submittedResult: StudentSubmittedTestAttempt) => {
+    const requestedOriginKey = originKey;
+    setResult(submittedResult);
+    setScreen('results');
+    if (isMockTest) {
+      setMockRetakeAvailability('checking');
+      // A completed delivery remains viewable even if administrators hide,
+      // archive, or move its mock before this refresh finishes. Retakes,
+      // however, must be based on fresh live projections rather than the
+      // detail that authorized the just-submitted frozen attempt.
+      void Promise.allSettled([refetchDashboard(), refetchMockDetail()]).then(results => {
+        if (activeOriginKeyRef.current !== requestedOriginKey) return;
+        const refreshedDashboard = results[0].status === 'fulfilled' ? results[0].value.data : undefined;
+        const refreshedDetail = results[1].status === 'fulfilled' ? results[1].value.data : undefined;
+        const liveCard = refreshedDashboard?.mockTests?.find(mock => mock.id === testId);
+        const isEligible = Boolean(
+          liveCard && refreshedDetail?.mock.status === 'active' && refreshedDetail.mock.isLive
+        );
+        setMockRetakeAvailability(isEligible ? 'available' : 'unavailable');
+      });
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const submit = async () => {
     if (!attempt || !user) return;
     const requestedOriginKey = originKey;
@@ -343,26 +375,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
         attemptId: attempt.id,
       }).unwrap();
       if (activeOriginKeyRef.current !== requestedOriginKey) return;
-      setResult(response.attempt);
-      setScreen('results');
-      if (isMockTest) {
-        setMockRetakeAvailability('checking');
-        // A completed delivery remains viewable even if administrators hide,
-        // archive, or move its mock before this refresh finishes. Retakes,
-        // however, must be based on fresh live projections rather than the
-        // detail that authorized the just-submitted frozen attempt.
-        void Promise.allSettled([refetchDashboard(), refetchMockDetail()]).then(results => {
-          if (activeOriginKeyRef.current !== requestedOriginKey) return;
-          const refreshedDashboard = results[0].status === 'fulfilled' ? results[0].value.data : undefined;
-          const refreshedDetail = results[1].status === 'fulfilled' ? results[1].value.data : undefined;
-          const liveCard = refreshedDashboard?.mockTests?.find(mock => mock.id === testId);
-          const isEligible = Boolean(
-            liveCard && refreshedDetail?.mock.status === 'active' && refreshedDetail.mock.isLive
-          );
-          setMockRetakeAvailability(isEligible ? 'available' : 'unavailable');
-        });
-      }
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      acceptSubmission(response.attempt);
     } catch (error) {
       if (getApiErrorCode(error) === 'TEST_CONFIGURATION_ERROR') {
         setScreen('unavailable');
@@ -386,7 +399,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
     try {
       await flushPendingAnswers();
       setAttempt(current => {
-        if (!current) return current;
+        if (!current || current.flowVersion === 1) return current;
         const nextAnswers = { ...current.answers };
         const nextTranslationGrades = { ...current.translationGrades };
         delete nextAnswers[exerciseId];
@@ -405,11 +418,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
   };
 
   if (authLoading || dashboardLoading || (isMockTest && mockDetailLoading) || (!user && !dashboardError)) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-roman-marble">
-        <div className="h-9 w-9 animate-spin rounded-full border-b-2 border-roman-red" />
-      </div>
-    );
+    return <PageLoading label="Loading test" />;
   }
 
   // A submit can legitimately make a hidden/archived/moved mock detail 404.
@@ -542,8 +551,9 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
             </div>
             <ul className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-sm leading-6 text-slate-700">
               <li className="flex gap-3 before:mt-2.5 before:h-1.5 before:w-1.5 before:shrink-0 before:rounded-full before:bg-roman-red">
-                For translations, you’ll get brief guidance as you go. Feedback on other questions appears after you
-                submit.
+                {attempt?.flowVersion === undefined && attempt
+                  ? 'For translations, you’ll get brief guidance as you go. Feedback on other questions appears after you submit.'
+                  : 'Review each section before confirming it. Once confirmed, you cannot return. All scores and feedback appear after submission.'}
               </li>
               <li className="flex gap-3 before:mt-2.5 before:h-1.5 before:w-1.5 before:shrink-0 before:rounded-full before:bg-roman-red">
                 Your answers save automatically, so you can refresh or return later without losing your work.
@@ -582,55 +592,51 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
       result.passingPercentage !== null && result.outcome === 'not-passed'
         ? Math.max(0, result.passingPercentage - result.percentage)
         : 0;
+    const resultTitle =
+      result.outcome === 'passed'
+        ? 'Test passed'
+        : result.outcome === 'score-only'
+          ? isMockTest
+            ? 'Mock test complete'
+            : 'Test complete'
+          : 'Keep going';
     return (
       <div className="min-h-screen bg-roman-marble p-4 md:p-10">
         <div className="mx-auto max-w-3xl space-y-6">
-          <Card
+          <RomanPlayerShell
+            icon={result.outcome === 'not-passed' ? AlertTriangle : CheckCircle2}
+            label="Results"
+            title={resultTitle}
+            headingAs="h1"
             className={
               result.outcome === 'not-passed'
-                ? 'overflow-hidden border-amber-300'
-                : 'overflow-hidden border-emerald-300'
-            }>
-            <div className="h-1.5 bg-roman-red" />
-            <CardContent className="space-y-4 p-8 text-center">
-              {result.outcome === 'not-passed' ? (
-                <AlertTriangle className="mx-auto h-12 w-12 text-amber-600" />
-              ) : (
-                <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-600" />
-              )}
-              <h1 className="font-serif text-3xl">
-                {result.outcome === 'passed'
-                  ? 'Test passed'
-                  : result.outcome === 'score-only'
-                    ? isMockTest
-                      ? 'Mock test complete'
-                      : 'Test complete'
-                    : 'Keep going'}
-              </h1>
-              <div className="text-5xl font-semibold text-roman-red">{formatScorePercentage(result.percentage)}%</div>
-              <p className="text-lg">
-                {formatScorePoints(result.score)} / {formatScorePoints(result.maxScore)} points
+                ? 'overflow-hidden rounded-2xl border-amber-300 shadow-md'
+                : 'overflow-hidden rounded-2xl border-emerald-300 shadow-md'
+            }
+            contentClassName="space-y-4 p-8 text-center">
+            <div className="text-5xl font-semibold text-roman-red">{formatScorePercentage(result.percentage)}%</div>
+            <p className="text-lg">
+              {formatScorePoints(result.score)} / {formatScorePoints(result.maxScore)} points
+            </p>
+            {result.outcome === 'not-passed' && result.passingPercentage !== null && (
+              <div className="rounded-lg bg-amber-50 p-3 text-amber-950">
+                You need {result.passingPercentage}% — you reached {formatScorePercentage(result.percentage)}%. You are{' '}
+                {formatScoreShortfall(shortfall)} percentage points away.
+              </div>
+            )}
+            {!isMockTest && result.outcome === 'not-passed' && normalTest?.relatedLiveMocks?.[0] && (
+              <Link
+                className="inline-block text-sm font-semibold text-teal-800 underline underline-offset-2"
+                href={`/test/${encodeURIComponent(normalTest.relatedLiveMocks[0].id)}?origin=mock`}>
+                Practice with the {normalTest.relatedLiveMocks[0].title} Mock Test before retaking.
+              </Link>
+            )}
+            {isMockTest && (
+              <p className="text-sm text-teal-800">
+                This result is for practice only and does not change your Learning Path.
               </p>
-              {result.outcome === 'not-passed' && result.passingPercentage !== null && (
-                <div className="rounded-lg bg-amber-50 p-3 text-amber-950">
-                  You need {result.passingPercentage}% — you reached {formatScorePercentage(result.percentage)}%. You
-                  are {formatScoreShortfall(shortfall)} percentage points away.
-                </div>
-              )}
-              {!isMockTest && result.outcome === 'not-passed' && normalTest?.relatedLiveMocks?.[0] && (
-                <Link
-                  className="inline-block text-sm font-semibold text-teal-800 underline underline-offset-2"
-                  href={`/test/${encodeURIComponent(normalTest.relatedLiveMocks[0].id)}?origin=mock`}>
-                  Practice with the {normalTest.relatedLiveMocks[0].title} Mock Test before retaking.
-                </Link>
-              )}
-              {isMockTest && (
-                <p className="text-sm text-teal-800">
-                  This result is for practice only and does not change your Learning Path.
-                </p>
-              )}
-            </CardContent>
-          </Card>
+            )}
+          </RomanPlayerShell>
 
           <Card>
             <CardHeader>
@@ -685,6 +691,21 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
 
   if (!attempt) return null;
 
+  if (attempt.flowVersion === 1)
+    return (
+      <SectionedTestPlayer
+        key={attempt.id}
+        attempt={attempt}
+        onAttempt={setAttempt}
+        buffer={answerBuffer}
+        title={test.title}
+        uid={user!.uid}
+        originKey={originKey}
+        onSubmitted={acceptSubmission}
+        onExit={exitTest}
+      />
+    );
+
   if (screen === 'review') {
     const unanswered = exerciseItems.filter(
       item => !isExerciseAnswerComplete(item.exercise, answers[item.id], item.resolvedItemCount)
@@ -692,115 +713,114 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
     return (
       <div className="min-h-screen bg-gradient-to-b from-roman-marble via-white to-roman-parchment/50 p-4 md:p-10">
         <div className="mx-auto max-w-4xl space-y-5">
-          <Card className="overflow-hidden rounded-2xl border-roman-red/15 shadow-md">
-            <div className="h-1.5 bg-roman-red" />
-            <CardHeader className="px-6 pb-4 pt-6 sm:px-8">
-              <CardTitle className="font-serif text-2xl text-roman-red">Review before submitting</CardTitle>
-              <p className="text-sm text-roman-stone">
-                {answeredCount} of {exerciseItems.length} exercises answered
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-5 px-6 pb-7 sm:px-8">
-              {unanswered.length === 0 ? (
-                <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-900">
-                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" aria-hidden="true" />
-                  <div>
-                    <p className="font-medium">Every exercise has a recorded answer.</p>
-                    <p className="mt-1 text-sm text-emerald-800">You can still make changes before submitting.</p>
-                  </div>
+          <RomanPlayerShell
+            icon={ClipboardCheck}
+            label="Answer review"
+            title="Review before submitting"
+            description={`${answeredCount} of ${exerciseItems.length} exercises answered`}
+            headingAs="h1"
+            className="overflow-hidden rounded-2xl border-roman-red/15 shadow-md"
+            contentClassName="space-y-5 px-6 pb-7 sm:px-8">
+            {unanswered.length === 0 ? (
+              <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-900">
+                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" aria-hidden="true" />
+                <div>
+                  <p className="font-medium">Every exercise has a recorded answer.</p>
+                  <p className="mt-1 text-sm text-emerald-800">You can still make changes before submitting.</p>
                 </div>
-              ) : (
-                <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
-                  <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" aria-hidden="true" />
-                  <div>
-                    <p className="font-medium text-amber-950">
-                      {unanswered.length} unanswered {unanswered.length === 1 ? 'exercise' : 'exercises'}
-                    </p>
-                    <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-amber-900">
-                      {unanswered.map(item => (
-                        <li key={item.id} className="flex items-center gap-1">
+              </div>
+            ) : (
+              <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" aria-hidden="true" />
+                <div>
+                  <p className="font-medium text-amber-950">
+                    {unanswered.length} unanswered {unanswered.length === 1 ? 'exercise' : 'exercises'}
+                  </p>
+                  <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-amber-900">
+                    {unanswered.map(item => (
+                      <li key={item.id} className="flex items-center gap-1">
+                        <span className="shrink-0">Page {item.pageIndex + 1}:</span>
+                        <SimpleRichDisplay content={item.title} />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
+            <div className="space-y-3">
+              <h2 className="font-semibold text-slate-900">Review each exercise</h2>
+              <ul className="space-y-3">
+                {exerciseItems.map(item => {
+                  const complete = isExerciseAnswerComplete(item.exercise, answers[item.id], item.resolvedItemCount);
+                  const hasRecordedAnswer = Boolean(answers[item.id]);
+                  const translationIsFinal =
+                    item.exercise.type === 'translation-grading' &&
+                    Object.keys(attempt.translationGrades?.[item.id] ?? {}).length > 0;
+                  const clearExisting = complete && !translationIsFinal;
+                  const actionLabel = translationIsFinal
+                    ? complete
+                      ? 'Review answer'
+                      : 'Continue exercise'
+                    : complete
+                      ? 'Edit answer'
+                      : hasRecordedAnswer
+                        ? 'Continue exercise'
+                        : 'Answer exercise';
+                  return (
+                    <li
+                      key={item.id}
+                      className={`flex flex-col gap-4 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between ${
+                        complete ? 'border-emerald-200 bg-emerald-50/70' : 'border-amber-200 bg-amber-50/70'
+                      }`}>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1 font-medium text-slate-900">
                           <span className="shrink-0">Page {item.pageIndex + 1}:</span>
                           <SimpleRichDisplay content={item.title} />
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              )}
-              <div className="space-y-3">
-                <h2 className="font-semibold text-slate-900">Review each exercise</h2>
-                <ul className="space-y-3">
-                  {exerciseItems.map(item => {
-                    const complete = isExerciseAnswerComplete(item.exercise, answers[item.id], item.resolvedItemCount);
-                    const hasRecordedAnswer = Boolean(answers[item.id]);
-                    const translationIsFinal =
-                      item.exercise.type === 'translation-grading' &&
-                      Object.keys(attempt.translationGrades[item.id] ?? {}).length > 0;
-                    const clearExisting = complete && !translationIsFinal;
-                    const actionLabel = translationIsFinal
-                      ? complete
-                        ? 'Review answer'
-                        : 'Continue exercise'
-                      : complete
-                        ? 'Edit answer'
-                        : hasRecordedAnswer
-                          ? 'Continue exercise'
-                          : 'Answer exercise';
-                    return (
-                      <li
-                        key={item.id}
-                        className={`flex flex-col gap-4 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between ${
-                          complete ? 'border-emerald-200 bg-emerald-50/70' : 'border-amber-200 bg-amber-50/70'
-                        }`}>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1 font-medium text-slate-900">
-                            <span className="shrink-0">Page {item.pageIndex + 1}:</span>
-                            <SimpleRichDisplay content={item.title} />
-                          </div>
-                          <div
-                            className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-                              complete ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                            }`}>
-                            {complete ? 'Answer recorded' : 'Needs an answer'}
-                          </div>
                         </div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="shrink-0 rounded-xl border-slate-200 bg-white"
-                          disabled={editingExerciseId !== null}
-                          aria-label={`${actionLabel.replace(' answer', '').replace(' exercise', '')} ${item.title}`}
-                          onClick={() => void openExercise(item.id, item.pageIndex, clearExisting)}>
-                          {editingExerciseId === item.id ? 'Opening…' : actionLabel}
-                        </Button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-              <p className="border-t border-slate-100 pt-4 text-sm leading-6 text-gray-600">
-                Submission is final for this attempt. After you submit, you can review every question with the correct
-                answers and your translation feedback.
-              </p>
-            </CardContent>
-          </Card>
-          <div className="flex flex-col gap-3 rounded-2xl border border-roman-red/15 bg-white p-3 shadow-sm sm:flex-row sm:justify-between">
-            <Button
-              variant="outline"
-              className="rounded-xl"
+                        <div
+                          className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            complete ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                          }`}>
+                          {complete ? 'Answer recorded' : 'Needs an answer'}
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0 rounded-xl border-slate-200 bg-white"
+                        disabled={editingExerciseId !== null}
+                        aria-label={`${actionLabel.replace(' answer', '').replace(' exercise', '')} ${item.title}`}
+                        onClick={() => void openExercise(item.id, item.pageIndex, clearExisting)}>
+                        {editingExerciseId === item.id ? 'Opening…' : actionLabel}
+                      </Button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+            <p className="border-t border-slate-100 pt-4 text-sm leading-6 text-gray-600">
+              Submission is final for this attempt. After you submit, you can review every question with the correct
+              answers and your translation feedback.
+            </p>
+          </RomanPlayerShell>
+          <PlayerActionBar>
+            <PlayerBarButton
+              type="button"
+              tone="outline"
               disabled={editingExerciseId !== null}
               onClick={() => setScreen('taking')}>
               <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
               Return to test
-            </Button>
-            <Button
-              className="rounded-xl bg-roman-red hover:bg-roman-red/90"
+            </PlayerBarButton>
+            <PlayerBarButton
+              type="button"
+              className="sm:ml-auto"
               disabled={submitting || translationGrading || editingExerciseId !== null}
               onClick={submit}>
               {submitting ? 'Submitting…' : 'Submit Test'}
-            </Button>
-          </div>
+            </PlayerBarButton>
+          </PlayerActionBar>
         </div>
       </div>
     );
@@ -821,7 +841,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
   );
 
   return (
-    <TestTranslationGradingProvider value={{ grades: attempt.translationGrades, grade: gradeTranslation }}>
+    <TestTranslationGradingProvider value={{ grades: attempt.translationGrades ?? {}, grade: gradeTranslation }}>
       <TestTakingView
         title={<SimpleRichDisplay content={test.title} />}
         description={test.description ? <SimpleRichDisplay content={test.description} /> : undefined}

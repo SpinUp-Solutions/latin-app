@@ -94,5 +94,6 @@ export const stripMacrons = (text: string): string => {
  * Handles both plain text and HTML content (from rich text editors)
  */
 export const isTextMatch = (userInput: string, correctAnswer: string): boolean => {
-  return normalizeText(userInput) === normalizeText(correctAnswer);
+  const comparable = (text: string) => normalizeText(text).replace(/\.+$/u, '').trimEnd();
+  return comparable(userInput) === comparable(correctAnswer);
 };

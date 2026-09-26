@@ -1,14 +1,15 @@
 import React from 'react';
-import { Plus, Trash2, ToggleLeft, ToggleRight } from 'lucide-react';
+import { ToggleLeft, ToggleRight } from 'lucide-react';
 import { TableFillExercise } from '@/src/types/exercise';
 import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonEditorSlice';
 import type { TableFillColumn, TableFillRow, TableFillCell } from '@/src/types/exercises/table-fill';
 import { SimpleRichEditor } from '../../core/simple-rich-editor';
-import { AudioUploadSection } from './AudioUploadSection';
 import { ExerciseFeedbackSection } from './ExerciseFeedbackSection';
-import { Button } from '../../button';
 import { cn } from '@/src/lib/utils';
+import { ExerciseHeaderFields } from './ExerciseHeaderFields';
+import { EditableTableGrid } from './EditableTableGrid';
+import { TableFootnotesEditor } from './TableFootnotesEditor';
 
 export const TableFillEditor: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -121,35 +122,15 @@ export const TableFillEditor: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium mb-1">Exercise Title</label>
-          <SimpleRichEditor
-            content={editingContent.title || ''}
-            onChange={value => updateContent({ title: value })}
-            placeholder="Enter exercise title..."
-            singleLine={true}
-            className="w-full"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">Instructions</label>
-          <SimpleRichEditor
-            content={editingContent.instructions || ''}
-            onChange={value => updateContent({ instructions: value })}
-            placeholder="Provide instructions for students..."
-            rows={3}
-            className="w-full"
-          />
-        </div>
-
-        <AudioUploadSection
-          audioPath={editingContent.audioPath}
-          onAudioPathChange={audioPath => updateContent({ audioPath })}
-          contentItemId={editingContent.id}
-        />
-      </div>
+      <ExerciseHeaderFields
+        title={editingContent.title || ''}
+        instructions={editingContent.instructions || ''}
+        onTitleChange={value => updateContent({ title: value })}
+        onInstructionsChange={value => updateContent({ instructions: value })}
+        audioPath={editingContent.audioPath}
+        onAudioPathChange={audioPath => updateContent({ audioPath })}
+        contentItemId={editingContent.id}
+      />
 
       <div>
         <label className="block text-sm font-medium mb-1">Table Title</label>
@@ -168,128 +149,59 @@ export const TableFillEditor: React.FC = () => {
           Use the toggle buttons to mark cells as blanks that students will fill in.
         </p>
 
-        <div className="border rounded-md overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="p-2 text-left w-16">Row</th>
-                {editingContent.data.columns.map((col: TableFillColumn) => (
-                  <th key={col.id} className="p-2 text-left relative group">
-                    <div className="flex items-center gap-2">
-                      <SimpleRichEditor
-                        content={col.header}
-                        onChange={value => updateColumnHeader(col.id, value)}
-                        className="w-full text-sm"
-                        singleLine={true}
-                      />
-                      {editingContent.data.columns.length > 1 && (
-                        <button
-                          onClick={() => removeColumn(col.id)}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-700"
-                          title="Remove column">
-                          <Trash2 className="h-3 w-3" />
-                        </button>
-                      )}
-                    </div>
-                  </th>
-                ))}
-                <th className="p-2 w-12">
+        <EditableTableGrid
+          columns={editingContent.data.columns}
+          rows={editingContent.data.rows}
+          containerClassName="overflow-hidden"
+          onAddColumn={addColumn}
+          onRemoveColumn={removeColumn}
+          onUpdateColumnHeader={updateColumnHeader}
+          onAddRow={addRow}
+          onRemoveRow={removeRow}
+          renderCell={(row, col) => {
+            const cell = row.cells[col.id];
+            return (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 mb-1">
                   <button
-                    onClick={addColumn}
-                    className="w-full h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
-                    title="Add column">
-                    <Plus className="h-4 w-4" />
+                    onClick={() => toggleCellBlank(row.id, col.id)}
+                    className={cn(
+                      'flex items-center gap-1 text-xs px-2 py-1 rounded',
+                      cell?.isBlank
+                        ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    )}
+                    title={cell?.isBlank ? 'Make this a normal cell' : 'Make this a blank for students to fill'}>
+                    {cell?.isBlank ? <ToggleRight className="h-3 w-3" /> : <ToggleLeft className="h-3 w-3" />}
+                    {cell?.isBlank ? 'Blank' : 'Normal'}
                   </button>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {editingContent.data.rows.map((row: TableFillRow) => (
-                <tr key={row.id} className="border-t group">
-                  <td className="p-2 text-sm text-gray-500 relative">
-                    <div className="flex items-center gap-2">
-                      <span className="flex-1">{row.id}</span>
-                      {editingContent.data.rows.length > 1 && (
-                        <button
-                          onClick={() => removeRow(row.id)}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-700"
-                          title="Remove row">
-                          <Trash2 className="h-3 w-3" />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                  {editingContent.data.columns.map((col: TableFillColumn) => {
-                    const cell = row.cells[col.id];
-                    return (
-                      <td key={col.id} className="p-2">
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2 mb-1">
-                            <button
-                              onClick={() => toggleCellBlank(row.id, col.id)}
-                              className={cn(
-                                'flex items-center gap-1 text-xs px-2 py-1 rounded',
-                                cell?.isBlank
-                                  ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                              )}
-                              title={
-                                cell?.isBlank ? 'Make this a normal cell' : 'Make this a blank for students to fill'
-                              }>
-                              {cell?.isBlank ? <ToggleRight className="h-3 w-3" /> : <ToggleLeft className="h-3 w-3" />}
-                              {cell?.isBlank ? 'Blank' : 'Normal'}
-                            </button>
-                          </div>
+                </div>
 
-                          {!cell?.isBlank && (
-                            <SimpleRichEditor
-                              content={cell?.content || ''}
-                              onChange={value => updateCell(row.id, col.id, { content: value })}
-                              className="w-full text-sm"
-                              placeholder="Cell content"
-                              singleLine={true}
-                            />
-                          )}
+                {!cell?.isBlank && (
+                  <SimpleRichEditor
+                    content={cell?.content || ''}
+                    onChange={value => updateCell(row.id, col.id, { content: value })}
+                    className="w-full text-sm"
+                    placeholder="Cell content"
+                    singleLine={true}
+                  />
+                )}
 
-                          {cell?.isBlank && (
-                            <div className="space-y-2 p-2 bg-blue-50 rounded">
-                              <input
-                                type="text"
-                                value={cell.answer || ''}
-                                onChange={e => updateCell(row.id, col.id, { answer: e.target.value })}
-                                placeholder="Correct answer (plain text)"
-                                className="w-full p-2 text-sm border rounded"
-                              />
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                    );
-                  })}
-                  <td className="p-2"></td>
-                </tr>
-              ))}
-              <tr className="border-t">
-                <td className="p-2">
-                  <button
-                    onClick={addRow}
-                    className="w-full h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
-                    title="Add row">
-                    <Plus className="h-4 w-4" />
-                  </button>
-                </td>
-                {editingContent.data.columns.map((col: TableFillColumn) => (
-                  <td key={col.id} className="p-2">
-                    <div className="h-8 border border-dashed border-gray-200 rounded flex items-center justify-center text-gray-400">
-                      <Plus className="h-3 w-3" />
-                    </div>
-                  </td>
-                ))}
-                <td className="p-2"></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+                {cell?.isBlank && (
+                  <div className="space-y-2 p-2 bg-blue-50 rounded">
+                    <input
+                      type="text"
+                      value={cell.answer || ''}
+                      onChange={e => updateCell(row.id, col.id, { answer: e.target.value })}
+                      placeholder="Correct answer (plain text)"
+                      className="w-full p-2 text-sm border rounded"
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          }}
+        />
       </div>
 
       <div className="space-y-4">
@@ -316,49 +228,11 @@ export const TableFillEditor: React.FC = () => {
         </div>
       </div>
 
-      <div>
-        <label className="block text-sm font-medium mb-2">Footnotes</label>
-        <div className="space-y-2">
-          {(editingContent.data.footnotes || []).map((footnote: string, index: number) => (
-            <div key={index} className="flex items-start gap-2">
-              <span className="text-sm text-gray-500 pt-2 min-w-[20px]">{index + 1}.</span>
-              <SimpleRichEditor
-                content={footnote}
-                onChange={value =>
-                  updateData({
-                    footnotes:
-                      editingContent.data.footnotes?.map((f: string, i: number) => (i === index ? value : f)) || [],
-                  })
-                }
-                className="flex-1 text-sm"
-                placeholder="Enter footnote text..."
-                rows={2}
-              />
-              <button
-                onClick={() =>
-                  updateData({
-                    footnotes: editingContent.data.footnotes?.filter((_: string, i: number) => i !== index) || [],
-                  })
-                }
-                className="mt-1 text-red-500 hover:text-red-700 transition-colors"
-                title="Remove footnote">
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
-          ))}
-          <Button
-            onClick={() =>
-              updateData({
-                footnotes: [...(editingContent.data.footnotes || []), ''],
-              })
-            }
-            variant="outline"
-            size="sm">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Footnote
-          </Button>
-        </div>
-      </div>
+      <TableFootnotesEditor
+        footnotes={editingContent.data.footnotes}
+        addButton="outline"
+        onChange={footnotes => updateData({ footnotes })}
+      />
 
       <ExerciseFeedbackSection
         feedbackConfig={editingContent.feedbackConfig}

@@ -2,10 +2,11 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
+import { getApiErrorMessage } from '@/src/store/api/baseQuery';
 import { toast } from 'sonner';
 import { useGetPoolQuery, useUpdatePoolMutation } from '@/src/store/api/vocabularyPoolApi';
 import { PoolForm } from '@/src/components/ui/admin/vocabulary-pools/PoolForm';
-import { AdminLoadingPage } from '@/src/components/ui/admin/AdminLoadingPage';
+import { PageLoading } from '@/src/components/ui/page-loading';
 import { Button } from '@/src/components/ui/button';
 import { AlertCircle } from 'lucide-react';
 import Link from 'next/link';
@@ -31,7 +32,8 @@ function EditPoolPage({ params }: EditPoolPageProps) {
       const updateData = {
         name: poolData.name,
         description: poolData.description,
-        wordDocIds: poolData.wordDocIds,
+        directWordDocIds: poolData.directWordDocIds,
+        sourcePoolIds: poolData.sourcePoolIds,
         tags: poolData.tags,
         difficulty: poolData.difficulty,
       };
@@ -40,8 +42,8 @@ function EditPoolPage({ params }: EditPoolPageProps) {
       toast.success('Vocabulary pool updated successfully');
       router.push('/admin/vocabulary-pools');
       return true;
-    } catch {
-      toast.error('Failed to update vocabulary pool');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to update vocabulary pool'));
       return false;
     }
   };
@@ -51,7 +53,7 @@ function EditPoolPage({ params }: EditPoolPageProps) {
   };
 
   if (loading) {
-    return <AdminLoadingPage />;
+    return <PageLoading label="Loading vocabulary pool" />;
   }
 
   if (error || !pool) {

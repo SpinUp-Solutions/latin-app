@@ -1,13 +1,14 @@
 'use client';
 
+import { useSectionedTest } from '../test/sectioned-test-context';
 import React, { useState } from 'react';
 import { OddOneOutExercise } from '@/src/types/exercise';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { FeedbackDisplay } from '../feedback';
 import { validateOddOneOutExercise } from '@/src/utils/exercises/oddOneOutExercise';
-import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
+import { ExerciseIntro } from './exercise-intro';
 import { SimpleRichEditor } from '../core/simple-rich-editor';
 import { Button } from '../button';
 import { CheckCircle2 } from 'lucide-react';
@@ -40,6 +41,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({
   const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
+  const sectioned = useSectionedTest();
   const restoredAnswer = initialAnswer?.type === 'odd-one-out' ? initialAnswer : null;
   const [selectedItemId, setSelectedItemId] = useState<string | null>(restoredAnswer?.selectedItemId ?? null);
   const [userExplanation, setUserExplanation] = useState(restoredAnswer?.explanation ?? '');
@@ -49,11 +51,13 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({
   const [hasSubmitted, setHasSubmitted] = useState(
     Boolean(restoredAnswer?.selectedItemId && hasRequiredExplanation(restoredAnswer.explanation))
   );
-  const { isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance, cancelPendingAdvance } = useExerciseProgression({
-    totalItems: 1,
-    itemProgressionDelay: exercise.itemProgressionDelay,
-    progressionRules: exercise.feedbackConfig.progressionRules,
-  });
+  const { isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance, cancelPendingAdvance } = useExerciseProgression(
+    {
+      totalItems: 1,
+      itemProgressionDelay: exercise.itemProgressionDelay,
+      progressionRules: exercise.feedbackConfig.progressionRules,
+    }
+  );
 
   const {
     isCorrect,
@@ -81,6 +85,8 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({
   const handleItemSelect = (itemId: string) => {
     if (hasSubmitted || resetRequired) return;
     setSelectedItemId(itemId);
+    if (testAnswerMode && sectioned)
+      onAnswer?.({ type: 'odd-one-out', selectedItemId: itemId, explanation: userExplanation });
   };
 
   const handleSubmit = () => {
@@ -127,28 +133,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({
   return (
     <div className="space-y-4">
       {/* Header with title and audio */}
-      <div className="flex justify-between items-start">
-        {exercise.title && (
-          <h3 className="text-lg font-serif text-roman-red mb-2">
-            <SimpleRichDisplay content={exercise.title} />
-          </h3>
-        )}
-        {exercise.audioPath && (
-          <AudioPlayButton
-            audioPath={exercise.audioPath}
-            variant="default"
-            size="sm"
-            className="ml-2 rounded-full border-roman-terracotta/20 hover:border-roman-terracotta hover:bg-roman-parchment"
-          />
-        )}
-      </div>
-
-      {/* Instructions */}
-      {exercise.instructions && exercise.instructions.replace(/<[^>]*>/g, '').trim() !== '' && (
-        <div className="p-4 bg-roman-parchment rounded-lg mb-4">
-          <SimpleRichDisplay content={exercise.instructions} />
-        </div>
-      )}
+      <ExerciseIntro title={exercise.title} audioPath={exercise.audioPath} instructions={exercise.instructions} />
 
       <div className="p-6 bg-white rounded-lg border border-gray-200">
         {/* Question */}
@@ -220,7 +205,11 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({
             </label>
             <SimpleRichEditor
               content={userExplanation}
-              onChange={setUserExplanation}
+              onChange={value => {
+                setUserExplanation(value);
+                if (testAnswerMode && sectioned)
+                  onAnswer?.({ type: 'odd-one-out', selectedItemId: selectedItemId ?? '', explanation: value });
+              }}
               placeholder="Explain your reasoning..."
               rows={3}
               className="w-full"

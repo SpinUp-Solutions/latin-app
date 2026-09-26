@@ -14,6 +14,8 @@ import { getContentTypeLabel } from '@/src/lib/content/registry';
 import { Loader2, ChevronLeft, ChevronRight, Check, Lightbulb, RotateCcw } from 'lucide-react';
 import type { ExerciseAnswer, ExerciseCompletionHandler, RuntimeMode } from '@/src/types/runtime-mode';
 import { richTextToPlainText } from '@/src/utils/exercises/helpers';
+import { useSectionedTest } from '../test/sectioned-test-context';
+import type { ExerciseAnswerHandler } from '@/src/types/runtime-mode';
 import { useTestTranslationGrading } from '../test/test-translation-grading-context';
 import {
   RomanTable,
@@ -30,6 +32,7 @@ interface Props {
   onCompletionAccepted?: ExerciseCompletionHandler;
   runtimeMode?: RuntimeMode;
   initialAnswer?: ExerciseAnswer;
+  onAnswer?: ExerciseAnswerHandler;
 }
 
 const getRoleColor = (role: string) => {
@@ -49,9 +52,12 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({
   onCompletionAccepted,
   runtimeMode,
   initialAnswer,
+  onAnswer,
 }) => {
   const mode = runtimeMode ?? 'practice';
   const testAnswerMode = mode === 'test';
+  const sectioned = useSectionedTest();
+  const [recorded, setRecorded] = useState<Set<number>>(new Set());
   const testGradingRuntime = useTestTranslationGrading();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const restoredTranslations = initialAnswer?.type === 'translation-grading' ? initialAnswer.translations : [];
@@ -69,12 +75,13 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({
   const targetLanguage = isLatinToEnglish ? 'English' : 'Latin';
   const direction = translationDirection;
 
-  const { currentIndex, isLastItem, isFirstItem, nextItem, previousItem, resetIndex, goToItem } = useExerciseProgression({
-    totalItems: exercise.data.items.length,
-    initialIndex: restoredIndex,
-    itemProgressionDelay: exercise.itemProgressionDelay,
-    progressionRules: exercise.feedbackConfig.progressionRules,
-  });
+  const { currentIndex, isLastItem, isFirstItem, nextItem, previousItem, resetIndex, goToItem } =
+    useExerciseProgression({
+      totalItems: exercise.data.items.length,
+      initialIndex: restoredIndex,
+      itemProgressionDelay: exercise.itemProgressionDelay,
+      progressionRules: exercise.feedbackConfig.progressionRules,
+    });
 
   const { handleCorrect, handleIncorrect, reset, shouldResetExercise, resetExercise } = useExerciseFeedback(
     exercise.feedbackConfig
@@ -84,7 +91,9 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({
   const currentAnswer = userAnswers[currentIndex] || '';
   const testGrades = testGradingRuntime?.grades[exercise.id] ?? {};
   const currentTestGrade = testGrades[String(currentIndex)];
-  const testSubmitted = Boolean(currentTestGrade && currentTestGrade.translation === currentAnswer.trim());
+  const testSubmitted = sectioned
+    ? recorded.has(currentIndex)
+    : Boolean(currentTestGrade && currentTestGrade.translation === currentAnswer.trim());
   const gradingPending = isLoading || testGrading;
   const resetRequired = mode === 'practice' && shouldResetExercise;
   const completionAcceptedRef = useRef(false);
@@ -105,6 +114,17 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({
     if (gradingPending || !currentAnswer.trim() || resetRequired) return;
 
     const currentItem = exercise.data.items[currentIndex];
+    if (testAnswerMode && sectioned) {
+      if (recorded.has(currentIndex)) return;
+      onAnswer?.({
+        type: 'translation-grading',
+        translations: exercise.data.items.map((_, index) => userAnswers[index] ?? ''),
+      });
+      setRecorded(previous => new Set(previous).add(currentIndex));
+      if (isLastItem) onComplete?.(0);
+      else nextItem();
+      return;
+    }
     if (testAnswerMode) {
       if (!testGradingRuntime) return;
       const userTranslation = currentAnswer.trim();
@@ -154,9 +174,7 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({
   };
 
   const allSentencesPassed = passedSentences.size === exercise.data.items.length;
-  const unpassedIndexes = exercise.data.items
-    .map((_, index) => index)
-    .filter(index => !passedSentences.has(index));
+  const unpassedIndexes = exercise.data.items.map((_, index) => index).filter(index => !passedSentences.has(index));
 
   const handleContinue = () => {
     if (allSentencesPassed) {
@@ -241,7 +259,9 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({
 
       <ExerciseProgress
         currentIndex={currentIndex}
-        completed={mode === 'practice' ? passedSentences.size : Object.keys(testGrades).length}
+        completed={
+          mode === 'practice' ? passedSentences.size : sectioned ? recorded.size : Object.keys(testGrades).length
+        }
         total={exercise.data.items.length}
         showProgress={exercise.feedbackConfig.progressionRules?.showProgress !== false}
       />
@@ -273,9 +293,14 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({
                   ...prev,
                   [currentIndex]: e.target.value,
                 }));
-                if (testAnswerMode) {
-                  setTestGradingError(null);
-                }
+                if (testAnswerMode) setTestGradingError(null);
+                if (testAnswerMode && sectioned)
+                  onAnswer?.({
+                    type: 'translation-grading',
+                    translations: exercise.data.items.map((_, index) =>
+                      index === currentIndex ? e.target.value : (userAnswers[index] ?? '')
+                    ),
+                  });
               }}
               onKeyDown={handleKeyDown}
               disabled={resetRequired || (testAnswerMode && (testSubmitted || testGrading))}
@@ -288,15 +313,16 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({
                 gradingPending ||
                 !currentAnswer.trim() ||
                 resetRequired ||
-                (testAnswerMode && (!testGradingRuntime || testSubmitted))
+                (testAnswerMode && ((!sectioned && !testGradingRuntime) || testSubmitted))
               }
               variant="outline"
               className="border-roman-red text-roman-red hover:bg-roman-red/5 hover:text-roman-red shadow-sm transition-all hover:translate-y-[-1px] h-auto min-h-[140px] px-4 self-stretch flex flex-col items-center justify-center gap-2"
-              title="Check Translation">
+              title={sectioned ? 'Record translation' : 'Check Translation'}
+              aria-label={sectioned ? 'Record translation' : 'Check Translation'}>
               {gradingPending ? <Loader2 className="h-6 w-6 animate-spin" /> : <Check className="h-6 w-6 stroke-[3]" />}
             </Button>
           </div>
-          {testAnswerMode && testSubmitted && currentTestGrade && (
+          {testAnswerMode && !sectioned && testSubmitted && currentTestGrade && (
             <div className="mt-4 space-y-3 rounded-xl border border-roman-red/10 bg-roman-parchment/20 p-4">
               <div className="flex items-center justify-between gap-4">
                 <h4 className="font-serif font-semibold text-roman-red">Translation feedback</h4>
@@ -310,7 +336,7 @@ const TranslationGradingExerciseComponent: React.FC<Props> = ({
               </Button>
             </div>
           )}
-          {testAnswerMode && !testGradingRuntime && (
+          {testAnswerMode && !sectioned && !testGradingRuntime && (
             <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
               Live AI grading is available in a student test attempt, not in test preview.
             </p>

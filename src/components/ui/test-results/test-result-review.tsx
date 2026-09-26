@@ -1,15 +1,21 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import Link from 'next/link';
+import { FileDown } from 'lucide-react';
+import { toast } from 'sonner';
+import { Button } from '@/src/components/ui/button';
+import React, { useMemo, useState } from 'react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/src/components/ui/accordion';
 import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
-import { AudioPlayer } from '@/src/components/ui/core/AudioPlayer';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
+import { ListeningPassageView } from '@/src/components/ui/exercises/listening-passage-exercise';
 import ConjugationTable from '@/src/components/ui/lesson/conjugation-table';
+import TextComponent from '@/src/components/ui/lesson/text-component';
 import { VocabularyViewer } from '@/src/components/ui/lesson/VocabularyViewer';
 import { VocabularyPoolViewer } from '@/src/components/ui/lesson/VocabularyPoolViewer';
 import { formatScorePoints } from '@/src/lib/tests/formatting';
 import { cn } from '@/src/lib/utils';
+import { downloadSubmittedTestResultPdf, saveBlobAsFile } from '@/src/services/testResultPdfService';
 import type {
   StudentTestResult,
   TestResultReviewExerciseItem,
@@ -38,15 +44,7 @@ const SupportingContentView = ({
     case 'emphasis':
       return (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          {item.title ? (
-            <h4 className="mb-1 font-serif text-lg text-slate-900">
-              <SimpleRichDisplay content={item.title} />
-            </h4>
-          ) : null}
-          <div className="prose prose-sm max-w-none prose-p:my-2 prose-p:leading-snug">
-            <SimpleRichDisplay content={item.content} />
-          </div>
-          {item.audioPath ? <AudioPlayButton audioPath={item.audioPath} className="mt-2" /> : null}
+          <TextComponent title={item.title} content={item.content} audioPath={item.audioPath ?? undefined} />
         </div>
       );
     case 'table':
@@ -78,29 +76,13 @@ const SupportingContentView = ({
     case 'listening-passage':
       return (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          {item.title ? (
-            <h4 className="mb-1 font-serif text-lg text-slate-900">
-              <SimpleRichDisplay content={item.title} />
-            </h4>
-          ) : null}
-          {item.instructions ? (
-            <div className="mb-2 text-sm text-slate-600">
-              <SimpleRichDisplay content={item.instructions} />
-            </div>
-          ) : null}
-          <div className="space-y-2 rounded-xl border border-roman-terracotta/20 bg-gradient-to-br from-roman-parchment/50 to-white p-5">
-            <div className="font-serif leading-relaxed text-slate-900">
-              <SimpleRichDisplay content={item.data.latinText} />
-            </div>
-            <div className="text-sm italic text-slate-500">
-              <SimpleRichDisplay content={item.data.translation} />
-            </div>
-          </div>
-          {item.data.passageAudioPath ? (
-            <div className="mt-3">
-              <AudioPlayer audioPath={item.data.passageAudioPath} />
-            </div>
-          ) : null}
+          <ListeningPassageView
+            title={item.title}
+            instructions={item.instructions}
+            latinText={item.data.latinText}
+            translation={item.data.translation}
+            passageAudioPath={item.data.passageAudioPath}
+          />
         </div>
       );
     default:
@@ -180,11 +162,45 @@ export function TestResultReviewView({ result }: { result: StudentTestResult }) 
   const entries = useMemo(() => buildAccordionEntries(result), [result]);
 
   const defaultOpenEntry = entries.find(entry => !entry.correct) ?? entries[0];
+  const [openEntryId, setOpenEntryId] = useState(defaultOpenEntry?.id ?? '');
+  const [exportingPdf, setExportingPdf] = useState(false);
+
+  const exportPdf = async () => {
+    if (exportingPdf) return;
+    setExportingPdf(true);
+    try {
+      const { blob, filename } = await downloadSubmittedTestResultPdf(attempt.id);
+      saveBlobAsFile(blob, filename);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to export this result as a PDF');
+    } finally {
+      setExportingPdf(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-roman-marble p-4 md:p-8" data-testid="test-result-review">
       <div className="mx-auto max-w-4xl space-y-6">
+        <nav aria-label="Result navigation" className="flex flex-wrap gap-3">
+          <Button asChild variant="outline">
+            <a href="#result-summary">Back to summary</a>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/dashboard">Back to dashboard</Link>
+          </Button>
+          <Button
+            type="button"
+            className="bg-roman-red hover:bg-roman-red/90"
+            onClick={() => void exportPdf()}
+            disabled={exportingPdf}
+            data-testid="export-result-pdf">
+            <FileDown className="mr-2 h-4 w-4" aria-hidden="true" />
+            {exportingPdf ? 'Exporting PDF…' : 'Export PDF'}
+          </Button>
+        </nav>
         <div
+          id="result-summary"
+          tabIndex={-1}
           className={cn(
             'overflow-hidden rounded-2xl border bg-white shadow-md',
             attempt.outcome === 'not-passed' ? 'border-amber-300' : 'border-emerald-300'
@@ -216,8 +232,9 @@ export function TestResultReviewView({ result }: { result: StudentTestResult }) 
         ) : (
           <Accordion
             type="single"
-            collapsible={false}
-            defaultValue={defaultOpenEntry?.id}
+            collapsible
+            value={openEntryId}
+            onValueChange={setOpenEntryId}
             className="space-y-3"
             data-testid="test-result-accordion">
             {entries.map(entry => (
@@ -241,8 +258,13 @@ export function TestResultReviewView({ result }: { result: StudentTestResult }) 
                       <SimpleRichDisplay content={entry.title} className="truncate" />
                     </div>
                   </div>
-                  <span className="shrink-0 text-sm tabular-nums text-slate-500">
-                    {formatScorePoints(entry.awardedPoints)} / {formatScorePoints(entry.maxPoints)} points
+                  <span className="flex shrink-0 flex-col items-end gap-1 text-sm">
+                    <span className="tabular-nums text-slate-500">
+                      {formatScorePoints(entry.awardedPoints)} / {formatScorePoints(entry.maxPoints)} points
+                    </span>
+                    <span className="font-medium text-roman-red">
+                      {openEntryId === entry.id ? 'Hide answers' : 'Show answers'}
+                    </span>
                   </span>
                 </AccordionTrigger>
                 <AccordionContent className="space-y-4 px-5 py-5">
