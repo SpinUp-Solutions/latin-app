@@ -85,6 +85,12 @@ jobs:
       - name: Linter
         run: npm run lint
 
+      - name: Build Firebase Functions
+        run: npm ci --prefix functions && npm run build --prefix functions
+
+      - name: Type-check application and tests
+        run: npx tsc --noEmit
+
       - name: Run Jest unit, component, service, and route tests
         run: npm test -- --runInBand
 
@@ -99,9 +105,6 @@ jobs:
 
       - name: Run Storage feedback security rules tests
         run: npm run test:storage-rules
-
-      - name: Build Firebase Functions
-        run: npm ci --prefix functions && npm run build --prefix functions
 
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
