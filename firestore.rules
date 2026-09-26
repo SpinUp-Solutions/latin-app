@@ -90,17 +90,9 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Feedback reports, private activity, upload sessions and rate-limit
-    // counters are accessible only through authenticated server routes.
+    // Feedback reports and their private admin activity are accessible only
+    // through authenticated server routes.
     match /studentFeedback/{document=**} {
-      allow read, write: if false;
-    }
-
-    match /studentFeedbackSessions/{document=**} {
-      allow read, write: if false;
-    }
-
-    match /studentFeedbackThrottles/{document=**} {
       allow read, write: if false;
     }
 
@@ -185,8 +177,6 @@ service cloud.firestore {
         && collection != 'aiEvaluationResultCache'
         && collection != 'aiEvaluationRunThrottles'
         && collection != 'studentFeedback'
-        && collection != 'studentFeedbackSessions'
-        && collection != 'studentFeedbackThrottles'
         && collection != 'vocabulary_pools'
         && collection != 'vocabulary_words_v5'
         && collection != 'vocabulary_words_v4'

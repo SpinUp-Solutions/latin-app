@@ -573,12 +573,22 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
         contentClassName={navigationPlacement === 'fixed' ? 'pb-28 sm:pb-24' : undefined}
         headerAside={
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-            {shouldShowExerciseRing && <ExerciseCompletionRing completedCount={completedExerciseCount} requiredCount={requiredExerciseCount} />}
-            {shouldTrackProgress && authUid && <FeedbackLessonDialog
-              open={feedbackOpen}
-              onOpenChange={setFeedbackDialogOpen}
-              context={{ lessonId: lesson.id, pageId: currentPage.id, pageIndex: currentPageIndex, revision: lesson.version ?? 0 }}
-            />}
+            {shouldShowExerciseRing && (
+              <ExerciseCompletionRing completedCount={completedExerciseCount} requiredCount={requiredExerciseCount} />
+            )}
+            {shouldTrackProgress && authUid && (
+              <FeedbackLessonDialog
+                key={authUid}
+                open={feedbackOpen}
+                onOpenChange={setFeedbackDialogOpen}
+                context={{
+                  lessonId: lesson.id,
+                  lessonTitle: lesson.title,
+                  pageId: currentPage.id,
+                  pageNumber: currentPageIndex + 1,
+                }}
+              />
+            )}
           </div>
         }
         iconAdornment={

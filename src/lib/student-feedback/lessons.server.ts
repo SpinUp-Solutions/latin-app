@@ -1,102 +1,62 @@
 import type { Firestore, Transaction } from 'firebase-admin/firestore';
-import type { z } from 'zod';
 import { adminDb } from '@/src/services/firebase-admin';
-import { LEARNING_UNITS_COLLECTION, USER_PROGRESS_COLLECTION } from '@/shared/constants/firestore';
-import { feedbackLessonSnapshotSchema, type FeedbackLessonOption, type FeedbackSubmitRequest } from '@/shared/student-feedback';
-import { getLessonProgressAccessInTransaction } from '@/src/lib/learning-units/progression-access';
+import { LEARNING_UNITS_COLLECTION } from '@/shared/constants/firestore';
+import type { FeedbackLessonOption, FeedbackLessonSnapshot } from '@/shared/student-feedback';
 import { isLessonDocumentData, normalizeLearningUnit } from '@/src/lib/learning-units/domain';
 import { studentDashboardService } from '@/src/lib/learning-units/student-dashboard-service';
 import { stripHtmlTags } from '@/src/utils/exercises/helpers';
-import { FeedbackError, invalidFeedbackDocument } from './http.server';
+import { FeedbackError } from './http.server';
 
 export function boundedFeedbackTitle(title: string): string {
   return (title.length <= 500 ? title : stripHtmlTags(title).slice(0, 500)).trim() || 'Untitled lesson';
 }
 
 /** The dashboard already applies the student's progression and live-practice policy. */
-export async function listAccessibleFeedbackLessons(uid: string, db: Firestore = adminDb): Promise<FeedbackLessonOption[]> {
+export async function listAccessibleFeedbackLessons(uid: string): Promise<FeedbackLessonOption[]> {
   const dashboard = await studentDashboardService.getDashboard(uid);
-  const candidates = [...dashboard.learningPath, ...dashboard.practiceLessons].filter(
-    unit => unit.kind === 'lesson' && unit.status !== 'locked'
-  );
-  const options: FeedbackLessonOption[] = [];
-  for (let offset = 0; offset < candidates.length; offset += 100) {
-    const chunk = candidates.slice(offset, offset + 100);
-    const snapshots = await db.getAll(...chunk.map(unit => db.collection(LEARNING_UNITS_COLLECTION).doc(unit.id)));
-    snapshots.forEach((snapshot, index) => {
-      const data = snapshot.data();
-      if (!snapshot.exists || !isLessonDocumentData(data) || data._deletionPending === true) return;
-      const candidate = chunk[index];
-      if (candidate.kind !== 'lesson') return;
-      if (candidate.type !== 'normal' && data.isLive !== true) return;
-      options.push({
-        id: candidate.id,
-        title: boundedFeedbackTitle(candidate.title),
-        revision: typeof data.version === 'number' && Number.isSafeInteger(data.version) ? data.version : 0,
-      });
-    });
-  }
-  return options;
+  return [...dashboard.learningPath, ...dashboard.practiceLessons]
+    .filter(unit => unit.kind === 'lesson' && unit.status !== 'locked')
+    .map(unit => ({ id: unit.id, title: boundedFeedbackTitle(unit.title) }));
 }
 
-export async function validateFeedbackLessonInTransaction(
+function lessonUnavailable(): never {
+  throw new FeedbackError('FEEDBACK_LESSON_UNAVAILABLE', 'This lesson is no longer available', 409);
+}
+
+/** Snapshots the lesson and page title. A page that no longer exists is dropped rather than rejected. */
+export async function readFeedbackLessonInTransaction(
   transaction: Transaction,
   db: Firestore,
-  uid: string,
-  lessonId: NonNullable<FeedbackSubmitRequest['lessonId']>,
-  pageContext: FeedbackSubmitRequest['pageContext']
-): Promise<z.infer<typeof feedbackLessonSnapshotSchema>> {
-  const lessonRef = db.collection(LEARNING_UNITS_COLLECTION).doc(lessonId);
-  const progressRef = db.collection(USER_PROGRESS_COLLECTION).doc(`${uid}_${lessonId}`);
-  const [lessonSnapshot, progressSnapshot] = await Promise.all([
-    transaction.get(lessonRef),
-    transaction.get(progressRef),
-  ]);
-  const raw = lessonSnapshot.data();
-  if (!lessonSnapshot.exists || !isLessonDocumentData(raw) || raw._deletionPending === true) {
-    throw new FeedbackError('FEEDBACK_LESSON_INACCESSIBLE', 'This lesson is no longer available', 409);
-  }
+  lessonId: string,
+  pageId: string | null | undefined
+): Promise<FeedbackLessonSnapshot> {
+  const snapshot = await transaction.get(db.collection(LEARNING_UNITS_COLLECTION).doc(lessonId));
+  const raw = snapshot.data();
+  if (!snapshot.exists || !isLessonDocumentData(raw) || raw._deletionPending === true) lessonUnavailable();
 
   let unit: ReturnType<typeof normalizeLearningUnit>;
   try {
-    unit = normalizeLearningUnit(raw, lessonSnapshot.id);
+    unit = normalizeLearningUnit(raw, snapshot.id);
   } catch {
-    return invalidFeedbackDocument('The selected lesson contains invalid data');
+    lessonUnavailable();
   }
-  if (unit.kind !== 'lesson') {
-    throw new FeedbackError('FEEDBACK_LESSON_INACCESSIBLE', 'This lesson is no longer available', 409);
-  }
-  const access = await getLessonProgressAccessInTransaction(
-    transaction,
-    db,
-    unit,
-    uid,
-    progressSnapshot.exists
-  );
-  if (access !== 'allowed') {
-    throw new FeedbackError('FEEDBACK_LESSON_INACCESSIBLE', 'This lesson is no longer accessible', 409);
-  }
+  if (unit.kind !== 'lesson') lessonUnavailable();
 
-  const revision = typeof unit.version === 'number' && Number.isSafeInteger(unit.version) ? unit.version : 0;
-  let pageId: string | null = null;
-  let pageIndex: number | null = null;
-  let pageTitle: string | null = null;
-  if (pageContext) {
-    const page = unit.pages[pageContext.pageIndex];
-    if (pageContext.revision !== revision || !page || page.id !== pageContext.pageId) {
-      throw new FeedbackError('FEEDBACK_STALE_LESSON_CONTEXT', 'The lesson page changed. Please refresh the context.', 409);
-    }
-    pageId = page.id;
-    pageIndex = pageContext.pageIndex;
-    pageTitle = page.title ? boundedFeedbackTitle(page.title) : null;
-  }
-
+  const pageIndex = pageId ? unit.pages.findIndex(page => page.id === pageId) : -1;
+  const page = pageIndex >= 0 ? unit.pages[pageIndex] : null;
   return {
     id: unit.id,
     title: boundedFeedbackTitle(unit.title),
-    pageId,
-    pageIndex,
-    pageTitle,
-    revision,
+    pageId: page?.id ?? null,
+    pageIndex: page ? pageIndex : null,
+    pageTitle: page?.title ? boundedFeedbackTitle(page.title) : null,
   };
+}
+
+export async function getCurrentFeedbackLesson(lessonId: string | undefined, db: Firestore = adminDb) {
+  if (!lessonId) return null;
+  const snapshot = await db.collection(LEARNING_UNITS_COLLECTION).doc(lessonId).get();
+  const data = snapshot.data();
+  if (!snapshot.exists || !isLessonDocumentData(data) || data._deletionPending === true) return null;
+  return { id: lessonId, title: boundedFeedbackTitle(typeof data.title === 'string' ? data.title : '') };
 }

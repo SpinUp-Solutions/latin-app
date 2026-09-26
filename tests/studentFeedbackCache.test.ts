@@ -7,9 +7,9 @@ const mockBaseQuery = jest.fn();
 jest.mock('@/src/store/api/baseQuery', () => ({ createAuthenticatedBaseQuery: () => (...args: unknown[]) => mockBaseQuery(...args) }));
 
 const item = (id: string, status: 'unresolved' | 'resolved' = 'unresolved'): FeedbackAdminListItem => ({
-  id, type: 'general', severity: undefined, areas: ['lessons'], description: id,
+  id, type: 'general', areas: ['lessons'], excerpt: id,
   submitter: { uid: 'student-1', displayName: 'Student', email: 'student@example.edu', emailNormalized: 'student@example.edu' },
-  lesson: null, createdAt: '2026-09-24T10:00:00.000Z', status, archived: false, stateRevision: 0, attachments: [],
+  lesson: null, createdAt: '2026-09-24T10:00:00.000Z', status, archived: false, attachmentCount: 0,
 });
 const page = (items: FeedbackAdminListItem[], nextCursor: string | null = null) => ({ data: { items, nextCursor } });
 const storeFor = () => configureStore({
@@ -61,7 +61,7 @@ test('state mutation waits for an in-flight cursor page and refreshes affected l
   await store.dispatch(studentFeedbackApi.endpoints.getAdminFeedbackList.initiate(newest));
   const tail = store.dispatch(studentFeedbackApi.endpoints.getAdminFeedbackList.initiate({ ...newest, cursor: 'next' }));
   await waitFor(() => expect(releaseTail).toBeDefined());
-  const mutation = store.dispatch(studentFeedbackApi.endpoints.updateAdminFeedbackState.initiate({ feedbackId: 'top', action: 'resolve', expectedRevision: 0 }));
+  const mutation = store.dispatch(studentFeedbackApi.endpoints.updateAdminFeedbackState.initiate({ feedbackId: 'top', action: 'resolve' }));
   await mutation;
   expect(mockBaseQuery.mock.calls.filter(([request]) => typeof request === 'string' && new URL(request, 'https://latin.test').pathname === '/admin/feedback')).toHaveLength(2);
   releaseTail!();
@@ -69,26 +69,19 @@ test('state mutation waits for an in-flight cursor page and refreshes affected l
   await waitFor(() => expect(studentFeedbackApi.endpoints.getAdminFeedbackList.select(newest)(store.getState()).data?.items).toEqual([]));
 });
 
-test('a note refreshes accumulated activity after an in-flight history page', async () => {
+test('a note refreshes the report detail, which includes its activity', async () => {
   const store = storeFor();
-  let releaseOlder: (() => void) | undefined;
   let noted = false;
-  const activity = (id: string) => ({ id, feedbackId: 'report-1', kind: 'note', actorUid: 'admin', actorDisplayName: null, createdAt: '2026-09-24T10:00:00.000Z', reason: null, note: id, requestId: '8c271c82-5d1b-4604-9891-d1269d5e1531', schemaVersion: 1 });
+  const note = { id: 'note-1', kind: 'note', actorUid: 'admin', actorDisplayName: null, createdAt: '2026-09-24T10:00:00.000Z', reason: null, note: 'Checked' };
   mockBaseQuery.mockImplementation(async (request: string | { url: string }) => {
     const url = new URL(typeof request === 'string' ? request : request.url, 'https://latin.test');
-    if (url.pathname.endsWith('/notes')) { noted = true; return { data: { activity: activity('new') } }; }
-    if (url.pathname.endsWith('/activity')) {
-      if (url.searchParams.has('cursor')) { await new Promise<void>(resolve => { releaseOlder = resolve; }); return { data: { items: [activity('older')], nextCursor: null } }; }
-      return { data: { items: noted ? [activity('new')] : [activity('first')], nextCursor: noted ? null : 'next' } };
-    }
+    if (url.pathname.endsWith('/notes')) { noted = true; return { data: { activity: note } }; }
+    if (url.pathname === '/admin/feedback/report-1') return { data: { feedback: { id: 'report-1' }, activity: noted ? [note] : [], currentLesson: null } };
     throw new Error(`Unexpected ${url}`);
   });
-  const first = { feedbackId: 'report-1', cursor: null };
-  await store.dispatch(studentFeedbackApi.endpoints.getAdminFeedbackActivity.initiate(first));
-  const older = store.dispatch(studentFeedbackApi.endpoints.getAdminFeedbackActivity.initiate({ feedbackId: 'report-1', cursor: 'next' }));
-  await waitFor(() => expect(releaseOlder).toBeDefined());
-  await store.dispatch(studentFeedbackApi.endpoints.addAdminFeedbackNote.initiate({ feedbackId: 'report-1', note: 'new', requestId: '8c271c82-5d1b-4604-9891-d1269d5e1531' }));
-  releaseOlder!();
-  await older;
-  await waitFor(() => expect(studentFeedbackApi.endpoints.getAdminFeedbackActivity.select(first)(store.getState()).data?.items.map(item => item.id)).toEqual(['new']));
+  const subscription = store.dispatch(studentFeedbackApi.endpoints.getAdminFeedbackDetail.initiate('report-1'));
+  await subscription;
+  await store.dispatch(studentFeedbackApi.endpoints.addAdminFeedbackNote.initiate({ feedbackId: 'report-1', note: 'Checked' }));
+  await waitFor(() => expect(studentFeedbackApi.endpoints.getAdminFeedbackDetail.select('report-1')(store.getState()).data?.activity).toEqual([note]));
+  subscription.unsubscribe();
 });

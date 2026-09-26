@@ -14,13 +14,7 @@ const environment = await initializeTestEnvironment({
 });
 
 try {
-  const paths = [
-    'studentFeedback/report-1',
-    'studentFeedback/report-1/activity/note-1',
-    'studentFeedbackSessions/session-1',
-    'studentFeedbackSessions/session-1/attachments/file-1',
-    'studentFeedbackThrottles/student-1',
-  ];
+  const paths = ['studentFeedback/report-1', 'studentFeedback/report-1/activity/note-1'];
   await environment.withSecurityRulesDisabled(async context => {
     const seedDb = context.firestore();
     for (const path of paths) await setDoc(doc(seedDb, path), { value: true });
@@ -44,7 +38,7 @@ try {
     }
   }
 
-  console.log('Verified feedback reports, activity, sessions, reservations and throttles deny direct client access.');
+  console.log('Verified feedback reports and activity deny direct client access.');
 } finally {
   await environment.cleanup();
 }

@@ -1,171 +1,230 @@
 import React, { useState } from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { FeedbackComposer } from '@/src/components/student-feedback/FeedbackComposer';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { toast } from 'sonner';
+import { FeedbackForm } from '@/src/components/student-feedback/FeedbackForm';
 import { FeedbackLessonDialog } from '@/src/components/student-feedback/FeedbackLessonDialog';
+import { useFeedbackDraft } from '@/src/hooks/useFeedbackDraft';
+import type { FeedbackUpload } from '@/src/hooks/useFeedbackUploads';
 
 const mockSubmit = jest.fn();
-const mockCreateSession = jest.fn();
-const mockGetSession = jest.fn();
-const mockRefetchLessons = jest.fn();
-const mockResetAttachments = jest.fn();
-let mockAuthUid = 'student-1';
-let mockAttachmentItems: Array<{ id: string; name: string; size: number; status: 'error'; progress: number; error: string }> = [];
+const mockDispatch = jest.fn();
+const mockResetUploads = jest.fn();
+const mockUploads: { uploads: FeedbackUpload[]; uploading: boolean; failed: boolean; ready: Array<{ id: string; name: string }> } = {
+  uploads: [],
+  uploading: false,
+  failed: false,
+  ready: [],
+};
 
-jest.mock('@/src/hooks/useAuth', () => ({ useAuth: () => ({ authUid: mockAuthUid }) }));
-jest.mock('@/src/hooks/useFeedbackAttachments', () => ({ useFeedbackAttachments: () => ({ items: mockAttachmentItems, addFiles: jest.fn(), retry: jest.fn(), remove: jest.fn(), reset: mockResetAttachments, readyIds: [], hasPendingOrFailed: mockAttachmentItems.length > 0 }) }));
-jest.mock('@/src/hooks/useUnsavedNavigationGuard', () => ({ useUnsavedNavigationGuard: () => ({ isOpen: false, message: '', stayOnPage: jest.fn(), leavePage: jest.fn(), requestNavigation: jest.fn(), replaceAfterSave: jest.fn() }) }));
-jest.mock('@/src/store/api/studentFeedbackApi', () => ({
-  useCreateFeedbackSessionMutation: () => [mockCreateSession],
-  useLazyGetFeedbackSessionQuery: () => [mockGetSession],
-  useSubmitFeedbackMutation: () => [mockSubmit, { isLoading: false }],
-  useGetFeedbackLessonsQuery: () => ({ data: { lessons: [
-    { id: 'lesson-1', title: '<strong>First lesson</strong>', revision: 3 },
-    { id: 'lesson-2', title: 'Second lesson', revision: 2 },
-  ] }, isLoading: false, isError: false, refetch: mockRefetchLessons }),
+jest.mock('sonner', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
+jest.mock('@/src/store/hooks', () => ({ useAppDispatch: () => mockDispatch }));
+jest.mock('@/src/hooks/useUnsavedNavigationGuard', () => ({
+  useUnsavedNavigationGuard: () => ({ isOpen: false, message: '', stayOnPage: jest.fn(), leavePage: jest.fn() }),
 }));
+jest.mock('@/src/hooks/useFeedbackUploads', () => ({
+  useFeedbackUploads: () => ({ ...mockUploads, addFiles: jest.fn(() => []), retry: jest.fn(), remove: jest.fn(), reset: mockResetUploads }),
+}));
+jest.mock('@/src/store/api/studentFeedbackApi', () => ({
+  studentFeedbackApi: { util: { invalidateTags: (tags: unknown) => ({ type: 'invalidate', tags }) } },
+  useSubmitFeedbackMutation: () => [mockSubmit, { isLoading: false }],
+  useGetFeedbackLessonsQuery: () => ({
+    data: {
+      lessons: [
+        { id: 'lesson-1', title: '<strong>First lesson</strong>' },
+        { id: 'lesson-2', title: 'Second lesson' },
+      ],
+    },
+    isLoading: false,
+    isError: false,
+    refetch: jest.fn(),
+  }),
+}));
+
+const receipt = (feedbackId: string) => ({ unwrap: () => Promise.resolve({ receipt: { feedbackId, submittedAt: '2026-09-24T10:00:00.000Z' } }) });
+const form = () => screen.getByRole('form', { name: 'Student feedback form' });
+const description = () => screen.getByLabelText('Tell us more');
+
+function Standalone() {
+  const draft = useFeedbackDraft({ entryPoint: 'standalone' });
+  return <FeedbackForm draft={draft} variant="page" />;
+}
+
+function LessonHarness() {
+  const [open, setOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  return (
+    <>
+      <button onClick={() => setPage(2)}>Next lesson page</button>
+      <FeedbackLessonDialog
+        open={open}
+        onOpenChange={setOpen}
+        context={{ lessonId: 'lesson-1', lessonTitle: '<strong>First lesson</strong>', pageId: `page-${page}`, pageNumber: page }}
+      />
+    </>
+  );
+}
+
+function completeBugReport() {
+  fireEvent.click(screen.getByLabelText('Bug report'));
+  fireEvent.click(screen.getByLabelText('Major'));
+  fireEvent.click(screen.getByLabelText('Lessons'));
+  fireEvent.change(description(), { target: { value: '  Audio stops\non page two  ' } });
+}
+
+beforeAll(() => {
+  Element.prototype.scrollIntoView = jest.fn();
+  global.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+});
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockAuthUid = 'student-1';
-  mockAttachmentItems = [];
-  mockResetAttachments.mockImplementation(() => { mockAttachmentItems = []; });
+  Object.assign(mockUploads, { uploads: [], uploading: false, failed: false, ready: [] });
   let uuid = 0;
-  Object.defineProperty(globalThis.crypto, 'randomUUID', { configurable: true, value: () => `a5361411-a326-4845-8465-${String(++uuid).padStart(12, '0')}` });
-  mockCreateSession.mockReturnValue({ unwrap: () => Promise.resolve({ session: { status: 'open' } }) });
-  mockSubmit.mockReturnValue({ unwrap: () => Promise.resolve({ receipt: { feedbackId: 'a5361411-a326-4845-8465-259154c05e14', submittedAt: '2026-09-24T10:00:00.000Z' } }) });
-  mockGetSession.mockReturnValue({ unwrap: () => Promise.resolve({ session: { status: 'open', receipt: null } }) });
+  Object.defineProperty(globalThis.crypto, 'randomUUID', {
+    configurable: true,
+    value: () => `a5361411-a326-4845-8465-${String(++uuid).padStart(12, '0')}`,
+  });
+  mockSubmit.mockImplementation((body: { draftId: string }) => receipt(body.draftId));
 });
 
-function completeRequiredFields() {
-  fireEvent.click(screen.getByLabelText('Bug report'));
-  fireEvent.click(screen.getByLabelText('Major (broken with workaround)'));
-  fireEvent.click(screen.getByLabelText('Lessons / lesson content'));
-  fireEvent.change(screen.getByLabelText(/Describe the issue or suggestion/), { target: { value: '  A broken thing\nOn the next line  ' } });
-}
+test('shows friendly errors, focuses the first one, and submits only fields that apply', async () => {
+  render(<Standalone />);
+  fireEvent.submit(form());
+  expect(await screen.findByText('Choose what kind of feedback this is')).toBeInTheDocument();
+  expect(screen.getByText('Choose at least one area')).toBeInTheDocument();
+  expect(screen.getByLabelText('Bug report')).toHaveFocus();
+  expect(mockSubmit).not.toHaveBeenCalled();
 
-test('requires conditional fields, focuses the first error, and submits trimmed plain text', async () => {
-  render(<FeedbackComposer entryPoint="standalone" />);
-  expect(screen.getByLabelText('Bug report')).not.toBeChecked();
-  expect(screen.getByLabelText('No rating')).toBeChecked();
-  fireEvent.submit(screen.getByRole('form', { name: 'Student feedback form' }));
-  expect(await screen.findByText(/Invalid option/)).toBeInTheDocument();
-  await waitFor(() => expect(screen.getByLabelText('Bug report')).toHaveFocus());
-  completeRequiredFields();
-  fireEvent.click(screen.getByLabelText('Other', { exact: true }));
-  fireEvent.submit(screen.getByRole('form', { name: 'Student feedback form' }));
-  expect(screen.getByLabelText(/Please explain Other/)).toHaveAttribute('aria-invalid', 'true');
-  fireEvent.change(screen.getByLabelText(/Please explain Other/), { target: { value: '  Screen layout  ' } });
-  fireEvent.click(screen.getByLabelText('Other', { exact: true }));
-  fireEvent.click(screen.getByLabelText('Other', { exact: true }));
-  fireEvent.change(screen.getByLabelText(/Please explain Other/), { target: { value: '  Screen layout  ' } });
-  fireEvent.submit(screen.getByRole('form', { name: 'Student feedback form' }));
+  completeBugReport();
+  fireEvent.click(screen.getByLabelText('Other'));
+  fireEvent.submit(form());
+  expect(await screen.findByText('Tell us which area you mean')).toBeInTheDocument();
+  expect(screen.getByLabelText('Which other area?')).toHaveFocus();
+
+  fireEvent.change(screen.getByLabelText('Which other area?'), { target: { value: ' Printing ' } });
+  fireEvent.click(screen.getByLabelText('4 of 5: Very good'));
+  fireEvent.submit(form());
   await waitFor(() => expect(mockSubmit).toHaveBeenCalledTimes(1));
-  const body = mockSubmit.mock.calls[0][0];
-  expect(body).toMatchObject({ type: 'bug_report', severity: 'major', areas: ['lessons', 'other'], otherAreaExplanation: 'Screen layout', description: 'A broken thing\nOn the next line', lessonId: null, attachmentIds: [] });
-  expect(body.diagnostics.route).not.toContain('?');
+  expect(mockSubmit.mock.calls[0][0]).toMatchObject({
+    draftId: 'a5361411-a326-4845-8465-000000000001',
+    type: 'bug_report',
+    severity: 'major',
+    areas: ['lessons', 'other'],
+    otherAreaExplanation: 'Printing',
+    description: 'Audio stops\non page two',
+    rating: 4,
+    lessonId: null,
+    pageId: null,
+    attachments: [],
+    diagnostics: { entryPoint: 'standalone' },
+  });
   expect(await screen.findByText(/Reference:/)).toBeInTheDocument();
 });
 
-test('changing feedback type and lesson clears irrelevant severity and page context', async () => {
-  render(<FeedbackComposer entryPoint="lesson" lessonContext={{ lessonId: 'lesson-1', pageId: 'page-2', pageIndex: 1, revision: 3 }} />);
-  completeRequiredFields();
-  fireEvent.click(screen.getByLabelText('Feature suggestion'));
-  expect(screen.queryByLabelText('Major (broken with workaround)')).not.toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText('Related lesson (optional)'), { target: { value: 'lesson-2' } });
-  fireEvent.submit(screen.getByRole('form', { name: 'Student feedback form' }));
+test('hidden answers stay in the draft but are not submitted', async () => {
+  render(<Standalone />);
+  completeBugReport();
+  fireEvent.click(screen.getByLabelText('Other'));
+  fireEvent.change(screen.getByLabelText('Which other area?'), { target: { value: 'Printing' } });
+  fireEvent.click(screen.getByLabelText('Other'));
+  fireEvent.click(screen.getByLabelText('Suggestion'));
+  expect(screen.queryByLabelText('Major')).not.toBeInTheDocument();
+  fireEvent.submit(form());
   await waitFor(() => expect(mockSubmit).toHaveBeenCalledTimes(1));
-  expect(mockSubmit.mock.calls[0][0]).toMatchObject({ type: 'feature_suggestion', lessonId: 'lesson-2', pageContext: null });
-  expect(mockSubmit.mock.calls[0][0]).not.toHaveProperty('severity');
+  const sent = JSON.parse(JSON.stringify(mockSubmit.mock.calls[0][0]));
+  expect(sent).toMatchObject({ type: 'feature_suggestion', areas: ['lessons'] });
+  expect(sent).not.toHaveProperty('severity');
+  expect(sent).not.toHaveProperty('otherAreaExplanation');
 });
 
-test('lesson dialog preserves the draft after closing and releases the modal layer', async () => {
-  function Harness() {
-    const [open, setOpen] = useState(false);
-    return <FeedbackLessonDialog open={open} onOpenChange={setOpen} context={{ lessonId: 'lesson-1', pageId: 'page-2', pageIndex: 1, revision: 3 }} />;
-  }
-  render(<Harness />);
-  fireEvent.click(screen.getByRole('button', { name: 'Feedback' }));
-  fireEvent.change(screen.getByLabelText(/Describe the issue or suggestion/), { target: { value: 'A draft that stays' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Close feedback' }));
-  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Share feedback' })).not.toBeInTheDocument());
-  expect(document.body.style.pointerEvents).not.toBe('none');
-  fireEvent.click(screen.getByRole('button', { name: 'Feedback' }));
-  expect(screen.getByLabelText(/Describe the issue or suggestion/)).toHaveValue('A draft that stays');
+test('waits for uploads and asks the student to fix failed ones', async () => {
+  mockUploads.uploading = true;
+  const { rerender } = render(<Standalone />);
+  expect(screen.getByRole('button', { name: /Waiting for uploads/ })).toBeDisabled();
+
+  Object.assign(mockUploads, { uploading: false, failed: true });
+  rerender(<Standalone />);
+  completeBugReport();
+  fireEvent.submit(form());
+  await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Retry or remove the files that failed to upload.'));
+  expect(mockSubmit).not.toHaveBeenCalled();
 });
 
-test('expired submission session retains the draft and retries with a new session ID', async () => {
-  mockSubmit.mockReturnValueOnce({ unwrap: () => Promise.reject({ status: 409, data: { code: 'FEEDBACK_SESSION_EXPIRED', error: 'Expired' } }) });
-  render(<FeedbackComposer entryPoint="standalone" />);
-  completeRequiredFields();
-  fireEvent.submit(screen.getByRole('form', { name: 'Student feedback form' }));
-  await waitFor(() => expect(mockResetAttachments).toHaveBeenCalled());
-  expect(screen.getByLabelText(/Describe the issue or suggestion/)).toHaveValue('  A broken thing\nOn the next line  ');
-  fireEvent.submit(screen.getByRole('form', { name: 'Student feedback form' }));
+test('a removed lesson is cleared from the draft so the student can send again', async () => {
+  mockSubmit.mockReturnValueOnce({
+    unwrap: () => Promise.reject({ status: 409, data: { code: 'FEEDBACK_LESSON_UNAVAILABLE', error: 'Gone' } }),
+  });
+  render(<Standalone />);
+  completeBugReport();
+  fireEvent.click(screen.getByRole('combobox'));
+  fireEvent.click(await screen.findByRole('option', { name: 'Second lesson' }));
+  fireEvent.submit(form());
+  await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('no longer available')));
+  expect(mockSubmit.mock.calls[0][0]).toMatchObject({ lessonId: 'lesson-2' });
+  expect(mockDispatch).toHaveBeenCalledWith({ type: 'invalidate', tags: ['FeedbackLessons'] });
+  expect(screen.getByRole('combobox')).toHaveTextContent('Not about a specific lesson');
+
+  fireEvent.submit(form());
   await waitFor(() => expect(mockSubmit).toHaveBeenCalledTimes(2));
-  expect(mockSubmit.mock.calls[1][0].sessionId).not.toBe(mockSubmit.mock.calls[0][0].sessionId);
+  expect(mockSubmit.mock.calls[1][0]).toMatchObject({ lessonId: null, draftId: mockSubmit.mock.calls[0][0].draftId });
 });
 
-test('failed upload can be discarded with its expired session without losing written feedback', async () => {
-  mockAttachmentItems = [{ id: 'attachment-1', name: 'screen.png', size: 1024, status: 'error', progress: 1, error: 'Feedback session expired' }];
-  render(<FeedbackComposer entryPoint="standalone" />);
-  completeRequiredFields();
-  expect(screen.getByRole('button', { name: 'Submit feedback' })).toBeDisabled();
-  fireEvent.click(screen.getByRole('button', { name: 'Remove uploads and start a new session' }));
-  expect(mockResetAttachments).toHaveBeenCalled();
-  expect(screen.getByLabelText(/Describe the issue or suggestion/)).toHaveValue('  A broken thing\nOn the next line  ');
-  expect(screen.getByRole('button', { name: 'Submit feedback' })).toBeEnabled();
-});
-
-test.each(['Return to lesson', 'Close feedback', 'Escape'])('a completed lesson report resets after %s and captures the next page', async closeAction => {
-  function Harness() {
-    const [open, setOpen] = useState(false);
-    const [pageIndex, setPageIndex] = useState(0);
-    return <>
-      <button onClick={() => setPageIndex(1)}>Next lesson page</button>
-      <FeedbackLessonDialog open={open} onOpenChange={setOpen} context={{ lessonId: 'lesson-1', pageId: `page-${pageIndex + 1}`, pageIndex, revision: 3 }} />
-    </>;
-  }
-  render(<Harness />);
+test('the lesson panel keeps the draft when closed and follows the current page', async () => {
+  render(<LessonHarness />);
   fireEvent.click(screen.getByRole('button', { name: 'Feedback' }));
-  completeRequiredFields();
-  fireEvent.submit(screen.getByRole('form', { name: 'Student feedback form' }));
+  expect(screen.getByRole('combobox')).toHaveTextContent('First lesson');
+  expect(screen.getByRole('combobox')).toHaveTextContent('Page 1');
+  fireEvent.change(description(), { target: { value: 'A draft that stays' } });
+  fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(document.body.style.pointerEvents).not.toBe('none');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Next lesson page' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Feedback' }));
+  expect(description()).toHaveValue('A draft that stays');
+  expect(screen.getByRole('combobox')).toHaveTextContent('Page 2');
+  completeBugReport();
+  fireEvent.submit(form());
+  await waitFor(() => expect(mockSubmit).toHaveBeenCalledTimes(1));
+  expect(mockSubmit.mock.calls[0][0]).toMatchObject({
+    lessonId: 'lesson-1',
+    pageId: 'page-2',
+    diagnostics: { entryPoint: 'lesson' },
+  });
+});
+
+test.each(['Back to lesson', 'Escape'])('a sent lesson report starts fresh after %s', async closeAction => {
+  render(<LessonHarness />);
+  fireEvent.click(screen.getByRole('button', { name: 'Feedback' }));
+  completeBugReport();
+  fireEvent.submit(form());
   expect(await screen.findByText(/Reference:/)).toBeInTheDocument();
   if (closeAction === 'Escape') fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
   else fireEvent.click(screen.getByRole('button', { name: closeAction }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-  fireEvent.click(screen.getByRole('button', { name: 'Next lesson page' }));
+  expect(mockResetUploads).toHaveBeenCalled();
+
   fireEvent.click(screen.getByRole('button', { name: 'Feedback' }));
   expect(screen.queryByText(/Reference:/)).not.toBeInTheDocument();
-  expect(screen.getByLabelText(/Describe the issue or suggestion/)).toHaveValue('');
-  expect(screen.getByLabelText('Bug report')).not.toBeChecked();
-  completeRequiredFields();
-  fireEvent.submit(screen.getByRole('form', { name: 'Student feedback form' }));
+  expect(description()).toHaveValue('');
+  completeBugReport();
+  fireEvent.submit(form());
   await waitFor(() => expect(mockSubmit).toHaveBeenCalledTimes(2));
-  expect(mockSubmit.mock.calls[1][0]).toMatchObject({ lessonId: 'lesson-1', pageContext: { pageId: 'page-2', pageIndex: 1, revision: 3 } });
-  expect(mockSubmit.mock.calls[1][0].sessionId).not.toBe(mockSubmit.mock.calls[0][0].sessionId);
+  expect(mockSubmit.mock.calls[1][0].draftId).not.toBe(mockSubmit.mock.calls[0][0].draftId);
 });
 
-test('standalone submit-another clears the entire form and starts a new session', async () => {
-  render(<FeedbackComposer entryPoint="standalone" />);
-  completeRequiredFields();
-  fireEvent.change(screen.getByLabelText('Search lessons'), { target: { value: 'First' } });
-  fireEvent.change(screen.getByLabelText('Related lesson (optional)'), { target: { value: 'lesson-1' } });
-  fireEvent.submit(screen.getByRole('form', { name: 'Student feedback form' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Submit another' }));
-  expect(screen.getByLabelText('Search lessons')).toHaveValue('');
-  expect(screen.getByLabelText('Related lesson (optional)')).toHaveValue('');
-  expect(screen.getByLabelText(/Describe the issue or suggestion/)).toHaveValue('');
-  completeRequiredFields();
-  fireEvent.submit(screen.getByRole('form', { name: 'Student feedback form' }));
-  await waitFor(() => expect(mockSubmit).toHaveBeenCalledTimes(2));
-  expect(mockSubmit.mock.calls[1][0].sessionId).not.toBe(mockSubmit.mock.calls[0][0].sessionId);
-});
-
-test('changing accounts discards the previous account’s draft', () => {
-  const { rerender } = render(<FeedbackComposer entryPoint="standalone" />);
-  completeRequiredFields();
-  mockAuthUid = 'student-2';
-  rerender(<FeedbackComposer entryPoint="standalone" />);
-  expect(screen.getByLabelText(/Describe the issue or suggestion/)).toHaveValue('');
-  expect(screen.getByLabelText('Bug report')).not.toBeChecked();
+test('choosing a different lesson drops the page, and choosing the current one restores it', async () => {
+  render(<LessonHarness />);
+  fireEvent.click(screen.getByRole('button', { name: 'Feedback' }));
+  fireEvent.click(screen.getByRole('combobox'));
+  fireEvent.click(await screen.findByRole('option', { name: 'Second lesson' }));
+  expect(screen.getByRole('combobox')).not.toHaveTextContent('Page');
+  fireEvent.click(screen.getByRole('combobox'));
+  fireEvent.click(await screen.findByRole('option', { name: 'First lesson' }));
+  expect(screen.getByRole('combobox')).toHaveTextContent('Page 1');
+  await act(async () => undefined);
 });

@@ -1,117 +1,423 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { RefreshCw } from 'lucide-react';
+import { BookOpen, ChevronRight, Inbox, Paperclip, RefreshCw, Tag, User, X } from 'lucide-react';
 import {
   FEEDBACK_AREAS,
   FEEDBACK_AREA_LABELS,
   FEEDBACK_SEVERITIES,
+  FEEDBACK_SEVERITY_LABELS,
   FEEDBACK_TYPES,
-  type FeedbackAdminListQuery,
+  FEEDBACK_TYPE_LABELS,
+  type FeedbackAdminListItem,
 } from '@/shared/student-feedback';
-import { AdminPage, AdminPageHeader } from '@/src/components/admin/shell';
+import {
+  AdminEmptyState,
+  AdminErrorState,
+  AdminLoadingState,
+  AdminPage,
+  AdminPageHeader,
+  AdminSearchInput,
+} from '@/src/components/admin/shell';
+import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 import { Button } from '@/src/components/ui/button';
+import { Input } from '@/src/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
+import { Switch } from '@/src/components/ui/switch';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { getApiErrorMessage } from '@/src/store/api/baseQuery';
-import { useGetAdminFeedbackCountQuery, useGetAdminFeedbackListQuery, type FeedbackListArgs } from '@/src/store/api/studentFeedbackApi';
-import { refreshFeedbackListPageOne } from '@/src/store/api/studentFeedbackApi';
+import {
+  refreshFeedbackListPageOne,
+  useGetAdminFeedbackCountQuery,
+  useGetAdminFeedbackListQuery,
+  type FeedbackListArgs,
+} from '@/src/store/api/studentFeedbackApi';
 import { useAppDispatch } from '@/src/store/hooks';
-import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
+import { cn } from '@/src/lib/utils';
+import { FeedbackBadges, FeedbackTypeIcon, formatDateTime, formatRelativeTime, submitterName } from './feedback-ui';
 
-const TYPE_LABELS = { bug_report: 'Bug report', feature_suggestion: 'Feature suggestion', general: 'General feedback' } as const;
-const SEVERITY_LABELS = { blocking: 'Blocking', major: 'Major', minor: 'Minor' } as const;
-const QUERY_KEYS = ['status', 'archived', 'type', 'severity', 'area', 'lessonId', 'from', 'to', 'submitterUid', 'submitterEmail', 'feedbackId', 'sort'] as const;
-const dateForInput = (iso?: string) => {
-  if (!iso) return '';
-  const date = new Date(iso);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-};
-const isoForDate = (date: string, end = false) => {
-  if (!date) return '';
-  const [year, month, day] = date.split('-').map(Number);
-  return new Date(year, month - 1, day, end ? 23 : 0, end ? 59 : 0, end ? 59 : 0, end ? 999 : 0).toISOString();
-};
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ANY = 'any';
+const STATUS_TABS = [
+  { value: 'unresolved', label: 'Open' },
+  { value: 'resolved', label: 'Resolved' },
+  { value: 'all', label: 'All' },
+] as const;
+const FILTER_KEYS = ['type', 'severity', 'area', 'from', 'to', 'lessonId', 'submitterUid', 'submitterEmail'] as const;
+
+function pick<T extends string>(value: string | null, allowed: readonly T[]): T | undefined {
+  return value && (allowed as readonly string[]).includes(value) ? (value as T) : undefined;
+}
+
+/** Dates stay as local calendar days in the URL and become ISO bounds for the query. */
+function isoFromDate(date: string | null, endOfDay = false): string | undefined {
+  const match = date?.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return undefined;
+  const [, year, month, day] = match.map(Number);
+  const value = endOfDay ? new Date(year, month - 1, day, 23, 59, 59, 999) : new Date(year, month - 1, day);
+  return Number.isNaN(value.getTime()) ? undefined : value.toISOString();
+}
+
+function filtersFromParams(params: URLSearchParams): FeedbackListArgs {
+  return {
+    status: pick(params.get('status'), ['unresolved', 'resolved', 'all'] as const) ?? 'unresolved',
+    archived: params.get('archived') === 'true' ? 'true' : 'false',
+    sort: params.get('sort') === 'oldest' ? 'oldest' : 'newest',
+    type: pick(params.get('type'), FEEDBACK_TYPES),
+    severity: pick(params.get('severity'), FEEDBACK_SEVERITIES),
+    area: pick(params.get('area'), FEEDBACK_AREAS),
+    from: isoFromDate(params.get('from')),
+    to: isoFromDate(params.get('to'), true),
+    lessonId: params.get('lessonId') || undefined,
+    submitterUid: params.get('submitterUid') || undefined,
+    submitterEmail: params.get('submitterEmail') || undefined,
+  };
+}
+
+function FilterSelect<T extends string>({
+  label,
+  anyLabel,
+  value,
+  options,
+  labels,
+  onChange,
+}: {
+  label: string;
+  anyLabel: string;
+  value: T | undefined;
+  options: readonly T[];
+  labels: Record<T, string>;
+  onChange: (value: T | null) => void;
+}) {
+  return (
+    <Select value={value ?? ANY} onValueChange={next => onChange(next === ANY ? null : (next as T))}>
+      <SelectTrigger aria-label={label} className="bg-white">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={ANY}>{anyLabel}</SelectItem>
+        {options.map(option => (
+          <SelectItem key={option} value={option}>
+            {labels[option]}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function FilterChip({ label, onRemove }: { label: ReactNode; onRemove: () => void }) {
+  return (
+    <span className="inline-flex max-w-full items-center gap-1 rounded-full border border-primary/20 bg-primary/5 py-0.5 pl-3 pr-1 text-xs font-medium text-foreground">
+      <span className="min-w-0 truncate">{label}</span>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="rounded-full p-0.5 text-roman-stone hover:bg-primary/10 hover:text-primary"
+        aria-label="Remove filter">
+        <X className="h-3.5 w-3.5" aria-hidden="true" />
+      </button>
+    </span>
+  );
+}
+
+function FeedbackRow({ item, href }: { item: FeedbackAdminListItem; href: string }) {
+  return (
+    <li>
+      <Link
+        href={href}
+        className="group flex gap-4 rounded-xl border border-border bg-white p-4 shadow-sm transition-[border-color,box-shadow] hover:border-primary/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <FeedbackTypeIcon type={item.type} />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold text-foreground">{FEEDBACK_TYPE_LABELS[item.type]}</span>
+            <FeedbackBadges report={item} />
+            <time className="ml-auto text-xs text-roman-stone" dateTime={item.createdAt} title={formatDateTime(item.createdAt)}>
+              {formatRelativeTime(item.createdAt)}
+            </time>
+          </div>
+          <p className="mt-1.5 line-clamp-2 whitespace-pre-line break-words text-sm leading-relaxed text-foreground/90">
+            {item.excerpt}
+          </p>
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-roman-stone">
+            <span className="inline-flex items-center gap-1.5">
+              <User className="h-3.5 w-3.5" aria-hidden="true" />
+              {submitterName(item.submitter)}
+            </span>
+            {item.lesson && (
+              <span className="inline-flex min-w-0 max-w-full items-center gap-1.5">
+                <BookOpen className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <SimpleRichDisplay content={item.lesson.title} className="min-w-0 truncate text-xs text-roman-stone [&_p]:truncate" />
+                {item.lesson.pageIndex !== null && <span className="shrink-0">· p. {item.lesson.pageIndex + 1}</span>}
+              </span>
+            )}
+            <span className="inline-flex items-center gap-1.5">
+              <Tag className="h-3.5 w-3.5" aria-hidden="true" />
+              {item.areas.map(area => FEEDBACK_AREA_LABELS[area]).join(', ')}
+            </span>
+            {item.attachmentCount > 0 && (
+              <span className="inline-flex items-center gap-1.5">
+                <Paperclip className="h-3.5 w-3.5" aria-hidden="true" />
+                {item.attachmentCount}
+              </span>
+            )}
+          </div>
+        </div>
+        <ChevronRight
+          className="hidden h-5 w-5 shrink-0 self-center text-roman-stone/60 transition-transform group-hover:translate-x-0.5 sm:block"
+          aria-hidden="true"
+        />
+      </Link>
+    </li>
+  );
+}
 
 export function FeedbackList() {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const searchParams = useSearchParams();
-  const [cursor, setCursor] = useState<string | null>(null);
   const queryString = searchParams.toString();
-  const [textFilters, setTextFilters] = useState(() => ({ lessonId: searchParams.get('lessonId') ?? '', submitterEmail: searchParams.get('submitterEmail') ?? '', submitterUid: searchParams.get('submitterUid') ?? '', feedbackId: searchParams.get('feedbackId') ?? '' }));
-  useEffect(() => setCursor(null), [queryString]);
-  useEffect(() => {
-    const current = new URLSearchParams(queryString);
-    setTextFilters({ lessonId: current.get('lessonId') ?? '', submitterEmail: current.get('submitterEmail') ?? '', submitterUid: current.get('submitterUid') ?? '', feedbackId: current.get('feedbackId') ?? '' });
-  }, [queryString]);
-  const filters: FeedbackListArgs = {
-    status: searchParams.get('status') === 'resolved' ? 'resolved' : searchParams.get('status') === 'all' ? 'all' : 'unresolved',
-    archived: searchParams.get('archived') === 'true' ? 'true' : 'false',
-    sort: searchParams.get('sort') === 'oldest' ? 'oldest' : 'newest',
-  };
-  for (const key of QUERY_KEYS) {
-    if (key === 'status' || key === 'archived' || key === 'sort') continue;
-    const value = searchParams.get(key);
-    if (value) (filters as Record<string, string>)[key] = value;
-  }
-  const args = { ...filters, cursor };
-  const { currentData, isLoading, isFetching, isError, error } = useGetAdminFeedbackListQuery(args);
+  const filters = useMemo(() => filtersFromParams(new URLSearchParams(queryString)), [queryString]);
+  // The cursor belongs to one filter combination, so a filter change starts from page one.
+  const [paging, setPaging] = useState<{ key: string; cursor: string | null }>({ key: queryString, cursor: null });
+  const cursor = paging.key === queryString ? paging.cursor : null;
+  const [search, setSearch] = useState('');
+
+  const { currentData, isLoading, isFetching, isError, error } = useGetAdminFeedbackListQuery({ ...filters, cursor });
   const count = useGetAdminFeedbackCountQuery(undefined, { refetchOnFocus: true });
-  const changeFilter = (key: keyof FeedbackAdminListQuery, value: string) => {
+  const items = currentData?.items ?? [];
+  const returnHref = `/admin/feedback${queryString ? `?${queryString}` : ''}`;
+  const params = new URLSearchParams(queryString);
+  const hasFilters = FILTER_KEYS.some(key => params.get(key));
+
+  const navigate = (changes: Record<string, string | null>) => {
     const next = new URLSearchParams(queryString);
-    if (value) next.set(key, value);
-    else next.delete(key);
-    setCursor(null);
-    router.replace(`/admin/feedback${next.toString() ? `?${next}` : ''}`);
-  };
-  const applyTextFilters = () => {
-    const next = new URLSearchParams(queryString);
-    for (const [key, value] of Object.entries(textFilters)) {
-      if (value.trim()) next.set(key, value.trim()); else next.delete(key);
+    for (const [key, value] of Object.entries(changes)) {
+      if (value) next.set(key, value);
+      else next.delete(key);
     }
-    setCursor(null);
-    router.replace(`/admin/feedback${next.toString() ? `?${next}` : ''}`);
+    const nextQuery = next.toString();
+    router.replace(`/admin/feedback${nextQuery ? `?${nextQuery}` : ''}`, { scroll: false });
   };
+
+  const applySearch = (event: FormEvent) => {
+    event.preventDefault();
+    const value = search.trim();
+    if (!value) return;
+    if (UUID_PATTERN.test(value)) {
+      router.push(`/admin/feedback/${value.toLowerCase()}?return=${encodeURIComponent(returnHref)}`);
+      return;
+    }
+    navigate(value.includes('@') ? { submitterEmail: value, submitterUid: null } : { submitterUid: value, submitterEmail: null });
+    setSearch('');
+  };
+
   const refresh = () => {
-    setCursor(null);
-    void refreshFeedbackListPageOne(dispatch, args);
+    setPaging({ key: queryString, cursor: null });
+    void refreshFeedbackListPageOne(dispatch, filters);
     void count.refetch();
   };
-  const returnHref = `/admin/feedback${queryString ? `?${queryString}` : ''}`;
-  const items = currentData?.items ?? [];
 
-  return <AdminPage>
-    <AdminPageHeader title="Feedback" description="Review student reports, add private notes, and track resolution." actions={<Button type="button" variant="outline" size="sm" onClick={refresh}><RefreshCw className="mr-2 h-4 w-4" />Refresh</Button>} />
-    <div className="mb-5 grid gap-3 rounded-xl border border-border bg-white p-4 sm:grid-cols-2 lg:grid-cols-4">
-      <label className="text-sm">Status<select className="mt-1 w-full rounded-md border border-border bg-white p-2" value={filters.status} onChange={event => changeFilter('status', event.target.value)}><option value="unresolved">Unresolved</option><option value="resolved">Resolved</option><option value="all">All</option></select></label>
-      <label className="text-sm">Archive<select className="mt-1 w-full rounded-md border border-border bg-white p-2" value={filters.archived} onChange={event => changeFilter('archived', event.target.value)}><option value="false">Active</option><option value="true">Archived</option></select></label>
-      <label className="text-sm">Type<select className="mt-1 w-full rounded-md border border-border bg-white p-2" value={filters.type ?? ''} onChange={event => changeFilter('type', event.target.value)}><option value="">All types</option>{FEEDBACK_TYPES.map(type => <option key={type} value={type}>{TYPE_LABELS[type]}</option>)}</select></label>
-      <label className="text-sm">Severity<select className="mt-1 w-full rounded-md border border-border bg-white p-2" value={filters.severity ?? ''} onChange={event => changeFilter('severity', event.target.value)}><option value="">All severities</option>{FEEDBACK_SEVERITIES.map(severity => <option key={severity} value={severity}>{SEVERITY_LABELS[severity]}</option>)}</select></label>
-      <label className="text-sm">Area<select className="mt-1 w-full rounded-md border border-border bg-white p-2" value={filters.area ?? ''} onChange={event => changeFilter('area', event.target.value)}><option value="">All areas</option>{FEEDBACK_AREAS.map(area => <option key={area} value={area}>{FEEDBACK_AREA_LABELS[area]}</option>)}</select></label>
-      <label className="text-sm">Lesson ID<input className="mt-1 w-full rounded-md border border-border p-2" value={textFilters.lessonId} onChange={event => setTextFilters(current => ({ ...current, lessonId: event.target.value }))} placeholder="Exact lesson ID" /></label>
-      <label className="text-sm">From (your time)<input type="date" className="mt-1 w-full rounded-md border border-border p-2" value={dateForInput(filters.from)} onChange={event => changeFilter('from', isoForDate(event.target.value))} /></label>
-      <label className="text-sm">To (your time)<input type="date" className="mt-1 w-full rounded-md border border-border p-2" value={dateForInput(filters.to)} onChange={event => changeFilter('to', isoForDate(event.target.value, true))} /></label>
-      <label className="text-sm">Exact submitter email<input type="search" className="mt-1 w-full rounded-md border border-border p-2" value={textFilters.submitterEmail} onChange={event => setTextFilters(current => ({ ...current, submitterEmail: event.target.value }))} /></label>
-      <label className="text-sm">Submitter UID<input type="search" className="mt-1 w-full rounded-md border border-border p-2" value={textFilters.submitterUid} onChange={event => setTextFilters(current => ({ ...current, submitterUid: event.target.value }))} /></label>
-      <label className="text-sm">Feedback ID<input type="search" className="mt-1 w-full rounded-md border border-border p-2" value={textFilters.feedbackId} onChange={event => setTextFilters(current => ({ ...current, feedbackId: event.target.value }))} /></label>
-      <label className="text-sm">Sort<select className="mt-1 w-full rounded-md border border-border bg-white p-2" value={filters.sort} onChange={event => changeFilter('sort', event.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label>
-      <div className="flex items-end gap-2"><Button type="button" onClick={applyTextFilters}>Apply search</Button><Button type="button" variant="outline" onClick={() => { setTextFilters({ lessonId: '', submitterEmail: '', submitterUid: '', feedbackId: '' }); router.replace('/admin/feedback'); }}>Reset</Button></div>
-    </div>
-    <p className="mb-3 text-sm text-roman-stone">{count.data ? `${count.data.count} unresolved active reports` : 'Feedback reports'} · 25 per page</p>
-    {isLoading && <p role="status">Loading feedback…</p>}
-    {isError && <div role="alert" className="rounded-md border border-destructive/30 bg-white p-4"><p>{getApiErrorMessage(error, 'Could not load feedback.')}</p><Button type="button" variant="outline" className="mt-3" onClick={refresh}>Retry</Button></div>}
-    {!isLoading && !isError && items.length === 0 && <div className="rounded-xl border border-border bg-white p-8 text-center text-roman-stone">{queryString ? 'No reports match these filters.' : 'No unresolved reports.'}</div>}
-    {items.length > 0 && <div className="space-y-3">{items.map(item => <Link key={item.id} href={`/admin/feedback/${encodeURIComponent(item.id)}?return=${encodeURIComponent(returnHref)}`} className="block rounded-xl border border-border bg-white p-4 transition-colors hover:border-primary/40 hover:bg-roman-parchment/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-      <div className="flex flex-wrap items-start justify-between gap-2"><div className="font-medium text-roman-red">{TYPE_LABELS[item.type]} <span className="ml-2 text-xs font-normal text-roman-stone">{item.status}{item.archived ? ' · archived' : ''}</span></div><time className="text-xs text-roman-stone" dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString()}</time></div>
-      <p className="mt-1 text-sm text-roman-stone">{item.submitter.displayName || item.submitter.email || item.submitter.uid}{item.submitter.email ? ` · ${item.submitter.email}` : ''}</p>
-      {item.lesson && <div className="mt-1 text-sm">Lesson: <SimpleRichDisplay content={item.lesson.title} className="inline" /></div>}
-      <p className="mt-2 line-clamp-2 whitespace-pre-wrap text-sm">{item.description}</p>
-      <p className="mt-2 text-xs text-roman-stone">{item.attachments.length} attachment{item.attachments.length === 1 ? '' : 's'} · {item.id}</p>
-    </Link>)}</div>}
-    {currentData?.nextCursor && <div className="mt-5 text-center"><Button type="button" variant="outline" disabled={isFetching} onClick={() => setCursor(currentData.nextCursor)}>{isFetching ? 'Loading…' : 'Load more'}</Button></div>}
-  </AdminPage>;
+  const lessonTitle = items.find(item => item.lesson?.id === filters.lessonId)?.lesson?.title;
+  const studentLabel =
+    filters.submitterEmail ??
+    (filters.submitterUid &&
+      (items.find(item => item.submitter.uid === filters.submitterUid)?.submitter.displayName || filters.submitterUid));
+
+  return (
+    <AdminPage>
+      <AdminPageHeader
+        title="Feedback"
+        description="Bug reports, ideas and comments from students."
+        actions={
+          <Button type="button" variant="outline" size="sm" onClick={refresh} disabled={isFetching}>
+            <RefreshCw className={cn('mr-2 h-4 w-4', isFetching && 'animate-spin')} aria-hidden="true" />
+            Refresh
+          </Button>
+        }
+      />
+
+      <div className="mb-6 space-y-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="inline-flex self-start rounded-lg border border-border bg-white p-1 shadow-sm" aria-label="Status">
+            {STATUS_TABS.map(tab => {
+              const active = filters.status === tab.value;
+              return (
+                <button
+                  key={tab.value}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => navigate({ status: tab.value === 'unresolved' ? null : tab.value })}
+                  className={cn(
+                    'inline-flex items-center gap-2 rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    active ? 'bg-primary text-primary-foreground shadow-sm' : 'text-roman-stone hover:text-foreground'
+                  )}>
+                  {tab.label}
+                  {tab.value === 'unresolved' && count.data !== undefined && (
+                    <span
+                      className={cn(
+                        'rounded-full px-1.5 text-xs font-semibold',
+                        active ? 'bg-white/20 text-white' : 'bg-primary/10 text-primary'
+                      )}>
+                      {count.data.count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex flex-wrap items-center gap-4">
+            <label className="flex items-center gap-2 text-sm text-roman-stone">
+              <Switch
+                checked={filters.archived === 'true'}
+                onCheckedChange={checked => navigate({ archived: checked ? 'true' : null })}
+              />
+              Archived
+            </label>
+            <Select value={filters.sort} onValueChange={value => navigate({ sort: value === 'oldest' ? 'oldest' : null })}>
+              <SelectTrigger aria-label="Sort" className="w-36 bg-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">Newest first</SelectItem>
+                <SelectItem value="oldest">Oldest first</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-border bg-white p-3 shadow-sm">
+          <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-[minmax(0,1.5fr)_repeat(3,minmax(0,1fr))_minmax(0,1.4fr)]">
+            <form onSubmit={applySearch}>
+              <AdminSearchInput
+                value={search}
+                onValueChange={setSearch}
+                label="Find by student email, student UID or report ID"
+                placeholder="Student email, UID or report ID…"
+              />
+            </form>
+            <FilterSelect
+              label="Type"
+              anyLabel="Any type"
+              value={filters.type}
+              options={FEEDBACK_TYPES}
+              labels={FEEDBACK_TYPE_LABELS}
+              onChange={value => navigate({ type: value, severity: value && value !== 'bug_report' ? null : (filters.severity ?? null) })}
+            />
+            <FilterSelect
+              label="Severity"
+              anyLabel="Any severity"
+              value={filters.severity}
+              options={FEEDBACK_SEVERITIES}
+              labels={FEEDBACK_SEVERITY_LABELS}
+              onChange={value => navigate({ severity: value })}
+            />
+            <FilterSelect
+              label="Area"
+              anyLabel="Any area"
+              value={filters.area}
+              options={FEEDBACK_AREAS}
+              labels={FEEDBACK_AREA_LABELS}
+              onChange={value => navigate({ area: value })}
+            />
+            <div className="flex items-center gap-2">
+              <Input
+                type="date"
+                aria-label="Submitted from"
+                className="min-w-0 bg-white"
+                value={params.get('from') ?? ''}
+                onChange={event => navigate({ from: event.target.value || null })}
+              />
+              <span className="text-sm text-roman-stone">to</span>
+              <Input
+                type="date"
+                aria-label="Submitted to"
+                className="min-w-0 bg-white"
+                value={params.get('to') ?? ''}
+                onChange={event => navigate({ to: event.target.value || null })}
+              />
+            </div>
+          </div>
+          {hasFilters && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
+              {filters.submitterEmail || filters.submitterUid ? (
+                <FilterChip
+                  label={<>Student: {studentLabel}</>}
+                  onRemove={() => navigate({ submitterEmail: null, submitterUid: null })}
+                />
+              ) : null}
+              {filters.lessonId && (
+                <FilterChip
+                  label={
+                    <span className="inline-flex items-center gap-1">
+                      Lesson:{' '}
+                      {lessonTitle ? <SimpleRichDisplay content={lessonTitle} className="inline text-xs [&_p]:inline" /> : filters.lessonId}
+                    </span>
+                  }
+                  onRemove={() => navigate({ lessonId: null })}
+                />
+              )}
+              <button
+                type="button"
+                className="ml-auto text-xs font-medium text-primary hover:underline"
+                onClick={() => navigate(Object.fromEntries(FILTER_KEYS.map(key => [key, null])))}>
+                Clear filters
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {isLoading ? (
+        <AdminLoadingState label="Loading feedback" />
+      ) : isError ? (
+        <AdminErrorState message={getApiErrorMessage(error, 'Could not load feedback.')} onRetry={refresh} />
+      ) : items.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border bg-white/60">
+          <AdminEmptyState
+            icon={Inbox}
+            title={hasFilters ? 'No matching feedback' : filters.status === 'unresolved' ? 'All caught up' : 'No feedback here yet'}
+            description={
+              hasFilters
+                ? 'Try removing a filter or widening the dates.'
+                : filters.status === 'unresolved'
+                  ? 'There are no open reports. New student feedback will appear here.'
+                  : 'Reports will appear here once students send them.'
+            }
+          />
+        </div>
+      ) : (
+        <>
+          <ul className="space-y-3">
+            {items.map(item => (
+              <FeedbackRow
+                key={item.id}
+                item={item}
+                href={`/admin/feedback/${encodeURIComponent(item.id)}?return=${encodeURIComponent(returnHref)}`}
+              />
+            ))}
+          </ul>
+          <div className="mt-6 flex flex-col items-center gap-2">
+            {currentData?.nextCursor ? (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isFetching}
+                onClick={() => setPaging({ key: queryString, cursor: currentData.nextCursor })}>
+                {isFetching ? 'Loading…' : 'Load more'}
+              </Button>
+            ) : (
+              <p className="text-xs text-roman-stone">
+                Showing all {items.length} {items.length === 1 ? 'report' : 'reports'}
+              </p>
+            )}
+          </div>
+        </>
+      )}
+    </AdminPage>
+  );
 }
 
 export const ProtectedFeedbackList = withAdminAuth(FeedbackList);

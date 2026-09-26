@@ -1,64 +1,329 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { FEEDBACK_AREA_LABELS, type FeedbackActivityDocument, type FeedbackAttachmentDescriptor } from '@/shared/student-feedback';
-import { AdminPage, AdminPageHeader } from '@/src/components/admin/shell';
+import {
+  Archive,
+  ArchiveRestore,
+  ArrowLeft,
+  CheckCircle2,
+  Copy,
+  Eye,
+  FileText,
+  MessageSquare,
+  Pencil,
+  RotateCcw,
+  Send,
+  Star,
+  type LucideIcon,
+} from 'lucide-react';
+import {
+  FEEDBACK_AREA_LABELS,
+  FEEDBACK_MAX_NOTE_LENGTH,
+  FEEDBACK_MAX_REASON_LENGTH,
+  FEEDBACK_TYPE_LABELS,
+  type FeedbackActivity,
+  type FeedbackAdminAction,
+  type FeedbackAdminDetailResponse,
+} from '@/shared/student-feedback';
+import { AdminErrorState, AdminLoadingState, AdminPage, AdminPageHeader } from '@/src/components/admin/shell';
+import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 import { Button } from '@/src/components/ui/button';
+import { Textarea } from '@/src/components/ui/textarea';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
-import { getApiErrorCode, getApiErrorMessage } from '@/src/store/api/baseQuery';
+import { getApiErrorMessage } from '@/src/store/api/baseQuery';
 import {
   useAddAdminFeedbackNoteMutation,
-  useGetAdminFeedbackActivityQuery,
   useGetAdminFeedbackDetailQuery,
-  useLazyGetAdminFeedbackAttachmentAccessQuery,
   useUpdateAdminFeedbackStateMutation,
 } from '@/src/store/api/studentFeedbackApi';
-import { useAuth } from '@/src/hooks/useAuth';
-import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
+import { cn } from '@/src/lib/utils';
+import { FeedbackAttachments } from './FeedbackAttachments';
+import { FeedbackBadges, FeedbackTypeIcon, formatDateTime, formatRelativeTime, submitterName } from './feedback-ui';
 
-const typeLabels = { bug_report: 'Bug report', feature_suggestion: 'Feature suggestion', general: 'General feedback' } as const;
-const severityLabels = { blocking: 'Blocking (cannot continue)', major: 'Major (broken with workaround)', minor: 'Minor (visual/usability)' } as const;
-const activityLabels: Record<FeedbackActivityDocument['kind'], string> = { submitted: 'Submitted', resolved: 'Resolved', reopened: 'Reopened', archived: 'Archived', unarchived: 'Unarchived', note: 'Private note' };
-const isInlineMedia = (type: string) => ['image/png', 'image/jpeg', 'image/webp', 'video/mp4', 'video/webm'].includes(type);
+const ACTIVITY: Record<FeedbackActivity['kind'], { icon: LucideIcon; text: string }> = {
+  submitted: { icon: Send, text: 'sent this report' },
+  resolved: { icon: CheckCircle2, text: 'marked it resolved' },
+  reopened: { icon: RotateCcw, text: 'reopened it' },
+  archived: { icon: Archive, text: 'archived it' },
+  unarchived: { icon: ArchiveRestore, text: 'moved it out of the archive' },
+  note: { icon: MessageSquare, text: 'added a note' },
+};
 
-function AttachmentRow({ feedbackId, attachment }: { feedbackId: string; attachment: FeedbackAttachmentDescriptor }) {
-  const { authUid } = useAuth();
-  const [getAccess, { isFetching }] = useLazyGetAdminFeedbackAttachmentAccessQuery();
-  const [prepared, setPrepared] = useState<{ url: string; expiresAt: string; disposition: string } | null>(null);
-  const [now, setNow] = useState(0);
-  const [error, setError] = useState('');
-  useEffect(() => { setPrepared(null); }, [authUid]);
-  useEffect(() => {
-    if (!prepared) return;
-    setNow(Date.now());
-    const delay = Math.max(0, Date.parse(prepared.expiresAt) - Date.now());
-    const timer = window.setTimeout(() => setNow(Date.now()), delay + 1);
-    return () => window.clearTimeout(timer);
-  }, [prepared]);
-  const prepare = async (disposition: 'inline' | 'attachment') => {
-    setError('');
-    setPrepared(null);
-    try {
-      const result = await getAccess({ feedbackId, attachmentId: attachment.id, disposition }).unwrap();
-      setPrepared({ ...result, disposition });
-    } catch (cause) { setError(getApiErrorMessage(cause, 'Could not prepare this attachment.')); }
-  };
-  const valid = prepared && Date.parse(prepared.expiresAt) > now;
-  return <li className="rounded-md border border-border p-3">
-    <div className="flex flex-wrap items-center justify-between gap-2">
-      <div><p className="break-all font-medium">{attachment.originalName}</p><p className="text-xs text-roman-stone">{attachment.contentType} · {(attachment.sizeBytes / (1024 * 1024)).toFixed(1)} MiB</p></div>
-      <div className="flex flex-wrap gap-2">
-        {isInlineMedia(attachment.contentType) && <Button type="button" size="sm" variant="outline" disabled={isFetching} onClick={() => void prepare('inline')}>Prepare preview</Button>}
-        <Button type="button" size="sm" variant="outline" disabled={isFetching} onClick={() => void prepare('attachment')}>Prepare download</Button>
-      </div>
+const ACTION_MESSAGES: Record<FeedbackAdminAction, string> = {
+  resolve: 'Marked as resolved.',
+  reopen: 'Reopened.',
+  archive: 'Archived.',
+  unarchive: 'Moved out of the archive.',
+};
+
+function Panel({ title, children, className }: { title?: string; children: ReactNode; className?: string }) {
+  return (
+    <section className={cn('rounded-xl border border-border bg-white shadow-sm', className)} aria-label={title}>
+      {title && (
+        <h2 className="border-b border-border px-5 py-3 font-sans text-xs font-semibold uppercase tracking-[0.12em] text-roman-stone">
+          {title}
+        </h2>
+      )}
+      <div className="p-5">{children}</div>
+    </section>
+  );
+}
+
+function Detail({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div>
+      <dt className="text-xs font-medium text-roman-stone">{label}</dt>
+      <dd className="mt-0.5 break-words text-sm text-foreground">{children}</dd>
     </div>
-    {valid && <a href={prepared.url} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-sm font-medium text-roman-red underline">{prepared.disposition === 'inline' ? 'Open preview' : 'Download file'}</a>}
-    {error && <p role="alert" className="mt-2 text-sm text-destructive">{error}</p>}
-    {attachment.contentType === 'video/quicktime' && <p className="mt-2 text-xs text-roman-stone">MOV playback may not be supported by your browser. Download the file to view it.</p>}
-  </li>;
+  );
+}
+
+function ReviewPanel({ feedbackId, feedback }: { feedbackId: string; feedback: FeedbackAdminDetailResponse['feedback'] }) {
+  const [updateState, { isLoading }] = useUpdateAdminFeedbackStateMutation();
+  const [reason, setReason] = useState('');
+  const run = async (action: FeedbackAdminAction) => {
+    const text = reason.trim();
+    try {
+      await updateState({ feedbackId, action, ...(text ? { reason: text } : {}) }).unwrap();
+      // Keep anything typed while the request was in flight.
+      setReason(current => (current.trim() === text ? '' : current));
+      toast.success(ACTION_MESSAGES[action]);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Could not update this report.'));
+    }
+  };
+  const resolved = feedback.status === 'resolved';
+
+  return (
+    <Panel title="Review">
+      <div className="space-y-3">
+        <Textarea
+          aria-label="Reason (optional)"
+          placeholder="Add a reason for the activity log (optional)"
+          rows={2}
+          maxLength={FEEDBACK_MAX_REASON_LENGTH}
+          value={reason}
+          onChange={event => setReason(event.target.value)}
+        />
+        <Button
+          type="button"
+          className="w-full gap-2"
+          variant={resolved ? 'outline' : 'default'}
+          disabled={isLoading}
+          onClick={() => void run(resolved ? 'reopen' : 'resolve')}>
+          {resolved ? <RotateCcw className="h-4 w-4" aria-hidden="true" /> : <CheckCircle2 className="h-4 w-4" aria-hidden="true" />}
+          {resolved ? 'Reopen' : 'Mark resolved'}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          className="w-full gap-2 text-roman-stone"
+          disabled={isLoading}
+          onClick={() => void run(feedback.archived ? 'unarchive' : 'archive')}>
+          {feedback.archived ? <ArchiveRestore className="h-4 w-4" aria-hidden="true" /> : <Archive className="h-4 w-4" aria-hidden="true" />}
+          {feedback.archived ? 'Unarchive' : 'Archive'}
+        </Button>
+        <p className="text-xs leading-relaxed text-roman-stone">Archiving hides a report from the queue without resolving it.</p>
+      </div>
+    </Panel>
+  );
+}
+
+function ActivityPanel({ feedbackId, activity }: { feedbackId: string; activity: FeedbackActivity[] }) {
+  const [addNote, { isLoading }] = useAddAdminFeedbackNoteMutation();
+  const [note, setNote] = useState('');
+  const submit = async (event?: FormEvent) => {
+    event?.preventDefault();
+    const text = note.trim();
+    if (!text || isLoading) return;
+    try {
+      await addNote({ feedbackId, note: text }).unwrap();
+      setNote(current => (current.trim() === text ? '' : current));
+      toast.success('Note added.');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Could not add the note.'));
+    }
+  };
+
+  return (
+    <Panel title="Activity">
+      <ol className="space-y-5">
+        {activity.map((item, index) => {
+          const { icon: Icon, text } = ACTIVITY[item.kind];
+          return (
+            <li key={item.id} className="relative flex gap-3">
+              {index < activity.length - 1 && (
+                <span className="absolute left-[13px] top-7 h-[calc(100%-4px)] w-px bg-border" aria-hidden="true" />
+              )}
+              <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border bg-roman-parchment/60">
+                <Icon className="h-3.5 w-3.5 text-roman-stone" aria-hidden="true" />
+              </span>
+              <div className="min-w-0 flex-1 pt-1">
+                <p className="text-sm">
+                  <span className="font-medium text-foreground">{item.actorDisplayName || item.actorUid}</span>{' '}
+                  <span className="text-roman-stone">{text}</span>{' '}
+                  <time className="text-xs text-roman-stone/80" dateTime={item.createdAt} title={formatDateTime(item.createdAt)}>
+                    · {formatRelativeTime(item.createdAt)}
+                  </time>
+                </p>
+                {item.reason && <p className="mt-1 whitespace-pre-wrap break-words text-sm italic text-roman-stone">“{item.reason}”</p>}
+                {item.note && (
+                  <p className="mt-2 whitespace-pre-wrap break-words rounded-lg border border-roman-gold/25 bg-roman-parchment/50 px-3 py-2 text-sm text-foreground">
+                    {item.note}
+                  </p>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+      <form onSubmit={submit} className="mt-6 border-t border-border pt-5">
+        <label htmlFor="feedback-note" className="mb-2 block text-sm font-medium text-foreground">
+          Private note
+        </label>
+        <Textarea
+          id="feedback-note"
+          rows={3}
+          maxLength={FEEDBACK_MAX_NOTE_LENGTH}
+          placeholder="Only admins can see notes. Press ⌘/Ctrl + Enter to add."
+          value={note}
+          onChange={event => setNote(event.target.value)}
+          onKeyDown={event => {
+            if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) void submit();
+          }}
+        />
+        <div className="mt-2 flex justify-end">
+          <Button type="submit" size="sm" disabled={isLoading || !note.trim()}>
+            {isLoading ? 'Adding…' : 'Add note'}
+          </Button>
+        </div>
+      </form>
+    </Panel>
+  );
+}
+
+function StudentPanel({ submitter }: { submitter: FeedbackAdminDetailResponse['feedback']['submitter'] }) {
+  const copyUid = async () => {
+    try {
+      await navigator.clipboard.writeText(submitter.uid);
+      toast.success('UID copied.');
+    } catch {
+      toast.error('Could not copy the UID.');
+    }
+  };
+  return (
+    <Panel title="Student">
+      <dl className="space-y-3">
+        <Detail label="Name">{submitter.displayName || 'Not provided'}</Detail>
+        <Detail label="Email">
+          {submitter.email ? (
+            <a href={`mailto:${submitter.email}`} className="text-primary hover:underline">
+              {submitter.email}
+            </a>
+          ) : (
+            'Not provided'
+          )}
+        </Detail>
+        <Detail label="UID">
+          <span className="inline-flex max-w-full items-center gap-1">
+            <span className="truncate font-mono text-xs">{submitter.uid}</span>
+            <button type="button" onClick={() => void copyUid()} className="rounded p-1 text-roman-stone hover:text-primary" aria-label="Copy UID">
+              <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </span>
+        </Detail>
+      </dl>
+      <Link
+        href={`/admin/feedback?status=all&submitterUid=${encodeURIComponent(submitter.uid)}`}
+        className="mt-4 inline-block text-sm font-medium text-primary hover:underline">
+        All feedback from this student →
+      </Link>
+    </Panel>
+  );
+}
+
+function LessonPanel({ feedback, currentLesson }: Pick<FeedbackAdminDetailResponse, 'feedback' | 'currentLesson'>) {
+  const lesson = feedback.lesson;
+  return (
+    <Panel title="Lesson">
+      {!lesson ? (
+        <p className="text-sm text-roman-stone">Not about a specific lesson.</p>
+      ) : (
+        <div className="space-y-3">
+          <SimpleRichDisplay content={lesson.title} className="font-medium text-foreground" />
+          {lesson.pageIndex !== null && (
+            <div className="flex items-start gap-2 text-sm text-roman-stone">
+              <FileText className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span className="min-w-0">
+                Page {lesson.pageIndex + 1}
+                {lesson.pageTitle && (
+                  <>
+                    {' · '}
+                    <SimpleRichDisplay content={lesson.pageTitle} className="inline text-sm text-roman-stone [&_p]:inline" />
+                  </>
+                )}
+              </span>
+            </div>
+          )}
+          {currentLesson ? (
+            <>
+              {currentLesson.title !== lesson.title && (
+                <div className="text-xs text-roman-stone">
+                  Now titled <SimpleRichDisplay content={currentLesson.title} className="inline text-xs [&_p]:inline" />
+                </div>
+              )}
+              <div className="flex gap-2">
+                <Button asChild variant="outline" size="sm" className="gap-1.5">
+                  <Link href={`/admin/lessons/preview/${encodeURIComponent(currentLesson.id)}`}>
+                    <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+                    Preview lesson
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" size="sm" className="gap-1.5">
+                  <Link href={`/admin/lessons/edit/${encodeURIComponent(currentLesson.id)}`}>
+                    <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                    Edit
+                  </Link>
+                </Button>
+              </div>
+            </>
+          ) : (
+            <p className="text-xs text-roman-stone">This lesson has since been removed.</p>
+          )}
+          <Link
+            href={`/admin/feedback?status=all&lessonId=${encodeURIComponent(lesson.id)}`}
+            className="inline-block text-sm font-medium text-primary hover:underline">
+            All feedback about this lesson →
+          </Link>
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+function DevicePanel({ diagnostics }: { diagnostics: FeedbackAdminDetailResponse['feedback']['diagnostics'] }) {
+  return (
+    <Panel title="Device">
+      <dl className="space-y-3">
+        <Detail label="Sent from">{diagnostics.entryPoint === 'lesson' ? 'Lesson feedback panel' : 'Feedback page'}</Detail>
+        {diagnostics.route && <Detail label="Page">{diagnostics.route}</Detail>}
+        {diagnostics.viewport && (
+          <Detail label="Window size">
+            {diagnostics.viewport.width} × {diagnostics.viewport.height}
+          </Detail>
+        )}
+        {diagnostics.appVersion && <Detail label="App version">{diagnostics.appVersion}</Detail>}
+        {diagnostics.browser && (
+          <Detail label="Browser">
+            <span className="text-xs text-roman-stone">{diagnostics.browser}</span>
+          </Detail>
+        )}
+      </dl>
+    </Panel>
+  );
 }
 
 export function FeedbackDetail({ feedbackId }: { feedbackId: string }) {
@@ -66,77 +331,103 @@ export function FeedbackDetail({ feedbackId }: { feedbackId: string }) {
   const requestedReturn = searchParams.get('return');
   const returnHref = requestedReturn && /^\/admin\/feedback(?:\?|$)/.test(requestedReturn) ? requestedReturn : '/admin/feedback';
   const { data, isLoading, isError, error, refetch } = useGetAdminFeedbackDetailQuery(feedbackId);
-  const [activityCursor, setActivityCursor] = useState<string | null>(null);
-  const activity = useGetAdminFeedbackActivityQuery({ feedbackId, cursor: activityCursor });
-  const [updateState, updateResult] = useUpdateAdminFeedbackStateMutation();
-  const [addNote, noteResult] = useAddAdminFeedbackNoteMutation();
-  const [reason, setReason] = useState('');
-  const [note, setNote] = useState('');
-  const [noteRequestId, setNoteRequestId] = useState(() => crypto.randomUUID());
-  const [lastAttemptedNote, setLastAttemptedNote] = useState<string | null>(null);
-  const [busyActions, setBusyActions] = useState<Set<string>>(new Set());
   const feedback = data?.feedback;
 
-  const changeState = async (action: 'resolve' | 'reopen' | 'archive' | 'unarchive') => {
-    if (!feedback || busyActions.has(action)) return;
-    setBusyActions(current => new Set(current).add(action));
-    try {
-      await updateState({ feedbackId, action, expectedRevision: feedback.stateRevision, ...(reason.trim() ? { reason: reason.trim() } : {}) }).unwrap();
-      setReason('');
-      toast.success(`Feedback ${action === 'resolve' ? 'resolved' : action === 'reopen' ? 'reopened' : action === 'archive' ? 'archived' : 'unarchived'}.`);
-    } catch (cause) {
-      if (getApiErrorCode(cause) === 'FEEDBACK_REVISION_CONFLICT') {
-        toast.error('This report changed. The latest state has been loaded; review it before trying again.');
-        void refetch();
-      } else toast.error(getApiErrorMessage(cause, 'Could not update feedback.'));
-    } finally { setBusyActions(current => { const next = new Set(current); next.delete(action); return next; }); }
-  };
-  const submitNote = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!note.trim()) return;
-    const submittedNote = note.trim();
-    const submittedRequestId = noteRequestId;
-    setLastAttemptedNote(submittedNote);
-    try {
-      await addNote({ feedbackId, requestId: submittedRequestId, note: submittedNote }).unwrap();
-      setNote(current => current.trim() === submittedNote ? '' : current);
-      setNoteRequestId(current => current === submittedRequestId ? crypto.randomUUID() : current);
-      setLastAttemptedNote(current => current === submittedNote ? null : current);
-      toast.success('Private note added.');
-    } catch (cause) { toast.error(getApiErrorMessage(cause, 'Could not add the note. Retry to keep the same request ID.')); }
-  };
+  return (
+    <AdminPage>
+      <AdminPageHeader
+        title={
+          feedback ? (
+            <span className="flex items-center gap-3">
+              <FeedbackTypeIcon type={feedback.type} />
+              {FEEDBACK_TYPE_LABELS[feedback.type]}
+            </span>
+          ) : (
+            'Feedback'
+          )
+        }
+        description={
+          feedback && (
+            <>
+              From {submitterName(feedback.submitter)} ·{' '}
+              <time dateTime={feedback.createdAt} title={formatDateTime(feedback.createdAt)}>
+                {formatRelativeTime(feedback.createdAt)}
+              </time>
+            </>
+          )
+        }
+        actions={
+          <Button asChild variant="outline" size="sm" className="gap-2">
+            <Link href={returnHref}>
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              All feedback
+            </Link>
+          </Button>
+        }
+      />
 
-  return <AdminPage>
-    <AdminPageHeader title="Feedback detail" actions={<Button asChild variant="outline"><Link href={returnHref}>Back to feedback</Link></Button>} />
-    {isLoading && <p role="status">Loading feedback…</p>}
-    {isError && <div role="alert" className="rounded-xl border border-destructive/30 bg-white p-5"><p>{getApiErrorMessage(error, 'Could not load feedback.')}</p><Button type="button" variant="outline" className="mt-3" onClick={() => void refetch()}>Retry</Button></div>}
-    {feedback && <div className="space-y-5">
-      <section className="rounded-xl border border-border bg-white p-5 space-y-3" aria-label="Report">
-        <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-serif text-xl">{typeLabels[feedback.type]}</h2><span className="rounded-full bg-roman-parchment px-3 py-1 text-sm">{feedback.status}{feedback.archived ? ' · archived' : ''}</span></div>
-        <p className="text-sm text-roman-stone">Reference {feedback.id} · Submitted <time dateTime={feedback.createdAt}>{new Date(feedback.createdAt).toLocaleString()}</time></p>
-        <dl className="grid gap-3 text-sm sm:grid-cols-2">
-          <div><dt className="font-semibold">Submitted by</dt><dd>{feedback.submitter.displayName || 'Name unavailable'} · {feedback.submitter.email || 'Email unavailable'}</dd><dd className="break-all text-xs text-roman-stone">UID: {feedback.submitter.uid}</dd></div>
-          <div><dt className="font-semibold">Severity</dt><dd>{feedback.severity ? severityLabels[feedback.severity] : 'Not applicable'}</dd></div>
-          <div><dt className="font-semibold">Areas</dt><dd>{feedback.areas.map(area => FEEDBACK_AREA_LABELS[area]).join('; ')}{feedback.otherAreaExplanation ? ` — ${feedback.otherAreaExplanation}` : ''}</dd></div>
-          <div><dt className="font-semibold">Overall experience</dt><dd>{feedback.rating ? `${feedback.rating} / 5` : 'Not rated'}</dd></div>
-        </dl>
-        <div><h3 className="font-semibold">Description</h3><p className="mt-1 whitespace-pre-wrap break-words text-sm">{feedback.description}</p></div>
-        {feedback.comments && <div><h3 className="font-semibold">Additional comments</h3><p className="mt-1 whitespace-pre-wrap break-words text-sm">{feedback.comments}</p></div>}
-      </section>
-      <section className="rounded-xl border border-border bg-white p-5 space-y-3" aria-label="Lesson context">
-        <h2 className="font-serif text-lg">Lesson context</h2>
-        {feedback.lesson ? <>
-          <div className="text-sm">At submission: <SimpleRichDisplay content={feedback.lesson.title} className="inline" /></div>
-          {feedback.lesson.pageId && <div className="text-sm">Page {feedback.lesson.pageIndex === null ? 'unknown' : feedback.lesson.pageIndex + 1}: <SimpleRichDisplay content={feedback.lesson.pageTitle || feedback.lesson.pageId} className="inline" /></div>}
-          {data.currentLesson ? <><div className="text-sm">Current title: <SimpleRichDisplay content={data.currentLesson.title} className="inline" /></div><div className="flex gap-3 text-sm"><Link href={`/admin/lessons/preview/${encodeURIComponent(data.currentLesson.id)}`} className="font-medium text-roman-red underline">Preview lesson</Link><Link href={`/admin/lessons/edit/${encodeURIComponent(data.currentLesson.id)}`} className="font-medium text-roman-red underline">Edit lesson</Link></div></> : <p className="text-sm text-roman-stone">This lesson is no longer available. Preview and edit are unavailable.</p>}
-        </> : <p className="text-sm text-roman-stone">No lesson associated.</p>}
-      </section>
-      <section className="rounded-xl border border-border bg-white p-5 space-y-3" aria-label="Attachments"><h2 className="font-serif text-lg">Attachments ({feedback.attachments.length})</h2>{feedback.attachments.length ? <ul className="space-y-2">{feedback.attachments.map(item => <AttachmentRow key={item.id} feedbackId={feedbackId} attachment={item} />)}</ul> : <p className="text-sm text-roman-stone">No attachments.</p>}</section>
-      <section className="rounded-xl border border-border bg-white p-5 space-y-3" aria-label="Diagnostics"><h2 className="font-serif text-lg">Context and diagnostics</h2><dl className="grid gap-2 text-sm sm:grid-cols-2"><div><dt className="font-semibold">Entry point</dt><dd>{feedback.diagnostics.entryPoint}</dd></div><div><dt className="font-semibold">Route</dt><dd className="break-all">{feedback.diagnostics.route || 'Unavailable'}</dd></div><div><dt className="font-semibold">App version</dt><dd>{feedback.diagnostics.appVersion || 'Unavailable'}</dd></div><div><dt className="font-semibold">Browser</dt><dd className="break-all">{feedback.diagnostics.browser || 'Unavailable'}</dd></div><div><dt className="font-semibold">Viewport</dt><dd>{feedback.diagnostics.viewport ? `${feedback.diagnostics.viewport.width} × ${feedback.diagnostics.viewport.height}` : 'Unavailable'}</dd></div></dl></section>
-      <section className="rounded-xl border border-border bg-white p-5 space-y-3" aria-label="Admin actions"><h2 className="font-serif text-lg">Review</h2><label className="block text-sm">Reason (optional)<textarea className="mt-1 w-full rounded-md border border-border p-2" rows={2} maxLength={2000} value={reason} onChange={event => setReason(event.target.value)} /></label><div className="flex flex-wrap gap-2"><Button type="button" disabled={updateResult.isLoading || feedback.status === 'resolved'} onClick={() => void changeState('resolve')}>Resolve</Button><Button type="button" variant="outline" disabled={updateResult.isLoading || feedback.status === 'unresolved'} onClick={() => void changeState('reopen')}>Reopen</Button><Button type="button" variant="outline" disabled={updateResult.isLoading || feedback.archived} onClick={() => void changeState('archive')}>Archive</Button><Button type="button" variant="outline" disabled={updateResult.isLoading || !feedback.archived} onClick={() => void changeState('unarchive')}>Unarchive</Button></div><p className="text-xs text-roman-stone">Archiving changes visibility, not resolution. All changes remain in activity.</p></section>
-      <section className="rounded-xl border border-border bg-white p-5 space-y-4" aria-label="Activity"><h2 className="font-serif text-lg">Activity and private notes</h2><form onSubmit={submitNote} className="space-y-2"><label htmlFor="feedback-note" className="block text-sm font-semibold">Add a private admin note</label><textarea id="feedback-note" className="w-full rounded-md border border-border p-2" rows={3} maxLength={5000} value={note} onChange={event => { const next = event.target.value; if (lastAttemptedNote !== null && next.trim() !== lastAttemptedNote) { setNoteRequestId(crypto.randomUUID()); setLastAttemptedNote(null); } setNote(next); }} /><Button type="submit" disabled={noteResult.isLoading || !note.trim()}>{noteResult.isLoading ? 'Saving…' : 'Add note'}</Button></form>{activity.isLoading && <p>Loading activity…</p>}{activity.isError && <div role="alert"><p>{getApiErrorMessage(activity.error, 'Could not load activity.')}</p><Button type="button" variant="outline" onClick={() => void activity.refetch()}>Retry</Button></div>}<ol className="space-y-3">{activity.currentData?.items.map(item => <li key={item.id} className="border-l-2 border-roman-gold/40 pl-3 text-sm"><div className="flex flex-wrap gap-2"><strong>{activityLabels[item.kind]}</strong><time dateTime={item.createdAt} className="text-roman-stone">{new Date(item.createdAt).toLocaleString()}</time></div><p className="text-roman-stone">By {item.actorDisplayName || item.actorUid}</p>{item.reason && <p className="mt-1 whitespace-pre-wrap break-words">Reason: {item.reason}</p>}{item.note && <p className="mt-1 whitespace-pre-wrap break-words">{item.note}</p>}</li>)}</ol>{activity.currentData?.nextCursor && <Button type="button" variant="outline" disabled={activity.isFetching} onClick={() => setActivityCursor(activity.currentData?.nextCursor ?? null)}>Load older activity</Button>}</section>
-    </div>}
-  </AdminPage>;
+      {isLoading && <AdminLoadingState label="Loading feedback" />}
+      {isError && <AdminErrorState message={getApiErrorMessage(error, 'Could not load this report.')} onRetry={() => void refetch()} />}
+
+      {data && feedback && (
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+          <div className="min-w-0 space-y-6">
+            <Panel>
+              <div className="flex flex-wrap items-center gap-2">
+                <FeedbackBadges report={feedback} showOpen />
+                {feedback.areas.map(area => (
+                  <span key={area} className="rounded-full bg-roman-parchment px-2.5 py-0.5 text-xs font-medium text-foreground">
+                    {FEEDBACK_AREA_LABELS[area]}
+                  </span>
+                ))}
+              </div>
+              {feedback.otherAreaExplanation && (
+                <p className="mt-2 text-xs text-roman-stone">Other area: {feedback.otherAreaExplanation}</p>
+              )}
+              <p className="mt-5 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-foreground">{feedback.description}</p>
+              {feedback.comments && (
+                <div className="mt-5 border-t border-border pt-4">
+                  <h3 className="font-sans text-xs font-semibold uppercase tracking-[0.12em] text-roman-stone">Anything else</h3>
+                  <p className="mt-1.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">{feedback.comments}</p>
+                </div>
+              )}
+              <div className="mt-5 flex items-center gap-2 border-t border-border pt-4 text-sm text-roman-stone">
+                <span>Overall experience</span>
+                {feedback.rating ? (
+                  <span className="flex items-center gap-0.5" aria-label={`${feedback.rating} of 5`}>
+                    {[1, 2, 3, 4, 5].map(value => (
+                      <Star
+                        key={value}
+                        className={cn('h-4 w-4', value <= (feedback.rating ?? 0) ? 'fill-roman-gold text-roman-gold' : 'text-roman-stone/30')}
+                        aria-hidden="true"
+                      />
+                    ))}
+                  </span>
+                ) : (
+                  <span className="text-roman-stone/80">not rated</span>
+                )}
+              </div>
+            </Panel>
+
+            {feedback.attachments.length > 0 && (
+              <Panel title={`Attachments (${feedback.attachments.length})`}>
+                <FeedbackAttachments feedbackId={feedbackId} attachments={feedback.attachments} />
+              </Panel>
+            )}
+
+            <ActivityPanel feedbackId={feedbackId} activity={data.activity} />
+          </div>
+
+          <aside className="space-y-6">
+            <ReviewPanel feedbackId={feedbackId} feedback={feedback} />
+            <StudentPanel submitter={feedback.submitter} />
+            <LessonPanel feedback={feedback} currentLesson={data.currentLesson} />
+            <DevicePanel diagnostics={feedback.diagnostics} />
+          </aside>
+        </div>
+      )}
+    </AdminPage>
+  );
 }
 
 export const ProtectedFeedbackDetail = withAdminAuth(FeedbackDetail);

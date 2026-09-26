@@ -24,7 +24,4 @@ export const AI_EVALUATION_RESULT_CACHE_COLLECTION = 'aiEvaluationResultCache';
 export const AI_EVALUATION_RUN_THROTTLES_COLLECTION = 'aiEvaluationRunThrottles';
 export const USERS_COLLECTION = 'users';
 export const STUDENT_FEEDBACK_COLLECTION = 'studentFeedback';
-export const STUDENT_FEEDBACK_SESSIONS_COLLECTION = 'studentFeedbackSessions';
-export const STUDENT_FEEDBACK_THROTTLES_COLLECTION = 'studentFeedbackThrottles';
-export const STUDENT_FEEDBACK_ATTACHMENTS_SUBCOLLECTION = 'attachments';
 export const STUDENT_FEEDBACK_ACTIVITY_SUBCOLLECTION = 'activity';

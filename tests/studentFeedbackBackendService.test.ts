@@ -1,92 +1,122 @@
-jest.mock('@/src/services/firebase-admin', () => ({ adminDb: {} }));
+jest.mock('@/src/services/firebase-admin', () => ({ adminDb: {}, adminStorage: {} }));
 jest.mock('firebase-admin/firestore', () => ({ FieldPath: { documentId: () => '__name__' } }));
 jest.mock('@/src/lib/learning-units/student-dashboard-service', () => ({ studentDashboardService: { getDashboard: jest.fn() } }));
-jest.mock('@/src/lib/learning-units/progression-access', () => ({ getLessonProgressAccessInTransaction: jest.fn() }));
 
-import { getLessonProgressAccessInTransaction } from '@/src/lib/learning-units/progression-access';
-import { createFeedbackSession, getPublicFeedbackSession, submitFeedback } from '@/src/lib/student-feedback/service.server';
-import { addPrivateFeedbackNote, updateFeedbackState } from '@/src/lib/student-feedback/admin.server';
-import { submitFeedbackRequestSchema } from '@/shared/student-feedback';
+const mockStoreAttachments = jest.fn();
+const mockDeleteUploads = jest.fn();
+jest.mock('@/src/lib/student-feedback/attachments.server', () => ({
+  storeFeedbackAttachments: (...args: unknown[]) => mockStoreAttachments(...args),
+  deleteFeedbackUploads: (...args: unknown[]) => mockDeleteUploads(...args),
+}));
 
-const nowMs = Date.parse('2026-09-24T12:00:00.000Z');
-const sessionId = '08814ab5-2712-49e9-9c54-7c7317fdd812';
-const attachmentId = '1be84684-3cec-4dd5-87f7-f911fdd0bc96';
+import type { DecodedIdToken } from 'firebase-admin/auth';
+import { submitFeedback } from '@/src/lib/student-feedback/service.server';
+import {
+  addFeedbackNote,
+  feedbackListQuery,
+  getFeedbackDetail,
+  listFeedback,
+  updateFeedbackState,
+} from '@/src/lib/student-feedback/admin.server';
+import { submitFeedbackRequestSchema, type FeedbackSubmitRequest } from '@/shared/student-feedback';
 
 type Data = Record<string, unknown>;
+const valueAt = (data: Data, path: string) =>
+  path.split('.').reduce<unknown>((value, key) => (value as Data | null | undefined)?.[key], data);
 
-class FakeRef {
-  constructor(readonly path: string, private readonly db: FakeDb) {}
-  get id() { return this.path.split('/').at(-1)!; }
-  collection(name: string) { return new FakeCollection(`${this.path}/${name}`, this.db); }
-  get() { return Promise.resolve(this.db.snapshot(this.path)); }
+class FakeQuery {
+  constructor(
+    readonly db: FakeDb,
+    readonly path: string,
+    readonly filters: Array<[string, string, unknown]> = [],
+    readonly order: string | null = null,
+    readonly max = Infinity
+  ) {}
+  where(field: string, op: string, value: unknown) {
+    return new FakeQuery(this.db, this.path, [...this.filters, [field, op, value]], this.order, this.max);
+  }
+  orderBy(field: string) {
+    return new FakeQuery(this.db, this.path, this.filters, field, this.max);
+  }
+  limit(max: number) {
+    return new FakeQuery(this.db, this.path, this.filters, this.order, max);
+  }
+  count() {
+    return { countOf: this };
+  }
+  matches() {
+    const rows = this.db.children(this.path).filter(([, data]) =>
+      this.filters.every(([field, op, value]) => {
+        const actual = valueAt(data, field);
+        if (op === '==') return actual === value;
+        if (op === '>=') return String(actual) >= String(value);
+        throw new Error(`Unsupported operator ${op}`);
+      })
+    );
+    const order = this.order;
+    if (order) rows.sort(([, a], [, b]) => String(valueAt(a, order)).localeCompare(String(valueAt(b, order))));
+    return rows.slice(0, this.max);
+  }
+  async get() {
+    const docs = this.matches().map(([path]) => this.db.snapshot(path));
+    return { docs, size: docs.length };
+  }
 }
 
-class FakeCollection {
-  constructor(readonly path: string, private readonly db: FakeDb, readonly max = Infinity, readonly statuses: string[] | null = null) {}
-  doc(id: string) { return new FakeRef(`${this.path}/${id}`, this.db); }
-  limit(max: number) { return new FakeCollection(this.path, this.db, max, this.statuses); }
-  where(field: string, op: string, values: string[]) {
-    if (field !== 'status' || op !== 'in') throw new Error('Unexpected fake query');
-    return new FakeCollection(this.path, this.db, this.max, values);
+class FakeCollection extends FakeQuery {
+  doc(id: string) {
+    return new FakeRef(this.db, `${this.path}/${id}`);
   }
-  get() { return Promise.resolve(this.db.query(this)); }
+}
+
+class FakeRef {
+  constructor(
+    readonly db: FakeDb,
+    readonly path: string
+  ) {}
+  get id() {
+    return this.path.split('/').at(-1)!;
+  }
+  collection(name: string) {
+    return new FakeCollection(this.db, `${this.path}/${name}`);
+  }
+  async get() {
+    return this.db.snapshot(this.path);
+  }
 }
 
 class FakeDb {
   readonly documents = new Map<string, Data>();
-  readonly writes: Array<{ operation: string; path: string }> = [];
-  collection(name: string) { return new FakeCollection(name, this); }
+  collection(name: string) {
+    return new FakeCollection(this, name);
+  }
   snapshot(path: string) {
     const data = this.documents.get(path);
-    return { id: path.split('/').at(-1)!, ref: new FakeRef(path, this), exists: data !== undefined, data: () => data };
+    return { id: path.split('/').at(-1)!, exists: data !== undefined, data: () => data, ref: new FakeRef(this, path) };
   }
-  query(collection: FakeCollection) {
-    const prefix = `${collection.path}/`;
-    const docs = [...this.documents.keys()]
-      .filter(path => path.startsWith(prefix) && !path.slice(prefix.length).includes('/') &&
-        (!collection.statuses || collection.statuses.includes(String(this.documents.get(path)?.status))))
-      .slice(0, collection.max)
-      .map(path => this.snapshot(path));
-    return { docs, size: docs.length };
+  children(path: string) {
+    const prefix = `${path}/`;
+    return [...this.documents.entries()].filter(([key]) => key.startsWith(prefix) && !key.slice(prefix.length).includes('/'));
   }
-  async runTransaction<T>(callback: (transaction: {
-    get(ref: FakeRef | FakeCollection): Promise<unknown>;
-    create(ref: FakeRef, data: Data): void;
-    set(ref: FakeRef, data: Data): void;
-    update(ref: FakeRef, data: Data): void;
-  }) => Promise<T>): Promise<T> {
-    let wrote = false;
+  async runTransaction<T>(callback: (transaction: unknown) => Promise<T>): Promise<T> {
     const staged: Array<() => void> = [];
-    const get = async (ref: FakeRef | FakeCollection) => {
-      if (wrote) throw new Error('Firestore read after write');
-      return ref instanceof FakeRef ? this.snapshot(ref.path) : this.query(ref);
-    };
     const transaction = {
-      get,
-      create: (ref: FakeRef, data: Data) => {
-        wrote = true;
+      get: async (target: FakeRef | { countOf: FakeQuery }) => {
+        if (staged.length) throw new Error('Firestore read after write');
+        if (target instanceof FakeRef) return this.snapshot(target.path);
+        return { data: () => ({ count: target.countOf.matches().length }) };
+      },
+      create: (ref: FakeRef, data: Data) =>
         staged.push(() => {
           if (this.documents.has(ref.path)) throw new Error('Document already exists');
           this.documents.set(ref.path, data);
-          this.writes.push({ operation: 'create', path: ref.path });
-        });
-      },
-      set: (ref: FakeRef, data: Data) => {
-        wrote = true;
+        }),
+      update: (ref: FakeRef, data: Data) =>
         staged.push(() => {
-          this.documents.set(ref.path, data);
-          this.writes.push({ operation: 'set', path: ref.path });
-        });
-      },
-      update: (ref: FakeRef, data: Data) => {
-        wrote = true;
-        staged.push(() => {
-          const previous = this.documents.get(ref.path);
-          if (!previous) throw new Error('Document missing');
-          this.documents.set(ref.path, { ...previous, ...data });
-          this.writes.push({ operation: 'update', path: ref.path });
-        });
-      },
+          const current = this.documents.get(ref.path);
+          if (!current) throw new Error('Document missing');
+          this.documents.set(ref.path, { ...current, ...data });
+        }),
     };
     const result = await callback(transaction);
     staged.forEach(apply => apply());
@@ -94,160 +124,278 @@ class FakeDb {
   }
 }
 
-function lesson(overrides: Data = {}) {
-  return {
-    id: 'lesson-1', kind: 'lesson', title: '<b>Lesson One</b>', description: '', type: 'normal',
-    pages: [{ id: 'page-1', title: 'Introduction', items: [] }],
-    isLive: true, liveOrder: 0, publishedAt: null, publishedBy: null, version: 2,
+const draftId = '08814ab5-2712-49e9-9c54-7c7317fdd812';
+const attachmentId = '1be84684-3cec-4dd5-87f7-f911fdd0bc96';
+const nowMs = Date.parse('2026-09-24T12:00:00.000Z');
+const student = { uid: 'student-1', email: ' Student@Example.edu ', name: 'Token Name' } as unknown as DecodedIdToken;
+const admin = { uid: 'admin-1', name: 'Admin Token' } as unknown as DecodedIdToken;
+const verifiedAttachment = { id: attachmentId, name: 'screen.png', contentType: 'image/png', sizeBytes: 1024 };
+
+const input = (overrides: Partial<FeedbackSubmitRequest> = {}): FeedbackSubmitRequest =>
+  submitFeedbackRequestSchema.parse({
+    draftId,
+    type: 'bug_report',
+    severity: 'major',
+    areas: ['lessons'],
+    description: 'Audio stops on page two',
+    attachments: [{ id: attachmentId, name: 'screen.png' }],
+    diagnostics: { entryPoint: 'lesson', route: '/lesson/lesson-1' },
     ...overrides,
-  };
-}
+  });
 
-function submission(overrides: Data = {}) {
-  return submitFeedbackRequestSchema.parse({
-    sessionId, type: 'bug_report', severity: 'minor', areas: ['lessons'],
-    description: 'The page would not advance.', lessonId: 'lesson-1',
-    attachmentIds: [], diagnostics: { entryPoint: 'lesson', route: '/lesson/lesson-1' },
+const lessonDocument = (overrides: Data = {}) => ({
+  id: 'lesson-1',
+  kind: 'lesson',
+  title: '<strong>First lesson</strong>',
+  description: '',
+  type: 'normal',
+  pages: [
+    { id: 'page-1', title: 'Opening', items: [] },
+    { id: 'page-2', title: 'Second page', items: [] },
+  ],
+  isLive: true,
+  version: 3,
+  ...overrides,
+});
+
+const seedReport = (db: FakeDb, overrides: Data = {}) =>
+  db.documents.set(`studentFeedback/${draftId}`, {
+    id: draftId,
+    submitter: { uid: 'student-1', displayName: 'Ada Lovelace', email: 'student@example.edu', emailNormalized: 'student@example.edu' },
+    type: 'general',
+    areas: ['dashboard'],
+    description: 'Existing report',
+    lesson: null,
+    attachments: [],
+    diagnostics: { entryPoint: 'standalone' },
+    createdAt: '2026-09-24T11:00:00.000Z',
+    updatedAt: '2026-09-24T11:00:00.000Z',
+    status: 'unresolved',
+    resolvedBy: null,
+    resolvedAt: null,
+    resolutionReason: null,
+    archived: false,
+    archivedBy: null,
+    archivedAt: null,
     ...overrides,
   });
-}
 
-const token = { uid: 'student-1', email: 'Verified@Example.edu', name: 'Auth Name' } as never;
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockStoreAttachments.mockResolvedValue([verifiedAttachment]);
+  mockDeleteUploads.mockResolvedValue(undefined);
+});
 
-describe('student feedback transaction boundaries', () => {
-  beforeEach(() => {
-    jest.mocked(getLessonProgressAccessInTransaction).mockResolvedValue('allowed');
-  });
-
-  it('recovers an idempotent owner session while rejecting another owner and exposing a safe DTO', async () => {
+describe('submitFeedback', () => {
+  it('creates the report and submitted activity from the verified identity and verified uploads', async () => {
     const db = new FakeDb();
-    const first = await createFeedbackSession('student-1', sessionId, db as never, nowMs);
-    const second = await createFeedbackSession('student-1', sessionId, db as never, nowMs + 1);
-    expect(second).toEqual(first);
-    expect(db.writes).toHaveLength(1);
-    await expect(createFeedbackSession('student-2', sessionId, db as never, nowMs)).rejects.toMatchObject({ status: 404 });
-    const publicSession = await getPublicFeedbackSession('student-1', sessionId, db as never);
-    expect(publicSession).toEqual({ id: sessionId, status: 'open', expiresAtMs: nowMs + 24 * 60 * 60 * 1000, receipt: null, attachments: [] });
-    expect(publicSession).not.toHaveProperty('ownerUid');
-    expect(publicSession).not.toHaveProperty('cleanupLease');
+    db.documents.set('users/student-1', { firstName: ' Ada ', lastName: 'Lovelace', email: 'spoofed@example.edu' });
+
+    const receipt = await submitFeedback(student, input(), db as never, nowMs);
+
+    expect(receipt).toEqual({ feedbackId: draftId, submittedAt: '2026-09-24T12:00:00.000Z' });
+    expect(mockStoreAttachments).toHaveBeenCalledWith('student-1', draftId, [{ id: attachmentId, name: 'screen.png' }]);
+    expect(db.documents.get(`studentFeedback/${draftId}`)).toMatchObject({
+      id: draftId,
+      submitter: { uid: 'student-1', displayName: 'Ada Lovelace', email: 'Student@Example.edu', emailNormalized: 'student@example.edu' },
+      type: 'bug_report',
+      severity: 'major',
+      attachments: [verifiedAttachment],
+      lesson: null,
+      status: 'unresolved',
+      archived: false,
+    });
+    expect(db.documents.get(`studentFeedback/${draftId}/activity/submitted`)).toMatchObject({
+      kind: 'submitted',
+      actorUid: 'student-1',
+      actorDisplayName: 'Ada Lovelace',
+    });
+    expect(mockDeleteUploads).toHaveBeenCalledWith('student-1', draftId, [{ id: attachmentId, name: 'screen.png' }]);
   });
 
-  it.each(['open', 'cleanup', 'expired'] as const)('returns recoverable expiry for a %s session after its deadline', async status => {
+  it('returns the original receipt for a retried draft without copying files or duplicating the report', async () => {
     const db = new FakeDb();
-    const session = await createFeedbackSession('student-1', sessionId, db as never, nowMs);
-    db.documents.set(`studentFeedbackSessions/${sessionId}`, { ...session, status });
-    const input = submission({ lessonId: null });
-    await expect(submitFeedback(token, input, db as never, session.expiresAtMs + 1))
-      .rejects.toMatchObject({ code: 'FEEDBACK_SESSION_EXPIRED' });
-    await expect(submitFeedback({ uid: 'other' } as never, input, db as never, session.expiresAtMs + 1))
-      .rejects.toMatchObject({ code: 'FEEDBACK_NOT_FOUND' });
-    expect(db.writes).toHaveLength(1);
+    seedReport(db);
+
+    await expect(submitFeedback(student, input(), db as never, nowMs)).resolves.toEqual({
+      feedbackId: draftId,
+      submittedAt: '2026-09-24T11:00:00.000Z',
+    });
+    expect(mockStoreAttachments).not.toHaveBeenCalled();
+    expect(db.documents.get(`studentFeedback/${draftId}`)).toMatchObject({ description: 'Existing report' });
   });
 
-  it('keeps an explicitly cancelled session closed rather than treating it as expired', async () => {
+  it('rejects a draft ID that belongs to another student', async () => {
     const db = new FakeDb();
-    const session = await createFeedbackSession('student-1', sessionId, db as never, nowMs);
-    db.documents.set(`studentFeedbackSessions/${sessionId}`, { ...session, status: 'cancelled' });
-    await expect(submitFeedback(token, submission({ lessonId: null }), db as never, session.expiresAtMs + 1))
-      .rejects.toMatchObject({ code: 'FEEDBACK_SESSION_CLOSED' });
+    seedReport(db, { submitter: { uid: 'student-2', displayName: null, email: null, emailNormalized: null } });
+
+    await expect(submitFeedback(student, input(), db as never, nowMs)).rejects.toMatchObject({ code: 'FEEDBACK_FORBIDDEN' });
   });
 
-  it('submits a generic lesson with historical snapshot, verified email, one quota entry, and replays without another write', async () => {
+  it('allows ten reports per student per rolling hour', async () => {
     const db = new FakeDb();
-    await createFeedbackSession('student-1', sessionId, db as never, nowMs);
-    db.documents.set('lessons/lesson-1', lesson());
-    db.documents.set('users/student-1', { firstName: 'Profile', lastName: 'Name', email: 'spoofed@example.org' });
-    const receipt = await submitFeedback(token, submission(), db as never, nowMs);
-    const report = db.documents.get(`studentFeedback/${sessionId}`)!;
-    expect(receipt.feedbackId).toBe(sessionId);
-    expect(report.lesson).toEqual({ id: 'lesson-1', title: '<b>Lesson One</b>', pageId: null, pageIndex: null, pageTitle: null, revision: 2 });
-    expect(report.submitter).toEqual({ uid: 'student-1', displayName: 'Profile Name', email: 'Verified@Example.edu', emailNormalized: 'verified@example.edu' });
-    expect(db.documents.get('studentFeedbackThrottles/student-1')?.submittedAtMs).toEqual([nowMs]);
-    const writes = db.writes.length;
-    expect(await submitFeedback(token, submission({ description: 'Different retry body' }), db as never, nowMs + 1)).toEqual(receipt);
-    expect(db.writes).toHaveLength(writes);
-  });
-
-  it('rejects stale page context and inaccessible, pending or missing lessons before any submission write', async () => {
-    for (const variant of [
-      { lesson: lesson(), access: 'allowed', context: { pageId: 'page-1', pageIndex: 0, revision: 1 }, code: 'FEEDBACK_STALE_LESSON_CONTEXT' },
-      { lesson: lesson({ _deletionPending: true }), access: 'allowed', context: undefined, code: 'FEEDBACK_LESSON_INACCESSIBLE' },
-      { lesson: undefined, access: 'allowed', context: undefined, code: 'FEEDBACK_LESSON_INACCESSIBLE' },
-      { lesson: lesson(), access: 'locked', context: undefined, code: 'FEEDBACK_LESSON_INACCESSIBLE' },
-    ]) {
-      const db = new FakeDb();
-      await createFeedbackSession('student-1', sessionId, db as never, nowMs);
-      if (variant.lesson) db.documents.set('lessons/lesson-1', variant.lesson);
-      jest.mocked(getLessonProgressAccessInTransaction).mockResolvedValue(variant.access as never);
-      await expect(submitFeedback(token, submission({ pageContext: variant.context }), db as never, nowMs)).rejects.toMatchObject({ code: variant.code });
-      expect(db.documents.has(`studentFeedback/${sessionId}`)).toBe(false);
-      expect(db.documents.has('studentFeedbackThrottles/student-1')).toBe(false);
+    for (let index = 0; index < 10; index += 1) {
+      db.documents.set(`studentFeedback/recent-${index}`, {
+        submitter: { uid: 'student-1' },
+        createdAt: new Date(nowMs - 30 * 60 * 1000).toISOString(),
+      });
     }
+    db.documents.set('studentFeedback/other-student', { submitter: { uid: 'student-2' }, createdAt: '2026-09-24T11:59:00.000Z' });
+
+    await expect(submitFeedback(student, input(), db as never, nowMs)).rejects.toMatchObject({ code: 'FEEDBACK_REPORT_QUOTA', status: 429 });
+    await expect(submitFeedback(student, input(), db as never, nowMs + 31 * 60 * 1000)).resolves.toMatchObject({ feedbackId: draftId });
   });
 
-  it('requires every active intent ready and selected, and verifies its canonical storage path', async () => {
+  it('snapshots the lesson page and drops a page that no longer exists', async () => {
     const db = new FakeDb();
-    await createFeedbackSession('student-1', sessionId, db as never, nowMs);
-    db.documents.set('lessons/lesson-1', lesson());
-    db.documents.set(`studentFeedbackSessions/${sessionId}`, {
-      ...db.documents.get(`studentFeedbackSessions/${sessionId}`), attachmentCount: 1,
-      totalReservedBytes: 12,
+    db.documents.set('lessons/lesson-1', lessonDocument());
+
+    await submitFeedback(student, input({ lessonId: 'lesson-1', pageId: 'page-2' }), db as never, nowMs);
+    expect(db.documents.get(`studentFeedback/${draftId}`)?.lesson).toEqual({
+      id: 'lesson-1',
+      title: '<strong>First lesson</strong>',
+      pageId: 'page-2',
+      pageIndex: 1,
+      pageTitle: 'Second page',
     });
-    const path = `studentFeedbackSessions/${sessionId}/attachments/${attachmentId}`;
-    const base = {
-      schemaVersion: 1, id: attachmentId, sessionId, ownerUid: 'student-1',
-      originalName: 'picture.png', contentType: 'image/png', reservedBytes: 12,
-      createdAt: new Date(nowMs).toISOString(), updatedAt: new Date(nowMs).toISOString(),
-      lease: null, verified: null, cleanupPending: false, cleanupAfterMs: null,
-    };
-    db.documents.set(path, { ...base, status: 'reserved' });
-    await expect(submitFeedback(token, submission(), db as never, nowMs)).rejects.toMatchObject({ code: 'FEEDBACK_ATTACHMENT_NOT_READY' });
-    db.documents.set(path, { ...base, status: 'ready', verified: {
-      id: attachmentId, originalName: 'picture.png', contentType: 'image/png', sizeBytes: 12,
-      storagePath: `student-feedback/private/${sessionId}/${attachmentId}`, generation: '1',
-    } });
-    await expect(submitFeedback(token, submission(), db as never, nowMs)).rejects.toMatchObject({ code: 'FEEDBACK_ATTACHMENT_NOT_READY' });
-    const ready = db.documents.get(path)!;
-    db.documents.set(path, { ...ready, verified: { ...(ready.verified as Data), storagePath: 'student-feedback/private/other/file' } });
-    await expect(submitFeedback(token, submission({ attachmentIds: [attachmentId] }), db as never, nowMs)).rejects.toMatchObject({ code: 'FEEDBACK_INVALID_DOCUMENT' });
-    db.documents.set(path, ready);
-    await expect(submitFeedback(token, submission({ attachmentIds: [attachmentId] }), db as never, nowMs)).resolves.toMatchObject({ feedbackId: sessionId });
+
+    db.documents.clear();
+    db.documents.set('lessons/lesson-1', lessonDocument());
+    await submitFeedback(student, input({ lessonId: 'lesson-1', pageId: 'deleted-page' }), db as never, nowMs);
+    expect(db.documents.get(`studentFeedback/${draftId}`)?.lesson).toMatchObject({ pageId: null, pageIndex: null, pageTitle: null });
   });
 
-  it('enforces a rolling 60-minute quota without consuming it on a failed request', async () => {
+  it.each([
+    ['missing', undefined],
+    ['pending deletion', lessonDocument({ _deletionPending: true })],
+    ['not a lesson', lessonDocument({ kind: 'test' })],
+  ])('rejects a lesson that is %s', async (_label, document) => {
     const db = new FakeDb();
-    await createFeedbackSession('student-1', sessionId, db as never, nowMs);
-    db.documents.set('lessons/lesson-1', lesson());
-    db.documents.set('studentFeedbackThrottles/student-1', {
-      schemaVersion: 1, uid: 'student-1', submittedAtMs: Array.from({ length: 10 }, (_, i) => nowMs - 59 * 60 * 1000 + i),
-      updatedAt: new Date(nowMs).toISOString(),
+    if (document) db.documents.set('lessons/lesson-1', document);
+
+    await expect(submitFeedback(student, input({ lessonId: 'lesson-1' }), db as never, nowMs)).rejects.toMatchObject({
+      code: 'FEEDBACK_LESSON_UNAVAILABLE',
     });
-    await expect(submitFeedback(token, submission(), db as never, nowMs)).rejects.toMatchObject({ code: 'FEEDBACK_REPORT_QUOTA', status: 429 });
-    expect(db.documents.has(`studentFeedback/${sessionId}`)).toBe(false);
-    await expect(submitFeedback(token, submission(), db as never, nowMs + 60 * 1000)).resolves.toMatchObject({ feedbackId: sessionId });
+    expect(db.documents.has(`studentFeedback/${draftId}`)).toBe(false);
   });
 });
 
-describe('admin feedback transaction boundaries', () => {
-  it('separates resolution from archive, rejects stale state, and deduplicates private notes', async () => {
+describe('admin review', () => {
+  it('records state changes as toggles and ignores repeats', async () => {
     const db = new FakeDb();
-    await createFeedbackSession('student-1', sessionId, db as never, nowMs);
-    db.documents.set('lessons/lesson-1', lesson());
-    jest.mocked(getLessonProgressAccessInTransaction).mockResolvedValue('allowed');
-    await submitFeedback(token, submission(), db as never, nowMs);
-    const admin = { uid: 'admin-1', name: 'Admin' } as never;
-    const resolved = await updateFeedbackState(sessionId, admin, { action: 'resolve', expectedRevision: 0, reason: 'Fixed' }, db as never, nowMs + 1);
-    expect(resolved.status).toBe('resolved');
-    await expect(updateFeedbackState(sessionId, admin, { action: 'reopen', expectedRevision: 0 }, db as never, nowMs + 2)).rejects.toMatchObject({ code: 'FEEDBACK_REVISION_CONFLICT' });
-    const archived = await updateFeedbackState(sessionId, admin, { action: 'archive', expectedRevision: 1 }, db as never, nowMs + 2);
-    expect(archived.archived).toBe(true);
-    expect(archived.status).toBe('resolved');
-    const requestId = '1b950942-6190-40f7-bb3b-ed943a73feca';
-    const first = await addPrivateFeedbackNote(sessionId, admin, { requestId, note: 'Check reproduction' }, db as never, nowMs + 3);
-    const writes = db.writes.length;
-    expect(await addPrivateFeedbackNote(sessionId, admin, { requestId, note: 'Check reproduction' }, db as never, nowMs + 4)).toEqual(first);
-    expect(db.writes).toHaveLength(writes);
-    await expect(addPrivateFeedbackNote(sessionId, admin, { requestId, note: 'Changed note' }, db as never, nowMs + 5)).rejects.toMatchObject({ code: 'FEEDBACK_REQUEST_CONFLICT' });
-    expect(db.documents.get(`studentFeedback/${sessionId}`)?.stateRevision).toBe(2);
+    seedReport(db);
+    db.documents.set('users/admin-1', { firstName: 'Grace', lastName: 'Hopper' });
+    const activity = () => db.children(`studentFeedback/${draftId}/activity`).map(([, data]) => data);
+
+    const resolved = await updateFeedbackState(draftId, admin, { action: 'resolve', reason: 'Fixed in 2.3' }, db as never, nowMs);
+    expect(resolved).toMatchObject({ status: 'resolved', resolvedBy: 'admin-1', resolutionReason: 'Fixed in 2.3' });
+    expect(db.documents.get(`studentFeedback/${draftId}`)).toMatchObject({ status: 'resolved', resolvedAt: '2026-09-24T12:00:00.000Z' });
+
+    await updateFeedbackState(draftId, admin, { action: 'resolve' }, db as never, nowMs + 1000);
+    expect(activity()).toHaveLength(1);
+
+    await updateFeedbackState(draftId, admin, { action: 'reopen' }, db as never, nowMs + 2000);
+    await updateFeedbackState(draftId, admin, { action: 'archive' }, db as never, nowMs + 3000);
+    expect(db.documents.get(`studentFeedback/${draftId}`)).toMatchObject({
+      status: 'unresolved',
+      resolvedBy: null,
+      resolutionReason: null,
+      archived: true,
+      archivedBy: 'admin-1',
+    });
+    expect(activity().map(item => [item.kind, item.actorDisplayName])).toEqual([
+      ['resolved', 'Grace Hopper'],
+      ['reopened', 'Grace Hopper'],
+      ['archived', 'Grace Hopper'],
+    ]);
+  });
+
+  it('adds notes only to existing reports', async () => {
+    const db = new FakeDb();
+    await expect(addFeedbackNote(draftId, admin, 'Investigating', db as never, nowMs)).rejects.toMatchObject({ code: 'FEEDBACK_NOT_FOUND' });
+
+    seedReport(db);
+    const note = await addFeedbackNote(draftId, admin, 'Investigating', db as never, nowMs);
+    expect(note).toMatchObject({ kind: 'note', note: 'Investigating', actorUid: 'admin-1', actorDisplayName: 'Admin Token' });
+    expect(db.documents.get(`studentFeedback/${draftId}/activity/${note.id}`)).toEqual(note);
+  });
+
+  it('returns chronological activity and the current lesson with the report', async () => {
+    const db = new FakeDb();
+    seedReport(db, { lesson: { id: 'lesson-1', title: 'Old title', pageId: null, pageIndex: null, pageTitle: null } });
+    db.documents.set('lessons/lesson-1', lessonDocument({ title: 'New title' }));
+    const entry = (id: string, createdAt: string) => ({ id, kind: 'note', actorUid: 'admin-1', actorDisplayName: null, createdAt, reason: null, note: id });
+    db.documents.set(`studentFeedback/${draftId}/activity/later`, entry('later', '2026-09-24T12:30:00.000Z'));
+    db.documents.set(`studentFeedback/${draftId}/activity/earlier`, entry('earlier', '2026-09-24T12:10:00.000Z'));
+
+    const detail = await getFeedbackDetail(draftId, db as never);
+    expect(detail.activity.map(item => item.id)).toEqual(['earlier', 'later']);
+    expect(detail.currentLesson).toEqual({ id: 'lesson-1', title: 'New title' });
+  });
+});
+
+describe('admin list query', () => {
+  function recordingDb(docs: Array<{ id: string; data: Data }> = []) {
+    const calls: unknown[][] = [];
+    const query: Record<string, unknown> = new Proxy(
+      {},
+      {
+        get: (_target, method: string) =>
+          method === 'get'
+            ? async () => ({ docs: docs.map(doc => ({ id: doc.id, data: () => doc.data })), size: docs.length })
+            : (...args: unknown[]) => {
+                calls.push([method, ...args]);
+                return query;
+              },
+      }
+    );
+    return { calls, db: { collection: (name: string) => (calls.push(['collection', name]), query) } };
+  }
+
+  it('translates filters and date bounds into one indexed query', () => {
+    const { calls, db } = recordingDb();
+    feedbackListQuery(db as never, {
+      status: 'resolved',
+      archived: 'false',
+      sort: 'newest',
+      area: 'lessons',
+      submitterEmail: 'Student@Example.edu',
+      from: '2026-09-01T00:00:00.000Z',
+      to: '2026-09-30T23:59:59.999Z',
+    });
+    expect(calls).toEqual([
+      ['collection', 'studentFeedback'],
+      ['where', 'archived', '==', false],
+      ['where', 'status', '==', 'resolved'],
+      ['where', 'areas', 'array-contains', 'lessons'],
+      ['where', 'submitter.emailNormalized', '==', 'student@example.edu'],
+      ['orderBy', 'createdAt', 'desc'],
+      ['orderBy', '__name__', 'desc'],
+      ['startAt', '2026-09-30T23:59:59.999Z'],
+      ['endAt', '2026-09-01T00:00:00.000Z'],
+    ]);
+  });
+
+  it('returns a cursor that resumes after the last report and rejects malformed cursors', async () => {
+    const reports = Array.from({ length: 26 }, (_, index) => {
+      const id = `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`;
+      const db = new FakeDb();
+      seedReport(db);
+      return { id, data: { ...db.documents.get(`studentFeedback/${draftId}`), id, createdAt: `2026-09-24T10:${String(index).padStart(2, '0')}:00.000Z` } };
+    });
+    const first = recordingDb(reports);
+    const page = await listFeedback({ status: 'all', archived: 'false', sort: 'oldest' }, first.db as never);
+    expect(page.items).toHaveLength(25);
+    expect(page.items[0]).toMatchObject({ id: reports[0].id, excerpt: 'Existing report', attachmentCount: 0 });
+    expect(page.nextCursor).toEqual(expect.any(String));
+
+    const next = recordingDb();
+    feedbackListQuery(next.db as never, { status: 'all', archived: 'false', sort: 'oldest', from: '2026-09-01T00:00:00.000Z', cursor: page.nextCursor! });
+    expect(next.calls).toContainEqual(['startAfter', '2026-09-24T10:24:00.000Z', reports[24].id]);
+    expect(next.calls.some(([method]) => method === 'startAt')).toBe(false);
+
+    expect(() =>
+      feedbackListQuery(recordingDb().db as never, { status: 'all', archived: 'false', sort: 'newest', cursor: 'not-a-cursor' })
+    ).toThrow(expect.objectContaining({ code: 'FEEDBACK_INVALID_CURSOR' }));
   });
 });

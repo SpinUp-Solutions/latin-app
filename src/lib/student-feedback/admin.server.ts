@@ -1,297 +1,221 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import type { DecodedIdToken } from 'firebase-admin/auth';
 import { FieldPath, type Firestore, type Query } from 'firebase-admin/firestore';
 import { adminDb } from '@/src/services/firebase-admin';
 import {
   STUDENT_FEEDBACK_ACTIVITY_SUBCOLLECTION,
   STUDENT_FEEDBACK_COLLECTION,
-  LEARNING_UNITS_COLLECTION,
   USERS_COLLECTION,
 } from '@/shared/constants/firestore';
-import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 import {
   FEEDBACK_ADMIN_PAGE_SIZE,
-  FEEDBACK_SCHEMA_VERSION,
-  feedbackActivityDocumentSchema,
-  feedbackAdminListItemSchema,
-  feedbackDocumentIdSchema,
-  feedbackIsoTimestampSchema,
-  feedbackReportDocumentSchema,
+  FEEDBACK_MAX_ACTIVITY_ITEMS,
+  feedbackActivitySchema,
+  feedbackReportSchema,
+  type FeedbackActivity,
+  type FeedbackAdminAction,
+  type FeedbackAdminDetailResponse,
+  type FeedbackAdminListItem,
   type FeedbackAdminListQuery,
-  type FeedbackReportDocument,
+  type FeedbackAdminListResponse,
+  type FeedbackReport,
 } from '@/shared/student-feedback';
-import { FeedbackError, invalidFeedbackDocument } from './http.server';
-import { boundedFeedbackTitle } from './lessons.server';
-import { applyFeedbackDateBounds } from './query-bounds';
-import { feedbackActorName } from '@/src/lib/student-feedback/session.server';
+import { FeedbackError, feedbackNotFound, invalidFeedbackDocument } from './http.server';
+import { getCurrentFeedbackLesson } from './lessons.server';
+import { feedbackActorName } from './service.server';
 
-type ListQuery = FeedbackAdminListQuery;
-type StateInput = { action: 'resolve' | 'reopen' | 'archive' | 'unarchive'; expectedRevision: number; reason?: string };
-const CURSOR_VERSION = 1;
+const EXCERPT_LENGTH = 280;
+const ACTIVITY_KIND: Record<FeedbackAdminAction, FeedbackActivity['kind']> = {
+  resolve: 'resolved',
+  reopen: 'reopened',
+  archive: 'archived',
+  unarchive: 'unarchived',
+};
 
-function parseReport(data: unknown, id: string): FeedbackReportDocument {
-  const parsed = feedbackReportDocumentSchema.safeParse(data);
-  if (!parsed.success || parsed.data.id !== id || parsed.data.sessionId !== id) {
-    invalidFeedbackDocument('Feedback report data is invalid');
-  }
+function parseReport(data: unknown, id: string): FeedbackReport {
+  const parsed = feedbackReportSchema.safeParse(data);
+  if (!parsed.success || parsed.data.id !== id) invalidFeedbackDocument('Feedback report data is invalid');
   return parsed.data;
 }
 
-function reportNotFound(): never {
-  throw new FeedbackError('FEEDBACK_NOT_FOUND', 'Feedback report not found', 404);
+function encodeCursor(createdAt: string, id: string): string {
+  return Buffer.from(JSON.stringify([createdAt, id]), 'utf8').toString('base64url');
 }
 
-function filterFingerprint(filters: ListQuery, scope = 'reports'): string {
-  const { cursor: _cursor, ...withoutCursor } = filters;
-  return createHash('sha256').update(JSON.stringify({ scope, filters: withoutCursor })).digest('hex');
-}
-
-export function encodeCursor(filters: ListQuery, createdAt: string, id: string, scope = 'reports'): string {
-  return Buffer.from(JSON.stringify({ v: CURSOR_VERSION, f: filterFingerprint(filters, scope), createdAt, id }), 'utf8')
-    .toString('base64url');
-}
-
-export function decodeCursor(value: string, filters: ListQuery, scope = 'reports'): { createdAt: string; id: string } {
+function decodeCursor(value: string): [string, string] {
   try {
-    const decoded = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as Record<string, unknown>;
-    if (
-      decoded.v !== CURSOR_VERSION ||
-      decoded.f !== filterFingerprint(filters, scope) ||
-      !feedbackIsoTimestampSchema.safeParse(decoded.createdAt).success ||
-      !feedbackDocumentIdSchema.safeParse(decoded.id).success
-    ) throw new Error('invalid');
-    const createdAt = decoded.createdAt as string;
-    if ((filters.from && createdAt < filters.from) || (filters.to && createdAt > filters.to)) throw new Error('out of bounds');
-    return { createdAt, id: decoded.id as string };
+    const decoded: unknown = JSON.parse(Buffer.from(value, 'base64url').toString('utf8'));
+    if (Array.isArray(decoded) && decoded.length === 2 && decoded.every(part => typeof part === 'string')) {
+      return decoded as [string, string];
+    }
   } catch {
-    throw new FeedbackError('FEEDBACK_REQUEST_CONFLICT', 'This page cursor does not match the filters', 400);
+    // Fall through to the domain error.
   }
+  throw new FeedbackError('FEEDBACK_INVALID_CURSOR', 'This page link is no longer valid', 400);
 }
 
-function assertDateBounds(filters: ListQuery) {
-  if (filters.from && filters.to && filters.from > filters.to) {
-    throw new FeedbackError('FEEDBACK_REQUEST_CONFLICT', 'The start date must be before the end date', 400);
-  }
-}
-
-export function baseListQuery(db: Firestore, filters: ListQuery): Query {
+export function feedbackListQuery(db: Firestore, filters: FeedbackAdminListQuery): Query {
   let query: Query = db.collection(STUDENT_FEEDBACK_COLLECTION).where('archived', '==', filters.archived === 'true');
   if (filters.status !== 'all') query = query.where('status', '==', filters.status);
   if (filters.type) query = query.where('type', '==', filters.type);
   if (filters.severity) query = query.where('severity', '==', filters.severity);
-  if (filters.area) query = query.where(`areaFlags.${filters.area}`, '==', true);
+  if (filters.area) query = query.where('areas', 'array-contains', filters.area);
   if (filters.lessonId) query = query.where('lesson.id', '==', filters.lessonId);
   if (filters.submitterUid) query = query.where('submitter.uid', '==', filters.submitterUid);
   if (filters.submitterEmail) query = query.where('submitter.emailNormalized', '==', filters.submitterEmail.toLowerCase());
+
   const direction = filters.sort === 'oldest' ? 'asc' : 'desc';
-  return query.orderBy('createdAt', direction).orderBy(FieldPath.documentId(), direction);
+  query = query.orderBy('createdAt', direction).orderBy(FieldPath.documentId(), direction);
+  // Date bounds are cursors on the sort field, so every filter reuses the same sort indexes.
+  const [start, end] = direction === 'asc' ? [filters.from, filters.to] : [filters.to, filters.from];
+  if (filters.cursor) query = query.startAfter(...decodeCursor(filters.cursor));
+  else if (start) query = query.startAt(start);
+  if (end) query = query.endAt(end);
+  return query;
 }
 
-export function applyDateAndCursor(query: Query, filters: ListQuery): Query {
-  assertDateBounds(filters);
-  const cursor = filters.cursor ? decodeCursor(filters.cursor, filters) : null;
-  return applyFeedbackDateBounds(query, { sort: filters.sort, from: filters.from, to: filters.to, cursor });
-}
-
-function matchesDirect(report: FeedbackReportDocument, filters: ListQuery): boolean {
-  if (report.archived !== (filters.archived === 'true')) return false;
-  if (filters.status !== 'all' && report.status !== filters.status) return false;
-  if (filters.type && report.type !== filters.type) return false;
-  if (filters.severity && report.severity !== filters.severity) return false;
-  if (filters.area && !report.areaFlags[filters.area]) return false;
-  if (filters.lessonId && report.lesson?.id !== filters.lessonId) return false;
-  if (filters.submitterUid && report.submitter.uid !== filters.submitterUid) return false;
-  if (filters.submitterEmail && report.submitter.emailNormalized !== filters.submitterEmail.toLowerCase()) return false;
-  if (filters.from && report.createdAt < filters.from) return false;
-  if (filters.to && report.createdAt > filters.to) return false;
-  return true;
-}
-
-function listItem(report: FeedbackReportDocument) {
-  return feedbackAdminListItemSchema.parse({
+function listItem(report: FeedbackReport): FeedbackAdminListItem {
+  return {
     id: report.id,
     type: report.type,
     ...(report.severity ? { severity: report.severity } : {}),
     areas: report.areas,
-    description: report.description,
+    excerpt: report.description.slice(0, EXCERPT_LENGTH),
     submitter: report.submitter,
     lesson: report.lesson,
     createdAt: report.createdAt,
     status: report.status,
     archived: report.archived,
-    stateRevision: report.stateRevision,
-    attachments: report.attachments,
-  });
-}
-
-export async function listFeedback(filters: ListQuery, db: Firestore = adminDb) {
-  assertDateBounds(filters);
-  if (filters.feedbackId) {
-    if (filters.cursor) decodeCursor(filters.cursor, filters);
-    const snapshot = await db.collection(STUDENT_FEEDBACK_COLLECTION).doc(filters.feedbackId).get();
-    if (!snapshot.exists) return { items: [], nextCursor: null };
-    const report = parseReport(snapshot.data(), snapshot.id);
-    return { items: matchesDirect(report, filters) ? [listItem(report)] : [], nextCursor: null };
-  }
-  const snapshots = await applyDateAndCursor(baseListQuery(db, filters), filters).limit(FEEDBACK_ADMIN_PAGE_SIZE + 1).get();
-  const page = snapshots.docs.slice(0, FEEDBACK_ADMIN_PAGE_SIZE);
-  const items = page.map(snapshot => listItem(parseReport(snapshot.data(), snapshot.id)));
-  const last = page.at(-1);
-  return {
-    items,
-    nextCursor: snapshots.size > FEEDBACK_ADMIN_PAGE_SIZE && last
-      ? encodeCursor(filters, last.get('createdAt') as string, last.id)
-      : null,
+    attachmentCount: report.attachments.length,
   };
 }
 
-export async function countFeedback(filters: ListQuery, db: Firestore = adminDb): Promise<number> {
-  assertDateBounds(filters);
-  if (filters.feedbackId) return (await listFeedback(filters, db)).items.length;
-  const { cursor: _cursor, ...withoutCursor } = filters;
-  return (await applyDateAndCursor(baseListQuery(db, withoutCursor), withoutCursor).count().get()).data().count;
+export async function listFeedback(filters: FeedbackAdminListQuery, db: Firestore = adminDb): Promise<FeedbackAdminListResponse> {
+  const snapshot = await feedbackListQuery(db, filters).limit(FEEDBACK_ADMIN_PAGE_SIZE + 1).get();
+  const page = snapshot.docs.slice(0, FEEDBACK_ADMIN_PAGE_SIZE).map(document => parseReport(document.data(), document.id));
+  const last = page.at(-1);
+  return {
+    items: page.map(listItem),
+    nextCursor: snapshot.size > FEEDBACK_ADMIN_PAGE_SIZE && last ? encodeCursor(last.createdAt, last.id) : null,
+  };
 }
 
-export async function getAdminFeedback(feedbackId: string, db: Firestore = adminDb) {
+export async function countOpenFeedback(db: Firestore = adminDb): Promise<number> {
+  const snapshot = await db
+    .collection(STUDENT_FEEDBACK_COLLECTION)
+    .where('archived', '==', false)
+    .where('status', '==', 'unresolved')
+    .count()
+    .get();
+  return snapshot.data().count;
+}
+
+export async function getFeedbackReport(feedbackId: string, db: Firestore = adminDb): Promise<FeedbackReport> {
   const snapshot = await db.collection(STUDENT_FEEDBACK_COLLECTION).doc(feedbackId).get();
-  if (!snapshot.exists) reportNotFound();
+  if (!snapshot.exists) feedbackNotFound();
   return parseReport(snapshot.data(), snapshot.id);
 }
 
-export async function getCurrentFeedbackLesson(lessonId: string | undefined, db: Firestore = adminDb) {
-  if (!lessonId) return null;
-  const snapshot = await db.collection(LEARNING_UNITS_COLLECTION).doc(lessonId).get();
-  const data = snapshot.data();
-  if (
-    !snapshot.exists || !isLessonDocumentData(data) || data._deletionPending === true ||
-    typeof data.title !== 'string' || !data.title.trim()
-  ) return null;
-  return { id: lessonId, title: boundedFeedbackTitle(data.title) };
+export async function getFeedbackDetail(feedbackId: string, db: Firestore = adminDb): Promise<FeedbackAdminDetailResponse> {
+  const feedback = await getFeedbackReport(feedbackId, db);
+  const [activitySnapshot, currentLesson] = await Promise.all([
+    db
+      .collection(STUDENT_FEEDBACK_COLLECTION)
+      .doc(feedbackId)
+      .collection(STUDENT_FEEDBACK_ACTIVITY_SUBCOLLECTION)
+      .orderBy('createdAt', 'asc')
+      .limit(FEEDBACK_MAX_ACTIVITY_ITEMS)
+      .get(),
+    getCurrentFeedbackLesson(feedback.lesson?.id, db),
+  ]);
+  const activity = activitySnapshot.docs.map(document => {
+    const parsed = feedbackActivitySchema.safeParse(document.data());
+    if (!parsed.success || parsed.data.id !== document.id) invalidFeedbackDocument('Feedback activity data is invalid');
+    return parsed.data;
+  });
+  return { feedback, activity, currentLesson };
 }
 
+function statePatch(report: FeedbackReport, action: FeedbackAdminAction, uid: string, reason: string | null, now: string) {
+  switch (action) {
+    case 'resolve':
+      return report.status === 'resolved'
+        ? null
+        : { status: 'resolved' as const, resolvedBy: uid, resolvedAt: now, resolutionReason: reason };
+    case 'reopen':
+      return report.status === 'unresolved'
+        ? null
+        : { status: 'unresolved' as const, resolvedBy: null, resolvedAt: null, resolutionReason: null };
+    case 'archive':
+      return report.archived ? null : { archived: true, archivedBy: uid, archivedAt: now };
+    case 'unarchive':
+      return report.archived ? { archived: false, archivedBy: null, archivedAt: null } : null;
+  }
+}
+
+/** Actions are toggles: repeating one that already applies changes nothing. */
 export async function updateFeedbackState(
   feedbackId: string,
   token: DecodedIdToken,
-  input: StateInput,
+  input: { action: FeedbackAdminAction; reason?: string },
   db: Firestore = adminDb,
   nowMs = Date.now()
-) {
-  const ref = db.collection(STUDENT_FEEDBACK_COLLECTION).doc(feedbackId);
-  const actorRef = db.collection(USERS_COLLECTION).doc(token.uid);
+): Promise<FeedbackReport> {
+  const reportRef = db.collection(STUDENT_FEEDBACK_COLLECTION).doc(feedbackId);
   return db.runTransaction(async transaction => {
-    const [snapshot, actorSnapshot] = await Promise.all([transaction.get(ref), transaction.get(actorRef)]);
-    if (!snapshot.exists) reportNotFound();
-    const previous = parseReport(snapshot.data(), feedbackId);
-    if (previous.stateRevision !== input.expectedRevision) {
-      throw new FeedbackError('FEEDBACK_REVISION_CONFLICT', 'Feedback changed. Refresh and try again.', 409);
-    }
-    const alreadyApplied =
-      (input.action === 'resolve' && previous.status === 'resolved') ||
-      (input.action === 'reopen' && previous.status === 'unresolved') ||
-      (input.action === 'archive' && previous.archived) ||
-      (input.action === 'unarchive' && !previous.archived);
-    if (alreadyApplied) return previous;
-
+    const [snapshot, actorSnapshot] = await Promise.all([
+      transaction.get(reportRef),
+      transaction.get(db.collection(USERS_COLLECTION).doc(token.uid)),
+    ]);
+    if (!snapshot.exists) feedbackNotFound();
+    const report = parseReport(snapshot.data(), feedbackId);
     const now = new Date(nowMs).toISOString();
-    const next = feedbackReportDocumentSchema.parse({
-      ...previous,
-      updatedAt: now,
-      stateRevision: previous.stateRevision + 1,
-      ...(input.action === 'resolve'
-        ? { status: 'resolved', resolvedBy: token.uid, resolvedAt: now, resolutionReason: input.reason ?? null }
-        : input.action === 'reopen'
-          ? { status: 'unresolved', resolvedBy: null, resolvedAt: null, resolutionReason: null }
-          : input.action === 'archive'
-            ? { archived: true, archivedBy: token.uid, archivedAt: now }
-            : { archived: false, archivedBy: null, archivedAt: null }),
-    });
-    const id = randomUUID();
-    const activity = feedbackActivityDocumentSchema.parse({
-      schemaVersion: FEEDBACK_SCHEMA_VERSION,
-      id,
-      feedbackId,
-      kind: input.action === 'resolve' ? 'resolved' : input.action === 'reopen' ? 'reopened' : input.action === 'archive' ? 'archived' : 'unarchived',
+    const reason = input.reason ?? null;
+    const patch = statePatch(report, input.action, token.uid, reason, now);
+    if (!patch) return report;
+
+    const activityRef = reportRef.collection(STUDENT_FEEDBACK_ACTIVITY_SUBCOLLECTION).doc(randomUUID());
+    const activity: FeedbackActivity = {
+      id: activityRef.id,
+      kind: ACTIVITY_KIND[input.action],
       actorUid: token.uid,
       actorDisplayName: feedbackActorName(token, actorSnapshot.data()),
       createdAt: now,
-      reason: input.reason ?? null,
+      reason,
       note: null,
-      requestId: null,
-    });
-    transaction.set(ref, next);
-    transaction.create(ref.collection(STUDENT_FEEDBACK_ACTIVITY_SUBCOLLECTION).doc(id), activity);
-    return next;
+    };
+    transaction.update(reportRef, { ...patch, updatedAt: now });
+    transaction.create(activityRef, activity);
+    return { ...report, ...patch, updatedAt: now };
   });
 }
 
-export async function addPrivateFeedbackNote(
+export async function addFeedbackNote(
   feedbackId: string,
   token: DecodedIdToken,
-  input: { requestId: string; note: string },
+  note: string,
   db: Firestore = adminDb,
   nowMs = Date.now()
-) {
+): Promise<FeedbackActivity> {
   const reportRef = db.collection(STUDENT_FEEDBACK_COLLECTION).doc(feedbackId);
-  const noteRef = reportRef.collection(STUDENT_FEEDBACK_ACTIVITY_SUBCOLLECTION).doc(input.requestId);
-  const actorRef = db.collection(USERS_COLLECTION).doc(token.uid);
   return db.runTransaction(async transaction => {
-    const [reportSnapshot, noteSnapshot, actorSnapshot] = await Promise.all([
-      transaction.get(reportRef), transaction.get(noteRef), transaction.get(actorRef),
+    const [snapshot, actorSnapshot] = await Promise.all([
+      transaction.get(reportRef),
+      transaction.get(db.collection(USERS_COLLECTION).doc(token.uid)),
     ]);
-    if (!reportSnapshot.exists) reportNotFound();
-    parseReport(reportSnapshot.data(), feedbackId);
-    if (noteSnapshot.exists) {
-      const parsed = feedbackActivityDocumentSchema.safeParse(noteSnapshot.data());
-      if (
-        !parsed.success || parsed.data.id !== input.requestId ||
-        parsed.data.requestId !== input.requestId || parsed.data.feedbackId !== feedbackId
-      ) invalidFeedbackDocument('Feedback activity data is invalid');
-      if (parsed.data.kind !== 'note' || parsed.data.actorUid !== token.uid || parsed.data.note !== input.note) {
-        throw new FeedbackError('FEEDBACK_REQUEST_CONFLICT', 'This note request ID was used for different content', 409);
-      }
-      return parsed.data;
-    }
-    const activity = feedbackActivityDocumentSchema.parse({
-      schemaVersion: FEEDBACK_SCHEMA_VERSION,
-      id: input.requestId,
-      feedbackId,
+    if (!snapshot.exists) feedbackNotFound();
+    parseReport(snapshot.data(), feedbackId);
+    const activityRef = reportRef.collection(STUDENT_FEEDBACK_ACTIVITY_SUBCOLLECTION).doc(randomUUID());
+    const activity: FeedbackActivity = {
+      id: activityRef.id,
       kind: 'note',
       actorUid: token.uid,
       actorDisplayName: feedbackActorName(token, actorSnapshot.data()),
       createdAt: new Date(nowMs).toISOString(),
       reason: null,
-      note: input.note,
-      requestId: input.requestId,
-    });
-    transaction.create(noteRef, activity);
+      note,
+    };
+    transaction.create(activityRef, activity);
     return activity;
   });
-}
-
-export async function listFeedbackActivity(feedbackId: string, cursor: string | undefined, db: Firestore = adminDb) {
-  const reportSnapshot = await db.collection(STUDENT_FEEDBACK_COLLECTION).doc(feedbackId).get();
-  if (!reportSnapshot.exists) reportNotFound();
-  parseReport(reportSnapshot.data(), feedbackId);
-  let query = reportSnapshot.ref.collection(STUDENT_FEEDBACK_ACTIVITY_SUBCOLLECTION)
-    .orderBy('createdAt', 'desc').orderBy(FieldPath.documentId(), 'desc');
-  if (cursor) {
-    const parsed = decodeCursor(cursor, { status: 'all', archived: 'false', sort: 'newest' }, `activity:${feedbackId}`);
-    query = query.startAfter(parsed.createdAt, parsed.id);
-  }
-  const snapshot = await query.limit(FEEDBACK_ADMIN_PAGE_SIZE + 1).get();
-  const page = snapshot.docs.slice(0, FEEDBACK_ADMIN_PAGE_SIZE);
-  const items = page.map(document => {
-    const parsed = feedbackActivityDocumentSchema.safeParse(document.data());
-    if (!parsed.success || parsed.data.id !== document.id || parsed.data.feedbackId !== feedbackId) {
-      invalidFeedbackDocument('Feedback activity data is invalid');
-    }
-    return parsed.data;
-  });
-  const last = page.at(-1);
-  return {
-    items,
-    nextCursor: snapshot.size > FEEDBACK_ADMIN_PAGE_SIZE && last
-      ? encodeCursor({ status: 'all', archived: 'false', sort: 'newest' }, last.get('createdAt') as string, last.id, `activity:${feedbackId}`)
-      : null,
-  };
 }
