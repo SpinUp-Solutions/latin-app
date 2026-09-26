@@ -3,16 +3,12 @@ import { PATCH } from '@/src/app/api/test-attempts/[attemptId]/sections/[pageId]
 import { POST } from '@/src/app/api/test-attempts/[attemptId]/sections/[pageId]/confirm/route';
 import { TestServiceError } from '@/src/lib/tests/errors';
 const mockAuth = jest.fn();
-const mockAppCheck = jest.fn();
 const mockRead = jest.fn();
 const mockPhase = jest.fn();
 const mockConfirm = jest.fn();
 jest.mock('next/server', () => jest.requireActual('./helpers/routeMocks'));
 jest.mock('@/src/services/firebase-admin', () => jest.requireActual('./helpers/routeMocks'));
 jest.mock('@/src/lib/verifyRequestAuth', () => ({ verifyRequestAuth: (...args: unknown[]) => mockAuth(...args) }));
-jest.mock('@/src/lib/verifyRequestAppCheck', () => ({
-  verifyRequestAppCheck: (...args: unknown[]) => mockAppCheck(...args),
-}));
 jest.mock('@/src/lib/tests/attempt-service', () => ({
   testAttemptService: {
     getAttempt: (...args: unknown[]) => mockRead(...args),
@@ -30,7 +26,6 @@ const params = { params: Promise.resolve({ attemptId: 'attempt-1', pageId: 'page
 beforeEach(() => {
   jest.clearAllMocks();
   mockAuth.mockResolvedValue({ uid: 'student-1' });
-  mockAppCheck.mockResolvedValue(true);
 });
 it.each([GET, PATCH, POST])('authenticates before accessing an attempt', async handler => {
   mockAuth.mockResolvedValue(null);
@@ -67,10 +62,4 @@ it('maps section conflicts without leaking internal grading details', async () =
     status: 409,
     body: { code: 'ATTEMPT_REVISION_CONFLICT', error: 'Reload saved answers' },
   });
-});
-
-it('rejects section grading before the service when required attestation fails', async () => {
-  mockAppCheck.mockResolvedValue(false);
-  expect(await POST(request(), params)).toMatchObject({ status: 401 });
-  expect(mockConfirm).not.toHaveBeenCalled();
 });

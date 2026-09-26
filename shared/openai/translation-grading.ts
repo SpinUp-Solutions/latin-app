@@ -18,12 +18,7 @@ import {
   type TranslationGradingOutput,
   type TranslationGradingOutputByMode,
 } from './translation-grading-tasks';
-import type {
-  OpenAIRequestContext,
-  TranslationGradingMode,
-  TranslationGradingRequest,
-  TranslationGradingResponse,
-} from './types';
+import type { TranslationGradingMode, TranslationGradingRequest, TranslationGradingResponse } from './types';
 
 export type {
   StructuredAIExecutor,
@@ -41,7 +36,7 @@ export interface TranslationGradingService {
     mode: M,
     request: TranslationGradingRequest,
     profileId?: TranslationGradingProfileId,
-    context?: OpenAIRequestContext
+    options?: { signal?: AbortSignal; timeout?: number; maxRetries?: number }
   ): Promise<TranslationGradingRunResult<TranslationGradingOutputByMode[M]>>;
 }
 
@@ -57,10 +52,10 @@ export function createTranslationGradingService(
   executor: StructuredAIExecutor = openAIStructuredOutputExecutor
 ): TranslationGradingService {
   return {
-    async grade(mode, request, profileId, context) {
+    async grade(mode, request, profileId, options) {
       const task = getTranslationGradingTask(mode);
-      return context
-        ? executor.execute(task, task.buildPrompt(request), profileFor(mode, profileId), context)
+      return options
+        ? executor.execute(task, task.buildPrompt(request), profileFor(mode, profileId), options)
         : executor.execute(task, task.buildPrompt(request), profileFor(mode, profileId));
     },
   };
@@ -69,11 +64,10 @@ export function createTranslationGradingService(
 export const translationGrader = createTranslationGradingService();
 
 export async function gradeTranslation(
-  request: TranslationGradingRequest,
-  context?: OpenAIRequestContext
+  request: TranslationGradingRequest
 ): Promise<TranslationGradingResponse<TranslationGradingOutput>> {
   try {
-    const result = await translationGrader.grade('lesson', request, undefined, context);
+    const result = await translationGrader.grade('lesson', request);
     if (!result.success) {
       return {
         success: false,

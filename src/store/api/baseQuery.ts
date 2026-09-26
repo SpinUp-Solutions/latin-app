@@ -5,8 +5,7 @@ import {
   type FetchBaseQueryError,
   type FetchBaseQueryMeta,
 } from '@reduxjs/toolkit/query/react';
-import { appCheck, auth } from '@/src/services/firebase';
-import { apiEndpointRequiresAppCheck } from '@/shared/openai/app-check';
+import { auth } from '@/src/services/firebase';
 
 const isObject = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object';
 
@@ -120,16 +119,11 @@ export const createAuthenticatedBaseQuery = (): BaseQueryFn<
 > => {
   const authenticatedFetch = fetchBaseQuery({
     baseUrl: '/api',
-    prepareHeaders: async (headers, { endpoint }) => {
+    prepareHeaders: async headers => {
       const user = auth.currentUser;
       if (user) {
         const token = await user.getIdToken();
         headers.set('authorization', `Bearer ${token}`);
-      }
-      if (appCheck && apiEndpointRequiresAppCheck(endpoint)) {
-        const { getToken } = await import('firebase/app-check');
-        const token = await getToken(appCheck);
-        headers.set('X-Firebase-AppCheck', token.token);
       }
       return headers;
     },

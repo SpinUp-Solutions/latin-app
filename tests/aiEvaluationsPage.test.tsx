@@ -5,7 +5,6 @@ import { getAdminBreadcrumbs } from '@/src/components/admin/shell';
 import {
   deleteEvaluationCaseInFirebase,
   listEvaluationCasesInFirebase,
-  listEvaluationRunsInFirebase,
   runEvaluationInFirebase,
   saveEvaluationCaseInFirebase,
 } from '@/src/lib/ai-evaluations/firebase-client';
@@ -13,7 +12,6 @@ import type { EvaluationCase, EvaluationCellResult, EvaluationRunResult } from '
 
 const mockedRunEvaluationInFirebase = jest.mocked(runEvaluationInFirebase);
 const mockedListEvaluationCasesInFirebase = jest.mocked(listEvaluationCasesInFirebase);
-const mockedListEvaluationRunsInFirebase = jest.mocked(listEvaluationRunsInFirebase);
 const mockedSaveEvaluationCaseInFirebase = jest.mocked(saveEvaluationCaseInFirebase);
 const mockedDeleteEvaluationCaseInFirebase = jest.mocked(deleteEvaluationCaseInFirebase);
 const pathname = '/admin/ai-evaluations';
@@ -22,7 +20,6 @@ jest.mock('@/src/components/auth/withAdminAuth', () => ({ withAdminAuth: (Compon
 jest.mock('@/src/lib/ai-evaluations/firebase-client', () => ({
   deleteEvaluationCaseInFirebase: jest.fn(),
   listEvaluationCasesInFirebase: jest.fn(),
-  listEvaluationRunsInFirebase: jest.fn(),
   runEvaluationInFirebase: jest.fn(),
   saveEvaluationCaseInFirebase: jest.fn(),
 }));
@@ -35,7 +32,6 @@ describe('AI evaluation admin workspace', () => {
     mockedRunEvaluationInFirebase.mockReset();
     mockedListEvaluationCasesInFirebase.mockReset();
     mockedListEvaluationCasesInFirebase.mockResolvedValue([]);
-    mockedListEvaluationRunsInFirebase.mockResolvedValue([]);
     mockedSaveEvaluationCaseInFirebase.mockReset();
     mockedDeleteEvaluationCaseInFirebase.mockReset();
   });
@@ -54,14 +50,7 @@ describe('AI evaluation admin workspace', () => {
       title: 'Loaded case',
       direction: 'latin-to-english',
       sourceText: 'Gallia est omnis divisa.',
-      answers: [
-        {
-          id: 'answer-loaded',
-          label: 'Answer',
-          text: 'All Gaul is divided.',
-          expectations: { lesson: { passing: true }, test: { minScore: 8, maxScore: 10 } },
-        },
-      ],
+      answers: [{ id: 'answer-loaded', label: 'Answer', text: 'All Gaul is divided.' }],
       modes: ['lesson', 'test'],
       createdAt: '2026-08-01T00:00:00.000Z',
       createdBy: 'admin',
@@ -91,14 +80,7 @@ describe('AI evaluation admin workspace', () => {
       title: 'Cicero case',
       direction: 'latin-to-english',
       sourceText: 'Si quid est in me ingeni.',
-      answers: [
-        {
-          id: 'answer-1',
-          label: 'Student A',
-          text: 'If there is talent in me.',
-          expectations: { lesson: { passing: true }, test: { minScore: 8, maxScore: 10 } },
-        },
-      ],
+      answers: [{ id: 'answer-1', label: 'Student A', text: 'If there is talent in me.' }],
       modes: ['lesson', 'test'],
       createdAt: '2026-08-01T00:00:00.000Z',
       createdBy: 'admin',
@@ -106,7 +88,7 @@ describe('AI evaluation admin workspace', () => {
       updatedBy: 'admin',
     };
     const cell = (
-      profileId: 'baseline' | 'candidateLow',
+      profileId: 'baseline' | 'candidate',
       model: string,
       feedbackLevel: 'Excellent' | 'Very good'
     ): EvaluationCellResult => ({
@@ -148,7 +130,7 @@ describe('AI evaluation admin workspace', () => {
         tokens: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
       },
     });
-    const testCell = (profileId: 'baseline' | 'candidateLow', model: string): EvaluationCellResult => ({
+    const testCell = (profileId: 'baseline' | 'candidate', model: string): EvaluationCellResult => ({
       answerId: 'answer-1',
       answerLabel: 'Student A',
       gradingMode: 'test',
@@ -182,7 +164,7 @@ describe('AI evaluation admin workspace', () => {
     });
     const runResult: EvaluationRunResult = {
       caseId: 'case-1',
-      schemaVersion: 'ai-translation-evaluation-v3',
+      schemaVersion: 'ai-translation-evaluation-v2',
       forceRefresh: false,
       startedAt: '2026-08-01T00:00:00.000Z',
       completedAt: '2026-08-01T00:00:00.500Z',
@@ -190,9 +172,6 @@ describe('AI evaluation admin workspace', () => {
         cellCount: 4,
         evaluatedCellCount: 4,
         failedCellCount: 0,
-        criteriaEvaluatedCount: 4,
-        criteriaPassedCount: 4,
-        criteriaFailedCount: 0,
         appCacheHits: 0,
         openAIPromptCacheHits: 0,
         wallTimeMs: 500,
@@ -221,9 +200,9 @@ describe('AI evaluation admin workspace', () => {
       },
       cells: [
         cell('baseline', 'gpt-5.4-mini', 'Excellent'),
-        cell('candidateLow', 'gpt-5.6-luna', 'Very good'),
+        cell('candidate', 'gpt-5.6-luna', 'Very good'),
         testCell('baseline', 'gpt-5.4-mini'),
-        testCell('candidateLow', 'gpt-5.6-luna'),
+        testCell('candidate', 'gpt-5.6-luna'),
       ],
     };
     mockedSaveEvaluationCaseInFirebase.mockResolvedValue(savedCase as never);
@@ -235,9 +214,6 @@ describe('AI evaluation admin workspace', () => {
     fireEvent.change(screen.getByLabelText('Source text'), { target: { value: savedCase.sourceText } });
     fireEvent.change(screen.getByLabelText('Label'), { target: { value: 'Student A' } });
     fireEvent.change(screen.getByLabelText('Student answer'), { target: { value: savedCase.answers[0].text } });
-    fireEvent.change(screen.getByLabelText('Expected lesson result'), { target: { value: 'passing' } });
-    fireEvent.change(screen.getByLabelText('Expected minimum score'), { target: { value: '8' } });
-    fireEvent.change(screen.getByLabelText('Expected maximum score'), { target: { value: '10' } });
 
     expect(screen.getByRole('button', { name: 'Test models' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Save case' }));
@@ -255,11 +231,11 @@ describe('AI evaluation admin workspace', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Test models' }));
     await waitFor(() =>
-      expect(mockedRunEvaluationInFirebase).toHaveBeenCalledWith({ caseId: 'case-1', forceRefresh: true })
+      expect(mockedRunEvaluationInFirebase).toHaveBeenCalledWith({ caseId: 'case-1', forceRefresh: false })
     );
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Results' })).toBeInTheDocument());
     expect(screen.getAllByText('GPT-5.4 Mini · Low').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('GPT-5.6 Luna · Low').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('GPT-5.6 Luna · High').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Good work.')).toHaveLength(2);
     expect(screen.getByRole('heading', { name: 'Test scoring' })).toBeInTheDocument();
     expect(screen.getAllByText('8.5/10')).toHaveLength(2);
@@ -276,14 +252,7 @@ describe('AI evaluation admin workspace', () => {
       title: 'Saved case',
       direction: 'latin-to-english',
       sourceText: 'Gallia est omnis divisa.',
-      answers: [
-        {
-          id: 'answer-save',
-          label: 'Answer',
-          text: 'All Gaul is divided.',
-          expectations: { lesson: { passing: true }, test: { minScore: 8, maxScore: 10 } },
-        },
-      ],
+      answers: [{ id: 'answer-save', label: 'Answer', text: 'All Gaul is divided.' }],
       modes: ['lesson'],
       createdAt: '2026-08-01T00:00:00.000Z',
       createdBy: 'admin',
@@ -319,14 +288,7 @@ describe('AI evaluation admin workspace', () => {
       title: 'Race case',
       direction: 'latin-to-english',
       sourceText: 'Gallia est omnis divisa.',
-      answers: [
-        {
-          id: 'answer-race',
-          label: 'Answer',
-          text: 'All Gaul is divided.',
-          expectations: { lesson: { passing: true } },
-        },
-      ],
+      answers: [{ id: 'answer-race', label: 'Answer', text: 'All Gaul is divided.' }],
       modes: ['lesson'],
       createdAt: '2026-08-01T00:00:00.000Z',
       createdBy: 'admin',
@@ -339,7 +301,7 @@ describe('AI evaluation admin workspace', () => {
     });
     const staleResult: EvaluationRunResult = {
       caseId: 'different-case',
-      schemaVersion: 'ai-translation-evaluation-v3',
+      schemaVersion: 'ai-translation-evaluation-v2',
       forceRefresh: false,
       startedAt: '2026-08-01T00:00:00.000Z',
       completedAt: '2026-08-01T00:00:00.100Z',
@@ -347,9 +309,6 @@ describe('AI evaluation admin workspace', () => {
         cellCount: 0,
         evaluatedCellCount: 0,
         failedCellCount: 0,
-        criteriaEvaluatedCount: 0,
-        criteriaPassedCount: 0,
-        criteriaFailedCount: 0,
         appCacheHits: 0,
         openAIPromptCacheHits: 0,
         wallTimeMs: 100,

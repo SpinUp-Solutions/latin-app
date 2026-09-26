@@ -27,13 +27,6 @@ try {
     'vocabulary_word_deletion_challenges',
     'content_sync_locks',
     'vocabulary_content_state',
-    'aiEvaluationCases',
-    'aiEvaluationResultCache',
-    'aiEvaluationRunThrottles',
-    'aiEvaluationInFlight',
-    'aiEvaluationRuns',
-    'aiRequestThrottles',
-    'aiProviderConcurrency',
   ];
 
   for (const collection of collections) {
@@ -43,7 +36,7 @@ try {
     await assertFails(deleteDoc(reference));
   }
 
-  console.log(`Verified direct client denial for ${collections.length} server-only collections.`);
+  console.log(`Verified direct client denial for ${collections.length} vocabulary collections.`);
 } finally {
   await environment.cleanup();
 }

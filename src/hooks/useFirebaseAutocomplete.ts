@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/src/services/firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { AIAutocompleteResponse, CostBreakdown, ErrorDetails } from '@/shared/openai/types';
 import { VocabularyWord } from '@/shared/types/vocabulary/schemas';
 import { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
@@ -51,6 +50,7 @@ export function useFirebaseAutocomplete(options?: UseFirebaseAutocompleteOptions
     try {
       console.log('[useFirebaseAutocomplete] Calling Firebase Function:', request);
 
+      const functions = getFunctions();
       const autocompleteWordFunc = httpsCallable<typeof request, AIAutocompleteResponse>(
         functions,
         'autocompleteWord',
