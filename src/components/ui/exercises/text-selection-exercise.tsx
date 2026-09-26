@@ -7,16 +7,17 @@ import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { FeedbackDisplay } from '../feedback';
 import { validateTextSelectionExercise } from '@/src/utils/exercises/textSelectionExercise';
 import { ExerciseProgress } from './exercise-progress';
-import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
+import { ExerciseIntro } from './exercise-intro';
+import { applySequentialItemResult } from './sequential-item-result';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { ClickableRichDisplay } from '../core/clickable-rich-display';
-import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 import type {
   ExerciseAnswer,
   ExerciseAnswerHandler,
   ExerciseCompletionHandler,
   RuntimeMode,
 } from '@/src/types/runtime-mode';
+import { useSectionedTest } from '../test/sectioned-test-context';
 import { RecordedAnswerControls } from './recorded-answer-controls';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 import { splitHtmlIntoWords } from '@/src/utils/htmlWordSplitter';
@@ -41,6 +42,7 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({
   const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
+  const sectioned = useSectionedTest();
   const passageWords = splitHtmlIntoWords(exercise.data.passage);
   const restoredIndices = initialAnswer?.type === 'text-selection' ? initialAnswer.selectedWordIndices : [];
   const restoredIndex = Math.min(restoredIndices.length, Math.max(exercise.data.questions.length - 1, 0));
@@ -101,6 +103,10 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({
     if (testAnswerMode) {
       onAnswer?.({ type: 'text-selection', selectedWordIndices: nextIndices });
       setTestSubmitted(true);
+      if (sectioned) {
+        if (isLastItem) onComplete?.(0);
+        else continueTest();
+      }
       return;
     }
 
@@ -109,41 +115,24 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({
       ? Math.round(gradeExercisePercentage({ exercise }, { type: 'text-selection', selectedWordIndices: nextIndices }))
       : null;
 
-    if (validation.isCorrect) {
-      handleCorrect(isLastItem);
-
-      const hasVisibleExplanation =
-        (exercise.feedbackConfig.successMessage?.showExplanation ?? true) &&
-        hasVisibleFeedbackContent(currentQuestion.explanation);
-
-      if (isLastItem) {
-        if (!assessmentMode) onCompletionAccepted?.(finalScore!);
-        autoAdvanceIfEnabled(() => {
-          setSelectedWordIndex(null);
-          reset();
-          setIsProcessing(false);
-          onComplete?.(finalScore!);
-        }, hasVisibleExplanation);
-      } else {
-        autoAdvanceIfEnabled(() => {
-          setSelectedWordIndex(null);
-          reset();
-          setIsProcessing(false);
-        }, hasVisibleExplanation);
-      }
-    } else {
-      handleIncorrect();
-      if (assessmentMode) {
-        autoAdvanceIfEnabled(() => {
-          setSelectedWordIndex(null);
-          reset();
-          setIsProcessing(false);
-          if (finalScore !== null) onComplete?.(finalScore);
-        }, false);
-      } else {
-        setIsProcessing(false);
-      }
-    }
+    applySequentialItemResult({
+      isCorrect: validation.isCorrect,
+      isLastItem,
+      assessmentMode,
+      showExplanation: exercise.feedbackConfig.successMessage?.showExplanation,
+      explanation: currentQuestion.explanation,
+      finalScore,
+      handleCorrect,
+      handleIncorrect,
+      autoAdvanceIfEnabled,
+      onCompletionAccepted,
+      onComplete,
+      clearItem: () => {
+        setSelectedWordIndex(null);
+        reset();
+      },
+      stopProcessing: () => setIsProcessing(false),
+    });
   };
 
   const currentQuestion = exercise.data.questions[currentIndex];
@@ -162,26 +151,12 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({
 
   return (
     <div className="space-y-6 max-w-full">
-      <div className="flex justify-between items-start">
-        {exercise.title && (
-          <h3 className="text-xl font-serif text-roman-red mb-4">
-            <SimpleRichDisplay content={exercise.title} />
-          </h3>
-        )}
-        {exercise.audioPath && (
-          <AudioPlayButton
-            audioPath={exercise.audioPath}
-            variant="default"
-            size="sm"
-            className="ml-2 rounded-full border-roman-terracotta/20 hover:border-roman-terracotta hover:bg-roman-parchment"
-          />
-        )}
-      </div>
-      {exercise.instructions && exercise.instructions.replace(/<[^>]*>/g, '').trim() !== '' && (
-        <div className="p-6 bg-roman-parchment rounded-lg mb-4">
-          <SimpleRichDisplay content={exercise.instructions} className="whitespace-pre-wrap break-words" />
-        </div>
-      )}
+      <ExerciseIntro
+        variant="passage"
+        title={exercise.title}
+        audioPath={exercise.audioPath}
+        instructions={exercise.instructions}
+      />
 
       {/* Progress indicator */}
       <ExerciseProgress
@@ -211,7 +186,7 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({
         </div>
 
         {testAnswerMode ? (
-          testSubmitted && <RecordedAnswerControls isLastItem={isLastItem} onContinue={continueTest} />
+          !sectioned && testSubmitted && <RecordedAnswerControls isLastItem={isLastItem} onContinue={continueTest} />
         ) : (
           <FeedbackDisplay
             isCorrect={isCorrect}

@@ -1,18 +1,17 @@
 'use client';
 
+import { usePracticeGeneratedExerciseWords } from '@/src/hooks/usePracticeGeneratedExerciseWords';
 import React, { useState, useMemo } from 'react';
 import { GeneratedFormIdentificationExercise } from '@/src/types/exercises/generated-form-identification';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { ExerciseInput, FeedbackDisplay } from '../feedback';
 import { ExerciseProgress } from './exercise-progress';
-import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
+import { ExerciseIntro } from './exercise-intro';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
-import {
-  useGetGeneratedExerciseWordsQuery,
-  type GeneratedExerciseQuerySource,
-} from '@/src/store/api/advancedVocabularyApi';
+import { type GeneratedExerciseQuerySource } from '@/src/store/api/advancedVocabularyApi';
 import { Card, CardContent } from '../card';
+import { ExerciseLoadingCard, ExerciseMessageCard } from './exercise-status-card';
 import {
   FormIdentificationItemSchema,
   type FormIdentificationItem,
@@ -38,6 +37,7 @@ import type {
 } from '@/src/types/runtime-mode';
 import { getContentTypeLabel } from '@/src/lib/content/registry';
 import { createGeneratedFormIdentificationItems } from '@/src/lib/tests/generated-exercises';
+import { useSectionedTest } from '../test/sectioned-test-context';
 import { RecordedAnswerControls } from './recorded-answer-controls';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
@@ -76,6 +76,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
   const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
+  const sectioned = useSectionedTest();
   const [wordAnswers, setWordAnswers] = useState<Record<string, Record<string, string>>>({});
   const [multiAnswerSlots, setMultiAnswerSlots] = useState<Record<string, string[][]>>({});
 
@@ -83,7 +84,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
   const requireAllPrimaryAnswers = exercise.data.requireAllPrimaryAnswers ?? false;
   const isMultiAnswerMode = !isSingleField && requireAllPrimaryAnswers;
 
-  const { data, isLoading, isError } = useGetGeneratedExerciseWordsQuery(
+  const { data, isLoading, isError } = usePracticeGeneratedExerciseWords(
     {
       exercise: {
         type: 'generated-form-identification',
@@ -217,6 +218,10 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
     if (testAnswerMode) {
       onAnswer?.({ type: 'generated-form-identification', answers: nextAnswers });
       setTestSubmitted(true);
+      if (sectioned) {
+        if (isLastItem) onComplete?.(0);
+        else continueTest();
+      }
       return;
     }
 
@@ -309,10 +314,13 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
         : null;
 
       autoAdvanceIfEnabled(() => {
+        if (finalScore !== null) {
+          onComplete?.(finalScore);
+          return;
+        }
         setUserAnswer('');
         reset();
         setIsProcessing(false);
-        if (finalScore !== null) onComplete?.(finalScore);
       }, false);
       if (!assessmentMode && finalScore !== null) onCompletionAccepted?.(finalScore);
       return;
@@ -346,10 +354,13 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
         : null;
 
       autoAdvanceIfEnabled(() => {
+        if (finalScore !== null) {
+          onComplete?.(finalScore);
+          return;
+        }
         setUserAnswer('');
         reset();
         setIsProcessing(false);
-        if (finalScore !== null) onComplete?.(finalScore);
       }, false);
       if (!assessmentMode && finalScore !== null) onCompletionAccepted?.(finalScore);
     } else {
@@ -382,42 +393,24 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
     nextItem();
   };
 
-  if (!resolvedItems && isLoading) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center justify-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red mr-3"></div>
-            <div className="text-gray-600">Loading exercise...</div>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+  if (!resolvedItems && isLoading) return <ExerciseLoadingCard />;
 
   if (!resolvedItems && isError) {
     return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="text-center text-red-600">
-            <div className="font-medium">Error loading exercise</div>
-            <div className="text-sm mt-2">Unable to fetch vocabulary words. Please try again later.</div>
-          </div>
-        </CardContent>
-      </Card>
+      <ExerciseMessageCard
+        title="Error loading exercise"
+        message="Unable to fetch vocabulary words. Please try again later."
+      />
     );
   }
 
   if (validatedItems.length === 0) {
     return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="text-center text-amber-600">
-            <div className="font-medium">No items found</div>
-            <div className="text-sm mt-2">No vocabulary words match the configured filters for this exercise.</div>
-          </div>
-        </CardContent>
-      </Card>
+      <ExerciseMessageCard
+        tone="warning"
+        title="No items found"
+        message="No vocabulary words match the configured filters for this exercise."
+      />
     );
   }
 
@@ -426,18 +419,12 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-start">
-        <h3 className="text-lg font-serif text-roman-red mb-2">
-          <SimpleRichDisplay content={exercise.title || getContentTypeLabel(exercise.type)} />
-        </h3>
-        {exercise.audioPath && <AudioPlayButton audioPath={exercise.audioPath} />}
-      </div>
-
-      {exercise.instructions && exercise.instructions.replace(/<[^>]*>/g, '').trim() !== '' && (
-        <div className="text-roman-stone">
-          <SimpleRichDisplay content={exercise.instructions} />
-        </div>
-      )}
+      <ExerciseIntro
+        variant="plain"
+        title={exercise.title || getContentTypeLabel(exercise.type)}
+        audioPath={exercise.audioPath}
+        instructions={exercise.instructions}
+      />
 
       <ExerciseProgress
         currentIndex={safeIndex}
@@ -557,7 +544,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
               onStartOver={resetRequired ? handleExerciseReset : undefined}
             />
           )}
-          {assessmentMode && testSubmitted && (
+          {assessmentMode && testSubmitted && !sectioned && (
             <RecordedAnswerControls isLastItem={isLastItem} onContinue={continueTest} />
           )}
         </CardContent>

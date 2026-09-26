@@ -2,8 +2,8 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
+import { PageLoading } from '@/src/components/ui/page-loading';
 import { TestVersionEditor } from '@/src/components/ui/admin';
 import type { TestVersionEditorValue } from '@/src/components/ui/admin/TestVersionEditor';
 import {
@@ -22,12 +22,7 @@ function VersionEditorPage({ params }: { params: Promise<{ id: string; versionId
   const { data: version, isLoading: loadingVersion, isError } = useGetTestVersionByIdQuery(versionId);
   const [update, updateState] = useUpdateTestMutation();
   const [updateDraft, updateDraftState] = useUpdateTestVersionDraftMutation();
-  if (loadingTest || loadingVersion)
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
+  if (loadingTest || loadingVersion) return <PageLoading label="Loading test version" />;
   const inactive = detail?.drafts?.some(draft => draft.id === versionId) ?? false;
   const active = detail?.versions.some(candidate => candidate.id === versionId) ?? false;
   if (!detail || !version || isError || (!inactive && !active))

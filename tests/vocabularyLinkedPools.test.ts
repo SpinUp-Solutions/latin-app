@@ -232,6 +232,21 @@ test('create endpoint defaults to live links; source edits update nested pools, 
   expect((await getReadableVocabularyPool(mockDb as never, nested.id))?.data.metadata.wordCount).toBe(3);
 });
 
+test('update endpoint persists metadata.isActive changes', async () => {
+  seed('inactive-copy', ['a']);
+  mockDb.docs.get(poolPath('inactive-copy'))!.metadata.isActive = false;
+
+  const activate = await updateRoute(request('PUT', { isActive: true }), params('inactive-copy'));
+  expect(activate.status).toBe(200);
+  expect((await activate.json()).data.pool.metadata.isActive).toBe(true);
+  expect(mockDb.docs.get(poolPath('inactive-copy'))?.metadata.isActive).toBe(true);
+
+  const deactivate = await updateRoute(request('PUT', { isActive: false }), params('inactive-copy'));
+  expect(deactivate.status).toBe(200);
+  expect((await deactivate.json()).data.pool.metadata.isActive).toBe(false);
+  expect(mockDb.docs.get(poolPath('inactive-copy'))?.metadata.isActive).toBe(false);
+});
+
 test('individual inherited removals are rejected by both mutation routes', async () => {
   const pool = await create();
   const deletion = await removeWords(request('DELETE', { wordDocIds: ['a'] }), params(pool.id));

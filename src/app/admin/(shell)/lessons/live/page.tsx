@@ -26,6 +26,7 @@ import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 import { LessonTypeTabs } from '@/src/components/ui/admin/LessonTypeTabs';
 import { PracticeCategoryChips } from '@/src/components/ui/admin/practice-categories/PracticeCategoryChips';
 import { AdminPage, AdminPageHeader } from '@/src/components/admin/shell';
+import { PageLoading } from '@/src/components/ui/page-loading';
 import { Badge } from '@/src/components/ui/badge';
 import { Button } from '@/src/components/ui/button';
 import { Checkbox } from '@/src/components/ui/checkbox';
@@ -501,11 +502,7 @@ function LiveLessonsPage() {
   );
 
   if (lessonsLoading || testsLoading || pathLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-roman-marble">
-        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-roman-red" />
-      </div>
-    );
+    return <PageLoading label="Loading learning path" />;
   }
 
   if (lessonsError || testsError || pathError) {

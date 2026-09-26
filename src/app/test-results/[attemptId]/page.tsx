@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/src/components/ui/button';
+import { PageLoading } from '@/src/components/ui/page-loading';
 import { Card, CardContent } from '@/src/components/ui/card';
 import { TestResultReviewView } from '@/src/components/ui/test-results/test-result-review';
 import { useAuth } from '@/src/hooks/useAuth';
@@ -26,11 +27,7 @@ export default function TestResultPage({ params }: { params: Promise<{ attemptId
   }, [authLoading, router, user]);
 
   if (authLoading || resultLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-roman-marble">
-        <div className="h-9 w-9 animate-spin rounded-full border-b-2 border-roman-red" />
-      </div>
-    );
+    return <PageLoading label="Loading test result" />;
   }
 
   if (!user) return null;

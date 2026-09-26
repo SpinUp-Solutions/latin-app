@@ -1,18 +1,18 @@
 'use client';
 
+import { usePracticeGeneratedExerciseWords } from '@/src/hooks/usePracticeGeneratedExerciseWords';
 import React, { useState, useMemo } from 'react';
 import { GeneratedTranslationExercise } from '@/src/types/exercises';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { ExerciseInput, FeedbackDisplay } from '../feedback';
 import { ExerciseProgress } from './exercise-progress';
-import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
+import { ExerciseIntro } from './exercise-intro';
+import { applySequentialItemResult } from './sequential-item-result';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
-import {
-  useGetGeneratedExerciseWordsQuery,
-  type GeneratedExerciseQuerySource,
-} from '@/src/store/api/advancedVocabularyApi';
+import { type GeneratedExerciseQuerySource } from '@/src/store/api/advancedVocabularyApi';
 import { Card, CardContent } from '../card';
+import { ExerciseLoadingCard, ExerciseMessageCard } from './exercise-status-card';
 import {
   validateGeneratedTranslationExercise,
   type GeneratedTranslationItem,
@@ -25,6 +25,7 @@ import type {
 } from '@/src/types/runtime-mode';
 import { getContentTypeLabel } from '@/src/lib/content/registry';
 import { createGeneratedTranslationItems } from '@/src/lib/tests/generated-exercises';
+import { useSectionedTest } from '../test/sectioned-test-context';
 import { RecordedAnswerControls } from './recorded-answer-controls';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
@@ -54,10 +55,11 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
   const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
+  const sectioned = useSectionedTest();
 
   const translationDirection = exercise.translationDirection || 'latin-to-english';
 
-  const { data, isLoading, isError } = useGetGeneratedExerciseWordsQuery(
+  const { data, isLoading, isError } = usePracticeGeneratedExerciseWords(
     {
       exercise: {
         type: 'generated-translation',
@@ -139,6 +141,10 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
     if (testAnswerMode) {
       onAnswer?.({ type: 'generated-translation', answers: nextAnswers });
       setTestSubmitted(true);
+      if (sectioned) {
+        if (isLastItem) onComplete?.(0);
+        else continueTest();
+      }
       return;
     }
 
@@ -152,37 +158,22 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
         )
       : null;
 
-    if (validation.isCorrect) {
-      handleCorrect(isLastItem);
-
-      if (isLastItem) {
-        if (!assessmentMode) onCompletionAccepted?.(finalScore!);
-        autoAdvanceIfEnabled(() => {
-          setUserAnswer('');
-          reset();
-          setIsProcessing(false);
-          onComplete?.(finalScore!);
-        }, false);
-      } else {
-        autoAdvanceIfEnabled(() => {
-          setUserAnswer('');
-          reset();
-          setIsProcessing(false);
-        }, false);
-      }
-    } else {
-      handleIncorrect();
-      if (assessmentMode) {
-        autoAdvanceIfEnabled(() => {
-          setUserAnswer('');
-          reset();
-          setIsProcessing(false);
-          if (finalScore !== null) onComplete?.(finalScore);
-        }, false);
-      } else {
-        setIsProcessing(false);
-      }
-    }
+    applySequentialItemResult({
+      isCorrect: validation.isCorrect,
+      isLastItem,
+      assessmentMode,
+      finalScore,
+      handleCorrect,
+      handleIncorrect,
+      autoAdvanceIfEnabled,
+      onCompletionAccepted,
+      onComplete,
+      clearItem: () => {
+        setUserAnswer('');
+        reset();
+      },
+      stopProcessing: () => setIsProcessing(false),
+    });
   };
 
   const handleAnswerChange = (value: string) => {
@@ -202,42 +193,24 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
     nextItem();
   };
 
-  if (!resolvedItems && isLoading) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center justify-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-roman-red mr-3"></div>
-            <div className="text-gray-600">Loading exercise...</div>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+  if (!resolvedItems && isLoading) return <ExerciseLoadingCard />;
 
   if (!resolvedItems && isError) {
     return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="text-center text-red-600">
-            <div className="font-medium">Error loading exercise</div>
-            <div className="text-sm mt-2">Unable to fetch vocabulary words. Please try again later.</div>
-          </div>
-        </CardContent>
-      </Card>
+      <ExerciseMessageCard
+        title="Error loading exercise"
+        message="Unable to fetch vocabulary words. Please try again later."
+      />
     );
   }
 
   if (items.length === 0) {
     return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="text-center text-amber-600">
-            <div className="font-medium">No vocabulary found</div>
-            <div className="text-sm mt-2">No words match the configured filters for this exercise.</div>
-          </div>
-        </CardContent>
-      </Card>
+      <ExerciseMessageCard
+        tone="warning"
+        title="No vocabulary found"
+        message="No words match the configured filters for this exercise."
+      />
     );
   }
 
@@ -247,22 +220,20 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-start">
-        <h3 className="text-lg font-serif text-roman-red mb-2">
-          <SimpleRichDisplay content={exercise.title || getContentTypeLabel(exercise.type)} />
-        </h3>
-        {exercise.audioPath && <AudioPlayButton audioPath={exercise.audioPath} />}
-      </div>
-
-      {exercise.instructions && exercise.instructions.replace(/<[^>]*>/g, '').trim() !== '' && (
-        <div className="text-roman-stone">
-          <SimpleRichDisplay content={exercise.instructions} />
-        </div>
-      )}
+      <ExerciseIntro
+        variant="plain"
+        title={exercise.title || getContentTypeLabel(exercise.type)}
+        audioPath={exercise.audioPath}
+        instructions={exercise.instructions}
+      />
 
       <ExerciseProgress
         currentIndex={currentIndex}
-        completed={mode === 'practice' ? currentIndex + (isCorrect === true ? 1 : 0) : submittedAnswers.filter(answer => Boolean(answer?.trim())).length}
+        completed={
+          mode === 'practice'
+            ? currentIndex + (isCorrect === true ? 1 : 0)
+            : submittedAnswers.filter(answer => Boolean(answer?.trim())).length
+        }
         total={items.length}
         showProgress={exercise.feedbackConfig.progressionRules?.showProgress !== false}
       />
@@ -282,7 +253,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
           />
 
           {testAnswerMode ? (
-            testSubmitted && <RecordedAnswerControls isLastItem={isLastItem} onContinue={continueTest} />
+            !sectioned && testSubmitted && <RecordedAnswerControls isLastItem={isLastItem} onContinue={continueTest} />
           ) : (
             <FeedbackDisplay
               isCorrect={isCorrect}

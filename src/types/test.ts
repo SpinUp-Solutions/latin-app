@@ -1,3 +1,4 @@
+import type { SectionState } from '@/shared/tests/sections';
 import type { TestUnit } from './learning-unit';
 import type { Page } from './page';
 import type { ExerciseAnswer } from './runtime-mode';
@@ -130,6 +131,8 @@ export type TestTranslationGradeRequestWindows = Record<string, Record<string, T
 
 export interface InProgressTestAttempt extends TestAttemptBase {
   status: 'in-progress';
+  flowVersion?: 1;
+  sections?: Record<string, SectionState>;
   answers: Record<string, ExerciseAnswer>;
   translationGrades: TestTranslationGrades;
   /** Server-only leases preventing concurrent AI grading of the same item. */
@@ -147,6 +150,8 @@ export interface TestAttemptExerciseResult {
 
 export interface SubmittedTestAttempt extends TestAttemptBase {
   status: 'submitted';
+  flowVersion?: 1;
+  confirmedSections?: Record<string, string>;
   exerciseResults: Record<string, TestAttemptExerciseResult>;
   score: number;
   maxScore: number;
@@ -180,16 +185,46 @@ export interface StudentTestDelivery {
   vocabularyPool?: VocabularyPoolStudyData;
 }
 
-export type StudentInProgressTestAttempt = Omit<
+type StudentAttemptCommon = Omit<
   InProgressTestAttempt,
-  'studentId' | 'deliveryState' | 'translationGradeReservations' | 'translationGradeRequestWindows'
-> & {
-  delivery: StudentTestDelivery;
+  | 'studentId'
+  | 'deliveryState'
+  | 'translationGradeReservations'
+  | 'translationGradeRequestWindows'
+  | 'translationGrades'
+  | 'flowVersion'
+  | 'sections'
+> & { delivery: StudentTestDelivery };
+
+export type StudentLegacyTestAttempt = StudentAttemptCommon & {
+  flowVersion?: undefined;
+  section?: never;
+  translationGrades: TestTranslationGrades;
+};
+export type StudentSectionedTestAttempt = StudentAttemptCommon & {
+  flowVersion: 1;
+  translationGrades?: never;
+  section: {
+    pageId: string;
+    pageIndex: number;
+    totalPages: number;
+    totalExercises: number;
+    answeredCount: number;
+    revision: number;
+    phase: 'answering' | 'review' | 'confirming';
+  };
+};
+export type StudentInProgressTestAttempt = StudentLegacyTestAttempt | StudentSectionedTestAttempt;
+export type ConfirmSectionResult = {
+  attempt: StudentTestAttempt;
+  pending: boolean;
+  retryAfterMs?: number;
+  completionGranted?: boolean;
 };
 
 export type StudentSubmittedTestAttempt = Omit<
   SubmittedTestAttempt,
-  'studentId' | 'answers' | 'translationGrades' | 'deliveryState'
+  'studentId' | 'answers' | 'translationGrades' | 'deliveryState' | 'confirmedSections'
 >;
 export type StudentTestAttempt = StudentInProgressTestAttempt | StudentSubmittedTestAttempt;
 

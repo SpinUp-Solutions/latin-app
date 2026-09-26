@@ -89,6 +89,7 @@ export interface CreatePoolRequest {
   difficulty?: 'beginner' | 'intermediate' | 'advanced';
   tags?: string[];
   directWordDocIds?: string[];
+  isActive?: boolean;
   /** Create-mode composition fields. Ordinary create callers omit these. */
   sourcePoolIds?: string[];
   requestId?: string;

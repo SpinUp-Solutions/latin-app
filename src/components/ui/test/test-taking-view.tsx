@@ -2,8 +2,8 @@
 
 import React, { type ReactNode } from 'react';
 import { ArrowLeft, ArrowRight, Eye, FileCheck2, LogOut, Save } from 'lucide-react';
-import { Button } from '@/src/components/ui/button';
 import { Progress } from '@/src/components/ui/progress';
+import { PlayerActionBar, PlayerBarButton } from '@/src/components/ui/core/player-action-bar';
 import { RomanPlayerShell } from '@/src/components/ui/core/roman-player-shell';
 import { PageTemplate } from '@/src/components/ui/lesson/page-template';
 import { cn } from '@/src/lib/utils';
@@ -34,6 +34,7 @@ export interface TestTakingViewProps {
   onExit?: () => void;
   navigationPending?: boolean;
   embedded?: boolean;
+  sectionNavigation?: { pageIndex: number; totalPages: number };
 }
 
 export function TestTakingView({
@@ -58,6 +59,7 @@ export function TestTakingView({
   onExit,
   navigationPending = false,
   embedded = false,
+  sectionNavigation,
 }: TestTakingViewProps) {
   const currentPage = pages[currentPageIndex];
   const answeredPercentage = totalExercises > 0 ? (answeredCount / totalExercises) * 100 : 0;
@@ -75,8 +77,8 @@ export function TestTakingView({
         <RomanPlayerShell
           icon={FileCheck2}
           label={preview ? 'Test preview' : 'Test in progress'}
-          currentPage={currentPageIndex + 1}
-          totalPages={pages.length}
+          currentPage={(sectionNavigation?.pageIndex ?? currentPageIndex) + 1}
+          totalPages={sectionNavigation?.totalPages ?? pages.length}
           title={title}
           description={description}
           headingAs={embedded ? 'div' : 'h1'}
@@ -104,66 +106,57 @@ export function TestTakingView({
             </>
           }>
           {currentPage ? (
-            <PageTemplate
-              key={currentPage.id}
-              page={currentPage}
-              pageIndex={currentPageIndex}
-              runtimeMode="test"
-              onAnswer={onAnswer}
-              answers={answers}
-              resolvedExerciseState={resolvedExerciseState}
-              allowGeneratedExerciseQueries={allowGeneratedExerciseQueries}
-              vocabularyPoolId={vocabularyPoolId}
-              resolvedVocabularyPool={resolvedVocabularyPool}
-              onExerciseComplete={onExerciseComplete}
-            />
+            <div inert={Boolean(sectionNavigation && navigationPending) || undefined}>
+              <PageTemplate
+                key={currentPage.id}
+                page={currentPage}
+                pageIndex={currentPageIndex}
+                runtimeMode="test"
+                onAnswer={onAnswer}
+                answers={answers}
+                resolvedExerciseState={resolvedExerciseState}
+                allowGeneratedExerciseQueries={allowGeneratedExerciseQueries}
+                vocabularyPoolId={vocabularyPoolId}
+                resolvedVocabularyPool={resolvedVocabularyPool}
+                onExerciseComplete={onExerciseComplete}
+              />
+            </div>
           ) : (
             <p className="py-12 text-center text-roman-stone">This test page is unavailable.</p>
           )}
         </RomanPlayerShell>
 
-        <div
-          className="mt-4 flex flex-col gap-3 rounded-2xl border border-roman-red/15 bg-white/95 p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between"
-          aria-label="Test page navigation">
+        <PlayerActionBar label="Test page navigation" className="mt-4">
           {onExit ? (
-            <Button
-              type="button"
-              variant="outline"
-              className="rounded-xl border-roman-red/20 hover:bg-roman-parchment"
-              disabled={navigationPending}
-              onClick={onExit}>
+            <PlayerBarButton type="button" tone="outline" disabled={navigationPending} onClick={onExit}>
               <LogOut className="mr-2 h-4 w-4" aria-hidden="true" />
               Exit test
-            </Button>
+            </PlayerBarButton>
           ) : null}
           <div className="flex flex-col gap-3 sm:ml-auto sm:flex-row sm:items-center">
-            <Button
-              variant="outline"
-              className="rounded-xl border-roman-red/20 hover:bg-roman-parchment"
-              disabled={navigationPending || currentPageIndex === 0}
-              onClick={onPrevious}>
-              <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
-              Previous page
-            </Button>
-            {!isLastPage ? (
-              <Button
-                className="rounded-xl bg-roman-red hover:bg-roman-red/90"
-                disabled={navigationPending}
-                onClick={onNext}>
+            {!sectionNavigation && (
+              <PlayerBarButton
+                type="button"
+                tone="outline"
+                disabled={navigationPending || currentPageIndex === 0}
+                onClick={onPrevious}>
+                <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
+                Previous page
+              </PlayerBarButton>
+            )}
+            {!sectionNavigation && !isLastPage ? (
+              <PlayerBarButton type="button" disabled={navigationPending} onClick={onNext}>
                 Next page
                 <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
-              </Button>
+              </PlayerBarButton>
             ) : (
-              <Button
-                className="rounded-xl bg-roman-red hover:bg-roman-red/90"
-                disabled={navigationPending}
-                onClick={onReview}>
-                Review answers
+              <PlayerBarButton type="button" disabled={navigationPending} onClick={onReview}>
+                {sectionNavigation ? 'Review section' : 'Review answers'}
                 <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
-              </Button>
+              </PlayerBarButton>
             )}
           </div>
-        </div>
+        </PlayerActionBar>
       </main>
     </div>
   );

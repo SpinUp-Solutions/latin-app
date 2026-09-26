@@ -147,7 +147,6 @@ const generatorConfigSchema = z
     collection: z.string(),
     wordSource: z.enum(['filters', 'pool']).default('filters'),
     poolId: z.string().trim().min(1).nullable().optional(),
-    poolWordLimit: z.number().int().positive().nullable().optional(),
     count: generatedWordCountSchema,
     filters: looseObjectSchema.optional(),
     formSelection: formSelectionSchema.optional(),

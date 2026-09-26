@@ -3,7 +3,7 @@
 import { use, useCallback, useEffect, useRef, useState } from 'react';
 import { shallowEqual } from 'react-redux';
 import { useRouter } from 'next/navigation';
-import { Archive, Copy, Loader2, MoveRight, Save } from 'lucide-react';
+import { Archive, Copy, MoveRight, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 import { Button } from '@/src/components/ui/button';
@@ -29,6 +29,7 @@ import {
 import type { MockTest } from '@/src/types/test';
 import { useUnsavedNavigationGuard } from '@/src/hooks/useUnsavedNavigationGuard';
 import { AdminPage, AdminPageHeader, AdminStatusBadge } from '@/src/components/admin/shell';
+import { PageLoading } from '@/src/components/ui/page-loading';
 import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
 import { UnsavedNavigationDialog } from '@/src/components/ui/core/UnsavedNavigationDialog';
 import { getApiErrorMessage } from '@/src/store/api/baseQuery';
@@ -217,13 +218,7 @@ function MockOverviewPage({ params }: { params: Promise<{ mockId: string }> }) {
     }
   };
 
-  if (isLoading || loadingVersion)
-    return (
-      <AdminPage className="flex items-center justify-center" role="status">
-        <Loader2 className="h-8 w-8 animate-spin" />
-        <span className="sr-only">Loading mock test</span>
-      </AdminPage>
-    );
+  if (isLoading || loadingVersion) return <PageLoading label="Loading mock test" />;
   if (!mock || !version)
     return <AdminPage role="alert">Mock test or its version is unavailable. Retry from the Mock Tests page.</AdminPage>;
   const standalone = mock.parent.kind === 'standalone';

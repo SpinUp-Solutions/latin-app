@@ -7,15 +7,16 @@ import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { ExerciseInput, FeedbackDisplay } from '../feedback';
 import { validateFillExercise } from '@/src/utils/exercises/fillExercise';
 import { ExerciseProgress } from './exercise-progress';
-import AudioPlayButton from '@/src/components/ui/core/audio-play-button';
+import { ExerciseIntro } from './exercise-intro';
+import { applySequentialItemResult } from './sequential-item-result';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
-import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 import type {
   ExerciseAnswer,
   ExerciseAnswerHandler,
   ExerciseCompletionHandler,
   RuntimeMode,
 } from '@/src/types/runtime-mode';
+import { useSectionedTest } from '../test/sectioned-test-context';
 import { RecordedAnswerControls } from './recorded-answer-controls';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
@@ -39,6 +40,7 @@ const FillExerciseComponent: React.FC<Props> = ({
   const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
+  const sectioned = useSectionedTest();
   const restoredAnswers = initialAnswer?.type === 'fill' ? initialAnswer.answers : [];
   const firstIncompleteIndex = exercise.data.items.findIndex((_, index) => !restoredAnswers[index]?.trim());
   const restoredIndex = firstIncompleteIndex >= 0 ? firstIncompleteIndex : Math.max(exercise.data.items.length - 1, 0);
@@ -98,7 +100,11 @@ const FillExerciseComponent: React.FC<Props> = ({
     if (testAnswerMode) {
       onAnswer?.({ type: 'fill', answers: nextAnswers });
       setTestSubmitted(true);
-      if (isLastItem) onComplete?.(0);
+
+      if (sectioned) {
+        if (isLastItem) onComplete?.(0);
+        else continueTest();
+      } else if (isLastItem) onComplete?.(0);
       return;
     }
 
@@ -107,41 +113,24 @@ const FillExerciseComponent: React.FC<Props> = ({
       ? Math.round(gradeExercisePercentage({ exercise }, { type: 'fill', answers: nextAnswers }))
       : null;
 
-    if (validation.isCorrect) {
-      handleCorrect(isLastItem);
-
-      const hasVisibleExplanation =
-        (exercise.feedbackConfig.successMessage?.showExplanation ?? true) &&
-        hasVisibleFeedbackContent(currentItem.explanation);
-
-      if (isLastItem) {
-        if (!assessmentMode) onCompletionAccepted?.(finalScore!);
-        autoAdvanceIfEnabled(() => {
-          setUserAnswer('');
-          reset();
-          setIsProcessing(false);
-          onComplete?.(finalScore!);
-        }, hasVisibleExplanation);
-      } else {
-        autoAdvanceIfEnabled(() => {
-          setUserAnswer('');
-          reset();
-          setIsProcessing(false);
-        }, hasVisibleExplanation);
-      }
-    } else {
-      handleIncorrect();
-      if (assessmentMode) {
-        autoAdvanceIfEnabled(() => {
-          setUserAnswer('');
-          reset();
-          setIsProcessing(false);
-          if (finalScore !== null) onComplete?.(finalScore);
-        }, false);
-      } else {
-        setIsProcessing(false);
-      }
-    }
+    applySequentialItemResult({
+      isCorrect: validation.isCorrect,
+      isLastItem,
+      assessmentMode,
+      showExplanation: exercise.feedbackConfig.successMessage?.showExplanation,
+      explanation: currentItem.explanation,
+      finalScore,
+      handleCorrect,
+      handleIncorrect,
+      autoAdvanceIfEnabled,
+      onCompletionAccepted,
+      onComplete,
+      clearItem: () => {
+        setUserAnswer('');
+        reset();
+      },
+      stopProcessing: () => setIsProcessing(false),
+    });
   };
 
   const handleAnswerChange = (value: string) => {
@@ -165,31 +154,16 @@ const FillExerciseComponent: React.FC<Props> = ({
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-start">
-        {exercise.title && (
-          <h3 className="text-lg font-serif text-roman-red mb-2">
-            <SimpleRichDisplay content={exercise.title} />
-          </h3>
-        )}
-        {exercise.audioPath && (
-          <AudioPlayButton
-            audioPath={exercise.audioPath}
-            variant="default"
-            size="sm"
-            className="ml-2 rounded-full border-roman-terracotta/20 hover:border-roman-terracotta hover:bg-roman-parchment"
-          />
-        )}
-      </div>
-      {exercise.instructions && exercise.instructions.replace(/<[^>]*>/g, '').trim() !== '' && (
-        <div className="p-4 bg-roman-parchment rounded-lg mb-4">
-          <SimpleRichDisplay content={exercise.instructions} />
-        </div>
-      )}
+      <ExerciseIntro title={exercise.title} audioPath={exercise.audioPath} instructions={exercise.instructions} />
 
       {/* Progress indicator */}
       <ExerciseProgress
         currentIndex={currentIndex}
-        completed={mode === 'practice' ? currentIndex + (isCorrect === true ? 1 : 0) : submittedAnswers.filter(answer => Boolean(answer?.trim())).length}
+        completed={
+          mode === 'practice'
+            ? currentIndex + (isCorrect === true ? 1 : 0)
+            : submittedAnswers.filter(answer => Boolean(answer?.trim())).length
+        }
         total={exercise.data.items.length}
         showProgress={exercise.feedbackConfig.progressionRules?.showProgress !== false}
       />
@@ -205,6 +179,7 @@ const FillExerciseComponent: React.FC<Props> = ({
         />
 
         {testAnswerMode ? (
+          !sectioned &&
           testSubmitted && <RecordedAnswerControls isLastItem={isLastItem} onContinue={continueTest} hideFinishAction />
         ) : (
           <FeedbackDisplay
