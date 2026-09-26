@@ -74,7 +74,8 @@ export function createGeneratedFormIdentificationItems(
   words: ExerciseWordResponse[],
   previousAnswers: Record<string, Record<string, string>> = {}
 ): ResolvedFormIdentificationItem[] {
-  const usableWords = words.filter(word => getExerciseDisplayForm(word).trim().length > 0);
+  // A word can appear several times with different forms; each occurrence needs its own item IDs.
+  const usableWords = makeWordIdsUnique(words).filter(word => getExerciseDisplayForm(word).trim().length > 0);
 
   if (exercise.data.mode === 'single-field') {
     return usableWords.flatMap<SingleFieldFormIdentificationItem>(word => {
@@ -173,20 +174,23 @@ export async function resolveGeneratedExerciseItems(exercise: GeneratedExercise,
   const words = await loadWords(exercise);
   return exercise.type === 'generated-translation'
     ? createGeneratedTranslationItems(exercise, words)
-    : createGeneratedFormIdentificationItems(exercise, makeWordIdsUnique(words));
+    : createGeneratedFormIdentificationItems(exercise, words);
 }
 
 function makeWordIdsUnique(words: ExerciseWordResponse[]): ExerciseWordResponse[] {
   const usedIds = new Set<string>();
+  // Resume each base ID's suffix search where its previous repeat stopped.
+  const nextOccurrence = new Map<string, number>();
 
   return words.map(word => {
     const baseId = word.id;
     let uniqueId = baseId;
-    let occurrence = 2;
+    let occurrence = nextOccurrence.get(baseId) ?? 2;
     while (usedIds.has(uniqueId)) {
       uniqueId = `${baseId}::${occurrence}`;
       occurrence += 1;
     }
+    nextOccurrence.set(baseId, occurrence);
     usedIds.add(uniqueId);
     return uniqueId === baseId ? word : { ...word, id: uniqueId };
   });

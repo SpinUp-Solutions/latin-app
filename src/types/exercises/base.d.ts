@@ -104,6 +104,8 @@ export interface GeneratorConfigBase {
   wordSource: 'filters' | 'pool';
   poolId?: string | null;
   count: number | 'all';
+  /** Pool-backed form identification only: rotate this many words through different forms to fill `count`. */
+  uniqueWordCount?: number | null;
   filters?: GeneratorFilters;
 }
 

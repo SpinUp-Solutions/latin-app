@@ -193,6 +193,33 @@ describe('admin generated exercise preview route', () => {
     expect(response.status).toBe(400);
   });
 
+  it('rotates a limited set of unique pool words through different forms', async () => {
+    const { words, pool, exercise } = generatedPoolFixture(55, 100, 3);
+    exercise.data.generatorConfig = { ...exercise.data.generatorConfig, uniqueWordCount: 10 };
+    const db = createFakeGeneratedWordDb({ words, pools: [pool] });
+    dbState.collection = db.collection;
+    const response = await POST({ json: async () => exercise } as never);
+    expect(response.status).toBe(200);
+    const payload = (
+      response as unknown as { body: { words: Array<{ id: string }>; collected: number; uniqueWords: number } }
+    ).body;
+    expect(payload.words).toHaveLength(30);
+    expect(payload.collected).toBe(30);
+    expect(payload.uniqueWords).toBe(10);
+    expect(new Set(payload.words.map(word => word.id)).size).toBe(10);
+  });
+
+  it.each([0, 1.5, MAX_GENERATED_WORD_COUNT + 1, '10'])('rejects unique word count %p', async uniqueWordCount => {
+    const { exercise } = generatedPoolFixture();
+    const response = await POST({
+      json: async () => ({
+        ...exercise,
+        data: { ...exercise.data, generatorConfig: { ...exercise.data.generatorConfig, uniqueWordCount } },
+      }),
+    } as never);
+    expect(response.status).toBe(400);
+  });
+
   it('fills the requested pool count through the shared collector, ignoring a saved candidate cap', async () => {
     const { words, pool, exercise } = generatedPoolFixture();
     const legacyConfig = { ...exercise.data.generatorConfig, poolWordLimit: 5 };

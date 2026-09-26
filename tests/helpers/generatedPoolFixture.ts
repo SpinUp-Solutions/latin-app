@@ -2,17 +2,31 @@ import type { GeneratedFormIdentificationExercise } from '@/src/types/exercises/
 import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 import type { FakeDocument } from './fakeGeneratedWordFirestore';
 
-export function generatedPoolFixture(eligibleCount = 55, totalCount = 100) {
+const EXTRA_FORM_CELLS = [
+  ['singular', 'first'],
+  ['singular', 'second'],
+  ['plural', 'first'],
+  ['plural', 'second'],
+  ['plural', 'third'],
+] as const;
+
+/** `formsPerWord` > 1 gives each eligible word further distinct forms in additional selected cells. */
+export function generatedPoolFixture(eligibleCount = 55, totalCount = 100, formsPerWord = 1) {
+  const extraCells = EXTRA_FORM_CELLS.slice(0, Math.max(0, formsPerWord - 1));
   const words: FakeDocument[] = Array.from({ length: totalCount }, (_, index) => {
     const eligible = index < eligibleCount;
     const form = eligible ? `amat-${index}` : ['—', ' ', ''][index % 3];
+    const present: Record<string, Record<string, string[]>> = { singular: { third: [form, '—', ''] } };
+    extraCells.forEach(([number, person], cellIndex) => {
+      present[number] = { ...present[number], [person]: [eligible ? `${form}-${cellIndex}` : '—'] };
+    });
     return {
       id: `${eligible ? 'valid' : 'invalid'}-${index}`,
       data: {
         word: `amo-${index}`,
         part_of_speech: 'verb',
         conjugation_table: {
-          indicative: { active: { present: { singular: { third: [form, '—', ''] } } } },
+          indicative: { active: { present } },
         },
       },
     };
@@ -39,7 +53,10 @@ export function generatedPoolFixture(eligibleCount = 55, totalCount = 100) {
           steps: ['person', 'number'],
           formSelection: {
             tableType: 'conjugation',
-            selectedCellPaths: ['indicative.active.present.singular.third'],
+            selectedCellPaths: [
+              'indicative.active.present.singular.third',
+              ...extraCells.map(([number, person]) => `indicative.active.present.${number}.${person}`),
+            ],
           },
         },
       },

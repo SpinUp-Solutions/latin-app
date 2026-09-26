@@ -14,10 +14,11 @@ import type { GeneratedTranslationExercise } from '@/src/types/exercises/generat
 import { FormIdentificationStepSchema } from '@/src/types/exercises/schemas/form-identification';
 import { firestoreDocumentIdSchema } from '@/src/lib/learning-units/schemas';
 
-export const generatedWordCountSchema = z.union([
-  z.literal('all'),
-  z.number().int().positive().max(MAX_GENERATED_WORD_COUNT),
-]);
+const generatedNumericWordCountSchema = z.number().int().positive().max(MAX_GENERATED_WORD_COUNT);
+
+export const generatedWordCountSchema = z.union([z.literal('all'), generatedNumericWordCountSchema]);
+
+export const generatedUniqueWordCountSchema = generatedNumericWordCountSchema.nullable();
 
 const formSelectionSchema = z
   .object({
@@ -73,6 +74,7 @@ export const generatedPreviewGeneratorConfigSchema = z
     wordSource: z.enum(['filters', 'pool']).default('filters'),
     poolId: z.string().trim().min(1).nullable().optional(),
     count: generatedWordCountSchema,
+    uniqueWordCount: generatedUniqueWordCountSchema.optional(),
     filters: generatedPreviewFiltersSchema.optional(),
     formSelection: formSelectionSchema,
   })
@@ -155,5 +157,7 @@ export type GeneratedExercisePreviewResult = {
   diagnostics: GeneratedExercisePreviewDiagnostics[];
   requestedCount: number | 'all';
   collected: number;
+  /** Distinct words behind the questions; present when a unique-word limit was applied. */
+  uniqueWords?: number;
   globalScanLimitReached: boolean;
 };

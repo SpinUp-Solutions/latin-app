@@ -270,6 +270,21 @@ describe('active test exercise validation', () => {
     expect(activeVersionResult(translation).success).toBe(false);
   });
 
+  it('accepts a unique-word limit and rejects invalid ones', () => {
+    const morphology = copyItem(validItems['generated-form-identification']);
+    const generator = morphology.data.generatorConfig as Record<string, unknown>;
+    Object.assign(generator, { wordSource: 'pool', poolId: 'pool-1', count: 30, uniqueWordCount: 10 });
+    expect(activeVersionResult(morphology).success).toBe(true);
+
+    generator.uniqueWordCount = null;
+    expect(activeVersionResult(morphology).success).toBe(true);
+
+    for (const invalid of [0, -1, 1.5, 201, '10']) {
+      generator.uniqueWordCount = invalid;
+      expect(activeVersionResult(morphology).success).toBe(false);
+    }
+  });
+
   it('accepts legacy generated configurations when they still resolve scorable items', () => {
     const translation = copyItem(validItems['generated-translation']);
     delete translation.data.posConfigs;
