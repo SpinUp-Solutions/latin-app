@@ -1,10 +1,13 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
+import { MAX_GENERATED_WORD_COUNT } from '@/src/config/generatedExerciseLimits';
+import { ensureGeneratorConfig } from '@/src/utils/exercises/generatorConfigDefaults';
 import { GeneratedTranslationEditor } from '@/src/components/ui/admin/content-editor/GeneratedTranslationEditor';
 import { GeneratedFormIdentificationEditor } from '@/src/components/ui/admin/content-editor/GeneratedFormIdentificationEditor';
 
 const mockTranslationUpdateConfig = jest.fn();
 const mockFormUpdateConfig = jest.fn();
+let mockCount: number | 'all' = 5;
 let mockEditingContent: Record<string, unknown>;
 
 jest.mock('@/src/store/hooks', () => ({
@@ -18,7 +21,7 @@ jest.mock('@/src/hooks/useGeneratedExerciseEditor', () => ({
       wordSource: 'pool',
       poolId: 'pool-1',
       poolWordLimit: null,
-      count: 5,
+      count: mockCount,
     },
     activePOS: undefined,
     derivedFilters: { partOfSpeech: 'all' },
@@ -47,7 +50,7 @@ jest.mock('@/src/hooks/useFormIdentificationEditor', () => ({
       wordSource: 'pool',
       poolId: 'pool-1',
       poolWordLimit: null,
-      count: 5,
+      count: mockCount,
     },
     derivedFilters: { partOfSpeech: 'all' },
     derivedFormSelection: undefined,
@@ -130,9 +133,10 @@ describe.each([
   beforeEach(() => {
     jest.clearAllMocks();
     mockEditingContent = exercise;
+    mockCount = 5;
   });
 
-  it('lets an admin choose a numeric count or every eligible pool word', () => {
+  it('offers only one question count for the selected pool', () => {
     render(<Editor />);
 
     const countInput = screen.getByLabelText('Number of Questions');
@@ -142,7 +146,55 @@ describe.each([
     fireEvent.blur(countInput);
     expect(updateConfig).toHaveBeenCalledWith({ count: 10 });
 
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Use all eligible pool words' }));
-    expect(updateConfig).toHaveBeenCalledWith({ count: 'all' });
+    expect(screen.queryByRole('checkbox', { name: 'Use all eligible pool words' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Pool Word Limit')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('spinbutton')).toHaveLength(1);
+  });
+});
+
+describe('saved pool count compatibility', () => {
+  it('preserves legacy all-word exercises until an admin enters a number', () => {
+    mockEditingContent = formExercise;
+    mockCount = 'all';
+    mockFormUpdateConfig.mockClear();
+    render(<GeneratedFormIdentificationEditor />);
+    const countInput = screen.getByLabelText('Number of Questions');
+    expect(countInput).toBeEnabled();
+    expect(countInput).toHaveValue(null);
+    fireEvent.blur(countInput);
+    expect(mockFormUpdateConfig).not.toHaveBeenCalled();
+    fireEvent.change(countInput, { target: { value: '30' } });
+    fireEvent.blur(countInput);
+    expect(mockFormUpdateConfig).toHaveBeenCalledWith({ count: 30 });
+  });
+
+  it.each(['', '0', '-2', '1.5'])('does not commit an invalid count of %s', value => {
+    mockEditingContent = formExercise;
+    mockCount = 30;
+    mockFormUpdateConfig.mockClear();
+    render(<GeneratedFormIdentificationEditor />);
+    const countInput = screen.getByLabelText('Number of Questions');
+    fireEvent.change(countInput, { target: { value } });
+    fireEvent.blur(countInput);
+    expect(mockFormUpdateConfig).not.toHaveBeenCalled();
+    expect(countInput).toHaveValue(30);
+  });
+
+  it('clamps the question count to the supported maximum', () => {
+    mockEditingContent = formExercise;
+    mockCount = 5;
+    mockFormUpdateConfig.mockClear();
+    render(<GeneratedFormIdentificationEditor />);
+    const countInput = screen.getByLabelText('Number of Questions');
+    fireEvent.change(countInput, { target: { value: String(MAX_GENERATED_WORD_COUNT + 1) } });
+    fireEvent.blur(countInput);
+    expect(mockFormUpdateConfig).toHaveBeenCalledWith({ count: MAX_GENERATED_WORD_COUNT });
+  });
+
+  it('drops the retired pool cap when updating a saved generator config', () => {
+    const savedConfig = { wordSource: 'pool' as const, count: 30, poolWordLimit: 5 };
+    expect(ensureGeneratorConfig(savedConfig)).toMatchObject({ wordSource: 'pool', count: 30 });
+    expect(ensureGeneratorConfig(savedConfig)).not.toHaveProperty('poolWordLimit');
+    expect(savedConfig.poolWordLimit).toBe(5);
   });
 });

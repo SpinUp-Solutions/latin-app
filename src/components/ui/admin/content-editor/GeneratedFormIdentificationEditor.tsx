@@ -82,12 +82,9 @@ const GeneratedFormIdentificationEditorView: React.FC<{
     <GeneratedPoolSourceFields
       poolId={editor.config.poolId}
       count={editor.config.count}
-      poolWordLimit={editor.config.poolWordLimit}
       questionCountId="form-identification-question-count"
-      poolWordLimitId="form-identification-pool-word-limit"
       onPoolChange={poolId => editor.updateConfig({ poolId })}
       onCountChange={count => editor.updateConfig({ count })}
-      onPoolWordLimitChange={poolWordLimit => editor.updateConfig({ poolWordLimit })}
     />
   );
 

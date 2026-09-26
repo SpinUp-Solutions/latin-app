@@ -6,13 +6,9 @@ import {
   collectGeneratedExerciseWords,
   createGeneratedExerciseRng,
   PER_SPEC_SCAN_FLOOR,
-  perSpecScanCeiling,
 } from '@/src/lib/tests/generated-word-composition.server';
 import { createFirestoreGeneratedWordLoader } from '@/src/lib/tests/generated-word-loader.server';
-import {
-  isUsableGeneratedTranslationWord,
-  resolveGeneratedExerciseItems,
-} from '@/src/lib/tests/generated-exercises';
+import { isUsableGeneratedTranslationWord, resolveGeneratedExerciseItems } from '@/src/lib/tests/generated-exercises';
 import type { GeneratedFormIdentificationExercise, GeneratedTranslationExercise } from '@/src/types/exercises';
 import { isRejectedBySpecAwarePronounOverlap } from '@/src/utils/generated/pronounParadigmFiltering';
 
@@ -389,11 +385,7 @@ describe('generated exercise word replenishment', () => {
 
   it('skips morphology words that map but cannot be prepared', async () => {
     const db = createFakeGeneratedWordDb({
-      words: [
-        verbDoc('amo'),
-        nounDoc('puella'),
-        verbDoc('laudo'),
-      ],
+      words: [verbDoc('amo'), nounDoc('puella'), verbDoc('laudo')],
     });
     const exercise = morphologyExercise(
       {
@@ -461,14 +453,10 @@ describe('generated exercise word replenishment', () => {
       },
     };
     expect(
-      isRejectedBySpecAwarePronounOverlap(
-        ego.data,
-        'pronoun-gendered',
-        {
-          'pronoun-gendered': { enabled: true, steps: ['case'], filters: {} },
-          'pronoun-personal': { enabled: true, steps: ['case'], filters: {} },
-        }
-      )
+      isRejectedBySpecAwarePronounOverlap(ego.data, 'pronoun-gendered', {
+        'pronoun-gendered': { enabled: true, steps: ['case'], filters: {} },
+        'pronoun-personal': { enabled: true, steps: ['case'], filters: {} },
+      })
     ).toBe(true);
     expect(
       isRejectedBySpecAwarePronounOverlap(ego.data, 'pronoun-personal', {
@@ -619,37 +607,6 @@ describe('generated exercise word replenishment', () => {
     expect(items.length).toBeGreaterThan(4);
   });
 
-  it('caps pool sampling to a shared universe and consumes missing ids without extending it', async () => {
-    const ids = [...Array.from({ length: 8 }, (_, index) => `noun-${index}`), 'missing-id'];
-    const db = createFakeGeneratedWordDb({
-      words: Array.from({ length: 8 }, (_, index) => nounDoc(`noun-${index}`)),
-      pools: [{ id: 'pool-1', wordDocIds: ids }],
-    });
-    const result = await collectGeneratedExerciseWords({
-      db: db as never,
-      collection: 'vocabulary_words_v5',
-      specs: [
-        { id: 'noun', partOfSpeech: 'noun', filters: {} },
-        { id: 'verb', partOfSpeech: 'verb', filters: {} },
-        { id: 'adjective', partOfSpeech: 'adjective', filters: {} },
-      ],
-      count: 20,
-      exercise: {
-        ...translationExercise(['noun', 'verb', 'adjective'], 20, {
-          wordSource: 'pool',
-          poolId: 'pool-1',
-          poolWordLimit: 5,
-        }),
-      },
-      poolId: 'pool-1',
-      poolWordLimit: 5,
-      rng: createGeneratedExerciseRng(17),
-    });
-
-    expect(result.words.length).toBeLessThanOrEqual(5);
-    expect(new Set(result.words.map(word => word.id)).size).toBeLessThanOrEqual(5);
-  });
-
   it('keeps the unused portion of a pool chunk available for cross-spec borrowing', async () => {
     const words = Array.from({ length: 10 }, (_, index) => nounDoc(`noun-${index}`));
     const db = createFakeGeneratedWordDb({
@@ -669,7 +626,7 @@ describe('generated exercise word replenishment', () => {
         poolId: 'noun-pool',
       }),
       poolId: 'noun-pool',
-      rng: createGeneratedExerciseRng(18),
+      rng: createGeneratedExerciseRng(17),
     });
 
     expect(result.words).toHaveLength(10);
@@ -677,7 +634,78 @@ describe('generated exercise word replenishment', () => {
     expect(result.diagnostics.find(entry => entry.specId === 'noun')?.collected).toBe(10);
   });
 
-  it('charges non-matching pool documents against the global scan budget', async () => {
+  it('honors the selected noun declension in a pool-backed morphology lesson', async () => {
+    const words = [
+      nounDoc('ager', { declension: '2' }),
+      nounDoc('puella', { declension: '1' }),
+      nounDoc('rex', { declension: '3' }),
+      nounDoc('rosa', { declension: '1' }),
+    ];
+    const db = createFakeGeneratedWordDb({
+      words,
+      pools: [{ id: 'morphology-nouns', wordDocIds: words.map(word => word.id) }],
+    });
+    const exercise = morphologyExercise(
+      {
+        'noun-declension': {
+          enabled: true,
+          filters: { nounDeclension: '1' },
+          steps: ['case'],
+          formSelection: { tableType: 'declension', selectedCellPaths: ['singular.nominative'] },
+        },
+      },
+      'all'
+    );
+    exercise.data.generatorConfig = {
+      ...exercise.data.generatorConfig,
+      wordSource: 'pool',
+      poolId: 'morphology-nouns',
+    };
+
+    const wordsForLesson = await createFirestoreGeneratedWordLoader(db as never, {
+      rng: createGeneratedExerciseRng(24),
+    })(exercise);
+
+    expect(wordsForLesson.map(word => word.root_word).sort()).toEqual(['puella', 'rosa']);
+    expect(wordsForLesson.every(word => word.part_of_speech === 'noun' && word.declension === '1')).toBe(true);
+  });
+
+  it('honors verb, adjective, and pronoun filters within a vocabulary pool', async () => {
+    const words = [
+      verbDoc('verb-keep', { conjugation: '1', is_deponent: false }),
+      verbDoc('verb-other-conjugation', { conjugation: '2', is_deponent: false }),
+      verbDoc('verb-deponent', { conjugation: '1', is_deponent: true }),
+      nounDoc('adjective-keep', { part_of_speech: 'adjective', declension: '3' }),
+      nounDoc('adjective-other-declension', { part_of_speech: 'adjective', declension: '1-2' }),
+      nounDoc('pronoun-keep', { part_of_speech: 'pronoun', pronoun_type: 'personal', person: '1st' }),
+      nounDoc('pronoun-other-person', { part_of_speech: 'pronoun', pronoun_type: 'personal', person: '3rd' }),
+      nounDoc('pronoun-other-type', { part_of_speech: 'pronoun', pronoun_type: 'relative', person: null }),
+    ];
+    const db = createFakeGeneratedWordDb({
+      words,
+      pools: [{ id: 'mixed-pool', wordDocIds: words.map(word => word.id) }],
+    });
+    const result = await collectGeneratedExerciseWords({
+      db: db as never,
+      collection: 'vocabulary_words_v5',
+      specs: [
+        { id: 'verb', partOfSpeech: 'verb', filters: { verbConjugation: '1', isDeponent: 'false' } },
+        { id: 'adjective', partOfSpeech: 'adjective', filters: { adjectiveDeclension: '3' } },
+        { id: 'pronoun', partOfSpeech: 'pronoun', filters: { pronounType: 'personal', pronounPerson: '1st' } },
+      ],
+      count: 'all',
+      exercise: translationExercise(['verb', 'adjective', 'pronoun'], 'all', {
+        wordSource: 'pool',
+        poolId: 'mixed-pool',
+      }),
+      poolId: 'mixed-pool',
+      rng: createGeneratedExerciseRng(25),
+    });
+
+    expect(result.words.map(word => word.id).sort()).toEqual(['adjective-keep', 'pronoun-keep', 'verb-keep']);
+  });
+
+  it('exhausts the full pool before returning no matching words', async () => {
     const words = Array.from({ length: 2100 }, (_, index) => verbDoc(`verb-${index}`));
     const db = createFakeGeneratedWordDb({
       words,
@@ -697,12 +725,13 @@ describe('generated exercise word replenishment', () => {
     });
 
     expect(result.words).toHaveLength(0);
-    expect(result.diagnostics[0]?.scanned).toBe(2000);
+    expect(result.diagnostics[0]?.scanned).toBe(2100);
+    expect(result.diagnostics[0]?.exhausted).toBe(true);
     expect(result.diagnostics[0]?.scanLimitReached).toBe(false);
-    expect(result.globalScanLimitReached).toBe(true);
+    expect(result.globalScanLimitReached).toBe(false);
   });
 
-  it('stops a sparse pool POS scan at the per-spec ceiling instead of walking the whole ID list', async () => {
+  it('finds every sparse pool POS candidate and borrows the remaining questions', async () => {
     const nouns = Array.from({ length: 600 }, (_, index) => nounDoc(`noun-${index}`));
     const verbs = Array.from({ length: 4 }, (_, index) => verbDoc(`verb-${index}`));
     const words = [...nouns, ...verbs];
@@ -729,14 +758,10 @@ describe('generated exercise word replenishment', () => {
       rng: createGeneratedExerciseRng(18),
     });
 
-    const verbShare = 5;
     const verb = result.diagnostics.find(entry => entry.specId === 'verb');
-    expect(verb).toBeDefined();
-    expect(perSpecScanCeiling(verbShare)).toBe(PER_SPEC_SCAN_FLOOR);
-    expect(verb?.scanned).toBeLessThanOrEqual(perSpecScanCeiling(verbShare));
-    expect(verb?.scanned).toBeLessThan(ids.length);
-    expect(verb?.scanLimitReached).toBe(true);
-    expect(result.words.length).toBeLessThanOrEqual(10);
+    expect(verb).toMatchObject({ collected: 4, scanned: ids.length, exhausted: true, scanLimitReached: false });
+    expect(result.words).toHaveLength(10);
+    expect(result.words.filter(word => word.part_of_speech === 'noun')).toHaveLength(6);
   });
 
   it('replays the same seeded rng to the same word set', async () => {
