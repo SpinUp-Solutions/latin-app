@@ -1,9 +1,17 @@
+// Next.js loads this configuration as CommonJS; keep these imports in its native format.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { withSentryConfig } = require('@sentry/nextjs');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { version } = require('./package.json');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Tests import separately deployed Firebase Functions; check them in CI after
+  // installing that package's dependencies, rather than in the Netlify build.
+  typescript: {
+    tsconfigPath: 'tsconfig.build.json',
+  },
   serverExternalPackages: ['pdf-lib', '@pdf-lib/fontkit'],
   outputFileTracingIncludes: {
     '/api/test-results/[attemptId]/pdf': ['./src/lib/tests/fonts/**/*'],

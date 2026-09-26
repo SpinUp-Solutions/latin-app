@@ -114,6 +114,8 @@ interface LessonPlayerProps {
   resolvedExerciseState?: Record<string, ResolvedGeneratedExerciseState>;
   testAttemptId?: string;
   generatedExerciseContext?: GeneratedExerciseRenderContext;
+  /** Extra header controls, such as the student feedback button, rendered for the current page. */
+  headerActions?: (page: { pageId: string; pageNumber: number; pauseAudio: () => void }) => React.ReactNode;
 }
 
 export const LessonPlayer: React.FC<LessonPlayerProps> = ({
@@ -125,6 +127,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   resolvedExerciseState,
   testAttemptId,
   generatedExerciseContext,
+  headerActions,
 }) => {
   // Lesson previews should preserve the normal student feedback experience.
   // `trackProgress` controls persistence independently; assessment callers pass
@@ -337,7 +340,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   }, [currentPage?.items, handleNext]);
 
   const audioPlaybackKey = `${lesson.id}:${currentPage?.id}`;
-  const { audioRef, isPlaying, togglePlay } = useAudio(currentPage?.audioPath, handleAudioEnded, audioPlaybackKey);
+  const { audioRef, isPlaying, togglePlay, pause } = useAudio(currentPage?.audioPath, handleAudioEnded, audioPlaybackKey);
 
   const trackPendingExerciseWrite = useCallback((write: Promise<unknown>) => {
     pendingExerciseWritesRef.current.add(write);
@@ -553,8 +556,13 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
         description={lesson.description ? <SimpleRichDisplay content={lesson.description} /> : undefined}
         contentClassName={navigationPlacement === 'fixed' ? 'pb-28 sm:pb-24' : undefined}
         headerAside={
-          shouldShowExerciseRing ? (
-            <ExerciseCompletionRing completedCount={completedExerciseCount} requiredCount={requiredExerciseCount} />
+          shouldShowExerciseRing || headerActions ? (
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+              {shouldShowExerciseRing && (
+                <ExerciseCompletionRing completedCount={completedExerciseCount} requiredCount={requiredExerciseCount} />
+              )}
+              {headerActions?.({ pageId: currentPage.id, pageNumber: currentPageIndex + 1, pauseAudio: pause })}
+            </div>
           ) : undefined
         }
         iconAdornment={

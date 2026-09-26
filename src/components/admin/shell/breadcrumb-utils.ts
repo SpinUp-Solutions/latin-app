@@ -27,6 +27,8 @@ export const routeMatchesTemplate = (pathname: string, template: string) => {
 };
 
 export const BREADCRUMB_ROUTES: BreadcrumbRoute[] = [
+  { template: 'feedback/$feedbackId', crumbs: ['Feedback', 'Feedback detail'], parentHrefs: () => ['/admin/feedback'] },
+  { template: 'feedback', crumbs: ['Feedback'] },
   {
     template: 'lessons/edit/$id/versions/$versionId/edit',
     crumbs: ['Lessons', 'Lesson details', 'Version editor'],

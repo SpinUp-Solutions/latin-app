@@ -9,6 +9,7 @@ import LessonPlayer from '@/src/components/ui/lesson/lesson-player';
 import LessonSidebar from '@/src/components/ui/lesson/lesson-sidebar';
 import PracticeSidebar from '@/src/components/ui/lesson/practice-sidebar';
 import { FeedbackBanner } from '@/src/components/ui/core/feedback-banner';
+import { FeedbackLessonDialog } from '@/src/components/student-feedback/FeedbackLessonDialog';
 import { useAuth } from '@/src/hooks/useAuth';
 import { BookOpen, Pencil } from 'lucide-react';
 import { PageLoading } from '@/src/components/ui/page-loading';
@@ -77,7 +78,7 @@ export default function DynamicLessonPage() {
   const params = useParams();
   const router = useRouter();
   const lessonId = params.lessonId as string;
-  const { user, loading: authLoading } = useAuth();
+  const { user, authUid, loading: authLoading } = useAuth();
 
   const {
     currentData: currentLesson,
@@ -237,7 +238,19 @@ export default function DynamicLessonPage() {
         <LessonSidebar currentLessonId={lessonId} isCollapsed={collapsed.left} onToggleCollapse={toggleLeft} />
         <main className="min-w-0 flex-1 overflow-y-auto px-3 pb-6 pt-4 sm:px-6 sm:pt-6">
           <div className="max-w-3xl mx-auto">
-            <LessonPlayer key={currentLesson.id} lesson={currentLesson} />
+            <LessonPlayer
+              key={currentLesson.id}
+              lesson={currentLesson}
+              headerActions={({ pageId, pageNumber, pauseAudio }) =>
+                authUid && (
+                  <FeedbackLessonDialog
+                    key={authUid}
+                    onOpen={pauseAudio}
+                    context={{ lessonId: currentLesson.id, lessonTitle: currentLesson.title, pageId, pageNumber }}
+                  />
+                )
+              }
+            />
           </div>
         </main>
         <PracticeSidebar

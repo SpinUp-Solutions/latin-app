@@ -7,7 +7,7 @@ import {
   persistentLocalCache,
   persistentMultipleTabManager,
 } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
+import { connectStorageEmulator, getStorage } from 'firebase/storage';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
 
 const firebaseConfig = {
@@ -51,6 +51,7 @@ const functions = getFunctions(app);
 if (usingFirebaseEmulators && typeof window !== 'undefined') {
   connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
   connectFirestoreEmulator(db, '127.0.0.1', 8080);
+  connectStorageEmulator(storage, '127.0.0.1', 9199);
 }
 
 if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
