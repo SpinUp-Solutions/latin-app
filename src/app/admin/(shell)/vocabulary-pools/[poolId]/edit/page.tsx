@@ -36,6 +36,7 @@ function EditPoolPage({ params }: EditPoolPageProps) {
         sourcePoolIds: poolData.sourcePoolIds,
         tags: poolData.tags,
         difficulty: poolData.difficulty,
+        isActive: poolData.isActive,
       };
 
       await updatePoolMutation({ id: poolId, data: updateData }).unwrap();
