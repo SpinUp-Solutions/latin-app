@@ -179,15 +179,18 @@ export async function resolveGeneratedExerciseItems(exercise: GeneratedExercise,
 
 function makeWordIdsUnique(words: ExerciseWordResponse[]): ExerciseWordResponse[] {
   const usedIds = new Set<string>();
+  // Resume each base ID's suffix search where its previous repeat stopped.
+  const nextOccurrence = new Map<string, number>();
 
   return words.map(word => {
     const baseId = word.id;
     let uniqueId = baseId;
-    let occurrence = 2;
+    let occurrence = nextOccurrence.get(baseId) ?? 2;
     while (usedIds.has(uniqueId)) {
       uniqueId = `${baseId}::${occurrence}`;
       occurrence += 1;
     }
+    nextOccurrence.set(baseId, occurrence);
     usedIds.add(uniqueId);
     return uniqueId === baseId ? word : { ...word, id: uniqueId };
   });

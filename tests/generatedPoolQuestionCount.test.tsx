@@ -200,22 +200,10 @@ describe('generated morphology unique word limit', () => {
     expect(mockFormUpdateConfig).not.toHaveBeenCalled();
   });
 
-  it('lowers the limit together with a smaller question count', () => {
-    mockUniqueWordCount = 10;
-    render(<GeneratedFormIdentificationEditor />);
-    const countInput = screen.getByLabelText('Number of Questions');
-    fireEvent.change(countInput, { target: { value: '5' } });
-    fireEvent.blur(countInput);
-    expect(mockFormUpdateConfig).toHaveBeenCalledWith({ count: 5, uniqueWordCount: 5 });
-  });
-
-  it('keeps the limit when the question count stays above it', () => {
-    mockUniqueWordCount = 10;
-    render(<GeneratedFormIdentificationEditor />);
-    const countInput = screen.getByLabelText('Number of Questions');
-    fireEvent.change(countInput, { target: { value: '20' } });
-    fireEvent.blur(countInput);
-    expect(mockFormUpdateConfig).toHaveBeenCalledWith({ count: 20 });
+  it('keeps a saved limit within the question count whenever the config is normalized', () => {
+    expect(ensureGeneratorConfig({ wordSource: 'pool', count: 5, uniqueWordCount: 10 }).uniqueWordCount).toBe(5);
+    expect(ensureGeneratorConfig({ wordSource: 'pool', count: 20, uniqueWordCount: 10 }).uniqueWordCount).toBe(10);
+    expect(ensureGeneratorConfig({ wordSource: 'pool', count: 'all', uniqueWordCount: 10 }).uniqueWordCount).toBe(10);
   });
 
   it('is disabled for saved all-word exercises', () => {

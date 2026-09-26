@@ -207,7 +207,7 @@ describe('pool generation with a unique-word limit', () => {
 
     expect(result.words).toHaveLength(30);
     expect(countsById(result.words).size).toBe(30);
-    expect(result).not.toHaveProperty('uniqueWords');
+    expect(result.uniqueWords).toBeUndefined();
   });
 
   it('ignores the limit for saved all-word exercises', async () => {
@@ -216,7 +216,7 @@ describe('pool generation with a unique-word limit', () => {
 
     expect(result.words).toHaveLength(17);
     expect(countsById(result.words).size).toBe(17);
-    expect(result).not.toHaveProperty('uniqueWords');
+    expect(result.uniqueWords).toBeUndefined();
   });
 
   it('ignores the limit for filter-based sources', async () => {
@@ -228,7 +228,7 @@ describe('pool generation with a unique-word limit', () => {
 
     expect(result.words).toHaveLength(12);
     expect(countsById(result.words).size).toBe(12);
-    expect(result).not.toHaveProperty('uniqueWords');
+    expect(result.uniqueWords).toBeUndefined();
   });
 
   it('ignores the limit for generated translation', async () => {

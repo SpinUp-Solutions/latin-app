@@ -183,14 +183,6 @@ const getPathValues = (value: Record<string, unknown>, path: string): string[] =
   return Array.isArray(current) ? current.filter(isSelectableMorphologyForm) : [];
 };
 
-type FormCandidate = { form: string; path: string };
-type FormPicker = (candidates: FormCandidate[]) => FormCandidate | undefined;
-
-const randomFormPicker =
-  (formRng: () => number): FormPicker =>
-  candidates =>
-    candidates[Math.floor(formRng() * candidates.length)];
-
 function getFormCandidates(word: Record<string, unknown>, spec: WordQuerySpec) {
   const tableType = spec.tableType;
   const selectedPaths = spec.formSelection?.selectedCellPaths || [];
@@ -205,28 +197,35 @@ function getFormCandidates(word: Record<string, unknown>, spec: WordQuerySpec) {
         path => (getApplicableStepsForFormPath(path, tableType, steps)?.applicableSteps.length ?? 0) > 0
       )
     : selectedPaths;
-  const candidates: FormCandidate[] = compatiblePaths.flatMap(path =>
+  const candidates = compatiblePaths.flatMap(path =>
     getPathValues(word, `${tableField}.${path}`).map(form => ({ form, path }))
   );
   return { table, tableType, compatiblePaths, candidates };
 }
 
-function selectForm(word: Record<string, unknown>, spec: WordQuerySpec, pickForm: FormPicker) {
+function selectForm(word: Record<string, unknown>, spec: WordQuerySpec, formRng: () => number, form?: string) {
   const available = getFormCandidates(word, spec);
-  if (!available?.candidates.length) return null;
+  if (!available) return null;
+  const candidates =
+    form === undefined ? available.candidates : available.candidates.filter(candidate => candidate.form === form);
+  if (!candidates.length) return null;
 
-  const selected = pickForm(available.candidates);
-  if (!selected) return null;
+  const selected = candidates[Math.floor(formRng() * candidates.length)];
   const matchingPaths = scanTableForMatchingForms(available.table, selected.form, available.tableType);
   const paths = categorizeMatchingPaths(matchingPaths, available.compatiblePaths);
   if (!paths.primaryPaths.includes(selected.path)) paths.primaryPaths.unshift(selected.path);
   return { selected, ...paths };
 }
 
-function mapWord(doc: QueryDocumentSnapshot, spec: WordQuerySpec, pickForm: FormPicker): ExerciseWordResponse | null {
-  const data = doc.data() as Record<string, unknown>;
+function mapWord(
+  id: string,
+  data: Record<string, unknown>,
+  spec: WordQuerySpec,
+  formRng: () => number,
+  form?: string
+): ExerciseWordResponse | null {
   const selectedPaths = spec.formSelection?.selectedCellPaths || [];
-  const selection = spec.tableType && selectedPaths.length ? selectForm(data, spec, pickForm) : null;
+  const selection = selectForm(data, spec, formRng, form);
   if (selectedPaths.length && !selection) return null;
 
   const parsedTableType = spec.tableType;
@@ -242,7 +241,7 @@ function mapWord(doc: QueryDocumentSnapshot, spec: WordQuerySpec, pickForm: Form
       : undefined;
 
   return {
-    id: doc.id,
+    id,
     root_word: String(data.word || ''),
     dictionary_entry: typeof data.dictionary_entry === 'string' ? data.dictionary_entry : null,
     selected_form: selection?.selected.form || String(data.word || ''),
@@ -267,11 +266,14 @@ function evaluateCandidate(
   doc: QueryDocumentSnapshot,
   spec: WordQuerySpec,
   exercise: GeneratedExercise,
-  pickForm: FormPicker,
-  paradigmConfigs: ParadigmConfigs
+  formRng: () => number,
+  paradigmConfigs: ParadigmConfigs,
+  /** Restricts the pick to one surface form, reusing data a form rotation already decoded. */
+  rotation?: { form: string; data: Record<string, unknown> }
 ): ExerciseWordResponse | null {
-  if (doc.data()._deletionPending) return null;
-  const word = mapWord(doc, spec, pickForm);
+  const data = rotation?.data ?? doc.data();
+  if (data._deletionPending) return null;
+  const word = mapWord(doc.id, data, spec, formRng, rotation?.form);
   if (!word) return null;
   if (isRejectedBySpecAwarePronounOverlap(word, spec.paradigm, paradigmConfigs)) return null;
   if (exercise.type === 'generated-form-identification') {
@@ -514,7 +516,7 @@ async function takeEligible(
     const doc = stream.unread.shift();
     if (!doc) break;
     if (acceptedIds?.has(doc.id)) continue;
-    const word = evaluateCandidate(doc, stream.spec, exercise, randomFormPicker(formRng), paradigmConfigs);
+    const word = evaluateCandidate(doc, stream.spec, exercise, formRng, paradigmConfigs);
     if (!word) continue;
     acceptedIds?.add(doc.id);
     accepted.push({ word, doc, spec: stream.spec });
@@ -529,18 +531,16 @@ function createFormRotation(
   formRng: () => number,
   paradigmConfigs: ParadigmConfigs
 ) {
-  const candidatesByForm = new Map<string, FormCandidate[]>();
-  for (const candidate of getFormCandidates(entry.doc.data(), entry.spec)?.candidates ?? []) {
-    if (candidate.form === entry.word.selected_form) continue;
-    candidatesByForm.set(candidate.form, [...(candidatesByForm.get(candidate.form) ?? []), candidate]);
-  }
-  const remainingForms = shuffleWithRng([...candidatesByForm.keys()], formRng);
+  const data = entry.doc.data();
+  const forms = new Set(getFormCandidates(data, entry.spec)?.candidates.map(candidate => candidate.form));
+  forms.delete(entry.word.selected_form);
+  const remainingForms = shuffleWithRng([...forms], formRng);
+  let next = 0;
 
   return (): AcceptedWord | null => {
-    while (remainingForms.length > 0) {
-      const sameForm = candidatesByForm.get(remainingForms.shift()!)!;
-      const pickForm = () => sameForm[Math.floor(formRng() * sameForm.length)];
-      const word = evaluateCandidate(entry.doc, entry.spec, exercise, pickForm, paradigmConfigs);
+    while (next < remainingForms.length) {
+      const form = remainingForms[next++];
+      const word = evaluateCandidate(entry.doc, entry.spec, exercise, formRng, paradigmConfigs, { form, data });
       if (word) return { ...entry, word };
     }
     return null;
@@ -560,15 +560,14 @@ function rotateWordForms(
   paradigmConfigs: ParadigmConfigs
 ): AcceptedWord[] {
   const questions = firstPass.slice(0, count);
-  let rotations = firstPass.map(entry => createFormRotation(entry, exercise, formRng, paradigmConfigs));
+  if (questions.length >= count) return questions;
+  const rotations = firstPass.map(entry => createFormRotation(entry, exercise, formRng, paradigmConfigs));
 
-  while (questions.length < count && rotations.length > 0) {
-    const pass: AcceptedWord[] = [];
-    rotations = rotations.filter(nextForm => {
-      const question = nextForm();
-      if (question) pass.push(question);
-      return question !== null;
-    });
+  while (questions.length < count) {
+    const pass = rotations
+      .map(nextForm => nextForm())
+      .filter((question): question is AcceptedWord => question !== null);
+    if (pass.length === 0) break;
 
     const ordered = shuffleWithRng(pass, shuffleRng);
     // Passes hold distinct words, so only the boundary with the previous pass can repeat a word.
@@ -639,6 +638,7 @@ export async function collectGeneratedExerciseWords(options: {
       : null;
   // Number of distinct words to collect; unique-word mode fills the rest with further forms.
   const wordTarget = uniqueWordTarget ?? numericCount;
+  // Unique-word mode must not pick one document for two paradigms; the default mode allows it.
   const acceptedIds = uniqueWordTarget === null ? undefined : new Set<string>();
   const shares = unbounded
     ? specs.map(() => Number.POSITIVE_INFINITY)
@@ -718,7 +718,6 @@ export async function collectGeneratedExerciseWords(options: {
     }
   }
 
-  const acceptedCount = collected.reduce((sum, words) => sum + words.length, 0);
   const combined = shuffleWithRng(collected.flat(), shuffleRng);
   const questions =
     uniqueWordTarget !== null
@@ -739,8 +738,9 @@ export async function collectGeneratedExerciseWords(options: {
   return {
     words,
     diagnostics,
-    globalScanLimitReached: !unbounded && budget.remaining <= 0 && initialBudget > 0 && acceptedCount < wordTarget,
+    globalScanLimitReached: !unbounded && budget.remaining <= 0 && initialBudget > 0 && combined.length < wordTarget,
     requestedCount,
-    ...(uniqueWordTarget !== null ? { uniqueWords: new Set(questions.map(question => question.doc.id)).size } : {}),
+    // Every collected word is distinct and opens the rotation, so this is the unique-word total.
+    uniqueWords: uniqueWordTarget === null ? undefined : combined.length,
   };
 }

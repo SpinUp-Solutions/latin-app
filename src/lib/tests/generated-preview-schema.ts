@@ -14,12 +14,11 @@ import type { GeneratedTranslationExercise } from '@/src/types/exercises/generat
 import { FormIdentificationStepSchema } from '@/src/types/exercises/schemas/form-identification';
 import { firestoreDocumentIdSchema } from '@/src/lib/learning-units/schemas';
 
-export const generatedWordCountSchema = z.union([
-  z.literal('all'),
-  z.number().int().positive().max(MAX_GENERATED_WORD_COUNT),
-]);
+const generatedNumericWordCountSchema = z.number().int().positive().max(MAX_GENERATED_WORD_COUNT);
 
-export const generatedUniqueWordCountSchema = z.number().int().positive().max(MAX_GENERATED_WORD_COUNT).nullable();
+export const generatedWordCountSchema = z.union([z.literal('all'), generatedNumericWordCountSchema]);
+
+export const generatedUniqueWordCountSchema = generatedNumericWordCountSchema.nullable();
 
 const formSelectionSchema = z
   .object({
