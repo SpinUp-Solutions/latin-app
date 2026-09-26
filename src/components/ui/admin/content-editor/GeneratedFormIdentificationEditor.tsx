@@ -78,15 +78,27 @@ const GeneratedFormIdentificationEditorView: React.FC<{
     />
   );
 
+  const uniqueWordCount = editor.config.uniqueWordCount ?? null;
   const poolContent = (
     <GeneratedPoolSourceFields
       poolId={editor.config.poolId}
       count={editor.config.count}
       questionCountId="form-identification-question-count"
       onPoolChange={poolId => editor.updateConfig({ poolId })}
-      onCountChange={count => editor.updateConfig({ count })}
+      onCountChange={count =>
+        editor.updateConfig(
+          uniqueWordCount !== null && uniqueWordCount > count ? { count, uniqueWordCount: count } : { count }
+        )
+      }
+      uniqueWords={{
+        id: 'form-identification-unique-word-count',
+        value: uniqueWordCount,
+        onChange: nextUniqueWordCount => editor.updateConfig({ uniqueWordCount: nextUniqueWordCount }),
+      }}
     />
   );
+  const appliedUniqueWordCount =
+    editor.config.wordSource === 'pool' && editor.config.count !== 'all' ? uniqueWordCount : null;
 
   return (
     <div className="space-y-6">
@@ -326,6 +338,7 @@ const GeneratedFormIdentificationEditorView: React.FC<{
       <GeneratedExerciseSummary
         collection={editor.config.collection}
         count={editor.config.count}
+        uniqueWordCount={appliedUniqueWordCount}
         partOfSpeech={editor.derivedFilters.partOfSpeech}
         selectedFormCount={editor.derivedFormSelection?.selectedCellPaths.length}
       />
