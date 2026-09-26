@@ -309,7 +309,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
       setCurrentPageIndex(newPageIndex);
       setFurthestPageIndex(current => Math.max(current, newPageIndex));
     }
-  }, [currentPageIndex, lesson.pages, totalPages]);
+  }, [currentPageIndex, totalPages]);
 
   const handlePageComplete = useCallback(() => {
     handleNext();
@@ -320,7 +320,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
       const newPageIndex = currentPageIndex - 1;
       setCurrentPageIndex(newPageIndex);
     }
-  }, [currentPageIndex, lesson.pages]);
+  }, [currentPageIndex]);
 
   const handleGoToPage = useCallback(
     (newPageIndex: number) => {
@@ -328,7 +328,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
       setCurrentPageIndex(newPageIndex);
       setFurthestPageIndex(current => Math.max(current, newPageIndex));
     },
-    [currentPageIndex, lesson.pages, totalPages]
+    [currentPageIndex, totalPages]
   );
 
   const handleAudioEnded = useCallback(() => {

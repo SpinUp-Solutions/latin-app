@@ -168,6 +168,16 @@ it('starts fresh when switching lessons even if page/exercise IDs are reused', (
   expect(screen.getByRole('textbox')).toHaveValue('');
 });
 
+it('starts fresh when the lesson version changes with reused page and exercise IDs', () => {
+  const initial = { ...lesson(), version: 1 };
+  const view = render(<LessonPlayer lesson={initial} trackProgress={false} />);
+  submit('one');
+  resume();
+  view.rerender(<LessonPlayer lesson={{ ...initial, version: 2 }} trackProgress={false} />);
+  expect(screen.getByText('0 of 2 complete (0%)')).toBeVisible();
+  expect(screen.getByRole('textbox')).toHaveValue('');
+});
+
 it('retains matching pairs and an incomplete selection', () => {
   const matching: MatchingExercise = {
     id: 'matching',
