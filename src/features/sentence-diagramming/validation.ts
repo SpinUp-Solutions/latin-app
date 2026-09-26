@@ -1,4 +1,3 @@
-import type { SentenceDiagrammingExercise } from '@/src/types/exercises/sentence-diagramming';
 import {
   ANNOTATION_SPECS,
   AnnotationKind,
@@ -30,9 +29,6 @@ export interface SentenceDiagramValidationIssue {
   message: string;
   path: string;
   annotationId?: string;
-  pageIndex?: number;
-  itemIndex?: number;
-  exerciseId?: string;
 }
 
 const isAnnotationKind = (value: unknown): value is AnnotationKind =>
@@ -201,6 +197,3 @@ export const validateSentenceDiagramDocument = (document: SentenceDiagramDocumen
 
   return issues;
 };
-
-export const validateSentenceDiagramExercise = (exercise: SentenceDiagrammingExercise) =>
-  validateSentenceDiagramDocument(exercise.data);
