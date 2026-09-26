@@ -1,3 +1,4 @@
+import type { DecodedIdToken } from 'firebase-admin/auth';
 import { feedbackSessionDocumentSchema, type FeedbackSessionDocument } from '@/shared/student-feedback';
 import { FeedbackError, invalidFeedbackDocument } from '@/src/lib/student-feedback/http.server';
 
@@ -27,4 +28,16 @@ export function assertOpenFeedbackSession(session: FeedbackSessionDocument, uid:
   if (session.status !== 'open') {
     throw new FeedbackError('FEEDBACK_SESSION_CLOSED', 'Feedback session is closed', 409);
   }
+}
+
+export function feedbackActorName(token: DecodedIdToken, rawProfile: unknown): string | null {
+  const profile = rawProfile && typeof rawProfile === 'object' && !Array.isArray(rawProfile)
+    ? rawProfile as Record<string, unknown>
+    : {};
+  const first = typeof profile.firstName === 'string' ? profile.firstName.trim() : '';
+  const last = typeof profile.lastName === 'string' ? profile.lastName.trim() : '';
+  const name = [first, last].filter(Boolean).join(' ') ||
+    (typeof profile.username === 'string' ? profile.username.trim() : '') ||
+    (typeof token.name === 'string' ? token.name.trim() : '');
+  return name.slice(0, 300) || null;
 }

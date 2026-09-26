@@ -33,7 +33,7 @@ interface AttachmentApiError extends Error {
   code?: string;
 }
 
-async function attachmentRequest<T>(url: string, method: 'POST' | 'DELETE', body?: unknown): Promise<T> {
+async function attachmentRequest(url: string, method: 'POST' | 'DELETE', body?: unknown): Promise<unknown> {
   const user = auth.currentUser;
   if (!user) throw new Error('Sign in to upload feedback attachments');
   const token = await user.getIdToken();
@@ -53,7 +53,7 @@ async function attachmentRequest<T>(url: string, method: 'POST' | 'DELETE', body
     if (typeof payload.code === 'string') error.code = payload.code;
     throw error;
   }
-  return data as T;
+  return data;
 }
 
 function uploadToStaging(path: string, file: File, onProgress: (fraction: number) => void, onTask: (task: UploadTask) => void): Promise<void> {
@@ -113,7 +113,7 @@ export function useFeedbackAttachments({ sessionId, ensureSession }: { sessionId
       const recovering = item.reserved || reserveAttemptsRef.current.has(id);
       if (!item.reserved) {
         reserveAttemptsRef.current.add(id);
-        const raw = await attachmentRequest<unknown>(base, 'POST', {
+        const raw = await attachmentRequest(base, 'POST', {
           attachmentId: id,
           originalName: item.name,
           contentType: item.contentType,
@@ -132,7 +132,7 @@ export function useFeedbackAttachments({ sessionId, ensureSession }: { sessionId
       // Create-only Storage rules make blindly writing the same path unsafe.
       if (recovering) {
         try {
-          const raw = await attachmentRequest<unknown>(finalizeUrl, 'POST');
+          const raw = await attachmentRequest(finalizeUrl, 'POST');
           const response = feedbackFinalizeAttachmentResponseSchema.parse(raw);
           if (response.attachment.status === 'ready') {
             if (live()) update(id, { status: 'ready', progress: 1, uploaded: true, error: undefined });
@@ -154,7 +154,7 @@ export function useFeedbackAttachments({ sessionId, ensureSession }: { sessionId
       tasksRef.current.delete(id);
       if (!live()) return;
       update(id, { uploaded: true, status: 'processing', progress: 1 });
-      const raw = await attachmentRequest<unknown>(finalizeUrl, 'POST');
+      const raw = await attachmentRequest(finalizeUrl, 'POST');
       const response = feedbackFinalizeAttachmentResponseSchema.parse(raw);
       if (response.attachment.status !== 'ready') throw new Error('Attachment is still processing');
       if (live()) update(id, { status: 'ready', error: undefined });
@@ -221,7 +221,7 @@ export function useFeedbackAttachments({ sessionId, ensureSession }: { sessionId
     await processPromisesRef.current.get(id)?.catch(() => undefined);
     if (item.reserved || reserveAttemptsRef.current.has(id)) {
       try {
-        await attachmentRequest<unknown>(
+        await attachmentRequest(
           `/api/feedback/sessions/${encodeURIComponent(sessionId)}/attachments/${encodeURIComponent(id)}`,
           'DELETE'
         );

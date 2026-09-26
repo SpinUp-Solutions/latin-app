@@ -37,9 +37,7 @@ const FINALIZE_LEASE_MS = 5 * 60 * 1000;
 const CANCELLED_COPY_CLEANUP_HOLD_MS = 24 * 60 * 60 * 1000;
 const ADMIN_URL_TTL_MS = 5 * 60 * 1000;
 
-export type FeedbackAttachmentPublic = FeedbackPublicAttachment;
-
-export function publicFeedbackAttachment(intent: FeedbackAttachmentIntentDocument): FeedbackAttachmentPublic {
+function publicFeedbackAttachment(intent: FeedbackAttachmentIntentDocument): FeedbackPublicAttachment {
   return {
     id: intent.id,
     originalName: intent.originalName,
@@ -75,7 +73,7 @@ export async function reserveFeedbackAttachment(
   input: { attachmentId: string; originalName: string; contentType: FeedbackAttachmentIntentDocument['contentType']; sizeBytes: number },
   db: Firestore = adminDb,
   nowMs = Date.now()
-): Promise<{ attachment: FeedbackAttachmentPublic; stagingPath: string }> {
+): Promise<{ attachment: FeedbackPublicAttachment; stagingPath: string }> {
   const sessionDocument = sessionRef(db, sessionId);
   const intentDocument = intentRef(db, sessionId, input.attachmentId);
   const intent = await db.runTransaction(async transaction => {
@@ -237,7 +235,7 @@ export async function finalizeFeedbackAttachment(
   db: Firestore = adminDb,
   bucket: Bucket = adminStorage.bucket(),
   nowMs = Date.now()
-): Promise<FeedbackAttachmentPublic> {
+): Promise<FeedbackPublicAttachment> {
   const claim = await claimFinalizeLease(uid, sessionId, attachmentId, db, nowMs);
   if (claim.leaseId === null) return publicFeedbackAttachment(claim.intent);
   let copied: Awaited<ReturnType<typeof copyVerifiedFeedbackObject>>;
@@ -321,7 +319,7 @@ export async function removeFeedbackAttachment(
   db: Firestore = adminDb,
   bucket: Bucket = adminStorage.bucket(),
   nowMs = Date.now()
-): Promise<FeedbackAttachmentPublic> {
+): Promise<FeedbackPublicAttachment> {
   const result = await db.runTransaction(async transaction => {
     const [sessionSnapshot, intentSnapshot] = await Promise.all([
       transaction.get(sessionRef(db, sessionId)),
@@ -332,7 +330,7 @@ export async function removeFeedbackAttachment(
     const intent = parseIntent(intentSnapshot.data(), sessionId, attachmentId);
     assertOpenSession(session, uid, nowMs);
     assertIntentOwner(intent, uid);
-    if (intent.status === 'cancelled') return { intent, verified: null, copyWasInFlight: intent.cleanupAfterMs !== null && intent.cleanupAfterMs > nowMs };
+    if (intent.status === 'cancelled') return { intent, copyWasInFlight: intent.cleanupAfterMs !== null && intent.cleanupAfterMs > nowMs };
     if (session.attachmentCount < 1 || session.totalReservedBytes < intent.reservedBytes) {
       invalidFeedbackDocument('Attachment reservation totals are inconsistent');
     }
@@ -348,7 +346,7 @@ export async function removeFeedbackAttachment(
       totalReservedBytes: session.totalReservedBytes - intent.reservedBytes,
       updatedAt: now,
     });
-    return { intent, verified: intent.verified, copyWasInFlight };
+    return { intent, copyWasInFlight };
   });
   const staging = feedbackStagingPath(uid, sessionId, attachmentId);
   const canonical = feedbackPrivatePath(sessionId, attachmentId);

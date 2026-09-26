@@ -11,6 +11,7 @@ import {
 } from '@/shared/constants/firestore';
 import {
   FEEDBACK_MAX_REPORTS_PER_HOUR,
+  FEEDBACK_MAX_ATTACHMENTS,
   FEEDBACK_MAX_TOTAL_BYTES,
   FEEDBACK_SCHEMA_VERSION,
   FEEDBACK_SESSION_TTL_MS,
@@ -22,6 +23,7 @@ import {
   feedbackSessionDocumentSchema,
   feedbackThrottleDocumentSchema,
   type FeedbackAttachmentDescriptor,
+  type FeedbackPublicAttachment,
   type FeedbackReceipt,
   type FeedbackSessionDocument,
   type FeedbackSubmitRequest,
@@ -33,6 +35,7 @@ import {
   assertFeedbackSessionOwner as assertSessionOwner,
   assertOpenFeedbackSession,
   feedbackSessionNotFound as sessionNotFound,
+  feedbackActorName,
   parseFeedbackSession as parseSession,
 } from '@/src/lib/student-feedback/session.server';
 
@@ -87,33 +90,27 @@ export async function getFeedbackSession(
 
 export async function getPublicFeedbackSession(uid: string, sessionId: string, db: Firestore = adminDb) {
   const session = await getFeedbackSession(uid, sessionId, db);
-  if (session.status !== 'open') {
-    return feedbackPublicSessionSchema.parse({
-      id: session.id,
-      status: session.status,
-      expiresAtMs: session.expiresAtMs,
-      receipt: session.receipt,
-      attachments: [],
+  let attachments: FeedbackPublicAttachment[] = [];
+  if (session.status === 'open') {
+    const snapshot = await db.collection(STUDENT_FEEDBACK_SESSIONS_COLLECTION).doc(sessionId)
+      .collection(STUDENT_FEEDBACK_ATTACHMENTS_SUBCOLLECTION)
+      .where('status', 'in', [...ACTIVE_ATTACHMENT_STATUSES]).limit(FEEDBACK_MAX_ATTACHMENTS + 1).get();
+    if (snapshot.size > FEEDBACK_MAX_ATTACHMENTS) invalidFeedbackDocument('Feedback session has too many active attachments');
+    attachments = snapshot.docs.map(document => {
+      const parsed = feedbackAttachmentIntentDocumentSchema.safeParse(document.data());
+      if (!parsed.success || parsed.data.id !== document.id || parsed.data.sessionId !== sessionId || parsed.data.ownerUid !== uid) {
+        invalidFeedbackDocument('Attachment reservation data is invalid');
+      }
+      const item = parsed.data;
+      return {
+        id: item.id,
+        originalName: item.originalName,
+        contentType: item.contentType,
+        sizeBytes: item.reservedBytes,
+        status: item.status,
+      };
     });
   }
-  const snapshot = await db.collection(STUDENT_FEEDBACK_SESSIONS_COLLECTION).doc(sessionId)
-    .collection(STUDENT_FEEDBACK_ATTACHMENTS_SUBCOLLECTION)
-    .where('status', 'in', [...ACTIVE_ATTACHMENT_STATUSES]).limit(6).get();
-  if (snapshot.size > 5) invalidFeedbackDocument('Feedback session has too many active attachments');
-  const attachments = snapshot.docs.map(document => {
-    const parsed = feedbackAttachmentIntentDocumentSchema.safeParse(document.data());
-    if (!parsed.success || parsed.data.id !== document.id || parsed.data.sessionId !== sessionId || parsed.data.ownerUid !== uid) {
-      invalidFeedbackDocument('Attachment reservation data is invalid');
-    }
-    const item = parsed.data;
-    return {
-      id: item.id,
-      originalName: item.originalName,
-      contentType: item.contentType,
-      sizeBytes: item.reservedBytes,
-      status: item.status,
-    };
-  });
   return feedbackPublicSessionSchema.parse({
     id: session.id,
     status: session.status,
@@ -124,17 +121,9 @@ export async function getPublicFeedbackSession(uid: string, sessionId: string, d
 }
 
 function identitySnapshot(uid: string, token: DecodedIdToken, rawProfile: unknown) {
-  const profile = rawProfile && typeof rawProfile === 'object' && !Array.isArray(rawProfile)
-    ? rawProfile as Record<string, unknown>
-    : {};
-  const first = typeof profile.firstName === 'string' ? profile.firstName.trim() : '';
-  const last = typeof profile.lastName === 'string' ? profile.lastName.trim() : '';
-  const username = typeof profile.username === 'string' ? profile.username.trim() : '';
-  const tokenEmail = typeof token.email === 'string' ? token.email.trim() : '';
   // The profile is client-editable; only verified Auth claims may identify an email.
-  const email = tokenEmail.slice(0, 320) || null;
-  const displayName = ([first, last].filter(Boolean).join(' ') || username ||
-    (typeof token.name === 'string' ? token.name.trim() : '')).slice(0, 300) || null;
+  const email = (typeof token.email === 'string' ? token.email.trim().slice(0, 320) : '') || null;
+  const displayName = feedbackActorName(token, rawProfile);
   return { uid, displayName, email, emailNormalized: email?.toLowerCase() ?? null };
 }
 
@@ -215,12 +204,12 @@ export async function submitFeedback(
     const [reportSnapshot, intentSnapshot, profileSnapshot, throttleSnapshot] = await Promise.all([
       transaction.get(reportRef),
       transaction.get(sessionRef.collection(STUDENT_FEEDBACK_ATTACHMENTS_SUBCOLLECTION)
-        .where('status', 'in', [...ACTIVE_ATTACHMENT_STATUSES]).limit(6)),
+        .where('status', 'in', [...ACTIVE_ATTACHMENT_STATUSES]).limit(FEEDBACK_MAX_ATTACHMENTS + 1)),
       transaction.get(profileRef),
       transaction.get(throttleRef),
     ]);
     if (reportSnapshot.exists) invalidFeedbackDocument('Feedback report exists without a submitted receipt');
-    if (intentSnapshot.size > 5) invalidFeedbackDocument('Feedback session has too many active attachments');
+    if (intentSnapshot.size > FEEDBACK_MAX_ATTACHMENTS) invalidFeedbackDocument('Feedback session has too many active attachments');
     const attachments = selectedReadyAttachments(intentSnapshot.docs, session, input.attachmentIds);
     const lesson = input.lessonId
       ? await validateFeedbackLessonInTransaction(transaction, db, uid, input.lessonId, input.pageContext)

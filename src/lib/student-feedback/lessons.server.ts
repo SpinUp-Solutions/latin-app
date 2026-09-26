@@ -2,18 +2,12 @@ import type { Firestore, Transaction } from 'firebase-admin/firestore';
 import type { z } from 'zod';
 import { adminDb } from '@/src/services/firebase-admin';
 import { LEARNING_UNITS_COLLECTION, USER_PROGRESS_COLLECTION } from '@/shared/constants/firestore';
-import { feedbackLessonSnapshotSchema, type FeedbackSubmitRequest } from '@/shared/student-feedback';
+import { feedbackLessonSnapshotSchema, type FeedbackLessonOption, type FeedbackSubmitRequest } from '@/shared/student-feedback';
 import { getLessonProgressAccessInTransaction } from '@/src/lib/learning-units/progression-access';
 import { isLessonDocumentData, normalizeLearningUnit } from '@/src/lib/learning-units/domain';
 import { studentDashboardService } from '@/src/lib/learning-units/student-dashboard-service';
 import { stripHtmlTags } from '@/src/utils/exercises/helpers';
 import { FeedbackError, invalidFeedbackDocument } from './http.server';
-
-export interface FeedbackLessonOption {
-  id: string;
-  title: string;
-  revision: number;
-}
 
 export function boundedFeedbackTitle(title: string): string {
   return (title.length <= 500 ? title : stripHtmlTags(title).slice(0, 500)).trim() || 'Untitled lesson';

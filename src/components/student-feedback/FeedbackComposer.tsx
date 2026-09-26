@@ -17,6 +17,7 @@ import {
   feedbackFormSchema,
   submitFeedbackRequestSchema,
   type FeedbackArea,
+  type FeedbackLessonOption,
   type FeedbackReceipt,
   type FeedbackSeverity,
   type FeedbackType,
@@ -31,7 +32,6 @@ import {
   useSubmitFeedbackMutation,
 } from '@/src/store/api/studentFeedbackApi';
 import { useAuth } from '@/src/hooks/useAuth';
-import type { FeedbackLessonOption } from '@/src/store/api/studentFeedbackApi';
 import { useFeedbackAttachments } from '@/src/hooks/useFeedbackAttachments';
 import { useUnsavedNavigationGuard } from '@/src/hooks/useUnsavedNavigationGuard';
 import { UnsavedNavigationDialog } from '@/src/components/ui/core/UnsavedNavigationDialog';

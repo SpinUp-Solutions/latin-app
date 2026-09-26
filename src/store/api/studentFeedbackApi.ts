@@ -3,7 +3,6 @@ import { createApi } from '@reduxjs/toolkit/query/react';
 import type {
   FeedbackActivityDocument,
   FeedbackActivityListResponse,
-  FeedbackAdminListItem,
   FeedbackAdminListResponse,
   FeedbackAdminListQuery,
   FeedbackReceipt,
@@ -15,10 +14,21 @@ import type {
 import { createAuthenticatedBaseQuery } from './baseQuery';
 
 export type FeedbackListArgs = Omit<FeedbackAdminListQuery, 'cursor'> & { cursor?: string | null };
-export type FeedbackListItem = FeedbackAdminListItem;
-export type FeedbackListResult = FeedbackAdminListResponse;
-export type FeedbackActivityResult = FeedbackActivityListResponse;
-export type { FeedbackLessonOption } from '@/shared/student-feedback';
+
+function mergeFeedbackPage<T extends { id: string }>(
+  current: { items: T[]; nextCursor: string | null },
+  incoming: { items: T[]; nextCursor: string | null },
+  { arg }: { arg: { cursor?: string | null } }
+) {
+  if (!arg.cursor) return incoming;
+  const seen = new Set<string>();
+  const items = [...current.items, ...incoming.items].filter(item => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+  return { items, nextCursor: incoming.nextCursor };
+}
 
 const queryString = (values: Record<string, unknown>) => {
   const params = new URLSearchParams();
@@ -48,21 +58,18 @@ export const studentFeedbackApi = createApi({
     }),
     submitFeedback: builder.mutation<{ receipt: FeedbackReceipt }, FeedbackSubmitRequest>({
       query: body => ({ url: '/feedback', method: 'POST', body }),
-      async onQueryStarted(_arg, lifecycle) { await refreshFeedbackLists(lifecycle); },
+      async onQueryStarted(_arg, lifecycle) {
+        try {
+          await lifecycle.queryFulfilled;
+          lifecycle.dispatch(studentFeedbackApi.util.invalidateTags([{ type: 'FeedbackCount', id: 'UNRESOLVED' }]));
+          await refreshFeedbackListsAfterSuccess(lifecycle);
+        } catch { /* mutation error is displayed by the caller */ }
+      },
     }),
-    getAdminFeedbackList: builder.query<FeedbackListResult, FeedbackListArgs>({
+    getAdminFeedbackList: builder.query<FeedbackAdminListResponse, FeedbackListArgs>({
       query: args => `/admin/feedback?${queryString(args)}`,
       serializeQueryArgs: ({ queryArgs }) => keyFor(queryArgs),
-      merge(currentCache, newData, { arg }) {
-        if (!arg.cursor) return newData;
-        const seen = new Set<string>();
-        const items = [...currentCache.items, ...newData.items].filter(item => {
-          if (seen.has(item.id)) return false;
-          seen.add(item.id);
-          return true;
-        });
-        return { items, nextCursor: newData.nextCursor };
-      },
+      merge: mergeFeedbackPage,
       forceRefetch: ({ currentArg, previousArg }) =>
         keyFor(currentArg ?? {}) !== keyFor(previousArg ?? {}) || currentArg?.cursor !== previousArg?.cursor,
       providesTags: [{ type: 'FeedbackList', id: 'LIST' }],
@@ -75,21 +82,10 @@ export const studentFeedbackApi = createApi({
       query: id => `/admin/feedback/${encodeURIComponent(id)}`,
       providesTags: (_result, _error, id) => [{ type: 'FeedbackDetail', id }],
     }),
-    getAdminFeedbackActivity: builder.query<FeedbackActivityResult, { feedbackId: string; cursor?: string | null }>({
+    getAdminFeedbackActivity: builder.query<FeedbackActivityListResponse, { feedbackId: string; cursor?: string | null }>({
       query: ({ feedbackId, cursor }) => `/admin/feedback/${encodeURIComponent(feedbackId)}/activity${cursor ? `?${queryString({ cursor })}` : ''}`,
       serializeQueryArgs: ({ queryArgs }) => queryArgs.feedbackId,
-      merge(currentCache, newData, { arg }) {
-        if (!arg.cursor) return newData;
-        const seen = new Set<string>();
-        return {
-          items: [...currentCache.items, ...newData.items].filter(item => {
-            if (seen.has(item.id)) return false;
-            seen.add(item.id);
-            return true;
-          }),
-          nextCursor: newData.nextCursor,
-        };
-      },
+      merge: mergeFeedbackPage,
       forceRefetch: ({ currentArg, previousArg }) => currentArg?.cursor !== previousArg?.cursor,
       providesTags: (_result, _error, arg) => [{ type: 'FeedbackActivity', id: arg.feedbackId }],
     }),
@@ -131,13 +127,6 @@ type MutationLifecycle = {
   getState: () => unknown;
   queryFulfilled: Promise<unknown>;
 };
-async function refreshFeedbackLists(lifecycle: MutationLifecycle) {
-  try {
-    await lifecycle.queryFulfilled;
-    lifecycle.dispatch(studentFeedbackApi.util.invalidateTags([{ type: 'FeedbackCount', id: 'UNRESOLVED' }]));
-    await refreshFeedbackListsAfterSuccess(lifecycle);
-  } catch { /* mutation error is displayed by the caller */ }
-}
 async function refreshFeedbackListsAfterSuccess({ dispatch, getState }: MutationLifecycle) {
   const state = getState() as FeedbackCacheState;
   const affected = studentFeedbackApi.util.selectInvalidatedBy(state, [{ type: 'FeedbackList', id: 'LIST' }]);
@@ -149,9 +138,7 @@ async function refreshFeedbackListsAfterSuccess({ dispatch, getState }: Mutation
     const running = dispatch(studentFeedbackApi.util.getRunningQueryThunk('getAdminFeedbackList', args));
     if (running) argsByKey.set(running.queryCacheKey, args);
   }
-  await Promise.all([...argsByKey.values()].map(async originalArgs => {
-    await refreshFeedbackListPageOne(dispatch, originalArgs);
-  }));
+  await Promise.all([...argsByKey.values()].map(args => refreshFeedbackListPageOne(dispatch, args)));
 }
 export async function refreshFeedbackListPageOne(
   dispatch: ThunkDispatch<unknown, unknown, UnknownAction>,

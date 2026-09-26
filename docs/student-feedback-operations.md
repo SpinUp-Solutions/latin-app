@@ -58,7 +58,7 @@ Run these with dedicated test accounts in a nonproduction environment first:
 
 Jest, rules tests and Playwright use local demo Firebase projects. They must not seed or mutate deployed content. Storage emulator tests check client authorization, and service tests exercise lifecycle races and preconditions. Emulators do not establish production bucket IAM, CORS, real GCS copy/signing semantics, Eventarc delivery or deployed scheduler behavior; the checks above remain necessary before rollout.
 
-The implementation plan and accepted product decisions are in [the approved plan](plans/integrated-student-feedback.md). Record actual verification results in the PR; do not infer successful checks from this runbook.
+The shared schemas in `shared/student-feedback/index.ts` define persisted data and request validation. Record actual verification results in the PR; do not infer successful checks from this runbook.
 
 ## References
 

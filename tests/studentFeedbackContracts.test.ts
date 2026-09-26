@@ -86,6 +86,9 @@ describe('student feedback contracts', () => {
     expect(reserveFeedbackAttachmentRequestSchema.safeParse({ attachmentId, originalName: 'a.png', contentType: 'image/png', sizeBytes: FEEDBACK_MAX_IMAGE_BYTES + 1 }).success).toBe(false);
     expect(reserveFeedbackAttachmentRequestSchema.safeParse({ attachmentId, originalName: 'a.mov', contentType: 'video/quicktime', sizeBytes: FEEDBACK_MAX_VIDEO_BYTES }).success).toBe(true);
     expect(reserveFeedbackAttachmentRequestSchema.safeParse({ attachmentId, originalName: 'a.svg', contentType: 'image/svg+xml', sizeBytes: 1 }).success).toBe(false);
+    const valid = report();
+    expect(feedbackReportDocumentSchema.safeParse({ ...valid, attachments: [{ ...valid.attachments[0], sizeBytes: FEEDBACK_MAX_IMAGE_BYTES }] }).success).toBe(true);
+    expect(feedbackReportDocumentSchema.safeParse({ ...valid, attachments: [{ ...valid.attachments[0], sizeBytes: FEEDBACK_MAX_IMAGE_BYTES + 1 }] }).success).toBe(false);
   });
 
   it('fails closed on malformed report state, flags, or signed-URL metadata', () => {

@@ -1,16 +1,17 @@
 import { configureStore } from '@reduxjs/toolkit';
 import { waitFor } from '@testing-library/react';
-import { studentFeedbackApi, type FeedbackListArgs, type FeedbackListItem } from '@/src/store/api/studentFeedbackApi';
+import { studentFeedbackApi, type FeedbackListArgs } from '@/src/store/api/studentFeedbackApi';
+import type { FeedbackAdminListItem } from '@/shared/student-feedback';
 
 const mockBaseQuery = jest.fn();
 jest.mock('@/src/store/api/baseQuery', () => ({ createAuthenticatedBaseQuery: () => (...args: unknown[]) => mockBaseQuery(...args) }));
 
-const item = (id: string, status: 'unresolved' | 'resolved' = 'unresolved'): FeedbackListItem => ({
+const item = (id: string, status: 'unresolved' | 'resolved' = 'unresolved'): FeedbackAdminListItem => ({
   id, type: 'general', severity: undefined, areas: ['lessons'], description: id,
   submitter: { uid: 'student-1', displayName: 'Student', email: 'student@example.edu', emailNormalized: 'student@example.edu' },
   lesson: null, createdAt: '2026-09-24T10:00:00.000Z', status, archived: false, stateRevision: 0, attachments: [],
 });
-const page = (items: FeedbackListItem[], nextCursor: string | null = null) => ({ data: { items, nextCursor } });
+const page = (items: FeedbackAdminListItem[], nextCursor: string | null = null) => ({ data: { items, nextCursor } });
 const storeFor = () => configureStore({
   reducer: { [studentFeedbackApi.reducerPath]: studentFeedbackApi.reducer },
   middleware: getDefaultMiddleware => getDefaultMiddleware().concat(studentFeedbackApi.middleware),

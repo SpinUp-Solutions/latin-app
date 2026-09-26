@@ -23,6 +23,7 @@ import {
 import { FeedbackError, invalidFeedbackDocument } from './http.server';
 import { boundedFeedbackTitle } from './lessons.server';
 import { applyFeedbackDateBounds } from './query-bounds';
+import { feedbackActorName } from '@/src/lib/student-feedback/session.server';
 
 type ListQuery = FeedbackAdminListQuery;
 type StateInput = { action: 'resolve' | 'reopen' | 'archive' | 'unarchive'; expectedRevision: number; reason?: string };
@@ -168,18 +169,6 @@ export async function getCurrentFeedbackLesson(lessonId: string | undefined, db:
   return { id: lessonId, title: boundedFeedbackTitle(data.title) };
 }
 
-function actorName(token: DecodedIdToken, rawProfile: unknown): string | null {
-  const profile = rawProfile && typeof rawProfile === 'object' && !Array.isArray(rawProfile)
-    ? rawProfile as Record<string, unknown>
-    : {};
-  const first = typeof profile.firstName === 'string' ? profile.firstName.trim() : '';
-  const last = typeof profile.lastName === 'string' ? profile.lastName.trim() : '';
-  const name = [first, last].filter(Boolean).join(' ') ||
-    (typeof profile.username === 'string' ? profile.username.trim() : '') ||
-    (typeof token.name === 'string' ? token.name.trim() : '');
-  return name.slice(0, 300) || null;
-}
-
 export async function updateFeedbackState(
   feedbackId: string,
   token: DecodedIdToken,
@@ -223,7 +212,7 @@ export async function updateFeedbackState(
       feedbackId,
       kind: input.action === 'resolve' ? 'resolved' : input.action === 'reopen' ? 'reopened' : input.action === 'archive' ? 'archived' : 'unarchived',
       actorUid: token.uid,
-      actorDisplayName: actorName(token, actorSnapshot.data()),
+      actorDisplayName: feedbackActorName(token, actorSnapshot.data()),
       createdAt: now,
       reason: input.reason ?? null,
       note: null,
@@ -268,7 +257,7 @@ export async function addPrivateFeedbackNote(
       feedbackId,
       kind: 'note',
       actorUid: token.uid,
-      actorDisplayName: actorName(token, actorSnapshot.data()),
+      actorDisplayName: feedbackActorName(token, actorSnapshot.data()),
       createdAt: new Date(nowMs).toISOString(),
       reason: null,
       note: input.note,

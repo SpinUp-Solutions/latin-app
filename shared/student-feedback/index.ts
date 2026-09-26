@@ -105,7 +105,6 @@ export const feedbackLessonOptionSchema = z
     revision: z.number().int().nonnegative().safe(),
   })
   .strict();
-export const feedbackLessonsResponseSchema = z.object({ lessons: z.array(feedbackLessonOptionSchema) }).strict();
 
 export const feedbackDiagnosticsSchema = z
   .object({
@@ -165,35 +164,16 @@ export const feedbackAttachmentMetadataSchema = z
     }
   });
 
-export const reserveFeedbackAttachmentRequestSchema = z
-  .object({
-    attachmentId: feedbackUuidSchema,
-    originalName: z.string().trim().min(1).max(255),
-    contentType: z.enum(FEEDBACK_MIME_TYPES),
-    sizeBytes: z.number().int().positive().max(FEEDBACK_MAX_VIDEO_BYTES),
-  })
-  .strict()
-  .superRefine((value, context) => {
-    if (FEEDBACK_IMAGE_MIME_TYPES.includes(value.contentType) && value.sizeBytes > FEEDBACK_MAX_IMAGE_BYTES) {
-      context.addIssue({ code: 'custom', path: ['sizeBytes'], message: 'Image exceeds 10 MiB' });
-    }
-  });
+export const reserveFeedbackAttachmentRequestSchema = feedbackAttachmentMetadataSchema.safeExtend({
+  attachmentId: feedbackUuidSchema,
+});
 
-export const feedbackAttachmentDescriptorSchema = z
-  .object({
-    id: feedbackUuidSchema,
-    originalName: z.string().min(1).max(255),
-    storagePath: z.string().min(1).max(1_000),
-    contentType: z.enum(FEEDBACK_MIME_TYPES),
-    sizeBytes: z.number().int().positive().max(FEEDBACK_MAX_VIDEO_BYTES),
-    generation: z.string().regex(/^\d+$/),
-  })
-  .strict()
-  .superRefine((value, context) => {
-    if (FEEDBACK_IMAGE_MIME_TYPES.includes(value.contentType) && value.sizeBytes > FEEDBACK_MAX_IMAGE_BYTES) {
-      context.addIssue({ code: 'custom', path: ['sizeBytes'], message: 'Image exceeds 10 MiB' });
-    }
-  });
+export const feedbackAttachmentDescriptorSchema = feedbackAttachmentMetadataSchema.safeExtend({
+  id: feedbackUuidSchema,
+  originalName: z.string().min(1).max(255),
+  storagePath: z.string().min(1).max(1_000),
+  generation: z.string().regex(/^\d+$/),
+});
 
 export const submitFeedbackRequestSchema = z
   .object({
@@ -408,8 +388,6 @@ export const feedbackPublicSessionSchema = z
     attachments: z.array(feedbackPublicAttachmentSchema).max(FEEDBACK_MAX_ATTACHMENTS),
   })
   .strict();
-export const feedbackSessionResponseSchema = z.object({ session: feedbackPublicSessionSchema }).strict();
-export const feedbackSubmitResponseSchema = z.object({ receipt: feedbackReceiptSchema }).strict();
 export const feedbackReserveAttachmentResponseSchema = z
   .object({ attachment: feedbackPublicAttachmentSchema, stagingPath: z.string().min(1).max(1_000) })
   .strict();
@@ -450,14 +428,6 @@ export const feedbackAdminListItemSchema = z
   })
   .strict();
 export const feedbackAdminListResponseSchema = z.object({ items: z.array(feedbackAdminListItemSchema).max(FEEDBACK_ADMIN_PAGE_SIZE), nextCursor: z.string().nullable() }).strict();
-export const feedbackAdminCountResponseSchema = z.object({ count: z.number().int().nonnegative() }).strict();
-export const feedbackAdminDetailResponseSchema = z
-  .object({
-    feedback: feedbackReportDocumentSchema,
-    currentLesson: z.object({ id: feedbackDocumentIdSchema, title: z.string().min(1).max(500) }).strict().nullable(),
-  })
-  .strict();
-export const feedbackAdminMutationResponseSchema = z.object({ feedback: feedbackReportDocumentSchema }).strict();
 
 export const feedbackAdminStateRequestSchema = z
   .object({
@@ -469,7 +439,6 @@ export const feedbackAdminStateRequestSchema = z
 export const feedbackAdminNoteRequestSchema = z.object({ requestId: feedbackUuidSchema, note: z.string().trim().min(1).max(5_000) }).strict();
 export const feedbackActivityListQuerySchema = z.object({ cursor: z.string().min(1).max(4_096).optional() }).strict();
 export const feedbackActivityListResponseSchema = z.object({ items: z.array(feedbackActivityDocumentSchema).max(FEEDBACK_ADMIN_PAGE_SIZE), nextCursor: z.string().nullable() }).strict();
-export const feedbackAdminAttachmentAccessResponseSchema = z.object({ url: z.string().url(), expiresAt: feedbackIsoTimestampSchema }).strict();
 
 export const FEEDBACK_ERROR_CODES = [
   'FEEDBACK_INVALID_DOCUMENT',
@@ -486,12 +455,10 @@ export const FEEDBACK_ERROR_CODES = [
   'FEEDBACK_REVISION_CONFLICT',
   'FEEDBACK_REQUEST_CONFLICT',
 ] as const;
-export const feedbackErrorCodeSchema = z.enum(FEEDBACK_ERROR_CODES);
 
 export type FeedbackType = z.infer<typeof feedbackTypeSchema>;
 export type FeedbackSeverity = z.infer<typeof feedbackSeveritySchema>;
 export type FeedbackArea = z.infer<typeof feedbackAreaSchema>;
-export type FeedbackForm = z.infer<typeof feedbackFormSchema>;
 export type FeedbackSubmitRequest = z.infer<typeof submitFeedbackRequestSchema>;
 export type FeedbackReportDocument = z.infer<typeof feedbackReportDocumentSchema>;
 export type FeedbackSessionDocument = z.infer<typeof feedbackSessionDocumentSchema>;
@@ -506,4 +473,4 @@ export type FeedbackAttachmentDescriptor = z.infer<typeof feedbackAttachmentDesc
 export type FeedbackActivityDocument = z.infer<typeof feedbackActivityDocumentSchema>;
 export type FeedbackReceipt = z.infer<typeof feedbackReceiptSchema>;
 export type FeedbackAdminListQuery = z.infer<typeof feedbackAdminListQuerySchema>;
-export type FeedbackErrorCode = z.infer<typeof feedbackErrorCodeSchema>;
+export type FeedbackErrorCode = (typeof FEEDBACK_ERROR_CODES)[number];

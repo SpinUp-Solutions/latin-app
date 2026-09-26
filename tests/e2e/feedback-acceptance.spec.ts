@@ -1,5 +1,4 @@
 import { expect, test } from '@playwright/test';
-import { mkdirSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { signIn } from './fixtures/journeys';
 import { E2E_PASSWORD, E2E_USERS, getE2EAdmin, seedAcceptanceData } from './fixtures/seed';
@@ -12,10 +11,8 @@ test.describe('Integrated feedback acceptance', () => {
     await seedFeedbackLesson();
   });
 
-  test('login return, standalone submission, lesson draft, and admin review', async ({ browser, request }, testInfo) => {
+  test('login return, standalone submission, lesson draft, and admin review', async ({ browser, request }) => {
     test.setTimeout(180_000);
-    const screenshotDir = '/tmp/latin-feedback-screenshots';
-    mkdirSync(screenshotDir, { recursive: true });
     const studentContext = await browser.newContext();
     const student = await studentContext.newPage();
     await student.goto('/feedback');
@@ -27,7 +24,6 @@ test.describe('Integrated feedback acceptance', () => {
     await expect(student.getByRole('heading', { name: 'Share your feedback' })).toBeVisible();
     await expect(student.getByText('Loading accessible lessons…')).toHaveCount(0);
     await expect(student.getByText('Successfully logged in!')).toHaveCount(0);
-    await student.screenshot({ path: `${screenshotDir}/student-form.png`, fullPage: true });
 
     const storageWrites: Array<{ method: string; status: number; url: string }> = [];
     const finalizeStatuses: number[] = [];
@@ -104,7 +100,6 @@ test.describe('Integrated feedback acceptance', () => {
     await expect(student.getByRole('button', { name: 'Feedback', exact: true })).toBeVisible();
     await student.getByRole('button', { name: 'Feedback', exact: true }).click();
     await expect(student.getByRole('dialog', { name: 'Share feedback' })).toBeVisible();
-    await student.screenshot({ path: `${screenshotDir}/lesson-dialog.png`, fullPage: true });
     await student.getByLabel(/Describe the issue or suggestion/).fill('My lesson draft survives closing.');
     await student.getByRole('button', { name: 'Close feedback' }).click();
     await expect(student.getByRole('dialog', { name: 'Share feedback' })).toHaveCount(0);
@@ -137,7 +132,6 @@ test.describe('Integrated feedback acceptance', () => {
     await admin.goto('/admin/feedback');
     await expect(admin.getByRole('heading', { name: 'Feedback', exact: true })).toBeVisible();
     await expect(admin.getByText('My lesson draft survives closing.')).toBeVisible();
-    await admin.screenshot({ path: `${screenshotDir}/admin-feedback.png`, fullPage: true });
     await admin.getByText('My lesson draft survives closing.').click();
     await expect(admin.getByText('Opening page')).toBeVisible();
     await expect(admin.getByRole('link', { name: 'Preview lesson' })).toBeVisible();
@@ -156,7 +150,6 @@ test.describe('Integrated feedback acceptance', () => {
     await student.setViewportSize({ width: 390, height: 844 });
     await student.goto('/feedback');
     await expect(student.getByRole('heading', { name: 'Share your feedback' })).toBeVisible();
-    await testInfo.attach('feedback-mobile', { body: await student.screenshot({ path: `${screenshotDir}/student-form-mobile.png`, fullPage: true }), contentType: 'image/png' });
     await adminContext.close();
     await studentContext.close();
   });
