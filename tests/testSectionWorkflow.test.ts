@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { AIRequestThrottleError } from '@/src/lib/openai/request-throttle';
+import { createOpenAISafetyIdentifier } from '@/shared/openai/safety';
 import { TestAttemptService, TRANSLATION_GRADING_RESERVATION_MS } from '@/src/lib/tests/attempt-service';
 import { testAttemptDocumentSchema } from '@/src/lib/tests/schemas';
 import { FakeFirestore } from './helpers/testAttemptFirestore';
@@ -37,6 +39,7 @@ async function fixture(
     mock?: boolean;
     contentOnly?: boolean;
     grader?: jest.Mock;
+    consumeGlobalAIQuota?: jest.Mock;
     maxAttemptDocumentBytes?: number;
   } = {}
 ) {
@@ -93,6 +96,7 @@ async function fixture(
   const grader = options.grader ?? jest.fn().mockResolvedValue({ score: 8, feedback: 'PRIVATE_TRANSLATION_FEEDBACK' });
   const service = new TestAttemptService(db as never, () => now, {
     gradeTestTranslation: grader,
+    consumeGlobalAIQuota: options.consumeGlobalAIQuota,
     maxAttemptDocumentBytes: options.maxAttemptDocumentBytes,
   });
   const origin = options.mock
@@ -573,4 +577,24 @@ it('enforces current normal-test access when confirming and refreshing', async (
     )
   ).rejects.toMatchObject({ code: 'TEST_NOT_AVAILABLE' });
   await expect(f.current()).rejects.toMatchObject({ code: 'TEST_NOT_AVAILABLE' });
+});
+
+it('applies the global AI quota to section grading and releases rejected confirmation for retry', async () => {
+  const quota = jest.fn().mockRejectedValueOnce(new AIRequestThrottleError(1000)).mockResolvedValue(undefined);
+  const f = await fixture({ translations: true, consumeGlobalAIQuota: quota });
+  await f.save({ 'translation-1': { type: 'translation-grading', translations: ['A girl sings.', ''] } });
+  await expect(f.confirm()).rejects.toMatchObject({ code: 'ATTEMPT_TRANSLATION_GRADING_RATE_LIMITED', status: 429 });
+  expect(f.grader).not.toHaveBeenCalled();
+  expect((await f.current()).section.phase).toBe('review');
+  expect(f.db.read('testAttempts', f.id)?.sections).toMatchObject({ 'page-1': { phase: 'review' } });
+  expect(await f.confirm()).toMatchObject({ pending: true });
+  expect(quota).toHaveBeenNthCalledWith(1, 1);
+  expect(quota).toHaveBeenNthCalledWith(2, 1);
+  expect(f.grader).toHaveBeenCalledWith(
+    expect.objectContaining({ userTranslation: 'A girl sings.' }),
+    expect.any(AbortSignal),
+    createOpenAISafetyIdentifier('student-1')
+  );
+  expect(await f.confirm()).toMatchObject({ pending: false });
+  expect(quota).toHaveBeenCalledTimes(2);
 });

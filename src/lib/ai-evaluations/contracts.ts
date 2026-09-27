@@ -11,7 +11,7 @@ import type {
   TranslationGradingOutput,
 } from '../../../shared/openai/translation-grading';
 import type { TranslationGradingProfileId } from '../../../shared/openai/model-registry';
-export const AI_EVALUATION_SCHEMA_VERSION = 'ai-translation-evaluation-v2';
+export const AI_EVALUATION_SCHEMA_VERSION = 'ai-translation-evaluation-v3';
 
 const CASE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 const ANSWER_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/;
@@ -37,6 +37,20 @@ const answerLabelSchema = z
   .min(1, 'Answer label is required')
   .max(80, 'Answer label must be 80 characters or fewer');
 
+const evaluationExpectationsSchema = z
+  .object({
+    lesson: z.object({ passing: z.boolean() }).strict().optional(),
+    test: z
+      .object({
+        minScore: z.number().min(0).max(10),
+        maxScore: z.number().min(0).max(10),
+      })
+      .strict()
+      .refine(value => value.minScore <= value.maxScore, 'Minimum score must not exceed maximum score')
+      .optional(),
+  })
+  .strict();
+
 const evaluationModeSchema = z.enum(TRANSLATION_GRADING_MODES);
 const canonicalEvaluationModes = (modes: readonly TranslationGradingMode[]) =>
   TRANSLATION_GRADING_MODES.filter(mode => modes.includes(mode));
@@ -56,6 +70,7 @@ export const evaluationAnswerInputSchema = z
     id: evaluationAnswerIdSchema,
     label: answerLabelSchema,
     text: answerTextSchema,
+    expectations: evaluationExpectationsSchema.optional(),
   })
   .strict();
 
@@ -131,6 +146,11 @@ interface EvaluationCellResultBase<M extends TranslationGradingMode> {
   costIncurredThisRun?: CostBreakdown;
   costIncurredThisRunStatus: EvaluationCellCostStatus;
   costIncurredThisRunReason?: string;
+  criterion?: {
+    passed: boolean;
+    expected: string;
+    actual: string;
+  };
 }
 
 type EvaluationLessonCellResult = EvaluationCellResultBase<'lesson'>;
@@ -142,6 +162,9 @@ export interface EvaluationAggregate {
   cellCount: number;
   evaluatedCellCount: number;
   failedCellCount: number;
+  criteriaEvaluatedCount: number;
+  criteriaPassedCount: number;
+  criteriaFailedCount: number;
   appCacheHits: number;
   openAIPromptCacheHits: number;
   wallTimeMs: number;
@@ -162,6 +185,8 @@ export interface EvaluationAggregate {
 }
 
 export interface EvaluationRunResult {
+  runId?: string;
+  historySaved?: boolean;
   caseId: string;
   schemaVersion: string;
   forceRefresh: boolean;
@@ -169,6 +194,35 @@ export interface EvaluationRunResult {
   completedAt: string;
   aggregate: EvaluationAggregate;
   cells: EvaluationCellResult[];
+}
+
+export interface EvaluationRunSummary {
+  id: string;
+  caseId: string;
+  caseTitle: string;
+  createdBy: string;
+  startedAt: string;
+  completedAt: string;
+  forceRefresh: boolean;
+  evaluatedCellCount: number;
+  failedCellCount: number;
+  criteriaPassedCount: number;
+  criteriaFailedCount: number;
+  costIncurredThisRun: number | null;
+  wallTimeMs: number;
+}
+
+export function missingEvaluationCriteria(evaluationCase: Pick<EvaluationCaseInput, 'answers' | 'modes'>): string[] {
+  const missing: string[] = [];
+  evaluationCase.answers.forEach(answer => {
+    if (evaluationCase.modes.includes('lesson') && !answer.expectations?.lesson) {
+      missing.push(`${answer.label}: expected lesson pass/fail`);
+    }
+    if (evaluationCase.modes.includes('test') && !answer.expectations?.test) {
+      missing.push(`${answer.label}: expected test score range`);
+    }
+  });
+  return missing;
 }
 
 export type EvaluationCaseInput = z.infer<typeof evaluationCaseInputSchema>;

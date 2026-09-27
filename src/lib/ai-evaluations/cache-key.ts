@@ -11,21 +11,19 @@ export interface EvaluationCacheKeyInput {
   profileId: string;
   model: string;
   reasoningEffort: 'low' | 'high';
-  promptVersion: string;
-  profileVersion?: string;
+  behaviorFingerprint: string;
   schemaVersion?: string;
 }
 
 /**
  * SHA-256 keeps cache document ids deterministic without putting student
- * answer text in Firestore paths. The version fields intentionally invalidate
- * all prior results when prompts, schemas, or profiles change.
+ * answer text in Firestore paths. The behavior fingerprint automatically
+ * invalidates prior results when prompts, schemas, or profiles change.
  */
 export function createEvaluationCacheKey(input: EvaluationCacheKeyInput): string {
   const canonicalInput = {
     schemaVersion: input.schemaVersion ?? AI_EVALUATION_SCHEMA_VERSION,
-    promptVersion: input.promptVersion,
-    profileVersion: input.profileVersion ?? input.promptVersion,
+    behaviorFingerprint: input.behaviorFingerprint,
     gradingMode: input.gradingMode,
     profileId: input.profileId,
     direction: input.direction,

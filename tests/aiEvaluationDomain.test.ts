@@ -8,7 +8,9 @@ import {
   TRANSLATION_GRADING_PROFILES,
 } from '@/shared/openai/model-registry';
 import { createEvaluationCacheKey } from '@/src/lib/ai-evaluations/cache-key';
-import { evaluationCaseInputSchema } from '@/src/lib/ai-evaluations/contracts';
+import { createTranslationGradingBehaviorFingerprint } from '@/shared/openai/translation-grading-fingerprint';
+import { getTranslationGradingTask } from '@/shared/openai/translation-grading-tasks';
+import { evaluationCaseInputSchema, missingEvaluationCriteria } from '@/src/lib/ai-evaluations/contracts';
 import { parseEvaluationCaseSnapshot } from '@/src/lib/ai-evaluations/persistence';
 
 describe('AI evaluation pricing and cache contracts', () => {
@@ -98,23 +100,34 @@ describe('AI evaluation pricing and cache contracts', () => {
       profileId: 'baseline',
       model: 'gpt-5.4-mini',
       reasoningEffort: 'low' as const,
-      promptVersion: 'translation-grading-v3',
-      profileVersion: 'translation-grading-v3:baseline',
-      schemaVersion: 'ai-translation-evaluation-v2',
+      behaviorFingerprint: 'behavior-a',
+      schemaVersion: 'ai-translation-evaluation-v3',
     };
 
     expect(createEvaluationCacheKey(base)).toBe(createEvaluationCacheKey({ ...base }));
     expect(createEvaluationCacheKey(base)).not.toBe(
-      createEvaluationCacheKey({ ...base, promptVersion: 'translation-grading-v4' })
-    );
-    expect(createEvaluationCacheKey(base)).not.toBe(
-      createEvaluationCacheKey({ ...base, profileVersion: 'translation-grading-v3:baseline-reasoning-high' })
+      createEvaluationCacheKey({ ...base, behaviorFingerprint: 'behavior-b' })
     );
     expect(createEvaluationCacheKey(base)).not.toBe(
       createEvaluationCacheKey({ ...base, model: 'gpt-5.6-luna', reasoningEffort: 'high' })
     );
     expect(createEvaluationCacheKey(base)).not.toBe(createEvaluationCacheKey({ ...base, gradingMode: 'test' }));
     expect(createEvaluationCacheKey(base)).not.toBe(createEvaluationCacheKey({ ...base, profileId: 'candidate' }));
+  });
+
+  it('derives behavior fingerprints from prompts, schemas, and execution profiles', () => {
+    const task = getTranslationGradingTask('lesson');
+    const profile = TRANSLATION_GRADING_PROFILES.baseline;
+    const fingerprint = createTranslationGradingBehaviorFingerprint(task, profile);
+
+    expect(fingerprint).toMatch(/^[a-f0-9]{64}$/);
+    expect(createTranslationGradingBehaviorFingerprint(task, profile)).toBe(fingerprint);
+    expect(
+      createTranslationGradingBehaviorFingerprint({ ...task, systemPrompt: `${task.systemPrompt}\nChanged.` }, profile)
+    ).not.toBe(fingerprint);
+    expect(createTranslationGradingBehaviorFingerprint(task, TRANSLATION_GRADING_PROFILES.candidateLow)).not.toBe(
+      fingerprint
+    );
   });
 
   it('rejects unknown fields and duplicate answer ids', () => {
@@ -173,5 +186,28 @@ describe('AI evaluation pricing and cache contracts', () => {
     };
     expect(evaluationCaseInputSchema.parse({ ...input, modes: ['test', 'lesson'] }).modes).toEqual(['lesson', 'test']);
     expect(evaluationCaseInputSchema.safeParse({ ...input, modes: ['lesson', 'lesson'] }).success).toBe(false);
+  });
+
+  it('requires explicit per-mode expectations before a case can run', () => {
+    const input = evaluationCaseInputSchema.parse({
+      title: 'Case',
+      direction: 'latin-to-english',
+      sourceText: 'Gallia est omnis divisa.',
+      answers: [{ id: 'one', label: 'A', text: 'Gaul is divided.', expectations: {} }],
+      modes: ['lesson', 'test'],
+    });
+
+    expect(missingEvaluationCriteria(input)).toEqual(['A: expected lesson pass/fail', 'A: expected test score range']);
+    expect(
+      evaluationCaseInputSchema.safeParse({
+        ...input,
+        answers: [
+          {
+            ...input.answers[0],
+            expectations: { lesson: { passing: true }, test: { minScore: 9, maxScore: 8 } },
+          },
+        ],
+      }).success
+    ).toBe(false);
   });
 });

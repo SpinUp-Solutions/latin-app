@@ -51,15 +51,23 @@ import type {
   EvaluationCaseInput,
   EvaluationCellResult,
   EvaluationRunResult,
+  EvaluationRunSummary,
 } from '@/src/lib/ai-evaluations/contracts';
+import { evaluationCaseInputSchema, missingEvaluationCriteria } from '@/src/lib/ai-evaluations/contracts';
 import {
   deleteEvaluationCaseInFirebase,
   listEvaluationCasesInFirebase,
+  listEvaluationRunsInFirebase,
   runEvaluationInFirebase,
   saveEvaluationCaseInFirebase,
 } from '@/src/lib/ai-evaluations/firebase-client';
 
-const newAnswer = (index: number) => ({ id: `answer-${Date.now()}-${index}`, label: `Answer ${index}`, text: '' });
+const newAnswer = (index: number) => ({
+  id: `answer-${Date.now()}-${index}`,
+  label: `Answer ${index}`,
+  text: '',
+  expectations: {},
+});
 
 const blankCase = (): EvaluationCaseInput => ({
   title: '',
@@ -89,14 +97,7 @@ type DisplayedRun = {
 };
 
 function isValidCase(value: EvaluationCaseInput) {
-  const ids = new Set(value.answers.map(answer => answer.id));
-  return (
-    value.title.trim().length > 0 &&
-    value.sourceText.trim().length > 0 &&
-    value.answers.length > 0 &&
-    value.modes.length > 0 &&
-    value.answers.every(answer => answer.label.trim() && answer.text.trim() && ids.size === value.answers.length)
-  );
+  return evaluationCaseInputSchema.safeParse(value).success;
 }
 
 function Metric({
@@ -316,6 +317,17 @@ function ResultCell({ cell }: { cell: EvaluationCellResult }) {
         </div>
       </div>
       <UsageBadges cell={cell} />
+      {cell.criterion && (
+        <Badge
+          className={`mt-3 ${
+            cell.criterion.passed
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50'
+              : 'border-red-200 bg-red-50 text-red-700 hover:bg-red-50'
+          }`}>
+          {cell.criterion.passed ? 'Expected outcome met' : 'Expected outcome missed'} · expected{' '}
+          {cell.criterion.expected}, got {cell.criterion.actual}
+        </Badge>
+      )}
       {cell.gradingMode === 'lesson' ? (
         <div className="mt-4 space-y-3">
           <div>
@@ -465,7 +477,7 @@ function AggregateSummary({ aggregate }: { aggregate: EvaluationAggregate }) {
         icon={Gauge}
         label="Evaluated"
         value={`${aggregate.evaluatedCellCount}/${aggregate.cellCount}`}
-        detail={`${aggregate.failedCellCount} failed`}
+        detail={`${aggregate.criteriaPassedCount}/${aggregate.criteriaEvaluatedCount} criteria met · ${aggregate.failedCellCount} provider failures`}
       />
       <Metric
         icon={Database}
@@ -660,11 +672,12 @@ function Results({ result, evaluationCase }: { result: EvaluationRunResult; eval
 
 function AIEvaluationsPage() {
   const [cases, setCases] = useState<EvaluationCase[]>([]);
+  const [recentRuns, setRecentRuns] = useState<EvaluationRunSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [form, setForm] = useState<EvaluationCaseInput>(blankCase);
   const [savedForm, setSavedForm] = useState<EvaluationCaseInput | null>(null);
   const [displayedRun, setDisplayedRun] = useState<DisplayedRun | null>(null);
-  const [forceRefresh, setForceRefresh] = useState(false);
+  const [forceRefresh, setForceRefresh] = useState(true);
   const [loadingCases, setLoadingCases] = useState(true);
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
@@ -681,10 +694,13 @@ function AIEvaluationsPage() {
         form.modes.length !== 2 ||
         form.answers.length !== 1 ||
         firstAnswer?.label !== 'Answer 1' ||
-        firstAnswer?.text.trim()
+        firstAnswer?.text.trim() ||
+        Object.keys(firstAnswer?.expectations ?? {}).length > 0
     );
   }, [form, savedForm]);
   const valid = useMemo(() => isValidCase(form), [form]);
+  const missingCriteria = useMemo(() => missingEvaluationCriteria(form), [form]);
+  const runnable = valid && missingCriteria.length === 0;
   const selectedCase = cases.find(item => item.id === selectedId) ?? null;
   const interactionLocked = running || saving || deleting;
   const runGenerationRef = useRef(0);
@@ -698,7 +714,15 @@ function AIEvaluationsPage() {
     title: value.title,
     direction: value.direction,
     sourceText: value.sourceText,
-    answers: value.answers.map(answer => ({ ...answer })),
+    answers: value.answers.map(answer => ({
+      ...answer,
+      expectations: answer.expectations
+        ? {
+            ...(answer.expectations.lesson ? { lesson: { ...answer.expectations.lesson } } : {}),
+            ...(answer.expectations.test ? { test: { ...answer.expectations.test } } : {}),
+          }
+        : undefined,
+    })),
     modes: [...value.modes],
   });
 
@@ -713,8 +737,15 @@ function AIEvaluationsPage() {
     setLoadingCases(true);
     setLoadError(null);
     try {
-      const nextCases = await listEvaluationCasesInFirebase();
+      const [nextCases, nextRuns] = await Promise.all([
+        listEvaluationCasesInFirebase(),
+        listEvaluationRunsInFirebase().catch(error => {
+          console.warn('[ai-evaluations] unable to load run history', error);
+          return [];
+        }),
+      ]);
       setCases(nextCases);
+      setRecentRuns(nextRuns);
       if (nextCases.length > 0) {
         const first = nextCases[0];
         setSelectedId(first.id);
@@ -812,7 +843,7 @@ function AIEvaluationsPage() {
   };
 
   const runEvaluation = async () => {
-    if (!selectedId || dirty || !valid || interactionLocked) return;
+    if (!selectedId || dirty || !runnable || interactionLocked) return;
     const caseIdAtStart = selectedId;
     const caseSnapshot = cloneCaseInput(form);
     const requestGeneration = ++runGenerationRef.current;
@@ -824,7 +855,14 @@ function AIEvaluationsPage() {
         return;
       }
       setDisplayedRun({ result: response, evaluationCase: caseSnapshot });
-      toast.success('Model comparison complete');
+      if (response.historySaved === false) {
+        toast.error('Model comparison completed, but its run history could not be saved.');
+      } else {
+        toast.success('Model comparison complete');
+        void listEvaluationRunsInFirebase()
+          .then(setRecentRuns)
+          .catch(error => console.warn('[ai-evaluations] unable to refresh run history', error));
+      }
     } catch (error) {
       if (requestGeneration === runGenerationRef.current) {
         toast.error(error instanceof Error ? error.message : 'Unable to run model comparison');
@@ -906,8 +944,27 @@ function AIEvaluationsPage() {
           )}
           <div className="rounded-lg border border-border/60 bg-roman-marble/45 p-3 text-xs leading-relaxed text-roman-stone">
             <Sparkles className="mb-1 h-4 w-4 text-primary" aria-hidden="true" />
-            API runs use the same task, profile, and schema as production. Successful cells are cached by mode, profile,
-            prompt version, direction, source, and answer.
+            API runs use the production task and schema with controlled low-reasoning model profiles. Successful cells
+            are cached by mode, profile, full prompt/schema behavior, direction, source, and answer.
+          </div>
+          <div className="space-y-2 border-t border-border/60 pt-3">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-roman-stone">Recent runs</p>
+              <Badge variant="outline">{recentRuns.length}</Badge>
+            </div>
+            {recentRuns.length === 0 ? (
+              <p className="text-xs text-roman-stone">Completed comparisons will be recorded here.</p>
+            ) : (
+              recentRuns.slice(0, 5).map(run => (
+                <div key={run.id} className="rounded-lg border border-border/60 bg-white/70 p-2.5 text-xs">
+                  <p className="truncate font-medium">{run.caseTitle}</p>
+                  <p className="mt-1 text-[11px] text-roman-stone">
+                    {run.criteriaPassedCount}/{run.criteriaPassedCount + run.criteriaFailedCount} criteria met ·{' '}
+                    {new Date(run.completedAt).toLocaleString()}
+                  </p>
+                </div>
+              ))
+            )}
           </div>
         </aside>
 
@@ -1071,6 +1128,119 @@ function AIEvaluationsPage() {
                                 />
                               </div>
                             </div>
+                            <div className="grid gap-3 sm:grid-cols-3">
+                              {form.modes.includes('lesson') && (
+                                <div className="space-y-2">
+                                  <Label htmlFor={`answer-lesson-expectation-${answer.id}`}>
+                                    Expected lesson result
+                                  </Label>
+                                  <select
+                                    id={`answer-lesson-expectation-${answer.id}`}
+                                    value={
+                                      answer.expectations?.lesson
+                                        ? answer.expectations.lesson.passing
+                                          ? 'passing'
+                                          : 'not-passing'
+                                        : ''
+                                    }
+                                    onChange={event =>
+                                      updateForm(previous => ({
+                                        ...previous,
+                                        answers: previous.answers.map((current, answerIndex) =>
+                                          answerIndex === index
+                                            ? {
+                                                ...current,
+                                                expectations: {
+                                                  ...current.expectations,
+                                                  lesson: { passing: event.target.value === 'passing' },
+                                                },
+                                              }
+                                            : current
+                                        ),
+                                      }))
+                                    }
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                                    <option value="" disabled>
+                                      Choose expected result
+                                    </option>
+                                    <option value="passing">Passing</option>
+                                    <option value="not-passing">Not passing</option>
+                                  </select>
+                                </div>
+                              )}
+                              {form.modes.includes('test') && (
+                                <>
+                                  <div className="space-y-2">
+                                    <Label htmlFor={`answer-min-score-${answer.id}`}>Expected minimum score</Label>
+                                    <Input
+                                      id={`answer-min-score-${answer.id}`}
+                                      type="number"
+                                      min={0}
+                                      max={10}
+                                      step={0.5}
+                                      value={
+                                        Number.isFinite(answer.expectations?.test?.minScore)
+                                          ? answer.expectations!.test!.minScore
+                                          : ''
+                                      }
+                                      onChange={event =>
+                                        updateForm(previous => ({
+                                          ...previous,
+                                          answers: previous.answers.map((current, answerIndex) =>
+                                            answerIndex === index
+                                              ? {
+                                                  ...current,
+                                                  expectations: {
+                                                    ...current.expectations,
+                                                    test: {
+                                                      minScore: event.target.valueAsNumber,
+                                                      maxScore: current.expectations?.test?.maxScore ?? 10,
+                                                    },
+                                                  },
+                                                }
+                                              : current
+                                          ),
+                                        }))
+                                      }
+                                    />
+                                  </div>
+                                  <div className="space-y-2">
+                                    <Label htmlFor={`answer-max-score-${answer.id}`}>Expected maximum score</Label>
+                                    <Input
+                                      id={`answer-max-score-${answer.id}`}
+                                      type="number"
+                                      min={0}
+                                      max={10}
+                                      step={0.5}
+                                      value={
+                                        Number.isFinite(answer.expectations?.test?.maxScore)
+                                          ? answer.expectations!.test!.maxScore
+                                          : ''
+                                      }
+                                      onChange={event =>
+                                        updateForm(previous => ({
+                                          ...previous,
+                                          answers: previous.answers.map((current, answerIndex) =>
+                                            answerIndex === index
+                                              ? {
+                                                  ...current,
+                                                  expectations: {
+                                                    ...current.expectations,
+                                                    test: {
+                                                      minScore: current.expectations?.test?.minScore ?? 0,
+                                                      maxScore: event.target.valueAsNumber,
+                                                    },
+                                                  },
+                                                }
+                                              : current
+                                          ),
+                                        }))
+                                      }
+                                    />
+                                  </div>
+                                </>
+                              )}
+                            </div>
                           </div>
                           <Button
                             type="button"
@@ -1160,7 +1330,7 @@ function AIEvaluationsPage() {
                 <Button
                   type="button"
                   size="lg"
-                  disabled={!selectedId || dirty || !valid || interactionLocked}
+                  disabled={!selectedId || dirty || !runnable || interactionLocked}
                   onClick={() => void runEvaluation()}>
                   {running ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
@@ -1171,6 +1341,11 @@ function AIEvaluationsPage() {
                 </Button>
                 {dirty && <span className="text-[11px] text-amber-700">Save changes before running.</span>}
                 {!selectedId && <span className="text-[11px] text-roman-stone">Save this case before running.</span>}
+                {selectedId && !dirty && missingCriteria.length > 0 && (
+                  <span className="max-w-xs text-right text-[11px] text-amber-700">
+                    Add every selected mode&apos;s expected outcome before running.
+                  </span>
+                )}
               </div>
             </RomanCardContent>
           </RomanCard>
@@ -1216,7 +1391,7 @@ function AIEvaluationsPage() {
         onClose={() => setDeleteOpen(false)}
         onConfirm={() => void deleteCase()}
         title="Delete this evaluation case?"
-        description="This removes the saved case. Shared cache results are not deleted and expire automatically after 30 days."
+        description="This removes the saved source and answers. Aggregate run summaries remain for audit, but run history never copies source text, answer text, or generated cell output. Shared cache results expire after 24 hours."
         confirmText="Delete case"
         confirmVariant="destructive"
       />

@@ -2,9 +2,9 @@
 
 ## Status
 
-Outstanding.
+Partially completed as of 2026-08-31.
 
-The existing evaluation cache has a strong foundation: deterministic versioned keys, a 30-day TTL, in-process duplicate coalescing, separate original and incremental cost reporting, prompt-cache usage tracking, and validation before cache writes. The main remaining risks are unbounded student-grading concurrency, duplicate work across concurrent submissions or Firebase instances, oversized output budgets, and manual cache invalidation.
+Completed work includes per-item student grading reservations and persisted scores, a Firestore-backed global OpenAI concurrency lease, cross-instance evaluation single-flight, automatic prompt/schema/profile fingerprints, and a 24-hour evaluation cache with fresh runs as the UI default. Remaining work is concentrated in output-budget tuning, telemetry/load testing, and optional asynchronous processing modes.
 
 ## Goals
 
@@ -16,17 +16,13 @@ The existing evaluation cache has a strong foundation: deterministic versioned k
 - Improve prompt-cache hit rates without creating unnecessary cache writes.
 - Retain the current failure isolation and grading quality.
 
-## Priority 1: Make student grading idempotent and concurrency-safe
+## Priority 1: Make student grading idempotent and concurrency-safe — superseded by item grading
 
 ### Problem
 
-`gradeFrozenTranslationExercises` uses nested `Promise.all` calls. Every translation item across every translation exercise can therefore start an OpenAI request simultaneously.
+The original plan referred to the removed `gradeFrozenTranslationExercises` submission path. Translation items are now graded individually under a transactional reservation, with per-item request windows and persisted grades. Concurrent requests cannot own the same active item reservation.
 
-Grading also happens after reading an `in-progress` attempt but before the transaction that marks it submitted. Two concurrent submission requests can both grade the same attempt, even though only one eventually writes the submitted result.
-
-If one request fails, `Promise.all` rejects while other billable requests continue. Their successful results are discarded, and a retry grades them again.
-
-### Work
+### Archived bulk-submission proposal
 
 - Add an atomic attempt transition from `in-progress` to `grading` before making provider calls.
 - Store a grading lease with:
@@ -79,27 +75,17 @@ Test grading returns only `{ "score": number }` but inherits the lesson-grading 
 - The chosen limit has headroom above measured p99 output plus reasoning usage.
 - Existing score-quality and incomplete-response tests pass.
 
-## Priority 3: Enforce a real provider concurrency budget
+## Priority 3: Enforce a real provider concurrency budget — core control completed
 
 ### Problem
 
-`MAX_CONCURRENCY = 4` applies to one evaluation invocation only. Firebase permits two concurrent invocations per instance and two instances, allowing as many as 16 simultaneous requests from this function. Other app functions can consume the same project/model limits as well.
+All OpenAI call paths now acquire a shared Firestore lease. The global limit applies across Firebase and Next.js instances in addition to the existing per-user quotas and per-run worker limit.
 
-The current admin throttle is per administrator and counts requested cells. It protects against individual misuse but is not a global provider-rate limiter.
+### Remaining work
 
-### Work
-
-- Separate controls into:
-  - per-user abuse/run quotas;
-  - global provider request and token budgets;
-  - per-model concurrency limits.
-- Choose one implementation:
-  - a durable queue with workers and per-model limits; or
-  - a Firestore-backed distributed semaphore/lease; or
-  - a simpler Firebase configuration with one invocation at a time, if throughput requirements permit it.
-- Account for all OpenAI-using functions that share the project/model limits.
-- Continue relying on the official SDK for eligible transient retries, while recording final 429 and timeout failures.
+- Add explicit student/admin priority or fairness if real traffic shows starvation.
 - Add metrics for queue time, provider time, retry count, and rate-limit failures.
+- Load-test the global limit across multiple worker instances.
 
 ### Acceptance criteria
 
@@ -108,21 +94,20 @@ The current admin throttle is per administrator and counts requested cells. It p
 - Student grading and admin evaluation have explicit priority or fairness rules.
 - Load tests verify the maximum observed concurrency.
 
-## Priority 4: Replace process-local evaluation coalescing
+## Priority 4: Replace process-local evaluation coalescing — completed
 
 ### Problem
 
-The `inFlightResults` map coalesces identical work only inside one JavaScript process. Requests handled by different Firebase instances can still issue duplicate OpenAI calls and race to write the same cache document.
+Evaluation cells now use a Firestore-backed claim keyed by the automatic evaluation cache key. Other instances join the shared cached result, and expired claims can be reclaimed.
 
-### Work
+### Implemented
 
-- Add a distributed single-flight record keyed by the evaluation cache key and refresh mode.
-- Acquire ownership transactionally before calling OpenAI.
-- Store lease expiry and owner/request ID.
-- Have non-owners wait, poll with a bound, or return a job identifier.
-- On completion, write the result cache before releasing/finishing the lease.
-- Ensure failures and crashed workers leave recoverable leases.
-- Preserve force-refresh semantics while coalescing identical concurrent force-refresh requests.
+- Added a distributed single-flight record keyed by the evaluation cache key.
+- Ownership is acquired transactionally before calling OpenAI.
+- Claims store an expiry and owner ID; expired claims can be reclaimed.
+- Non-owners poll the shared result cache with a bound.
+- Successful output is cached before the claim is released.
+- Identical force-refresh requests share the same claim.
 
 ### Acceptance criteria
 
@@ -130,15 +115,15 @@ The `inFlightResults` map coalesces identical work only inside one JavaScript pr
 - A crashed owner does not block the cache key indefinitely.
 - Joined callers report zero incremental provider cost while retaining the original usage metadata.
 
-## Priority 5: Strengthen cache invalidation
+## Priority 5: Strengthen cache invalidation — completed
 
 ### Problem
 
-Evaluation cache correctness currently depends on manually incrementing `translation-grading-v3` and related schema/profile versions whenever behavior changes. A prompt or schema edit without a version bump can reuse stale results for 30 days.
+Cache keys now include a deterministic fingerprint of the system prompt, generated prompt structure, structured-output schema, parser implementation, model, reasoning effort, output limit, and cache mode. Cache retention is 24 hours, and evaluation runs are fresh by default so rolling model aliases do not silently hide changes.
 
-### Work
+### Implemented
 
-- Add a deterministic grading fingerprint covering behavior-affecting inputs, including:
+- Added a deterministic grading fingerprint covering behavior-affecting inputs, including:
   - system prompt;
   - stable user instructions;
   - structured-output schema;
@@ -146,10 +131,10 @@ Evaluation cache correctness currently depends on manually incrementing `transla
   - reasoning effort;
   - output-token limit;
   - grading mode/namespace.
-- Include the fingerprint in app-cache keys.
-- Retain human-readable prompt/profile versions for reporting and deliberate migrations.
-- Add a test that snapshots or independently verifies the fingerprint.
-- Decide whether model aliases are acceptable for 30-day evaluation reuse. If evaluations must always reflect the current backend snapshot, pin a snapshot model or shorten retention.
+- Included the fingerprint in app-cache keys.
+- Retained human-readable prompt/profile versions for reporting and deliberate migrations.
+- Added deterministic and behavior-change tests for the fingerprint.
+- Shortened retention to 24 hours and made fresh evaluation runs the default for rolling aliases.
 
 ### Acceptance criteria
 
@@ -221,14 +206,10 @@ Do not silently change an interactive run into a 24-hour batch job. Persist offl
 
 ## Suggested implementation order
 
-1. Add bounded student-grading concurrency.
-2. Add the atomic attempt grading lease and persisted per-item scores.
-3. Add the dedicated score-only output budget.
-4. Add tests for concurrent submission and partial retry.
-5. Add distributed evaluation single-flight and a global provider budget.
-6. Add automatic cache fingerprints.
-7. Measure prompt-cache shards and tune their count.
-8. Add optional Flex or Batch evaluation modes.
+1. Add the dedicated score-only output budget.
+2. Measure prompt-cache shards and tune their count.
+3. Add load tests and provider lease telemetry.
+4. Add optional Flex or Batch evaluation modes.
 
 ## Official references
 
@@ -239,11 +220,11 @@ Do not silently change an interactive run into a 24-hour batch job. Persist offl
 
 ## Baseline verification
 
-Before this plan was written, the following suites passed with 25 tests total:
+The 2026-08-31 hardening pass verifies these areas with the focused AI/evaluation and attempt-service suites, including explicit coverage for distributed single-flight, automatic fingerprinting, quotas, expectations, and run persistence.
 
 - `tests/translationGradingRunner.test.ts`
 - `tests/aiEvaluationExecution.test.ts`
 - `tests/aiEvaluationDomain.test.ts`
 - `tests/aiEvaluationThrottle.test.ts`
 
-These suites do not currently cover cross-instance duplication or large-test concurrency.
+Large-scale load testing remains outstanding.
