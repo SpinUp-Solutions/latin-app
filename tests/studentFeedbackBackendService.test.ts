@@ -1,12 +1,13 @@
 jest.mock('@/src/services/firebase-admin', () => ({ adminDb: {}, adminStorage: {} }));
 jest.mock('firebase-admin/firestore', () => ({ FieldPath: { documentId: () => '__name__' } }));
-jest.mock('@/src/lib/learning-units/student-dashboard-service', () => ({ studentDashboardService: { getDashboard: jest.fn() } }));
 
 const mockStoreAttachments = jest.fn();
 const mockDeleteUploads = jest.fn();
+const mockDeleteReportAttachments = jest.fn();
 jest.mock('@/src/lib/student-feedback/attachments.server', () => ({
   storeFeedbackAttachments: (...args: unknown[]) => mockStoreAttachments(...args),
   deleteFeedbackUploads: (...args: unknown[]) => mockDeleteUploads(...args),
+  deleteFeedbackReportAttachments: (...args: unknown[]) => mockDeleteReportAttachments(...args),
 }));
 
 import type { DecodedIdToken } from 'firebase-admin/auth';
@@ -18,7 +19,7 @@ import {
   listFeedback,
   updateFeedbackState,
 } from '@/src/lib/student-feedback/admin.server';
-import { submitFeedbackRequestSchema, type FeedbackSubmitRequest } from '@/shared/student-feedback';
+import { FEEDBACK_MAX_ACTIVITY_ITEMS, submitFeedbackRequestSchema, type FeedbackSubmitRequest } from '@/shared/student-feedback';
 
 type Data = Record<string, unknown>;
 const valueAt = (data: Data, path: string) =>
@@ -29,14 +30,14 @@ class FakeQuery {
     readonly db: FakeDb,
     readonly path: string,
     readonly filters: Array<[string, string, unknown]> = [],
-    readonly order: string | null = null,
+    readonly order: [string, 'asc' | 'desc'] | null = null,
     readonly max = Infinity
   ) {}
   where(field: string, op: string, value: unknown) {
     return new FakeQuery(this.db, this.path, [...this.filters, [field, op, value]], this.order, this.max);
   }
-  orderBy(field: string) {
-    return new FakeQuery(this.db, this.path, this.filters, field, this.max);
+  orderBy(field: string, direction: 'asc' | 'desc' = 'asc') {
+    return new FakeQuery(this.db, this.path, this.filters, [field, direction], this.max);
   }
   limit(max: number) {
     return new FakeQuery(this.db, this.path, this.filters, this.order, max);
@@ -53,8 +54,11 @@ class FakeQuery {
         throw new Error(`Unsupported operator ${op}`);
       })
     );
-    const order = this.order;
-    if (order) rows.sort(([, a], [, b]) => String(valueAt(a, order)).localeCompare(String(valueAt(b, order))));
+    if (this.order) {
+      const [field, direction] = this.order;
+      const sign = direction === 'desc' ? -1 : 1;
+      rows.sort(([, a], [, b]) => sign * String(valueAt(a, field)).localeCompare(String(valueAt(b, field))));
+    }
     return rows.slice(0, this.max);
   }
   async get() {
@@ -93,6 +97,9 @@ class FakeDb {
   snapshot(path: string) {
     const data = this.documents.get(path);
     return { id: path.split('/').at(-1)!, exists: data !== undefined, data: () => data, ref: new FakeRef(this, path) };
+  }
+  async getAll(...args: unknown[]) {
+    return args.filter((arg): arg is FakeRef => arg instanceof FakeRef).map(ref => this.snapshot(ref.path));
   }
   children(path: string) {
     const prefix = `${path}/`;
@@ -179,6 +186,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockStoreAttachments.mockResolvedValue([verifiedAttachment]);
   mockDeleteUploads.mockResolvedValue(undefined);
+  mockDeleteReportAttachments.mockResolvedValue(undefined);
 });
 
 describe('submitFeedback', () => {
@@ -238,7 +246,36 @@ describe('submitFeedback', () => {
     db.documents.set('studentFeedback/other-student', { submitter: { uid: 'student-2' }, createdAt: '2026-09-24T11:59:00.000Z' });
 
     await expect(submitFeedback(student, input(), db as never, nowMs)).rejects.toMatchObject({ code: 'FEEDBACK_REPORT_QUOTA', status: 429 });
+    expect(mockStoreAttachments).not.toHaveBeenCalled();
     await expect(submitFeedback(student, input(), db as never, nowMs + 31 * 60 * 1000)).resolves.toMatchObject({ feedbackId: draftId });
+  });
+
+  it('removes copied attachments when the quota fills while they are being copied', async () => {
+    const db = new FakeDb();
+    // Other submissions commit between the pre-copy check and the write transaction.
+    mockStoreAttachments.mockImplementation(async () => {
+      for (let index = 0; index < 10; index += 1) {
+        db.documents.set(`studentFeedback/recent-${index}`, { submitter: { uid: 'student-1' }, createdAt: '2026-09-24T11:59:00.000Z' });
+      }
+      return [verifiedAttachment];
+    });
+
+    await expect(submitFeedback(student, input(), db as never, nowMs)).rejects.toMatchObject({ code: 'FEEDBACK_REPORT_QUOTA' });
+    expect(db.documents.has(`studentFeedback/${draftId}`)).toBe(false);
+    expect(mockDeleteReportAttachments).toHaveBeenCalledWith(draftId, [verifiedAttachment]);
+    // The uploads stay so the student can send the same draft once the quota allows it.
+    expect(mockDeleteUploads).not.toHaveBeenCalled();
+  });
+
+  it('keeps copied attachments that a saved report with this draft ID uses', async () => {
+    const db = new FakeDb();
+    mockStoreAttachments.mockImplementation(async () => {
+      seedReport(db, { submitter: { uid: 'student-2', displayName: null, email: null, emailNormalized: null } });
+      return [verifiedAttachment];
+    });
+
+    await expect(submitFeedback(student, input(), db as never, nowMs)).rejects.toMatchObject({ code: 'FEEDBACK_FORBIDDEN' });
+    expect(mockDeleteReportAttachments).not.toHaveBeenCalled();
   });
 
   it('snapshots the lesson page and drops a page that no longer exists', async () => {
@@ -272,6 +309,7 @@ describe('submitFeedback', () => {
       code: 'FEEDBACK_LESSON_UNAVAILABLE',
     });
     expect(db.documents.has(`studentFeedback/${draftId}`)).toBe(false);
+    expect(mockStoreAttachments).not.toHaveBeenCalled();
   });
 });
 
@@ -324,6 +362,30 @@ describe('admin review', () => {
     const detail = await getFeedbackDetail(draftId, db as never);
     expect(detail.activity.map(item => item.id)).toEqual(['earlier', 'later']);
     expect(detail.currentLesson).toEqual({ id: 'lesson-1', title: 'New title' });
+  });
+
+  it('returns the newest activity when a report has more entries than one read returns', async () => {
+    const db = new FakeDb();
+    seedReport(db);
+    const total = FEEDBACK_MAX_ACTIVITY_ITEMS + 5;
+    for (let index = 0; index < total; index += 1) {
+      const id = `entry-${String(index).padStart(4, '0')}`;
+      const createdAt = new Date(nowMs + index * 1000).toISOString();
+      db.documents.set(`studentFeedback/${draftId}/activity/${id}`, {
+        id,
+        kind: 'note',
+        actorUid: 'admin-1',
+        actorDisplayName: null,
+        createdAt,
+        reason: null,
+        note: id,
+      });
+    }
+
+    const ids = (await getFeedbackDetail(draftId, db as never)).activity.map(item => item.id);
+    expect(ids).toHaveLength(FEEDBACK_MAX_ACTIVITY_ITEMS);
+    expect(ids[0]).toBe('entry-0005');
+    expect(ids.at(-1)).toBe(`entry-${String(total - 1).padStart(4, '0')}`);
   });
 });
 

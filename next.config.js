@@ -8,7 +8,7 @@ const { version } = require('./package.json');
 const nextConfig = {
   reactStrictMode: true,
   // Auto-memoizes client components and hooks at build time. Components that break the Rules of
-  // React are skipped (not miscompiled); see AGENTS.md for how to check coverage.
+  // React are skipped (not miscompiled).
   reactCompiler: true,
   // Tests import separately deployed Firebase Functions; check them in CI after
   // installing that package's dependencies, rather than in the Netlify build.

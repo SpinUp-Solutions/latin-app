@@ -1,22 +1,13 @@
 import type { Firestore, Transaction } from 'firebase-admin/firestore';
 import { adminDb } from '@/src/services/firebase-admin';
 import { LEARNING_UNITS_COLLECTION } from '@/shared/constants/firestore';
-import type { FeedbackLessonOption, FeedbackLessonSnapshot } from '@/shared/student-feedback';
+import type { FeedbackLessonSnapshot } from '@/shared/student-feedback';
 import { isLessonDocumentData, normalizeLearningUnit } from '@/src/lib/learning-units/domain';
-import { studentDashboardService } from '@/src/lib/learning-units/student-dashboard-service';
 import { richTextToPlainText } from '@/src/utils/exercises/helpers';
 import { FeedbackError } from './http.server';
 
-export function boundedFeedbackTitle(title: string): string {
+function boundedFeedbackTitle(title: string): string {
   return (title.length <= 500 ? title : richTextToPlainText(title).slice(0, 500)).trim() || 'Untitled lesson';
-}
-
-/** The dashboard already applies the student's progression and live-practice policy. */
-export async function listAccessibleFeedbackLessons(uid: string): Promise<FeedbackLessonOption[]> {
-  const dashboard = await studentDashboardService.getDashboard(uid);
-  return [...dashboard.learningPath, ...dashboard.practiceLessons]
-    .filter(unit => unit.kind === 'lesson' && unit.status !== 'locked')
-    .map(unit => ({ id: unit.id, title: boundedFeedbackTitle(unit.title) }));
 }
 
 function lessonUnavailable(): never {
@@ -55,7 +46,10 @@ export async function readFeedbackLessonInTransaction(
 
 export async function getCurrentFeedbackLesson(lessonId: string | undefined, db: Firestore = adminDb) {
   if (!lessonId) return null;
-  const snapshot = await db.collection(LEARNING_UNITS_COLLECTION).doc(lessonId).get();
+  // Skip the pages; only these fields decide what the admin sees.
+  const [snapshot] = await db.getAll(db.collection(LEARNING_UNITS_COLLECTION).doc(lessonId), {
+    fieldMask: ['kind', 'title', '_deletionPending'],
+  });
   const data = snapshot.data();
   if (!snapshot.exists || !isLessonDocumentData(data) || data._deletionPending === true) return null;
   return { id: lessonId, title: boundedFeedbackTitle(typeof data.title === 'string' ? data.title : '') };

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ref, uploadBytesResumable, type UploadTask } from 'firebase/storage';
 import {
   FEEDBACK_MAX_ATTACHMENTS,
@@ -48,95 +48,81 @@ export function useFeedbackUploads(draftId: string) {
     setUploads(uploadsRef.current);
   }, []);
 
-  const patch = useCallback(
-    (id: string, changes: Partial<FeedbackUpload>) =>
-      commit(current => current.map(upload => (upload.id === id ? { ...upload, ...changes } : upload))),
-    [commit]
-  );
+  const patch = (id: string, changes: Partial<FeedbackUpload>) =>
+    commit(current => current.map(upload => (upload.id === id ? { ...upload, ...changes } : upload)));
 
-  const start = useCallback(
-    (upload: FeedbackUpload) => {
-      const uid = auth.currentUser?.uid;
-      if (!uid) {
+  const start = (upload: FeedbackUpload) => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) {
+      patch(upload.id, { status: 'error' });
+      return;
+    }
+    const target = ref(storage, feedbackUploadPath(uid, draftId, upload.id));
+    const task = uploadBytesResumable(target, upload.file, { contentType: upload.contentType });
+    tasksRef.current.set(upload.id, task);
+    // Callbacks for removed uploads patch nothing, because IDs are never reused.
+    task.on(
+      'state_changed',
+      snapshot => patch(upload.id, { progress: snapshot.totalBytes ? snapshot.bytesTransferred / snapshot.totalBytes : 0 }),
+      () => {
+        tasksRef.current.delete(upload.id);
         patch(upload.id, { status: 'error' });
-        return;
+      },
+      () => {
+        tasksRef.current.delete(upload.id);
+        patch(upload.id, { status: 'ready', progress: 1 });
       }
-      const target = ref(storage, feedbackUploadPath(uid, draftId, upload.id));
-      const task = uploadBytesResumable(target, upload.file, { contentType: upload.contentType });
-      tasksRef.current.set(upload.id, task);
-      // Callbacks for removed uploads patch nothing, because IDs are never reused.
-      task.on(
-        'state_changed',
-        snapshot => patch(upload.id, { progress: snapshot.totalBytes ? snapshot.bytesTransferred / snapshot.totalBytes : 0 }),
-        () => {
-          tasksRef.current.delete(upload.id);
-          patch(upload.id, { status: 'error' });
-        },
-        () => {
-          tasksRef.current.delete(upload.id);
-          patch(upload.id, { status: 'ready', progress: 1 });
-        }
-      );
-    },
-    [draftId, patch]
-  );
+    );
+  };
 
   /** Starts uploading every acceptable file and returns a message for each rejected one. */
-  const addFiles = useCallback(
-    (files: File[]): string[] => {
-      const rejected: string[] = [];
-      const added: FeedbackUpload[] = [];
-      let count = uploadsRef.current.length;
-      let totalBytes = uploadsRef.current.reduce((sum, upload) => sum + upload.size, 0);
-      for (const file of files) {
-        const problem = rejectionFor(file, count, totalBytes);
-        if (problem) {
-          rejected.push(problem);
-          continue;
-        }
-        count += 1;
-        totalBytes += file.size;
-        added.push({
-          id: crypto.randomUUID(),
-          file,
-          name: file.name.trim().slice(0, 255) || 'attachment',
-          size: file.size,
-          contentType: file.type,
-          previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : null,
-          status: 'uploading',
-          progress: 0,
-        });
+  const addFiles = (files: File[]): string[] => {
+    const rejected: string[] = [];
+    const added: FeedbackUpload[] = [];
+    let count = uploadsRef.current.length;
+    let totalBytes = uploadsRef.current.reduce((sum, upload) => sum + upload.size, 0);
+    for (const file of files) {
+      const problem = rejectionFor(file, count, totalBytes);
+      if (problem) {
+        rejected.push(problem);
+        continue;
       }
-      commit(current => [...current, ...added]);
-      added.forEach(start);
-      return rejected;
-    },
-    [commit, start]
-  );
+      count += 1;
+      totalBytes += file.size;
+      added.push({
+        id: crypto.randomUUID(),
+        file,
+        name: file.name.trim().slice(0, 255) || 'attachment',
+        size: file.size,
+        contentType: file.type,
+        previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : null,
+        status: 'uploading',
+        progress: 0,
+      });
+    }
+    commit(current => [...current, ...added]);
+    added.forEach(start);
+    return rejected;
+  };
 
-  const retry = useCallback(
-    (id: string) => {
-      const upload = uploadsRef.current.find(item => item.id === id);
-      if (!upload || upload.status !== 'error') return;
-      // Uploads are create-only, so a retry writes to a fresh path.
-      const next: FeedbackUpload = { ...upload, id: crypto.randomUUID(), status: 'uploading', progress: 0 };
-      commit(current => current.map(item => (item.id === id ? next : item)));
-      start(next);
-    },
-    [commit, start]
-  );
+  const retry = (id: string) => {
+    const upload = uploadsRef.current.find(item => item.id === id);
+    if (!upload || upload.status !== 'error') return;
+    // Uploads are create-only, so a retry writes to a fresh path.
+    const next: FeedbackUpload = { ...upload, id: crypto.randomUUID(), status: 'uploading', progress: 0 };
+    commit(current => current.map(item => (item.id === id ? next : item)));
+    start(next);
+  };
 
-  const remove = useCallback(
-    (id: string) => {
-      tasksRef.current.get(id)?.cancel();
-      tasksRef.current.delete(id);
-      const upload = uploadsRef.current.find(item => item.id === id);
-      if (upload) releasePreview(upload);
-      commit(current => current.filter(item => item.id !== id));
-    },
-    [commit]
-  );
+  const remove = (id: string) => {
+    tasksRef.current.get(id)?.cancel();
+    tasksRef.current.delete(id);
+    const upload = uploadsRef.current.find(item => item.id === id);
+    if (upload) releasePreview(upload);
+    commit(current => current.filter(item => item.id !== id));
+  };
 
+  // Stable, because unmounting runs it to cancel uploads and free previews.
   const reset = useCallback(() => {
     for (const task of tasksRef.current.values()) task.cancel();
     tasksRef.current.clear();
@@ -146,17 +132,14 @@ export function useFeedbackUploads(draftId: string) {
 
   useEffect(() => reset, [reset]);
 
-  return useMemo(
-    () => ({
-      uploads,
-      addFiles,
-      retry,
-      remove,
-      reset,
-      uploading: uploads.some(upload => upload.status === 'uploading'),
-      failed: uploads.some(upload => upload.status === 'error'),
-      ready: uploads.filter(upload => upload.status === 'ready').map(({ id, name }) => ({ id, name })),
-    }),
-    [uploads, addFiles, retry, remove, reset]
-  );
+  return {
+    uploads,
+    addFiles,
+    retry,
+    remove,
+    reset,
+    uploading: uploads.some(upload => upload.status === 'uploading'),
+    failed: uploads.some(upload => upload.status === 'error'),
+    ready: uploads.filter(upload => upload.status === 'ready').map(({ id, name }) => ({ id, name })),
+  };
 }

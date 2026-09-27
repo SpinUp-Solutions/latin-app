@@ -86,8 +86,10 @@ function ReviewPanel({ feedbackId, feedback }: { feedbackId: string; feedback: F
   const [reason, setReason] = useState('');
   const run = async (action: FeedbackAdminAction) => {
     const text = reason.trim();
+    // Built outside the try block: the React Compiler skips components with conditional expressions inside one.
+    const request = { feedbackId, action, ...(text ? { reason: text } : {}) };
     try {
-      await updateState({ feedbackId, action, ...(text ? { reason: text } : {}) }).unwrap();
+      await updateState(request).unwrap();
       // Keep anything typed while the request was in flight.
       setReason(current => (current.trim() === text ? '' : current));
       toast.success(ACTION_MESSAGES[action]);

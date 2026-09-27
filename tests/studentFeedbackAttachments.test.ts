@@ -1,6 +1,7 @@
 jest.mock('@/src/services/firebase-admin', () => ({ adminStorage: {} }));
 
 import {
+  deleteFeedbackReportAttachments,
   deleteFeedbackUploads,
   feedbackReportAttachmentPath,
   getFeedbackAttachmentLinks,
@@ -145,6 +146,12 @@ describe('storeFeedbackAttachments', () => {
     const { bucket, deleted } = fakeBucket({});
     await deleteFeedbackUploads('student-1', draftId, [{ id: imageId }], bucket);
     expect(deleted).toEqual([upload(imageId)]);
+  });
+
+  it('deletes a rejected submission’s copies from the report folder only', async () => {
+    const { bucket, deleted } = fakeBucket({});
+    await deleteFeedbackReportAttachments(draftId, [{ id: imageId }, { id: videoId }], bucket);
+    expect(deleted).toEqual([feedbackReportAttachmentPath(draftId, imageId), feedbackReportAttachmentPath(draftId, videoId)]);
   });
 });
 

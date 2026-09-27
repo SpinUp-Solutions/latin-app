@@ -24,10 +24,10 @@ export function feedbackRouteErrorResponse(error: unknown, action: string) {
   return mapRouteError(new Error('Unexpected feedback failure'), action);
 }
 
-export function invalidFeedbackDocument(message = 'Feedback data is unavailable'): never {
+export function invalidFeedbackDocument(message: string): never {
   throw new FeedbackError('FEEDBACK_INVALID_DOCUMENT', message, 409);
 }
 
-export function feedbackNotFound(message = 'Feedback report not found'): never {
-  throw new FeedbackError('FEEDBACK_NOT_FOUND', message, 404);
+export function feedbackNotFound(): never {
+  throw new FeedbackError('FEEDBACK_NOT_FOUND', 'Feedback report not found', 404);
 }

@@ -2,7 +2,7 @@
 // lesson for scripts/perf/react-benchmark.mjs. Never point this at a deployed project.
 import { seedAcceptanceData, getE2EAdmin, E2E_USERS } from '../../tests/e2e/fixtures/seed.ts';
 
-export const PERF_LESSON_ID = 'perf-lesson';
+const PERF_LESSON_ID = 'perf-lesson';
 const PAGES = Number(process.env.PERF_PAGES ?? 12);
 const feedbackConfig = { escalationLevels: [{ showHint: true }, { showAnswer: true }] };
 const words = ['amo', 'moneo', 'rego', 'audio', 'capio', 'sum', 'possum', 'fero', 'eo', 'volo', 'nolo', 'malo'];

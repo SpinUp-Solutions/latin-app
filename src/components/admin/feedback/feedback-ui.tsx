@@ -60,8 +60,8 @@ const RELATIVE_UNITS: Array<[Intl.RelativeTimeFormatUnit, number]> = [
   ['minute', 60],
 ];
 
-export function formatRelativeTime(iso: string, nowMs = Date.now()): string {
-  const seconds = Math.round((Date.parse(iso) - nowMs) / 1000);
+export function formatRelativeTime(iso: string): string {
+  const seconds = Math.round((Date.parse(iso) - Date.now()) / 1000);
   const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
   for (const [unit, size] of RELATIVE_UNITS) {
     if (Math.abs(seconds) >= size) return formatter.format(Math.round(seconds / size), unit);

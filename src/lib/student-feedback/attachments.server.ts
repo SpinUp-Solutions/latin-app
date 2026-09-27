@@ -116,6 +116,10 @@ export async function storeFeedbackAttachments(
   return verified.map(item => item.attachment);
 }
 
+async function deleteQuietly(bucket: Bucket, paths: string[]): Promise<void> {
+  await Promise.allSettled(paths.map(path => bucket.file(path).delete({ ignoreNotFound: true })));
+}
+
 /** Leftover uploads are also removed by the bucket lifecycle rule, so failures here are ignored. */
 export async function deleteFeedbackUploads(
   uid: string,
@@ -123,9 +127,16 @@ export async function deleteFeedbackUploads(
   attachments: readonly { id: string }[],
   bucket: Bucket = adminStorage.bucket()
 ): Promise<void> {
-  await Promise.allSettled(
-    attachments.map(item => bucket.file(feedbackUploadPath(uid, draftId, item.id)).delete({ ignoreNotFound: true }))
-  );
+  await deleteQuietly(bucket, attachments.map(item => feedbackUploadPath(uid, draftId, item.id)));
+}
+
+/** Removes a rejected submission's copies. Callers must first check that no saved report uses them. */
+export async function deleteFeedbackReportAttachments(
+  feedbackId: string,
+  attachments: readonly { id: string }[],
+  bucket: Bucket = adminStorage.bucket()
+): Promise<void> {
+  await deleteQuietly(bucket, attachments.map(item => feedbackReportAttachmentPath(feedbackId, item.id)));
 }
 
 function downloadName(attachment: FeedbackAttachment): string {

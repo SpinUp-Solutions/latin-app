@@ -5,7 +5,8 @@ import { BookOpen, Check, ChevronsUpDown } from 'lucide-react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/src/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/src/components/ui/popover';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
-import { useGetFeedbackLessonsQuery } from '@/src/store/api/studentFeedbackApi';
+import { useGetStudentDashboardQuery } from '@/src/store/api/lessonApi';
+import { useAuth } from '@/src/hooks/useAuth';
 import type { FeedbackLessonContext } from '@/src/hooks/useFeedbackDraft';
 import { cn } from '@/src/lib/utils';
 import { richTextToPlainText } from '@/src/utils/exercises/helpers';
@@ -25,10 +26,16 @@ export function FeedbackLessonPicker({
   onChoose: (lessonId: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const { authUid } = useAuth();
   // The list is only needed once the picker opens or a lesson other than the current one is chosen.
   const needsList = open || (lessonId !== null && lessonId !== lessonContext?.lessonId);
-  const { data, isLoading, isError, refetch } = useGetFeedbackLessonsQuery(undefined, { skip: !needsList });
-  const fetched = data?.lessons ?? [];
+  // The dashboard already applies the student's progression and live-practice policy, and lesson pages have it cached.
+  const { data, isLoading, isError, refetch } = useGetStudentDashboardQuery(authUid ?? '', { skip: !needsList || !authUid });
+  const fetched = data
+    ? [...data.learningPath, ...data.practiceLessons]
+        .filter(unit => unit.kind === 'lesson' && unit.status !== 'locked')
+        .map(unit => ({ id: unit.id, title: unit.title || 'Untitled lesson' }))
+    : [];
   const lessons =
     lessonContext && !fetched.some(lesson => lesson.id === lessonContext.lessonId)
       ? [{ id: lessonContext.lessonId, title: lessonContext.lessonTitle }, ...fetched]

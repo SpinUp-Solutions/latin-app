@@ -1,12 +1,13 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import {
   feedbackFormSchema,
   type FeedbackArea,
   type FeedbackReceipt,
   type FeedbackSeverity,
+  type FeedbackSubmitRequest,
   type FeedbackType,
 } from '@/shared/student-feedback';
 import { getApiErrorCode, getApiErrorMessage } from '@/src/store/api/baseQuery';
@@ -73,28 +74,24 @@ export function useFeedbackDraft(lessonContext?: FeedbackLessonContext) {
     lessonChoice.source === 'picked';
   const navigationGuard = useUnsavedNavigationGuard(dirty && !receipt, 'Discard your unfinished feedback?');
 
-  const setField = useCallback(<K extends keyof FeedbackFields>(key: K, value: FeedbackFields[K]) => {
+  const setField = <K extends keyof FeedbackFields>(key: K, value: FeedbackFields[K]) => {
     setFields(current => ({ ...current, [key]: value }));
     setErrors(current => (current[key] ? { ...current, [key]: undefined } : current));
-  }, []);
+  };
 
-  const chooseLesson = useCallback(
-    (id: string | null) => {
-      const contextId = lessonContext?.lessonId ?? null;
-      setLessonChoice(id === contextId ? { source: 'context' } : { source: 'picked', lessonId: id });
-    },
-    [lessonContext?.lessonId]
-  );
+  const chooseLesson = (id: string | null) => {
+    const contextId = lessonContext?.lessonId ?? null;
+    setLessonChoice(id === contextId ? { source: 'context' } : { source: 'picked', lessonId: id });
+  };
 
-  const { reset: resetUploads } = uploads;
-  const reset = useCallback(() => {
-    resetUploads();
+  const reset = () => {
+    uploads.reset();
     setDraftId(crypto.randomUUID());
     setFields(EMPTY_FIELDS);
     setErrors({});
     setLessonChoice({ source: 'context' });
     setReceipt(null);
-  }, [resetUploads]);
+  };
 
   /** Returns field errors when validation fails, so the form can focus the first one. */
   const submit = async (): Promise<FeedbackFieldErrors | null> => {
@@ -112,7 +109,7 @@ export function useFeedbackDraft(lessonContext?: FeedbackLessonContext) {
       const next: FeedbackFieldErrors = {};
       for (const issue of parsed.error.issues) {
         const key = issue.path[0] as keyof FeedbackFields;
-        next[key] ??= issue.message;
+        if (!next[key]) next[key] = issue.message;
       }
       setErrors(next);
       return next;
@@ -123,26 +120,29 @@ export function useFeedbackDraft(lessonContext?: FeedbackLessonContext) {
       return null;
     }
 
+    const request: FeedbackSubmitRequest = {
+      draftId,
+      ...parsed.data,
+      lessonId,
+      pageId,
+      attachments: uploads.ready,
+      diagnostics: {
+        entryPoint: lessonContext ? 'lesson' : 'standalone',
+        ...(process.env.NEXT_PUBLIC_APP_VERSION ? { appVersion: process.env.NEXT_PUBLIC_APP_VERSION.slice(0, 100) } : {}),
+        browser: navigator.userAgent.slice(0, 300),
+        viewport: { width: Math.max(1, window.innerWidth), height: Math.max(1, window.innerHeight) },
+        route: window.location.pathname.slice(0, 512),
+      },
+    };
+    // Built outside the try block: the React Compiler skips hooks with conditional expressions inside one.
     try {
-      const response = await submitFeedback({
-        draftId,
-        ...parsed.data,
-        lessonId,
-        pageId,
-        attachments: uploads.ready,
-        diagnostics: {
-          entryPoint: lessonContext ? 'lesson' : 'standalone',
-          ...(process.env.NEXT_PUBLIC_APP_VERSION ? { appVersion: process.env.NEXT_PUBLIC_APP_VERSION.slice(0, 100) } : {}),
-          browser: navigator.userAgent.slice(0, 300),
-          viewport: { width: Math.max(1, window.innerWidth), height: Math.max(1, window.innerHeight) },
-          route: window.location.pathname.slice(0, 512),
-        },
-      }).unwrap();
+      const response = await submitFeedback(request).unwrap();
       setReceipt(response.receipt);
     } catch (error) {
       if (getApiErrorCode(error) === 'FEEDBACK_LESSON_UNAVAILABLE') {
         setLessonChoice({ source: 'picked', lessonId: null });
-        dispatch(studentFeedbackApi.util.invalidateTags(['FeedbackLessons']));
+        // Refresh the lesson picker, which lists lessons from the student dashboard.
+        dispatch(studentFeedbackApi.util.invalidateTags([{ type: 'StudentLesson', id: 'LIST' }]));
         toast.error('That lesson is no longer available, so we removed it from your report. Please send it again.');
       } else {
         toast.error(getApiErrorMessage(error, 'Could not send your feedback. Your draft is still here.'));

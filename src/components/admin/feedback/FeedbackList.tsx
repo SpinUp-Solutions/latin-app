@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { BookOpen, ChevronRight, Inbox, Paperclip, RefreshCw, Tag, User, X } from 'lucide-react';
@@ -60,7 +60,7 @@ function isoFromDate(date: string | null, endOfDay = false): string | undefined 
   return Number.isNaN(value.getTime()) ? undefined : value.toISOString();
 }
 
-function filtersFromParams(params: URLSearchParams): FeedbackListArgs {
+function filtersFromParams(params: Pick<URLSearchParams, 'get'>): FeedbackListArgs {
   return {
     status: pick(params.get('status'), ['unresolved', 'resolved', 'all'] as const) ?? 'unresolved',
     archived: params.get('archived') === 'true' ? 'true' : 'false',
@@ -179,7 +179,7 @@ export function FeedbackList() {
   const dispatch = useAppDispatch();
   const searchParams = useSearchParams();
   const queryString = searchParams.toString();
-  const filters = useMemo(() => filtersFromParams(new URLSearchParams(queryString)), [queryString]);
+  const filters = filtersFromParams(searchParams);
   // The cursor belongs to one filter combination, so a filter change starts from page one.
   const [paging, setPaging] = useState<{ key: string; cursor: string | null }>({ key: queryString, cursor: null });
   const cursor = paging.key === queryString ? paging.cursor : null;
@@ -189,8 +189,7 @@ export function FeedbackList() {
   const count = useGetAdminFeedbackCountQuery(undefined, { refetchOnFocus: true });
   const items = currentData?.items ?? [];
   const returnHref = `/admin/feedback${queryString ? `?${queryString}` : ''}`;
-  const params = new URLSearchParams(queryString);
-  const hasFilters = FILTER_KEYS.some(key => params.get(key));
+  const hasFilters = FILTER_KEYS.some(key => searchParams.get(key));
 
   const navigate = (changes: Record<string, string | null>) => {
     const next = new URLSearchParams(queryString);
@@ -327,7 +326,7 @@ export function FeedbackList() {
                 type="date"
                 aria-label="Submitted from"
                 className="min-w-0 bg-white"
-                value={params.get('from') ?? ''}
+                value={searchParams.get('from') ?? ''}
                 onChange={event => navigate({ from: event.target.value || null })}
               />
               <span className="text-sm text-roman-stone">to</span>
@@ -335,7 +334,7 @@ export function FeedbackList() {
                 type="date"
                 aria-label="Submitted to"
                 className="min-w-0 bg-white"
-                value={params.get('to') ?? ''}
+                value={searchParams.get('to') ?? ''}
                 onChange={event => navigate({ to: event.target.value || null })}
               />
             </div>

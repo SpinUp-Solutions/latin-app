@@ -1,8 +1,9 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { Download, Film, Play } from 'lucide-react';
 import { formatFileSize, type FeedbackAttachment } from '@/shared/student-feedback';
+import { AdminErrorState } from '@/src/components/admin/shell';
 import { Button } from '@/src/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/src/components/ui/dialog';
 import { getApiErrorMessage } from '@/src/store/api/baseQuery';
@@ -37,18 +38,11 @@ export function FeedbackAttachments({ feedbackId, attachments }: { feedbackId: s
   const [open, setOpen] = useState<{ attachment: FeedbackAttachment; links: Links } | null>(null);
   const links = new Map<string, Links>(data?.items.map(item => [item.id, item]));
   // Loaded thumbnails keep their first URL so refreshed links don't download every file again.
-  const thumbnails = useRef<Map<string, Links> | null>(null);
-  if (data && !thumbnails.current) thumbnails.current = links;
+  const [thumbnails, setThumbnails] = useState<Map<string, Links> | null>(null);
+  if (data && !thumbnails) setThumbnails(links);
 
   if (isError) {
-    return (
-      <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-        {getApiErrorMessage(error, 'Could not load attachments.')}{' '}
-        <button type="button" className="font-medium underline" onClick={() => void refetch()}>
-          Try again
-        </button>
-      </div>
-    );
+    return <AdminErrorState message={getApiErrorMessage(error, 'Could not load attachments.')} onRetry={() => void refetch()} />;
   }
 
   return (
@@ -56,7 +50,7 @@ export function FeedbackAttachments({ feedbackId, attachments }: { feedbackId: s
       <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {attachments.map(attachment => {
           const itemLinks = links.get(attachment.id);
-          const thumbnailUrl = thumbnails.current?.get(attachment.id)?.viewUrl ?? null;
+          const thumbnailUrl = thumbnails?.get(attachment.id)?.viewUrl ?? null;
           return (
             <li key={attachment.id} className="overflow-hidden rounded-lg border border-border bg-white">
               <button

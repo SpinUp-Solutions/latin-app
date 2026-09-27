@@ -11,7 +11,6 @@ import {
   FEEDBACK_ADMIN_PAGE_SIZE,
   FEEDBACK_MAX_ACTIVITY_ITEMS,
   feedbackActivitySchema,
-  feedbackReportSchema,
   type FeedbackActivity,
   type FeedbackAdminAction,
   type FeedbackAdminDetailResponse,
@@ -22,7 +21,7 @@ import {
 } from '@/shared/student-feedback';
 import { FeedbackError, feedbackNotFound, invalidFeedbackDocument } from './http.server';
 import { getCurrentFeedbackLesson } from './lessons.server';
-import { feedbackActorName } from './service.server';
+import { feedbackActorName, parseFeedbackReport } from './service.server';
 
 const EXCERPT_LENGTH = 280;
 const ACTIVITY_KIND: Record<FeedbackAdminAction, FeedbackActivity['kind']> = {
@@ -31,12 +30,6 @@ const ACTIVITY_KIND: Record<FeedbackAdminAction, FeedbackActivity['kind']> = {
   archive: 'archived',
   unarchive: 'unarchived',
 };
-
-function parseReport(data: unknown, id: string): FeedbackReport {
-  const parsed = feedbackReportSchema.safeParse(data);
-  if (!parsed.success || parsed.data.id !== id) invalidFeedbackDocument('Feedback report data is invalid');
-  return parsed.data;
-}
 
 function encodeCursor(createdAt: string, id: string): string {
   return Buffer.from(JSON.stringify([createdAt, id]), 'utf8').toString('base64url');
@@ -92,7 +85,7 @@ function listItem(report: FeedbackReport): FeedbackAdminListItem {
 
 export async function listFeedback(filters: FeedbackAdminListQuery, db: Firestore = adminDb): Promise<FeedbackAdminListResponse> {
   const snapshot = await feedbackListQuery(db, filters).limit(FEEDBACK_ADMIN_PAGE_SIZE + 1).get();
-  const page = snapshot.docs.slice(0, FEEDBACK_ADMIN_PAGE_SIZE).map(document => parseReport(document.data(), document.id));
+  const page = snapshot.docs.slice(0, FEEDBACK_ADMIN_PAGE_SIZE).map(document => parseFeedbackReport(document.data(), document.id));
   const last = page.at(-1);
   return {
     items: page.map(listItem),
@@ -113,26 +106,31 @@ export async function countOpenFeedback(db: Firestore = adminDb): Promise<number
 export async function getFeedbackReport(feedbackId: string, db: Firestore = adminDb): Promise<FeedbackReport> {
   const snapshot = await db.collection(STUDENT_FEEDBACK_COLLECTION).doc(feedbackId).get();
   if (!snapshot.exists) feedbackNotFound();
-  return parseReport(snapshot.data(), snapshot.id);
+  return parseFeedbackReport(snapshot.data(), snapshot.id);
 }
 
 export async function getFeedbackDetail(feedbackId: string, db: Firestore = adminDb): Promise<FeedbackAdminDetailResponse> {
-  const [feedback, activitySnapshot] = await Promise.all([
-    getFeedbackReport(feedbackId, db),
+  const [{ feedback, currentLesson }, activitySnapshot] = await Promise.all([
+    getFeedbackReport(feedbackId, db).then(async feedback => ({
+      feedback,
+      currentLesson: await getCurrentFeedbackLesson(feedback.lesson?.id, db),
+    })),
+    // Read the newest entries so a long history never hides the latest notes and actions.
     db
       .collection(STUDENT_FEEDBACK_COLLECTION)
       .doc(feedbackId)
       .collection(STUDENT_FEEDBACK_ACTIVITY_SUBCOLLECTION)
-      .orderBy('createdAt', 'asc')
+      .orderBy('createdAt', 'desc')
       .limit(FEEDBACK_MAX_ACTIVITY_ITEMS)
       .get(),
   ]);
-  const currentLesson = await getCurrentFeedbackLesson(feedback.lesson?.id, db);
-  const activity = activitySnapshot.docs.map(document => {
-    const parsed = feedbackActivitySchema.safeParse(document.data());
-    if (!parsed.success || parsed.data.id !== document.id) invalidFeedbackDocument('Feedback activity data is invalid');
-    return parsed.data;
-  });
+  const activity = activitySnapshot.docs
+    .map(document => {
+      const parsed = feedbackActivitySchema.safeParse(document.data());
+      if (!parsed.success || parsed.data.id !== document.id) invalidFeedbackDocument('Feedback activity data is invalid');
+      return parsed.data;
+    })
+    .reverse();
   return { feedback, activity, currentLesson };
 }
 
@@ -160,7 +158,7 @@ async function recordAdminChange(feedbackId: string, token: DecodedIdToken, chan
       transaction.get(db.collection(USERS_COLLECTION).doc(token.uid)),
     ]);
     if (!snapshot.exists) feedbackNotFound();
-    const report = parseReport(snapshot.data(), feedbackId);
+    const report = parseFeedbackReport(snapshot.data(), feedbackId);
     const isAction = 'action' in change;
     const patch = isAction ? statePatch(report, change.action) : null;
     // Actions are toggles: repeating one that already applies changes nothing.

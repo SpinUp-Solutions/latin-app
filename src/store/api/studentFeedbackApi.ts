@@ -6,7 +6,6 @@ import type {
   FeedbackAdminListQuery,
   FeedbackAdminListResponse,
   FeedbackAttachmentLinksResponse,
-  FeedbackLessonOption,
   FeedbackReceipt,
   FeedbackReport,
   FeedbackSubmitRequest,
@@ -28,10 +27,6 @@ const listKey = (args: FeedbackListArgs) => queryString({ ...args, cursor: undef
 
 export const studentFeedbackApi = appApi.injectEndpoints({
   endpoints: builder => ({
-    getFeedbackLessons: builder.query<{ lessons: FeedbackLessonOption[] }, void>({
-      query: () => '/feedback/lessons',
-      providesTags: ['FeedbackLessons'],
-    }),
     submitFeedback: builder.mutation<{ receipt: FeedbackReceipt }, FeedbackSubmitRequest>({
       query: body => ({ url: '/feedback', method: 'POST', body }),
     }),
@@ -129,7 +124,6 @@ export async function refreshFeedbackListPageOne(dispatch: Dispatch, args: Feedb
 }
 
 export const {
-  useGetFeedbackLessonsQuery,
   useSubmitFeedbackMutation,
   useGetAdminFeedbackListQuery,
   useGetAdminFeedbackCountQuery,

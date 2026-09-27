@@ -1,7 +1,6 @@
 const verifyToken = jest.fn();
 const verifyAdmin = jest.fn();
 const submitFeedback = jest.fn();
-const listAccessibleFeedbackLessons = jest.fn();
 const listFeedback = jest.fn();
 const countOpenFeedback = jest.fn();
 const getFeedbackDetail = jest.fn();
@@ -16,9 +15,6 @@ jest.mock('@/src/lib/verifyAdminAccess', () => ({ verifyAdminAccess: (...args: u
 jest.mock('@/src/lib/student-feedback/service.server', () => ({
   submitFeedback: (...args: unknown[]) => submitFeedback(...args),
 }));
-jest.mock('@/src/lib/student-feedback/lessons.server', () => ({
-  listAccessibleFeedbackLessons: (...args: unknown[]) => listAccessibleFeedbackLessons(...args),
-}));
 jest.mock('@/src/lib/student-feedback/admin.server', () => ({
   listFeedback: (...args: unknown[]) => listFeedback(...args),
   countOpenFeedback: (...args: unknown[]) => countOpenFeedback(...args),
@@ -32,7 +28,6 @@ jest.mock('@/src/lib/student-feedback/attachments.server', () => ({
 }));
 
 import { POST as submit } from '@/src/app/api/feedback/route';
-import { GET as lessons } from '@/src/app/api/feedback/lessons/route';
 import { GET as adminList } from '@/src/app/api/admin/feedback/route';
 import { GET as adminCount } from '@/src/app/api/admin/feedback/count/route';
 import { GET as adminDetail } from '@/src/app/api/admin/feedback/[feedbackId]/route';
@@ -60,7 +55,6 @@ describe('student feedback API authorization and validation', () => {
     verifyToken.mockResolvedValue({ uid: 'student-1', firebase: { sign_in_provider: 'password' } });
     verifyAdmin.mockResolvedValue({ uid: 'admin-1' });
     submitFeedback.mockResolvedValue({ feedbackId, submittedAt: '2026-09-24T12:00:00.000Z' });
-    listAccessibleFeedbackLessons.mockResolvedValue([]);
     listFeedback.mockResolvedValue({ items: [], nextCursor: null });
     countOpenFeedback.mockResolvedValue(3);
     getFeedbackDetail.mockResolvedValue({ feedback: { id: feedbackId }, activity: [], currentLesson: null });
@@ -76,9 +70,6 @@ describe('student feedback API authorization and validation', () => {
       expect((await submit(request(input))).status).toBe(401);
     }
     expect(submitFeedback).not.toHaveBeenCalled();
-    verifyToken.mockResolvedValueOnce(null);
-    expect((await lessons(request())).status).toBe(401);
-    expect(listAccessibleFeedbackLessons).not.toHaveBeenCalled();
   });
 
   it('passes the verified actor to the submit service and validates the body', async () => {

@@ -15,7 +15,6 @@ export const APP_API_TAG_TYPES = [
   'TestAttempt',
   'AttemptSummary',
   // Student feedback.
-  'FeedbackLessons',
   'FeedbackList',
   'FeedbackDetail',
   'FeedbackCount',

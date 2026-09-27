@@ -28,12 +28,17 @@ jest.mock('@/src/hooks/useFeedbackUploads', () => ({
 jest.mock('@/src/store/api/studentFeedbackApi', () => ({
   studentFeedbackApi: { util: { invalidateTags: (tags: unknown) => ({ type: 'invalidate', tags }) } },
   useSubmitFeedbackMutation: () => [mockSubmit, { isLoading: false }],
-  useGetFeedbackLessonsQuery: () => ({
+}));
+jest.mock('@/src/hooks/useAuth', () => ({ useAuth: () => ({ authUid: 'student-1' }) }));
+jest.mock('@/src/store/api/lessonApi', () => ({
+  useGetStudentDashboardQuery: () => ({
     data: {
-      lessons: [
-        { id: 'lesson-1', title: '<strong>First lesson</strong>' },
-        { id: 'lesson-2', title: 'Second lesson' },
+      learningPath: [
+        { id: 'lesson-1', kind: 'lesson', title: '<strong>First lesson</strong>', status: 'in-progress' },
+        { id: 'test-1', kind: 'test', title: 'A test', status: 'available' },
+        { id: 'lesson-3', kind: 'lesson', title: 'Locked lesson', status: 'locked' },
       ],
+      practiceLessons: [{ id: 'lesson-2', kind: 'lesson', title: 'Second lesson', status: 'available' }],
     },
     isLoading: false,
     isError: false,
@@ -160,11 +165,15 @@ test('a removed lesson is cleared from the draft so the student can send again',
   render(<Standalone />);
   completeBugReport();
   fireEvent.click(screen.getByRole('combobox'));
-  fireEvent.click(await screen.findByRole('option', { name: 'Second lesson' }));
+  const secondLesson = await screen.findByRole('option', { name: 'Second lesson' });
+  // Only unlocked lessons from the dashboard are offered.
+  expect(screen.queryByRole('option', { name: 'Locked lesson' })).toBeNull();
+  expect(screen.queryByRole('option', { name: 'A test' })).toBeNull();
+  fireEvent.click(secondLesson);
   fireEvent.submit(form());
   await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('no longer available')));
   expect(mockSubmit.mock.calls[0][0]).toMatchObject({ lessonId: 'lesson-2' });
-  expect(mockDispatch).toHaveBeenCalledWith({ type: 'invalidate', tags: ['FeedbackLessons'] });
+  expect(mockDispatch).toHaveBeenCalledWith({ type: 'invalidate', tags: [{ type: 'StudentLesson', id: 'LIST' }] });
   expect(screen.getByRole('combobox')).toHaveTextContent('Not about a specific lesson');
 
   fireEvent.submit(form());

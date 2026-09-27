@@ -1,5 +1,10 @@
-const LESSON_AUDIO_PATH =
-  /^lessons\/[A-Za-z0-9_-]{1,200}\/content_audio\/[A-Za-z0-9._~-]{0,250}\.(mp3|m4a|wav|wave|ogg|oga|opus|aac|flac|aif|aiff|caf|wma|webm|mp4)$/i;
+// The folder, not the file extension, keeps these routes away from other objects: uploads accept any audio/* file.
+const LESSON_AUDIO_PATH = /^lessons\/[A-Za-z0-9_-]{1,200}\/content_audio\/[A-Za-z0-9_~-][A-Za-z0-9._~-]{0,254}$/;
+
+/** Whether an object path is inside a lesson's audio folder. The uploader checks its destination with this too. */
+export function isLessonAudioObjectPath(path: string): boolean {
+  return LESSON_AUDIO_PATH.test(path);
+}
 
 /**
  * Returns the object path of a lesson-audio URL in this bucket, or null. The audio signer and
@@ -11,7 +16,7 @@ export function parseLessonAudioPath(audioPath: unknown, bucketName: string): st
   if (!audioPath.startsWith(prefix)) return null;
   try {
     const decoded = decodeURIComponent(audioPath.slice(prefix.length));
-    return LESSON_AUDIO_PATH.test(decoded) ? decoded : null;
+    return isLessonAudioObjectPath(decoded) ? decoded : null;
   } catch {
     return null;
   }

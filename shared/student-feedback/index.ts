@@ -227,7 +227,6 @@ export type FeedbackAttachment = z.infer<typeof feedbackAttachmentSchema>;
 export type FeedbackLessonSnapshot = z.infer<typeof feedbackLessonSnapshotSchema>;
 export type FeedbackReport = z.infer<typeof feedbackReportSchema>;
 export type FeedbackActivity = z.infer<typeof feedbackActivitySchema>;
-export type FeedbackLessonOption = { id: string; title: string };
 export type FeedbackAdminListQuery = z.infer<typeof feedbackAdminListQuerySchema>;
 
 export type FeedbackAdminListItem = Pick<

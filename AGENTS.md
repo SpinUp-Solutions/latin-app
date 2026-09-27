@@ -107,7 +107,7 @@ Authoritative examples:
 ## React Effects, Render Loops, and Navigation
 
 - An effect that sets state, dispatches, navigates, or writes browser history must not re-run on every render. Keep per-render callbacks and inline objects or arrays out of its dependency array.
-- Custom hooks that accept callbacks must read them through a ref or `useEffectEvent`, never list them as effect dependencies. `react-hooks/exhaustive-deps` cannot see a per-render callback passed through a custom hook.
+- Custom hooks that accept callbacks must read them through `useEffectEvent`, never list them as effect dependencies. `react-hooks/exhaustive-deps` cannot see a per-render callback passed through a custom hook.
 - In the Next.js App Router, a native `window.history.pushState` or `replaceState` triggers a router update that re-renders the page. An effect that pushes history on every render is an infinite loop that freezes the tab. It throws nothing and never reaches Sentry.
 - History and navigation guards must be idempotent: push one guard entry per dirty period and check before writing again. Use `useUnsavedNavigationGuard` for new editors.
 - Render-phase state updates (`if (changed) setState(...)` during render) must settle after one extra render.
