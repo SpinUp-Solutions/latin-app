@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useEffectEvent, useState, type FormEvent, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { BookOpen, ChevronRight, Inbox, Paperclip, RefreshCw, Tag, User, X } from 'lucide-react';
@@ -31,6 +31,7 @@ import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display'
 import { getApiErrorMessage } from '@/src/store/api/baseQuery';
 import {
   refreshFeedbackListPageOne,
+  studentFeedbackApi,
   useGetAdminFeedbackCountQuery,
   useGetAdminFeedbackListQuery,
   type FeedbackListArgs,
@@ -180,12 +181,18 @@ export function FeedbackList() {
   const searchParams = useSearchParams();
   const queryString = searchParams.toString();
   const filters = filtersFromParams(searchParams);
-  // The cursor belongs to one filter combination, so a filter change starts from page one.
+  // The cursor belongs to one filter combination, so a filter change starts again from page one.
   const [paging, setPaging] = useState<{ key: string; cursor: string | null }>({ key: queryString, cursor: null });
+  if (paging.key !== queryString) setPaging({ key: queryString, cursor: null });
   const cursor = paging.key === queryString ? paging.cursor : null;
   const [search, setSearch] = useState('');
 
-  const { currentData, isLoading, isFetching, isError, error } = useGetAdminFeedbackListQuery({ ...filters, cursor });
+  // RTK's focus and reconnect refetch would repeat only the latest "Load more" page, so this list
+  // reloads from page one itself (see refreshOnReturn).
+  const { currentData, isLoading, isFetching, isError, error } = useGetAdminFeedbackListQuery(
+    { ...filters, cursor },
+    { refetchOnFocus: false, refetchOnReconnect: false }
+  );
   const count = useGetAdminFeedbackCountQuery(undefined, { refetchOnFocus: true });
   const items = currentData?.items ?? [];
   const returnHref = `/admin/feedback${queryString ? `?${queryString}` : ''}`;
@@ -218,6 +225,24 @@ export function FeedbackList() {
     void refreshFeedbackListPageOne(dispatch, filters);
     void count.refetch();
   };
+
+  const refreshOnReturn = useEffectEvent(() => {
+    if (document.visibilityState !== 'visible') return;
+    // Returning to a tab fires both focus and visibilitychange; one page-one request is enough.
+    // RTK 2.5 infers the running request's arg as `never`, so its type is named here.
+    const running: { arg: FeedbackListArgs } | undefined = dispatch(
+      studentFeedbackApi.util.getRunningQueryThunk('getAdminFeedbackList', filters)
+    );
+    if (!running || running.arg.cursor) refresh();
+  });
+  useEffect(() => {
+    const events = ['focus', 'visibilitychange', 'online'];
+    const onEvent = () => refreshOnReturn();
+    for (const event of events) window.addEventListener(event, onEvent);
+    return () => {
+      for (const event of events) window.removeEventListener(event, onEvent);
+    };
+  }, []);
 
   const lessonTitle = items.find(item => item.lesson?.id === filters.lessonId)?.lesson?.title;
   const studentLabel =

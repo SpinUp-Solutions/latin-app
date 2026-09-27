@@ -102,7 +102,7 @@ describe('storeFeedbackAttachments', () => {
         from: upload(imageId),
         generation: '11',
         to: feedbackReportAttachmentPath(draftId, imageId),
-        options: { metadata: {}, contentType: 'image/png', cacheControl: 'private, no-store' },
+        options: { metadata: { firebaseStorageDownloadTokens: null }, contentType: 'image/png', cacheControl: 'private, no-store' },
       },
       expect.objectContaining({ from: upload(videoId), generation: '22', to: feedbackReportAttachmentPath(draftId, videoId) }),
     ]);

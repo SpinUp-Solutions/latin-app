@@ -106,8 +106,8 @@ export async function storeFeedbackAttachments(
   await Promise.all(
     verified.map(({ source, attachment }) =>
       source.copy(bucket.file(feedbackReportAttachmentPath(draftId, attachment.id)), {
-        // Replacing the metadata drops the Firebase download token from the student's upload.
-        metadata: {},
+        // Copies keep the upload's Firebase download token, which the student already has, unless it is cleared.
+        metadata: { firebaseStorageDownloadTokens: null },
         contentType: attachment.contentType,
         cacheControl: 'private, no-store',
       })
