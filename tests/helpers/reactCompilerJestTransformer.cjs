@@ -16,6 +16,8 @@ module.exports = {
             filename,
             babelrc: false,
             configFile: false,
+            // SWC composes an inline input map with its own, keeping stack traces on source lines.
+            sourceMaps: 'inline',
             parserOpts: { plugins: ['typescript', 'jsx'] },
             plugins: [['babel-plugin-react-compiler', { panicThreshold: 'none' }]],
           }).code;
