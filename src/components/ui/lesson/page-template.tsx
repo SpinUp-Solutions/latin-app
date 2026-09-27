@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useEffectEvent, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Page } from '@/src/types/lesson';
 import ContentRenderer from './content-renderer';
@@ -57,8 +57,7 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({
 
   const previousPageId = useRef(page.id);
   const scheduledCompletion = useRef<Set<number> | null>(null);
-  const onPageCompleteRef = useRef(onPageComplete);
-  onPageCompleteRef.current = onPageComplete;
+  const completePage = useEffectEvent(() => onPageComplete?.());
   const canAutoAdvance = Boolean(onPageComplete);
 
   useEffect(() => {
@@ -78,7 +77,7 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({
     if (scheduledCompletion.current === completedExercises) return;
     scheduledCompletion.current = completedExercises;
     const timer = setTimeout(() => {
-      onPageCompleteRef.current?.();
+      completePage();
     }, autoAdvance.delay);
 
     return () => clearTimeout(timer);

@@ -1,10 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useEffectEvent } from 'react';
 
 export const useBeforeUnload = (hasDraft: boolean, onNavigateAway?: (destination?: string) => void) => {
-  // Callers pass a new callback on every render. Reading it through a ref keeps the
-  // history guard below from pushing a new entry (and re-rendering the router) each render.
-  const onNavigateAwayRef = useRef(onNavigateAway);
-  onNavigateAwayRef.current = onNavigateAway;
+  // Callers pass a new callback on every render. An effect event always sees the latest one
+  // without being an effect dependency, so the history guard below pushes one entry per dirty
+  // period instead of one per render (each push re-renders the App Router page).
+  const navigateAway = useEffectEvent((destination?: string) => onNavigateAway?.(destination));
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -27,7 +27,7 @@ export const useBeforeUnload = (hasDraft: boolean, onNavigateAway?: (destination
       if (hasDraft) {
         e.preventDefault();
         window.history.pushState(null, '', window.location.href);
-        onNavigateAwayRef.current?.();
+        navigateAway();
       }
     };
 
@@ -50,7 +50,7 @@ export const useBeforeUnload = (hasDraft: boolean, onNavigateAway?: (destination
       if (destination.origin !== window.location.origin || destination.href === window.location.href) return;
       event.preventDefault();
       event.stopPropagation();
-      onNavigateAwayRef.current?.(`${destination.pathname}${destination.search}${destination.hash}`);
+      navigateAway(`${destination.pathname}${destination.search}${destination.hash}`);
     };
 
     document.addEventListener('click', handleDocumentNavigation, true);
