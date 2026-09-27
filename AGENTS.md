@@ -96,6 +96,20 @@ Authoritative examples:
 - When duplicating authored lesson/page/exercise content, use the ID regeneration utilities in `src/utils/idUtils.ts`. IDs and references must be regenerated together.
 - Do not regenerate canonical IDs such as sentence-diagram token/span identities unless the domain utility explicitly does so.
 
+## React Effects, Render Loops, and Navigation
+
+- An effect that sets state, dispatches, navigates, or writes browser history must not re-run on every render. Keep per-render callbacks and inline objects or arrays out of its dependency array.
+- Custom hooks that accept callbacks must read them through a ref or `useEffectEvent`, never list them as effect dependencies. `react-hooks/exhaustive-deps` cannot see a per-render callback passed through a custom hook.
+- In the Next.js App Router, a native `window.history.pushState` or `replaceState` triggers a router update that re-renders the page. An effect that pushes history on every render is an infinite loop that freezes the tab. It throws nothing and never reaches Sentry.
+- History and navigation guards must be idempotent: push one guard entry per dirty period and check before writing again. Use `useUnsavedNavigationGuard` for new editors.
+- Render-phase state updates (`if (changed) setState(...)` during render) must settle after one extra render.
+- Regression tests for navigation guards must model the router re-render on `pushState`; jsdom has no App Router, so a plain render cannot reproduce these loops.
+
+Authoritative examples:
+- `src/hooks/useUnsavedNavigationGuard.ts`
+- `src/hooks/useLessonDraft.ts`
+- `tests/useBeforeUnload.test.tsx`
+
 ## Testing and Verification
 
 - Add regression tests for the actual failure mode, not only isolated helper functions.
@@ -113,6 +127,7 @@ Authoritative examples:
   - `git diff --check`
   - the full test suite for cross-cutting changes
   - `npm run test:firestore-rules` when Firestore rules change
+  - after a Next.js or React upgrade, a real-browser smoke test of lesson create/edit and the test editors: make an edit and confirm the tab stays responsive and the history length stays stable
 - Preserve unrelated uncommitted work and avoid opportunistic refactors.
 
 ## Production Content Safety
