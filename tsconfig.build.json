@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "exclude": [
+    "node_modules",
+    "functions",
+    "tests",
+    "jest.setup.ts",
+    "playwright.config.ts"
+  ]
+}

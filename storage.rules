@@ -2,6 +2,27 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
+    // Students upload report attachments to their own draft folder. Uploads are
+    // create-only; the server verifies and copies them into reports/ on submit,
+    // and a bucket lifecycle rule deletes whatever is left in uploads/.
+    match /student-feedback/uploads/{uid}/{draftId}/{attachmentId} {
+      allow create: if request.auth != null
+        && request.auth.uid == uid
+        && request.auth.token.firebase.sign_in_provider != 'anonymous'
+        && resource == null
+        && request.resource.size > 0
+        && ((request.resource.contentType.matches('image/(png|jpeg|webp)')
+            && request.resource.size <= 10 * 1024 * 1024)
+          || (request.resource.contentType.matches('video/(mp4|webm|quicktime)')
+            && request.resource.size <= 100 * 1024 * 1024));
+      allow read, update, delete: if false;
+    }
+
+    // Submitted report files are read only through admin signed URLs.
+    match /student-feedback/reports/{allPaths=**} {
+      allow read, write: if false;
+    }
+
     // Lesson migration snapshots are created and restored only through
     // server-side Admin SDK routes. Client SDK access stays disabled.
     match /lesson-snapshots/{allPaths=**} {
