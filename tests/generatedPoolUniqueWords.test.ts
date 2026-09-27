@@ -137,7 +137,7 @@ describe('pool generation with a unique-word limit', () => {
       expect([...countsById(result.words).values()]).toEqual(Array(10).fill(3));
       expectEveryFormDistinct(result.words);
       expectNoBackToBackWord(result.words);
-      expect(result.diagnostics).toEqual([expect.objectContaining({ specId: 'verb-conjugation', collected: 30 })]);
+      expect(result.diagnostics).toEqual([expect.objectContaining({ specId: 'verb-conjugation', collected: 10 })]);
     }
   );
 
@@ -281,8 +281,8 @@ describe('pool generation with a unique-word limit', () => {
     expect(result.uniqueWords).toBe(4);
     expect([...countsById(result.words).values()]).toEqual([3, 3, 3, 3]);
     expect(result.diagnostics).toEqual([
-      expect.objectContaining({ specId: 'verb-conjugation', collected: 6 }),
-      expect.objectContaining({ specId: 'noun-declension', collected: 6 }),
+      expect.objectContaining({ specId: 'verb-conjugation', collected: 2 }),
+      expect.objectContaining({ specId: 'noun-declension', collected: 2 }),
     ]);
   });
 

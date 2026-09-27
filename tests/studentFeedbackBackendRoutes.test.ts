@@ -35,6 +35,7 @@ import { PATCH as adminState } from '@/src/app/api/admin/feedback/[feedbackId]/s
 import { POST as adminNote } from '@/src/app/api/admin/feedback/[feedbackId]/notes/route';
 import { GET as adminAttachments } from '@/src/app/api/admin/feedback/[feedbackId]/attachments/route';
 import { FeedbackError, feedbackRouteErrorResponse } from '@/src/lib/student-feedback/http.server';
+import { captureException } from '@sentry/nextjs';
 
 const feedbackId = '08814ab5-2712-49e9-9c54-7c7317fdd812';
 const request = (body?: unknown, query = '') =>
@@ -118,17 +119,19 @@ describe('student feedback API authorization and validation', () => {
     expect(getFeedbackAttachmentLinks).toHaveBeenCalledWith({ id: feedbackId, attachments: [] });
   });
 
-  it('never reflects raw unexpected SDK messages containing credentials or private metadata', () => {
+  it('never reflects raw unexpected SDK messages to the client but still reports the original error', () => {
     const privateValue = 'token=private123&studentEmail=hidden@example.edu';
+    const sdkError = Object.assign(new Error(privateValue), { status: 503, code: 'SDK_FAILURE' });
     const log = jest.spyOn(console, 'error').mockImplementation(() => {});
+    (captureException as jest.Mock).mockClear();
     try {
-      const response = feedbackRouteErrorResponse(
-        Object.assign(new Error(privateValue), { status: 503, code: 'SDK_FAILURE' }),
-        'load feedback'
-      ) as unknown as { status: number; body: { error: string } };
+      const response = feedbackRouteErrorResponse(sdkError, 'load feedback') as unknown as {
+        status: number;
+        body: { error: string };
+      };
       expect(response.status).toBe(500);
       expect(JSON.stringify(response.body)).not.toContain(privateValue);
-      expect(JSON.stringify(log.mock.calls)).not.toContain(privateValue);
+      expect(captureException).toHaveBeenCalledWith(expect.objectContaining({ cause: sdkError }), expect.anything());
     } finally {
       log.mockRestore();
     }

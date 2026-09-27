@@ -30,7 +30,11 @@ export function FeedbackLessonPicker({
   // The list is only needed once the picker opens or a lesson other than the current one is chosen.
   const needsList = open || (lessonId !== null && lessonId !== lessonContext?.lessonId);
   // The dashboard already applies the student's progression and live-practice policy, and lesson pages have it cached.
-  const { data, isLoading, isError, refetch } = useGetStudentDashboardQuery(authUid ?? '', { skip: !needsList || !authUid });
+  // Reuse that copy: the app-wide 30-second refetch would otherwise rebuild the dashboard every time the picker opens.
+  const { data, isLoading, isError, refetch } = useGetStudentDashboardQuery(authUid ?? '', {
+    skip: !needsList || !authUid,
+    refetchOnMountOrArgChange: false,
+  });
   const fetched = data
     ? [...data.learningPath, ...data.practiceLessons]
         .filter(unit => unit.kind === 'lesson' && unit.status !== 'locked')

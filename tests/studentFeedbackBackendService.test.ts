@@ -4,10 +4,12 @@ jest.mock('firebase-admin/firestore', () => ({ FieldPath: { documentId: () => '_
 const mockStoreAttachments = jest.fn();
 const mockDeleteUploads = jest.fn();
 const mockDeleteReportAttachments = jest.fn();
+const mockDeleteUnreferenced = jest.fn();
 jest.mock('@/src/lib/student-feedback/attachments.server', () => ({
   storeFeedbackAttachments: (...args: unknown[]) => mockStoreAttachments(...args),
   deleteFeedbackUploads: (...args: unknown[]) => mockDeleteUploads(...args),
   deleteFeedbackReportAttachments: (...args: unknown[]) => mockDeleteReportAttachments(...args),
+  deleteUnreferencedFeedbackReportAttachments: (...args: unknown[]) => mockDeleteUnreferenced(...args),
 }));
 
 import type { DecodedIdToken } from 'firebase-admin/auth';
@@ -187,6 +189,7 @@ beforeEach(() => {
   mockStoreAttachments.mockResolvedValue([verifiedAttachment]);
   mockDeleteUploads.mockResolvedValue(undefined);
   mockDeleteReportAttachments.mockResolvedValue(undefined);
+  mockDeleteUnreferenced.mockResolvedValue(undefined);
 });
 
 describe('submitFeedback', () => {
@@ -214,6 +217,20 @@ describe('submitFeedback', () => {
       actorDisplayName: 'Ada Lovelace',
     });
     expect(mockDeleteUploads).toHaveBeenCalledWith('student-1', draftId, [{ id: attachmentId, name: 'screen.png' }]);
+    // Copies left by an earlier failed attempt of this draft are pruned against the saved list.
+    expect(mockDeleteUnreferenced).toHaveBeenCalledWith(draftId, [verifiedAttachment]);
+  });
+
+  it('skips the pre-copy check for a report without attachments', async () => {
+    const db = new FakeDb();
+    mockStoreAttachments.mockResolvedValue([]);
+    const runTransaction = jest.spyOn(db, 'runTransaction');
+
+    await expect(submitFeedback(student, input({ attachments: [] }), db as never, nowMs)).resolves.toMatchObject({
+      feedbackId: draftId,
+    });
+    expect(runTransaction).toHaveBeenCalledTimes(1);
+    expect(mockDeleteUnreferenced).toHaveBeenCalledWith(draftId, []);
   });
 
   it('returns the original receipt for a retried draft without copying files or duplicating the report', async () => {
@@ -225,6 +242,7 @@ describe('submitFeedback', () => {
       submittedAt: '2026-09-24T11:00:00.000Z',
     });
     expect(mockStoreAttachments).not.toHaveBeenCalled();
+    expect(mockDeleteUnreferenced).not.toHaveBeenCalled();
     expect(db.documents.get(`studentFeedback/${draftId}`)).toMatchObject({ description: 'Existing report' });
   });
 

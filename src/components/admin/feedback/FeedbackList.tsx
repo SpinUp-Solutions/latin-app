@@ -189,7 +189,7 @@ export function FeedbackList() {
 
   // RTK's focus and reconnect refetch would repeat only the latest "Load more" page, so this list
   // reloads from page one itself (see refreshOnReturn).
-  const { currentData, isLoading, isFetching, isError, error } = useGetAdminFeedbackListQuery(
+  const { currentData, isFetching, isError, error } = useGetAdminFeedbackListQuery(
     { ...filters, cursor },
     { refetchOnFocus: false, refetchOnReconnect: false }
   );
@@ -394,7 +394,8 @@ export function FeedbackList() {
         </div>
       </div>
 
-      {isLoading ? (
+      {/* RTK's `isLoading` stays false after a filter change because earlier filters left data behind. */}
+      {isFetching && !currentData ? (
         <AdminLoadingState label="Loading feedback" />
       ) : isError ? (
         <AdminErrorState message={getApiErrorMessage(error, 'Could not load feedback.')} onRetry={refresh} />

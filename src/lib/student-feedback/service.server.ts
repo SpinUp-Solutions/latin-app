@@ -16,7 +16,12 @@ import {
 } from '@/shared/student-feedback';
 import { FeedbackError, invalidFeedbackDocument } from './http.server';
 import { readFeedbackLessonInTransaction } from './lessons.server';
-import { deleteFeedbackReportAttachments, deleteFeedbackUploads, storeFeedbackAttachments } from './attachments.server';
+import {
+  deleteFeedbackReportAttachments,
+  deleteFeedbackUploads,
+  deleteUnreferencedFeedbackReportAttachments,
+  storeFeedbackAttachments,
+} from './attachments.server';
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -80,20 +85,22 @@ export async function submitFeedback(
   if (existing.exists) return receiptFor(existing.data(), input.draftId, uid);
 
   // Check before copying so a rejected submission leaves no files behind. The write transaction checks again.
-  const preflight = await db.runTransaction(
-    transaction => readSubmission(transaction, db, uid, input, nowMs ?? Date.now()),
-    { readOnly: true }
-  );
-  if (preflight.receipt) return preflight.receipt;
+  if (input.attachments.length > 0) {
+    const preflight = await db.runTransaction(
+      transaction => readSubmission(transaction, db, uid, input, nowMs ?? Date.now()),
+      { readOnly: true }
+    );
+    if (preflight.receipt) return preflight.receipt;
+  }
 
   const attachments = await storeFeedbackAttachments(uid, input.draftId, input.attachments);
 
-  let receipt: FeedbackReceipt;
+  let saved: { receipt: FeedbackReceipt; created: boolean };
   try {
-    receipt = await db.runTransaction(async transaction => {
+    saved = await db.runTransaction(async transaction => {
       const attemptNowMs = nowMs ?? Date.now();
       const submission = await readSubmission(transaction, db, uid, input, attemptNowMs);
-      if (submission.receipt) return submission.receipt;
+      if (submission.receipt) return { receipt: submission.receipt, created: false };
 
       const now = new Date(attemptNowMs).toISOString();
       // Only verified Auth claims identify an email; the profile is client-editable.
@@ -128,7 +135,7 @@ export async function submitFeedback(
       };
       transaction.create(reportRef, report);
       transaction.create(reportRef.collection(STUDENT_FEEDBACK_ACTIVITY_SUBCOLLECTION).doc(activity.id), activity);
-      return { feedbackId: input.draftId, submittedAt: now };
+      return { receipt: { feedbackId: input.draftId, submittedAt: now }, created: true };
     });
   } catch (error) {
     // A check refused the report, so nothing was written. Keep the copies only if a
@@ -140,6 +147,10 @@ export async function submitFeedback(
     throw error;
   }
 
-  await deleteFeedbackUploads(uid, input.draftId, input.attachments);
-  return receipt;
+  await Promise.all([
+    deleteFeedbackUploads(uid, input.draftId, input.attachments),
+    // Copies from an earlier failed attempt that the saved report no longer lists would otherwise never be removed.
+    saved.created ? deleteUnreferencedFeedbackReportAttachments(input.draftId, attachments) : undefined,
+  ]);
+  return saved.receipt;
 }

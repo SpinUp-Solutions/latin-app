@@ -8,7 +8,6 @@ import Image from 'next/image';
 import LessonPlayer from '@/src/components/ui/lesson/lesson-player';
 import LessonSidebar from '@/src/components/ui/lesson/lesson-sidebar';
 import PracticeSidebar from '@/src/components/ui/lesson/practice-sidebar';
-import { FeedbackBanner } from '@/src/components/ui/core/feedback-banner';
 import { FeedbackLessonDialog } from '@/src/components/student-feedback/FeedbackLessonDialog';
 import { useAuth } from '@/src/hooks/useAuth';
 import { BookOpen, Pencil } from 'lucide-react';
@@ -222,8 +221,6 @@ export default function DynamicLessonPage() {
           </button>
         </div>
       </header>
-
-      <FeedbackBanner />
 
       {isRefreshFailure && (
         <ConnectionRetryBanner

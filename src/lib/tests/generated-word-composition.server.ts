@@ -726,9 +726,10 @@ export async function collectGeneratedExerciseWords(options: {
         ? combined
         : combined.slice(0, numericCount);
 
-  const diagnostics: GeneratedExercisePreviewDiagnostics[] = streams.map(stream => ({
+  // Counts distinct words per paradigm; further forms of the same word are not extra usable words.
+  const diagnostics: GeneratedExercisePreviewDiagnostics[] = streams.map((stream, index) => ({
     specId: stream.spec.id,
-    collected: questions.filter(question => question.spec === stream.spec).length,
+    collected: collected[index].length,
     scanned: stream.totalScanned,
     exhausted: stream.exhausted,
     scanLimitReached: stream.scanLimitReached,

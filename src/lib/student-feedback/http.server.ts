@@ -16,12 +16,15 @@ export class FeedbackError extends Error {
 
 const mapRouteError = createRouteErrorResponse(FeedbackError);
 
-/** Cloud SDK errors can carry a numeric status and put URLs or credentials in their message; never pass them through. */
+/**
+ * Cloud SDK errors can carry a numeric status and put URLs or credentials in their message; never pass them
+ * through to the client. The original stays attached as `cause` so logs and Sentry still show what failed.
+ */
 export function feedbackRouteErrorResponse(error: unknown, action: string) {
   if (error instanceof FeedbackError || error instanceof ZodError || error instanceof AdminAccessError) {
     return mapRouteError(error, action);
   }
-  return mapRouteError(new Error('Unexpected feedback failure'), action);
+  return mapRouteError(new Error('Unexpected feedback failure', { cause: error }), action);
 }
 
 export function invalidFeedbackDocument(message: string): never {

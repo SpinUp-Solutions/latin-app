@@ -43,8 +43,11 @@ export const ensureGeneratorConfig = (config?: Partial<GeneratorConfigBase>): En
   return normalized;
 };
 
-/** The unique-word limit the generator applies, or null when the setting has no effect. */
+/**
+ * The unique-word limit, or null when the setting has no effect. The generator caps it at the question
+ * count, and the editor's config is already capped by ensureGeneratorConfig.
+ */
 export const getAppliedUniqueWordCount = (config: Partial<GeneratorConfigBase>): number | null =>
   config.wordSource === 'pool' && typeof config.count === 'number' && config.uniqueWordCount
-    ? Math.min(config.uniqueWordCount, config.count)
+    ? config.uniqueWordCount
     : null;

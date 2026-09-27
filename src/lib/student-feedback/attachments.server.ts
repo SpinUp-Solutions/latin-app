@@ -22,6 +22,7 @@ const EXTENSIONS: Record<FeedbackMediaType, string> = {
   'video/webm': '.webm',
   'video/quicktime': '.mov',
 };
+const QUICKTIME_LEADING_ATOMS = ['ftyp', 'moov', 'mdat', 'wide', 'free', 'skip', 'pnot'];
 
 /** Submitted files live in a folder no client can read or write. */
 export function feedbackReportAttachmentPath(feedbackId: string, attachmentId: string): string {
@@ -43,8 +44,10 @@ export function matchesFeedbackMediaSignature(contentType: string, bytes: Uint8A
     case 'video/webm':
       return has(0x1a, 0x45, 0xdf, 0xa3);
     case 'video/mp4':
-    case 'video/quicktime':
       return ascii(4, 'ftyp');
+    case 'video/quicktime':
+      // QuickTime makes the ftyp atom optional, so older files often open with another top-level atom.
+      return QUICKTIME_LEADING_ATOMS.some(atom => ascii(4, atom));
     default:
       return false;
   }
@@ -128,6 +131,21 @@ export async function deleteFeedbackUploads(
   bucket: Bucket = adminStorage.bucket()
 ): Promise<void> {
   await deleteQuietly(bucket, attachments.map(item => feedbackUploadPath(uid, draftId, item.id)));
+}
+
+/**
+ * Removes copies a saved report does not reference, such as files an earlier failed attempt copied
+ * before the student removed them and sent the draft again. The report is already saved, so failures are ignored.
+ */
+export async function deleteUnreferencedFeedbackReportAttachments(
+  feedbackId: string,
+  attachments: readonly { id: string }[],
+  bucket: Bucket = adminStorage.bucket()
+): Promise<void> {
+  const referenced = new Set(attachments.map(item => feedbackReportAttachmentPath(feedbackId, item.id)));
+  const listed = await bucket.getFiles({ prefix: feedbackReportAttachmentPath(feedbackId, '') }).catch(() => null);
+  if (!listed) return;
+  await deleteQuietly(bucket, listed[0].map(file => file.name).filter(name => !referenced.has(name)));
 }
 
 /** Removes a rejected submission's copies. Callers must first check that no saved report uses them. */

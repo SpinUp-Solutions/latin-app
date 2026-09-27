@@ -3,6 +3,7 @@ jest.mock('@/src/services/firebase-admin', () => ({ adminStorage: {} }));
 import {
   deleteFeedbackReportAttachments,
   deleteFeedbackUploads,
+  deleteUnreferencedFeedbackReportAttachments,
   feedbackReportAttachmentPath,
   getFeedbackAttachmentLinks,
   matchesFeedbackMediaSignature,
@@ -51,6 +52,11 @@ function fakeBucket(objects: Record<string, StoredObject>) {
       },
       path,
     }),
+    getFiles: async ({ prefix }: { prefix: string }) => [
+      Object.keys(objects)
+        .filter(name => name.startsWith(prefix))
+        .map(name => ({ name })),
+    ],
   };
   return { bucket: bucket as never, copies, deleted, signed };
 }
@@ -65,6 +71,8 @@ describe('media signatures', () => {
     ['video/webm', Uint8Array.from([0x1a, 0x45, 0xdf, 0xa3])],
     ['video/mp4', MP4],
     ['video/quicktime', Uint8Array.from([0, 0, 0, 0x14, ...Buffer.from('ftypqt  ')])],
+    ['video/quicktime', Uint8Array.from([0, 0, 0, 0x08, ...Buffer.from('wide')])],
+    ['video/quicktime', Uint8Array.from([0, 0, 0x0a, 0x2c, ...Buffer.from('moov')])],
   ])('accepts a real %s header', (type, bytes) => {
     expect(matchesFeedbackMediaSignature(type, bytes)).toBe(true);
   });
@@ -72,6 +80,7 @@ describe('media signatures', () => {
   it('rejects HTML disguised as an image and unsupported types', () => {
     expect(matchesFeedbackMediaSignature('image/png', HTML)).toBe(false);
     expect(matchesFeedbackMediaSignature('video/mp4', HTML)).toBe(false);
+    expect(matchesFeedbackMediaSignature('video/quicktime', HTML)).toBe(false);
     expect(matchesFeedbackMediaSignature('image/svg+xml', PNG)).toBe(false);
   });
 });
@@ -152,6 +161,17 @@ describe('storeFeedbackAttachments', () => {
     const { bucket, deleted } = fakeBucket({});
     await deleteFeedbackReportAttachments(draftId, [{ id: imageId }, { id: videoId }], bucket);
     expect(deleted).toEqual([feedbackReportAttachmentPath(draftId, imageId), feedbackReportAttachmentPath(draftId, videoId)]);
+  });
+
+  it('deletes only the report copies a saved report does not reference', async () => {
+    const stored = { contentType: 'image/png', size: 12, generation: '1', head: PNG };
+    const { bucket, deleted } = fakeBucket({
+      [feedbackReportAttachmentPath(draftId, imageId)]: stored,
+      [feedbackReportAttachmentPath(draftId, videoId)]: stored,
+      [upload(videoId)]: stored,
+    });
+    await deleteUnreferencedFeedbackReportAttachments(draftId, [{ id: imageId }], bucket);
+    expect(deleted).toEqual([feedbackReportAttachmentPath(draftId, videoId)]);
   });
 });
 
