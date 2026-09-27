@@ -1,6 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 export const useBeforeUnload = (hasDraft: boolean, onNavigateAway?: (destination?: string) => void) => {
+  // Callers pass a new callback on every render. Reading it through a ref keeps the
+  // history guard below from pushing a new entry (and re-rendering the router) each render.
+  const onNavigateAwayRef = useRef(onNavigateAway);
+  onNavigateAwayRef.current = onNavigateAway;
+
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (hasDraft) {
@@ -22,9 +27,7 @@ export const useBeforeUnload = (hasDraft: boolean, onNavigateAway?: (destination
       if (hasDraft) {
         e.preventDefault();
         window.history.pushState(null, '', window.location.href);
-        if (onNavigateAway) {
-          onNavigateAway();
-        }
+        onNavigateAwayRef.current?.();
       }
     };
 
@@ -47,7 +50,7 @@ export const useBeforeUnload = (hasDraft: boolean, onNavigateAway?: (destination
       if (destination.origin !== window.location.origin || destination.href === window.location.href) return;
       event.preventDefault();
       event.stopPropagation();
-      onNavigateAway?.(`${destination.pathname}${destination.search}${destination.hash}`);
+      onNavigateAwayRef.current?.(`${destination.pathname}${destination.search}${destination.hash}`);
     };
 
     document.addEventListener('click', handleDocumentNavigation, true);
@@ -56,5 +59,5 @@ export const useBeforeUnload = (hasDraft: boolean, onNavigateAway?: (destination
       window.removeEventListener('popstate', handlePopState);
       document.removeEventListener('click', handleDocumentNavigation, true);
     };
-  }, [hasDraft, onNavigateAway]);
+  }, [hasDraft]);
 };
