@@ -40,6 +40,7 @@ export interface CollectGeneratedExerciseWordsResult {
   diagnostics: GeneratedExercisePreviewDiagnostics[];
   globalScanLimitReached: boolean;
   requestedCount: number | 'all';
+  uniqueWords?: number;
 }
 
 export class GeneratedVocabularySourceError extends Error {
@@ -182,42 +183,49 @@ const getPathValues = (value: Record<string, unknown>, path: string): string[] =
   return Array.isArray(current) ? current.filter(isSelectableMorphologyForm) : [];
 };
 
-function selectForm(
-  word: Record<string, unknown>,
-  tableType: TableType,
-  selectedPaths: string[],
-  formRng: () => number,
-  steps?: readonly FormIdentificationStep[]
-) {
+function getFormCandidates(word: Record<string, unknown>, spec: WordQuerySpec) {
+  const tableType = spec.tableType;
+  const selectedPaths = spec.formSelection?.selectedCellPaths || [];
+  if (!tableType || !selectedPaths.length) return null;
   const tableField = TABLE_TYPE_CONFIG[tableType];
   const table = word[tableField];
   if (!table) return null;
 
-  const compatiblePaths =
-    steps && tableType
-      ? selectedPaths.filter(
-          path => (getApplicableStepsForFormPath(path, tableType, steps)?.applicableSteps.length ?? 0) > 0
-        )
-      : selectedPaths;
+  const steps = spec.steps;
+  const compatiblePaths = steps
+    ? selectedPaths.filter(
+        path => (getApplicableStepsForFormPath(path, tableType, steps)?.applicableSteps.length ?? 0) > 0
+      )
+    : selectedPaths;
   const candidates = compatiblePaths.flatMap(path =>
     getPathValues(word, `${tableField}.${path}`).map(form => ({ form, path }))
   );
+  return { table, tableType, compatiblePaths, candidates };
+}
+
+function selectForm(word: Record<string, unknown>, spec: WordQuerySpec, formRng: () => number, form?: string) {
+  const available = getFormCandidates(word, spec);
+  if (!available) return null;
+  const candidates =
+    form === undefined ? available.candidates : available.candidates.filter(candidate => candidate.form === form);
   if (!candidates.length) return null;
 
   const selected = candidates[Math.floor(formRng() * candidates.length)];
-  const matchingPaths = scanTableForMatchingForms(table, selected.form, tableType);
-  const paths = categorizeMatchingPaths(matchingPaths, compatiblePaths);
+  const matchingPaths = scanTableForMatchingForms(available.table, selected.form, available.tableType);
+  const paths = categorizeMatchingPaths(matchingPaths, available.compatiblePaths);
   if (!paths.primaryPaths.includes(selected.path)) paths.primaryPaths.unshift(selected.path);
   return { selected, ...paths };
 }
 
-function mapWord(doc: QueryDocumentSnapshot, spec: WordQuerySpec, formRng: () => number): ExerciseWordResponse | null {
-  const data = doc.data() as Record<string, unknown>;
+function mapWord(
+  id: string,
+  data: Record<string, unknown>,
+  spec: WordQuerySpec,
+  formRng: () => number,
+  form?: string
+): ExerciseWordResponse | null {
   const selectedPaths = spec.formSelection?.selectedCellPaths || [];
-  const selection =
-    spec.tableType && selectedPaths.length
-      ? selectForm(data, spec.tableType, selectedPaths, formRng, spec.steps)
-      : null;
+  const selection = selectForm(data, spec, formRng, form);
   if (selectedPaths.length && !selection) return null;
 
   const parsedTableType = spec.tableType;
@@ -233,7 +241,7 @@ function mapWord(doc: QueryDocumentSnapshot, spec: WordQuerySpec, formRng: () =>
       : undefined;
 
   return {
-    id: doc.id,
+    id,
     root_word: String(data.word || ''),
     dictionary_entry: typeof data.dictionary_entry === 'string' ? data.dictionary_entry : null,
     selected_form: selection?.selected.form || String(data.word || ''),
@@ -259,10 +267,13 @@ function evaluateCandidate(
   spec: WordQuerySpec,
   exercise: GeneratedExercise,
   formRng: () => number,
-  paradigmConfigs: ParadigmConfigs
+  paradigmConfigs: ParadigmConfigs,
+  /** Restricts the pick to one surface form, reusing data a form rotation already decoded. */
+  rotation?: { form: string; data: Record<string, unknown> }
 ): ExerciseWordResponse | null {
-  if (doc.data()._deletionPending) return null;
-  const word = mapWord(doc, spec, formRng);
+  const data = rotation?.data ?? doc.data();
+  if (data._deletionPending) return null;
+  const word = mapWord(doc.id, data, spec, formRng, rotation?.form);
   if (!word) return null;
   if (isRejectedBySpecAwarePronounOverlap(word, spec.paradigm, paradigmConfigs)) return null;
   if (exercise.type === 'generated-form-identification') {
@@ -466,6 +477,12 @@ function createSharedPoolLoader(pool: NonNullable<Awaited<ReturnType<typeof getR
   };
 }
 
+interface AcceptedWord {
+  word: ExerciseWordResponse;
+  doc: QueryDocumentSnapshot;
+  spec: WordQuerySpec;
+}
+
 async function takeEligible(
   stream: CandidateStream,
   target: number,
@@ -474,9 +491,10 @@ async function takeEligible(
   paradigmConfigs: ParadigmConfigs,
   budget: { remaining: number },
   deficit: number,
-  unbounded: boolean
-): Promise<ExerciseWordResponse[]> {
-  const accepted: ExerciseWordResponse[] = [];
+  unbounded: boolean,
+  acceptedIds?: Set<string>
+): Promise<AcceptedWord[]> {
+  const accepted: AcceptedWord[] = [];
   while (
     accepted.length < target &&
     (stream.unread.length > 0 || canStreamContinue(stream, unbounded ? 1 : budget.remaining))
@@ -497,10 +515,68 @@ async function takeEligible(
     }
     const doc = stream.unread.shift();
     if (!doc) break;
+    if (acceptedIds?.has(doc.id)) continue;
     const word = evaluateCandidate(doc, stream.spec, exercise, formRng, paradigmConfigs);
-    if (word) accepted.push(word);
+    if (!word) continue;
+    acceptedIds?.add(doc.id);
+    accepted.push({ word, doc, spec: stream.spec });
   }
   return accepted;
+}
+
+/** Yields validated questions for further distinct surface forms of an already accepted word. */
+function createFormRotation(
+  entry: AcceptedWord,
+  exercise: GeneratedExercise,
+  formRng: () => number,
+  paradigmConfigs: ParadigmConfigs
+) {
+  const data = entry.doc.data();
+  const forms = new Set(getFormCandidates(data, entry.spec)?.candidates.map(candidate => candidate.form));
+  forms.delete(entry.word.selected_form);
+  const remainingForms = shuffleWithRng([...forms], formRng);
+  let next = 0;
+
+  return (): AcceptedWord | null => {
+    while (next < remainingForms.length) {
+      const form = remainingForms[next++];
+      const word = evaluateCandidate(entry.doc, entry.spec, exercise, formRng, paradigmConfigs, { form, data });
+      if (word) return { ...entry, word };
+    }
+    return null;
+  };
+}
+
+/**
+ * Cycles through the accepted words, giving each one a new surface form per pass, until
+ * `count` questions exist or every word has run out of forms. The first pass is `firstPass`.
+ */
+function rotateWordForms(
+  firstPass: AcceptedWord[],
+  count: number,
+  exercise: GeneratedExercise,
+  formRng: () => number,
+  shuffleRng: () => number,
+  paradigmConfigs: ParadigmConfigs
+): AcceptedWord[] {
+  const questions = firstPass.slice(0, count);
+  if (questions.length >= count) return questions;
+  const rotations = firstPass.map(entry => createFormRotation(entry, exercise, formRng, paradigmConfigs));
+
+  while (questions.length < count) {
+    const pass = rotations
+      .map(nextForm => nextForm())
+      .filter((question): question is AcceptedWord => question !== null);
+    if (pass.length === 0) break;
+
+    const ordered = shuffleWithRng(pass, shuffleRng);
+    // Passes hold distinct words, so only the boundary with the previous pass can repeat a word.
+    if (ordered.length > 1 && ordered[0].doc.id === questions[questions.length - 1]?.doc.id) {
+      [ordered[0], ordered[1]] = [ordered[1], ordered[0]];
+    }
+    questions.push(...ordered.slice(0, count - questions.length));
+  }
+  return questions;
 }
 
 export async function collectGeneratedExerciseWords(options: {
@@ -510,6 +586,8 @@ export async function collectGeneratedExerciseWords(options: {
   count: number | 'all';
   exercise: GeneratedExercise;
   poolId?: string | null;
+  /** Caps distinct words; each is repeated with different forms until `count` is filled. */
+  uniqueWordCount?: number | null;
   rng?: () => number;
   paradigmConfigs?: ParadigmConfigs;
 }): Promise<CollectGeneratedExerciseWordsResult> {
@@ -554,13 +632,21 @@ export async function collectGeneratedExerciseWords(options: {
     numericCount = Math.min(Math.max(1, options.count), MAX_GENERATED_WORD_COUNT);
     requestedCount = numericCount;
   }
+  const uniqueWordTarget =
+    !unbounded && options.uniqueWordCount && options.uniqueWordCount > 0
+      ? Math.min(options.uniqueWordCount, numericCount)
+      : null;
+  // Number of distinct words to collect; unique-word mode fills the rest with further forms.
+  const wordTarget = uniqueWordTarget ?? numericCount;
+  // Unique-word mode must not pick one document for two paradigms; the default mode allows it.
+  const acceptedIds = uniqueWordTarget === null ? undefined : new Set<string>();
   const shares = unbounded
     ? specs.map(() => Number.POSITIVE_INFINITY)
-    : allocateFairShares(specs.length, numericCount, allocationRng);
+    : allocateFairShares(specs.length, wordTarget, allocationRng);
   const budget = {
     // Pool reads are bounded by its unique IDs and shared across all paradigms.
     // Collection queries retain their scan budget.
-    remaining: unbounded || poolIds !== null ? Number.POSITIVE_INFINITY : globalScanBudget(numericCount),
+    remaining: unbounded || poolIds !== null ? Number.POSITIVE_INFINITY : globalScanBudget(wordTarget),
   };
   const initialBudget = budget.remaining;
 
@@ -573,7 +659,7 @@ export async function collectGeneratedExerciseWords(options: {
     return new QueryCandidateStream(spec, ceiling, options.db, options.collection, queryRng, unbounded);
   });
 
-  const collected: ExerciseWordResponse[][] = streams.map(() => []);
+  const collected: AcceptedWord[][] = streams.map(() => []);
 
   if (unbounded) {
     for (let index = 0; index < streams.length; index += 1) {
@@ -598,17 +684,18 @@ export async function collectGeneratedExerciseWords(options: {
         paradigmConfigs,
         budget,
         shares[index],
-        false
+        false,
+        acceptedIds
       );
     }
 
     let total = collected.reduce((sum, words) => sum + words.length, 0);
     const hasCapacity = (stream: CandidateStream) =>
       stream.unread.length > 0 || canStreamContinue(stream, budget.remaining);
-    while (total < numericCount && streams.some(hasCapacity)) {
-      const deficit = numericCount - total;
+    while (total < wordTarget && streams.some(hasCapacity)) {
+      const deficit = wordTarget - total;
       let progressed = false;
-      for (let index = 0; index < streams.length && total < numericCount; index += 1) {
+      for (let index = 0; index < streams.length && total < wordTarget; index += 1) {
         if (!hasCapacity(streams[index])) continue;
         const extra = await takeEligible(
           streams[index],
@@ -618,7 +705,8 @@ export async function collectGeneratedExerciseWords(options: {
           paradigmConfigs,
           budget,
           deficit,
-          false
+          false,
+          acceptedIds
         );
         if (extra.length > 0) {
           collected[index].push(...extra);
@@ -630,21 +718,29 @@ export async function collectGeneratedExerciseWords(options: {
     }
   }
 
-  const diagnostics: GeneratedExercisePreviewDiagnostics[] = streams.map((stream, index) => ({
+  const combined = shuffleWithRng(collected.flat(), shuffleRng);
+  const questions =
+    uniqueWordTarget !== null
+      ? rotateWordForms(combined, numericCount, options.exercise, formRng, shuffleRng, paradigmConfigs)
+      : unbounded
+        ? combined
+        : combined.slice(0, numericCount);
+
+  const diagnostics: GeneratedExercisePreviewDiagnostics[] = streams.map(stream => ({
     specId: stream.spec.id,
-    collected: collected[index].length,
+    collected: questions.filter(question => question.spec === stream.spec).length,
     scanned: stream.totalScanned,
     exhausted: stream.exhausted,
     scanLimitReached: stream.scanLimitReached,
   }));
-
-  const combined = shuffleWithRng(collected.flat(), shuffleRng);
-  const words = unbounded ? combined : combined.slice(0, numericCount);
+  const words = questions.map(question => question.word);
 
   return {
     words,
     diagnostics,
-    globalScanLimitReached: !unbounded && budget.remaining <= 0 && initialBudget > 0 && words.length < numericCount,
+    globalScanLimitReached: !unbounded && budget.remaining <= 0 && initialBudget > 0 && combined.length < wordTarget,
     requestedCount,
+    // Every collected word is distinct and opens the rotation, so this is the unique-word total.
+    uniqueWords: uniqueWordTarget === null ? undefined : combined.length,
   };
 }

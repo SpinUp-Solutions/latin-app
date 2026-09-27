@@ -32,5 +32,19 @@ export const ensureGeneratorConfig = (config?: Partial<GeneratorConfigBase>): En
   };
   // Retired candidate caps must not be saved again when an old exercise is edited.
   delete (normalized as EnsuredGeneratorConfig & { poolWordLimit?: unknown }).poolWordLimit;
+  // A unique-word limit above the question count has no effect, so keep it in range whenever the count changes.
+  if (
+    typeof normalized.count === 'number' &&
+    normalized.uniqueWordCount &&
+    normalized.uniqueWordCount > normalized.count
+  ) {
+    normalized.uniqueWordCount = normalized.count;
+  }
   return normalized;
 };
+
+/** The unique-word limit the generator applies, or null when the setting has no effect. */
+export const getAppliedUniqueWordCount = (config: Partial<GeneratorConfigBase>): number | null =>
+  config.wordSource === 'pool' && typeof config.count === 'number' && config.uniqueWordCount
+    ? Math.min(config.uniqueWordCount, config.count)
+    : null;

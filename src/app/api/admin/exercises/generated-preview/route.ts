@@ -62,6 +62,7 @@ export async function handleGeneratedExerciseWordsPOST(request: NextRequest, aud
       diagnostics: result.diagnostics,
       requestedCount: result.requestedCount,
       collected: result.words.length,
+      uniqueWords: result.uniqueWords,
       globalScanLimitReached: result.globalScanLimitReached,
     });
   } catch (error) {
