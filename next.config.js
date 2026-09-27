@@ -4,6 +4,9 @@ const { version } = require('./package.json');
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Auto-memoizes client components and hooks at build time. Components that break the Rules of
+  // React are skipped (not miscompiled); see AGENTS.md for how to check coverage.
+  reactCompiler: true,
   serverExternalPackages: ['pdf-lib', '@pdf-lib/fontkit'],
   outputFileTracingIncludes: {
     '/api/test-results/[attemptId]/pdf': ['./src/lib/tests/fonts/**/*'],
