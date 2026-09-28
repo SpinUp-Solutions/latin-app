@@ -8,7 +8,7 @@ import {
 } from '@/src/lib/tests/generated-preview-schema';
 import type { GeneratedExercise } from '@/src/lib/tests/generated-exercises';
 import { collectWordsForGeneratedExerciseRequest } from '@/src/lib/tests/generated-word-loader.server';
-import { GeneratedVocabularySourceError } from '@/src/lib/tests/generated-word-composition.server';
+import { GeneratedVocabularySourceError } from '@/src/lib/tests/errors';
 import {
   studentDashboardService,
   StudentDashboardServiceError,

@@ -13,7 +13,7 @@ import {
   gradeOddOneOut,
 } from '@/src/lib/tests/grading';
 import { estimateFirestoreDocumentBytes } from '@/src/lib/tests/firestore-size';
-import { applyValueFilter } from '@/src/lib/tests/generated-word-loader.server';
+import { applyValueFilter } from '@/src/lib/tests/generated-word-composition.server';
 import { filterOverlappingPronounParadigms, isRejectedBySpecAwarePronounOverlap } from '@/src/utils/generated/pronounParadigmFiltering';
 import type {
   FillExercise,
