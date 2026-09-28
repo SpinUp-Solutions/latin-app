@@ -14,14 +14,30 @@ import {
   LayoutDashboard,
   LibraryBig,
   Sparkles,
+  MessageSquare,
   Tags,
   type LucideIcon,
 } from 'lucide-react';
+import type { ComponentType } from 'react';
 import { cn } from '@/src/lib/utils';
 import { getActiveAdminNavigationHref, type AdminNavigationItem } from './navigation-utils';
+import { useGetAdminFeedbackCountQuery } from '@/src/store/api/studentFeedbackApi';
+
+function FeedbackCount() {
+  const { data } = useGetAdminFeedbackCountQuery();
+  return data?.count ? (
+    <span
+      className="rounded-full bg-roman-red px-1.5 py-0.5 text-xs font-semibold text-white"
+      aria-label={`${data.count} unresolved feedback reports`}>
+      {data.count}
+    </span>
+  ) : null;
+}
 
 interface NavigationEntry extends AdminNavigationItem {
   icon: LucideIcon;
+  /** Rendered after the label, for example a count. */
+  badge?: ComponentType;
 }
 
 interface NavigationGroup {
@@ -31,6 +47,7 @@ interface NavigationGroup {
 
 const navigationGroups: NavigationGroup[] = [
   { label: 'Overview', items: [{ href: '/admin', label: 'Overview', icon: LayoutDashboard }] },
+  { label: 'Feedback', items: [{ href: '/admin/feedback', label: 'Feedback', icon: MessageSquare, badge: FeedbackCount }] },
   {
     label: 'Content',
     items: [
@@ -135,6 +152,7 @@ export function AdminSidebar({ onNavigate, collapsed = false, onToggleCollapse, 
             <ul className="space-y-1">
               {group.items.map(item => {
                 const Icon = item.icon;
+                const Badge = item.badge;
                 const isActive = item.href === activeHref;
                 return (
                   <li key={item.href}>
@@ -181,6 +199,7 @@ export function AdminSidebar({ onNavigate, collapsed = false, onToggleCollapse, 
                           )}>
                           {item.label}
                         </span>
+                        {Badge && <Badge />}
                       </Link>
                     )}
                   </li>

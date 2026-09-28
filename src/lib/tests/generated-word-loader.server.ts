@@ -4,6 +4,7 @@ import { PARADIGM_POS_GROUP, PARADIGM_TABLE_TYPE } from '@/src/config/paradigmDe
 import type { GeneratorFilters } from '@/src/types/exercises/base';
 import type { FormParadigm, ParadigmConfigs } from '@/src/types/exercises/paradigm';
 import { deriveTableTypeFromPOS } from '@/src/utils/generated/tableType';
+import { getAppliedUniqueWordCount } from '@/src/utils/exercises/generatorConfigDefaults';
 import {
   buildLegacyParadigmConfigs,
   buildLegacyPosConfigs,
@@ -101,6 +102,7 @@ export async function collectWordsForGeneratedExerciseRequest(
     count: config.count || 'all',
     exercise,
     poolId,
+    uniqueWordCount: exercise.type === 'generated-form-identification' ? getAppliedUniqueWordCount(config) : null,
     rng: options?.rng,
     paradigmConfigs: exercise.type === 'generated-form-identification' ? getParadigmConfigs(exercise) : {},
   });

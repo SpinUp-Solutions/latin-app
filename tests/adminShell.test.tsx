@@ -12,6 +12,7 @@ import { AdminSidebar } from '@/src/components/admin/shell/AdminSidebar';
 let pathname = '/admin/vocabulary/pending';
 
 jest.mock('next/navigation', () => ({ usePathname: () => pathname }));
+jest.mock('@/src/store/api/studentFeedbackApi', () => ({ useGetAdminFeedbackCountQuery: () => ({ data: undefined }) }));
 jest.mock('next/image', () => ({ __esModule: true, default: ({ alt }: { alt: string }) => <span aria-label={alt} /> }));
 
 describe('admin shell routing and accessibility', () => {

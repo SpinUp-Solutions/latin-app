@@ -3,6 +3,7 @@ import { adminDb, adminStorage } from '@/src/services/firebase-admin';
 import { Bucket } from '@google-cloud/storage';
 import { verifyAdminAccess } from '../../../../lib/verifyAdminAccess';
 import { runVocabularyContentStorageMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
+import { isLessonAudioObjectPath } from '@/src/lib/lesson-audio-path.server';
 
 export async function POST(req: NextRequest) {
   try {
@@ -36,6 +37,10 @@ export async function POST(req: NextRequest) {
 
     const fileExtension = file.name.split('.').pop();
     const destination = `lessons/${lessonId}/content_audio/${contentItemId}.${fileExtension}`;
+    // Store only paths the audio signer and deleter accept, or the file could never be played or removed.
+    if (!isLessonAudioObjectPath(destination)) {
+      return new NextResponse(JSON.stringify({ error: 'Invalid lesson, content item or file name' }), { status: 400 });
+    }
 
     const bucket = adminStorage.bucket() as unknown as Bucket;
     const fileBuffer = Buffer.from(await file.arrayBuffer());

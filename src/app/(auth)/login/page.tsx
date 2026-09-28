@@ -44,12 +44,11 @@ export default function LoginPage() {
   useEffect(() => {
     if (user && !authLoading) {
       redirectRequested.current = true;
-      recordAuthBreadcrumb('redirect_requested', { destination: isAdmin ? '/admin' : '/dashboard' });
-      if (isAdmin) {
-        router.replace('/admin');
-      } else {
-        router.replace('/dashboard');
-      }
+      // The feedback page is the only return path accepted from the URL.
+      const returnToFeedback = new URLSearchParams(window.location.search).get('return') === '/feedback';
+      const destination = returnToFeedback ? '/feedback' : isAdmin ? '/admin' : '/dashboard';
+      recordAuthBreadcrumb('redirect_requested', { destination });
+      router.replace(destination);
     }
   }, [user, authLoading, isAdmin, router]);
 

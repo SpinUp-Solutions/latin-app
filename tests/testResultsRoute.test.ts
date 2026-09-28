@@ -1,4 +1,5 @@
 import { GET as getTestResult } from '@/src/app/api/test-results/[attemptId]/route';
+import { TestServiceError } from '@/src/lib/tests/errors';
 
 const mockVerifyRequestAuth = jest.fn();
 const mockGetSubmittedResult = jest.fn();
@@ -57,7 +58,7 @@ describe('student test-result route', () => {
 
   it('maps domain errors like ATTEMPT_NOT_FOUND to their status codes', async () => {
     mockGetSubmittedResult.mockRejectedValue(
-      Object.assign(new Error('Test result not found'), { code: 'ATTEMPT_NOT_FOUND', status: 404 })
+      new TestServiceError('ATTEMPT_NOT_FOUND', 'Test result not found', 404)
     );
     const response = (await getTestResult(request(), params('attempt-1'))) as unknown as {
       status: number;

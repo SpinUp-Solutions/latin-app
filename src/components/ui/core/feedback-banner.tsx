@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { X, MessageSquare } from 'lucide-react';
 import { FEEDBACK_FORM_URL } from '@/src/constants/student-feedback';
 
@@ -31,13 +32,11 @@ export const FeedbackBanner: React.FC<FeedbackBannerProps> = ({ className = '' }
         <MessageSquare className="h-4 w-4 text-roman-red flex-shrink-0" />
         <p className="text-sm text-roman-stone">
           How is your Latin learning experience?{' '}
-          <a
+          <Link
             href={FEEDBACK_FORM_URL}
-            target="_blank"
-            rel="noopener noreferrer"
             className="font-medium text-roman-red hover:underline">
             Share your feedback
-          </a>{' '}
+          </Link>{' '}
           — it only takes a minute.
         </p>
       </div>

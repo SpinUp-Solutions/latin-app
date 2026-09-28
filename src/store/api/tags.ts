@@ -14,6 +14,10 @@ export const APP_API_TAG_TYPES = [
   'MockTest',
   'TestAttempt',
   'AttemptSummary',
+  // Student feedback.
+  'FeedbackList',
+  'FeedbackDetail',
+  'FeedbackCount',
 ] as const;
 
 export const PRACTICE_CATEGORY_ASSIGNMENTS_TAG = {

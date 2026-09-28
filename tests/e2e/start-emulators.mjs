@@ -14,7 +14,7 @@ const child = spawn(
     firebaseCli,
     'emulators:start',
     '--only',
-    'auth,firestore',
+    'auth,firestore,storage',
     '--project',
     'demo-latin-app',
     '--config',

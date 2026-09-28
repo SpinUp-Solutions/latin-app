@@ -23,6 +23,8 @@ import { prepareGeneratedFormIdentificationWord } from '@/src/utils/exercises/fo
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { GeneratedVocabularyFilters } from './GeneratedVocabularyFilters';
 import { GeneratedPoolSourceFields } from './GeneratedPoolSourceFields';
+import { GeneratedUniqueWordCountField } from './GeneratedUniqueWordCountField';
+import { getAppliedUniqueWordCount } from '@/src/utils/exercises/generatorConfigDefaults';
 import { GeneratedExerciseSummary } from './GeneratedExerciseSummary';
 import { GeneratedPreviewPanel } from './GeneratedPreviewPanel';
 
@@ -84,8 +86,14 @@ const GeneratedFormIdentificationEditorView: React.FC<{
       count={editor.config.count}
       questionCountId="form-identification-question-count"
       onPoolChange={poolId => editor.updateConfig({ poolId })}
-      onCountChange={count => editor.updateConfig({ count })}
-    />
+      onCountChange={count => editor.updateConfig({ count })}>
+      <GeneratedUniqueWordCountField
+        id="form-identification-unique-word-count"
+        uniqueWordCount={editor.config.uniqueWordCount}
+        count={editor.config.count}
+        onChange={uniqueWordCount => editor.updateConfig({ uniqueWordCount })}
+      />
+    </GeneratedPoolSourceFields>
   );
 
   return (
@@ -326,6 +334,7 @@ const GeneratedFormIdentificationEditorView: React.FC<{
       <GeneratedExerciseSummary
         collection={editor.config.collection}
         count={editor.config.count}
+        uniqueWordCount={getAppliedUniqueWordCount(editor.config)}
         partOfSpeech={editor.derivedFilters.partOfSpeech}
         selectedFormCount={editor.derivedFormSelection?.selectedCellPaths.length}
       />
