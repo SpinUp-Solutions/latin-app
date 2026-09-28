@@ -32,15 +32,13 @@ import type {
   PracticeCategoryWithCounts,
   PracticeLessonType,
 } from '@/src/types/practice-category';
+import { isPracticeLessonType } from '@/src/lib/practice-categories/domain';
 
 export const PRACTICE_LESSON_TYPES: Array<{ value: PracticeLessonType; label: string; shortLabel: string }> = [
   { value: 'vocab', label: 'Vocabulary', shortLabel: 'Vocabulary' },
   { value: 'sentence-diagramming', label: 'Sentence Diagramming', shortLabel: 'Diagramming' },
   { value: 'listening', label: 'Listening', shortLabel: 'Listening' },
 ];
-
-export const isPracticeLessonType = (value: string | null): value is PracticeLessonType =>
-  PRACTICE_LESSON_TYPES.some(option => option.value === value);
 
 export const practiceLessonTypeLabel = (lessonType: PracticeLessonType) =>
   PRACTICE_LESSON_TYPES.find(option => option.value === lessonType)?.label ?? lessonType;
@@ -59,14 +57,27 @@ export const parsePracticeCategoryContext = (
   };
 };
 
-export const getCategoryCounts = (category: PracticeCategoryWithCounts | PracticeCategory) => {
-  const withCounts = category as PracticeCategoryWithCounts;
+/**
+ * Radix focuses the trigger on close; when the trigger has unmounted (e.g. the row it lived in was
+ * removed), focus falls back to the page's [data-dialog-focus-fallback] element instead of <body>.
+ */
+export function useDialogFocusReturn() {
+  const returnFocusRef = useRef<HTMLElement | null>(null);
   return {
-    assigned: Number(withCounts.assignedLessonCount ?? 0),
-    live: Number(withCounts.liveLessonCount ?? 0),
-    draft: Number(withCounts.draftLessonCount ?? 0),
+    onOpenAutoFocus: () => {
+      returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    },
+    onCloseAutoFocus: (event: Event) => {
+      const target = returnFocusRef.current?.isConnected
+        ? returnFocusRef.current
+        : document.querySelector<HTMLElement>('[data-dialog-focus-fallback]');
+      returnFocusRef.current = null;
+      if (!target) return;
+      event.preventDefault();
+      target.focus();
+    },
   };
-};
+}
 
 export const useBrowserNavigationProtection = (dirty: boolean, itemName = 'order changes') => {
   useEffect(() => {
@@ -138,24 +149,13 @@ export function ConfirmActionDialog({
   destructive = false,
   cancelLabel = 'Cancel',
 }: ConfirmActionDialogProps) {
-  const returnFocusRef = useRef<HTMLElement | null>(null);
+  const focusReturn = useDialogFocusReturn();
 
   return (
     <AlertDialog open={open} onOpenChange={nextOpen => !pending && onOpenChange(nextOpen)}>
       <AlertDialogContent
         className="max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-lg overflow-y-auto"
-        onOpenAutoFocus={() => {
-          returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        }}
-        onCloseAutoFocus={event => {
-          const target = returnFocusRef.current?.isConnected
-            ? returnFocusRef.current
-            : document.querySelector<HTMLElement>('[data-dialog-focus-fallback]');
-          returnFocusRef.current = null;
-          if (!target) return;
-          event.preventDefault();
-          target.focus();
-        }}>
+        {...focusReturn}>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription asChild>
@@ -213,7 +213,7 @@ export function CategoryFormDialog({
   const [submitting, setSubmitting] = useState(false);
   const [discardOpen, setDiscardOpen] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
-  const returnFocusRef = useRef<HTMLElement | null>(null);
+  const focusReturn = useDialogFocusReturn();
 
   const initial = useMemo(
     () => ({
@@ -284,18 +284,7 @@ export function CategoryFormDialog({
       <Dialog open={open} onOpenChange={nextOpen => (nextOpen ? onOpenChange(true) : close())}>
         <DialogContent
           className="max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] overflow-y-auto sm:max-w-xl"
-          onOpenAutoFocus={() => {
-            returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-          }}
-          onCloseAutoFocus={event => {
-            const target = returnFocusRef.current?.isConnected
-              ? returnFocusRef.current
-              : document.querySelector<HTMLElement>('[data-dialog-focus-fallback]');
-            returnFocusRef.current = null;
-            if (!target) return;
-            event.preventDefault();
-            target.focus();
-          }}
+          {...focusReturn}
           onEscapeKeyDown={event => {
             if (submitting || dirty) {
               event.preventDefault();

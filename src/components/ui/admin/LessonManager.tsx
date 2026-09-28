@@ -41,8 +41,8 @@ import { useDebounce } from '@/src/hooks/useDebounce';
 import { PracticeCategoryChips } from './practice-categories/PracticeCategoryChips';
 import { useGetPracticeCategoriesQuery } from '@/src/store/api/practiceCategoryApi';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
+import { isPracticeLessonType } from '@/src/lib/practice-categories/domain';
 import {
-  isPracticeLessonType,
   lessonMatchesPracticeCategory,
   lessonMatchesTextSearch,
   type PracticeCategoryFilter,

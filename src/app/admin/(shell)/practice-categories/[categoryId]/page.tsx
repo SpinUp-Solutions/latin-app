@@ -30,14 +30,14 @@ import {
   CategoryFormDialog,
   CategoryFormSubmission,
   ConfirmActionDialog,
-  getCategoryCounts,
   InlineLoadError,
-  isPracticeLessonType,
   LoadingRows,
   parsePracticeCategoryContext,
   practiceLessonTypeLabel,
   useBrowserNavigationProtection,
+  useDialogFocusReturn,
 } from '@/src/components/admin/practice-categories/category-admin-shared';
+import { isPracticeLessonType } from '@/src/lib/practice-categories/domain';
 import { Badge } from '@/src/components/ui/badge';
 import { Button } from '@/src/components/ui/button';
 import { Checkbox } from '@/src/components/ui/checkbox';
@@ -279,7 +279,7 @@ function AddLessonsDialog({ open, onOpenChange, category, assignedCount, lessons
   const [selected, setSelected] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const returnFocusRef = useRef<HTMLElement | null>(null);
+  const focusReturn = useDialogFocusReturn();
 
   useEffect(() => {
     if (!open) return;
@@ -322,18 +322,7 @@ function AddLessonsDialog({ open, onOpenChange, category, assignedCount, lessons
     <Dialog open={open} onOpenChange={nextOpen => !submitting && onOpenChange(nextOpen)}>
       <DialogContent
         className="flex max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-2xl flex-col overflow-hidden p-0"
-        onOpenAutoFocus={() => {
-          returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        }}
-        onCloseAutoFocus={event => {
-          const target = returnFocusRef.current?.isConnected
-            ? returnFocusRef.current
-            : document.querySelector<HTMLElement>('[data-dialog-focus-fallback]');
-          returnFocusRef.current = null;
-          if (!target) return;
-          event.preventDefault();
-          target.focus();
-        }}
+        {...focusReturn}
         onEscapeKeyDown={event => submitting && event.preventDefault()}
         onPointerDownOutside={event => submitting && event.preventDefault()}>
         <DialogHeader className="px-6 pt-6">
@@ -702,6 +691,11 @@ function PracticeCategoryDetailPage() {
     }
   };
 
+  const clearLessonFilters = () => {
+    setLessonSearch('');
+    setLessonTagFilters([]);
+  };
+
   const filterLessonsByTag = (tagId: string) => {
     setLessonTagFilters([tagId]);
     setLessonSearch('');
@@ -735,7 +729,7 @@ function PracticeCategoryDetailPage() {
     }
   };
 
-  const assignedCount = category ? Math.max(getCategoryCounts(category).assigned, lessons.length) : lessons.length;
+  const assignedCount = category ? Math.max(category.assignedLessonCount, lessons.length) : lessons.length;
 
   const categoryActionDescription = (() => {
     if (!category || !categoryAction) return '';
@@ -893,14 +887,7 @@ function PracticeCategoryDetailPage() {
                     className="sm:min-w-52"
                   />
                   {lessonFiltersActive && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setLessonSearch('');
-                        setLessonTagFilters([]);
-                      }}>
+                    <Button type="button" variant="ghost" size="sm" onClick={clearLessonFilters}>
                       Clear filters
                     </Button>
                   )}
@@ -960,14 +947,7 @@ function PracticeCategoryDetailPage() {
                     <p className="mt-2 text-sm text-roman-stone">
                       Search and selected tags combine to narrow this category.
                     </p>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="mt-4"
-                      onClick={() => {
-                        setLessonSearch('');
-                        setLessonTagFilters([]);
-                      }}>
+                    <Button type="button" variant="outline" className="mt-4" onClick={clearLessonFilters}>
                       Clear filters
                     </Button>
                   </div>

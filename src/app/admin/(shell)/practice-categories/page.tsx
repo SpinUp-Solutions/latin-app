@@ -32,7 +32,6 @@ import {
   CategoryFormDialog,
   CategoryFormSubmission,
   ConfirmActionDialog,
-  getCategoryCounts,
   InlineLoadError,
   LoadingRows,
   PRACTICE_LESSON_TYPES,
@@ -49,7 +48,6 @@ import {
   DropdownMenuTrigger,
 } from '@/src/components/ui/dropdown-menu';
 import { Input } from '@/src/components/ui/input';
-import { Tabs } from '@/src/components/ui/tabs';
 import { getApiErrorMessage, hasApiErrorStatus } from '@/src/store/api/baseQuery';
 import {
   practiceCategoryApi,
@@ -121,7 +119,7 @@ function SortableCategoryRow({
     id: category.id,
     disabled: !orderingEnabled,
   });
-  const counts = getCategoryCounts(category);
+  const { assignedLessonCount: assigned, liveLessonCount: live, draftLessonCount: draft } = category;
 
   return (
     <div
@@ -183,18 +181,18 @@ function SortableCategoryRow({
         {category.description && <p className="mt-1 line-clamp-2 text-sm text-roman-stone">{category.description}</p>}
         <div
           className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600"
-          aria-label={`${counts.assigned} assigned lessons, ${counts.live} live, ${counts.draft} draft`}>
+          aria-label={`${assigned} assigned lessons, ${live} live, ${draft} draft`}>
           <span>
-            <strong className="font-medium text-gray-800">{counts.assigned}</strong> assigned
+            <strong className="font-medium text-gray-800">{assigned}</strong> assigned
           </span>
           <span>
-            <strong className="font-medium text-gray-800">{counts.live}</strong> live
+            <strong className="font-medium text-gray-800">{live}</strong> live
           </span>
           <span>
-            <strong className="font-medium text-gray-800">{counts.draft}</strong> draft
+            <strong className="font-medium text-gray-800">{draft}</strong> draft
           </span>
         </div>
-        {category.status === 'archived' && counts.assigned > 0 && (
+        {category.status === 'archived' && assigned > 0 && (
           <p className="mt-2 text-xs text-amber-700">
             Remove all assigned lessons before permanently deleting this category.
           </p>
@@ -227,7 +225,7 @@ function SortableCategoryRow({
               <DropdownMenuItem onSelect={() => onAction('restore')}>
                 <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" /> Restore
               </DropdownMenuItem>
-              {counts.assigned === 0 && (
+              {assigned === 0 && (
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive"
                   onSelect={() => onAction('delete')}>
@@ -286,23 +284,20 @@ function PracticeCategoriesPage() {
 
   useBrowserNavigationProtection(dirty, 'category order changes');
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const { lessonType: nextType, status: nextStatus } = parsePracticeCategoryContext(window.location.search);
-    setLessonType(nextType);
-    setStatus(nextStatus);
-    params.set('lessonType', nextType);
-    params.set('status', nextStatus);
-    window.history.replaceState(window.history.state, '', `${window.location.pathname}?${params.toString()}`);
-    setUrlReady(true);
-  }, []);
-
   const setUrlContext = useCallback((nextType: PracticeLessonType, nextStatus: PracticeCategoryStatus) => {
     const params = new URLSearchParams(window.location.search);
     params.set('lessonType', nextType);
     params.set('status', nextStatus);
     window.history.replaceState(window.history.state, '', `${window.location.pathname}?${params.toString()}`);
   }, []);
+
+  useEffect(() => {
+    const { lessonType: nextType, status: nextStatus } = parsePracticeCategoryContext(window.location.search);
+    setLessonType(nextType);
+    setStatus(nextStatus);
+    setUrlContext(nextType, nextStatus);
+    setUrlReady(true);
+  }, [setUrlContext]);
 
   useEffect(() => {
     const target = focusAfterLoad.current;
@@ -460,13 +455,13 @@ function PracticeCategoriesPage() {
 
   const actionDescription = (() => {
     if (!action) return '';
-    const counts = getCategoryCounts(action.category);
+    const assigned = action.category.assignedLessonCount;
     if (action.kind === 'archive') {
       return (
         <>
           <p>
-            <strong>{action.category.name}</strong> currently has {counts.assigned} assigned{' '}
-            {counts.assigned === 1 ? 'lesson' : 'lessons'}.
+            <strong>{action.category.name}</strong> currently has {assigned} assigned{' '}
+            {assigned === 1 ? 'lesson' : 'lessons'}.
           </p>
           <ul className="list-disc space-y-1 pl-5">
             <li>Lessons will not be deleted or unpublished.</li>
@@ -512,14 +507,12 @@ function PracticeCategoriesPage() {
             </Button>
           }
         />
-        <Tabs value={lessonType} onValueChange={value => guardContextChange(value as PracticeLessonType, status)}>
-          <LessonTypeTabs
-            value={lessonType}
-            onValueChange={value => guardContextChange(value as PracticeLessonType, status)}
-            lessonTypes={PRACTICE_LESSON_TYPE_TABS}
-            disabled={orderPending}
-          />
-        </Tabs>
+        <LessonTypeTabs
+          value={lessonType}
+          onValueChange={value => guardContextChange(value as PracticeLessonType, status)}
+          lessonTypes={PRACTICE_LESSON_TYPE_TABS}
+          disabled={orderPending}
+        />
 
         <section className="rounded-xl border bg-white/70 p-4 shadow-sm sm:p-6" aria-labelledby="category-list-heading">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
