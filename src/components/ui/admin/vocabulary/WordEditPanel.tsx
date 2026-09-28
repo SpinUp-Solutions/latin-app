@@ -91,7 +91,8 @@ const EDITABLE_TABLES: Partial<
   },
 };
 
-const getEditableTable = (word: VocabularyWordWithId | null) => (word ? EDITABLE_TABLES[word.part_of_speech] : undefined);
+const getEditableTable = (word: VocabularyWordWithId | null) =>
+  word ? EDITABLE_TABLES[word.part_of_speech] : undefined;
 
 const EmptyState: React.FC = () => (
   <div className="flex items-center justify-center h-full p-8">
