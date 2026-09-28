@@ -56,8 +56,6 @@ export const createAdverbFormPath = (degree: string): AdverbFormPath => ({
   degree,
 });
 
-type FormPath = VerbFormPath | NounFormPath | AdjectiveFormPath | PronounFormPath | AdverbFormPath;
-
 export const parseFormPathFromString = (
   path: string,
   tableType: TableType
@@ -128,11 +126,4 @@ export const parseFormPathFromString = (
   }
 
   return null;
-};
-
-export const formatFormPath = (formPath: FormPath | null): string => {
-  if (!formPath) return '';
-  return Object.values(formPath)
-    .filter(v => v)
-    .join(' ');
 };

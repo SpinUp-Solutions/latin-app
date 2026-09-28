@@ -25,7 +25,7 @@ interface LessonNavigationProps {
   isFinishBlocked?: boolean;
 }
 
-export const LessonNavigation: React.FC<LessonNavigationProps> = ({
+const LessonNavigation: React.FC<LessonNavigationProps> = ({
   currentPageIndex,
   furthestPageIndex = currentPageIndex,
   totalPages,

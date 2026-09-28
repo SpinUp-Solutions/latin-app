@@ -387,5 +387,3 @@ export const SentenceDiagramAuthor: React.FC<SentenceDiagramAuthorProps> = ({ do
     </div>
   );
 };
-
-export default SentenceDiagramAuthor;

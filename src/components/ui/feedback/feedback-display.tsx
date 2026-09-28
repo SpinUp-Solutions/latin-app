@@ -14,7 +14,6 @@ interface FeedbackDisplayProps {
   correctAnswer?: FeedbackBody;
   explanation?: FeedbackBody;
   showExplanation?: boolean;
-  className?: string;
   onContinue?: () => void;
   allowContinueOnIncorrect?: boolean;
   onStartOver?: () => void;
@@ -36,7 +35,6 @@ export const FeedbackDisplay: React.FC<FeedbackDisplayProps> = ({
   correctAnswer,
   explanation,
   showExplanation = false,
-  className = '',
   onContinue,
   allowContinueOnIncorrect = false,
   onStartOver,
@@ -58,7 +56,7 @@ export const FeedbackDisplay: React.FC<FeedbackDisplayProps> = ({
     : 'bg-red-50 border-red-200 text-red-700';
 
   return (
-    <div className={`${className}`}>
+    <div>
       {showStatusPanel ? (
         <div className={`${baseClasses} ${statusClasses}`}>
           <div className="flex items-start gap-2">
@@ -77,7 +75,7 @@ export const FeedbackDisplay: React.FC<FeedbackDisplayProps> = ({
               {shouldShowHint && (
                 <div className="flex items-start gap-2 mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-yellow-800">
                   <HelpCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                  <div className="flex-1 text-sm">{renderFeedbackBody(hint as FeedbackBody)}</div>
+                  <div className="flex-1 text-sm">{renderFeedbackBody(hint)}</div>
                 </div>
               )}
 
@@ -103,7 +101,6 @@ export const FeedbackDisplay: React.FC<FeedbackDisplayProps> = ({
         </div>
       ) : null}
 
-      {/* Show explanation after correct answer */}
       {shouldShowExplanationPanel && (
         <div className="mt-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <div className="text-blue-800">{renderFeedbackBody(explanation, 'text-sm leading-relaxed')}</div>
@@ -135,5 +132,3 @@ export const FeedbackDisplay: React.FC<FeedbackDisplayProps> = ({
     </div>
   );
 };
-
-export default FeedbackDisplay;

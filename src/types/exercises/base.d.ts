@@ -49,8 +49,7 @@ export interface FeedbackConfig {
   maxLevelFailures?: number;
 }
 
-// New robust state machine types
-export type FeedbackPhase = 'initial' | 'attempting' | 'succeeded' | 'failed';
+export type FeedbackPhase = 'initial' | 'attempting' | 'succeeded';
 
 export interface FeedbackState {
   readonly phase: FeedbackPhase;
@@ -68,12 +67,6 @@ export type FeedbackAction =
   | { type: 'CLEAR_FEEDBACK' }
   | { type: 'RESET' }
   | { type: 'EXERCISE_RESET' };
-
-export interface FeedbackMachineConfig {
-  escalationLevels: FeedbackLevel[];
-  successMessage: SuccessMessageConfig;
-  progressionRules: ProgressionRules;
-}
 
 export interface BaseExercise extends ContentItem {
   instructions: string;
@@ -120,4 +113,3 @@ export interface FormIdentificationPosConfig extends PosGeneratorConfig {
 }
 
 export type PosConfigs = Partial<Record<PartOfSpeech, PosGeneratorConfig>>;
-export type FormIdentificationPosConfigs = Partial<Record<PartOfSpeech, FormIdentificationPosConfig>>;

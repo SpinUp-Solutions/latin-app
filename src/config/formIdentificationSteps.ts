@@ -11,5 +11,3 @@ export const AVAILABLE_STEPS: Readonly<Record<PartOfSpeech, readonly FormIdentif
   conjunction: [],
   interjection: [],
 } as const;
-
-export const getStepsForPOS = (pos: PartOfSpeech): readonly FormIdentificationStep[] => AVAILABLE_STEPS[pos] || [];

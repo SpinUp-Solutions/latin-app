@@ -32,7 +32,7 @@ interface MatchingTableProps {
   initialAnswer?: ExerciseAnswer;
 }
 
-export const MatchingTable: React.FC<MatchingTableProps> = ({
+const MatchingTable: React.FC<MatchingTableProps> = ({
   exercise,
   onComplete,
   onCompletionAccepted,

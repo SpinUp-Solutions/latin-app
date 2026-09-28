@@ -545,5 +545,3 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
     </div>
   );
 };
-
-export default SentenceDiagramStudent;
