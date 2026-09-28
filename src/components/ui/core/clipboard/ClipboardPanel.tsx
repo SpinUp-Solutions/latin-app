@@ -22,19 +22,11 @@ export const ClipboardPanel: React.FC<ClipboardPanelProps> = ({ onPasteBulk }) =
     }
   };
 
-  const toggleSelectAll = () => {
-    if (selectedItems.length === clipboardItems.length) {
-      clearSelection();
-    } else {
-      selectAll();
-    }
-  };
-
   const isAllSelected = selectedItems.length === clipboardItems.length;
+  const toggleSelectAll = () => (isAllSelected ? clearSelection() : selectAll());
 
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50">
-      {/* Header Bar */}
       <div className="flex items-center justify-between px-4 py-2 bg-gray-50">
         <div className="flex items-center gap-2">
           <Clipboard className="h-4 w-4 text-gray-600" />
@@ -62,10 +54,8 @@ export const ClipboardPanel: React.FC<ClipboardPanelProps> = ({ onPasteBulk }) =
         </div>
       </div>
 
-      {/* Expanded Content */}
       {isExpanded && (
         <div className="border-t border-gray-200 bg-white">
-          {/* Controls */}
           <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b border-gray-100">
             <Button variant="ghost" size="sm" onClick={toggleSelectAll} className="text-gray-600 hover:text-gray-800">
               {isAllSelected ? <Square className="h-4 w-4 mr-1" /> : <CheckSquare className="h-4 w-4 mr-1" />}
@@ -82,7 +72,6 @@ export const ClipboardPanel: React.FC<ClipboardPanelProps> = ({ onPasteBulk }) =
             </Button>
           </div>
 
-          {/* Items Grid */}
           <div className="p-4 max-h-60 overflow-y-auto">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
               {clipboardItems.map((item, index) => (
