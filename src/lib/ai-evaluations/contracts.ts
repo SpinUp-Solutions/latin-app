@@ -17,7 +17,7 @@ const CASE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 const ANSWER_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/;
 export const AI_EVALUATION_MAX_ANSWERS = 20;
 
-export const evaluationCaseIdSchema = z.string().regex(CASE_ID_PATTERN, 'Invalid evaluation case id');
+const evaluationCaseIdSchema = z.string().regex(CASE_ID_PATTERN, 'Invalid evaluation case id');
 const evaluationAnswerIdSchema = z.string().regex(ANSWER_ID_PATTERN, 'Invalid answer id');
 
 const titleSchema = z.string().trim().min(1, 'Title is required').max(120, 'Title must be 120 characters or fewer');
