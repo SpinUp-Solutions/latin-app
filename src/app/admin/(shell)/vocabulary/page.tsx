@@ -31,7 +31,6 @@ import { PartOfSpeechSchema, type PartOfSpeech } from '@/shared/types/vocabulary
 import { buildEmptyWord, isPlaceholderWord } from '@/src/utils/vocabulary-defaults';
 import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 import { fetchVocabularyBackup } from '@/src/services/vocabularyBackupService';
-import { shouldFetchNextSearchPage } from '@/src/lib/paginated-search';
 
 const EMPTY_WORDS: VocabularyWordWithId[] = [];
 const PART_OF_SPEECH_OPTIONS = PartOfSpeechSchema.options;
@@ -177,16 +176,8 @@ function AdminVocabularyPage() {
   };
 
   const handleLoadMore = () => {
-    const nextCursor = data?.lastWordId ?? null;
-    if (
-      !shouldFetchNextSearchPage({
-        hasCursor: Boolean(nextCursor),
-        isFetching,
-        searchPending,
-      })
-    ) {
-      return;
-    }
+    const nextCursor = data?.lastWordId;
+    if (!nextCursor || isFetching || searchPending) return;
     setLastWordId(nextCursor);
   };
 

@@ -2,13 +2,8 @@ import type { VocabularyWord, VocabularyWordWithId } from '@/shared/types/vocabu
 import type { RootWordCandidate } from '@/shared/types/vocabulary/requests';
 import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 import { buildEmptyWord } from './vocabulary-defaults';
+import { stripMacrons } from './exercises/helpers';
 
-const stripMacrons = (value: string): string =>
-  value
-    .normalize('NFD')
-    .replace(/[\u0304]/g, '')
-    .normalize('NFC')
-    .toLowerCase();
 
 const stripUndefined = <T>(value: T): T => {
   if (Array.isArray(value)) {
@@ -42,7 +37,7 @@ export const buildDraftVocabularyWord = (
     ...autocompleteData,
     word: candidate.word,
     part_of_speech: candidate.part_of_speech,
-    sort_key: stripMacrons(candidate.word),
+    sort_key: stripMacrons(candidate.word).toLowerCase(),
     random_index: Math.random(),
     dictionary_entry:
       autocompleteData.dictionary_entry !== undefined
@@ -58,5 +53,3 @@ export const buildDraftVocabularyWord = (
 
   return stripUndefined(draft);
 };
-
-export const cleanVocabularyPayload = <T extends Record<string, unknown>>(value: T): T => stripUndefined(value);

@@ -3,6 +3,7 @@ import { adminDb } from '@/src/services/firebase-admin';
 import { VocabularyWordSchema, type VocabularyWord } from '@/shared/types/vocabulary/schemas';
 import { VOCABULARY_WORD_REQUESTS_COLLECTION, VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 import type { VocabularyWordRequest } from '@/shared/types/vocabulary/requests';
+import { stripMacrons } from '@/src/utils/exercises/helpers';
 
 export const requestCollection = () => adminDb.collection(VOCABULARY_WORD_REQUESTS_COLLECTION);
 export const wordCollection = () => adminDb.collection(VOCABULARY_WORDS_COLLECTION);
@@ -27,14 +28,7 @@ const isValidDateString = (value: unknown): value is string =>
 const timestampToIso = (value: FirestoreTimestampLike | undefined): string | undefined =>
   value ? value.toDate().toISOString() : undefined;
 
-export const stripMacrons = (value: string): string =>
-  value
-    .normalize('NFD')
-    .replace(/[\u0304]/g, '')
-    .normalize('NFC')
-    .toLowerCase();
-
-export const serializeForJson = (value: unknown): unknown => {
+const serializeForJson = (value: unknown): unknown => {
   if (value === null || value === undefined) return value;
   if (value instanceof Date) {
     return value.toISOString();
@@ -53,15 +47,11 @@ export const serializeForJson = (value: unknown): unknown => {
   return value;
 };
 
-export const serializeRequestDoc = (id: string, data: Record<string, unknown>): VocabularyWordRequest =>
-  ({
-    id,
-    ...(serializeForJson(data) as Record<string, unknown>),
-  }) as VocabularyWordRequest;
-
 export const serializeRequestSnapshot = (snapshot: RequestSnapshotLike): VocabularyWordRequest => {
-  const request = serializeRequestDoc(snapshot.id, snapshot.data() || {}) as VocabularyWordRequest &
-    Record<string, unknown>;
+  const request = {
+    id: snapshot.id,
+    ...(serializeForJson(snapshot.data() || {}) as Record<string, unknown>),
+  } as VocabularyWordRequest & Record<string, unknown>;
   const createdAt = isValidDateString(request.createdAt) ? request.createdAt : timestampToIso(snapshot.createTime);
   const updatedAt = isValidDateString(request.updatedAt)
     ? request.updatedAt
@@ -95,7 +85,7 @@ export const buildValidatedWordForApproval = (draftWord: VocabularyWord) => {
   const now = new Date();
   const validationResult = VocabularyWordSchema.safeParse({
     ...draftWord,
-    sort_key: stripMacrons(draftWord.word),
+    sort_key: stripMacrons(draftWord.word).toLowerCase(),
     random_index: typeof draftWord.random_index === 'number' ? draftWord.random_index : Math.random(),
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
