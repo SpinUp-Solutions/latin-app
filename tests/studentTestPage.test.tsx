@@ -223,7 +223,6 @@ describe('student normal test flow', () => {
 
     await waitFor(() =>
       expect(mockSaveAnswers).toHaveBeenCalledWith({
-        uid: 'student-1',
         attemptId: 'attempt-1',
         answers: {
           'fill-one': { type: 'fill', answers: ['one'] },
@@ -307,7 +306,6 @@ describe('student normal test flow', () => {
 
     await waitFor(() =>
       expect(mockSaveAnswers).toHaveBeenLastCalledWith({
-        uid: 'student-1',
         attemptId: 'attempt-1',
         answers: { 'fill-one': null },
       })

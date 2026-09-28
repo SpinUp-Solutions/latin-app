@@ -138,7 +138,6 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
           section: response.attempt.section,
           attemptId: response.attempt.id,
           originKey,
-          uid: user.uid,
         });
         setAttempt(response.attempt);
         setPageIndex(0);
@@ -257,7 +256,6 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
         section: response.attempt.section,
         attemptId: response.attempt.id,
         originKey: requestedOriginKey,
-        uid: user.uid,
       });
       setAttempt(response.attempt);
       setPageIndex(0);
@@ -325,11 +323,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
     const requestedOriginKey = originKey;
     try {
       await flushPendingAnswers();
-      const updatedAttempt = await gradeTestTranslation({
-        uid: user.uid,
-        attemptId: attempt.id,
-        ...event,
-      }).unwrap();
+      const updatedAttempt = await gradeTestTranslation({ attemptId: attempt.id, ...event }).unwrap();
       if (activeOriginKeyRef.current !== requestedOriginKey) {
         throw new Error('The active test changed while the translation was being graded.');
       }

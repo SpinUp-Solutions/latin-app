@@ -184,14 +184,9 @@ export const testApi = appApi.injectEndpoints({
     }),
     saveTestAttemptAnswers: builder.mutation<
       StudentInProgressTestAttempt,
-      {
-        uid: string;
-        attemptId: string;
-        answers: Record<string, ExerciseAnswer | null>;
-        section?: SectionWrite;
-      }
+      { attemptId: string; answers: Record<string, ExerciseAnswer | null>; section?: SectionWrite }
     >({
-      query: ({ uid: _uid, attemptId, answers, section }) => ({
+      query: ({ attemptId, answers, section }) => ({
         url: `/test-attempts/${attemptId}/answers`,
         method: 'PATCH',
         body: { answers, ...(section ? { section } : {}) },
@@ -201,15 +196,9 @@ export const testApi = appApi.injectEndpoints({
     }),
     gradeTestTranslation: builder.mutation<
       StudentInProgressTestAttempt,
-      {
-        uid: string;
-        attemptId: string;
-        exerciseId: string;
-        itemIndex: number;
-        userTranslation: string;
-      }
+      { attemptId: string; exerciseId: string; itemIndex: number; userTranslation: string }
     >({
-      query: ({ uid: _uid, attemptId, ...body }) => ({
+      query: ({ attemptId, ...body }) => ({
         url: `/test-attempts/${attemptId}/translation-grade`,
         method: 'POST',
         body,

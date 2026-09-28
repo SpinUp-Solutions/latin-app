@@ -13,7 +13,6 @@ export type AnswerSaveStatus = 'recorded' | 'saving' | 'saved' | 'error';
 interface ActiveAttempt {
   attemptId: string;
   scope: string;
-  uid: string;
   section?: { pageId: string; revision: number };
 }
 
@@ -66,18 +65,16 @@ export function useBufferedAttemptAnswers() {
       answers: initialAnswers,
       attemptId,
       originKey,
-      uid,
       section,
     }: {
       answers: Record<string, ExerciseAnswer>;
       attemptId: string;
       originKey: string;
-      uid: string;
       section?: { pageId: string; revision: number };
     }) => {
       clearSaveTimer();
       const scope = `${originKey}:${attemptId}:${section?.pageId ?? 'legacy'}:${++generationRef.current}`;
-      activeAttemptRef.current = { attemptId, scope, uid, section: section ? { ...section } : undefined };
+      activeAttemptRef.current = { attemptId, scope, section: section ? { ...section } : undefined };
       retryRef.current = null;
       conflictRef.current = null;
       setConflict(false);
@@ -100,7 +97,7 @@ export function useBufferedAttemptAnswers() {
     const activeAttempt = activeAttemptRef.current;
     if (!activeAttempt) return;
 
-    const { attemptId, scope, uid } = activeAttempt;
+    const { attemptId, scope } = activeAttempt;
     const operation = flushChainRef.current
       .catch(() => undefined)
       .then(async () => {
@@ -131,7 +128,6 @@ export function useBufferedAttemptAnswers() {
             if (section) retryRef.current = { scope, answers: batch, section };
             try {
               const saved = await saveAnswers({
-                uid,
                 attemptId,
                 answers: batch,
                 ...(section ? { section } : {}),
@@ -189,58 +185,22 @@ export function useBufferedAttemptAnswers() {
     await operation;
   }, [clearSaveTimer, saveAnswers]);
 
-  const recordAnswer = useCallback(
-    (event: ExerciseAnswerEvent) => {
-      const activeAttempt = activeAttemptRef.current;
-      if (!activeAttempt) return;
-
-      setAnswers(current => ({ ...current, [event.exerciseId]: event.answer }));
-      const queued = pendingAnswersRef.current;
-      pendingAnswersRef.current =
-        queued?.scope === activeAttempt.scope
-          ? {
-              scope: activeAttempt.scope,
-              answers: { ...queued.answers, [event.exerciseId]: event.answer },
-            }
-          : {
-              scope: activeAttempt.scope,
-              answers: { [event.exerciseId]: event.answer },
-            };
-      setSaveError(null);
-      setSaveStatus('recorded');
-
-      clearSaveTimer();
-      if (conflictRef.current) return;
-      saveTimerRef.current = setTimeout(() => {
-        void flushPendingAnswers().catch(() => {
-          toast.error('An answer is still waiting to be saved. Try again before leaving.');
-        });
-      }, ANSWER_SAVE_DEBOUNCE_MS);
-    },
-    [clearSaveTimer, flushPendingAnswers]
-  );
-
-  const clearAnswer = useCallback(
-    (exerciseId: string) => {
+  const queueAnswer = useCallback(
+    (exerciseId: string, answer: ExerciseAnswer | null) => {
       const activeAttempt = activeAttemptRef.current;
       if (!activeAttempt) return;
 
       setAnswers(current => {
         const next = { ...current };
-        delete next[exerciseId];
+        if (answer) next[exerciseId] = answer;
+        else delete next[exerciseId];
         return next;
       });
       const queued = pendingAnswersRef.current;
-      pendingAnswersRef.current =
-        queued?.scope === activeAttempt.scope
-          ? {
-              scope: activeAttempt.scope,
-              answers: { ...queued.answers, [exerciseId]: null },
-            }
-          : {
-              scope: activeAttempt.scope,
-              answers: { [exerciseId]: null },
-            };
+      pendingAnswersRef.current = {
+        scope: activeAttempt.scope,
+        answers: { ...(queued?.scope === activeAttempt.scope ? queued.answers : {}), [exerciseId]: answer },
+      };
       setSaveError(null);
       setSaveStatus('recorded');
 
@@ -254,6 +214,11 @@ export function useBufferedAttemptAnswers() {
     },
     [clearSaveTimer, flushPendingAnswers]
   );
+  const recordAnswer = useCallback(
+    (event: ExerciseAnswerEvent) => queueAnswer(event.exerciseId, event.answer),
+    [queueAnswer]
+  );
+  const clearAnswer = useCallback((exerciseId: string) => queueAnswer(exerciseId, null), [queueAnswer]);
 
   const adoptPersistedAnswer = useCallback((event: ExerciseAnswerEvent) => {
     const activeAttempt = activeAttemptRef.current;

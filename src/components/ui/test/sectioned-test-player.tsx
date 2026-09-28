@@ -99,11 +99,10 @@ export function SectionedTestPlayer({ attempt, onAttempt, buffer, title, uid, or
         answers: updated.answers,
         section: updated.section,
         originKey,
-        uid,
       });
       onAttempt(updated);
     },
-    [activateAttempt, onAttempt, originKey, uid]
+    [activateAttempt, onAttempt, originKey]
   );
 
   const refresh = async (preserveDraft = false) => {
