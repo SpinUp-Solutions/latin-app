@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { zodResponseFormat } from 'openai/helpers/zod';
+import { zodTextFormat } from 'openai/helpers/zod';
 import { openai, DEFAULT_MODEL } from './client';
 import { PartOfSpeechSchema } from '../types/vocabulary/schemas/enums';
 import type { RootWordCandidate } from '../types/vocabulary/requests';
@@ -50,20 +50,12 @@ const buildPrompt = ({ selectedText, context }: ResolveRootWordRequest) => {
 
 export async function resolveRootWord(request: ResolveRootWordRequest): Promise<ResolveRootWordResponse> {
   try {
-    const responseFormat = zodResponseFormat(RootResolverOutputSchema, 'root_word_candidates');
     const response = await openai.responses.create({
       model: DEFAULT_MODEL,
       max_output_tokens: 2000,
       instructions: SYSTEM_PROMPT,
       input: buildPrompt(request),
-      text: {
-        format: {
-          type: 'json_schema',
-          name: responseFormat.json_schema.name,
-          schema: responseFormat.json_schema.schema as { [key: string]: unknown },
-          strict: responseFormat.json_schema.strict ?? true,
-        },
-      },
+      text: { format: zodTextFormat(RootResolverOutputSchema, 'root_word_candidates') },
     });
 
     const messageItem = response.output.find(item => item.type === 'message');

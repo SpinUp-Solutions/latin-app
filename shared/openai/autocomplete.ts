@@ -1,4 +1,4 @@
-import { zodResponseFormat } from 'openai/helpers/zod';
+import { zodTextFormat } from 'openai/helpers/zod';
 import type { Response } from 'openai/resources/responses/responses';
 import { openai, AUTOCOMPLETE_MODEL, MAX_TOKENS } from './client';
 import { calculateModelCost } from './model-registry';
@@ -145,21 +145,13 @@ export async function autocompleteVocabularyWord(request: AIAutocompleteRequest)
   }
 
   try {
-    const responseFormat = zodResponseFormat(schema, `${request.part_of_speech}_structured_output`);
     const response = await openai.responses.create({
       model: AUTOCOMPLETE_MODEL,
       reasoning: { effort: 'low' },
       max_output_tokens: MAX_TOKENS,
       instructions: SYSTEM_PROMPT,
       input: getPromptForPartOfSpeech(request.part_of_speech, request.word),
-      text: {
-        format: {
-          type: 'json_schema',
-          name: responseFormat.json_schema.name,
-          schema: responseFormat.json_schema.schema as { [key: string]: unknown },
-          strict: responseFormat.json_schema.strict ?? true,
-        },
-      },
+      text: { format: zodTextFormat(schema, `${request.part_of_speech}_structured_output`) },
     });
 
     const messageItem = response.output.find(item => item.type === 'message');
