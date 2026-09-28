@@ -113,7 +113,7 @@ describe('generated exercise preview staleness', () => {
   it('closes and resets preview when count, filters, or direction change', () => {
     const { result, rerender } = renderHook(
       ({ exercise }: { exercise: GeneratedTranslationExercise }) =>
-        useGeneratedExerciseEditor(exercise, { exerciseType: 'generated-translation' }),
+        useGeneratedExerciseEditor(exercise),
       { initialProps: { exercise: makeExercise(10) } }
     );
 

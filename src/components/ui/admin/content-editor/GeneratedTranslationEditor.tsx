@@ -33,9 +33,7 @@ export const GeneratedTranslationEditor: React.FC = () => {
 const GeneratedTranslationEditorView: React.FC<{ editingContent: GeneratedTranslationExercise }> = ({
   editingContent,
 }) => {
-  const editor = useGeneratedExerciseEditor(editingContent, {
-    exerciseType: 'generated-translation',
-  });
+  const editor = useGeneratedExerciseEditor(editingContent);
 
   const translationDirection = editingContent.translationDirection || 'latin-to-english';
 
@@ -136,7 +134,6 @@ const GeneratedTranslationEditorView: React.FC<{ editingContent: GeneratedTransl
 
       {editor.isPoolWordSource && editor.posSummary.availablePOS.length > 0 && editor.posSummary.summary && (
         <MultiPosConfigSection
-          exerciseType="translation"
           availablePartOfSpeech={editor.posSummary.availablePOS}
           wordCountsByPOS={editor.posSummary.summary}
           posConfigs={editingContent.data.posConfigs}
