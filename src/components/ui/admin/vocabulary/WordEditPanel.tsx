@@ -1,12 +1,11 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm, FormProvider, Resolver } from 'react-hook-form';
-import { useDispatch, useSelector } from 'react-redux';
 import { zodResolver } from '@hookform/resolvers/zod';
+import type { z } from 'zod';
 import { Button } from '@/src/components/ui/button';
 import { VocabularyWord, VocabularyWordWithId } from '@/src/types/vocabulary/index';
 import { EditingCell } from '@/src/types/admin-vocabulary';
 import { parseEditingCellValue } from '@/src/utils/vocabUtils';
-import { TABLE_TYPES, type TableType } from '@/src/utils/schema-helpers';
 import { SchemaTable } from './tables/SchemaTable';
 import {
   DeclensionTableSchema,
@@ -33,16 +32,6 @@ import {
   applyFormValuesToWord,
   VocabularyFormSchema,
 } from '@/src/types/vocabulary/form-schemas/builder';
-import {
-  clear as clearVocabularyEdit,
-  initFromWord,
-  selectConjugationTable,
-  selectDeclensionTable,
-  selectDegreesTable,
-  selectVocabularyPartOfSpeech,
-  setCell as setVocabularyTableCell,
-} from '@/src/store/slices/vocabularyEditSlice';
-import type { RootState } from '@/src/store';
 
 export const AIFilledFieldsContext = React.createContext<Map<string, 'filled' | 'missing'>>(new Map());
 
@@ -51,6 +40,8 @@ interface WordEditPanelProps {
   onSave: (updates: Partial<VocabularyWord>) => Promise<boolean>;
   updating: boolean;
 }
+
+type TableData = Record<string, unknown>;
 
 const EMPTY_FORM_VALUES: VocabularyFormValues = {
   word: '',
@@ -66,6 +57,42 @@ const EMPTY_FORM_VALUES: VocabularyFormValues = {
   random_index: 0,
 };
 
+/** The one inflection table each part of speech edits; pronoun schema and title depend on type and person. */
+const EDITABLE_TABLES: Partial<
+  Record<string, { field: string; tableType: string; title: string; color: string; schema: z.ZodTypeAny }>
+> = {
+  noun: {
+    field: 'declension_table',
+    tableType: 'declension',
+    title: 'Declension Table',
+    color: 'text-blue-700',
+    schema: DeclensionTableSchema,
+  },
+  pronoun: {
+    field: 'declension_table',
+    tableType: 'declension',
+    title: 'Pronoun Declension Table',
+    color: 'text-indigo-700',
+    schema: AdjectiveDeclensionTableSchema,
+  },
+  adjective: {
+    field: 'degrees_table',
+    tableType: 'adjective-declension',
+    title: 'Degrees of Comparison',
+    color: 'text-purple-700',
+    schema: DegreesTableSchema,
+  },
+  verb: {
+    field: 'conjugation_table',
+    tableType: 'conjugation',
+    title: 'Conjugation Table',
+    color: 'text-green-700',
+    schema: ConjugationTableSchema,
+  },
+};
+
+const getEditableTable = (word: VocabularyWordWithId | null) => (word ? EDITABLE_TABLES[word.part_of_speech] : undefined);
+
 const EmptyState: React.FC = () => (
   <div className="flex items-center justify-center h-full p-8">
     <div className="text-center space-y-4 max-w-md">
@@ -80,26 +107,43 @@ const EmptyState: React.FC = () => (
   </div>
 );
 
-const getValueFromTable = (table: Record<string, unknown>, path: string): unknown => {
-  if (!table) return undefined;
-  const segments = path.split('.').filter(Boolean);
+const getValueFromTable = (table: TableData, path: string): unknown => {
   let current: unknown = table;
-  for (const segment of segments) {
+  for (const segment of path.split('.').filter(Boolean)) {
     if (current === null || current === undefined || typeof current !== 'object') {
       return undefined;
     }
-    current = (current as Record<string, unknown>)[segment];
+    current = (current as TableData)[segment];
   }
   return current;
 };
 
-const cloneTableData = (value: unknown): Record<string, unknown> => {
+const setNestedValue = (target: TableData, path: string, value: unknown) => {
+  const segments = path.split('.').filter(Boolean);
+  if (segments.length === 0) return;
+
+  let current = target;
+  for (const key of segments.slice(0, -1)) {
+    if (current[key] === undefined || current[key] === null || typeof current[key] !== 'object') {
+      current[key] = {};
+    }
+    current = current[key] as TableData;
+  }
+  current[segments[segments.length - 1]] = value;
+};
+
+const cloneTableData = (value: unknown): TableData => {
   if (value === undefined || value === null) return {};
   try {
-    return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
+    return JSON.parse(JSON.stringify(value)) as TableData;
   } catch {
     return {};
   }
+};
+
+const tableFromWord = (word: VocabularyWordWithId | null): TableData => {
+  const table = getEditableTable(word);
+  return table ? cloneTableData((word as unknown as TableData)[table.field]) : {};
 };
 
 const getPronounTableSchema = (pronounType: PronounType | null, person: PronounPerson | null) => {
@@ -129,95 +173,103 @@ const getPronounTableTitle = (pronounType: PronounType | null, person: PronounPe
   return `${typeLabels[pronounType]} Pronoun Declension Table`;
 };
 
-export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, updating }) => {
-  const dispatch = useDispatch();
+const findNullPaths = (obj: unknown, path = ''): string[] => {
+  if (obj === null || obj === undefined) {
+    return [path];
+  }
 
+  if (Array.isArray(obj)) {
+    return obj.length === 0 || obj.every(item => item === null || item === undefined) ? [path] : [];
+  }
+
+  if (typeof obj === 'object') {
+    return Object.entries(obj as TableData).flatMap(([key, value]) =>
+      findNullPaths(value, path ? `${path}.${key}` : key)
+    );
+  }
+
+  return [];
+};
+
+const deepMergeNullValues = (existing: unknown, aiGenerated: unknown): unknown => {
+  if (aiGenerated === null || aiGenerated === undefined) {
+    return existing;
+  }
+
+  if (existing === null || existing === undefined) {
+    return aiGenerated;
+  }
+
+  if (Array.isArray(aiGenerated)) {
+    if (
+      !Array.isArray(existing) ||
+      existing.length === 0 ||
+      existing.every(item => item === null || item === undefined || item === '')
+    ) {
+      return aiGenerated;
+    }
+    return existing;
+  }
+
+  if (typeof aiGenerated === 'object' && typeof existing === 'object') {
+    const existingRecord = existing as TableData;
+    const merged = { ...existingRecord };
+    for (const [key, value] of Object.entries(aiGenerated as TableData)) {
+      merged[key] = deepMergeNullValues(existingRecord[key], value);
+    }
+    return merged;
+  }
+
+  return existing === '' ? aiGenerated : existing;
+};
+
+export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, updating }) => {
   const form = useForm<VocabularyFormValues>({
     resolver: zodResolver(VocabularyFormSchema) as Resolver<VocabularyFormValues>,
-    defaultValues: word ? toFormDefaultValues(word) : (EMPTY_FORM_VALUES as VocabularyFormValues),
+    defaultValues: word ? toFormDefaultValues(word) : EMPTY_FORM_VALUES,
     mode: 'onSubmit',
   });
 
+  const [table, setTable] = useState<TableData>(() => tableFromWord(word));
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
   const [editingCellValue, setEditingCellValue] = useState('');
-  const [expandedEditTables, setExpandedEditTables] = useState<Set<string>>(
-    new Set([TABLE_TYPES.DECLENSION, TABLE_TYPES.ADJECTIVE_DECLENSION, TABLE_TYPES.CONJUGATION])
-  );
+  const [tableExpanded, setTableExpanded] = useState(true);
   const [aiFieldStatus, setAiFieldStatus] = useState<Map<string, 'filled' | 'missing'>>(new Map());
   const [tableErrors, setTableErrors] = useState<string[]>([]);
-  const [prevPronounSchemaType, setPrevPronounSchemaType] = useState<'personal' | 'adjective' | null>(null);
+  const [prevPronounSchema, setPrevPronounSchema] = useState<ReturnType<typeof getPronounTableSchema> | null>(null);
 
-  const wordRef = useRef(word);
-  wordRef.current = word;
-
-  const declensionTable = useSelector((state: RootState) => selectDeclensionTable(state));
-  const degreesTable = useSelector((state: RootState) => selectDegreesTable(state));
-  const conjugationTable = useSelector((state: RootState) => selectConjugationTable(state));
-  const currentPartOfSpeech = useSelector((state: RootState) => selectVocabularyPartOfSpeech(state));
+  const editableTable = getEditableTable(word);
 
   useEffect(() => {
-    if (word) {
-      const formValues = toFormDefaultValues(word);
-      form.reset(formValues, { keepDefaultValues: false });
-      dispatch(initFromWord(word));
-      setExpandedEditTables(
-        new Set([TABLE_TYPES.DECLENSION, TABLE_TYPES.ADJECTIVE_DECLENSION, TABLE_TYPES.CONJUGATION])
-      );
-    } else {
-      form.reset(EMPTY_FORM_VALUES as VocabularyFormValues, { keepDefaultValues: false });
-      dispatch(clearVocabularyEdit());
-    }
+    form.reset(word ? toFormDefaultValues(word) : EMPTY_FORM_VALUES, { keepDefaultValues: false });
+    setTable(tableFromWord(word));
+    if (word) setTableExpanded(true);
     setEditingCell(null);
     setEditingCellValue('');
     setTableErrors([]);
     setAiFieldStatus(new Map());
-    setPrevPronounSchemaType(null); // Reset so new word gets fresh schema detection
+    setPrevPronounSchema(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [word?.id, dispatch]);
+  }, [word?.id]);
 
-  // Helper to determine which pronoun table schema is needed
-  const needsPersonalPronounSchema = (pronounType: PronounType | null, person: PronounPerson | null) =>
-    pronounType === 'personal' && (person === '1st' || person === '2nd');
+  const pronounType = form.watch('pronoun_type') as PronounType | null;
+  const pronounPerson = form.watch('person') as PronounPerson | null;
 
-  // Watch for pronoun type/person changes and regenerate table if schema type changes
-  const currentPronounType = form.watch('pronoun_type') as PronounType | null;
-  const currentPronounPerson = form.watch('person') as PronounPerson | null;
-
+  // Personal 1st/2nd-person pronouns use a different table shape; switching shape starts from an empty table.
   useEffect(() => {
-    if (wordRef.current?.part_of_speech !== 'pronoun') {
-      setPrevPronounSchemaType(null);
+    if (word?.part_of_speech !== 'pronoun') {
+      setPrevPronounSchema(null);
       return;
     }
-
-    const currentSchemaType = needsPersonalPronounSchema(currentPronounType, currentPronounPerson)
-      ? 'personal'
-      : 'adjective';
-
-    // On first render for this word, just set the type without regenerating
-    if (prevPronounSchemaType === null) {
-      setPrevPronounSchemaType(currentSchemaType);
-      return;
+    const schema = getPronounTableSchema(pronounType, pronounPerson);
+    if (prevPronounSchema && prevPronounSchema !== schema) {
+      setTable(buildEmptyFromSchema(schema));
     }
-
-    // If schema type changed, regenerate the table with correct empty structure
-    if (prevPronounSchemaType !== currentSchemaType) {
-      console.log('[WordEditPanel] Pronoun schema type changed from', prevPronounSchemaType, 'to', currentSchemaType);
-      const newSchema =
-        currentSchemaType === 'personal' ? PersonalPronounDeclensionTableSchema : AdjectiveDeclensionTableSchema;
-      const emptyTable = buildEmptyFromSchema(newSchema);
-      dispatch(initFromWord({ ...wordRef.current, declension_table: emptyTable } as VocabularyWordWithId));
-      setPrevPronounSchemaType(currentSchemaType);
-    }
-  }, [currentPronounType, currentPronounPerson, prevPronounSchemaType, dispatch, word?.part_of_speech]);
+    setPrevPronounSchema(schema);
+  }, [pronounType, pronounPerson, prevPronounSchema, word?.part_of_speech]);
 
   const handleCellDoubleClick = (rowIndex: number, cellKey: string, tableType: string, displayValue: string) => {
-    const tableData =
-      tableType === TABLE_TYPES.DECLENSION
-        ? declensionTable
-        : tableType === TABLE_TYPES.ADJECTIVE_DECLENSION
-          ? degreesTable
-          : conjugationTable;
-    const existingValue = getValueFromTable(tableData, cellKey);
+    const existingValue = getValueFromTable(table, cellKey);
     const normalized = Array.isArray(existingValue)
       ? existingValue.join(', ')
       : displayValue === '—'
@@ -229,10 +281,12 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
 
   const handleCellEditSave = () => {
     if (!editingCell) return;
-    const { cellKey, tableType } = editingCell;
     const newValue = parseEditingCellValue(editingCellValue);
-    const valueForStore = newValue.length > 0 ? newValue : null;
-    dispatch(setVocabularyTableCell({ tableType: tableType as TableType, path: cellKey, value: valueForStore }));
+    setTable(previous => {
+      const next = cloneTableData(previous);
+      setNestedValue(next, editingCell.cellKey, newValue.length > 0 ? newValue : null);
+      return next;
+    });
     setEditingCell(null);
     setEditingCellValue('');
   };
@@ -242,334 +296,87 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
     setEditingCellValue('');
   };
 
-  const toggleEditTableExpansion = (tableType: string) => {
-    setExpandedEditTables(prev => {
-      const next = new Set(prev);
-      if (next.has(tableType)) {
-        next.delete(tableType);
-      } else {
-        next.add(tableType);
-      }
-      return next;
-    });
-  };
-
-  const isEditTableExpanded = (tableType: string) => expandedEditTables.has(tableType);
-
-  const findNullPaths = (obj: unknown, path = ''): string[] => {
-    const nullPaths: string[] = [];
-
-    if (obj === null || obj === undefined) {
-      return [path];
-    }
-
-    if (Array.isArray(obj)) {
-      if (obj.length === 0 || obj.every(item => item === null || item === undefined)) {
-        nullPaths.push(path);
-      }
-      return nullPaths;
-    }
-
-    if (typeof obj === 'object') {
-      const objRecord = obj as Record<string, unknown>;
-      for (const key in objRecord) {
-        const newPath = path ? `${path}.${key}` : key;
-        nullPaths.push(...findNullPaths(objRecord[key], newPath));
-      }
-    }
-
-    return nullPaths;
-  };
-
-  const deepMergeNullValues = (existing: unknown, aiGenerated: unknown): unknown => {
-    if (aiGenerated === null || aiGenerated === undefined) {
-      return existing;
-    }
-
-    if (existing === null || existing === undefined) {
-      return aiGenerated;
-    }
-
-    if (Array.isArray(aiGenerated)) {
-      if (
-        !Array.isArray(existing) ||
-        existing.length === 0 ||
-        existing.every(item => item === null || item === undefined || item === '')
-      ) {
-        return aiGenerated;
-      }
-      return existing;
-    }
-
-    if (typeof aiGenerated === 'object' && typeof existing === 'object') {
-      const existingRecord = existing as Record<string, unknown>;
-      const aiGeneratedRecord = aiGenerated as Record<string, unknown>;
-      const merged = { ...existingRecord };
-      for (const key in aiGeneratedRecord) {
-        merged[key] = deepMergeNullValues(existingRecord[key], aiGeneratedRecord[key]);
-      }
-      return merged;
-    }
-
-    if (existing === '' || existing === null || existing === undefined) {
-      return aiGenerated;
-    }
-
-    return existing;
-  };
-
   const handleAIAutocomplete = (
     aiData: Partial<VocabularyWord>,
     apiFieldStatus?: Record<string, 'filled' | 'missing'>,
     requestWordId?: string
   ) => {
-    // Guard against stale AI responses
-    if (requestWordId && requestWordId !== word?.id) {
-      console.log('[WordEditPanel] Ignoring stale AI response for word:', requestWordId, 'current word:', word?.id);
-      return;
-    }
+    // Ignore a response that arrives after the admin switched to another word.
+    if (requestWordId && requestWordId !== word?.id) return;
 
-    console.log('[WordEditPanel] AI Autocomplete data received:', aiData);
-    console.log('[WordEditPanel] Field status from API:', apiFieldStatus);
-
-    const aiDataRecord = aiData as Record<string, unknown>;
     const fieldStatus = new Map<string, 'filled' | 'missing'>(Object.entries(apiFieldStatus || {}));
 
-    // Fill form fields with AI data
     Object.entries(aiData).forEach(([key, value]) => {
       if (key === 'part_of_speech') return;
-
       if (value !== undefined && value !== null && value !== '' && !(Array.isArray(value) && value.length === 0)) {
-        console.log(`[WordEditPanel] Setting form field ${key}`);
         form.setValue(key as keyof VocabularyFormValues, value as never, { shouldValidate: false, shouldDirty: true });
       }
     });
 
-    if (aiDataRecord.conjugation_table && currentPartOfSpeech === 'verb') {
-      console.log('[WordEditPanel] Conjugation table received from AI');
-      console.log('[WordEditPanel] Current conjugation table exists:', !!conjugationTable);
-
-      const nullPathsBefore = conjugationTable ? findNullPaths(conjugationTable) : [];
-      const nullPathsInAI = findNullPaths(aiDataRecord.conjugation_table);
-
-      console.log('[WordEditPanel] Null paths BEFORE merge:', nullPathsBefore.slice(0, 20));
-      console.log('[WordEditPanel] Total null paths before:', nullPathsBefore.length);
-      console.log('[WordEditPanel] Null paths in AI data:', nullPathsInAI.slice(0, 20));
-      console.log('[WordEditPanel] Total null paths in AI:', nullPathsInAI.length);
-
-      const mergedConjugationTable = conjugationTable
-        ? deepMergeNullValues(conjugationTable, aiDataRecord.conjugation_table)
-        : aiDataRecord.conjugation_table;
-
-      const nullPathsAfter = findNullPaths(mergedConjugationTable);
-      console.log('[WordEditPanel] Null paths AFTER merge:', nullPathsAfter.slice(0, 20));
-      console.log('[WordEditPanel] Total null paths after:', nullPathsAfter.length);
-      console.log('[WordEditPanel] Fields filled by AI:', nullPathsBefore.length - nullPathsAfter.length);
-
-      console.log('[WordEditPanel] Dispatching initFromWord with merged conjugation table');
-      dispatch(initFromWord({ ...word, conjugation_table: mergedConjugationTable } as VocabularyWordWithId));
+    const aiTable = editableTable && (aiData as TableData)[editableTable.field];
+    if (editableTable && aiTable) {
+      const nullPathsBefore = findNullPaths(table);
+      const mergedTable = deepMergeNullValues(table, aiTable);
+      const nullPathsAfter = findNullPaths(mergedTable);
+      setTable(cloneTableData(mergedTable));
 
       const nullPathsBeforeSet = new Set(nullPathsBefore);
       const nullPathsAfterSet = new Set(nullPathsAfter);
-
       for (const path of nullPathsBefore) {
-        if (!nullPathsAfterSet.has(path)) {
-          fieldStatus.set(`conjugation_table.${path}`, 'filled');
-        }
+        if (!nullPathsAfterSet.has(path)) fieldStatus.set(`${editableTable.field}.${path}`, 'filled');
       }
-
       for (const path of nullPathsAfter) {
-        if (nullPathsBeforeSet.has(path)) {
-          fieldStatus.set(`conjugation_table.${path}`, 'missing');
-        }
+        if (nullPathsBeforeSet.has(path)) fieldStatus.set(`${editableTable.field}.${path}`, 'missing');
       }
     }
 
-    if (aiDataRecord.declension_table && currentPartOfSpeech === 'noun') {
-      console.log('[WordEditPanel] Declension table received:', aiDataRecord.declension_table);
-      console.log('[WordEditPanel] Current declension table:', declensionTable);
-
-      const nullPathsBefore = declensionTable ? findNullPaths(declensionTable) : [];
-
-      const mergedDeclensionTable = declensionTable
-        ? deepMergeNullValues(declensionTable, aiDataRecord.declension_table)
-        : aiDataRecord.declension_table;
-
-      const nullPathsAfter = findNullPaths(mergedDeclensionTable);
-
-      console.log('[WordEditPanel] Merged declension table:', mergedDeclensionTable);
-      console.log('[WordEditPanel] Dispatching initFromWord with merged declension table');
-      dispatch(initFromWord({ ...word, declension_table: mergedDeclensionTable } as VocabularyWordWithId));
-
-      const nullPathsBeforeSet = new Set(nullPathsBefore);
-      const nullPathsAfterSet = new Set(nullPathsAfter);
-
-      for (const path of nullPathsBefore) {
-        if (!nullPathsAfterSet.has(path)) {
-          fieldStatus.set(`declension_table.${path}`, 'filled');
-        }
-      }
-
-      for (const path of nullPathsAfter) {
-        if (nullPathsBeforeSet.has(path)) {
-          fieldStatus.set(`declension_table.${path}`, 'missing');
-        }
-      }
-    }
-
-    if (aiDataRecord.declension_table && currentPartOfSpeech === 'pronoun') {
-      console.log('[WordEditPanel] Pronoun declension table received:', aiDataRecord.declension_table);
-      console.log('[WordEditPanel] Current pronoun declension table:', declensionTable);
-
-      const nullPathsBefore = declensionTable ? findNullPaths(declensionTable) : [];
-
-      const mergedDeclensionTable = declensionTable
-        ? deepMergeNullValues(declensionTable, aiDataRecord.declension_table)
-        : aiDataRecord.declension_table;
-
-      const nullPathsAfter = findNullPaths(mergedDeclensionTable);
-
-      console.log('[WordEditPanel] Merged pronoun declension table:', mergedDeclensionTable);
-      console.log('[WordEditPanel] Dispatching initFromWord with merged pronoun declension table');
-      dispatch(initFromWord({ ...word, declension_table: mergedDeclensionTable } as VocabularyWordWithId));
-
-      const nullPathsBeforeSet = new Set(nullPathsBefore);
-      const nullPathsAfterSet = new Set(nullPathsAfter);
-
-      for (const path of nullPathsBefore) {
-        if (!nullPathsAfterSet.has(path)) {
-          fieldStatus.set(`declension_table.${path}`, 'filled');
-        }
-      }
-
-      for (const path of nullPathsAfter) {
-        if (nullPathsBeforeSet.has(path)) {
-          fieldStatus.set(`declension_table.${path}`, 'missing');
-        }
-      }
-    }
-
-    if (aiDataRecord.degrees_table && currentPartOfSpeech === 'adjective') {
-      console.log('[WordEditPanel] Degrees table received:', aiDataRecord.degrees_table);
-      console.log('[WordEditPanel] Current degrees table:', degreesTable);
-
-      const nullPathsBefore = degreesTable ? findNullPaths(degreesTable) : [];
-
-      const mergedDegreesTable = degreesTable
-        ? deepMergeNullValues(degreesTable, aiDataRecord.degrees_table)
-        : aiDataRecord.degrees_table;
-
-      const nullPathsAfter = findNullPaths(mergedDegreesTable);
-
-      console.log('[WordEditPanel] Merged degrees table:', mergedDegreesTable);
-      console.log('[WordEditPanel] Dispatching initFromWord with merged degrees table');
-      dispatch(initFromWord({ ...word, degrees_table: mergedDegreesTable } as VocabularyWordWithId));
-
-      const nullPathsBeforeSet = new Set(nullPathsBefore);
-      const nullPathsAfterSet = new Set(nullPathsAfter);
-
-      for (const path of nullPathsBefore) {
-        if (!nullPathsAfterSet.has(path)) {
-          fieldStatus.set(`degrees_table.${path}`, 'filled');
-        }
-      }
-
-      for (const path of nullPathsAfter) {
-        if (nullPathsBeforeSet.has(path)) {
-          fieldStatus.set(`degrees_table.${path}`, 'missing');
-        }
-      }
-    }
-
-    console.log('[WordEditPanel] AI field status:', Array.from(fieldStatus.entries()));
     setAiFieldStatus(fieldStatus);
   };
 
   const handleSubmit = form.handleSubmit(
     async values => {
       if (!word) return;
-      const newTableErrors: string[] = [];
 
-      if (currentPartOfSpeech === 'noun') {
-        const result = DeclensionTableSchema.safeParse(declensionTable);
+      if (editableTable) {
+        const schema =
+          word.part_of_speech === 'pronoun'
+            ? getPronounTableSchema(
+                form.getValues('pronoun_type') as PronounType | null,
+                form.getValues('person') as PronounPerson | null
+              )
+            : editableTable.schema;
+        const result = schema.safeParse(table);
         if (!result.success) {
-          newTableErrors.push(result.error.issues[0]?.message ?? 'Invalid declension table');
+          setTableErrors([result.error.issues[0]?.message ?? 'Invalid table']);
+          return;
         }
-      }
-
-      if (currentPartOfSpeech === 'pronoun') {
-        const pronounType = form.getValues('pronoun_type') as PronounType | null;
-        const person = form.getValues('person') as PronounPerson | null;
-        const pronounSchema = getPronounTableSchema(pronounType, person);
-        const result = pronounSchema.safeParse(declensionTable);
-        if (!result.success) {
-          newTableErrors.push(result.error.issues[0]?.message ?? 'Invalid pronoun declension table');
-        }
-      }
-
-      if (currentPartOfSpeech === 'adjective') {
-        const result = DegreesTableSchema.safeParse(degreesTable);
-        if (!result.success) {
-          newTableErrors.push(result.error.issues[0]?.message ?? 'Invalid degrees table');
-        }
-      }
-
-      if (currentPartOfSpeech === 'verb') {
-        const result = ConjugationTableSchema.safeParse(conjugationTable);
-        if (!result.success) {
-          newTableErrors.push(result.error.issues[0]?.message ?? 'Invalid conjugation table');
-        }
-      }
-
-      if (newTableErrors.length > 0) {
-        setTableErrors(newTableErrors);
-        return;
       }
 
       setTableErrors([]);
 
       const updatedWord = applyFormValuesToWord(word, values);
-
-      if (currentPartOfSpeech === 'noun' || currentPartOfSpeech === 'pronoun') {
-        const clonedTable = cloneTableData(declensionTable);
-        (updatedWord as unknown as Record<string, unknown>).declension_table = clonedTable;
+      if (editableTable) {
+        (updatedWord as unknown as TableData)[editableTable.field] = cloneTableData(table);
       }
 
-      if (currentPartOfSpeech === 'adjective') {
-        const clonedTable = cloneTableData(degreesTable);
-        (updatedWord as unknown as Record<string, unknown>).degrees_table = clonedTable;
-      }
-
-      if (currentPartOfSpeech === 'verb') {
-        const clonedTable = cloneTableData(conjugationTable);
-        (updatedWord as unknown as Record<string, unknown>).conjugation_table = clonedTable;
-      }
-
-      const { id: discardedId, ...payload } = updatedWord;
-      void discardedId;
+      const { id: _id, ...payload } = updatedWord;
 
       const success = await onSave(payload);
       if (success) {
         form.reset(toFormDefaultValues(updatedWord));
-        dispatch(initFromWord(updatedWord));
+        setTable(tableFromWord(updatedWord));
         setEditingCell(null);
         setEditingCellValue('');
         setAiFieldStatus(new Map());
       }
     },
-    errors => {
-      setTableErrors([]);
-      console.error('WordEditPanel submit errors', errors);
-    }
+    () => setTableErrors([])
   );
 
   const watchedWord = form.watch('word');
-  const watchedPronounType = form.watch('pronoun_type') as PronounType | null;
-  const watchedPerson = form.watch('person') as PronounPerson | null;
 
   const renderPosForm = () => {
-    if (!word) return null;
-    switch (word.part_of_speech) {
+    switch (word?.part_of_speech) {
       case 'noun':
         return <NounForm />;
       case 'pronoun':
@@ -580,36 +387,12 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
         return <VerbForm />;
       case 'preposition':
         return <PrepositionForm />;
-      case 'adverb':
-      case 'conjunction':
-      case 'interjection':
-        return null;
       default:
         return null;
     }
   };
 
   const isSubmitting = form.formState.isSubmitting;
-  const renderEditableSchemaTable = ({
-    tableType,
-    ...props
-  }: Pick<React.ComponentProps<typeof SchemaTable>, 'schema' | 'data' | 'title' | 'color'> & { tableType: string }) => (
-    <SchemaTable
-      {...props}
-      tableType={tableType}
-      isExpanded={isEditTableExpanded(tableType)}
-      onToggle={() => toggleEditTableExpansion(tableType)}
-      isEditMode={true}
-      editingCell={editingCell}
-      editingCellValue={editingCellValue}
-      editCallbacks={{
-        onCellDoubleClick: handleCellDoubleClick,
-        onCellEditSave: handleCellEditSave,
-        onCellEditCancel: handleCellEditCancel,
-        onEditingCellValueChange: setEditingCellValue,
-      }}
-    />
-  );
 
   if (!word) {
     return <EmptyState />;
@@ -666,41 +449,34 @@ export const WordEditPanel: React.FC<WordEditPanelProps> = ({ word, onSave, upda
               <BaseWordForm />
               {renderPosForm()}
 
-              {word.part_of_speech === 'noun' &&
-                renderEditableSchemaTable({
-                  schema: DeclensionTableSchema,
-                  data: declensionTable,
-                  tableType: TABLE_TYPES.DECLENSION,
-                  title: 'Declension Table',
-                  color: 'text-blue-700',
-                })}
-
-              {word.part_of_speech === 'pronoun' &&
-                renderEditableSchemaTable({
-                  schema: getPronounTableSchema(watchedPronounType, watchedPerson),
-                  data: declensionTable,
-                  tableType: TABLE_TYPES.DECLENSION,
-                  title: getPronounTableTitle(watchedPronounType, watchedPerson),
-                  color: 'text-indigo-700',
-                })}
-
-              {word.part_of_speech === 'adjective' &&
-                renderEditableSchemaTable({
-                  schema: DegreesTableSchema,
-                  data: degreesTable,
-                  tableType: TABLE_TYPES.ADJECTIVE_DECLENSION,
-                  title: 'Degrees of Comparison',
-                  color: 'text-purple-700',
-                })}
-
-              {word.part_of_speech === 'verb' &&
-                renderEditableSchemaTable({
-                  schema: ConjugationTableSchema,
-                  data: conjugationTable,
-                  tableType: TABLE_TYPES.CONJUGATION,
-                  title: 'Conjugation Table',
-                  color: 'text-green-700',
-                })}
+              {editableTable && (
+                <SchemaTable
+                  schema={
+                    word.part_of_speech === 'pronoun'
+                      ? getPronounTableSchema(pronounType, pronounPerson)
+                      : editableTable.schema
+                  }
+                  data={table}
+                  tableType={editableTable.tableType}
+                  title={
+                    word.part_of_speech === 'pronoun'
+                      ? getPronounTableTitle(pronounType, pronounPerson)
+                      : editableTable.title
+                  }
+                  color={editableTable.color}
+                  isExpanded={tableExpanded}
+                  onToggle={() => setTableExpanded(expanded => !expanded)}
+                  isEditMode={true}
+                  editingCell={editingCell}
+                  editingCellValue={editingCellValue}
+                  editCallbacks={{
+                    onCellDoubleClick: handleCellDoubleClick,
+                    onCellEditSave: handleCellEditSave,
+                    onCellEditCancel: handleCellEditCancel,
+                    onEditingCellValueChange: setEditingCellValue,
+                  }}
+                />
+              )}
             </div>
           </div>
         </form>
