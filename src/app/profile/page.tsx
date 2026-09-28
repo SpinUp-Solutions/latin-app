@@ -97,7 +97,6 @@ export default function ProfilePage() {
 
       if (!validation.success) {
         toast.error(validation.error.issues[0].message);
-        setSaving(false);
         return;
       }
 
@@ -106,7 +105,6 @@ export default function ProfilePage() {
         const isAvailable = await checkUsernameAvailable(username, user.uid);
         if (!isAvailable) {
           toast.error('Username is already taken. Please choose another.');
-          setSaving(false);
           return;
         }
       }
@@ -141,7 +139,6 @@ export default function ProfilePage() {
 
       if (!validation.success) {
         toast.error(validation.error.issues[0].message);
-        setChangingPassword(false);
         return;
       }
 
@@ -176,7 +173,6 @@ export default function ProfilePage() {
           Back to Dashboard
         </Button>
 
-        {/* Profile Info */}
         <RomanCard className="shadow-xl">
           <RomanCardHeader className="space-y-1 text-center">
             <Image
@@ -263,7 +259,6 @@ export default function ProfilePage() {
           </RomanCardContent>
         </RomanCard>
 
-        {/* Change Password */}
         <RomanCard className="shadow-xl">
           <RomanCardHeader className="space-y-1 text-center">
             <h2 className="text-2xl font-bold font-serif">Change Password</h2>

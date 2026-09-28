@@ -36,8 +36,6 @@ const RegistrationSchema = z
     path: ['confirmPassword'],
   });
 
-type RegistrationFormData = z.infer<typeof RegistrationSchema>;
-
 const checkUsernameAvailable = async (username: string): Promise<boolean> => {
   const usersRef = collection(db, 'users');
   const q = query(usersRef, where('username', '==', username.toLowerCase()));
@@ -70,28 +68,23 @@ export default function RegisterPage() {
     setFormLoading(true);
 
     try {
-      const formData: RegistrationFormData = {
+      const validation = RegistrationSchema.safeParse({
         email,
         password,
         confirmPassword,
         username,
         firstName,
         lastName,
-        dateOfBirth: dateOfBirth as Date,
-      };
-
-      const validation = RegistrationSchema.safeParse(formData);
+        dateOfBirth,
+      });
       if (!validation.success) {
-        const firstError = validation.error.issues[0];
-        toast.error(firstError.message);
-        setFormLoading(false);
+        toast.error(validation.error.issues[0].message);
         return;
       }
 
       const isAvailable = await checkUsernameAvailable(username);
       if (!isAvailable) {
         toast.error('Username is already taken. Please choose another.');
-        setFormLoading(false);
         return;
       }
 
