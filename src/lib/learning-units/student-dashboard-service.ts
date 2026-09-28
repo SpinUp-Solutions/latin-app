@@ -173,12 +173,7 @@ function fullLessonFromSnapshot(snapshot: DocumentSnapshot): Lesson {
     throw new StudentDashboardServiceError('LESSON_NOT_FOUND', 'Lesson not found', 404);
   }
 
-  if (
-    !data ||
-    typeof data.title !== 'string' ||
-    !Array.isArray(data.pages) ||
-    typeof (data.type ?? 'normal') !== 'string'
-  ) {
+  if (typeof data.title !== 'string' || !Array.isArray(data.pages) || typeof (data.type ?? 'normal') !== 'string') {
     throw new StudentDashboardServiceError(
       'STALE_LESSON_DATA',
       `Lesson ${snapshot.id} contains invalid persisted data`,
@@ -228,10 +223,6 @@ export class StudentDashboardService {
 
   private get versions() {
     return this.db.collection(TEST_VERSIONS_COLLECTION);
-  }
-
-  private async getAttemptSummary(origin: { kind: 'normal-test'; testId: string }, userId: string) {
-    return this.attempts.getAttemptSummary(origin, userId);
   }
 
   private async getLiveLessonSummaries(): Promise<LessonSummary[]> {
@@ -341,11 +332,7 @@ export class StudentDashboardService {
 
     const summaries: LearningPathUnitSummary[] = [];
     for (const unit of projectedUnits) {
-      if (unit.kind !== 'test') {
-        summaries.push(unit);
-        continue;
-      }
-      if (!('rotationVersions' in unit)) {
+      if (unit.kind !== 'test' || !('rotationVersions' in unit)) {
         summaries.push(unit);
         continue;
       }
@@ -629,13 +616,10 @@ export class StudentDashboardService {
     normalUnits: LearningPathUnitSummary[];
     rawPracticeLessons: LessonSummary[];
   }> {
-    const [allLessons, pathSnapshot] = await Promise.all([
+    const [allLessons, normalUnits] = await Promise.all([
       this.getLiveLessonSummaries(),
-      this.db.collection(LEARNING_PATHS_COLLECTION).doc(DEFAULT_LEARNING_PATH_ID).get(),
+      this.getNormalUnitSummaries(),
     ]);
-
-    const path = parseLearningPathSnapshot(pathSnapshot);
-    const normalUnits: LearningPathUnitSummary[] = path ? await this.getPlacedUnitSummaries(path.unitIds) : [];
     const rawPracticeLessons = PRACTICE_TYPE_ORDER.flatMap(type => allLessons.filter(lesson => lesson.type === type));
 
     return { normalUnits, rawPracticeLessons };
@@ -645,10 +629,6 @@ export class StudentDashboardService {
     const pathSnapshot = await this.db.collection(LEARNING_PATHS_COLLECTION).doc(DEFAULT_LEARNING_PATH_ID).get();
     const path = parseLearningPathSnapshot(pathSnapshot);
     return path ? this.getPlacedUnitSummaries(path.unitIds) : [];
-  }
-
-  async getNormalSequenceUnitIds(): Promise<string[]> {
-    return (await this.getNormalUnitSummaries()).map(unit => unit.id);
   }
 
   async getDashboard(userId: string): Promise<StudentDashboard> {
@@ -704,7 +684,7 @@ export class StudentDashboardService {
     await Promise.all(
       testUnits.map(async test => {
         const origin = { kind: 'normal-test' as const, testId: test.id };
-        attemptSummaries.set(test.id, await this.getAttemptSummary(origin, userId));
+        attemptSummaries.set(test.id, await this.attempts.getAttemptSummary(origin, userId));
       })
     );
     return attemptSummaries;

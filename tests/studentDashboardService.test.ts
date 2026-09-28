@@ -563,7 +563,6 @@ describe('StudentDashboardService summary projection', () => {
 
     const active = await service.getDashboard('user');
     expect(active.learningPath.map(item => item.id)).toEqual(['placed', 'legacy']);
-    await expect(service.getNormalSequenceUnitIds()).resolves.toEqual(['placed', 'legacy']);
     expect(active.practiceLessons.map(item => item.id)).toEqual(['practice']);
     expect(errorSpy).toHaveBeenCalledWith('Learning Path references missing unit missing; skipping it');
 
