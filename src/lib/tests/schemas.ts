@@ -11,7 +11,7 @@ import {
 import { getTestVersionSummaryFields } from './domain';
 
 const optionalAuditFieldSchema = z.string().min(1).optional();
-const isoTimestampSchema = z
+export const isoTimestampSchema = z
   .string()
   .refine(
     value => Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value,

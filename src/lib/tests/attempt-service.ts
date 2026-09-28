@@ -49,7 +49,7 @@ import type {
   TestTranslationGradeRequestWindows,
   TestVersion,
 } from '@/src/types/test';
-import { isAnswerForExercise, parseExerciseAnswer } from './answer-schemas';
+import { parseExerciseAnswer } from './answer-schemas';
 import {
   createFrozenTestDeliveryState,
   gradeFrozenTestDelivery,
@@ -840,7 +840,7 @@ export class TestAttemptService {
         } catch {
           throw new TestServiceError('ATTEMPT_ANSWER_INVALID', 'The committed answer has an invalid shape', 400);
         }
-        if (!isAnswerForExercise(answer, item.type)) {
+        if (answer.type !== item.type) {
           throw new TestServiceError('ATTEMPT_ANSWER_INVALID', `The committed answer must have type ${item.type}`, 400);
         }
         if (attempt.flowVersion === 1)

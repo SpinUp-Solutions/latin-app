@@ -13,15 +13,9 @@ import type {
   TestTranslationGrades,
   TestVersion,
 } from '@/src/types/test';
-import type { VocabularyContent, VocabularyPoolContent } from '@/src/types/vocabulary';
+import type { VocabularyContent, VocabularyPoolContent, VocabularyPoolStudyData } from '@/src/types/vocabulary';
 import type { TableData } from '@/src/components/ui/lesson/conjugation-table';
-import {
-  isExerciseType,
-  isTestEligibleContentType,
-  isTestEligibleExerciseType,
-  type TestEligibleExerciseType,
-} from '@/src/lib/content/registry';
-import type { ExerciseAnswer } from '@/src/types/runtime-mode';
+import { isExerciseType, isTestEligibleContentType, isTestEligibleExerciseType } from '@/src/lib/content/registry';
 import type { GeneratedWordLoader } from './generated-exercises';
 import { resolveGeneratedExerciseItems } from './generated-exercises';
 import type { GeneratedTranslationItem } from '@/src/utils/exercises/generatedTranslationExercise';
@@ -29,6 +23,7 @@ import {
   gradeExercise,
   gradeTranslationAssessment,
   maxPointsFor,
+  type ExerciseOfType,
   type ExerciseScore,
   type ResolvedGeneratedItem,
 } from './grading';
@@ -96,8 +91,6 @@ export async function createFrozenTestDeliveryState(
  */
 const compact = (value: Record<string, unknown>): Record<string, unknown> =>
   Object.fromEntries(Object.entries(value).filter(([, field]) => field !== undefined));
-
-type ExerciseOfType<T extends TestEligibleExerciseType> = Extract<Exercise, { type: T }>;
 
 const projectExerciseBase = (exercise: Exercise): Record<string, unknown> => ({
   id: exercise.id,
@@ -316,7 +309,9 @@ function projectTranslationGradingExercise(exercise: ExerciseOfType<'translation
   });
 }
 
-function sanitizeExercise(exercise: Exercise): Record<string, unknown> {
+// Detailed-review snapshots reuse these exact student-safe projections so the
+// post-submission review can never drift from what was taken.
+export function sanitizeExercise(exercise: Exercise): Record<string, unknown> {
   switch (exercise.type) {
     case 'matching':
       return projectMatchingExercise(exercise);
@@ -357,7 +352,10 @@ function sanitizeContentItem(item: RenderableContentItem): unknown {
     }
     return sanitizeExercise(item as Exercise);
   }
+  return projectSupportingContent(item);
+}
 
+export function projectSupportingContent(item: RenderableContentItem) {
   switch (item.type) {
     case 'text':
     case 'emphasis':
@@ -458,30 +456,28 @@ export function sanitizeTestDeliveryState(state: FrozenTestDeliveryState): Stude
         { items: resolved.items.map(sanitizeResolvedItem) },
       ])
     ),
-    ...(state.vocabularyPool
-      ? {
-          vocabularyPool: {
-            id: state.vocabularyPool.id,
-            name: state.vocabularyPool.name,
-            items: state.vocabularyPool.items.map(item => ({
-              id: item.id,
-              latin: item.latin,
-              english: item.english,
-              pronunciation: item.pronunciation,
-              audioPath: item.audioPath,
-              example: item.example,
-              partOfSpeech: item.partOfSpeech,
-              notes: item.notes,
-            })),
-          },
-        }
-      : {}),
+    ...(state.vocabularyPool ? { vocabularyPool: projectVocabularyPool(state.vocabularyPool) } : {}),
   };
 }
 
+export const projectVocabularyPool = (pool: VocabularyPoolStudyData) => ({
+  id: pool.id,
+  name: pool.name,
+  items: pool.items.map(item => ({
+    id: item.id,
+    latin: item.latin,
+    english: item.english,
+    pronunciation: item.pronunciation,
+    audioPath: item.audioPath,
+    example: item.example,
+    partOfSpeech: item.partOfSpeech,
+    notes: item.notes,
+  })),
+});
+
 export function gradeFrozenTestDelivery(
   state: FrozenTestDeliveryState,
-  answers: Record<string, ExerciseAnswer | unknown>,
+  answers: Record<string, unknown>,
   translationGrades: TestTranslationGrades = {}
 ): FrozenDeliveryScore {
   const exerciseResults: GradedExerciseResult[] = [];
@@ -529,26 +525,3 @@ function gradeSavedTranslationExercise(
   });
   return gradeTranslationAssessment(exercise, scores);
 }
-
-// Detailed-review snapshots reuse the exact student-safe projections shown
-// during the attempt so the post-submission review can never drift from what
-// was taken.
-export {
-  projectClickOnMultipleWordsExercise,
-  projectFillEmboldedTextExercise,
-  projectFillExercise,
-  projectGeneratedFormIdentificationExercise,
-  projectGeneratedTranslationExercise,
-  projectListeningPassageContent,
-  projectMatchingExercise,
-  projectMultipleChoiceExercise,
-  projectOddOneOutExercise,
-  projectSentenceDiagrammingExercise,
-  projectTableContent,
-  projectTableFillExercise,
-  projectTextContent,
-  projectTextSelectionExercise,
-  projectTranslationGradingExercise,
-  projectVocabularyContent,
-  projectVocabularyPoolContent,
-};
