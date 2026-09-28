@@ -6,9 +6,6 @@ export const NextResponse = {
   }),
 };
 
-export const mockNextResponse = NextResponse;
-
 /** Default Firebase Admin surface for tests that inject their own database. */
 export const adminAuth = {};
 export const adminDb = {};
-export const mockFirebaseAdmin = { adminAuth, adminDb };
