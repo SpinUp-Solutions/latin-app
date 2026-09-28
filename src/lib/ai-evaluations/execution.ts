@@ -12,7 +12,7 @@ import { getTranslationGradingTask } from '../../../shared/openai/translation-gr
 import {
   calculateTokenUsageCost,
   EVALUATION_TRANSLATION_PROFILE_IDS,
-  getTranslationGradingProfile,
+  TRANSLATION_GRADING_PROFILES,
   type TranslationGradingProfile,
   type TranslationGradingProfileId,
 } from '../../../shared/openai/model-registry';
@@ -353,7 +353,7 @@ function buildEvaluationJobGroups(evaluationCase: EvaluationCase): EvaluationJob
   for (const answer of evaluationCase.answers) {
     for (const mode of evaluationCase.modes) {
       for (const profileId of EVALUATION_TRANSLATION_PROFILE_IDS) {
-        const profile = getTranslationGradingProfile(profileId);
+        const profile = TRANSLATION_GRADING_PROFILES[profileId];
         const identity = { answer, mode, profileId, profile };
         const cacheKey = cacheKeyFor(evaluationCase, identity);
         const group = groups.get(cacheKey) ?? [];

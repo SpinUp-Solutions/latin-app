@@ -3,11 +3,11 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { isValidTokenUsage, parseOpenAIUsage } from '../../../shared/openai/model-registry';
 import type { CostBreakdown, TokenUsage } from '../../../shared/openai/types';
 import {
-  parseTranslationGradingOutput,
+  getTranslationGradingTask,
   type TestTranslationGradingOutput,
-  type TranslationGradingMode,
   type TranslationGradingOutput,
-} from '../../../shared/openai/translation-grading';
+} from '../../../shared/openai/translation-grading-tasks';
+import type { TranslationGradingMode } from '../../../shared/openai/types';
 import { AI_EVALUATION_RESULT_CACHE_COLLECTION } from '../../../shared/constants/firestore';
 
 const AI_EVALUATION_CACHE_RETENTION_MS = 30 * 24 * 60 * 60 * 1_000;
@@ -86,7 +86,7 @@ export async function getCachedEvaluationResult(
   let output: TranslationGradingOutput | TestTranslationGradingOutput;
   try {
     if (data?.gradingMode !== gradingMode) return null;
-    output = parseTranslationGradingOutput(gradingMode, data?.output);
+    output = getTranslationGradingTask(gradingMode).parse(data?.output);
   } catch {
     return null;
   }
@@ -122,7 +122,7 @@ export async function setCachedEvaluationResult(result: CachedEvaluationResult, 
   if (!isValidTokenUsage(result.usage) || !isValidCost(result.cost, result.usage)) {
     throw new Error('Cannot cache an evaluation without measured, consistent usage and cost');
   }
-  parseTranslationGradingOutput(result.gradingMode, result.output);
+  getTranslationGradingTask(result.gradingMode).parse(result.output);
   await cacheCollection(db)
     .doc(result.cacheKey)
     .set({

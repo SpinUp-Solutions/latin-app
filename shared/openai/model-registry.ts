@@ -72,14 +72,10 @@ interface TranslationGradingProfileDefinition {
   pricing: OpenAIModelPricing;
 }
 
-interface TranslationGradingProfileOptions {
-  labelSuffix: string;
-  reasoningEffort: OpenAIReasoningEffort;
-  maxOutputTokens: Record<TranslationGradingMode, number>;
-  promptCacheKey: string;
-  promptCacheMode: 'automatic' | 'explicit';
-  profileVersion: string;
-}
+type TranslationGradingProfileOptions = Omit<
+  TranslationGradingProfileDefinition,
+  'key' | 'modelId' | 'model' | 'label' | 'pricing'
+> & { labelSuffix: string };
 
 const defineTranslationGradingProfile = <const K extends string, const M extends OpenAIModelId>(
   key: K,
@@ -124,9 +120,6 @@ export const TRANSLATION_GRADING_PROFILES = {
 
 export type TranslationGradingProfileId = keyof typeof TRANSLATION_GRADING_PROFILES;
 export type TranslationGradingProfile = (typeof TRANSLATION_GRADING_PROFILES)[TranslationGradingProfileId];
-
-export const getTranslationGradingProfile = (key: TranslationGradingProfileId): TranslationGradingProfile =>
-  TRANSLATION_GRADING_PROFILES[key];
 
 /** Production switches are policy, not call-site conditionals. */
 export const PRODUCTION_TRANSLATION_POLICY = {
@@ -220,25 +213,6 @@ export function parseOpenAIUsage(usage: unknown): TokenUsage | undefined {
   };
 }
 
-/**
- * Responses API usage has evolved a little across SDK/API versions. Keep the
- * legacy normalizer tolerant for existing autocomplete callers; evaluation
- * billing uses parseOpenAIUsage so malformed usage is marked unavailable.
- */
-export function normalizeOpenAIUsage(usage: unknown): TokenUsage {
-  return (
-    parseOpenAIUsage(usage) ?? {
-      promptTokens: 0,
-      completionTokens: 0,
-      totalTokens: 0,
-      ordinaryInputTokens: 0,
-      cachedInputTokens: 0,
-      cacheWriteTokens: 0,
-      reasoningTokens: 0,
-    }
-  );
-}
-
 export function isValidTokenUsage(value: unknown): value is TokenUsage {
   if (!value || typeof value !== 'object') return false;
   const usage = value as Partial<TokenUsage>;
@@ -277,16 +251,8 @@ export function calculateTokenUsageCost(tokens: TokenUsage, pricing: OpenAIModel
   };
 }
 
-function calculateOpenAICost(usage: unknown, pricing: OpenAIModelPricing): CostBreakdown {
-  return calculateTokenUsageCost(normalizeOpenAIUsage(usage), pricing);
-}
-
-export function calculateProfileCost(usage: unknown, profile: TranslationGradingProfileDefinition): CostBreakdown {
-  return calculateOpenAICost(usage, profile.pricing);
-}
-
 export function calculateModelCost(usage: unknown, model: string): CostBreakdown | undefined {
-  if (!parseOpenAIUsage(usage)) return undefined;
+  const tokens = parseOpenAIUsage(usage);
   const pricing = OPENAI_MODEL_PRICING[model];
-  return pricing ? calculateOpenAICost(usage, pricing) : undefined;
+  return tokens && pricing ? calculateTokenUsageCost(tokens, pricing) : undefined;
 }
