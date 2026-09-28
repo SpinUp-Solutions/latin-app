@@ -4,13 +4,14 @@ import {
   createVocabularyPoolFromPools,
   VocabularyPoolFromPoolsError,
 } from '@/src/lib/vocabulary-pools/from-pools.server';
+import { VocabularyPoolStateError } from '@/src/lib/vocabulary-pools/pool-state.server';
 import { createRouteErrorResponse } from '@/src/lib/route-error-response';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import { adminDb } from '@/src/services/firebase-admin';
 
 export const dynamic = 'force-dynamic';
 
-const routeErrorResponse = createRouteErrorResponse(VocabularyPoolFromPoolsError);
+const routeErrorResponse = createRouteErrorResponse(VocabularyPoolFromPoolsError, VocabularyPoolStateError);
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {

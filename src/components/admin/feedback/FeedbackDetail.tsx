@@ -41,7 +41,7 @@ import {
 } from '@/src/store/api/studentFeedbackApi';
 import { cn } from '@/src/lib/utils';
 import { FeedbackAttachments } from './FeedbackAttachments';
-import { FeedbackBadges, FeedbackTypeIcon, formatDateTime, formatRelativeTime, submitterName } from './feedback-ui';
+import { FeedbackBadges, FeedbackTypeIcon, formatDateTime, formatRelativeTime, submitterLabel } from './feedback-ui';
 
 const ACTIVITY: Record<FeedbackActivity['kind'], { icon: LucideIcon; text: string }> = {
   submitted: { icon: Send, text: 'sent this report' },
@@ -219,7 +219,7 @@ function StudentPanel({ submitter }: { submitter: FeedbackAdminDetailResponse['f
   return (
     <Panel title="Student">
       <dl className="space-y-3">
-        <Detail label="Name">{submitter.displayName || 'Not provided'}</Detail>
+        <Detail label="Profile name">{submitter.displayName || 'Not provided'}</Detail>
         <Detail label="Email">
           {submitter.email ? (
             <a href={`mailto:${submitter.email}`} className="text-primary hover:underline">
@@ -351,7 +351,7 @@ export function FeedbackDetail({ feedbackId }: { feedbackId: string }) {
         description={
           feedback && (
             <>
-              From {submitterName(feedback.submitter)} ·{' '}
+              From {submitterLabel(feedback.submitter)} ·{' '}
               <time dateTime={feedback.createdAt} title={formatDateTime(feedback.createdAt)}>
                 {formatRelativeTime(feedback.createdAt)}
               </time>

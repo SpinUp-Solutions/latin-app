@@ -16,6 +16,9 @@ import { isRejectedBySpecAwarePronounOverlap } from '@/src/utils/generated/prono
 import { isSelectableMorphologyForm } from '@/src/utils/morphologyForms';
 import type { GeneratedExercisePreviewDiagnostics } from './generated-preview-schema';
 import { isUsableGeneratedTranslationWord, type GeneratedExercise } from './generated-exercises';
+import { GeneratedVocabularySourceError } from './errors';
+
+export { GeneratedVocabularySourceError } from './errors';
 
 export const PER_SPEC_SCAN_FLOOR = 400;
 const BASE_GLOBAL_SCAN = 2000;
@@ -41,18 +44,6 @@ export interface CollectGeneratedExerciseWordsResult {
   globalScanLimitReached: boolean;
   requestedCount: number | 'all';
   uniqueWords?: number;
-}
-
-export class GeneratedVocabularySourceError extends Error {
-  readonly code: string;
-  readonly status: number;
-
-  constructor(message: string, status = 400, code = 'GENERATED_SOURCE_INVALID') {
-    super(message);
-    this.name = 'GeneratedVocabularySourceError';
-    this.code = code;
-    this.status = status;
-  }
 }
 
 const parseFilterValues = (value?: unknown): string[] => {

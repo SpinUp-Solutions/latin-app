@@ -33,6 +33,15 @@ describe('createRouteErrorResponse Sentry reporting', () => {
     expect(captureException).not.toHaveBeenCalled();
   });
 
+  it('keeps the code of admin access errors such as the content sync lock', () => {
+    const response = routeErrorResponse(new AdminAccessError('Maintenance', 409, 'SYNC_IN_PROGRESS'), 'save') as unknown as {
+      status: number;
+      body: unknown;
+    };
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual({ error: 'Maintenance', code: 'SYNC_IN_PROGRESS' });
+  });
+
   it('does not report Zod validation errors', () => {
     const response = routeErrorResponse(new ZodError([]), 'create') as unknown as { status: number };
     expect(response.status).toBe(400);
@@ -43,6 +52,18 @@ describe('createRouteErrorResponse Sentry reporting', () => {
     const response = routeErrorResponse(new DomainBoom(), 'update') as unknown as { status: number };
     expect(response.status).toBe(409);
     expect(captureException).not.toHaveBeenCalled();
+  });
+
+  it('never passes through the message of an unregistered error that has a status', () => {
+    const sdkError = Object.assign(new Error('POST https://iamcredentials.googleapis.com/ sa@project.iam'), {
+      status: 403,
+      code: 'ERR_BAD_REQUEST',
+    });
+    const response = routeErrorResponse(sdkError, 'sign link') as unknown as { status: number; body: unknown };
+
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({ error: 'Failed to sign link' });
+    expect(captureException).toHaveBeenCalledWith(sdkError, expect.anything());
   });
 
   it('reports unexpected errors on the 500 branch', () => {

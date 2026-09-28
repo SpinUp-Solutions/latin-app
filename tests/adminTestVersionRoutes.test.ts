@@ -10,14 +10,7 @@ jest.mock('next/server', () => jest.requireActual('./helpers/routeMocks'));
 jest.mock('@/src/services/firebase-admin', () => jest.requireActual('./helpers/routeMocks'));
 jest.mock('@/src/lib/verifyAdminAccess', () => ({
   verifyAdminAccess: (...args: unknown[]) => verifyAdmin(...args),
-  AdminAccessError: class AdminAccessError extends Error {
-    constructor(
-      message: string,
-      public readonly status: number
-    ) {
-      super(message);
-    }
-  },
+  AdminAccessError: jest.requireActual('@/src/lib/admin-access-error').AdminAccessError,
 }));
 jest.mock('@/src/lib/tests/authoring-service', () => ({
   testAuthoringService: {

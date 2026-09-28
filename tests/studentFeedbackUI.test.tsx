@@ -71,6 +71,7 @@ jest.mock('@/src/store/api/studentFeedbackApi', () => ({
   useUpdateAdminFeedbackStateMutation: () => [mockUpdate, { isLoading: false }],
   useAddAdminFeedbackNoteMutation: () => [mockAddNote, { isLoading: false }],
   refreshFeedbackListPageOne: jest.fn(),
+  studentFeedbackApi: { util: { getRunningQueryThunk: () => undefined } },
 }));
 
 beforeEach(() => {
@@ -89,6 +90,8 @@ test('list keeps filters in detail links and renders student text as text', () =
   expect(row).toHaveAttribute('href', expect.stringContaining(encodeURIComponent('/admin/feedback?status=resolved&sort=oldest')));
   expect(row).toHaveTextContent('Blocking');
   expect(row).toHaveTextContent('First lesson');
+  // The verified email leads; the student can edit their profile name.
+  expect(row).toHaveTextContent('ada@example.edu (Ada Lovelace)');
   expect(screen.getByText('<script>alert(1)</script>')).toBeInTheDocument();
   expect(document.querySelector('script')).toBeNull();
 });

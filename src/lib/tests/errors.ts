@@ -38,3 +38,15 @@ export class TestServiceError extends Error {
     this.name = 'TestServiceError';
   }
 }
+
+export class GeneratedVocabularySourceError extends Error {
+  readonly code: string;
+  readonly status: number;
+
+  constructor(message: string, status = 400, code = 'GENERATED_SOURCE_INVALID') {
+    super(message);
+    this.name = 'GeneratedVocabularySourceError';
+    this.code = code;
+    this.status = status;
+  }
+}

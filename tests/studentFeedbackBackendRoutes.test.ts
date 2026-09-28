@@ -131,7 +131,7 @@ describe('student feedback API authorization and validation', () => {
       };
       expect(response.status).toBe(500);
       expect(JSON.stringify(response.body)).not.toContain(privateValue);
-      expect(captureException).toHaveBeenCalledWith(expect.objectContaining({ cause: sdkError }), expect.anything());
+      expect(captureException).toHaveBeenCalledWith(sdkError, expect.anything());
     } finally {
       log.mockRestore();
     }

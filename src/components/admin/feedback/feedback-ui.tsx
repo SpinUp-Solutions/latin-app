@@ -73,6 +73,11 @@ export function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-export function submitterName(submitter: FeedbackReport['submitter']): string {
-  return submitter.displayName || submitter.email || submitter.uid;
+/**
+ * Leads with the verified sign-in email (or UID). The name is copied from the student's own
+ * profile, which they can edit, so it is shown only alongside.
+ */
+export function submitterLabel(submitter: FeedbackReport['submitter']): string {
+  const verified = submitter.email || submitter.uid;
+  return submitter.displayName ? `${verified} (${submitter.displayName})` : verified;
 }

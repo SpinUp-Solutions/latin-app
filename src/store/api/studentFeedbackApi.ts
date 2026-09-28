@@ -38,7 +38,9 @@ export const studentFeedbackApi = appApi.injectEndpoints({
         const seen = new Set(current.items.map(item => item.id));
         return { items: [...current.items, ...incoming.items.filter(item => !seen.has(item.id))], nextCursor: incoming.nextCursor };
       },
-      forceRefetch: ({ currentArg, previousArg }) => currentArg?.cursor !== previousArg?.cursor,
+      // Only a new "Load more" cursor forces a request. A page-one request replaces the cache, so a list
+      // shown again after remounting keeps its loaded pages; refreshes pass `forceRefetch` themselves.
+      forceRefetch: ({ currentArg, previousArg }) => Boolean(currentArg?.cursor) && currentArg?.cursor !== previousArg?.cursor,
       providesTags: [{ type: 'FeedbackList', id: 'LIST' }],
     }),
     getAdminFeedbackCount: builder.query<{ count: number }, void>({

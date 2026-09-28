@@ -18,6 +18,8 @@ jest.mock('@/src/lib/verifyRequestAuth', () => ({
 
 const mockGetLesson = jest.fn();
 jest.mock('@/src/lib/learning-units/student-dashboard-service', () => ({
+  StudentDashboardServiceError: jest.requireActual('@/src/lib/learning-units/student-dashboard-service')
+    .StudentDashboardServiceError,
   studentDashboardService: { getLesson: (...args: unknown[]) => mockGetLesson(...args) },
 }));
 
@@ -89,9 +91,8 @@ describe('student generated exercise playback route', () => {
   });
 
   it('preserves lesson access failures from the ownership check', async () => {
-    mockGetLesson.mockRejectedValue(
-      Object.assign(new Error('Lesson is locked'), { status: 403, code: 'LESSON_LOCKED' })
-    );
+    const { StudentDashboardServiceError } = jest.requireActual('@/src/lib/learning-units/student-dashboard-service');
+    mockGetLesson.mockRejectedValue(new StudentDashboardServiceError('LESSON_LOCKED', 'Lesson is locked', 403));
 
     const response = await POST({ json: async () => playbackBody } as never);
 

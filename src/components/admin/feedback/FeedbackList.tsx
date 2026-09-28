@@ -38,7 +38,7 @@ import {
 } from '@/src/store/api/studentFeedbackApi';
 import { useAppDispatch } from '@/src/store/hooks';
 import { cn } from '@/src/lib/utils';
-import { FeedbackBadges, FeedbackTypeIcon, formatDateTime, formatRelativeTime, submitterName } from './feedback-ui';
+import { FeedbackBadges, FeedbackTypeIcon, formatDateTime, formatRelativeTime, submitterLabel } from './feedback-ui';
 
 const ANY = 'any';
 const STATUS_TABS = [
@@ -145,7 +145,7 @@ function FeedbackRow({ item, href }: { item: FeedbackAdminListItem; href: string
           <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-roman-stone">
             <span className="inline-flex items-center gap-1.5">
               <User className="h-3.5 w-3.5" aria-hidden="true" />
-              {submitterName(item.submitter)}
+              {submitterLabel(item.submitter)}
             </span>
             {item.lesson && (
               <span className="inline-flex min-w-0 max-w-full items-center gap-1.5">
@@ -187,11 +187,11 @@ export function FeedbackList() {
   const cursor = paging.key === queryString ? paging.cursor : null;
   const [search, setSearch] = useState('');
 
-  // RTK's focus and reconnect refetch would repeat only the latest "Load more" page, so this list
-  // reloads from page one itself (see refreshOnReturn).
-  const { currentData, isFetching, isError, error } = useGetAdminFeedbackListQuery(
+  // RTK's automatic refetches would repeat only the latest "Load more" page or drop the loaded pages,
+  // so this list decides when to reload (see refreshPageOne).
+  const { currentData, originalArgs, isFetching, isError, error } = useGetAdminFeedbackListQuery(
     { ...filters, cursor },
-    { refetchOnFocus: false, refetchOnReconnect: false }
+    { refetchOnFocus: false, refetchOnReconnect: false, refetchOnMountOrArgChange: false }
   );
   const count = useGetAdminFeedbackCountQuery(undefined, { refetchOnFocus: true });
   const items = currentData?.items ?? [];
@@ -226,29 +226,29 @@ export function FeedbackList() {
     void count.refetch();
   };
 
-  const refreshOnReturn = useEffectEvent(() => {
-    if (document.visibilityState !== 'visible') return;
+  // Keeps the list fresh when the admin comes back to it, unless reloading would drop pages they loaded
+  // with "Load more"; the Refresh button still reloads those.
+  const refreshPageOne = useEffectEvent(() => {
+    if (document.visibilityState !== 'visible' || originalArgs?.cursor) return;
     // Returning to a tab fires both focus and visibilitychange; one page-one request is enough.
-    // RTK 2.5 infers the running request's arg as `never`, so its type is named here.
-    const running: { arg: FeedbackListArgs } | undefined = dispatch(
-      studentFeedbackApi.util.getRunningQueryThunk('getAdminFeedbackList', filters)
-    );
-    if (!running || running.arg.cursor) refresh();
+    if (!dispatch(studentFeedbackApi.util.getRunningQueryThunk('getAdminFeedbackList', filters))) refresh();
   });
   useEffect(() => {
     const events = ['focus', 'visibilitychange', 'online'];
-    const onEvent = () => refreshOnReturn();
+    const onEvent = () => refreshPageOne();
     for (const event of events) window.addEventListener(event, onEvent);
     return () => {
       for (const event of events) window.removeEventListener(event, onEvent);
     };
   }, []);
+  // Remounting or switching back to a filter shows its cached pages; reload them only if that loses nothing.
+  useEffect(() => refreshPageOne(), [queryString]);
 
   const lessonTitle = items.find(item => item.lesson?.id === filters.lessonId)?.lesson?.title;
   const studentLabel =
     filters.submitterEmail ??
     (filters.submitterUid &&
-      (items.find(item => item.submitter.uid === filters.submitterUid)?.submitter.displayName || filters.submitterUid));
+      (items.find(item => item.submitter.uid === filters.submitterUid)?.submitter.email || filters.submitterUid));
 
   return (
     <AdminPage>

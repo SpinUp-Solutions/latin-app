@@ -35,8 +35,14 @@ function renderList() {
     middleware: getDefaultMiddleware => getDefaultMiddleware().concat(studentFeedbackApi.middleware),
   });
   removeListeners.push(setupListeners(store.dispatch));
-  const view = render(<Provider store={store}><FeedbackList /></Provider>);
-  return { rerenderList: () => view.rerender(<Provider store={store}><FeedbackList /></Provider>) };
+  let mounts = 0;
+  const tree = () => <Provider store={store}><FeedbackList key={++mounts} /></Provider>;
+  const view = render(tree());
+  return {
+    rerenderList: () => view.rerender(<Provider store={store}><FeedbackList key={mounts} /></Provider>),
+    unmountList: () => view.rerender(<Provider store={store}>{null}</Provider>),
+    remountList: () => view.rerender(tree()),
+  };
 }
 
 beforeEach(() => {
@@ -56,6 +62,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  jest.restoreAllMocks();
   removeListeners.splice(0).forEach(remove => remove());
   jest.useRealTimers();
 });
@@ -88,17 +95,60 @@ test('returning to a filter after its cache expired starts again from page one',
 test.each([
   ['focus', () => fireEvent.focus(window)],
   ['reconnect', () => fireEvent(window, new Event('online'))],
-])('%s reloads page one instead of repeating the last "Load more" request', async (_label, trigger) => {
+])('%s keeps the pages loaded with "Load more"', async (_label, trigger) => {
   renderList();
   await loadSecondOpenPage();
 
   listRequests.length = 0;
   openFirstPage = ['open-new', 'open-1'];
   act(trigger);
+  await act(async () => {});
+
+  expect(screen.getByText('open-2')).toBeInTheDocument();
+  expect(screen.queryByText('open-new')).not.toBeInTheDocument();
+  expect(listRequests).toEqual([]);
+});
+
+test.each([
+  ['focus', () => fireEvent.focus(window)],
+  ['reconnect', () => fireEvent(window, new Event('online'))],
+])('%s reloads a list that shows only page one', async (_label, trigger) => {
+  renderList();
+  expect(await screen.findByText('open-1')).toBeInTheDocument();
+
+  listRequests.length = 0;
+  openFirstPage = ['open-new', 'open-1'];
+  act(trigger);
+
+  expect(await screen.findByText('open-new')).toBeInTheDocument();
+  expect(listRequests.map(url => url.searchParams.get('cursor'))).toEqual([null]);
+});
+
+test('coming back from a report keeps the pages loaded with "Load more"', async () => {
+  const { unmountList, remountList } = renderList();
+  await loadSecondOpenPage();
+
+  unmountList();
+  listRequests.length = 0;
+  jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 60_000);
+  remountList();
+
+  expect(await screen.findByText('open-2')).toBeInTheDocument();
+  await act(async () => {});
+  expect(screen.getByText('Showing all 2 reports')).toBeInTheDocument();
+  expect(listRequests).toEqual([]);
+});
+
+test('the Refresh button reloads page one even after "Load more"', async () => {
+  renderList();
+  await loadSecondOpenPage();
+
+  listRequests.length = 0;
+  openFirstPage = ['open-new', 'open-1'];
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
 
   expect(await screen.findByText('open-new')).toBeInTheDocument();
   expect(screen.queryByText('open-2')).not.toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Load more' })).toBeInTheDocument();
   expect(listRequests.map(url => url.searchParams.get('cursor'))).toEqual([null]);
 });
 
