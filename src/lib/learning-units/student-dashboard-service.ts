@@ -28,7 +28,7 @@ import {
   isStoredLessonComplete,
   summarizeLessonCompletion,
 } from '@/src/utils/lessonProgress';
-import { toLessonSummary } from '@/src/utils/lessonSummary';
+import { LESSON_SUMMARY_FIELDS, toLessonSummary } from '@/src/utils/lessonSummary';
 import type { PracticeCategoryService } from '@/src/lib/practice-categories/service';
 import { practiceCategoryService } from '@/src/lib/practice-categories/service';
 import { testAttemptService, type TestAttemptService } from '@/src/lib/tests/attempt-service';
@@ -44,27 +44,6 @@ import {
   type ProgressionActivity,
   type ProgressionUnit,
 } from './progression';
-
-const LESSON_SUMMARY_FIELDS = [
-  'kind',
-  'title',
-  'description',
-  'type',
-  'vocabulary_pool',
-  'showWordSearch',
-  'isLive',
-  'liveOrder',
-  'publishedAt',
-  'publishedBy',
-  'createdAt',
-  'createdBy',
-  'updatedAt',
-  'updatedBy',
-  'version',
-  'totalPages',
-  'totalItems',
-  'totalExercises',
-] as const;
 
 const LEARNING_UNIT_SUMMARY_FIELDS = [...LESSON_SUMMARY_FIELDS, 'rotationVersions', 'passingPercentage'] as const;
 

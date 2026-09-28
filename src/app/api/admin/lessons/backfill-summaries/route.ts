@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { LEARNING_UNITS_COLLECTION } from '@/shared/constants/firestore';
 import { adminDb } from '@/src/services/firebase-admin';
 import type { Lesson } from '@/src/types/lesson';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
@@ -13,13 +14,10 @@ export const dynamic = 'force-dynamic';
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const user = await verifyAdminAccess(request);
-    if (!user) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
 
     const { searchParams } = new URL(request.url);
     const dryRun = searchParams.get('dryRun') === 'true';
-    const snapshot = await adminDb.collection('lessons').get();
+    const snapshot = await adminDb.collection(LEARNING_UNITS_COLLECTION).get();
 
     const lessonDocs = snapshot.docs.filter(doc => isLessonDocumentData(doc.data()));
     const updates = lessonDocs

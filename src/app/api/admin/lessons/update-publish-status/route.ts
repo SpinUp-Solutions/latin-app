@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { LEARNING_UNITS_COLLECTION } from '@/shared/constants/firestore';
 import { adminDb } from '@/src/services/firebase-admin';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
@@ -31,9 +32,6 @@ class PublishStatusError extends Error {
 export async function POST(request: NextRequest) {
   try {
     const user = await verifyAdminAccess(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
 
     const { lessonIds, isLive, lessonType, expectedLiveLessonIds, startOrder }: UpdateRequest = await request.json();
 
@@ -66,7 +64,7 @@ export async function POST(request: NextRequest) {
       if (lessonType === 'normal') {
         await assertLegacyNormalPlacementAllowedInTransaction(transaction, adminDb);
       }
-      const lessonRefs = lessonIds.map(lessonId => adminDb.collection('lessons').doc(lessonId));
+      const lessonRefs = lessonIds.map(lessonId => adminDb.collection(LEARNING_UNITS_COLLECTION).doc(lessonId));
       const lessonDocs = await transaction.getAll(...lessonRefs);
       const lessons = lessonDocs.map((lessonDoc, index) => {
         if (!lessonDoc.exists) {
@@ -84,7 +82,7 @@ export async function POST(request: NextRequest) {
         return { data: data as Partial<Lesson>, ref: lessonRefs[index] };
       });
 
-      const liveSnapshot = await transaction.get(adminDb.collection('lessons').where('isLive', '==', true));
+      const liveSnapshot = await transaction.get(adminDb.collection(LEARNING_UNITS_COLLECTION).where('isLive', '==', true));
       const currentTypeLiveIds = liveSnapshot.docs
         .filter(doc => {
           const data = doc.data();
@@ -103,7 +101,7 @@ export async function POST(request: NextRequest) {
       let nextOrder = startOrder;
       if (isLive && nextOrder === undefined) {
         const maxOrderSnapshot = await transaction.get(
-          adminDb.collection('lessons').where('isLive', '==', true).orderBy('liveOrder', 'desc')
+          adminDb.collection(LEARNING_UNITS_COLLECTION).where('isLive', '==', true).orderBy('liveOrder', 'desc')
         );
         const maxOrderDoc = maxOrderSnapshot.docs.find(doc => isLessonDocumentData(doc.data()));
         nextOrder = maxOrderDoc ? maxOrderDoc.data().liveOrder + 1 : 0;

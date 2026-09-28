@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { LEARNING_UNITS_COLLECTION } from '@/shared/constants/firestore';
 import { adminDb } from '@/src/services/firebase-admin';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
     }
 
     await runVocabularyContentMutation(adminDb, async transaction => {
-      const refs = updates.map(update => adminDb.collection('lessons').doc(update.lessonId));
+      const refs = updates.map(update => adminDb.collection(LEARNING_UNITS_COLLECTION).doc(update.lessonId));
       const snapshots = await transaction.getAll(...refs);
       const lessonTypes = new Set<LessonUnitType>();
 
