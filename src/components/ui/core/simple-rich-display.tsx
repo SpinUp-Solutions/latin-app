@@ -20,5 +20,3 @@ export const SimpleRichDisplay: React.FC<SimpleRichDisplayProps> = ({ content, c
     />
   );
 };
-
-export default SimpleRichDisplay;

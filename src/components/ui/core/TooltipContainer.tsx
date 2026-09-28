@@ -59,20 +59,9 @@ const TooltipOverlay: React.FC<TooltipOverlayProps> = ({ elementPosition, data }
   );
 };
 
-interface TooltipContainerProps {
-  children: React.ReactNode;
-  className?: string;
-  onTooltipShow?: (tooltipData: TooltipData) => void;
-  onTooltipHide?: () => void;
-  onMouseClick?: (e: MouseEvent) => void;
-}
-
-export const TooltipContainer: React.FC<TooltipContainerProps> = ({
+export const TooltipContainer: React.FC<{ children: React.ReactNode; className?: string }> = ({
   children,
   className,
-  onTooltipShow,
-  onTooltipHide,
-  onMouseClick,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeTooltip, setActiveTooltip] = useState<ActiveTooltip | null>(null);
@@ -101,11 +90,10 @@ export const TooltipContainer: React.FC<TooltipContainerProps> = ({
             y: rect.top,
           });
           setActiveTooltip({ id: tooltipId, data: tooltipData });
-          onTooltipShow?.(tooltipData);
         }
       }
     },
-    [activeTooltip?.id, onTooltipShow]
+    [activeTooltip?.id]
   );
 
   const handleMouseMove = useCallback(
@@ -121,35 +109,19 @@ export const TooltipContainer: React.FC<TooltipContainerProps> = ({
           hideTimeoutRef.current = null;
         }
       } else if (!hideTimeoutRef.current) {
-        hideTimeoutRef.current = setTimeout(() => {
-          setActiveTooltip(null);
-          onTooltipHide?.();
-        }, 400);
+        hideTimeoutRef.current = setTimeout(() => setActiveTooltip(null), 400);
       }
     },
-    [activeTooltip, onTooltipHide]
+    [activeTooltip]
   );
 
-  const handleMouseOut = useCallback(
-    (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const tooltipElement = target.closest('[data-tooltip="true"]');
-      if (tooltipElement && !hideTimeoutRef.current) {
-        hideTimeoutRef.current = setTimeout(() => {
-          setActiveTooltip(null);
-          onTooltipHide?.();
-        }, 400);
-      }
-    },
-    [onTooltipHide]
-  );
-
-  const handleClick = useCallback(
-    (e: MouseEvent) => {
-      onMouseClick?.(e);
-    },
-    [onMouseClick]
-  );
+  const handleMouseOut = useCallback((e: MouseEvent) => {
+    const target = e.target as HTMLElement;
+    const tooltipElement = target.closest('[data-tooltip="true"]');
+    if (tooltipElement && !hideTimeoutRef.current) {
+      hideTimeoutRef.current = setTimeout(() => setActiveTooltip(null), 400);
+    }
+  }, []);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -157,21 +129,15 @@ export const TooltipContainer: React.FC<TooltipContainerProps> = ({
 
     container.addEventListener('mouseover', handleMouseOver);
     container.addEventListener('mouseout', handleMouseOut);
-    if (onMouseClick) {
-      container.addEventListener('click', handleClick);
-    }
     document.addEventListener('mousemove', handleMouseMove);
 
     return () => {
       if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
       container.removeEventListener('mouseover', handleMouseOver);
       container.removeEventListener('mouseout', handleMouseOut);
-      if (onMouseClick) {
-        container.removeEventListener('click', handleClick);
-      }
       document.removeEventListener('mousemove', handleMouseMove);
     };
-  }, [handleMouseOver, handleMouseOut, handleClick, handleMouseMove, onMouseClick]);
+  }, [handleMouseOver, handleMouseOut, handleMouseMove]);
 
   return (
     <>
@@ -183,5 +149,3 @@ export const TooltipContainer: React.FC<TooltipContainerProps> = ({
     </>
   );
 };
-
-export default TooltipContainer;
