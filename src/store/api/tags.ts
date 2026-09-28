@@ -30,6 +30,9 @@ export const STUDENT_DASHBOARD_TAG = {
   type: 'StudentLearningPath' as const,
 };
 
+/** TestVersion tag id covering every version listed on one test's detail page. */
+export const testVersionsForTestTag = (testId: string) => `FOR_TEST:${testId}`;
+
 export const getAttemptSummaryTagId = (uid: string, origin: TestAttemptOrigin) =>
   `${origin.kind}:${origin.kind === 'normal-test' ? origin.testId : origin.mockTestId}:${uid}`;
 import type { TestAttemptOrigin } from '@/src/types/test';

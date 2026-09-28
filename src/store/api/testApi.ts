@@ -21,9 +21,7 @@ import type {
 import type { StudentTestResult } from '@/src/types/test-results';
 import type { ExerciseAnswer } from '@/src/types/runtime-mode';
 import { appApi } from './appApi';
-import { getAttemptSummaryTagId, STUDENT_DASHBOARD_TAG } from './tags';
-
-const testVersionsForTestTag = (testId: string) => `FOR_TEST:${testId}`;
+import { getAttemptSummaryTagId, STUDENT_DASHBOARD_TAG, testVersionsForTestTag } from './tags';
 
 export const testApi = appApi.injectEndpoints({
   endpoints: builder => ({
