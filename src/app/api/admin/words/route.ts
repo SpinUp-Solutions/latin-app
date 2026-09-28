@@ -637,7 +637,7 @@ function pickRandomFormServer(
 
   const selected = formsWithPaths[Math.floor(Math.random() * formsWithPaths.length)];
   const { primaryPaths, optionalPaths } = categorizeMatchingPaths(
-    scanTableForMatchingForms(table, selected.form, tableType),
+    scanTableForMatchingForms(table, selected.form),
     compatiblePaths
   );
   if (!primaryPaths.includes(selected.path)) {

@@ -200,7 +200,7 @@ function selectForm(word: Record<string, unknown>, spec: WordQuerySpec, formRng:
   if (!candidates.length) return null;
 
   const selected = candidates[Math.floor(formRng() * candidates.length)];
-  const matchingPaths = scanTableForMatchingForms(available.table, selected.form, available.tableType);
+  const matchingPaths = scanTableForMatchingForms(available.table, selected.form);
   const paths = categorizeMatchingPaths(matchingPaths, available.compatiblePaths);
   if (!paths.primaryPaths.includes(selected.path)) paths.primaryPaths.unshift(selected.path);
   return { selected, ...paths };

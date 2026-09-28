@@ -1,107 +1,40 @@
-import { z } from 'zod';
-import type { TableType } from '@/src/utils/schema-helpers';
 import { isSelectableMorphologyForm } from '@/src/utils/morphologyForms';
-import {
-  ConjugationTableSchema,
-  DeclensionTableSchema,
-  AdjectiveDeclensionTableSchema,
-  DegreesTableSchema,
-} from '@/shared/types/vocabulary/schemas';
 
-type ConjugationTable = z.infer<typeof ConjugationTableSchema>;
-type DeclensionTable = z.infer<typeof DeclensionTableSchema>;
-type DegreesTable = z.infer<typeof DegreesTableSchema>;
-type AdjectiveDeclensionTable = z.infer<typeof AdjectiveDeclensionTableSchema>;
+const isLeaf = (value: unknown): value is string | (string | null)[] | null =>
+  value === null ||
+  typeof value === 'string' ||
+  (Array.isArray(value) && value.every(entry => typeof entry === 'string' || entry === null));
 
-export interface MatchingPath {
-  path: string;
-}
-
-function isLeafNode(value: unknown): value is string[] | string | null {
-  if (value === null) return true;
-  if (typeof value === 'string') return true;
-  if (Array.isArray(value) && value.every(v => typeof v === 'string' || v === null)) return true;
-  return false;
-}
-
-function leafContainsForm(leaf: string[] | string | null, targetForm: string): boolean {
-  if (!isSelectableMorphologyForm(targetForm) || leaf === null) return false;
-  if (typeof leaf === 'string') return isSelectableMorphologyForm(leaf) && leaf === targetForm;
-  return leaf.some(form => isSelectableMorphologyForm(form) && form === targetForm);
-}
-
-function scanObjectForForm(
-  obj: Record<string, unknown>,
+function collectMatchingPaths(
+  table: Record<string, unknown>,
   targetForm: string,
-  currentPath: string[] = []
-): MatchingPath[] {
-  const results: MatchingPath[] = [];
-
-  for (const [key, value] of Object.entries(obj)) {
-    const newPath = [...currentPath, key];
-
-    if (isLeafNode(value)) {
-      if (leafContainsForm(value as string[] | string | null, targetForm)) {
-        results.push({ path: newPath.join('.') });
-      }
+  prefix: string[],
+  matches: string[]
+): string[] {
+  for (const [key, value] of Object.entries(table)) {
+    const path = [...prefix, key];
+    if (isLeaf(value)) {
+      if (value === targetForm || (Array.isArray(value) && value.includes(targetForm))) matches.push(path.join('.'));
     } else if (value && typeof value === 'object') {
-      results.push(...scanObjectForForm(value as Record<string, unknown>, targetForm, newPath));
+      collectMatchingPaths(value as Record<string, unknown>, targetForm, path, matches);
     }
   }
-
-  return results;
+  return matches;
 }
 
-export function scanDeclensionTable(table: DeclensionTable, targetForm: string): MatchingPath[] {
-  return scanObjectForForm(table as unknown as Record<string, unknown>, targetForm);
-}
-
-export function scanAdjectiveDeclensionTable(table: AdjectiveDeclensionTable, targetForm: string): MatchingPath[] {
-  return scanObjectForForm(table as unknown as Record<string, unknown>, targetForm);
-}
-
-export function scanDegreesTable(table: DegreesTable, targetForm: string): MatchingPath[] {
-  return scanObjectForForm(table as unknown as Record<string, unknown>, targetForm);
-}
-
-export function scanConjugationTable(table: ConjugationTable, targetForm: string): MatchingPath[] {
-  return scanObjectForForm(table as unknown as Record<string, unknown>, targetForm);
-}
-
-export function scanTableForMatchingForms(table: unknown, targetForm: string, tableType: TableType): MatchingPath[] {
+/** Dot paths of every cell in an inflection table that contains `targetForm`. */
+export function scanTableForMatchingForms(table: unknown, targetForm: string): string[] {
   if (!table || !isSelectableMorphologyForm(targetForm)) return [];
-
-  switch (tableType) {
-    case 'conjugation':
-      return scanConjugationTable(table as ConjugationTable, targetForm);
-    case 'declension':
-    case 'pronoun-declension':
-      return scanDeclensionTable(table as DeclensionTable, targetForm);
-    case 'adjective-declension':
-      return scanDegreesTable(table as DegreesTable, targetForm);
-    case 'pronoun-adjective-declension':
-      return scanAdjectiveDeclensionTable(table as AdjectiveDeclensionTable, targetForm);
-    default:
-      return [];
-  }
+  return collectMatchingPaths(table as Record<string, unknown>, targetForm, [], []);
 }
 
 export function categorizeMatchingPaths(
-  allMatchingPaths: MatchingPath[],
+  allMatchingPaths: string[],
   adminSelectedPaths: string[]
 ): { primaryPaths: string[]; optionalPaths: string[] } {
-  const adminSelectedSet = new Set(adminSelectedPaths);
-
-  const primaryPaths: string[] = [];
-  const optionalPaths: string[] = [];
-
-  for (const match of allMatchingPaths) {
-    if (adminSelectedSet.has(match.path)) {
-      primaryPaths.push(match.path);
-    } else {
-      optionalPaths.push(match.path);
-    }
-  }
-
-  return { primaryPaths, optionalPaths };
+  const adminSelected = new Set(adminSelectedPaths);
+  return {
+    primaryPaths: allMatchingPaths.filter(path => adminSelected.has(path)),
+    optionalPaths: allMatchingPaths.filter(path => !adminSelected.has(path)),
+  };
 }
