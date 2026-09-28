@@ -93,31 +93,14 @@ interface EvaluationJob {
   index: number;
 }
 
-const cacheKeyFor = (
-  evaluationCase: EvaluationCase,
-  job: Pick<EvaluationJob, 'answer' | 'mode' | 'profileId' | 'profile'>
-) =>
-  createEvaluationCacheKey({
-    direction: evaluationCase.direction,
-    sourceText: evaluationCase.sourceText,
-    answerText: job.answer.text,
-    gradingMode: job.mode,
-    profileId: job.profileId,
-    model: job.profile.model,
-    reasoningEffort: job.profile.reasoningEffort,
-    promptVersion: getTranslationGradingTask(job.mode).promptVersion,
-    profileVersion: job.profile.profileVersion,
-    schemaVersion: AI_EVALUATION_SCHEMA_VERSION,
-  });
-
 async function executeUniqueJob(
   evaluationCase: EvaluationCase,
+  cacheKey: string,
   job: EvaluationJob,
   forceRefresh: boolean,
   db: Firestore
 ): Promise<ExecutionOutcome> {
   const runStartedAt = Date.now();
-  const cacheKey = cacheKeyFor(evaluationCase, job);
 
   if (!forceRefresh) {
     try {
@@ -208,12 +191,12 @@ async function executeUniqueJob(
 
 async function executeCoalesced(
   evaluationCase: EvaluationCase,
+  cacheKey: string,
   job: EvaluationJob,
   forceRefresh: boolean,
   db: Firestore
 ): Promise<ExecutionOutcome> {
   const waitStartedAt = Date.now();
-  const cacheKey = cacheKeyFor(evaluationCase, job);
   const mapKey = `${forceRefresh ? 'force' : 'cached'}:${cacheKey}`;
   const existing = inFlightResults.get(mapKey);
   if (existing) {
@@ -225,7 +208,7 @@ async function executeCoalesced(
     };
   }
 
-  const pending = executeUniqueJob(evaluationCase, job, forceRefresh, db);
+  const pending = executeUniqueJob(evaluationCase, cacheKey, job, forceRefresh, db);
   inFlightResults.set(mapKey, pending);
   try {
     return await pending;
@@ -345,28 +328,38 @@ function measurementStatusFor(
   };
 }
 
-/** Jobs grouped by cache key; each group makes at most one grading request. */
-function buildEvaluationJobGroups(evaluationCase: EvaluationCase): EvaluationJob[][] {
+/** Jobs keyed by cache key; each group makes at most one grading request. */
+function buildEvaluationJobGroups(evaluationCase: EvaluationCase): Map<string, EvaluationJob[]> {
   const groups = new Map<string, EvaluationJob[]>();
   let index = 0;
   for (const answer of evaluationCase.answers) {
     for (const mode of evaluationCase.modes) {
       for (const profileId of EVALUATION_TRANSLATION_PROFILE_IDS) {
         const profile = TRANSLATION_GRADING_PROFILES[profileId];
-        const identity = { answer, mode, profileId, profile };
-        const cacheKey = cacheKeyFor(evaluationCase, identity);
+        const cacheKey = createEvaluationCacheKey({
+          direction: evaluationCase.direction,
+          sourceText: evaluationCase.sourceText,
+          answerText: answer.text,
+          gradingMode: mode,
+          profileId,
+          model: profile.model,
+          reasoningEffort: profile.reasoningEffort,
+          promptVersion: getTranslationGradingTask(mode).promptVersion,
+          profileVersion: profile.profileVersion,
+          schemaVersion: AI_EVALUATION_SCHEMA_VERSION,
+        });
         const group = groups.get(cacheKey) ?? [];
-        group.push({ ...identity, index, duplicateWithinRun: group.length > 0 });
+        group.push({ answer, mode, profileId, profile, index, duplicateWithinRun: group.length > 0 });
         groups.set(cacheKey, group);
         index += 1;
       }
     }
   }
-  return [...groups.values()];
+  return groups;
 }
 
 export function countEvaluationCells(evaluationCase: EvaluationCase): number {
-  return buildEvaluationJobGroups(evaluationCase).length;
+  return buildEvaluationJobGroups(evaluationCase).size;
 }
 
 export async function runEvaluationCase(
@@ -375,16 +368,16 @@ export async function runEvaluationCase(
   db: Firestore
 ): Promise<EvaluationRunResult> {
   const startedAt = new Date();
-  const groups = buildEvaluationJobGroups(evaluationCase);
-  const outcomes = await mapWithConcurrency(groups, MAX_CONCURRENCY, group =>
-    executeCoalesced(evaluationCase, group[0], forceRefresh, db)
+  const groups = [...buildEvaluationJobGroups(evaluationCase)];
+  const outcomes = await mapWithConcurrency(groups, MAX_CONCURRENCY, ([cacheKey, jobs]) =>
+    executeCoalesced(evaluationCase, cacheKey, jobs[0], forceRefresh, db)
   );
   const cells = new Array<EvaluationCellResult>(
     evaluationCase.answers.length * evaluationCase.modes.length * EVALUATION_TRANSLATION_PROFILE_IDS.length
   );
-  groups.forEach((group, groupIndex) => {
+  groups.forEach(([, jobs], groupIndex) => {
     const outcome = outcomes[groupIndex];
-    group.forEach((job, duplicateIndex) => {
+    jobs.forEach((job, duplicateIndex) => {
       const coalescedDuplicate = duplicateIndex > 0 || !outcome.chargeable;
       cells[job.index] = outcome.result.success
         ? createSuccessfulCell(
