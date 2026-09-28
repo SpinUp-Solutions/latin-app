@@ -62,10 +62,9 @@ export interface FeedbackState {
 
 export type FeedbackAction =
   | { type: 'ANSWER_INCORRECT'; escalationLevels: FeedbackLevel[] }
-  | { type: 'ANSWER_CORRECT'; successMessage: string; showExplanation: boolean; isLastItem?: boolean }
+  | { type: 'ANSWER_CORRECT'; successMessage: string; showExplanation: boolean }
   | { type: 'CLEAR_FEEDBACK' }
-  | { type: 'RESET' }
-  | { type: 'EXERCISE_RESET' };
+  | { type: 'RESET' };
 
 export interface BaseExercise extends ContentItem {
   instructions: string;

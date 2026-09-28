@@ -2,7 +2,6 @@ import { useReducer, useCallback, useMemo } from 'react';
 import type { FeedbackConfig, FeedbackState, FeedbackAction } from '@/src/types/exercises/base';
 import { getEffectiveFeedbackConfig } from '@/src/utils/feedbackDefaults';
 
-// Initial state for the feedback state machine
 const createInitialState = (): FeedbackState => ({
   phase: 'initial',
   currentAttempt: 0,
@@ -13,14 +12,11 @@ const createInitialState = (): FeedbackState => ({
   shouldShowExplanation: false,
 });
 
-// Pure reducer function - handles all state transitions
 function feedbackReducer(state: FeedbackState, action: FeedbackAction): FeedbackState {
   switch (action.type) {
     case 'ANSWER_INCORRECT': {
       const { escalationLevels } = action;
       const nextAttempt = state.currentAttempt + 1;
-
-      // Get the escalation level for this attempt (clamped to available levels)
       const levelIndex = Math.min(nextAttempt - 1, escalationLevels.length - 1);
       const activeLevel = escalationLevels[levelIndex] || null;
 
@@ -40,7 +36,7 @@ function feedbackReducer(state: FeedbackState, action: FeedbackAction): Feedback
 
       return {
         phase: 'succeeded',
-        currentAttempt: 0, // Reset for next item
+        currentAttempt: 0,
         activeLevel: null,
         displayMessage: successMessage,
         shouldShowHint: false,
@@ -56,11 +52,7 @@ function feedbackReducer(state: FeedbackState, action: FeedbackAction): Feedback
       };
     }
 
-    case 'RESET': {
-      return createInitialState();
-    }
-
-    case 'EXERCISE_RESET':
+    case 'RESET':
       return createInitialState();
 
     default:
@@ -72,32 +64,19 @@ export function useExerciseFeedback(config: FeedbackConfig) {
   const machineConfig = useMemo(() => getEffectiveFeedbackConfig(config), [config]);
   const [state, dispatch] = useReducer(feedbackReducer, undefined, createInitialState);
 
-  const buildSuccessMessage = useCallback(
-    (isLastItem?: boolean): string => {
-      const { successMessage } = machineConfig;
-
-      if (isLastItem && successMessage?.completion) {
-        return successMessage.completion;
-      }
-
-      return successMessage?.advance || successMessage?.default || 'Correct!';
-    },
-    [machineConfig]
-  );
-
   const handleCorrect = useCallback(
     (isLastItem?: boolean) => {
-      const successMessage = buildSuccessMessage(isLastItem);
-      const showExplanation = Boolean(machineConfig.successMessage?.showExplanation);
-
+      const { successMessage } = machineConfig;
       dispatch({
         type: 'ANSWER_CORRECT',
-        successMessage,
-        showExplanation,
-        isLastItem,
+        successMessage:
+          isLastItem && successMessage.completion
+            ? successMessage.completion
+            : successMessage.advance || successMessage.default || 'Correct!',
+        showExplanation: Boolean(successMessage.showExplanation),
       });
     },
-    [buildSuccessMessage, machineConfig.successMessage?.showExplanation]
+    [machineConfig]
   );
 
   const handleIncorrect = useCallback(() => {
@@ -115,16 +94,7 @@ export function useExerciseFeedback(config: FeedbackConfig) {
     dispatch({ type: 'CLEAR_FEEDBACK' });
   }, []);
 
-  const resetExercise = useCallback(() => {
-    dispatch({ type: 'EXERCISE_RESET' });
-  }, []);
-
-  // Derived values for backward compatibility
   const isCorrect = state.phase === 'succeeded' ? true : state.phase === 'attempting' ? false : null;
-
-  const level = state.activeLevel;
-  const message = state.displayMessage;
-  const showExplanation = state.shouldShowExplanation;
 
   const shouldResetExercise =
     machineConfig.maxLevelFailures != null &&
@@ -137,22 +107,17 @@ export function useExerciseFeedback(config: FeedbackConfig) {
     state.currentAttempt + 1 >= machineConfig.maxLevelFailures;
 
   return {
-    // New state machine interface
     feedbackState: state,
-
-    // Backward compatible interface
-    level,
+    level: state.activeLevel,
     isCorrect,
-    message,
-    showExplanation,
+    message: state.displayMessage,
+    showExplanation: state.shouldShowExplanation,
     handleCorrect,
     handleIncorrect,
     clearFeedback,
     reset,
-
-    // Exercise reset on repeated question failures
     shouldResetExercise,
     willResetOnNextIncorrect,
-    resetExercise,
+    resetExercise: reset,
   };
 }
