@@ -76,6 +76,8 @@ const formatMeasuredCost = (value: number | undefined, status: string) => {
   if (status === 'not-incurred-app-cache' || status === 'not-incurred-coalesced') return 'No API call';
   return `${status === 'lower-bound' ? '≥' : ''}${formatCost(value)}`;
 };
+const aggregateCostStatus = (anyUnknown: boolean, anyKnown: boolean) =>
+  !anyUnknown ? 'measured' : anyKnown ? 'lower-bound' : 'unavailable';
 
 type DisplayedRun = {
   result: EvaluationRunResult;
@@ -339,42 +341,27 @@ function ModelComparisonCards({ cells }: { cells: EvaluationCellResult[] }) {
         const modelCells = cells.filter(cell => cell.profileId === profileId);
         const uniqueCells = modelCells.filter(cell => !cell.duplicateWithinRun);
         const successfulCells = modelCells.filter(cell => cell.output);
-        const usage = uniqueCells.reduce(
-          (sum, cell) => ({
-            promptTokens: sum.promptTokens + (cell.usage?.promptTokens ?? 0),
-            completionTokens: sum.completionTokens + (cell.usage?.completionTokens ?? 0),
-            totalTokens: sum.totalTokens + (cell.usage?.totalTokens ?? 0),
-            ordinaryInputTokens: sum.ordinaryInputTokens + (cell.usage?.ordinaryInputTokens ?? 0),
-            cachedInputTokens: sum.cachedInputTokens + (cell.usage?.cachedInputTokens ?? 0),
-            cacheWriteTokens: sum.cacheWriteTokens + (cell.usage?.cacheWriteTokens ?? 0),
-            reasoningTokens: sum.reasoningTokens + (cell.usage?.reasoningTokens ?? 0),
-          }),
-          {
-            promptTokens: 0,
-            completionTokens: 0,
-            totalTokens: 0,
-            ordinaryInputTokens: 0,
-            cachedInputTokens: 0,
-            cacheWriteTokens: 0,
-            reasoningTokens: 0,
-          }
-        );
+        const usage = {
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0,
+          cachedInputTokens: 0,
+          cacheWriteTokens: 0,
+          reasoningTokens: 0,
+        };
+        for (const cell of uniqueCells) {
+          for (const key of Object.keys(usage) as Array<keyof typeof usage>) usage[key] += cell.usage?.[key] ?? 0;
+        }
         const originalCost = uniqueCells.reduce((sum, cell) => sum + (cell.originalCost?.totalCost ?? 0), 0);
         const incurredCost = uniqueCells.reduce((sum, cell) => sum + (cell.costIncurredThisRun?.totalCost ?? 0), 0);
-        const originalUnknown = uniqueCells.filter(cell => cell.originalCostStatus === 'unavailable').length;
-        const incurredUnknown = uniqueCells.filter(cell => cell.costIncurredThisRunStatus === 'unavailable').length;
-        const originalStatus =
-          originalUnknown === 0
-            ? 'measured'
-            : modelCells.some(cell => cell.originalCost)
-              ? 'lower-bound'
-              : 'unavailable';
-        const incurredStatus =
-          incurredUnknown === 0
-            ? 'measured'
-            : modelCells.some(cell => cell.costIncurredThisRun)
-              ? 'lower-bound'
-              : 'unavailable';
+        const originalStatus = aggregateCostStatus(
+          uniqueCells.some(cell => cell.originalCostStatus === 'unavailable'),
+          modelCells.some(cell => cell.originalCost)
+        );
+        const incurredStatus = aggregateCostStatus(
+          uniqueCells.some(cell => cell.costIncurredThisRunStatus === 'unavailable'),
+          modelCells.some(cell => cell.costIncurredThisRun)
+        );
         const generationTime = uniqueCells.reduce((sum, cell) => sum + (cell.generationLatencyMs ?? 0), 0);
         const actualModel = modelCells.find(cell => cell.actualModel)?.actualModel ?? profile.model;
 
