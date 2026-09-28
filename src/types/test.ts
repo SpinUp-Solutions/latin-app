@@ -178,12 +178,8 @@ export interface TestAttemptSession {
   updatedAt: string;
 }
 
-export interface StudentTestDelivery {
-  versionId: string;
-  pages: Page[];
-  resolvedExercises: Record<string, { items: unknown[] }>;
-  vocabularyPool?: VocabularyPoolStudyData;
-}
+/** The student-safe projection of the frozen delivery has the same shape. */
+export type StudentTestDelivery = TestAttemptDeliveryState;
 
 type StudentAttemptCommon = Omit<
   InProgressTestAttempt,

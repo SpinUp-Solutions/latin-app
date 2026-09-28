@@ -22,7 +22,7 @@ const PartPoints = ({ points }: { points: ReviewPartPoints }) => (
   </span>
 );
 
-export const CorrectBadge = ({ correct, points }: { correct: boolean; points?: ReviewPartPoints }) => {
+const CorrectBadge = ({ correct, points }: { correct: boolean; points?: ReviewPartPoints }) => {
   const partlyCorrect = !correct && Boolean(points && points.awardedPoints > 0);
   const label = correct ? 'Correct' : partlyCorrect ? 'Partly correct' : 'Incorrect';
   return (
@@ -84,11 +84,7 @@ const PlainValue = ({ value, className }: { value: string; className?: string })
 
 const EmptyAnswer = () => <span className="text-sm italic text-slate-400">No answer was recorded.</span>;
 
-// ---------------------------------------------------------------------------
-// Matching
-// ---------------------------------------------------------------------------
-
-export const MatchingExerciseReview = ({ item }: { item: ExerciseOfType<'matching'> }) => {
+const MatchingExerciseReview = ({ item }: { item: ExerciseOfType<'matching'> }) => {
   const { answerKey, itemResults, studentAnswer } = item;
   const hasAnswer = studentAnswer !== null;
   return (
@@ -149,11 +145,7 @@ export const MatchingExerciseReview = ({ item }: { item: ExerciseOfType<'matchin
   );
 };
 
-// ---------------------------------------------------------------------------
-// Fill in the blank
-// ---------------------------------------------------------------------------
-
-export const FillExerciseReview = ({ item }: { item: ExerciseOfType<'fill'> }) => {
+const FillExerciseReview = ({ item }: { item: ExerciseOfType<'fill'> }) => {
   return (
     <div className="space-y-4">
       {item.answerKey.items.map((keyItem, index) => {
@@ -189,11 +181,7 @@ export const FillExerciseReview = ({ item }: { item: ExerciseOfType<'fill'> }) =
   );
 };
 
-// ---------------------------------------------------------------------------
-// Multiple choice
-// ---------------------------------------------------------------------------
-
-export const MultipleChoiceExerciseReview = ({ item }: { item: ExerciseOfType<'multiple-choice'> }) => {
+const MultipleChoiceExerciseReview = ({ item }: { item: ExerciseOfType<'multiple-choice'> }) => {
   const selectedIds = new Set(item.itemResults.selectedOptionIds);
   return (
     <div className="space-y-4">
@@ -241,11 +229,7 @@ export const MultipleChoiceExerciseReview = ({ item }: { item: ExerciseOfType<'m
   );
 };
 
-// ---------------------------------------------------------------------------
-// Odd one out
-// ---------------------------------------------------------------------------
-
-export const OddOneOutExerciseReview = ({ item }: { item: ExerciseOfType<'odd-one-out'> }) => {
+const OddOneOutExerciseReview = ({ item }: { item: ExerciseOfType<'odd-one-out'> }) => {
   return (
     <div className="space-y-4">
       <RichValue value={item.question.question} className="font-medium" />
@@ -297,10 +281,6 @@ export const OddOneOutExerciseReview = ({ item }: { item: ExerciseOfType<'odd-on
   );
 };
 
-// ---------------------------------------------------------------------------
-// Text selection
-// ---------------------------------------------------------------------------
-
 export const TextSelectionExerciseReview = ({ item }: { item: ExerciseOfType<'text-selection'> }) => {
   const passageWords = splitHtmlIntoWords(item.question.passage);
   return (
@@ -343,11 +323,7 @@ export const TextSelectionExerciseReview = ({ item }: { item: ExerciseOfType<'te
   );
 };
 
-// ---------------------------------------------------------------------------
-// Fill in embolded text
-// ---------------------------------------------------------------------------
-
-export const FillEmboldedTextExerciseReview = ({ item }: { item: ExerciseOfType<'fill-embolded-text'> }) => {
+const FillEmboldedTextExerciseReview = ({ item }: { item: ExerciseOfType<'fill-embolded-text'> }) => {
   return (
     <div className="space-y-4">
       <ReviewBlock label="Passage">
@@ -384,11 +360,7 @@ export const FillEmboldedTextExerciseReview = ({ item }: { item: ExerciseOfType<
   );
 };
 
-// ---------------------------------------------------------------------------
-// Sentence diagramming
-// ---------------------------------------------------------------------------
-
-export const SentenceDiagrammingExerciseReview = ({ item }: { item: ExerciseOfType<'sentence-diagramming'> }) => {
+const SentenceDiagrammingExerciseReview = ({ item }: { item: ExerciseOfType<'sentence-diagramming'> }) => {
   const { answerKey, itemResults } = item;
   return (
     <div className="space-y-4" data-testid="sentence-diagramming-review">
@@ -435,10 +407,6 @@ export const SentenceDiagrammingExerciseReview = ({ item }: { item: ExerciseOfTy
     </div>
   );
 };
-
-// ---------------------------------------------------------------------------
-// Table fill
-// ---------------------------------------------------------------------------
 
 export const TableFillExerciseReview = ({ item }: { item: ExerciseOfType<'table-fill'> }) => {
   const { question, answerKey, itemResults } = item;
@@ -512,10 +480,6 @@ export const TableFillExerciseReview = ({ item }: { item: ExerciseOfType<'table-
   );
 };
 
-// ---------------------------------------------------------------------------
-// Click on multiple words
-// ---------------------------------------------------------------------------
-
 export const ClickOnMultipleWordsExerciseReview = ({ item }: { item: ExerciseOfType<'click-on-multiple-words'> }) => {
   const words = splitHtmlIntoWords(item.question.passage);
   const selected = new Set(item.itemResults.selectedWordIndices);
@@ -583,11 +547,7 @@ export const ClickOnMultipleWordsExerciseReview = ({ item }: { item: ExerciseOfT
   );
 };
 
-// ---------------------------------------------------------------------------
-// Generated translation
-// ---------------------------------------------------------------------------
-
-export const GeneratedTranslationExerciseReview = ({ item }: { item: ExerciseOfType<'generated-translation'> }) => {
+const GeneratedTranslationExerciseReview = ({ item }: { item: ExerciseOfType<'generated-translation'> }) => {
   return (
     <div className="space-y-4">
       {item.answerKey.items.map((keyItem, index) => {
@@ -618,11 +578,7 @@ export const GeneratedTranslationExerciseReview = ({ item }: { item: ExerciseOfT
   );
 };
 
-// ---------------------------------------------------------------------------
-// Generated form identification
-// ---------------------------------------------------------------------------
-
-export const GeneratedFormIdentificationExerciseReview = ({
+const GeneratedFormIdentificationExerciseReview = ({
   item,
 }: {
   item: ExerciseOfType<'generated-form-identification'>;
@@ -665,11 +621,7 @@ export const GeneratedFormIdentificationExerciseReview = ({
   );
 };
 
-// ---------------------------------------------------------------------------
-// Translation grading (AI)
-// ---------------------------------------------------------------------------
-
-export const TranslationGradingExerciseReview = ({ item }: { item: ExerciseOfType<'translation-grading'> }) => {
+const TranslationGradingExerciseReview = ({ item }: { item: ExerciseOfType<'translation-grading'> }) => {
   return (
     <div className="space-y-4">
       {item.itemResults.items.map((result, index) => {
@@ -708,10 +660,6 @@ export const TranslationGradingExerciseReview = ({ item }: { item: ExerciseOfTyp
     </div>
   );
 };
-
-// ---------------------------------------------------------------------------
-// Router
-// ---------------------------------------------------------------------------
 
 export const ExerciseReviewView = ({ item }: { item: TestResultReviewExerciseItem }) => {
   switch (item.type) {

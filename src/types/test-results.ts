@@ -3,12 +3,8 @@ import type { StudentTestResultReview } from '@/src/lib/tests/review';
 
 export type {
   ReviewPartPoints,
-  StudentTestResultReview,
-  TestResultReview,
-  TestResultReviewContent,
   TestResultReviewExerciseItem,
   TestResultReviewItem,
-  TestResultReviewPage,
   TestResultReviewSupportingItem,
 } from '@/src/lib/tests/review';
 
