@@ -45,11 +45,6 @@ type ExecutionOutcome = {
 // later requests and force-refresh behavior.
 const inFlightResults = new Map<string, Promise<ExecutionOutcome>>();
 
-const safeErrorMessage = (error: unknown): string => {
-  console.error('[ai-evaluations] unexpected cell failure', error);
-  return 'The model comparison could not complete this cell.';
-};
-
 const addTokenUsage = (left: TokenUsage, right: TokenUsage): TokenUsage => ({
   promptTokens: left.promptTokens + right.promptTokens,
   completionTokens: left.completionTokens + right.completionTokens,
@@ -67,22 +62,6 @@ const addCost = (left: CostBreakdown, right: CostBreakdown): CostBreakdown => ({
   tokens: addTokenUsage(left.tokens, right.tokens),
   pricingVersion: left.pricingVersion ?? right.pricingVersion,
   pricingSource: left.pricingSource ?? right.pricingSource,
-});
-
-const costForResult = (result: TranslationGradingRunResult) =>
-  result.costMeasurement.status === 'measured' && result.cost ? result.cost : undefined;
-
-const createUnexpectedFailure = (
-  profile: TranslationGradingProfile,
-  error: unknown,
-  latencyMs: number
-): TranslationGradingRunFailure => ({
-  success: false,
-  code: 'provider-error',
-  error: safeErrorMessage(error),
-  requestedModel: profile.model,
-  costMeasurement: { status: 'unavailable', reason: 'No provider usage was returned.' },
-  latencyMs,
 });
 
 async function mapWithConcurrency<T, R>(
@@ -183,7 +162,15 @@ async function executeUniqueJob(
       job.profileId
     );
   } catch (error) {
-    result = createUnexpectedFailure(job.profile, error, Date.now() - providerStartedAt);
+    console.error('[ai-evaluations] unexpected cell failure', error);
+    result = {
+      success: false,
+      code: 'provider-error',
+      error: 'The model comparison could not complete this cell.',
+      requestedModel: job.profile.model,
+      costMeasurement: { status: 'unavailable', reason: 'No provider usage was returned.' },
+      latencyMs: Date.now() - providerStartedAt,
+    };
   }
 
   // Do not write malformed/unmetered output to the shared cache. Billable
@@ -198,7 +185,7 @@ async function executeUniqueJob(
           model: result.requestedModel,
           actualModel: result.model ?? result.requestedModel,
           output: result.data,
-          usage: result.usage!,
+          usage: result.usage,
           cost: result.cost,
           latencyMs: result.latencyMs,
           generatedAt: generatedAt!,
@@ -305,7 +292,7 @@ function createFailureCell(
   coalescedDuplicate: boolean,
   runLatencyMs: number
 ): EvaluationCellResult {
-  const measuredCost = costForResult(result);
+  const measuredCost = result.costMeasurement.status === 'measured' ? result.cost : undefined;
   const base: EvaluationCellResultCommon = {
     answerId: job.answer.id,
     answerLabel: job.answer.label,
@@ -359,12 +346,9 @@ function measurementStatusFor(
   };
 }
 
-interface EvaluationJobGroup {
-  jobs: EvaluationJob[];
-}
-
-function buildEvaluationJobGroups(evaluationCase: EvaluationCase): EvaluationJobGroup[] {
-  const groups = new Map<string, EvaluationJobGroup>();
+/** Jobs grouped by cache key; each group makes at most one grading request. */
+function buildEvaluationJobGroups(evaluationCase: EvaluationCase): EvaluationJob[][] {
+  const groups = new Map<string, EvaluationJob[]>();
   let index = 0;
   for (const answer of evaluationCase.answers) {
     for (const mode of evaluationCase.modes) {
@@ -372,12 +356,8 @@ function buildEvaluationJobGroups(evaluationCase: EvaluationCase): EvaluationJob
         const profile = getTranslationGradingProfile(profileId);
         const identity = { answer, mode, profileId, profile };
         const cacheKey = cacheKeyFor(evaluationCase, identity);
-        const group = groups.get(cacheKey) ?? { jobs: [] };
-        group.jobs.push({
-          ...identity,
-          index,
-          duplicateWithinRun: group.jobs.length > 0,
-        });
+        const group = groups.get(cacheKey) ?? [];
+        group.push({ ...identity, index, duplicateWithinRun: group.length > 0 });
         groups.set(cacheKey, group);
         index += 1;
       }
@@ -398,14 +378,14 @@ export async function runEvaluationCase(
   const startedAt = new Date();
   const groups = buildEvaluationJobGroups(evaluationCase);
   const outcomes = await mapWithConcurrency(groups, MAX_CONCURRENCY, group =>
-    executeCoalesced(evaluationCase, group.jobs[0], forceRefresh, db)
+    executeCoalesced(evaluationCase, group[0], forceRefresh, db)
   );
   const cells = new Array<EvaluationCellResult>(
     evaluationCase.answers.length * evaluationCase.modes.length * EVALUATION_TRANSLATION_PROFILE_IDS.length
   );
   groups.forEach((group, groupIndex) => {
     const outcome = outcomes[groupIndex];
-    group.jobs.forEach((job, duplicateIndex) => {
+    group.forEach((job, duplicateIndex) => {
       const coalescedDuplicate = duplicateIndex > 0 || !outcome.chargeable;
       cells[job.index] = outcome.result.success
         ? createSuccessfulCell(
