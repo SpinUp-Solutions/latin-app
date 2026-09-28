@@ -1,16 +1,3 @@
-import { ComponentType } from 'react';
-import { RenderableContentItem } from '@/src/types/page';
-// Import removed - types are not used directly in this file
-
-export interface EditorProps<T extends RenderableContentItem = RenderableContentItem> {
-  content: T;
-  onChange: (content: RenderableContentItem) => void;
-}
-
-export type EditorRegistry = {
-  [K in RenderableContentItem['type']]: ComponentType<EditorProps<Extract<RenderableContentItem, { type: K }>>>;
-};
-
 export const getEditorTitle = (contentType: string): string => {
   switch (contentType) {
     case 'text':

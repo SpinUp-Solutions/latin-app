@@ -6,7 +6,7 @@ import { Page } from '@/src/types/lesson';
 import ContentRenderer from './content-renderer';
 import { ExerciseErrorBoundary } from './exercise-error-boundary';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
-import { isExerciseType } from '@/src/utils/lessonUtils';
+import { isExerciseType } from '@/src/lib/content/registry';
 import { DiagramAuditSubmission } from '@/src/features/sentence-diagramming';
 import type { ExerciseAnswer, ExerciseAnswerEvent, RuntimeMode } from '@/src/types/runtime-mode';
 import type { GeneratedExerciseRenderContext, ResolvedGeneratedExerciseState } from './content-renderer';

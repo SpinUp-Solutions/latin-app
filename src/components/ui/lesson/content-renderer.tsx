@@ -76,7 +76,7 @@ interface ContentRendererProps {
   onDiagrammingAttempt?: (attempt: DiagramAuditSubmission) => void;
 }
 
-export const ContentRenderer: React.FC<ContentRendererProps> = ({
+const ContentRenderer: React.FC<ContentRendererProps> = ({
   content,
   onComplete,
   onCompletionAccepted,

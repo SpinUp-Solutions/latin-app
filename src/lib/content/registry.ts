@@ -79,10 +79,6 @@ export function getContentTypeLabel(type: string) {
   return getContentTypeMetadata(type)?.label ?? type;
 }
 
-export function isCreatableContentType(type: string): type is ContentType {
-  return getContentTypeMetadata(type)?.creatable === true;
-}
-
 export function isExerciseType(type: string): type is ExerciseType {
   return getContentTypeMetadata(type)?.kind === 'exercise';
 }

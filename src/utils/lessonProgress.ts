@@ -1,5 +1,5 @@
 import { ExerciseProgress, Lesson, UserProgress } from '@/src/types/lesson';
-import { isExerciseType, parsePageIndex } from './lessonUtils';
+import { isExerciseType } from '@/src/lib/content/registry';
 
 export const PROGRESS_SCHEMA_VERSION = 4;
 export const STABLE_ID_PROGRESS_SCHEMA_VERSION = 2;
@@ -77,6 +77,11 @@ export function getMissingExercises(
     }
   }
   return requiredExercises.filter(exercise => !completedIds.has(exercise.exerciseId));
+}
+
+function parsePageIndex(exerciseId: string): number | null {
+  const match = exerciseId.match(/^page(\d+)-item\d+$/);
+  return match ? parseInt(match[1], 10) : null;
 }
 
 export function resolveExerciseId(lesson: Pick<Lesson, 'pages'>, exerciseId: string): string | null {
@@ -275,12 +280,8 @@ export function toPersistedProgressSummary(
 
 export function calculateStoredProgress(
   progress: Partial<UserProgress> | undefined,
-  totalPagesOrOptions: number | StoredProgressCalculationOptions
+  options: StoredProgressCalculationOptions
 ): number {
-  const options =
-    typeof totalPagesOrOptions === 'number'
-      ? { totalPages: totalPagesOrOptions, totalExercises: 0, lessonVersion: 0 }
-      : totalPagesOrOptions;
   const totalPages = options.totalPages;
   if (!progress || totalPages <= 0) return 0;
   if (isStoredLessonComplete(progress, totalPages)) return 100;

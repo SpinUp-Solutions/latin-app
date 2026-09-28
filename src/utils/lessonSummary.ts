@@ -1,6 +1,6 @@
 import { Lesson, LessonSummary } from '@/src/types/lesson';
 import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
-import { isExerciseType } from '@/src/utils/lessonUtils';
+import { isExerciseType } from '@/src/lib/content/registry';
 
 export function getLessonContentCounts(lesson: Pick<Lesson, 'pages'>): {
   totalPages: number;

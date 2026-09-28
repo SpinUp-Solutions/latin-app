@@ -12,7 +12,7 @@ interface TextComponentProps {
   audioPath?: string;
 }
 
-export const TextComponent: React.FC<TextComponentProps> = ({ title, content, className = '', audioPath }) => {
+const TextComponent: React.FC<TextComponentProps> = ({ title, content, className = '', audioPath }) => {
   return (
     <div className={`text-component relative ${className}`}>
       {(title || audioPath) && (

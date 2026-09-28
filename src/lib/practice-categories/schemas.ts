@@ -156,12 +156,6 @@ export const reconcilePracticeCategoryAssignmentsSchema = z
     'practiceCategorySelections or practiceCategoryIds is required'
   );
 
-export const reconcilePracticeCategoriesSchema = z
-  .object({
-    practiceCategoryIds: z.array(nonEmptyIdSchema).refine(uniqueIds, 'practiceCategoryIds must not contain duplicates'),
-  })
-  .strict();
-
 export const optionalPracticeCategoryIdsSchema = z
   .array(nonEmptyIdSchema)
   .refine(uniqueIds, 'practiceCategoryIds must not contain duplicates')

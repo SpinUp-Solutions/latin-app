@@ -1,4 +1,3 @@
-import type { VocabularyPoolWithWords } from './vocabulary-pool';
 import type {
   PracticeCategoryPlacement,
   PracticeCategorySelection,
@@ -72,10 +71,6 @@ export interface StudentDashboard {
   /** Latest submitted results for hidden/archived mocks; review-only entries. */
   pastMockResults?: StudentPastMockResult[];
 }
-
-export type LessonWithVocabularyPool = Lesson & {
-  vocabularyPoolData?: VocabularyPoolWithWords;
-};
 
 export type LessonStatus = 'available' | 'in-progress' | 'completed' | 'locked';
 
