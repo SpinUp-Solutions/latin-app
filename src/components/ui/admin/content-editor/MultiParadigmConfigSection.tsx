@@ -38,17 +38,10 @@ interface MultiParadigmConfigSectionProps {
 const PRONOUN_PARADIGMS: FormParadigm[] = ['pronoun-personal', 'pronoun-gendered'];
 const NON_PRONOUN_PARADIGMS: FormParadigm[] = ['verb-conjugation', 'noun-declension', 'adjective-declension'];
 
-const getFormSelectionProps = (paradigm: FormParadigm) => {
-  const pos = getParadigmPOS(paradigm);
-
-  if (paradigm === 'pronoun-personal') {
-    return { partOfSpeech: pos, pronounType: 'personal' as const, pronounPerson: '1st' as const };
-  }
-  if (paradigm === 'pronoun-gendered') {
-    return { partOfSpeech: pos, pronounType: undefined, pronounPerson: undefined };
-  }
-  return { partOfSpeech: pos, pronounType: undefined, pronounPerson: undefined };
-};
+const getFormSelectionProps = (paradigm: FormParadigm) =>
+  paradigm === 'pronoun-personal'
+    ? { partOfSpeech: getParadigmPOS(paradigm), pronounType: 'personal' as const, pronounPerson: '1st' as const }
+    : { partOfSpeech: getParadigmPOS(paradigm), pronounType: undefined, pronounPerson: undefined };
 
 const getSkippedSelectionCount = (summary: ReturnType<typeof getFormIdentificationCompatibilitySummary> | null) =>
   summary ? summary.skipped.length + summary.unknownPaths.length : 0;
@@ -149,6 +142,7 @@ export const MultiParadigmConfigSection: React.FC<MultiParadigmConfigSectionProp
   const renderParadigmTab = (paradigm: FormParadigm) => {
     const isActive = paradigm === activeParadigm;
     const wordCount = paradigmWordCounts?.[paradigm];
+    const skippedCount = getSkippedSelectionCount(getCompatibilitySummaryForParadigm(paradigm));
 
     return (
       <Button
@@ -164,12 +158,12 @@ export const MultiParadigmConfigSection: React.FC<MultiParadigmConfigSectionProp
             {wordCount}
           </Badge>
         )}
-        {getSkippedSelectionCount(getCompatibilitySummaryForParadigm(paradigm)) > 0 && (
+        {skippedCount > 0 && (
           <Badge
             variant="outline"
             className="border-amber-300 bg-amber-50 text-xs text-amber-800"
             title="Selected forms that cannot be used with the current questions">
-            {getSkippedSelectionCount(getCompatibilitySummaryForParadigm(paradigm))} skipped
+            {skippedCount} skipped
           </Badge>
         )}
       </Button>

@@ -11,7 +11,6 @@ import {
   DegreeSchema,
   VoiceSchema,
   PersonSchema,
-  GrammaticalNumberSchema,
   PronounTypeSchema,
   PronounPersonSchema,
 } from '@/shared/types/vocabulary/schemas';
@@ -236,11 +235,6 @@ const createVariantMap = () => {
   NumberSchema.options.forEach(val => {
     v[val] = val === 'singular' ? ['singular', 'sg', 'sing', 's'] : ['plural', 'pl', 'plur', 'p'];
   });
-  GrammaticalNumberSchema.options.forEach(val => {
-    if (!v[val]) {
-      v[val] = val === 'singular' ? ['singular', 'sg', 'sing', 's'] : ['plural', 'pl', 'plur', 'p'];
-    }
-  });
 
   GenderSchema.options.forEach(val => {
     const map: Record<string, string[]> = {
@@ -280,7 +274,7 @@ const createVariantMap = () => {
     v[val] = a ? [val, `${a}.`, a] : [val];
   });
 
-  const tenses: Record<string, string[]> = {
+  Object.assign(v, {
     present: ['present', 'pres.', 'pres'],
     imperfect: ['imperfect', 'imperf.', 'imperf', 'imp.', 'imp'],
     future: ['future', 'fut.', 'fut'],
@@ -297,12 +291,9 @@ const createVariantMap = () => {
       'future perf',
       'fut perfect',
     ],
-  };
-  Object.entries(tenses).forEach(([k, arr]) => {
-    v[k] = arr;
   });
 
-  const moods: Record<string, string[]> = {
+  Object.assign(v, {
     finite: ['finite', 'fin.', 'fin'],
     indicative: ['indicative', 'ind.', 'ind'],
     subjunctive: ['subjunctive', 'subj.', 'subj'],
@@ -311,9 +302,6 @@ const createVariantMap = () => {
     participle: ['participle', 'part.', 'part'],
     gerund: ['gerund', 'ger.', 'ger'],
     supine: ['supine', 'sup.', 'sup'],
-  };
-  Object.entries(moods).forEach(([k, arr]) => {
-    v[k] = arr;
   });
 
   PronounTypeSchema.options.forEach(val => {

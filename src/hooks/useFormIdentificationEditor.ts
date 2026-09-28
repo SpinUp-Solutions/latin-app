@@ -3,14 +3,13 @@ import { produce } from 'immer';
 import { useAppDispatch } from '@/src/store/hooks';
 import { updateEditingContent } from '@/src/store/slices/lessonEditorSlice';
 import { useAvailableParadigms } from '@/src/hooks/useAvailableParadigms';
-import { useFormSelectionControls } from '@/src/hooks/useFormSelection';
 import { useGeneratedExercisePreview } from '@/src/hooks/useGeneratedExercisePreview';
 import { ensureGeneratorConfig, DEFAULT_POS_FILTERS } from '@/src/utils/exercises/generatorConfigDefaults';
 import { PARADIGM_STEPS, PARADIGM_TABLE_TYPE, PARADIGM_RELEVANT_FILTERS } from '@/src/config/paradigmDefinitions';
 import { getParadigmPOS } from '@/src/utils/paradigm';
 import type { GeneratedFormIdentificationExercise } from '@/src/types/exercises/generated-form-identification';
 import type { FormParadigm, ParadigmConfig, ParadigmConfigs } from '@/src/types/exercises/paradigm';
-import type { GeneratorFilters, FormSelection } from '@/src/types/exercises/base';
+import type { GeneratorFilters } from '@/src/types/exercises/base';
 import { buildLegacyParadigmConfigs } from '@/src/utils/exercises/legacyExerciseCompat';
 
 export function useFormIdentificationEditor(editingContent: GeneratedFormIdentificationExercise) {
@@ -18,7 +17,6 @@ export function useFormIdentificationEditor(editingContent: GeneratedFormIdentif
 
   const rawConfig = editingContent.data?.generatorConfig;
   const config = useMemo(() => ensureGeneratorConfig(rawConfig), [rawConfig]);
-  const isPoolWordSource = config.wordSource === 'pool';
   const paradigmConfigs = useMemo(
     () =>
       editingContent.data.paradigmConfigs && Object.keys(editingContent.data.paradigmConfigs).length > 0
@@ -196,27 +194,11 @@ export function useFormIdentificationEditor(editingContent: GeneratedFormIdentif
     });
   }, [paradigmInfo.availableParadigms, editingContent, paradigmConfigs, updateContent]);
 
-  const formSelectionControls = useFormSelectionControls(
-    activeParadigm ? getParadigmPOS(activeParadigm) : undefined,
-    derivedFormSelection,
-    (formSelectionValue: FormSelection | undefined) => {
-      if (!activeParadigm) return;
-      handleUpdateParadigmConfig(activeParadigm, {
-        formSelection: formSelectionValue,
-      });
-    },
-    derivedFilters.pronounType,
-    derivedFilters.pronounPerson
-  );
-
   return {
-    editingContent,
     paradigmConfigs,
     config,
-    activeParadigm,
     derivedFilters,
     derivedFormSelection,
-    isPoolWordSource,
     isPreviewOpen,
     setIsPreviewOpen,
     paradigmInfo,
@@ -225,7 +207,6 @@ export function useFormIdentificationEditor(editingContent: GeneratedFormIdentif
     handleUpdateParadigmConfig,
     handleToggleParadigm,
     handleGlobalFiltersChange,
-    formSelectionControls,
     previewData,
     isPreviewFetching,
     previewError,

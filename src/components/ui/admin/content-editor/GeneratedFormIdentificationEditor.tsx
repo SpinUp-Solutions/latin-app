@@ -14,6 +14,7 @@ import { MultiParadigmConfigSection } from './MultiParadigmConfigSection';
 import { useFormIdentificationEditor } from '@/src/hooks/useFormIdentificationEditor';
 import {
   extractStepValue,
+  extractStepValuesFromPaths,
   getAcceptedAnswersForStep,
   getDisplayForm,
 } from '@/src/utils/exercises/formIdentificationHelpers';
@@ -24,7 +25,7 @@ import { AlertTriangle, Loader2 } from 'lucide-react';
 import { GeneratedVocabularyFilters } from './GeneratedVocabularyFilters';
 import { GeneratedPoolSourceFields } from './GeneratedPoolSourceFields';
 import { GeneratedUniqueWordCountField } from './GeneratedUniqueWordCountField';
-import { getAppliedUniqueWordCount } from '@/src/utils/exercises/generatorConfigDefaults';
+import { DEFAULT_POS_FILTERS, getAppliedUniqueWordCount } from '@/src/utils/exercises/generatorConfigDefaults';
 import { GeneratedExerciseSummary } from './GeneratedExerciseSummary';
 import { GeneratedPreviewPanel } from './GeneratedPreviewPanel';
 
@@ -55,16 +56,7 @@ const GeneratedFormIdentificationEditorView: React.FC<{
   };
 
   const handleResetFilters = () => {
-    editor.handleGlobalFiltersChange({
-      partOfSpeech: 'all',
-      search: '',
-      verbConjugation: 'all',
-      isDeponent: 'both',
-      nounDeclension: 'all',
-      adjectiveDeclension: 'all',
-      pronounType: 'all',
-      pronounPerson: 'all',
-    });
+    editor.handleGlobalFiltersChange({ partOfSpeech: 'all', ...DEFAULT_POS_FILTERS });
   };
 
   const filtersContent = (
@@ -287,16 +279,9 @@ const GeneratedFormIdentificationEditorView: React.FC<{
                       </>
                     ) : (
                       wordSteps.map(step => {
-                        const primaryValues = (prepared?.primary ?? [])
-                          .map(path => path[step])
-                          .filter((value): value is string => Boolean(value));
-                        const optionalValues = (prepared?.optional ?? [])
-                          .map(path => path[step])
-                          .filter((value): value is string => Boolean(value));
-
-                        const uniquePrimaryValues = Array.from(new Set(primaryValues));
-                        const uniqueOptionalValues = Array.from(
-                          new Set(optionalValues.filter(value => !uniquePrimaryValues.includes(value)))
+                        const uniquePrimaryValues = extractStepValuesFromPaths(prepared?.primary ?? [], step);
+                        const uniqueOptionalValues = extractStepValuesFromPaths(prepared?.optional ?? [], step).filter(
+                          value => !uniquePrimaryValues.includes(value)
                         );
 
                         const displayValue =
