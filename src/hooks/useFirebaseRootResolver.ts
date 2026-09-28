@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/src/lib/firebase';
+import { functions } from '@/src/services/firebase';
 import type { ResolveRootWordRequest, ResolveRootWordResponse } from '@/shared/openai/root-resolver';
 import type { RootWordCandidate } from '@/shared/types/vocabulary/requests';
 
