@@ -1,4 +1,4 @@
-import type { VocabularyWord, VocabularyWordWithId } from '@/shared/types/vocabulary/schemas';
+import type { VocabularyWordWithId } from '@/shared/types/vocabulary/schemas';
 import { BaseWordFormSchema, BaseWordFormValues } from './base';
 import { NounFormSchema, NounFormValues } from './noun';
 import { PronounFormSchema, PronounFormValues } from './pronoun';
@@ -7,30 +7,6 @@ import { VerbFormSchema, VerbFormValues } from './verb';
 import { PrepositionFormSchema, PrepositionFormValues } from './preposition';
 import { VerbConjugationSchema } from '@/shared/types/vocabulary/schemas/enums';
 import { z } from 'zod';
-
-type SpecificSchema =
-  | typeof NounFormSchema
-  | typeof PronounFormSchema
-  | typeof AdjectiveFormSchema
-  | typeof VerbFormSchema
-  | typeof PrepositionFormSchema
-  | typeof BaseWordFormSchema;
-
-const schemaMap: Record<VocabularyWord['part_of_speech'], SpecificSchema> = {
-  noun: NounFormSchema,
-  pronoun: PronounFormSchema,
-  adjective: AdjectiveFormSchema,
-  verb: VerbFormSchema,
-  adverb: BaseWordFormSchema,
-  preposition: PrepositionFormSchema,
-  conjunction: BaseWordFormSchema,
-  interjection: BaseWordFormSchema,
-};
-
-export const getFormSchemaForPartOfSpeech = (partOfSpeech: VocabularyWord['part_of_speech']) => {
-  const specific = schemaMap[partOfSpeech];
-  return BaseWordFormSchema.merge(specific);
-};
 
 const nounBranchSchema = BaseWordFormSchema.extend({ part_of_speech: z.literal('noun') }).merge(NounFormSchema);
 const pronounBranchSchema = BaseWordFormSchema.extend({ part_of_speech: z.literal('pronoun') }).merge(
@@ -213,19 +189,4 @@ export const applyFormValuesToWord = (
   }
 
   return baseApplied;
-};
-
-export type FormSchema = ReturnType<typeof BaseWordFormSchema.merge>;
-
-export const getTableFieldName = (partOfSpeech: VocabularyWord['part_of_speech'], tableType: string): string | null => {
-  if (tableType === 'declension') {
-    return partOfSpeech === 'noun' || partOfSpeech === 'pronoun' ? 'declension_table' : null;
-  }
-  if (tableType === 'adjective-declension') {
-    return partOfSpeech === 'adjective' ? 'degrees_table' : null;
-  }
-  if (tableType === 'conjugation') {
-    return partOfSpeech === 'verb' ? 'conjugation_table' : null;
-  }
-  return null;
 };
