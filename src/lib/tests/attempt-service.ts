@@ -425,10 +425,6 @@ export class TestAttemptService {
       : scoped.where('origin.mockTestId', '==', origin.mockTestId);
   }
 
-  private submittedHistoryQuery(studentId: string, origin: Extract<TestAttemptOrigin, { kind: 'normal-test' }>) {
-    return this.submittedAttemptsQuery(studentId, origin).select('versionId', 'submittedAt');
-  }
-
   private parseAttemptVersion(snapshot: DocumentSnapshot, origin: TestAttemptOrigin): TestVersion {
     try {
       return parseVersionSnapshot(snapshot);
@@ -556,10 +552,9 @@ export class TestAttemptService {
       return { version, passingPercentage: mock.passingPercentage };
     }
 
-    const historyQuery = this.submittedHistoryQuery(studentId, origin);
     const [testSnapshot, historySnapshot] = await Promise.all([
       transaction.get(this.units.doc(origin.testId)),
-      transaction.get(historyQuery),
+      transaction.get(this.submittedAttemptsQuery(studentId, origin).select('versionId', 'submittedAt')),
     ]);
 
     let test: TestUnit;
@@ -654,7 +649,7 @@ export class TestAttemptService {
   }
 
   async startAttempt(input: StartTestAttemptInput, studentId: string): Promise<StartTestAttemptResult> {
-    const { origin } = startTestAttemptInputSchema.parse(input) as { origin: TestAttemptOrigin };
+    const { origin } = startTestAttemptInputSchema.parse(input);
     const sessionId = getTestAttemptSessionId(studentId, origin);
     const sessionRef = this.attemptSessions.doc(sessionId);
     const newAttemptRef = this.attempts.doc();
@@ -1500,7 +1495,7 @@ export class TestAttemptService {
           console.error(`Submitted attempt ${document.id} contains invalid trend fields; omitting point`, parsed.error);
           return [];
         }
-        return [{ percentage: parsed.data.percentage, submittedAt: parsed.data.submittedAt }];
+        return [parsed.data];
       })
       .reverse();
   }

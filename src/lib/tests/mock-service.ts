@@ -246,7 +246,7 @@ export class MockTestService {
   }
 
   private async nextMockOrder(transaction: Transaction): Promise<number> {
-    const snapshot = await transaction.get(this.mocks.where('status', '==', 'active').where('isLive', '==', true));
+    const snapshot = await this.readLiveMockOrderScope(transaction);
     return (
       snapshot.docs.reduce(
         (maximum, doc) => Math.max(maximum, typeof doc.data().mockOrder === 'number' ? doc.data().mockOrder : -1),
@@ -862,7 +862,7 @@ export class MockTestService {
     const { mockIds } = reorderMockTestsInputSchema.parse(input);
     return runVocabularyContentMutation(this.db, async transaction => {
       const ordering = await transaction.get(this.mockOrdering);
-      const scope = await transaction.get(this.mocks.where('status', '==', 'active').where('isLive', '==', true));
+      const scope = await this.readLiveMockOrderScope(transaction);
       const mocks = scope.docs.map(parseMockSnapshot);
       if (mocks.length !== mockIds.length || !mockIds.every(id => mocks.some(mock => mock.id === id)))
         throw new TestServiceError(
