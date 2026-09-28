@@ -147,16 +147,10 @@ interface RawUsage {
 const isNonNegativeInteger = (value: unknown): value is number =>
   typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 
-const readOptionalInteger = (value: unknown): number | undefined => {
-  if (value === undefined || value === null) return undefined;
-  return isNonNegativeInteger(value) ? value : undefined;
-};
+const readOptionalInteger = (value: unknown): number | undefined => (isNonNegativeInteger(value) ? value : undefined);
 
-const readDetailsInteger = (value: unknown, key: string): number | undefined => {
-  if (value === undefined || value === null) return undefined;
-  if (typeof value !== 'object') return undefined;
-  return readOptionalInteger((value as Record<string, unknown>)[key]);
-};
+const readDetailsInteger = (value: unknown, key: string): number | undefined =>
+  value && typeof value === 'object' ? readOptionalInteger((value as Record<string, unknown>)[key]) : undefined;
 
 /**
  * Parse usage without silently converting malformed provider data into a

@@ -30,7 +30,9 @@ const OUTPUT_SCHEMAS = {
 
 function createTokenBudgetError(prefix: string, response: Response): AIAutocompleteResponse {
   const usage = response.usage;
-  const outputTypes = response.output.map(item => `${item.type}${'status' in item && item.status ? `:${item.status}` : ''}`);
+  const outputTypes = response.output.map(
+    item => `${item.type}${'status' in item && item.status ? `:${item.status}` : ''}`
+  );
   const reason = response.incomplete_details?.reason;
   const tokenMessage =
     usage?.output_tokens !== undefined

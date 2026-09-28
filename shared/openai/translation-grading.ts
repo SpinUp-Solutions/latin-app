@@ -121,9 +121,7 @@ async function grade<M extends TranslationGradingMode>(
             ]
           : `${prompt.stablePrefix}\n\n${prompt.variableSuffix}`,
         prompt_cache_key: promptCacheKeyFor(profile, prompt.variableSuffix, task.mode),
-        ...(explicitPromptCaching
-          ? { prompt_cache_options: { mode: 'explicit' as const, ttl: '30m' as const } }
-          : {}),
+        ...(explicitPromptCaching ? { prompt_cache_options: { mode: 'explicit' as const, ttl: '30m' as const } } : {}),
         service_tier: 'default',
         store: false,
         text: {

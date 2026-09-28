@@ -433,15 +433,11 @@ function ModelComparisonCards({ cells }: { cells: EvaluationCellResult[] }) {
               <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-3 text-xs">
                 <span className="text-roman-stone">
                   API cost this run{' '}
-                  <strong className="text-foreground">
-                    {formatMeasuredCost(incurredCost, incurredStatus)}
-                  </strong>
+                  <strong className="text-foreground">{formatMeasuredCost(incurredCost, incurredStatus)}</strong>
                 </span>
                 <span className="text-roman-stone">
                   Original generated cost{' '}
-                  <strong className="text-foreground">
-                    {formatMeasuredCost(originalCost, originalStatus)}
-                  </strong>
+                  <strong className="text-foreground">{formatMeasuredCost(originalCost, originalStatus)}</strong>
                 </span>
               </div>
             </RomanCardContent>
