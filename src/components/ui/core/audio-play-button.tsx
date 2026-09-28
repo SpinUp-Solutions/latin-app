@@ -10,20 +10,15 @@ interface AudioPlayButtonProps {
   size?: 'sm' | 'default' | 'lg';
   className?: string;
   showLabel?: boolean;
-  disabled?: boolean;
-  onClick?: (e: React.MouseEvent) => void;
 }
-const AudioPlayButton: React.FC<AudioPlayButtonProps> = props => {
-  const {
-    audioPath,
-    variant = 'default',
-    size = 'sm',
-    className = '',
-    showLabel = false,
-    disabled = false,
-    onClick,
-  } = props;
 
+const AudioPlayButton: React.FC<AudioPlayButtonProps> = ({
+  audioPath,
+  variant = 'default',
+  size = 'sm',
+  className = '',
+  showLabel = false,
+}) => {
   const { audioRef, isPlaying, isLoading, play, pause } = useAudio(audioPath);
   const pageIsVisible = useContext(LessonPageVisibilityContext);
 
@@ -31,52 +26,18 @@ const AudioPlayButton: React.FC<AudioPlayButtonProps> = props => {
     if (!pageIsVisible) pause();
   }, [pageIsVisible, pause]);
 
-  if (variant === 'vocabulary') {
-    const handlePlay = (e: React.MouseEvent) => {
-      e.stopPropagation();
-      if (onClick) onClick(e);
+  if (!audioPath) return null;
 
-      console.log('🎤 Vocabulary audio play requested:', audioPath);
-      if (isPlaying) {
-        pause();
-      } else {
-        play();
-      }
-    };
-
-    if (!audioPath) return null;
-
-    return (
-      <>
-        <Button
-          variant="ghost"
-          size={size}
-          onClick={handlePlay}
-          disabled={disabled || isLoading}
-          className={`rounded-full text-roman-terracotta hover:bg-roman-parchment focus-visible:ring-roman-terracotta/40 ${className}`}>
-          {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Volume2 className="h-4 w-4" />}
-          {showLabel && <span className="ml-2">{isLoading ? 'Loading...' : 'Play'}</span>}
-        </Button>
-        <audio ref={audioRef} />
-      </>
-    );
-  }
-
-  // Default variant
+  // Vocabulary buttons sit inside clickable cards and always show the speaker icon.
+  const isVocabulary = variant === 'vocabulary';
+  const showPause = isPlaying && !isVocabulary;
+  const Icon = isLoading ? Loader2 : isVocabulary ? Volume2 : showPause ? PauseCircle : PlayCircle;
 
   const handleClick = (e: React.MouseEvent) => {
-    if (onClick) onClick(e);
-
-    if (isPlaying) {
-      console.log('⏸️ Pausing default audio');
-      pause();
-    } else {
-      console.log('▶️ Playing default audio');
-      play();
-    }
+    if (isVocabulary) e.stopPropagation();
+    if (isPlaying) pause();
+    else play();
   };
-
-  if (!audioPath) return null;
 
   return (
     <>
@@ -84,16 +45,10 @@ const AudioPlayButton: React.FC<AudioPlayButtonProps> = props => {
         variant="ghost"
         size={size}
         onClick={handleClick}
-        disabled={disabled || isLoading}
+        disabled={isLoading}
         className={`rounded-full text-roman-terracotta hover:bg-roman-parchment focus-visible:ring-roman-terracotta/40 ${className}`}>
-        {isLoading ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : isPlaying ? (
-          <PauseCircle className="h-4 w-4" />
-        ) : (
-          <PlayCircle className="h-4 w-4" />
-        )}
-        {showLabel && <span className="ml-2">{isLoading ? 'Loading...' : isPlaying ? 'Pause' : 'Play'}</span>}
+        <Icon className={isLoading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
+        {showLabel && <span className="ml-2">{isLoading ? 'Loading...' : showPause ? 'Pause' : 'Play'}</span>}
       </Button>
       <audio ref={audioRef} />
     </>
