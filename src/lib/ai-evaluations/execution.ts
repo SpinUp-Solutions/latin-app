@@ -17,7 +17,7 @@ import {
   type TranslationGradingProfileId,
 } from '../../../shared/openai/model-registry';
 import type { CostBreakdown, TokenUsage } from '../../../shared/openai/types';
-import { getCachedEvaluationResult, getEvaluationCacheExpiry, setCachedEvaluationResult } from './cache';
+import { getCachedEvaluationResult, setCachedEvaluationResult } from './cache';
 import { createEvaluationCacheKey } from './cache-key';
 import {
   AI_EVALUATION_SCHEMA_VERSION,
@@ -189,7 +189,6 @@ async function executeUniqueJob(
           cost: result.cost,
           latencyMs: result.latencyMs,
           generatedAt: generatedAt!,
-          expiresAt: getEvaluationCacheExpiry(),
         },
         db
       );
