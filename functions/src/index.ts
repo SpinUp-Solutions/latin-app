@@ -58,10 +58,7 @@ export const autocompleteWord = onCall(
     secrets: [openaiApiKey],
   },
   async request => {
-    console.log('[Firebase Function] autocompleteWord called');
-
     if (!request.auth) {
-      console.error('[Firebase Function] Unauthenticated request');
       throw new HttpsError('unauthenticated', 'User must be authenticated');
     }
 
@@ -75,28 +72,9 @@ export const autocompleteWord = onCall(
       throw new HttpsError('invalid-argument', 'Part of speech is required');
     }
 
-    console.log(`[Firebase Function] Processing: word="${data.word}", part_of_speech="${data.part_of_speech}"`);
-
-    const startTime = Date.now();
-
-    try {
-      const result = await autocompleteVocabularyWord(data);
-      const endTime = Date.now();
-
-      console.log(`[Firebase Function] Completed in ${endTime - startTime}ms`);
-      console.log(`[Firebase Function] Success:`, result.success);
-      console.log(`[Firebase Function] Model used: ${result.model ?? 'unknown'}`);
-      if (result.cost) {
-        console.log(`[Firebase Function] Cost: $${result.cost.totalCost.toFixed(4)}`);
-      }
-
-      return result;
-    } catch (error) {
-      const endTime = Date.now();
-      console.error(`[Firebase Function] Error after ${endTime - startTime}ms:`, error);
-
-      throw new HttpsError('internal', error instanceof Error ? error.message : 'Unknown error occurred');
-    }
+    const result = await autocompleteVocabularyWord(data);
+    if (result.cost) console.log(`[autocompleteWord] ${result.model} cost $${result.cost.totalCost.toFixed(4)}`);
+    return result;
   }
 );
 
@@ -108,10 +86,7 @@ export const resolveRootWordFn = onCall(
     secrets: [openaiApiKey],
   },
   async request => {
-    console.log('[Firebase Function] resolveRootWordFn called');
-
     if (!request.auth) {
-      console.error('[Firebase Function] Unauthenticated request');
       throw new HttpsError('unauthenticated', 'User must be authenticated');
     }
 
@@ -122,23 +97,10 @@ export const resolveRootWordFn = onCall(
       throw new HttpsError('invalid-argument', 'selectedText is required');
     }
 
-    try {
-      const startTime = Date.now();
-      const result = await resolveRootWord({
-        selectedText,
-        context: typeof data.context === 'string' ? data.context : undefined,
-      });
-      const elapsed = Date.now() - startTime;
-
-      console.log(`[Firebase Function] resolveRootWordFn completed in ${elapsed}ms`);
-      console.log(`[Firebase Function] Success:`, result.success);
-      console.log(`[Firebase Function] Model used: ${result.model ?? 'unknown'}`);
-
-      return result;
-    } catch (error) {
-      console.error('[Firebase Function] resolveRootWordFn error:', error);
-      throw new HttpsError('internal', error instanceof Error ? error.message : 'Unknown error occurred');
-    }
+    return resolveRootWord({
+      selectedText,
+      context: typeof data.context === 'string' ? data.context : undefined,
+    });
   }
 );
 
@@ -155,11 +117,6 @@ export const gradeTranslationFn = onCall(
     }
 
     const data = request.data as TranslationGradingRequest;
-    console.log(`[gradeTranslationFn] ========================================`);
-    console.log(`[gradeTranslationFn] OPENAI_API_KEY present: ${!!process.env.OPENAI_API_KEY}`);
-    console.log(`[gradeTranslationFn] Direction: ${data.direction}`);
-    console.log(`[gradeTranslationFn] Source: "${data.sourceText?.substring(0, 40)}..."`);
-
     if (!data.sourceText || typeof data.sourceText !== 'string') {
       throw new HttpsError('invalid-argument', 'sourceText is required');
     }
@@ -172,21 +129,7 @@ export const gradeTranslationFn = onCall(
       throw new HttpsError('invalid-argument', 'direction is required');
     }
 
-    try {
-      const startTime = Date.now();
-      const result = await gradeTranslation(data);
-      const elapsed = Date.now() - startTime;
-
-      console.log(`[gradeTranslationFn] ✅ Completed in ${elapsed}ms`);
-      console.log(`[gradeTranslationFn] Model used: ${result.model}`);
-      console.log(`[gradeTranslationFn] Success: ${result.success}, Feedback: ${result.data?.feedbackLevel}`);
-      console.log(`[gradeTranslationFn] ========================================`);
-
-      return result;
-    } catch (error) {
-      console.error(`[gradeTranslationFn] ❌ Error:`, error);
-      throw new HttpsError('internal', error instanceof Error ? error.message : 'Unknown error occurred');
-    }
+    return gradeTranslation(data);
   }
 );
 
@@ -200,7 +143,7 @@ const evaluationCrudOptions = {
 
 export const listAiEvaluationCasesFn = onCall(evaluationCrudOptions, async request => {
   try {
-    await requireAdmin(request.auth ? { uid: request.auth.uid } : undefined);
+    await requireAdmin(request.auth);
     return { cases: await listEvaluationCases(functionsDb) };
   } catch (error) {
     return throwEvaluationHttpsError(error);
@@ -209,7 +152,7 @@ export const listAiEvaluationCasesFn = onCall(evaluationCrudOptions, async reque
 
 export const saveAiEvaluationCaseFn = onCall(evaluationCrudOptions, async request => {
   try {
-    const actorId = await requireAdmin(request.auth ? { uid: request.auth.uid } : undefined);
+    const actorId = await requireAdmin(request.auth);
     const input = evaluationFunctionSaveRequestSchema.parse(request.data);
     const evaluationCase = input.caseId
       ? await updateEvaluationCase(input.caseId, input.input, actorId, functionsDb)
@@ -222,7 +165,7 @@ export const saveAiEvaluationCaseFn = onCall(evaluationCrudOptions, async reques
 
 export const deleteAiEvaluationCaseFn = onCall(evaluationCrudOptions, async request => {
   try {
-    await requireAdmin(request.auth ? { uid: request.auth.uid } : undefined);
+    await requireAdmin(request.auth);
     const input = evaluationFunctionDeleteRequestSchema.parse(request.data);
     await deleteEvaluationCase(input.caseId, functionsDb);
     return { success: true };
@@ -247,7 +190,7 @@ export const runAiEvaluationFn = onCall(
   },
   async request => {
     try {
-      const actorId = await requireAdmin(request.auth ? { uid: request.auth.uid } : undefined);
+      const actorId = await requireAdmin(request.auth);
       const input = evaluationFunctionRunRequestSchema.parse(request.data);
       const evaluationCase = await getEvaluationCase(input.caseId, functionsDb);
       const requestedCells = countEvaluationCells(evaluationCase);

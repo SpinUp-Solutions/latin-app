@@ -49,10 +49,6 @@ const buildPrompt = ({ selectedText, context }: ResolveRootWordRequest) => {
 };
 
 export async function resolveRootWord(request: ResolveRootWordRequest): Promise<ResolveRootWordResponse> {
-  if (!request.selectedText.trim()) {
-    return { success: false, error: 'Selected text is required' };
-  }
-
   try {
     const responseFormat = zodResponseFormat(RootResolverOutputSchema, 'root_word_candidates');
     const response = await openai.responses.create({
