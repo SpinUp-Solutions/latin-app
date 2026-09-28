@@ -10,17 +10,14 @@ import { compareDiagramAnnotationSets } from '@/src/features/sentence-diagrammin
 import { validateGeneratedTranslationExercise } from '@/src/utils/exercises/generatedTranslationExercise';
 import {
   scoreSingleFieldFormIdentificationAnswer,
-  normalize,
   validateGeneratedFormIdentificationExercise,
   validateMultiAnswerStep,
   validatePartialMultiAnswerPaths,
 } from '@/src/utils/exercises/generatedFormIdentificationExercise';
 import { getAcceptedAnswersForStep } from '@/src/utils/exercises/formIdentificationHelpers';
+import { normalizeAnswer } from '@/src/utils/exercises/helpers';
 import { validateMultipleChoiceExercise } from '@/src/utils/exercises/multipleChoiceExercise';
-import {
-  getSelectableMatchingAnswers,
-  validateMatchingExercise,
-} from '@/src/utils/exercises/matchingExercise';
+import { getSelectableMatchingAnswers, validateMatchingExercise } from '@/src/utils/exercises/matchingExercise';
 import { validateFillExercise } from '@/src/utils/exercises/fillExercise';
 import { validateOddOneOutExercise } from '@/src/utils/exercises/oddOneOutExercise';
 import { validateTextSelectionExercise } from '@/src/utils/exercises/textSelectionExercise';
@@ -265,14 +262,14 @@ export function scoreGeneratedFormIdentificationItems(
 
     for (const item of items) {
       let earnedUnits = 0;
-      const submitted = normalize(answers[item.id] ?? '');
+      const submitted = normalizeAnswer(answers[item.id] ?? '');
       const pathsForStep = compatiblePaths.filter(path => Boolean(path[item.step]));
       if (pathsForStep.length === 0) {
         earnedUnits = validateGeneratedFormIdentificationExercise(answers[item.id] ?? '', item).isCorrect ? 1 : 0;
       } else {
         const matchingPaths = pathsForStep.filter(path => {
           const expected = path[item.step];
-          return expected ? getAcceptedAnswersForStep(expected).map(normalize).includes(submitted) : false;
+          return expected ? getAcceptedAnswersForStep(expected).map(normalizeAnswer).includes(submitted) : false;
         });
         if (matchingPaths.length > 0) {
           earnedUnits = 1;

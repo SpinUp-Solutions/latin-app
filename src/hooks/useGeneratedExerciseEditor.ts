@@ -12,7 +12,11 @@ import type { GeneratorFilters, PosGeneratorConfig, FormSelection } from '@/src/
 import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 import type { GeneratedTranslationExercise } from '@/src/types/exercises/generated-translation';
 
-const createPosConfig = (pos: string, enabled: boolean, filters?: PosGeneratorConfig['filters']): PosGeneratorConfig => {
+const createPosConfig = (
+  pos: string,
+  enabled: boolean,
+  filters?: PosGeneratorConfig['filters']
+): PosGeneratorConfig => {
   const tableType = deriveTableTypeFromPOS(pos);
   return {
     enabled,

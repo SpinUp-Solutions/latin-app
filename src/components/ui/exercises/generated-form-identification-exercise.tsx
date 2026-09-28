@@ -26,8 +26,8 @@ import {
   validateMultiAnswerStep,
   validatePartialMultiAnswerPaths,
   scoreSingleFieldFormIdentificationAnswer,
-  normalize,
 } from '@/src/utils/exercises/generatedFormIdentificationExercise';
+import { normalizeAnswer } from '@/src/utils/exercises/helpers';
 import { formatLabel } from '@/src/utils/label-formatter';
 import type {
   ExerciseAnswer,
@@ -257,7 +257,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
         if (fullyCorrect) {
           setWordAnswers(prev => ({
             ...prev,
-            [stepItem.wordId]: { ...(prev[stepItem.wordId] || {}), [stepItem.step]: normalize(userAnswer) },
+            [stepItem.wordId]: { ...(prev[stepItem.wordId] || {}), [stepItem.step]: normalizeAnswer(userAnswer) },
           }));
         }
       }
@@ -337,7 +337,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
           ...prev,
           [stepItem.wordId]: {
             ...(prev[stepItem.wordId] || {}),
-            [stepItem.step]: normalize(userAnswer),
+            [stepItem.step]: normalizeAnswer(userAnswer),
           },
         }));
       }

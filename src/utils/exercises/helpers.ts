@@ -72,12 +72,13 @@ export const richTextToPlainText = (text: string): string =>
     .replace(/\s+/g, ' ')
     .trim();
 
-/**
- * Normalizes text for comparison by stripping HTML, trimming whitespace and converting to lowercase
- */
-export const normalizeText = (text: string): string => {
-  return stripHtmlTags(text).trim().toLowerCase();
-};
+const normalizeText = (text: string): string => stripHtmlTags(text).trim().toLowerCase();
+
+/** Normalizes a typed answer for comparison: plain lowercase text without punctuation or repeated spaces. */
+export const normalizeAnswer = (text: string): string =>
+  normalizeText(text)
+    .replace(/[.,;:!?]/g, '')
+    .replace(/\s+/g, ' ');
 
 /**
  * Strips macrons from Latin text (e.g., ā -> a)

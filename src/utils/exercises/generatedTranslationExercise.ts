@@ -1,5 +1,5 @@
 import { ValidationResult } from './types';
-import { stripHtmlTags, stripMacrons } from './helpers';
+import { normalizeAnswer, stripMacrons } from './helpers';
 
 export interface GeneratedTranslationItem {
   text: string;
@@ -19,22 +19,9 @@ export const splitTranslationAnswers = (value?: string | null): string[] => {
     .filter(Boolean);
 };
 
-const normalize = (s: string, shouldStripMacrons: boolean): string => {
-  const normalized = stripHtmlTags(s)
-    .trim()
-    .toLowerCase()
-    .replace(/[.,;:!?]/g, '')
-    .replace(/\s+/g, ' ');
-  return shouldStripMacrons ? stripMacrons(normalized) : normalized;
-};
-
-const stripInfinitive = (s: string): string => {
-  return s.replace(/^to\s+/, '');
-};
-
 const transformValue = (value: string, shouldStripInfinitive: boolean, shouldStripMacrons: boolean): string => {
-  const normalized = normalize(value, shouldStripMacrons);
-  return shouldStripInfinitive ? stripInfinitive(normalized) : normalized;
+  const normalized = shouldStripMacrons ? stripMacrons(normalizeAnswer(value)) : normalizeAnswer(value);
+  return shouldStripInfinitive ? normalized.replace(/^to\s+/, '') : normalized;
 };
 
 export const validateGeneratedTranslationExercise = (
