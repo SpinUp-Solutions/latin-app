@@ -238,13 +238,19 @@ const visibleWordCount = (value: string) => {
 };
 const rawWhitespaceWordCount = (value: string) => (value.trim() ? value.trim().split(/\s+/).length : 0);
 
-const zodIssues = (error: z.ZodError): ActiveExerciseConfigurationIssue[] =>
+const dataIssues = (error: z.ZodError): ActiveExerciseConfigurationIssue[] =>
   error.issues.map(issue => ({
     message: issue.message,
-    path: issue.path.map(segment => (typeof segment === 'symbol' ? String(segment) : segment)),
+    path: ['data', ...issue.path.map(segment => (typeof segment === 'symbol' ? String(segment) : segment))],
   }));
 
 const issue = (message: string, path: (string | number)[]): ActiveExerciseConfigurationIssue => ({ message, path });
+
+const translationDirectionIssues = (item: Record<string, unknown>): ActiveExerciseConfigurationIssue[] =>
+  item.translationDirection !== undefined &&
+  !['latin-to-english', 'english-to-latin'].includes(String(item.translationDirection))
+    ? [issue('Unknown translation direction', ['translationDirection'])]
+    : [];
 
 const parseDiagramIssuePath = (value: string): (string | number)[] =>
   value
@@ -255,7 +261,7 @@ const parseDiagramIssuePath = (value: string): (string | number)[] =>
 
 function validateMatching(data: unknown): ActiveExerciseConfigurationIssue[] {
   const parsed = matchingDataSchema.safeParse(data);
-  if (!parsed.success) return zodIssues(parsed.error).map(entry => ({ ...entry, path: ['data', ...entry.path] }));
+  if (!parsed.success) return dataIssues(parsed.error);
 
   const issues: ActiveExerciseConfigurationIssue[] = [];
   const leftIds = parsed.data.leftColumn.map(entry => entry.id);
@@ -283,7 +289,7 @@ function validateMatching(data: unknown): ActiveExerciseConfigurationIssue[] {
 
 function validateMultipleChoice(data: unknown): ActiveExerciseConfigurationIssue[] {
   const parsed = multipleChoiceDataSchema.safeParse(data);
-  if (!parsed.success) return zodIssues(parsed.error).map(entry => ({ ...entry, path: ['data', ...entry.path] }));
+  if (!parsed.success) return dataIssues(parsed.error);
   const issues: ActiveExerciseConfigurationIssue[] = [];
   if (!uniqueValues(parsed.data.options.map(option => option.id))) {
     issues.push(issue('Multiple-choice option IDs must be unique', ['data', 'options']));
@@ -304,7 +310,7 @@ function validateMultipleChoice(data: unknown): ActiveExerciseConfigurationIssue
 
 function validateOddOneOut(data: unknown): ActiveExerciseConfigurationIssue[] {
   const parsed = oddOneOutDataSchema.safeParse(data);
-  if (!parsed.success) return zodIssues(parsed.error).map(entry => ({ ...entry, path: ['data', ...entry.path] }));
+  if (!parsed.success) return dataIssues(parsed.error);
   const issues: ActiveExerciseConfigurationIssue[] = [];
   if (!uniqueValues(parsed.data.items.map(item => item.id))) {
     issues.push(issue('Odd-one-out item IDs must be unique', ['data', 'items']));
@@ -317,7 +323,7 @@ function validateOddOneOut(data: unknown): ActiveExerciseConfigurationIssue[] {
 
 function validateTableFill(data: unknown): ActiveExerciseConfigurationIssue[] {
   const parsed = tableFillDataSchema.safeParse(data);
-  if (!parsed.success) return zodIssues(parsed.error).map(entry => ({ ...entry, path: ['data', ...entry.path] }));
+  if (!parsed.success) return dataIssues(parsed.error);
   const issues: ActiveExerciseConfigurationIssue[] = [];
   const columnIds = parsed.data.columns.map(column => column.id);
   const columnIdSet = new Set(columnIds);
@@ -366,7 +372,7 @@ function validateTableFill(data: unknown): ActiveExerciseConfigurationIssue[] {
 
 function validateClick(data: unknown): ActiveExerciseConfigurationIssue[] {
   const parsed = clickDataSchema.safeParse(data);
-  if (!parsed.success) return zodIssues(parsed.error).map(entry => ({ ...entry, path: ['data', ...entry.path] }));
+  if (!parsed.success) return dataIssues(parsed.error);
   const issues: ActiveExerciseConfigurationIssue[] = [];
   const indices = parsed.data.correctWordIndices;
   if (!uniqueValues(indices.map(String))) {
@@ -386,7 +392,7 @@ function validateClick(data: unknown): ActiveExerciseConfigurationIssue[] {
 
 function validateTextSelection(data: unknown): ActiveExerciseConfigurationIssue[] {
   const parsed = textSelectionDataSchema.safeParse(data);
-  if (!parsed.success) return zodIssues(parsed.error).map(entry => ({ ...entry, path: ['data', ...entry.path] }));
+  if (!parsed.success) return dataIssues(parsed.error);
   const issues: ActiveExerciseConfigurationIssue[] = [];
   if (!uniqueValues(parsed.data.questions.map(question => question.id))) {
     issues.push(issue('Text-selection question IDs must be unique', ['data', 'questions']));
@@ -402,7 +408,7 @@ function validateTextSelection(data: unknown): ActiveExerciseConfigurationIssue[
 
 function validateFillEmbolded(data: unknown): ActiveExerciseConfigurationIssue[] {
   const parsed = fillEmboldedDataSchema.safeParse(data);
-  if (!parsed.success) return zodIssues(parsed.error).map(entry => ({ ...entry, path: ['data', ...entry.path] }));
+  if (!parsed.success) return dataIssues(parsed.error);
   const issues: ActiveExerciseConfigurationIssue[] = [];
   const wordIndices = parsed.data.words.map(word => word.wordIndex);
   if (!uniqueValues(wordIndices.map(String))) {
@@ -426,14 +432,8 @@ function validateGeneratorConfig(config: z.infer<typeof generatorConfigSchema>):
 
 function validateGeneratedTranslation(item: Record<string, unknown>): ActiveExerciseConfigurationIssue[] {
   const parsed = generatedTranslationDataSchema.safeParse(item.data);
-  if (!parsed.success) return zodIssues(parsed.error).map(entry => ({ ...entry, path: ['data', ...entry.path] }));
-  const issues = validateGeneratorConfig(parsed.data.generatorConfig);
-  if (
-    item.translationDirection !== undefined &&
-    !['latin-to-english', 'english-to-latin'].includes(String(item.translationDirection))
-  ) {
-    issues.push(issue('Unknown translation direction', ['translationDirection']));
-  }
+  if (!parsed.success) return dataIssues(parsed.error);
+  const issues = [...validateGeneratorConfig(parsed.data.generatorConfig), ...translationDirectionIssues(item)];
   const effectivePosConfigs = Object.keys(parsed.data.posConfigs).length
     ? parsed.data.posConfigs
     : buildLegacyPosConfigs(parsed.data.generatorConfig as GeneratorConfigBase);
@@ -463,7 +463,7 @@ function validateGeneratedTranslation(item: Record<string, unknown>): ActiveExer
 
 function validateGeneratedForm(data: unknown): ActiveExerciseConfigurationIssue[] {
   const parsed = generatedFormDataSchema.safeParse(data);
-  if (!parsed.success) return zodIssues(parsed.error).map(entry => ({ ...entry, path: ['data', ...entry.path] }));
+  if (!parsed.success) return dataIssues(parsed.error);
   const issues = validateGeneratorConfig(parsed.data.generatorConfig);
   const paradigmConfigs = Object.keys(parsed.data.paradigmConfigs).length
     ? parsed.data.paradigmConfigs
@@ -525,7 +525,7 @@ function validateGeneratedForm(data: unknown): ActiveExerciseConfigurationIssue[
 
 function validateSentenceDiagram(data: unknown): ActiveExerciseConfigurationIssue[] {
   const parsed = sentenceDiagramDataSchema.safeParse(data);
-  if (!parsed.success) return zodIssues(parsed.error).map(entry => ({ ...entry, path: ['data', ...entry.path] }));
+  if (!parsed.success) return dataIssues(parsed.error);
   return validateSentenceDiagramDocument(parsed.data as SentenceDiagramDocument).map(entry => ({
     message: entry.message,
     path: parseDiagramIssuePath(entry.path),
@@ -553,7 +553,7 @@ export function validateActiveTestExerciseConfiguration(
       return validateClick(item.data);
     case 'fill': {
       const parsed = fillDataSchema.safeParse(item.data);
-      return parsed.success ? [] : zodIssues(parsed.error).map(entry => ({ ...entry, path: ['data', ...entry.path] }));
+      return parsed.success ? [] : dataIssues(parsed.error);
     }
     case 'text-selection':
       return validateTextSelection(item.data);
@@ -567,16 +567,7 @@ export function validateActiveTestExerciseConfiguration(
       return validateGeneratedForm(item.data);
     case 'translation-grading': {
       const parsed = translationGradingDataSchema.safeParse(item.data);
-      const issues = parsed.success
-        ? []
-        : zodIssues(parsed.error).map(entry => ({ ...entry, path: ['data', ...entry.path] }));
-      if (
-        item.translationDirection !== undefined &&
-        !['latin-to-english', 'english-to-latin'].includes(String(item.translationDirection))
-      ) {
-        issues.push(issue('Unknown translation direction', ['translationDirection']));
-      }
-      return issues;
+      return [...(parsed.success ? [] : dataIssues(parsed.error)), ...translationDirectionIssues(item)];
     }
     default:
       return [];
