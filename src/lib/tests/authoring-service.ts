@@ -11,13 +11,7 @@ import {
 import { learningPathDocumentSchema, testUnitCreateSchema, testUnitSchema } from '@/src/lib/learning-units/schemas';
 import { adminDb } from '@/src/services/firebase-admin';
 import type { TestUnit } from '@/src/types/learning-unit';
-import type {
-  TestUnitDetail,
-  TestUnitSummary,
-  TestVersion,
-  TestVersionDraft,
-  TestVersionSummary,
-} from '@/src/types/test';
+import type { TestUnitDetail, TestUnitSummary, TestVersion } from '@/src/types/test';
 import { regeneratePageIds } from '@/src/utils/idUtils';
 import { assertVocabularyPoolAssignmentsAllowedInTransaction } from '@/src/lib/vocabulary-pools/assignment.server';
 import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
@@ -47,7 +41,6 @@ import {
   type UpdateTestUnitInput,
   type UpdateTestVersionDraftInput,
   type UpdateTestWithVersionInput,
-  type TestVersionInput,
 } from './schemas';
 
 export class TestAuthoringService {
@@ -72,31 +65,11 @@ export class TestAuthoringService {
     return this.db.collection(MOCK_TESTS_COLLECTION);
   }
 
-  private getVersionSummaries(versionIds: readonly string[]): Promise<TestVersionSummary[]> {
-    return getVersionSummaries(this.db, versionIds);
-  }
-
-  private buildVersion(
-    input: TestVersionInput,
-    actorId: string,
-    created?: Pick<TestVersion, 'createdAt' | 'createdBy'>
-  ): TestVersion {
-    return buildVersion(this.now, input, actorId, created);
-  }
-
-  private buildVersionDraft(
-    testId: string,
-    input: TestVersionDraftInput,
-    actorId: string,
-    created?: Pick<TestVersionDraft, 'createdAt' | 'createdBy'>
-  ): TestVersionDraft {
-    return buildVersionDraft(this.now, testId, input, actorId, created);
-  }
-
   async listTests(): Promise<TestUnitSummary[]> {
     const snapshot = await this.units.where('kind', '==', 'test').orderBy('updatedAt', 'desc').get();
     const tests = snapshot.docs.map(parseTestSnapshot);
-    const summaries = await this.getVersionSummaries(
+    const summaries = await getVersionSummaries(
+      this.db,
       tests.flatMap(test => test.rotationVersions.map(reference => reference.versionId))
     );
     const summariesById = new Map(summaries.map(version => [version.id, version]));
@@ -112,7 +85,10 @@ export class TestAuthoringService {
   async getTest(testId: string): Promise<TestUnitDetail> {
     const test = parseTestSnapshot(await this.units.doc(testId).get());
     const [versions, draftSnapshots, snapshots] = await Promise.all([
-      this.getVersionSummaries(test.rotationVersions.map(reference => reference.versionId)),
+      getVersionSummaries(
+        this.db,
+        test.rotationVersions.map(reference => reference.versionId)
+      ),
       this.drafts.where('testId', '==', testId).get(),
       this.mocks.where('parent.testId', '==', testId).where('status', '==', 'active').get(),
     ]);
@@ -126,7 +102,7 @@ export class TestAuthoringService {
       snapshots.docs.map(async document => {
         try {
           const mock = parseMockSnapshot(document);
-          const version = (await this.getVersionSummaries([mock.versionId]))[0];
+          const version = (await getVersionSummaries(this.db, [mock.versionId]))[0];
           return { ...mock, version };
         } catch (error) {
           console.error(`Parent-linked mock ${document.id} could not be projected safely; omitting it`, error);
@@ -171,7 +147,7 @@ export class TestAuthoringService {
           const currentTest = parseTestSnapshot(existingTest);
           const currentVersion = parseVersionSnapshot(existingVersion);
           const timestamp = this.now();
-          const version = this.buildVersion(parsed.version, actorId, {
+          const version = buildVersion(this.now, parsed.version, actorId, {
             createdAt: currentVersion.createdAt,
             createdBy: currentVersion.createdBy,
           });
@@ -200,7 +176,7 @@ export class TestAuthoringService {
       }
 
       const timestamp = this.now();
-      const version = this.buildVersion(parsed.version, actorId);
+      const version = buildVersion(this.now, parsed.version, actorId);
       const test = testUnitCreateSchema.parse({
         ...parsed.test,
         kind: 'test',
@@ -263,7 +239,8 @@ export class TestAuthoringService {
         updatedAt: timestamp,
         updatedBy: actorId,
       }) as TestUnit;
-      const version = this.buildVersion(
+      const version = buildVersion(
+        this.now,
         {
           id: changes.versionId,
           ...changes.version,
@@ -319,7 +296,7 @@ export class TestAuthoringService {
         throw new TestServiceError('TEST_VERSION_ALREADY_EXISTS', 'A different test version already uses this ID', 409);
       }
 
-      const version = this.buildVersionDraft(testId, parsed, actorId);
+      const version = buildVersionDraft(this.now, testId, parsed, actorId);
       const test = testUnitSchema.parse({
         ...currentTest,
         updatedAt: this.now(),
@@ -351,7 +328,8 @@ export class TestAuthoringService {
       if (currentDraft.testId !== testId) {
         throw new TestServiceError('TEST_VERSION_NOT_IN_TEST', 'Inactive version belongs to another test', 409);
       }
-      const version = this.buildVersionDraft(
+      const version = buildVersionDraft(
+        this.now,
         testId,
         {
           id: versionId,
@@ -423,7 +401,8 @@ export class TestAuthoringService {
         const regenerated = regeneratePageIds(page, {}).page;
         return { ...regenerated, title: page.title };
       });
-      const version = this.buildVersionDraft(
+      const version = buildVersionDraft(
+        this.now,
         testId,
         {
           id: targetVersionId,
@@ -481,7 +460,7 @@ export class TestAuthoringService {
         pages: draft.pages,
         vocabularyPoolId: draft.vocabularyPoolId,
       });
-      const version = this.buildVersion(activeInput, actorId, {
+      const version = buildVersion(this.now, activeInput, actorId, {
         createdAt: draft.createdAt,
         createdBy: draft.createdBy,
       });
@@ -565,7 +544,8 @@ export class TestAuthoringService {
           );
         }
       }
-      const draft = this.buildVersionDraft(
+      const draft = buildVersionDraft(
+        this.now,
         testId,
         testVersionDraftInputSchema.parse({
           id: version.id,

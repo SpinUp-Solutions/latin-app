@@ -619,7 +619,7 @@ export class TestAttemptService {
 
   private async assertActiveOwnershipGraph(transaction: Transaction): Promise<void> {
     const [testSnapshots, mockSnapshots, versionSnapshots, pathSnapshot] = await Promise.all([
-      transaction.get(this.db.collection('lessons').where('kind', '==', 'test')),
+      transaction.get(this.units.where('kind', '==', 'test')),
       transaction.get(this.mocks.where('status', '==', 'active')),
       transaction.get(this.versions),
       transaction.get(this.db.collection(LEARNING_PATHS_COLLECTION).doc(DEFAULT_LEARNING_PATH_ID)),

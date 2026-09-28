@@ -8,7 +8,7 @@ import {
   formatFormIdentificationConfigurationIssue,
   getGeneratedFormIdentificationConfigurationIssues,
 } from '@/src/utils/exercises/formIdentificationConfiguration';
-import { getTestVersionSummaryFields } from './domain';
+import { getTestVersionSummaryFields, type TestVersionSummaryFields } from './domain';
 
 const optionalAuditFieldSchema = z.string().min(1).optional();
 export const isoTimestampSchema = z
@@ -140,15 +140,9 @@ function addFormIdentificationConfigurationIssues(
 
 export const testVersionInputSchema = testVersionInputShapeSchema.superRefine(refineTestVersionContent);
 
-const testVersionUpdateShapeSchema = z
-  .object({
-    name: testVersionContentShape.name,
-    pages: testVersionContentShape.pages,
-    vocabularyPoolId: testVersionContentShape.vocabularyPoolId,
-  })
-  .strict();
-
-export const updateTestVersionInputSchema = testVersionUpdateShapeSchema.superRefine(refineTestVersionContent);
+export const updateTestVersionInputSchema = testVersionInputShapeSchema
+  .omit({ id: true })
+  .superRefine(refineTestVersionContent);
 
 export const duplicateTestVersionInputSchema = z
   .object({
@@ -173,13 +167,11 @@ const testVersionDocumentShapeSchema = z
 
 export const testVersionSummaryDocumentSchema = testVersionDocumentShapeSchema.omit({ pages: true });
 
-export const testVersionDocumentSchema = testVersionDocumentShapeSchema.superRefine((value, context) => {
-  // Existing active versions remain readable for backward compatibility. All
-  // create, update, activation, and duplication paths pass through the strict
-  // input validator before a new active document is written.
-  refineTestVersionContent(value, context, { validateExerciseConfigurations: false });
+function addDerivedSummaryIssues(
+  value: TestVersionSummaryFields & Pick<z.infer<typeof testVersionInputShapeSchema>, 'pages'>,
+  context: z.RefinementCtx
+) {
   const derived = getTestVersionSummaryFields(value.pages);
-
   (Object.keys(derived) as (keyof typeof derived)[]).forEach(field => {
     if (value[field] !== derived[field]) {
       context.addIssue({
@@ -189,6 +181,14 @@ export const testVersionDocumentSchema = testVersionDocumentShapeSchema.superRef
       });
     }
   });
+}
+
+export const testVersionDocumentSchema = testVersionDocumentShapeSchema.superRefine((value, context) => {
+  // Existing active versions remain readable for backward compatibility. All
+  // create, update, activation, and duplication paths pass through the strict
+  // input validator before a new active document is written.
+  refineTestVersionContent(value, context, { validateExerciseConfigurations: false });
+  addDerivedSummaryIssues(value, context);
 });
 
 const testVersionDraftDocumentShapeSchema = z
@@ -209,17 +209,7 @@ const testVersionDraftDocumentShapeSchema = z
 
 export const testVersionDraftDocumentSchema = testVersionDraftDocumentShapeSchema.superRefine((value, context) => {
   addFormIdentificationConfigurationIssues(value.pages, context);
-  const derived = getTestVersionSummaryFields(value.pages);
-
-  (Object.keys(derived) as (keyof typeof derived)[]).forEach(field => {
-    if (value[field] !== derived[field]) {
-      context.addIssue({
-        code: 'custom',
-        message: `${field} must be derived from pages`,
-        path: [field],
-      });
-    }
-  });
+  addDerivedSummaryIssues(value, context);
 });
 
 const mockTestParentSchema = z.discriminatedUnion('kind', [
@@ -278,14 +268,7 @@ export const createStandaloneMockInputSchema = z
   .strict();
 
 export const assignVersionToMockInputSchema = z
-  .object({
-    testId: firestoreDocumentIdSchema,
-    versionId: firestoreDocumentIdSchema,
-    title: z.string().trim().min(1),
-    description: z.string().trim().default(''),
-    passingPercentage: passingPercentageSchema,
-    isLive: z.boolean(),
-  })
+  .object({ testId: firestoreDocumentIdSchema, versionId: firestoreDocumentIdSchema, ...mockSettingsShape })
   .strict();
 
 export const updateMockTestInputSchema = z
