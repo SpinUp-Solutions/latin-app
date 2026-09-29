@@ -37,6 +37,9 @@ const transformValue = (value: string, shouldStripInfinitive: boolean, shouldStr
   return shouldStripInfinitive ? stripInfinitive(normalized) : normalized;
 };
 
+// Students often list several meanings ("he, she, it", "by/from", "he or she or it").
+const ANSWER_LIST_SEPARATOR = /[,;/]|\bor\b/i;
+
 export const validateGeneratedTranslationExercise = (
   userAnswer: string,
   currentItem: GeneratedTranslationItem
@@ -47,7 +50,13 @@ export const validateGeneratedTranslationExercise = (
   const normalizedAnswers = currentItem.acceptedAnswers.map(answer =>
     transformValue(answer, shouldStripInfinitive, shouldStripMacrons)
   );
-  const isCorrect = normalizedAnswers.includes(input);
+  const listedAnswers = userAnswer
+    .split(ANSWER_LIST_SEPARATOR)
+    .map(part => transformValue(part, shouldStripInfinitive, shouldStripMacrons))
+    .filter(Boolean);
+  const isCorrect =
+    normalizedAnswers.includes(input) ||
+    (listedAnswers.length > 1 && listedAnswers.every(answer => normalizedAnswers.includes(answer)));
 
   return {
     isCorrect,
