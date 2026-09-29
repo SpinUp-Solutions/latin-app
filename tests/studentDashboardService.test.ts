@@ -25,8 +25,10 @@ const snapshot = (id: string, value?: RecordData, ref?: unknown) => ({
   ref: ref ?? { id },
 });
 
+type QueryLogEntry = { collection: string; projected: boolean; docs: string[] };
+
 class FakeQuery {
-  private filters: Array<{ field: string; value: unknown }> = [];
+  private filters: Array<{ field: string; operator: string; value: unknown }> = [];
   private orderField?: string;
   private selectedFields?: string[];
 
@@ -34,11 +36,11 @@ class FakeQuery {
     private readonly collectionName: string,
     private readonly collections: Record<string, Record<string, RecordData>>,
     private readonly selectedFieldLog: string[][],
-    private readonly queryLog: Array<{ collection: string; projected: boolean }>
+    private readonly queryLog: QueryLogEntry[]
   ) {}
 
-  where(field: string, _operator: string, value: unknown) {
-    this.filters.push({ field, value });
+  where(field: string, operator: string, value: unknown) {
+    this.filters.push({ field, operator, value });
     return this;
   }
 
@@ -62,10 +64,11 @@ class FakeQuery {
   }
 
   async get() {
-    this.queryLog.push({ collection: this.collectionName, projected: Boolean(this.selectedFields) });
     let entries = Object.entries(this.collections[this.collectionName] ?? {});
-    for (const filter of this.filters) {
-      entries = entries.filter(([, value]) => value[filter.field] === filter.value);
+    for (const { field, operator, value: expected } of this.filters) {
+      entries = entries.filter(([, value]) =>
+        operator === 'in' ? (expected as unknown[]).includes(value[field]) : value[field] === expected
+      );
     }
     if (this.orderField) {
       const field = this.orderField;
@@ -86,13 +89,18 @@ class FakeQuery {
         get: async () => snapshot(id, value),
       });
     });
+    this.queryLog.push({
+      collection: this.collectionName,
+      projected: Boolean(this.selectedFields),
+      docs: docs.map(doc => doc.id),
+    });
     return { docs, empty: docs.length === 0, size: docs.length };
   }
 }
 
 const createFakeDb = (collections: Record<string, Record<string, RecordData>>) => {
   const selectedFieldLog: string[][] = [];
-  const queryLog: Array<{ collection: string; projected: boolean }> = [];
+  const queryLog: QueryLogEntry[] = [];
   const db = {
     collection: (name: string) => new FakeQuery(name, collections, selectedFieldLog, queryLog),
     runTransaction: <T>(run: (transaction: unknown) => Promise<T>) =>
@@ -216,7 +224,7 @@ describe('StudentDashboardService summary projection', () => {
         },
       },
     };
-    const { db, selectedFieldLog } = createFakeDb(collections);
+    const { db, selectedFieldLog, queryLog } = createFakeDb(collections);
     const getAssignmentsForLessonIds = jest.fn(async (lessonIds: string[]) => {
       expect(lessonIds).toEqual(['vocab-1', 'diagram-1', 'listening']);
       return new Map([
@@ -307,6 +315,8 @@ describe('StudentDashboardService summary projection', () => {
       { id: 'tag-cicero', name: 'Cicero', status: 'active', tagOrder: 0 },
     ]);
     expect(JSON.stringify(dashboard)).not.toContain('"pages"');
+    // Normal lessons come from the path, so the live query never reads them (nor legacy full documents).
+    expect(queryLog.find(query => query.collection === 'lessons')?.docs).toEqual(['diagram-1', 'vocab-1', 'listening']);
     expect(selectedFieldLog).toHaveLength(3);
     expect(selectedFieldLog.every(fields => !fields.includes('pages'))).toBe(true);
     // The dashboard reads progress with a summary mask: per-exercise history
@@ -1180,7 +1190,7 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
       status: 'available',
     });
     // An unreached lesson checks the path against progress projections, not full progress documents.
-    expect(queryLog).toEqual([{ collection: 'userProgress', projected: true }]);
+    expect(queryLog).toEqual([{ collection: 'userProgress', projected: true, docs: ['user_first'] }]);
   });
 
   it('isolates an invalid lesson during canonical dashboard hydration', async () => {
