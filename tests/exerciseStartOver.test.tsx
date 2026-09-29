@@ -459,6 +459,7 @@ describe('exercise start over flow', () => {
       instructions: '',
       feedbackConfig: resetFeedbackConfig,
       data: {
+        retryIncorrectAnswers: false,
         mode: 'step-by-step',
         showDictionaryEntry: false,
         generatorConfig: {

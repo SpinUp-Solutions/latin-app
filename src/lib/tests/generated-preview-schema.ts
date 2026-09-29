@@ -103,6 +103,7 @@ export const GeneratedExercisePreviewRequestSchema = z.discriminatedUnion('type'
       type: z.literal('generated-form-identification'),
       data: z
         .object({
+          retryIncorrectAnswers: z.boolean().optional(),
           mode: z.enum(['step-by-step', 'single-field']).default('step-by-step'),
           requireAllPrimaryAnswers: z.boolean().optional(),
           generatorConfig: generatedPreviewGeneratorConfigSchema,
@@ -117,6 +118,7 @@ export const GeneratedExercisePreviewRequestSchema = z.discriminatedUnion('type'
       translationDirection: z.enum(['latin-to-english', 'english-to-latin']).optional(),
       data: z
         .object({
+          retryIncorrectAnswers: z.boolean().optional(),
           generatorConfig: generatedPreviewGeneratorConfigSchema,
           posConfigs: z.record(z.string(), generatedPreviewPosConfigSchema).default({}),
         })

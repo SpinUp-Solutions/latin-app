@@ -5,6 +5,7 @@ import { ensureGeneratorConfig } from '@/src/utils/exercises/generatorConfigDefa
 import { GeneratedTranslationEditor } from '@/src/components/ui/admin/content-editor/GeneratedTranslationEditor';
 import { GeneratedFormIdentificationEditor } from '@/src/components/ui/admin/content-editor/GeneratedFormIdentificationEditor';
 
+const mockUpdateContent = jest.fn();
 const mockTranslationUpdateConfig = jest.fn();
 const mockFormUpdateConfig = jest.fn();
 let mockCount: number | 'all' = 5;
@@ -40,7 +41,7 @@ jest.mock('@/src/hooks/useGeneratedExerciseEditor', () => ({
     previewError: undefined,
     setIsPreviewOpen: jest.fn(),
     updateConfig: mockTranslationUpdateConfig,
-    updateContent: jest.fn(),
+    updateContent: mockUpdateContent,
   }),
 }));
 
@@ -67,7 +68,7 @@ jest.mock('@/src/hooks/useFormIdentificationEditor', () => ({
     previewError: undefined,
     setIsPreviewOpen: jest.fn(),
     updateConfig: mockFormUpdateConfig,
-    updateContent: jest.fn(),
+    updateContent: mockUpdateContent,
   }),
 }));
 
@@ -137,6 +138,17 @@ describe.each([
     mockEditingContent = exercise;
     mockCount = 5;
     mockUniqueWordCount = null;
+  });
+
+  it('defaults retries on for legacy exercises and saves an explicit admin opt-out', () => {
+    const view = render(<Editor />);
+    const toggle = screen.getByRole('checkbox', { name: 'Repeat incorrect words until correct' });
+    expect(toggle).toBeChecked();
+    fireEvent.click(toggle);
+    expect(mockUpdateContent).toHaveBeenCalledWith({ data: { ...exercise.data, retryIncorrectAnswers: false } });
+    mockEditingContent = { ...exercise, ...mockUpdateContent.mock.calls[0][0] };
+    view.rerender(<Editor />);
+    expect(screen.getByRole('checkbox', { name: 'Repeat incorrect words until correct' })).not.toBeChecked();
   });
 
   it('offers only one question count for the selected pool', () => {

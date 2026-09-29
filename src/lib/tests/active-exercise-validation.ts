@@ -164,6 +164,7 @@ const generatedPosConfigSchema = z
 
 const generatedTranslationDataSchema = z
   .object({
+    retryIncorrectAnswers: z.boolean().optional(),
     generatorConfig: generatorConfigSchema,
     posConfigs: z.record(z.string(), generatedPosConfigSchema).default({}),
   })
@@ -180,6 +181,7 @@ const paradigmConfigSchema = z
 
 const generatedFormDataSchema = z
   .object({
+    retryIncorrectAnswers: z.boolean().optional(),
     mode: z.enum(['step-by-step', 'single-field']),
     generatorConfig: generatorConfigSchema,
     paradigmConfigs: z.record(z.string(), paradigmConfigSchema).default({}),

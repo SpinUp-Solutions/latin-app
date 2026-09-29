@@ -89,20 +89,20 @@ describe('generated form identification with a repeated pool word', () => {
         />
       );
 
-      expect(screen.getByText('0 of 4 complete (0%)')).toBeInTheDocument();
+      expect(screen.getByText('0 of 2 complete (0%)')).toBeInTheDocument();
       expect(screen.getByText('amo')).toBeInTheDocument();
       answer('first');
       fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
       answer('singular');
       fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
-      expect(screen.getByText('2 of 4 complete (50%)')).toBeInTheDocument();
+      expect(screen.getByText('1 of 2 complete (50%)')).toBeInTheDocument();
       expect(screen.getByText('amant')).toBeInTheDocument();
       answer('third');
       fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
       answer('plural');
 
-      expect(screen.getByText('4 of 4 complete (100%)')).toBeInTheDocument();
+      expect(screen.getByText('2 of 2 complete (100%)')).toBeInTheDocument();
       expect(callbacks.onCompletionAccepted).toHaveBeenCalledWith(100);
     }
   );
