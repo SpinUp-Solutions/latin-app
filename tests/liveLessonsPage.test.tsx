@@ -273,7 +273,6 @@ describe('Learning delivery organizer', () => {
   });
 
   it('protects a dirty Learning Path draft from links, history navigation, and unload', () => {
-    const confirm = jest.spyOn(window, 'confirm').mockReturnValue(false);
     const pushState = jest.spyOn(window.history, 'pushState');
     render(<LiveLessonsPage />);
 
@@ -284,13 +283,20 @@ describe('Learning delivery organizer', () => {
     document.body.append(navigationLink);
     expect(fireEvent.click(navigationLink)).toBe(false);
     navigationLink.remove();
+    expect(screen.getByRole('alertdialog')).toHaveTextContent(
+      'You have unsaved Learning Path changes. Leave this page and discard them?'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Stay on page' }));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+
     const beforeUnload = new Event('beforeunload', { cancelable: true });
     expect(fireEvent(window, beforeUnload)).toBe(false);
     expect(beforeUnload.defaultPrevented).toBe(true);
 
     fireEvent.popState(window);
-    expect(confirm).toHaveBeenCalledTimes(2);
-    expect(pushState).toHaveBeenCalledWith(null, '', window.location.href);
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    // One Back guard entry for the whole dirty period.
+    expect(pushState).toHaveBeenCalledTimes(1);
   });
 
   it('protects a dirty Learning Path draft from practice-row edit navigation', () => {
@@ -303,14 +309,16 @@ describe('Learning delivery organizer', () => {
       isLoading: false,
       refetch: jest.fn(),
     });
-    const confirm = jest.spyOn(window, 'confirm').mockReturnValueOnce(true).mockReturnValueOnce(false);
+    jest.spyOn(window, 'confirm').mockReturnValue(true);
     render(<LiveLessonsPage />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Add Lesson two to Learning Path' }));
     fireEvent.click(screen.getByRole('button', { name: 'Switch to vocab' }));
     fireEvent.click(screen.getByRole('button', { name: 'Edit Vocab live' }));
 
-    expect(confirm).toHaveBeenCalledWith('You have unsaved Learning Path changes. Leave this page and discard them?');
+    expect(screen.getByRole('alertdialog')).toHaveTextContent(
+      'You have unsaved Learning Path changes. Leave this page and discard them?'
+    );
   });
 
   it('requires confirmation before switching context with a dirty path draft', () => {

@@ -34,9 +34,10 @@ import {
   LoadingRows,
   parsePracticeCategoryContext,
   practiceLessonTypeLabel,
-  useBrowserNavigationProtection,
   useDialogFocusReturn,
 } from '@/src/components/admin/practice-categories/category-admin-shared';
+import { useUnsavedNavigationGuard } from '@/src/hooks/useUnsavedNavigationGuard';
+import { UnsavedNavigationDialog } from '@/src/components/ui/core/UnsavedNavigationDialog';
 import { isPracticeLessonType } from '@/src/lib/practice-categories/domain';
 import { Badge } from '@/src/components/ui/badge';
 import { Button } from '@/src/components/ui/button';
@@ -460,8 +461,6 @@ function PracticeCategoryDetailPage() {
   const [removePendingId, setRemovePendingId] = useState<string | null>(null);
   const [tagUpdatePendingId, setTagUpdatePendingId] = useState<string | null>(null);
   const [categoryAction, setCategoryAction] = useState<CategoryAction | null>(null);
-  const [discardNavigationOpen, setDiscardNavigationOpen] = useState(false);
-  const [pendingHref, setPendingHref] = useState<string | null>(null);
   const focusAfterLoad = useRef<string | null>(null);
   const hasOriginContext = useRef(false);
   const {
@@ -522,7 +521,10 @@ function PracticeCategoryDetailPage() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  useBrowserNavigationProtection(dirty, tagOrderDirty ? 'tag order changes' : 'lesson order changes');
+  const navigationGuard = useUnsavedNavigationGuard(
+    dirty,
+    `Your reordered ${tagOrderDirty ? 'tags' : 'lessons'} have not been saved. Leaving this page will restore the last server-confirmed order.`
+  );
 
   useEffect(() => {
     if (!cachedDetail || hasOriginContext.current) return;
@@ -554,12 +556,7 @@ function PracticeCategoryDetailPage() {
 
   const guardHref = (href: string) => {
     if (orderPending) return;
-    if (dirty) {
-      setPendingHref(href);
-      setDiscardNavigationOpen(true);
-      return;
-    }
-    router.push(href);
+    navigationGuard.requestNavigation(() => router.push(href));
   };
 
   const focusCategoryHeading = () => {
@@ -582,15 +579,6 @@ function PracticeCategoryDetailPage() {
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Unable to load available lessons'));
     }
-  };
-
-  const continuePendingNavigation = () => {
-    const href = pendingHref;
-    setLessonOrder(null);
-    setTagOrder(null);
-    setDiscardNavigationOpen(false);
-    setPendingHref(null);
-    if (href) router.push(href);
   };
 
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
@@ -1096,20 +1084,7 @@ function PracticeCategoryDetailPage() {
         onConfirm={confirmCategoryAction}
       />
 
-      <ConfirmActionDialog
-        open={discardNavigationOpen}
-        onOpenChange={open => {
-          setDiscardNavigationOpen(open);
-          if (!open) setPendingHref(null);
-        }}
-        title={`Discard unsaved ${tagOrderDirty ? 'tag' : 'lesson'} order?`}
-        description={`Your reordered ${
-          tagOrderDirty ? 'tags' : 'lessons'
-        } have not been saved. Leaving this page will restore the last server-confirmed order.`}
-        confirmLabel="Discard and continue"
-        destructive
-        onConfirm={continuePendingNavigation}
-      />
+      <UnsavedNavigationDialog guard={navigationGuard} />
     </>
   );
 }

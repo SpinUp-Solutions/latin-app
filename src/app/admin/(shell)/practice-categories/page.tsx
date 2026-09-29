@@ -37,8 +37,9 @@ import {
   PRACTICE_LESSON_TYPES,
   parsePracticeCategoryContext,
   practiceLessonTypeLabel,
-  useBrowserNavigationProtection,
 } from '@/src/components/admin/practice-categories/category-admin-shared';
+import { useUnsavedNavigationGuard } from '@/src/hooks/useUnsavedNavigationGuard';
+import { UnsavedNavigationDialog } from '@/src/components/ui/core/UnsavedNavigationDialog';
 import { Badge } from '@/src/components/ui/badge';
 import { Button } from '@/src/components/ui/button';
 import {
@@ -67,19 +68,6 @@ import { haveSameIdOrder, orderByIds } from '@/src/utils/orderByIds';
 import { AdminPage, AdminPageHeader } from '@/src/components/admin/shell';
 
 type CategoryAction = 'archive' | 'restore' | 'delete';
-
-interface PendingContextNavigation {
-  kind: 'context';
-  lessonType: PracticeLessonType;
-  status: PracticeCategoryStatus;
-}
-
-interface PendingHrefNavigation {
-  kind: 'href';
-  href: string;
-}
-
-type PendingNavigation = PendingContextNavigation | PendingHrefNavigation;
 
 const EMPTY_CATEGORIES: PracticeCategoryWithCounts[] = [];
 
@@ -251,8 +239,6 @@ function PracticeCategoriesPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<PracticeCategoryWithCounts | null>(null);
   const [action, setAction] = useState<{ kind: CategoryAction; category: PracticeCategoryWithCounts } | null>(null);
-  const [discardNavigationOpen, setDiscardNavigationOpen] = useState(false);
-  const [pendingNavigation, setPendingNavigation] = useState<PendingNavigation | null>(null);
   const focusAfterLoad = useRef<{ id?: string; name?: string; lessonType: PracticeLessonType } | null>(null);
   const {
     currentData: cachedCategories,
@@ -282,7 +268,10 @@ function PracticeCategoriesPage() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  useBrowserNavigationProtection(dirty, 'category order changes');
+  const navigationGuard = useUnsavedNavigationGuard(
+    dirty,
+    'Your reordered categories have not been saved. Leaving this view will restore the last server-confirmed order.'
+  );
 
   const setUrlContext = useCallback((nextType: PracticeLessonType, nextStatus: PracticeCategoryStatus) => {
     const params = new URLSearchParams(window.location.search);
@@ -325,45 +314,23 @@ function PracticeCategoriesPage() {
     setCategoryOrder(null);
     setLessonType(nextType);
     setStatus(nextStatus);
-    setUrlContext(nextType, nextStatus);
+    // Drop the guard's Back entry first, so the new query is written to this page's own history entry.
+    void navigationGuard.replaceAfterSave(() => setUrlContext(nextType, nextStatus));
   };
 
   const guardContextChange = (nextType: PracticeLessonType, nextStatus: PracticeCategoryStatus) => {
     if (orderPending) return;
     if (nextType === lessonType && nextStatus === status) return;
-    if (dirty) {
-      setPendingNavigation({ kind: 'context', lessonType: nextType, status: nextStatus });
-      setDiscardNavigationOpen(true);
-      return;
-    }
-    applyContext(nextType, nextStatus);
+    navigationGuard.requestNavigation(() => applyContext(nextType, nextStatus));
   };
 
   const guardHref = (href: string) => {
     if (orderPending) return;
-    if (dirty) {
-      setPendingNavigation({ kind: 'href', href });
-      setDiscardNavigationOpen(true);
-      return;
-    }
-    router.push(href);
+    navigationGuard.requestNavigation(() => router.push(href));
   };
 
   const focusListHeading = () => {
     requestAnimationFrame(() => document.getElementById('category-list-heading')?.focus());
-  };
-
-  const continuePendingNavigation = () => {
-    const destination = pendingNavigation;
-    setCategoryOrder(null);
-    setDiscardNavigationOpen(false);
-    setPendingNavigation(null);
-    if (!destination) return;
-    if (destination.kind === 'context') {
-      applyContext(destination.lessonType, destination.status);
-    } else {
-      router.push(destination.href);
-    }
   };
 
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
@@ -751,18 +718,7 @@ function PracticeCategoriesPage() {
         onConfirm={confirmCategoryAction}
       />
 
-      <ConfirmActionDialog
-        open={discardNavigationOpen}
-        onOpenChange={open => {
-          setDiscardNavigationOpen(open);
-          if (!open) setPendingNavigation(null);
-        }}
-        title="Discard unsaved category order?"
-        description="Your reordered categories have not been saved. Leaving this view will restore the last server-confirmed order."
-        confirmLabel="Discard and continue"
-        destructive
-        onConfirm={continuePendingNavigation}
-      />
+      <UnsavedNavigationDialog guard={navigationGuard} />
     </>
   );
 }

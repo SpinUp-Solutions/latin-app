@@ -19,6 +19,8 @@ import {
 import { BookOpen, CheckCircle, Clock, Edit, FileCheck2, Filter, Globe, Plus, Search } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useUnsavedNavigationGuard } from '@/src/hooks/useUnsavedNavigationGuard';
+import { UnsavedNavigationDialog } from '@/src/components/ui/core/UnsavedNavigationDialog';
 import { toast } from 'sonner';
 import { SortableLearningPathLesson } from '@/src/components/admin/SortableLearningPathLesson';
 import { SortableLessonItem } from '@/src/components/admin/SortableLessonItem';
@@ -175,10 +177,8 @@ function LiveLessonsPage() {
 
   const pathUnitIds = pathDraft?.unitIds ?? canonicalPathIds;
   const pathDirty = Boolean(pathDraft && !haveSameIdOrder(pathDraft.unitIds, pathDraft.baseUnitIds));
-  const navigateFromPathDraft = (href: string) => {
-    if (pathDirty && !window.confirm(UNSAVED_PATH_MESSAGE)) return;
-    router.push(href);
-  };
+  const navigationGuard = useUnsavedNavigationGuard(pathDirty, UNSAVED_PATH_MESSAGE);
+  const navigateFromPathDraft = (href: string) => navigationGuard.requestNavigation(() => router.push(href));
   const pathUnits = pathUnitIds.map(id => pathUnitById.get(id)).filter(Boolean) as Array<
     LessonSummary | TestUnitSummary
   >;
@@ -205,45 +205,6 @@ function LiveLessonsPage() {
       );
     })
     .sort((left, right) => left.title.localeCompare(right.title));
-
-  useEffect(() => {
-    if (!pathDirty) return;
-    const currentUrl = window.location.href;
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = '';
-    };
-    const handlePopState = () => {
-      if (window.confirm(UNSAVED_PATH_MESSAGE)) return;
-      window.history.pushState(null, '', currentUrl);
-    };
-    const handleDocumentNavigation = (event: MouseEvent) => {
-      if (
-        event.defaultPrevented ||
-        event.button !== 0 ||
-        event.metaKey ||
-        event.ctrlKey ||
-        event.shiftKey ||
-        event.altKey
-      )
-        return;
-      const anchor = (event.target as HTMLElement | null)?.closest<HTMLAnchorElement>('a[href]');
-      if (!anchor || anchor.target === '_blank' || anchor.hasAttribute('download')) return;
-      const destination = new URL(anchor.href, window.location.href);
-      if (destination.origin !== window.location.origin || destination.href === window.location.href) return;
-      if (window.confirm(UNSAVED_PATH_MESSAGE)) return;
-      event.preventDefault();
-      event.stopPropagation();
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    window.addEventListener('popstate', handlePopState);
-    document.addEventListener('click', handleDocumentNavigation, true);
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      window.removeEventListener('popstate', handlePopState);
-      document.removeEventListener('click', handleDocumentNavigation, true);
-    };
-  }, [pathDirty]);
 
   const serverPracticeLive = useMemo(() => {
     const result = {} as Record<PracticeLessonType, LessonSummary[]>;
@@ -1046,6 +1007,7 @@ function LiveLessonsPage() {
           </div>
         </DialogContent>
       </Dialog>
+      <UnsavedNavigationDialog guard={navigationGuard} />
     </>
   );
 }
