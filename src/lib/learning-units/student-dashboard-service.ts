@@ -3,7 +3,6 @@ import {
   LEARNING_UNITS_COLLECTION,
   LEARNING_PATHS_COLLECTION,
   DEFAULT_LEARNING_PATH_ID,
-  TEST_ATTEMPTS_COLLECTION,
   TEST_VERSIONS_COLLECTION,
   USER_PROGRESS_COLLECTION,
 } from '@/shared/constants/firestore';
@@ -37,8 +36,8 @@ import { TEST_VERSION_SUMMARY_FIELDS, toTestUnitSummary } from '@/src/lib/tests/
 import { testVersionSummaryDocumentSchema } from '@/src/lib/tests/schemas';
 import { isLessonDocumentData, normalizeLearningUnit } from './domain';
 import { parseLearningPathSnapshot } from './learning-path-service';
+import { getLessonProgressAccessInTransaction } from './progression-access';
 import {
-  collectAttemptedNormalTestIds,
   isProgressionUnitComplete,
   isProgressionUnitUnlocked,
   type ProgressionActivity,
@@ -334,11 +333,11 @@ export class StudentDashboardService {
     return summaries;
   }
 
-  private async getProgressByLessonId(userId: string, fields?: readonly string[]): Promise<Map<string, UserProgress>> {
-    const query = fields
-      ? this.progress.where('userId', '==', userId).select(...fields)
-      : this.progress.where('userId', '==', userId);
-    const snapshot = await query.get();
+  private async getProgressByLessonId(userId: string): Promise<Map<string, UserProgress>> {
+    const snapshot = await this.progress
+      .where('userId', '==', userId)
+      .select(...PROGRESS_SUMMARY_FIELDS)
+      .get();
     const progressByLessonId = new Map<string, UserProgress>();
 
     for (const document of snapshot.docs) {
@@ -608,7 +607,7 @@ export class StudentDashboardService {
   async getDashboard(userId: string): Promise<StudentDashboard> {
     const [{ normalUnits, rawPracticeLessons }, progressByLessonId] = await Promise.all([
       this.getProjectedLessonSummaries(),
-      this.getProgressByLessonId(userId, PROGRESS_SUMMARY_FIELDS),
+      this.getProgressByLessonId(userId),
     ]);
     const testUnits = normalUnits.filter((unit): unit is TestUnitSummary => unit.kind === 'test');
     const lessonSummaries = [
@@ -689,70 +688,19 @@ export class StudentDashboardService {
     if (!lessonSnapshot.exists || !isLessonDocumentData(data)) {
       throw new StudentDashboardServiceError('LESSON_NOT_FOUND', 'Lesson not found', 404);
     }
-    const progress = progressSnapshot.exists ? (progressSnapshot.data() as UserProgress) : undefined;
-
-    if ((data.type ?? 'normal') !== 'normal') {
-      if (data.isLive !== true) {
-        throw new StudentDashboardServiceError('LESSON_NOT_FOUND', 'Lesson not found', 404);
-      }
-    } else if (progress) {
-      // Sticky frontier: a server-authored progress record means the student already reached this lesson.
-      await this.assertInLearningPath(lessonId);
-    } else {
-      await this.assertNormalLessonUnlocked(userId, lessonId);
-    }
-    return { lesson: fullLessonFromSnapshot(lessonSnapshot), progress };
-  }
-
-  private async assertInLearningPath(lessonId: string): Promise<void> {
-    const pathSnapshot = await this.db.collection(LEARNING_PATHS_COLLECTION).doc(DEFAULT_LEARNING_PATH_ID).get();
-    if (!parseLearningPathSnapshot(pathSnapshot)?.unitIds.includes(lessonId)) {
-      throw new StudentDashboardServiceError('LESSON_NOT_FOUND', 'Lesson not found', 404);
-    }
-  }
-
-  private async assertNormalLessonUnlocked(userId: string, lessonId: string): Promise<void> {
-    const [unitSummaries, progressByLessonId] = await Promise.all([
-      this.getNormalUnitSummaries(),
-      this.getProgressByLessonId(userId, PROGRESS_SUMMARY_FIELDS),
-    ]);
-    const lessonSummaries = unitSummaries.filter(
-      (unit): unit is CanonicalLessonSummary => unit.kind === 'lesson'
+    // Reads authorize with the same sticky-frontier rule as the progress write routes.
+    const target = { id: lessonId, type: (data.type ?? 'normal') as Lesson['type'], isLive: data.isLive === true };
+    const access = await this.db.runTransaction(
+      transaction =>
+        getLessonProgressAccessInTransaction(transaction, this.db, target, userId, progressSnapshot.exists),
+      { readOnly: true }
     );
-    const canonicalProgressByLessonId = await this.hydrateCanonicalProgressSummaries(
-      userId,
-      lessonSummaries,
-      progressByLessonId
-    );
-    const units = unitSummaries.map(toProgressionUnit);
-    const targetIndex = units.findIndex(unit => unit.id === lessonId);
-    if (targetIndex < 0) {
-      throw new StudentDashboardServiceError('LESSON_NOT_FOUND', 'Lesson not found', 404);
-    }
-
-    const activity: ProgressionActivity = {
-      progressByUnitId: canonicalProgressByLessonId,
-      attemptedTestIds: new Set(),
-    };
-    const isUnlocked =
-      isProgressionUnitUnlocked(units, targetIndex, activity) ||
-      (units.some(unit => unit.kind === 'test') &&
-        isProgressionUnitUnlocked(units, targetIndex, {
-          ...activity,
-          attemptedTestIds: await this.getAttemptedTestIds(userId),
-        }));
-    if (!isUnlocked) {
+    if (access === 'locked') {
       throw new StudentDashboardServiceError('LESSON_LOCKED', 'Complete the previous lesson to unlock this one', 403);
     }
-  }
-
-  private async getAttemptedTestIds(userId: string): Promise<Set<string>> {
-    const snapshot = await this.db
-      .collection(TEST_ATTEMPTS_COLLECTION)
-      .where('studentId', '==', userId)
-      .select('origin', 'status')
-      .get();
-    return collectAttemptedNormalTestIds(snapshot.docs.map(document => document.data()));
+    if (access === 'not-found') throw new StudentDashboardServiceError('LESSON_NOT_FOUND', 'Lesson not found', 404);
+    const progress = progressSnapshot.exists ? (progressSnapshot.data() as UserProgress) : undefined;
+    return { lesson: fullLessonFromSnapshot(lessonSnapshot), progress };
   }
 
   private toLessonDetail(

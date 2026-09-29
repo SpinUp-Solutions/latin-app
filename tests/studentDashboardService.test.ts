@@ -93,38 +93,37 @@ class FakeQuery {
 const createFakeDb = (collections: Record<string, Record<string, RecordData>>) => {
   const selectedFieldLog: string[][] = [];
   const queryLog: Array<{ collection: string; projected: boolean }> = [];
-  return {
-    db: {
-      collection: (name: string) => new FakeQuery(name, collections, selectedFieldLog, queryLog),
-      getAll: async (
-        ...inputs: Array<{ get?: () => Promise<ReturnType<typeof snapshot>> } | { fieldMask: string[] }>
-      ) => {
-        const options = inputs.at(-1);
-        const fieldMask =
-          options && 'fieldMask' in options && Array.isArray(options.fieldMask) ? options.fieldMask : undefined;
-        const refs = (fieldMask ? inputs.slice(0, -1) : inputs) as Array<{
-          get: () => Promise<ReturnType<typeof snapshot>>;
-        }>;
-        if (fieldMask) selectedFieldLog.push(fieldMask);
-        return Promise.all(
-          refs.map(async ref => {
-            const full = await ref.get();
-            const value = full.data();
-            if (!fieldMask || !value) return full;
-            return snapshot(
-              full.id,
-              Object.fromEntries(
-                fieldMask.filter(field => value[field] !== undefined).map(field => [field, value[field]])
-              ),
-              full.ref
-            );
-          })
-        );
-      },
+  const db = {
+    collection: (name: string) => new FakeQuery(name, collections, selectedFieldLog, queryLog),
+    runTransaction: <T>(run: (transaction: unknown) => Promise<T>) =>
+      run({ get: (target: { get: () => Promise<unknown> }) => target.get(), getAll: db.getAll }),
+    getAll: async (
+      ...inputs: Array<{ get?: () => Promise<ReturnType<typeof snapshot>> } | { fieldMask: string[] }>
+    ) => {
+      const options = inputs.at(-1);
+      const fieldMask =
+        options && 'fieldMask' in options && Array.isArray(options.fieldMask) ? options.fieldMask : undefined;
+      const refs = (fieldMask ? inputs.slice(0, -1) : inputs) as Array<{
+        get: () => Promise<ReturnType<typeof snapshot>>;
+      }>;
+      if (fieldMask) selectedFieldLog.push(fieldMask);
+      return Promise.all(
+        refs.map(async ref => {
+          const full = await ref.get();
+          const value = full.data();
+          if (!fieldMask || !value) return full;
+          return snapshot(
+            full.id,
+            Object.fromEntries(
+              fieldMask.filter(field => value[field] !== undefined).map(field => [field, value[field]])
+            ),
+            full.ref
+          );
+        })
+      );
     },
-    selectedFieldLog,
-    queryLog,
   };
+  return { db, selectedFieldLog, queryLog };
 };
 
 const lesson = (overrides: RecordData): RecordData => ({
@@ -358,7 +357,7 @@ describe('StudentDashboardService summary projection', () => {
         },
       },
     };
-    const { db } = createFakeDb(collections);
+    const { db, queryLog, selectedFieldLog } = createFakeDb(collections);
     const service = new StudentDashboardService(
       db as never,
       {
@@ -373,6 +372,13 @@ describe('StudentDashboardService summary projection', () => {
       ['first', 'in-progress', 50, 0],
       ['second', 'in-progress', 75, 2],
     ]);
+
+    // A lesson with a progress record is authorized from the path alone, without the unlock scan.
+    queryLog.length = selectedFieldLog.length = 0;
+    await expect(service.getLesson('user', 'second')).resolves.toMatchObject({ id: 'second' });
+    expect([...queryLog, ...selectedFieldLog]).toEqual([]);
+    collections.learningPaths.default.unitIds = ['first'];
+    await expect(service.getLesson('user', 'second')).rejects.toMatchObject({ code: 'LESSON_NOT_FOUND' });
   });
 
   it('authorizes one detail through the same projection and rejects locked lessons', async () => {
@@ -482,77 +488,6 @@ describe('StudentDashboardService summary projection', () => {
       status: 'submitted',
     };
     await expect(service.getLesson('user', 'second')).resolves.toMatchObject({ id: 'second', status: 'available' });
-  });
-
-  it('authorizes a lesson the student already reached from its own progress and the path alone', async () => {
-    const collections = {
-      lessons: {
-        first: lesson({
-          title: 'First',
-          pages: [{ id: 'page-1', items: [{ id: 'exercise-a', type: 'fill', title: 'A' }] }],
-          totalExercises: 1,
-        }),
-        second: lesson({
-          title: 'Second',
-          liveOrder: 1,
-          pages: [
-            { id: 'page-1', items: [] },
-            { id: 'page-2', items: [] },
-          ],
-        }),
-      },
-      learningPaths: {
-        default: { id: 'default', revision: 1, unitIds: ['first', 'second'], updatedAt: 'now', updatedBy: 'admin' },
-      },
-      userProgress: {
-        // The first lesson gained an exercise after the student moved on, so it no longer unlocks the second.
-        user_first: { userId: 'user', lessonId: 'first', status: 'in-progress', exerciseProgress: [] },
-        user_second: { userId: 'user', lessonId: 'second', status: 'in-progress', furthestPageIndex: 0 },
-      },
-    };
-    const { db, selectedFieldLog, queryLog } = createFakeDb(collections);
-    const service = new StudentDashboardService(
-      db as never,
-      { getAssignmentsForLessonIds: jest.fn(async () => new Map()) } as never
-    );
-
-    await expect(service.getLesson('user', 'second')).resolves.toMatchObject({ id: 'second', status: 'in-progress' });
-    expect(queryLog).toEqual([]);
-    expect(selectedFieldLog).toEqual([]);
-
-    collections.learningPaths.default.unitIds = ['first'];
-    await expect(service.getLesson('user', 'second')).rejects.toMatchObject<Partial<StudentDashboardServiceError>>({
-      code: 'LESSON_NOT_FOUND',
-      status: 404,
-    });
-  });
-
-  it('checks an unreached lesson against progress projections rather than full progress documents', async () => {
-    const collections = {
-      lessons: {
-        first: lesson({ title: 'First', totalPages: 1 }),
-        second: lesson({ title: 'Second', liveOrder: 1 }),
-      },
-      learningPaths: {
-        default: { id: 'default', revision: 1, unitIds: ['first', 'second'], updatedAt: 'now', updatedBy: 'admin' },
-      },
-      userProgress: {
-        user_first: {
-          userId: 'user',
-          lessonId: 'first',
-          status: 'completed',
-          exerciseProgress: [{ exerciseId: 'large-history', score: 100, completedAt: 'now' }],
-        },
-      },
-    };
-    const { db, queryLog } = createFakeDb(collections);
-    const service = new StudentDashboardService(
-      db as never,
-      { getAssignmentsForLessonIds: jest.fn(async () => new Map()) } as never
-    );
-
-    await expect(service.getLesson('user', 'second')).resolves.toMatchObject({ id: 'second', status: 'available' });
-    expect(queryLog).toEqual([{ collection: 'userProgress', projected: true }]);
   });
 
   it('keeps practice category failure non-fatal', async () => {
@@ -1224,7 +1159,7 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
         },
       },
     };
-    const { db } = createFakeDb(collections);
+    const { db, queryLog } = createFakeDb(collections);
     const service = new StudentDashboardService(
       db as never,
       { getAssignmentsForLessonIds: jest.fn(async () => new Map()) } as never
@@ -1239,10 +1174,13 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
       ['first', 'completed', 100],
       ['second', 'available', 0],
     ]);
+    queryLog.length = 0;
     await expect(service.getLesson('user', 'second')).resolves.toMatchObject({
       id: 'second',
       status: 'available',
     });
+    // An unreached lesson checks the path against progress projections, not full progress documents.
+    expect(queryLog).toEqual([{ collection: 'userProgress', projected: true }]);
   });
 
   it('isolates an invalid lesson during canonical dashboard hydration', async () => {
