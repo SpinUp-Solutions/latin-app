@@ -9,6 +9,7 @@ import {
 } from '@/shared/types/vocabulary/schemas/enums';
 import { MAX_GENERATED_FILTER_OPERANDS, MAX_GENERATED_WORD_COUNT } from '@/src/config/generatedExerciseLimits';
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
+import type { ResolvedGeneratedItem } from './generated-exercises';
 import type { GeneratedFormIdentificationExercise } from '@/src/types/exercises/generated-form-identification';
 import type { GeneratedTranslationExercise } from '@/src/types/exercises/generated-translation';
 import { FormIdentificationStepSchema } from '@/src/types/exercises/schemas/form-identification';
@@ -154,7 +155,10 @@ export type GeneratedExercisePreviewDiagnostics = {
   scanLimitReached: boolean;
 };
 
-export type GeneratedExercisePreviewResult = {
+/** What lesson playback receives: the questions only, resolved on the server like a test delivery. */
+export type GeneratedExerciseItemsResult = { items: ResolvedGeneratedItem[] };
+
+export type GeneratedExercisePreviewResult = GeneratedExerciseItemsResult & {
   words: ExerciseWordResponse[];
   diagnostics: GeneratedExercisePreviewDiagnostics[];
   requestedCount: number | 'all';

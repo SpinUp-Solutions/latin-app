@@ -81,13 +81,14 @@ describe('student generated exercise playback route', () => {
     expect(response.status).toBe(401);
   });
 
-  it('loads the authorized persisted exercise and returns exactly count usable words', async () => {
+  it('resolves the authorized persisted exercise into questions, without the words behind them', async () => {
     const response = await POST({ json: async () => playbackBody } as never);
     expect(response.status).toBe(200);
     expect(mockGetAuthorizedLesson).toHaveBeenCalledWith('student-1', 'lesson-1');
-    const payload = (response as unknown as { body: { words: unknown[]; collected: number } }).body;
-    expect(payload.words).toHaveLength(10);
-    expect(payload.collected).toBe(10);
+    const payload = (response as unknown as { body: { items: Array<{ acceptedAnswers: string[] }> } }).body;
+    expect(Object.keys(payload)).toEqual(['items']);
+    expect(payload.items).toHaveLength(10);
+    expect(payload.items.every(item => ['girl', 'love'].includes(item.acceptedAnswers[0]))).toBe(true);
   });
 
   it('preserves lesson access failures from the ownership check', async () => {
@@ -112,19 +113,6 @@ describe('student generated exercise playback route', () => {
     expect(mockGetAuthorizedLesson).not.toHaveBeenCalled();
   });
 
-  it('serves the persisted unique-word rotation', async () => {
-    const { words, pool, exercise } = generatedPoolFixture(55, 100, 3);
-    exercise.data.generatorConfig = { ...exercise.data.generatorConfig, uniqueWordCount: 10 };
-    const db = createFakeGeneratedWordDb({ words, pools: [pool] });
-    dbState.collection = db.collection;
-    mockGetAuthorizedLesson.mockResolvedValue({ id: 'lesson-1', pages: [{ id: 'page-1', items: [exercise] }] });
-    const response = await POST({ json: async () => playbackBody } as never);
-    expect(response.status).toBe(200);
-    const payload = (response as unknown as { body: { words: Array<{ id: string }>; uniqueWords: number } }).body;
-    expect(payload.words).toHaveLength(30);
-    expect(payload.uniqueWords).toBe(10);
-  });
-
   it('fails closed on an invalid persisted unique word count', async () => {
     const { words, pool, exercise } = generatedPoolFixture();
     const invalidConfig = { ...exercise.data.generatorConfig, uniqueWordCount: 0 };
@@ -135,31 +123,5 @@ describe('student generated exercise playback route', () => {
     const response = await POST({ json: async () => playbackBody } as never);
     expect(response.status).toBe(409);
     expect((response as unknown as { body: { code?: string } }).body.code).toBe('INVALID_GENERATED_EXERCISE');
-  });
-
-  it('fills the requested pool count through the shared collector, ignoring a saved candidate cap', async () => {
-    const { words, pool, exercise } = generatedPoolFixture();
-    const legacyConfig = { ...exercise.data.generatorConfig, poolWordLimit: 5 };
-    exercise.data.generatorConfig = legacyConfig;
-    const db = createFakeGeneratedWordDb({ words, pools: [pool] });
-    dbState.collection = db.collection;
-    mockGetAuthorizedLesson.mockResolvedValue({ id: 'lesson-1', pages: [{ id: 'page-1', items: [exercise] }] });
-    const response = await POST({ json: async () => playbackBody } as never);
-    expect(response.status).toBe(200);
-    const payload = (
-      response as unknown as {
-        body: {
-          words: Array<{ id: string }>;
-          requestedCount: number;
-          collected: number;
-          globalScanLimitReached: boolean;
-        };
-      }
-    ).body;
-    expect(payload.requestedCount).toBe(30);
-    expect(payload.words).toHaveLength(30);
-    expect(payload.collected).toBe(30);
-    expect(payload.words.every(word => word.id.startsWith('valid-'))).toBe(true);
-    expect(payload.globalScanLimitReached).toBe(false);
   });
 });

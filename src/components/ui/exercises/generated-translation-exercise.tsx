@@ -1,8 +1,6 @@
 'use client';
 
-import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
-import { usePracticeGeneratedExerciseWords } from '@/src/hooks/usePracticeGeneratedExerciseWords';
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { GeneratedTranslationExercise } from '@/src/types/exercises';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
 import { useGeneratedExerciseQueue } from '@/src/hooks/useGeneratedExerciseQueue';
@@ -14,7 +12,8 @@ import { applySequentialItemResult } from './sequential-item-result';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { type GeneratedExerciseQuerySource } from '@/src/store/api/advancedVocabularyApi';
 import { Card, CardContent } from '../card';
-import { ExerciseLoadingCard, ExerciseMessageCard } from './exercise-status-card';
+import { ExerciseMessageCard } from './exercise-status-card';
+import { GeneratedExerciseItems } from './generated-exercise-items';
 import {
   validateGeneratedTranslationExercise,
   type GeneratedTranslationItem,
@@ -26,7 +25,6 @@ import type {
   RuntimeMode,
 } from '@/src/types/runtime-mode';
 import { getContentTypeLabel } from '@/src/lib/content/registry';
-import { createGeneratedTranslationItems, generatedExerciseWordsRequest } from '@/src/lib/tests/generated-exercises';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
 interface Props {
@@ -40,59 +38,30 @@ interface Props {
   generatedExerciseSource?: GeneratedExerciseQuerySource;
 }
 
-const GeneratedTranslationExerciseComponent: React.FC<Props> = props => {
-  const { exercise, runtimeMode, resolvedItems, generatedExerciseSource } = props;
-  const mode = runtimeMode ?? 'practice';
+const GeneratedTranslationExerciseComponent: React.FC<Props> = props => (
+  <GeneratedExerciseItems
+    exercise={props.exercise}
+    runtimeMode={props.runtimeMode}
+    resolvedItems={props.resolvedItems}
+    source={props.generatedExerciseSource}>
+    {items => <GeneratedExerciseSession {...props} items={items} />}
+  </GeneratedExerciseItems>
+);
 
-  const { data, isLoading, isError } = usePracticeGeneratedExerciseWords(
-    {
-      exercise: generatedExerciseWordsRequest(exercise),
-      source: generatedExerciseSource ?? { kind: 'admin-preview' },
-    },
-    {
-      // Test sections receive their questions frozen in the delivery.
-      skip: !generatedExerciseSource || mode === 'test' || resolvedItems !== undefined,
-    }
-  );
-
-  if (!resolvedItems && isLoading) return <ExerciseLoadingCard />;
-  if (!resolvedItems && isError) {
-    return (
-      <ExerciseMessageCard
-        title="Error loading exercise"
-        message="Unable to fetch vocabulary words. Please try again later."
-      />
-    );
-  }
-  // A different exercise or sample starts a fresh session and cancels pending advancement.
-  return (
-    <GeneratedExerciseSession
-      key={JSON.stringify([exercise, mode, resolvedItems ?? data?.words ?? []])}
-      {...props}
-      words={data?.words ?? []}
-    />
-  );
-};
-
-const GeneratedExerciseSession: React.FC<Props & { words: ExerciseWordResponse[] }> = ({
+const GeneratedExerciseSession: React.FC<Props & { items: GeneratedTranslationItem[] }> = ({
   exercise,
   onComplete,
   onCompletionAccepted,
   runtimeMode,
   onAnswer,
   initialAnswer,
-  resolvedItems,
-  words,
+  items,
 }) => {
   const mode = runtimeMode ?? 'practice';
   const queueEnabled = mode === 'practice' && (exercise.data.retryIncorrectAnswers ?? true);
   const testAnswerMode = mode === 'test';
   const translationDirection = exercise.translationDirection || 'latin-to-english';
 
-  const items: GeneratedTranslationItem[] = useMemo(() => {
-    if (resolvedItems) return resolvedItems;
-    return createGeneratedTranslationItems(exercise, words);
-  }, [words, exercise, resolvedItems]);
   const restoredAnswers = !queueEnabled && initialAnswer?.type === 'generated-translation' ? initialAnswer.answers : [];
   const firstIncompleteIndex = items.findIndex((_, index) => !restoredAnswers[index]?.trim());
   const restoredIndex = firstIncompleteIndex >= 0 ? firstIncompleteIndex : Math.max(items.length - 1, 0);

@@ -6,11 +6,6 @@ import type { Page } from '@/src/types/page';
 jest.mock('@/src/services/wordLookupService', () => ({}));
 jest.mock('@/src/components/ui/core/simple-rich-editor', () => ({ SimpleRichEditor: () => null }));
 jest.mock('@/src/hooks/useTranslationGrading', () => ({ useTranslationGrading: () => ({ grade: jest.fn() }) }));
-jest.mock('@/src/store/api/advancedVocabularyApi', () => ({
-  useGetGeneratedExerciseWordsQuery: () => ({}),
-  useGetMultiPosWordsQuery: () => ({}),
-  useGetMultiParadigmWordsQuery: () => ({}),
-}));
 const fixtures = [
   { type: 'fill', data: { items: [{ text: 'First' }, { text: 'Second' }] } },
   {

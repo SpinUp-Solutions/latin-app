@@ -1,21 +1,20 @@
 import { createContext, useContext, useState } from 'react';
-import { useGetGeneratedExerciseWordsQuery } from '@/src/store/api/advancedVocabularyApi';
+import { useGetGeneratedExerciseItemsQuery } from '@/src/store/api/advancedVocabularyApi';
 
 export const RetainedPracticeSession = createContext(false);
 
-type QueryArgs = Parameters<typeof useGetGeneratedExerciseWordsQuery>[0];
-type QueryOptions = Parameters<typeof useGetGeneratedExerciseWordsQuery>[1];
-type QueryData = ReturnType<typeof useGetGeneratedExerciseWordsQuery>['data'];
+type QueryArgs = Parameters<typeof useGetGeneratedExerciseItemsQuery>[0];
+type QueryData = ReturnType<typeof useGetGeneratedExerciseItemsQuery>['data'];
 
 /** Keep a visited practice exercise's random sample even after RTK cache eviction. */
-export function usePracticeGeneratedExerciseWords(args: QueryArgs, options: QueryOptions) {
+export function usePracticeGeneratedExerciseItems(args: QueryArgs) {
   const retained = useContext(RetainedPracticeSession);
   const key = JSON.stringify(args);
   const [sample, setSample] = useState<{ key: string; data: QueryData } | null>(null);
   const saved = retained && sample?.key === key ? sample.data : undefined;
-  const result = useGetGeneratedExerciseWordsQuery(args, { ...options, skip: options?.skip || Boolean(saved) });
+  const result = useGetGeneratedExerciseItemsQuery(args, { skip: Boolean(saved) });
 
-  if (retained && !saved && result.currentData && !options?.skip) {
+  if (retained && !saved && result.currentData) {
     setSample({ key, data: result.currentData });
   }
 

@@ -16,7 +16,13 @@ import type {
 import type { VocabularyContent, VocabularyPoolContent, VocabularyPoolStudyData } from '@/src/types/vocabulary';
 import type { TableData } from '@/src/components/ui/lesson/conjugation-table';
 import { isExerciseType, isTestEligibleContentType, isTestEligibleExerciseType } from '@/src/lib/content/registry';
-import { isGeneratedExercise, resolveGeneratedExercises, type GeneratedWordLoader } from './generated-exercises';
+import {
+  isGeneratedExercise,
+  resolveGeneratedExerciseItems,
+  resolveGeneratedExercises,
+  type GeneratedWordLoader,
+  type ResolvedGeneratedItem,
+} from './generated-exercises';
 import type { GeneratedTranslationItem } from '@/src/utils/exercises/generatedTranslationExercise';
 import {
   gradeExercise,
@@ -24,7 +30,6 @@ import {
   maxPointsFor,
   type ExerciseOfType,
   type ExerciseScore,
-  type ResolvedGeneratedItem,
 } from './grading';
 import { parseExerciseAnswer } from './answer-schemas';
 import type { VocabularyPoolLoader } from './vocabulary-pool-loader.server';
@@ -65,7 +70,7 @@ export async function createFrozenTestDeliveryState(
       : undefined,
     resolveGeneratedExercises(
       pages.flatMap(page => page.items.filter(isGeneratedExercise)),
-      loadGeneratedWords
+      exercise => resolveGeneratedExerciseItems(exercise, loadGeneratedWords)
     ).then(cloneSerializable),
   ]);
 

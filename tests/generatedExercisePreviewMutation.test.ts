@@ -54,79 +54,40 @@ describe('generated exercise preview mutation', () => {
     );
   });
 
-  it('posts lesson playback collection through the student collector endpoint', async () => {
-    mockBaseQuery.mockResolvedValue({
-      data: {
-        words: [{ id: 'noun-1' }],
-        diagnostics: [{ specId: 'noun', collected: 1, scanned: 1, exhausted: true, scanLimitReached: false }],
-        requestedCount: 10,
-        collected: 1,
-        globalScanLimitReached: false,
-      },
-    });
-    const store = createStore();
-    const body = {
-      type: 'generated-translation' as const,
-      data: {
-        generatorConfig: { collection: 'vocabulary_words_v5', wordSource: 'filters' as const, count: 10 },
-        posConfigs: { noun: { enabled: true, filters: {} } },
-      },
-    };
+  const exercise = {
+    type: 'generated-translation' as const,
+    data: {
+      generatorConfig: { collection: 'vocabulary_words_v5', wordSource: 'filters' as const, count: 1 },
+      posConfigs: { noun: { enabled: true, filters: {} } },
+    },
+  };
 
-    const source = {
-      kind: 'lesson' as const,
-      lessonId: 'lesson-1',
-      pageIndex: 2,
-      itemIndex: 3,
-      exerciseId: 'exercise-1',
-    };
-    const result = await store.dispatch(
-      advancedVocabularyApi.endpoints.getGeneratedExerciseWords.initiate({ exercise: body, source })
-    );
-
-    expect('data' in result && result.data?.collected).toBe(1);
-    expect(mockBaseQuery).toHaveBeenCalledWith(
-      expect.objectContaining({
+  it.each([
+    [
+      'lesson playback through the student endpoint',
+      { kind: 'lesson' as const, lessonId: 'lesson-1', pageIndex: 2, itemIndex: 3, exerciseId: 'exercise-1' },
+      {
         url: '/words/generated-exercise',
-        method: 'POST',
-        body: {
-          lessonId: 'lesson-1',
-          pageIndex: 2,
-          itemIndex: 3,
-          exerciseId: 'exercise-1',
-        },
-      }),
-      expect.anything(),
-      undefined
-    );
-  });
-
-  it('routes generated exercise rendering in admin previews through the admin endpoint', async () => {
-    mockBaseQuery.mockResolvedValue({
-      data: { words: [], diagnostics: [], requestedCount: 1, collected: 0, globalScanLimitReached: false },
-    });
-    const store = createStore();
-    const exercise = {
-      type: 'generated-translation' as const,
-      data: {
-        generatorConfig: { collection: 'vocabulary_words_v5', wordSource: 'filters' as const, count: 1 },
-        posConfigs: { noun: { enabled: true, filters: {} } },
+        body: { lessonId: 'lesson-1', pageIndex: 2, itemIndex: 3, exerciseId: 'exercise-1' },
       },
-    };
+    ],
+    [
+      'admin previews through the admin endpoint',
+      { kind: 'admin-preview' as const },
+      { url: '/admin/exercises/generated-preview', body: exercise },
+    ],
+  ])('loads server-resolved questions for %s', async (_, source, request) => {
+    const items = [{ text: 'amo', acceptedAnswers: ['love'] }];
+    mockBaseQuery.mockResolvedValue({ data: { items } });
+    const store = createStore();
 
-    await store.dispatch(
-      advancedVocabularyApi.endpoints.getGeneratedExerciseWords.initiate({
-        exercise,
-        source: { kind: 'admin-preview' },
-      })
+    const result = await store.dispatch(
+      advancedVocabularyApi.endpoints.getGeneratedExerciseItems.initiate({ exercise, source })
     );
 
+    expect(result.data).toEqual({ items });
     expect(mockBaseQuery).toHaveBeenCalledWith(
-      expect.objectContaining({
-        url: '/admin/exercises/generated-preview',
-        method: 'POST',
-        body: exercise,
-      }),
+      expect.objectContaining({ ...request, method: 'POST' }),
       expect.anything(),
       undefined
     );
