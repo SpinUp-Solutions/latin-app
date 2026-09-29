@@ -54,25 +54,28 @@ export async function createFrozenTestDeliveryState(
   loadVocabularyPool?: VocabularyPoolLoader
 ): Promise<FrozenTestDeliveryState> {
   const pages = cloneSerializable(version.pages);
-  const resolvedExercises: FrozenTestDeliveryState['resolvedExercises'] = {};
   const usesVocabularyPoolContent = pages.some(page => page.items.some(item => item.type === 'vocabulary-pool'));
-  const vocabularyPool =
-    version.vocabularyPoolId && usesVocabularyPoolContent
-      ? cloneSerializable(
-          await (loadVocabularyPool
-            ? loadVocabularyPool(version.vocabularyPoolId)
-            : Promise.reject(new Error(`No vocabulary pool loader was provided for ${version.vocabularyPoolId}`)))
-        )
-      : undefined;
+  const generatedExercises = pages.flatMap(page =>
+    page.items.filter(item => item.type === 'generated-translation' || item.type === 'generated-form-identification')
+  );
 
-  for (const page of pages) {
-    for (const item of page.items) {
-      if (item.type !== 'generated-translation' && item.type !== 'generated-form-identification') continue;
-      const items = await resolveGeneratedExerciseItems(item, loadGeneratedWords);
-      if (items.length === 0) throw new Error(`Generated exercise ${item.id} did not resolve any items`);
-      resolvedExercises[item.id] = { items: cloneSerializable(items as ResolvedGeneratedItem[]) };
-    }
-  }
+  // Attempt start runs this inside its transaction, so independent word collections run together.
+  const [vocabularyPool, resolvedEntries] = await Promise.all([
+    version.vocabularyPoolId && usesVocabularyPoolContent
+      ? (loadVocabularyPool
+          ? loadVocabularyPool(version.vocabularyPoolId)
+          : Promise.reject(new Error(`No vocabulary pool loader was provided for ${version.vocabularyPoolId}`))
+        ).then(cloneSerializable)
+      : undefined,
+    Promise.all(
+      generatedExercises.map(async item => {
+        const items = await resolveGeneratedExerciseItems(item, loadGeneratedWords);
+        if (items.length === 0) throw new Error(`Generated exercise ${item.id} did not resolve any items`);
+        return [item.id, { items: cloneSerializable(items as ResolvedGeneratedItem[]) }] as const;
+      })
+    ),
+  ]);
+  const resolvedExercises: FrozenTestDeliveryState['resolvedExercises'] = Object.fromEntries(resolvedEntries);
 
   return {
     versionId: version.id,
