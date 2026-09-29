@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AlertTriangle, CheckCircle2, FileCheck2, Loader2, RotateCcw } from 'lucide-react';
@@ -26,6 +26,38 @@ const TEST_HISTORY_GUARD_KEY = '__latinTestHistoryGuard';
 
 type Screen = 'expectations' | 'taking' | 'results' | 'unavailable';
 type MockRetakeAvailability = 'unchecked' | 'checking' | 'available' | 'unavailable';
+
+const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+
+function TestStatusCard({
+  icon,
+  title,
+  className,
+  children,
+}: {
+  icon: ReactNode;
+  title: ReactNode;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-roman-marble p-6">
+      <Card className={className ? `max-w-lg ${className}` : 'max-w-lg'}>
+        <CardContent className="space-y-4 p-8 text-center">
+          {icon}
+          <h1 className="font-serif text-2xl">{title}</h1>
+          {children}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+const backToDashboard = (
+  <Button asChild variant="outline">
+    <Link href="/dashboard">Back to dashboard</Link>
+  </Button>
+);
 
 export default function StudentTestPage({ params }: { params: Promise<{ testId: string }> }) {
   const { testId } = React.use(params);
@@ -94,36 +126,42 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
     }
   }, [isMockTest, mockDetail?.mock.isLive, mockDetail?.mock.status, mockDetailError, result, screen]);
 
+  /** Starts or resumes this origin's attempt. Ignores the outcome if the origin changed meanwhile. */
+  const openAttempt = async (failureMessage: string) => {
+    if (!user) return false;
+    const requestedOriginKey = originKey;
+    try {
+      const { attempt: opened } = await startAttempt({ uid: user.uid, origin }).unwrap();
+      if (activeOriginKeyRef.current !== requestedOriginKey) return false;
+      activateAttempt({
+        answers: opened.answers,
+        section: opened.section,
+        attemptId: opened.id,
+        originKey: requestedOriginKey,
+      });
+      setAttempt(opened);
+      return true;
+    } catch (error) {
+      if (activeOriginKeyRef.current !== requestedOriginKey) return false;
+      const code = getApiErrorCode(error);
+      if (code === 'TEST_CONFIGURATION_ERROR' || code === 'TEST_NOT_AVAILABLE') setScreen('unavailable');
+      else toast.error(getApiErrorMessage(error, failureMessage));
+      return false;
+    }
+  };
+
   // This authorized detail projection is intentionally independent of the
   // live dashboard list. It proves that this origin has a frozen delivery;
   // starting that existing session then restores the withheld answer payload.
   // A fresh inactive mock never gets this projection and remains start-denied.
+  const resumeMockAttempt = useEffectEvent(() => void openAttempt('Unable to resume this mock test'));
   useEffect(() => {
-    if (!isMockTest || !mockDetail?.attempt || activeOriginKeyRef.current !== originKey) return;
+    if (!isMockTest || !mockDetail?.attempt || !user || activeOriginKeyRef.current !== originKey) return;
     const resumeScope = `${originKey}:${mockDetail.attempt.id}`;
-    if (mockResumeScopeRef.current === resumeScope || !user) return;
+    if (mockResumeScopeRef.current === resumeScope) return;
     mockResumeScopeRef.current = resumeScope;
-    void startAttempt({ uid: user.uid, origin })
-      .unwrap()
-      .then(response => {
-        if (activeOriginKeyRef.current !== originKey) return;
-        activateAttempt({
-          answers: response.attempt.answers,
-          section: response.attempt.section,
-          attemptId: response.attempt.id,
-          originKey,
-        });
-        setAttempt(response.attempt);
-      })
-      .catch(error => {
-        if (activeOriginKeyRef.current !== originKey) return;
-        if (getApiErrorCode(error) === 'TEST_CONFIGURATION_ERROR' || getApiErrorCode(error) === 'TEST_NOT_AVAILABLE') {
-          setScreen('unavailable');
-          return;
-        }
-        toast.error(getApiErrorMessage(error, 'Unable to resume this mock test'));
-      });
-  }, [activateAttempt, isMockTest, mockDetail?.attempt, origin, originKey, startAttempt, user]);
+    resumeMockAttempt();
+  }, [isMockTest, mockDetail?.attempt, originKey, user]);
 
   useEffect(() => {
     if (!authLoading && !user) router.replace('/login');
@@ -196,39 +234,20 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
     };
   }, [flushPendingAnswers, hasUnsavedAnswers, originKey, screen]);
 
+  const canStart = Boolean(user && test && (!isMockTest || mockTest) && normalTest?.status !== 'locked');
+
   const startFreshAttempt = async () => {
-    if (!user || !test || (isMockTest && !mockTest) || normalTest?.status === 'locked') return;
-    const requestedOriginKey = originKey;
-    try {
-      const response = await startAttempt({ uid: user.uid, origin }).unwrap();
-      if (activeOriginKeyRef.current !== requestedOriginKey) return;
-      activateAttempt({
-        answers: response.attempt.answers,
-        section: response.attempt.section,
-        attemptId: response.attempt.id,
-        originKey: requestedOriginKey,
-      });
-      setAttempt(response.attempt);
-      setScreen('taking');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (error) {
-      const code = getApiErrorCode(error);
-      if (code === 'TEST_CONFIGURATION_ERROR' || code === 'TEST_NOT_AVAILABLE') {
-        setScreen('unavailable');
-        return;
-      }
-      toast.error(getApiErrorMessage(error, 'Unable to start this test'));
-    }
+    if (!canStart) return;
+    if (!(await openAttempt('Unable to start this test'))) return;
+    setScreen('taking');
+    scrollToTop();
   };
 
   const begin = async () => {
-    if (!user || !test || (isMockTest && !mockTest) || normalTest?.status === 'locked') return;
-    if (attempt) {
-      setScreen('taking');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
-    }
-    await startFreshAttempt();
+    if (!canStart) return;
+    if (!attempt) return startFreshAttempt();
+    setScreen('taking');
+    scrollToTop();
   };
 
   const retake = () => {
@@ -268,7 +287,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
         setMockRetakeAvailability(isEligible ? 'available' : 'unavailable');
       });
     }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    scrollToTop();
   };
 
   if (authLoading || dashboardLoading || (isMockTest && mockDetailLoading) || (!user && !dashboardError)) {
@@ -280,81 +299,57 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
   // replace its result screen with that expected post-submit refetch error.
   if ((dashboardError || (isMockTest && mockDetailError)) && !(screen === 'results' && result)) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-roman-marble p-6">
-        <Card className="max-w-lg">
-          <CardContent className="space-y-4 p-8 text-center">
-            <AlertTriangle className="mx-auto h-10 w-10 text-amber-600" />
-            <h1 className="font-serif text-2xl">Unable to load this test</h1>
-            <p className="text-gray-600">This test could not be loaded. Please try again.</p>
-            <Button
-              type="button"
-              onClick={() => {
-                void refetchDashboard();
-                if (isMockTest) void refetchMockDetail();
-              }}>
-              Retry
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+      <TestStatusCard
+        icon={<AlertTriangle className="mx-auto h-10 w-10 text-amber-600" />}
+        title="Unable to load this test">
+        <p className="text-gray-600">This test could not be loaded. Please try again.</p>
+        <Button
+          type="button"
+          onClick={() => {
+            void refetchDashboard();
+            if (isMockTest) void refetchMockDetail();
+          }}>
+          Retry
+        </Button>
+      </TestStatusCard>
     );
   }
 
   if (!test || (isMockTest && !mockTest && !mockDetail?.attempt)) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-roman-marble p-6">
-        <Card className="max-w-lg">
-          <CardContent className="space-y-4 p-8 text-center">
-            <AlertTriangle className="mx-auto h-10 w-10 text-amber-600" />
-            <h1 className="font-serif text-2xl">Test unavailable</h1>
-            <p className="text-gray-600">This test is not currently available.</p>
-            <Button asChild variant="outline">
-              <Link href="/dashboard">Back to dashboard</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+      <TestStatusCard icon={<AlertTriangle className="mx-auto h-10 w-10 text-amber-600" />} title="Test unavailable">
+        <p className="text-gray-600">This test is not currently available.</p>
+        {backToDashboard}
+      </TestStatusCard>
     );
   }
 
   if (!isMockTest && normalTest?.status === 'locked') {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-roman-marble p-6">
-        <Card className="max-w-lg border-gray-300">
-          <CardContent className="space-y-4 p-8 text-center">
-            <FileCheck2 className="mx-auto h-10 w-10 text-gray-500" />
-            <h1 className="font-serif text-2xl">
-              <SimpleRichDisplay content={test.title} />
-            </h1>
-            <p className="text-gray-600">
-              {normalTest.lockedReason || 'Complete the previous learning unit to unlock this test.'}
-            </p>
-            <Button asChild variant="outline">
-              <Link href="/dashboard">Back to dashboard</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+      <TestStatusCard
+        className="border-gray-300"
+        icon={<FileCheck2 className="mx-auto h-10 w-10 text-gray-500" />}
+        title={<SimpleRichDisplay content={test.title} />}>
+        <p className="text-gray-600">
+          {normalTest.lockedReason || 'Complete the previous learning unit to unlock this test.'}
+        </p>
+        {backToDashboard}
+      </TestStatusCard>
     );
   }
 
   if (screen === 'unavailable' || (!isMockTest && normalTest?.configurationStatus === 'unavailable')) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-roman-marble p-6">
-        <Card className="max-w-lg border-amber-200">
-          <CardContent className="space-y-4 p-8 text-center">
-            <AlertTriangle className="mx-auto h-10 w-10 text-amber-600" />
-            <h1 className="font-serif text-2xl">This test is temporarily unavailable</h1>
-            <p className="text-gray-600">
-              Your work has not been submitted. Please return later or ask an administrator to review the test
-              configuration.
-            </p>
-            <Button asChild variant="outline">
-              <Link href="/dashboard">Back to dashboard</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+      <TestStatusCard
+        className="border-amber-200"
+        icon={<AlertTriangle className="mx-auto h-10 w-10 text-amber-600" />}
+        title="This test is temporarily unavailable">
+        <p className="text-gray-600">
+          Your work has not been submitted. Please return later or ask an administrator to review the test
+          configuration.
+        </p>
+        {backToDashboard}
+      </TestStatusCard>
     );
   }
 
@@ -364,17 +359,15 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
       : normalTest && normalTest.minTotalPoints === normalTest.maxTotalPoints
         ? `${formatScorePoints(normalTest.minTotalPoints)} total points`
         : `${formatScorePoints(normalTest?.minTotalPoints ?? 0)}–${formatScorePoints(normalTest?.maxTotalPoints ?? 0)} total points, depending on the version selected`;
-    const mockAction = attempt
-      ? mockDetail?.attempt || attemptSummary?.inProgressAttemptId
-        ? 'Continue Mock Test'
-        : (attemptSummary?.attemptCount ?? 0) > 0
-          ? 'Begin Mock Retake'
-          : 'Begin Mock Test'
-      : attemptSummary?.inProgressAttemptId
-        ? 'Continue Mock Test'
-        : (attemptSummary?.attemptCount ?? 0) > 0
-          ? 'Start Mock Retake'
-          : 'Start Mock Test';
+    const kind = isMockTest ? 'Mock ' : '';
+    // A resumed mock session is already open here, so it is begun rather than started.
+    const verb = isMockTest && attempt ? 'Begin' : 'Start';
+    const continuing = Boolean(attemptSummary?.inProgressAttemptId || (isMockTest && attempt && mockDetail?.attempt));
+    const startLabel = continuing
+      ? `Continue ${kind}Test`
+      : (attemptSummary?.attemptCount ?? 0) > 0
+        ? `${verb} ${kind}Retake`
+        : `${verb} ${kind}Test`;
     return (
       <div className="min-h-screen bg-gradient-to-b from-roman-marble via-white to-roman-parchment/60 p-4 sm:p-6 md:p-10">
         <Card className="mx-auto max-w-3xl overflow-hidden rounded-2xl border-roman-red/15 shadow-lg">
@@ -423,15 +416,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
                 className="h-11 rounded-xl bg-roman-red hover:bg-roman-red/90 sm:flex-1"
                 disabled={starting || (isMockTest && !mockTest)}
                 onClick={begin}>
-                {starting
-                  ? 'Preparing test…'
-                  : isMockTest
-                    ? mockAction
-                    : attemptSummary?.inProgressAttemptId
-                      ? 'Continue Test'
-                      : (attemptSummary?.attemptCount ?? 0) > 0
-                        ? 'Start Retake'
-                        : 'Start Test'}
+                {starting ? 'Preparing test…' : startLabel}
               </Button>
             </div>
           </CardContent>
