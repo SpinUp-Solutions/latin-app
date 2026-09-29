@@ -1,10 +1,20 @@
 import { Lesson, LessonSummary, LessonWithProgress, StudentDashboard } from '@/src/types/lesson';
 import { extractTooltipsFromLesson } from '@/src/utils/tooltipUtils';
 import { TooltipData } from '@/src/types/tooltip';
-import type { AdminLearningPathView, LearningPathDocument } from '@/src/types/learning-unit';
+import type { AdminLearningPathView, LearningPathDocument, LessonUnitType } from '@/src/types/learning-unit';
 import { buildLessonMutationPayload } from '@/src/utils/practiceCategoryLessons';
 import { appApi } from './appApi';
 import { getAttemptSummaryTagId, PRACTICE_CATEGORY_ASSIGNMENTS_TAG, STUDENT_DASHBOARD_TAG } from './tags';
+
+interface RecoveryItem {
+  id: string;
+  lessonId: string;
+  lessonTitle: string;
+  rawLessonData: Lesson;
+  errorMessage: string;
+  errorCode?: string;
+  createdAt: string;
+}
 
 export const lessonApi = appApi.injectEndpoints({
   endpoints: builder => ({
@@ -80,14 +90,7 @@ export const lessonApi = appApi.injectEndpoints({
     getLessonById: builder.query<{ lesson: Lesson; tooltips: Record<string, TooltipData> }, { lessonId: string }>({
       query: ({ lessonId }) => `/admin/lessons/${lessonId}`,
       extraOptions: { retryNetworkErrors: true },
-      transformResponse: (response: { lesson?: Lesson } | Lesson) => {
-        const lesson = 'lesson' in response ? response.lesson : (response as Lesson);
-        if (!lesson) {
-          throw new Error('Lesson not found');
-        }
-        const tooltips = extractTooltipsFromLesson(lesson);
-        return { lesson, tooltips };
-      },
+      transformResponse: ({ lesson }: { lesson: Lesson }) => ({ lesson, tooltips: extractTooltipsFromLesson(lesson) }),
       providesTags: (result, error, { lessonId }) => [
         { type: 'Lesson', id: lessonId },
         PRACTICE_CATEGORY_ASSIGNMENTS_TAG,
@@ -143,7 +146,7 @@ export const lessonApi = appApi.injectEndpoints({
       {
         lessonIds: string[];
         isLive: boolean;
-        lessonType: 'normal' | 'vocab' | 'sentence-diagramming' | 'listening';
+        lessonType: LessonUnitType;
         expectedLiveLessonIds: string[];
         startOrder?: number;
       }
@@ -264,31 +267,9 @@ export const lessonApi = appApi.injectEndpoints({
             ],
     }),
 
-    // Recovery endpoints
-    getRecoveryItems: builder.query<
-      {
-        id: string;
-        lessonId: string;
-        lessonTitle: string;
-        rawLessonData: Lesson;
-        errorMessage: string;
-        errorCode?: string;
-        createdAt: string;
-      }[],
-      void
-    >({
+    getRecoveryItems: builder.query<RecoveryItem[], void>({
       query: () => '/admin/lessons/recovery',
-      transformResponse: (response: {
-        recoveryItems: {
-          id: string;
-          lessonId: string;
-          lessonTitle: string;
-          rawLessonData: Lesson;
-          errorMessage: string;
-          errorCode?: string;
-          createdAt: string;
-        }[];
-      }) => response.recoveryItems,
+      transformResponse: (response: { recoveryItems: RecoveryItem[] }) => response.recoveryItems,
       providesTags: [{ type: 'Recovery', id: 'LIST' }],
     }),
 
@@ -341,7 +322,6 @@ export const {
   useMarkExerciseCompleteMutation,
   useUpdatePageProgressMutation,
   useFinishLessonMutation,
-  // Recovery hooks
   useGetRecoveryItemsQuery,
   useSaveToRecoveryMutation,
   useRetryFromRecoveryMutation,

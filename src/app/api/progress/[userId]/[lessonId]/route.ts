@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { Transaction } from 'firebase-admin/firestore';
 import { z } from 'zod';
 import { LEARNING_UNITS_COLLECTION, USER_PROGRESS_COLLECTION } from '@/shared/constants/firestore';
 import { adminDb } from '@/src/services/firebase-admin';
@@ -87,32 +88,57 @@ export async function POST(
     const progressRef = adminDb.collection(USER_PROGRESS_COLLECTION).doc(`${userId}_${lessonId}`);
     const now = new Date().toISOString();
 
+    // Every action reads the lesson and progress, then re-checks progression access, before any write.
+    const readAuthorizedProgress = async (transaction: Transaction) => {
+      const [lessonSnapshot, progressSnapshot] = await Promise.all([
+        transaction.get(lessonRef),
+        transaction.get(progressRef),
+      ]);
+      if (!lessonSnapshot.exists || !isLessonDocumentData(lessonSnapshot.data())) throw new Error('LESSON_NOT_FOUND');
+
+      const lesson = { id: lessonSnapshot.id, ...lessonSnapshot.data() } as Lesson;
+      const access = await getLessonProgressAccessInTransaction(
+        transaction,
+        adminDb,
+        lesson,
+        userId,
+        progressSnapshot.exists
+      );
+      if (access !== 'allowed') {
+        throw Object.assign(new Error(access), {
+          code: access === 'locked' ? 'LESSON_LOCKED' : 'LESSON_NOT_FOUND',
+        });
+      }
+      return { lesson, existing: (progressSnapshot.data() || {}) as Partial<UserProgress> };
+    };
+
+    const writeProgress = (
+      transaction: Transaction,
+      existing: Partial<UserProgress>,
+      furthestPageIndex: number,
+      persisted: ReturnType<typeof toPersistedProgressSummary>
+    ) =>
+      transaction.set(
+        progressRef,
+        {
+          ...existing,
+          userId,
+          lessonId,
+          furthestPageIndex,
+          currentPageIndex: furthestPageIndex,
+          ...persisted,
+          lastAccessedAt: now,
+          updatedAt: now,
+        },
+        { merge: true }
+      );
+
     if (progressData.action === 'complete-exercise') {
       const result = await adminDb.runTransaction(async transaction => {
-        const [lessonSnapshot, progressSnapshot] = await Promise.all([
-          transaction.get(lessonRef),
-          transaction.get(progressRef),
-        ]);
-        if (!lessonSnapshot.exists) throw new Error('LESSON_NOT_FOUND');
-        if (!isLessonDocumentData(lessonSnapshot.data())) throw new Error('LESSON_NOT_FOUND');
-
-        const lesson = { id: lessonSnapshot.id, ...lessonSnapshot.data() } as Lesson;
-        const access = await getLessonProgressAccessInTransaction(
-          transaction,
-          adminDb,
-          lesson,
-          userId,
-          progressSnapshot.exists
-        );
-        if (access !== 'allowed') {
-          throw Object.assign(new Error(access), {
-            code: access === 'locked' ? 'LESSON_LOCKED' : 'LESSON_NOT_FOUND',
-          });
-        }
+        const { lesson, existing } = await readAuthorizedProgress(transaction);
         const exerciseId = resolveExerciseId(lesson, progressData.exerciseId);
         if (!exerciseId) throw new Error('EXERCISE_NOT_FOUND');
 
-        const existing = (progressSnapshot.data() || {}) as Partial<UserProgress>;
         const summary = summarizeLessonCompletion(lesson, {
           ...existing,
           exerciseProgress: [
@@ -123,20 +149,7 @@ export async function POST(
         const persisted = toPersistedProgressSummary(summary, existing, now, lesson.version);
         const furthestPageIndex = getFurthestPageIndex(existing, lesson.pages.length);
 
-        transaction.set(
-          progressRef,
-          {
-            ...existing,
-            userId,
-            lessonId,
-            furthestPageIndex,
-            currentPageIndex: furthestPageIndex,
-            ...persisted,
-            lastAccessedAt: now,
-            updatedAt: now,
-          },
-          { merge: true }
-        );
+        writeProgress(transaction, existing, furthestPageIndex, persisted);
 
         return {
           lessonCompleted: persisted.status === 'completed',
@@ -151,26 +164,7 @@ export async function POST(
 
     if (progressData.action === 'visit-page') {
       const result = await adminDb.runTransaction(async transaction => {
-        const [lessonSnapshot, progressSnapshot] = await Promise.all([
-          transaction.get(lessonRef),
-          transaction.get(progressRef),
-        ]);
-        if (!lessonSnapshot.exists) throw new Error('LESSON_NOT_FOUND');
-        if (!isLessonDocumentData(lessonSnapshot.data())) throw new Error('LESSON_NOT_FOUND');
-
-        const lesson = { id: lessonSnapshot.id, ...lessonSnapshot.data() } as Lesson;
-        const access = await getLessonProgressAccessInTransaction(
-          transaction,
-          adminDb,
-          lesson,
-          userId,
-          progressSnapshot.exists
-        );
-        if (access !== 'allowed') {
-          throw Object.assign(new Error(access), {
-            code: access === 'locked' ? 'LESSON_LOCKED' : 'LESSON_NOT_FOUND',
-          });
-        }
+        const { lesson, existing } = await readAuthorizedProgress(transaction);
         const submittedIndex =
           typeof progressData.pageId === 'string'
             ? lesson.pages.findIndex(page => page.id === progressData.pageId)
@@ -179,7 +173,6 @@ export async function POST(
           throw new Error('PAGE_NOT_FOUND');
         }
 
-        const existing = (progressSnapshot.data() || {}) as Partial<UserProgress>;
         const furthestPageIndex = Math.max(getFurthestPageIndex(existing, lesson.pages.length), submittedIndex);
         const summary = summarizeLessonCompletion(lesson, {
           ...existing,
@@ -188,20 +181,7 @@ export async function POST(
         });
         const persisted = toPersistedProgressSummary(summary, existing, now, lesson.version);
 
-        transaction.set(
-          progressRef,
-          {
-            ...existing,
-            userId,
-            lessonId,
-            furthestPageIndex,
-            currentPageIndex: furthestPageIndex,
-            ...persisted,
-            lastAccessedAt: now,
-            updatedAt: now,
-          },
-          { merge: true }
-        );
+        writeProgress(transaction, existing, furthestPageIndex, persisted);
 
         return {
           furthestPageIndex,
@@ -217,27 +197,7 @@ export async function POST(
 
     if (progressData.action === 'legacy-finish') {
       const result = await adminDb.runTransaction(async transaction => {
-        const [lessonSnapshot, progressSnapshot] = await Promise.all([
-          transaction.get(lessonRef),
-          transaction.get(progressRef),
-        ]);
-        if (!lessonSnapshot.exists) throw new Error('LESSON_NOT_FOUND');
-        if (!isLessonDocumentData(lessonSnapshot.data())) throw new Error('LESSON_NOT_FOUND');
-
-        const lesson = { id: lessonSnapshot.id, ...lessonSnapshot.data() } as Lesson;
-        const access = await getLessonProgressAccessInTransaction(
-          transaction,
-          adminDb,
-          lesson,
-          userId,
-          progressSnapshot.exists
-        );
-        if (access !== 'allowed') {
-          throw Object.assign(new Error(access), {
-            code: access === 'locked' ? 'LESSON_LOCKED' : 'LESSON_NOT_FOUND',
-          });
-        }
-        const existing = (progressSnapshot.data() || {}) as Partial<UserProgress>;
+        const { lesson, existing } = await readAuthorizedProgress(transaction);
         const furthestPageIndex = Math.max(lesson.pages.length - 1, 0);
         const summary = summarizeLessonCompletion(lesson, {
           ...existing,
@@ -255,20 +215,7 @@ export async function POST(
           lesson.version
         );
 
-        transaction.set(
-          progressRef,
-          {
-            ...existing,
-            userId,
-            lessonId,
-            furthestPageIndex,
-            currentPageIndex: furthestPageIndex,
-            ...persisted,
-            lastAccessedAt: now,
-            updatedAt: now,
-          },
-          { merge: true }
-        );
+        writeProgress(transaction, existing, furthestPageIndex, persisted);
         return {
           missingExercises: [],
           lessonCompleted: true as const,
