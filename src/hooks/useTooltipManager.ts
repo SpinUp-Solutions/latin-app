@@ -54,10 +54,14 @@ export const useTooltipManager = ({ editor, disabled = false }: TooltipManagerOp
 
       const tooltipId = editingTooltip?.id || generateTooltipId(tooltipData.word);
       dispatch(addTooltip({ id: tooltipId, data: tooltipData }));
+      // setTooltip merges into the existing mark, so attributes the form omitted must be cleared explicitly.
+      const cleared = Object.fromEntries(
+        Object.keys(editor.schema.marks.tooltip.spec.attrs ?? {}).map(name => [name, undefined])
+      );
       editor
         .chain()
         .focus()
-        .setTooltip({ tooltipId, ...tooltipData })
+        .setTooltip({ ...cleared, tooltipId, ...tooltipData })
         .run();
 
       handleCloseDialog();
