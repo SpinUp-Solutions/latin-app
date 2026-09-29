@@ -496,7 +496,9 @@ describe('LessonPlayer mutation summaries and retries', () => {
   });
 
   it('writes page progress only for pages beyond the one the server already recorded', async () => {
-    render(<LessonPlayer lesson={createLesson(3, { status: 'in-progress', furthestPageIndex: 1, currentPageIndex: 1 })} />);
+    render(
+      <LessonPlayer lesson={createLesson(3, { status: 'in-progress', furthestPageIndex: 1, currentPageIndex: 1 })} />
+    );
 
     expect(screen.getByText('Page content: page-2')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Previous page' }));

@@ -278,7 +278,7 @@ export function toPersistedProgressSummary(
   };
 }
 
-/** What every progress write returns: the persisted summary the client caches can adopt as-is. */
+/** What every progress write returns: the persisted summary, which the client caches adopt instead of refetching. */
 export interface LessonProgressMutationResult {
   lessonCompleted: boolean;
   progress: number;

@@ -576,7 +576,9 @@ describe('test grading foundation', () => {
 
     const { resolvedExercises } = await state;
     expect(Object.keys(resolvedExercises)).toEqual(['first', 'second']);
-    expect(resolvedExercises.second.items).toEqual([expect.objectContaining({ text: 'duo', acceptedAnswers: ['two'] })]);
+    expect(resolvedExercises.second.items).toEqual([
+      expect.objectContaining({ text: 'duo', acceptedAnswers: ['two'] }),
+    ]);
   });
 
   it('removes static and generated grading inputs from the student projection', async () => {

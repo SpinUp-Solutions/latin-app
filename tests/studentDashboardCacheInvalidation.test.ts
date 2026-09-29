@@ -448,7 +448,11 @@ describe('student dashboard cache invalidation', () => {
       [
         'page visit',
         () =>
-          lessonApi.endpoints.updatePageProgress.initiate({ userId: 'student-1', lessonId: 'lesson-1', pageId: 'page-2' }),
+          lessonApi.endpoints.updatePageProgress.initiate({
+            userId: 'student-1',
+            lessonId: 'lesson-1',
+            pageId: 'page-2',
+          }),
       ],
     ])('adopts the persisted summary for %s without refetching the lesson or dashboard', async (_name, mutate) => {
       dashboardLearningPath = [pathLesson('available')];
@@ -473,6 +477,58 @@ describe('student dashboard cache invalidation', () => {
         requiredExerciseCount: 2,
         exerciseProgress: [{ exerciseId: 'exercise-1', score: 100, completedAt: 'now' }],
       });
+      unsubscribe();
+    });
+
+    it('keeps the newer summary when concurrent exercise writes resolve out of order', async () => {
+      dashboardLearningPath = [pathLesson('in-progress')];
+      const store = createStore();
+      const unsubscribe = await subscribe(store);
+      const responses: Array<(summary: Record<string, unknown>) => void> = [];
+      mockBaseQuery.mockImplementation(
+        () => new Promise(resolve => responses.push(summary => resolve({ data: { success: true, ...summary } })))
+      );
+      const complete = (exerciseId: string) =>
+        store.dispatch(
+          lessonApi.endpoints.markExerciseComplete.initiate({
+            userId: 'student-1',
+            lessonId: 'lesson-1',
+            exerciseId,
+            score: 100,
+          })
+        );
+      const first = complete('exercise-1');
+      const second = complete('exercise-2');
+      await waitFor(() => expect(responses).toHaveLength(2));
+
+      const exerciseOne = { exerciseId: 'exercise-1', score: 100, completedAt: 'first' };
+      const exerciseTwo = { exerciseId: 'exercise-2', score: 100, completedAt: 'second' };
+      responses[1]({
+        ...progressResult,
+        progress: 67,
+        furthestPageIndex: 2,
+        completedExerciseCount: 2,
+        requiredExerciseCount: 3,
+        exerciseProgress: [exerciseOne, exerciseTwo],
+      });
+      await second;
+      responses[0]({
+        ...progressResult,
+        progress: 33,
+        furthestPageIndex: 2,
+        completedExerciseCount: 1,
+        requiredExerciseCount: 3,
+        exerciseProgress: [exerciseOne],
+      });
+      await first;
+
+      expect(
+        lessonApi.endpoints.getStudentLesson.select({ userId: 'student-1', lessonId: 'lesson-1' })(store.getState())
+          .data
+      ).toMatchObject({ progress: 67, completedExerciseCount: 2, exerciseProgress: [exerciseOne, exerciseTwo] });
+      expect(
+        lessonApi.endpoints.getStudentDashboard.select('student-1')(store.getState()).data?.learningPath[0]
+      ).toMatchObject({ status: 'in-progress', progress: 67, furthestPageIndex: 2 });
       unsubscribe();
     });
 

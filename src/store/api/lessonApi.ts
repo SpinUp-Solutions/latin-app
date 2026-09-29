@@ -44,18 +44,23 @@ const adoptPersistedProgress: TypedMutationOnQueryStarted<
   } catch {
     return;
   }
-  const status = result.lessonCompleted ? 'completed' : 'in-progress';
-  const pages = { furthestPageIndex: result.furthestPageIndex, currentPageIndex: Math.max(result.furthestPageIndex, 0) };
+  // Concurrent writes can resolve out of order, and persisted progress only grows, so keep the furthest state.
+  const adoptSummary = (
+    cached: Pick<LessonWithProgress, 'status' | 'progress' | 'furthestPageIndex' | 'currentPageIndex'>
+  ) => {
+    cached.status = result.lessonCompleted || cached.status === 'completed' ? 'completed' : 'in-progress';
+    cached.progress = Math.max(cached.progress ?? 0, result.progress);
+    cached.furthestPageIndex = Math.max(cached.furthestPageIndex ?? -1, result.furthestPageIndex);
+    cached.currentPageIndex = Math.max(cached.furthestPageIndex, 0);
+  };
 
   dispatch(
     lessonApi.util.updateQueryData('getStudentLesson', { lessonId, userId }, lesson => {
-      Object.assign(lesson, pages, {
-        status,
-        progress: result.progress,
-        exerciseProgress: result.exerciseProgress,
-        completedExerciseCount: result.completedExerciseCount,
-        requiredExerciseCount: result.requiredExerciseCount,
-      });
+      adoptSummary(lesson);
+      if (result.exerciseProgress.length < (lesson.exerciseProgress?.length ?? 0)) return;
+      lesson.exerciseProgress = result.exerciseProgress;
+      lesson.completedExerciseCount = result.completedExerciseCount;
+      lesson.requiredExerciseCount = result.requiredExerciseCount;
     })
   );
 
@@ -64,8 +69,8 @@ const adoptPersistedProgress: TypedMutationOnQueryStarted<
     lessonApi.util.updateQueryData('getStudentDashboard', userId, dashboard => {
       for (const unit of [...dashboard.learningPath, ...dashboard.practiceLessons]) {
         if (unit.kind !== 'lesson' || unit.id !== lessonId) continue;
-        completedNow ||= status === 'completed' && unit.status !== 'completed';
-        Object.assign(unit, pages, { status, progress: result.progress });
+        completedNow ||= result.lessonCompleted && unit.status !== 'completed';
+        adoptSummary(unit);
       }
     })
   );
