@@ -1,3 +1,4 @@
+import { VOCABULARY_POOL_COLLECTION } from '@/shared/constants/firestore';
 import {
   isVocabularyPoolCreationPending,
   VocabularyPoolStateError,
@@ -247,7 +248,7 @@ export async function handleVocabularyWordsGET(
         audience === 'generated'
           ? await getReadableVocabularyPool(adminDb, poolId)
           : await adminDb
-              .collection('vocabulary_pools')
+              .collection(VOCABULARY_POOL_COLLECTION)
               .doc(poolId)
               .get()
               .then(async poolDoc =>
