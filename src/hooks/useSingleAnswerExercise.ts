@@ -35,7 +35,6 @@ export function useSingleAnswerExercise({
   onCompletionAccepted,
 }: SingleAnswerExerciseOptions) {
   const mode = runtimeMode ?? 'practice';
-  const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
   const [hasSubmitted, setHasSubmitted] = useState(initiallySubmitted);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -81,11 +80,10 @@ export function useSingleAnswerExercise({
         setIsProcessing(false);
         onComplete?.(score);
       }, hasVisibleExplanation);
-      if (!assessmentMode) onCompletionAccepted?.(score);
+      onCompletionAccepted?.(score);
     } else {
       handleIncorrect();
       setIsProcessing(false);
-      if (assessmentMode) onComplete?.(score);
     }
   };
 
@@ -102,7 +100,6 @@ export function useSingleAnswerExercise({
   };
 
   return {
-    assessmentMode,
     testAnswerMode,
     hasSubmitted,
     isProcessing,

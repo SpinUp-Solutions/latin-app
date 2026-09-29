@@ -119,33 +119,6 @@ describe('exercise start over flow', () => {
     expect(screen.queryByRole('button', { name: /start over/i })).not.toBeInTheDocument();
   });
 
-  it('does not lock preview mode at the reset threshold', () => {
-    const onComplete = jest.fn();
-    const exercise: MultipleChoiceExerciseType = {
-      id: 'mc-preview',
-      type: 'multiple-choice',
-      title: 'MC',
-      instructions: '',
-      feedbackConfig: { ...resetFeedbackConfig, maxLevelFailures: 1 },
-      data: {
-        question: 'Pick one',
-        allowMultipleSelections: false,
-        options: [
-          { id: 'a', text: 'Wrong', isCorrect: false },
-          { id: 'b', text: 'Right', isCorrect: true },
-        ],
-      },
-    };
-
-    render(<MultipleChoiceExercise exercise={exercise} runtimeMode="preview" onComplete={onComplete} />);
-
-    fireEvent.click(screen.getByRole('button', { name: /wrong/i }));
-    fireEvent.click(screen.getByRole('button', { name: /submit answer/i }));
-
-    expect(screen.queryByRole('button', { name: /start over/i })).not.toBeInTheDocument();
-    expect(onComplete).toHaveBeenCalled();
-  });
-
   it('keeps matching feedback visible at threshold and cancels the earlier clear timeout', () => {
     const exercise: MatchingExercise = {
       id: 'matching-reset',
@@ -309,40 +282,6 @@ describe('exercise start over flow', () => {
     expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /previous/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /^next$/i })).toBeDisabled();
-
-    jest.useFakeTimers();
-  });
-
-  it('keeps translation preview interactive without Start over or a delayed reset', async () => {
-    jest.useRealTimers();
-
-    const exercise: TranslationGradingExerciseType = {
-      id: 'translation-preview-reset',
-      type: 'translation-grading',
-      title: 'Translate',
-      instructions: '',
-      itemProgressionDelay: 1,
-      feedbackConfig: { ...resetFeedbackConfig, maxLevelFailures: 1 },
-      data: {
-        items: [{ latinText: 'amo', instructions: '' }],
-      },
-    };
-
-    render(<TranslationGradingExercise exercise={exercise} runtimeMode="preview" />);
-
-    const textarea = screen.getByPlaceholderText(/type your english translation/i);
-    fireEvent.change(textarea, { target: { value: 'preview answer' } });
-    fireEvent.click(screen.getByTitle('Check Translation'));
-    await waitFor(() => expect(screen.getByText(/not quite right/i)).toBeInTheDocument());
-
-    await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 10));
-    });
-
-    expect(screen.getByText(/not quite right/i)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /start over/i })).not.toBeInTheDocument();
-    expect(textarea).toBeEnabled();
-    expect(textarea).toHaveValue('preview answer');
 
     jest.useFakeTimers();
   });
@@ -546,9 +485,7 @@ describe('exercise start over flow', () => {
       },
     };
 
-    render(
-      <MatchingTable exercise={exercise} onComplete={onComplete} onCompletionAccepted={onCompletionAccepted} />
-    );
+    render(<MatchingTable exercise={exercise} onComplete={onComplete} onCompletionAccepted={onCompletionAccepted} />);
     fireEvent.click(screen.getByRole('button', { name: 'Alpha' }));
     fireEvent.click(screen.getByRole('button', { name: 'One' }));
     fireEvent.click(screen.getByRole('button', { name: 'Beta' }));
@@ -590,9 +527,7 @@ describe('exercise start over flow', () => {
       },
     };
 
-    render(
-      <MatchingTable exercise={exercise} onComplete={onComplete} onCompletionAccepted={onCompletionAccepted} />
-    );
+    render(<MatchingTable exercise={exercise} onComplete={onComplete} onCompletionAccepted={onCompletionAccepted} />);
     fireEvent.click(screen.getByRole('button', { name: 'Alpha' }));
     fireEvent.click(screen.getByRole('button', { name: 'One' }));
     fireEvent.click(screen.getByRole('button', { name: 'Beta' }));

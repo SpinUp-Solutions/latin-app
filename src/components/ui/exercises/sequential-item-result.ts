@@ -3,7 +3,6 @@ import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 interface SequentialItemResult {
   isCorrect: boolean;
   isLastItem: boolean;
-  assessmentMode: boolean;
   showExplanation?: boolean;
   explanation?: unknown;
   finalScore: number | null;
@@ -19,7 +18,6 @@ interface SequentialItemResult {
 export function applySequentialItemResult({
   isCorrect,
   isLastItem,
-  assessmentMode,
   showExplanation,
   explanation,
   finalScore,
@@ -37,7 +35,7 @@ export function applySequentialItemResult({
     handleCorrect(isLastItem);
 
     if (isLastItem) {
-      if (!assessmentMode) onCompletionAccepted?.(finalScore!);
+      onCompletionAccepted?.(finalScore!);
       autoAdvanceIfEnabled(() => {
         // Retain the final answer and success state after completion.
         onComplete?.(finalScore!);
@@ -53,14 +51,5 @@ export function applySequentialItemResult({
   }
 
   handleIncorrect();
-  if (assessmentMode) {
-    autoAdvanceIfEnabled(() => {
-      clearItem();
-      stopProcessing();
-      if (finalScore !== null) onComplete?.(finalScore);
-    }, false);
-    return;
-  }
-
   stopProcessing();
 }

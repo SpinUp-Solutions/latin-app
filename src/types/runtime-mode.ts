@@ -1,7 +1,7 @@
 import type { DiagramAnnotation } from '@/src/features/sentence-diagramming/model';
 import type { FeedbackConfig } from '@/src/types/exercises/base';
 
-export type RuntimeMode = 'practice' | 'test' | 'preview';
+export type RuntimeMode = 'practice' | 'test';
 
 export type ExerciseAnswer =
   | { type: 'matching'; rounds: Record<string, string>[] }

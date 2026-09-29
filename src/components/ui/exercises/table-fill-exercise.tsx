@@ -50,7 +50,6 @@ const TableFillExerciseComponent: React.FC<Props> = ({
   const [userAnswers, setUserAnswers] = useState<Record<string, string>>(restoredAnswers);
   const [cellResults, setCellResults] = useState<Record<string, boolean>>({});
   const {
-    assessmentMode,
     testAnswerMode,
     hasSubmitted,
     isProcessing,
@@ -107,7 +106,7 @@ const TableFillExerciseComponent: React.FC<Props> = ({
   const getCellClassName = (cellKey: string, isBlank: boolean) => {
     if (!isBlank) return '';
 
-    if (!assessmentMode && hasSubmitted && cellKey in cellResults) {
+    if (!testAnswerMode && hasSubmitted && cellKey in cellResults) {
       return cellResults[cellKey] ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300';
     }
 
@@ -198,14 +197,14 @@ const TableFillExerciseComponent: React.FC<Props> = ({
             </Button>
           )}
 
-          {hasSubmitted && isCorrect === false && !assessmentMode && !resetRequired && (
+          {hasSubmitted && isCorrect === false && !testAnswerMode && !resetRequired && (
             <Button onClick={handleReset} variant="outline" disabled={isProcessing} className="px-8">
               Try Again
             </Button>
           )}
         </div>
 
-        {!assessmentMode && (
+        {!testAnswerMode && (
           <FeedbackDisplay
             isCorrect={isCorrect}
             message={message}

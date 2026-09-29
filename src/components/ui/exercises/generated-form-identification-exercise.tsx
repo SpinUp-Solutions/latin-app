@@ -25,7 +25,6 @@ import {
   validateSingleFieldFormIdentificationExercise,
   validateMultiAnswerStep,
   validatePartialMultiAnswerPaths,
-  scoreSingleFieldFormIdentificationAnswer,
 } from '@/src/utils/exercises/generatedFormIdentificationExercise';
 import { normalizeAnswer } from '@/src/utils/exercises/helpers';
 import { formatLabel } from '@/src/utils/label-formatter';
@@ -72,7 +71,6 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
   generatedExerciseSource,
 }) => {
   const mode = runtimeMode ?? 'practice';
-  const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
   const [wordAnswers, setWordAnswers] = useState<Record<string, Record<string, string>>>({});
   const [multiAnswerSlots, setMultiAnswerSlots] = useState<Record<string, string[][]>>({});
@@ -214,48 +212,6 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
       return;
     }
 
-    if (assessmentMode) {
-      let fullyCorrect = false;
-
-      if (isSingleField) {
-        const credit = scoreSingleFieldFormIdentificationAnswer(
-          userAnswer,
-          currentItem as SingleFieldFormIdentificationItem
-        );
-        fullyCorrect = credit.availableUnits > 0 && credit.earnedUnits === credit.availableUnits;
-      } else if (isMultiAnswerMode) {
-        const multiItem = currentItem as MultiAnswerFormIdentificationItem;
-        const validation = validateMultiAnswerStep(userAnswer, multiItem);
-        fullyCorrect = validation.isCorrect;
-        if (fullyCorrect) {
-          const updatedSlots = [...(multiAnswerSlots[multiItem.wordId] || [])];
-          updatedSlots[multiItem.stepIndex] = validation.answerSlots;
-          fullyCorrect = validatePartialMultiAnswerPaths(
-            updatedSlots,
-            multiItem.steps.slice(0, multiItem.stepIndex + 1),
-            multiItem.primaryFormPaths
-          ).isCorrect;
-          if (fullyCorrect) {
-            setMultiAnswerSlots(prev => ({ ...prev, [multiItem.wordId]: updatedSlots }));
-          }
-        }
-      } else {
-        const stepItem = currentItem as FormIdentificationItem;
-        const validation = validateGeneratedFormIdentificationExercise(userAnswer, stepItem);
-        fullyCorrect = validation.isCorrect;
-        if (fullyCorrect) {
-          setWordAnswers(prev => ({
-            ...prev,
-            [stepItem.wordId]: { ...(prev[stepItem.wordId] || {}), [stepItem.step]: normalizeAnswer(userAnswer) },
-          }));
-        }
-      }
-
-      if (fullyCorrect) handleCorrect(isLastItem);
-      else handleIncorrect();
-      return;
-    }
-
     if (isMultiAnswerMode) {
       const multiItem = currentItem as MultiAnswerFormIdentificationItem;
       const stepValidation = validateMultiAnswerStep(userAnswer, multiItem);
@@ -310,7 +266,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
         reset();
         setIsProcessing(false);
       }, false);
-      if (!assessmentMode && finalScore !== null) onCompletionAccepted?.(finalScore);
+      if (finalScore !== null) onCompletionAccepted?.(finalScore);
       return;
     }
 
@@ -350,7 +306,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
         reset();
         setIsProcessing(false);
       }, false);
-      if (!assessmentMode && finalScore !== null) onCompletionAccepted?.(finalScore);
+      if (finalScore !== null) onCompletionAccepted?.(finalScore);
     } else {
       handleIncorrect();
       setIsProcessing(false);
@@ -506,7 +462,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
             disabled={isProcessing || resetRequired}
           />
 
-          {!assessmentMode && (
+          {!testAnswerMode && (
             <FeedbackDisplay
               isCorrect={isCorrect}
               message={message}
@@ -520,7 +476,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
                     : (currentItem as FormIdentificationItem).correctAnswer
               }
               showExplanation={showExplanation}
-              onContinue={!assessmentMode && isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
+              onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
               onStartOver={resetRequired ? handleExerciseReset : undefined}
             />
           )}

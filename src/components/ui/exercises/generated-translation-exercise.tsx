@@ -51,7 +51,6 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
   generatedExerciseSource,
 }) => {
   const mode = runtimeMode ?? 'practice';
-  const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
 
   const translationDirection = exercise.translationDirection || 'latin-to-english';
@@ -152,7 +151,6 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
     applySequentialItemResult({
       isCorrect: validation.isCorrect,
       isLastItem,
-      assessmentMode,
       finalScore,
       handleCorrect,
       handleIncorrect,
@@ -245,13 +243,12 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
           {!testAnswerMode && (
             <FeedbackDisplay
               isCorrect={isCorrect}
-              message={assessmentMode ? '' : message}
-              level={assessmentMode ? null : level}
-              hint={assessmentMode ? undefined : currentItem.hint}
-              correctAnswer={assessmentMode ? undefined : currentItem.acceptedAnswers.join(' OR ')}
-              showExplanation={!assessmentMode && showExplanation}
-              onContinue={(isCorrect || assessmentMode) && isAwaitingConfirmation ? confirmAdvance : undefined}
-              allowContinueOnIncorrect={assessmentMode}
+              message={message}
+              level={level}
+              hint={currentItem.hint}
+              correctAnswer={currentItem.acceptedAnswers.join(' OR ')}
+              showExplanation={showExplanation}
+              onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
               onStartOver={resetRequired ? handleExerciseReset : undefined}
             />
           )}

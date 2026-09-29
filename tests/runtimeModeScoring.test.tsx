@@ -1,13 +1,11 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import FillExercise from '@/src/components/ui/exercises/fill-exercise';
 import MultipleChoiceExercise from '@/src/components/ui/exercises/multiple-choice-exercise';
-import ClickOnMultipleWordsExercise from '@/src/components/ui/exercises/click-on-multiple-words';
 import ContentRenderer from '@/src/components/ui/lesson/content-renderer';
 import type { FillExercise as FillExerciseType } from '@/src/types/exercises/fill';
 import type { MultipleChoiceExercise as MultipleChoiceExerciseType } from '@/src/types/exercises/multiple-choice';
 import type { MatchingExercise } from '@/src/types/exercises/matching';
-import type { ClickOnMultipleWordsExercise as ClickOnMultipleWordsExerciseType } from '@/src/types/exercises/click-on-multiple-words';
 import type { GeneratedTranslationExercise } from '@/src/types/exercises/generated-translation';
 
 jest.mock('@/src/services/wordLookupService', () => ({}));
@@ -35,38 +33,7 @@ describe('exercise runtime-mode scoring', () => {
     mockUseGetMultiPosWordsQuery.mockReturnValue({ data: undefined, isLoading: false, isError: false });
   });
 
-  it('rounds click-selection scores passed to preview completion without changing grader precision', async () => {
-    const onComplete = jest.fn();
-    const exercise: ClickOnMultipleWordsExerciseType = {
-      id: 'click-preview',
-      type: 'click-on-multiple-words',
-      title: 'Click',
-      instructions: '',
-      itemProgressionDelay: 0,
-      feedbackConfig: {
-        ...manualProgression,
-        progressionRules: {
-          ...manualProgression.progressionRules,
-          autoAdvanceOnCorrect: true,
-          pauseForExplanation: false,
-        },
-      },
-      data: {
-        passage: 'amo amas amat',
-        correctWordIndices: [0, 1, 2],
-        allowOverSelection: false,
-      },
-    };
-
-    render(<ClickOnMultipleWordsExercise exercise={exercise} runtimeMode="preview" onComplete={onComplete} />);
-    fireEvent.click(screen.getByRole('button', { name: /Word 1: amo/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Word 2: amas/i }));
-    fireEvent.click(screen.getByRole('button', { name: /submit selections/i }));
-
-    await waitFor(() => expect(onComplete).toHaveBeenCalledWith(67));
-  });
-
-  it('does not emit accepted completion from preview or test runtime modes', () => {
+  it('does not emit accepted completion in test runtime mode', () => {
     const exercise: MultipleChoiceExerciseType = {
       id: 'mode-gated-completion',
       type: 'multiple-choice',
@@ -79,19 +46,6 @@ describe('exercise runtime-mode scoring', () => {
         options: [{ id: 'right', text: 'Right', isCorrect: true }],
       },
     };
-
-    const previewAccepted = jest.fn();
-    const { unmount } = render(
-      <MultipleChoiceExercise
-        exercise={exercise}
-        runtimeMode="preview"
-        onCompletionAccepted={previewAccepted}
-      />
-    );
-    fireEvent.click(screen.getByRole('button', { name: /right/i }));
-    fireEvent.click(screen.getByRole('button', { name: /submit answer/i }));
-    expect(previewAccepted).not.toHaveBeenCalled();
-    unmount();
 
     const testAccepted = jest.fn();
     render(<MultipleChoiceExercise exercise={exercise} runtimeMode="test" onCompletionAccepted={testAccepted} />);
@@ -295,36 +249,6 @@ describe('exercise runtime-mode scoring', () => {
         },
       })
     );
-  });
-
-  it('scores matching preview answers through the canonical matching grader', () => {
-    const onComplete = jest.fn();
-    const exercise: MatchingExercise = {
-      id: 'matching-preview',
-      type: 'matching',
-      title: 'Match',
-      instructions: '',
-      feedbackConfig: manualProgression,
-      data: {
-        leftColumn: [
-          { id: 'left-a', value: 'Alpha' },
-          { id: 'left-b', value: 'Beta' },
-        ],
-        rightColumn: [
-          { id: 'right-a', value: 'One' },
-          { id: 'right-b', value: 'Two' },
-        ],
-        answers: { 'left-a': 'right-a', 'left-b': 'right-b' },
-      },
-    };
-
-    render(<ContentRenderer content={exercise} runtimeMode="preview" onComplete={onComplete} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Alpha' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Two' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Beta' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Two' }));
-
-    expect(onComplete).toHaveBeenCalledWith(50);
   });
 
   it('allows the authoring preview to opt into generated vocabulary queries in test mode', () => {

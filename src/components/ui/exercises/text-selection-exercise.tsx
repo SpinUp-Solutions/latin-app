@@ -38,7 +38,6 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({
   initialAnswer,
 }) => {
   const mode = runtimeMode ?? 'practice';
-  const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
   const passageWords = splitHtmlIntoWords(exercise.data.passage);
   const restoredIndices = initialAnswer?.type === 'text-selection' ? initialAnswer.selectedWordIndices : [];
@@ -109,7 +108,6 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({
     applySequentialItemResult({
       isCorrect: validation.isCorrect,
       isLastItem,
-      assessmentMode,
       showExplanation: exercise.feedbackConfig.successMessage?.showExplanation,
       explanation: currentQuestion.explanation,
       finalScore,
@@ -178,18 +176,17 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({
         {!testAnswerMode && (
           <FeedbackDisplay
             isCorrect={isCorrect}
-            message={assessmentMode ? '' : message}
-            level={assessmentMode ? null : level}
-            hint={assessmentMode ? undefined : currentQuestion.hint}
+            message={message}
+            level={level}
+            hint={currentQuestion.hint}
             correctAnswer={
-              assessmentMode || !passageWords[currentQuestion.correctWordIndex] ? undefined : (
+              testAnswerMode || !passageWords[currentQuestion.correctWordIndex] ? undefined : (
                 <SimpleRichDisplay content={passageWords[currentQuestion.correctWordIndex]} />
               )
             }
-            explanation={assessmentMode ? undefined : currentQuestion.explanation}
-            showExplanation={!assessmentMode && showExplanation}
-            onContinue={(isCorrect || assessmentMode) && isAwaitingConfirmation ? confirmAdvance : undefined}
-            allowContinueOnIncorrect={assessmentMode}
+            explanation={currentQuestion.explanation}
+            showExplanation={showExplanation}
+            onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
             onStartOver={resetRequired ? handleExerciseReset : undefined}
           />
         )}

@@ -36,7 +36,6 @@ const FillExerciseComponent: React.FC<Props> = ({
   initialAnswer,
 }) => {
   const mode = runtimeMode ?? 'practice';
-  const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
   const restoredAnswers = initialAnswer?.type === 'fill' ? initialAnswer.answers : [];
   const firstIncompleteIndex = exercise.data.items.findIndex((_, index) => !restoredAnswers[index]?.trim());
@@ -106,7 +105,6 @@ const FillExerciseComponent: React.FC<Props> = ({
     applySequentialItemResult({
       isCorrect: validation.isCorrect,
       isLastItem,
-      assessmentMode,
       showExplanation: exercise.feedbackConfig.successMessage?.showExplanation,
       explanation: currentItem.explanation,
       finalScore,
@@ -169,14 +167,13 @@ const FillExerciseComponent: React.FC<Props> = ({
         {!testAnswerMode && (
           <FeedbackDisplay
             isCorrect={isCorrect}
-            message={assessmentMode ? '' : message}
-            level={assessmentMode ? null : level}
-            hint={assessmentMode ? undefined : currentItem.hint}
-            correctAnswer={assessmentMode ? undefined : currentItem.answer}
-            explanation={assessmentMode ? undefined : currentItem.explanation}
-            showExplanation={!assessmentMode && showExplanation}
-            onContinue={(isCorrect || assessmentMode) && isAwaitingConfirmation ? confirmAdvance : undefined}
-            allowContinueOnIncorrect={assessmentMode}
+            message={message}
+            level={level}
+            hint={currentItem.hint}
+            correctAnswer={currentItem.answer}
+            explanation={currentItem.explanation}
+            showExplanation={showExplanation}
+            onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
             onStartOver={resetRequired ? handleExerciseReset : undefined}
           />
         )}

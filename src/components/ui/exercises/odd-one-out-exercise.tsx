@@ -40,7 +40,6 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({
   const hasRequiredExplanation = (value: string) =>
     !exercise.data.requireExplanation || value.replace(/<[^>]*>/g, '').trim().length > 0;
   const {
-    assessmentMode,
     testAnswerMode,
     hasSubmitted,
     isProcessing,
@@ -111,9 +110,9 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({
             const isCorrectItem = item.isOddOneOut;
             // Only show correct answer when user got it right OR feedback system says to show answer
             const showCorrectHighlight =
-              !assessmentMode && hasSubmitted && isCorrectItem && (isCorrect === true || level?.showAnswer);
+              !testAnswerMode && hasSubmitted && isCorrectItem && (isCorrect === true || level?.showAnswer);
             const showIncorrectHighlight =
-              !assessmentMode && hasSubmitted && isSelected && !isCorrectItem && level?.showAnswer;
+              !testAnswerMode && hasSubmitted && isSelected && !isCorrectItem && level?.showAnswer;
 
             return (
               <button
@@ -186,7 +185,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({
               className="bg-roman-terracotta hover:bg-roman-terracotta/90 text-white">
               {isProcessing ? 'Checking...' : 'Submit Answer'}
             </Button>
-          ) : hasSubmitted && !assessmentMode && !resetRequired ? (
+          ) : hasSubmitted && !testAnswerMode && !resetRequired ? (
             <Button
               onClick={handleReset}
               variant="outline"
@@ -197,7 +196,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({
         </div>
 
         {/* Feedback Display */}
-        {!assessmentMode && (
+        {!testAnswerMode && (
           <FeedbackDisplay
             isCorrect={isCorrect}
             message={message}

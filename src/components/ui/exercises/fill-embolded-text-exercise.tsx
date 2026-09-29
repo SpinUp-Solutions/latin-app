@@ -38,7 +38,6 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
   initialAnswer,
 }) => {
   const mode = runtimeMode ?? 'practice';
-  const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
   const passageWords = useMemo(() => splitHtmlIntoWords(exercise.data.passage), [exercise.data.passage]);
   const restoredAnswers = initialAnswer?.type === 'fill-embolded-text' ? initialAnswer.answers : [];
@@ -130,7 +129,6 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
     applySequentialItemResult({
       isCorrect: validation.isCorrect,
       isLastItem,
-      assessmentMode,
       showExplanation: exercise.feedbackConfig.successMessage?.showExplanation,
       explanation: currentWord.explanation,
       finalScore,
@@ -234,14 +232,13 @@ const FillEmboldedTextExerciseComponent: React.FC<Props> = ({
         {!testAnswerMode && (
           <FeedbackDisplay
             isCorrect={isCorrect}
-            message={assessmentMode ? '' : message}
-            level={assessmentMode ? null : level}
-            hint={assessmentMode ? undefined : currentWord.hint}
-            correctAnswer={assessmentMode ? undefined : currentWord.correctAnswer}
-            explanation={assessmentMode ? undefined : currentWord.explanation}
-            showExplanation={!assessmentMode && showExplanation}
-            onContinue={(isCorrect || assessmentMode) && isAwaitingConfirmation ? confirmAdvance : undefined}
-            allowContinueOnIncorrect={assessmentMode}
+            message={message}
+            level={level}
+            hint={currentWord.hint}
+            correctAnswer={currentWord.correctAnswer}
+            explanation={currentWord.explanation}
+            showExplanation={showExplanation}
+            onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
             onStartOver={resetRequired ? handleExerciseReset : undefined}
           />
         )}

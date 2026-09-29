@@ -36,7 +36,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({
   const restoredOptionIds = initialAnswer?.type === 'multiple-choice' ? initialAnswer.selectedOptionIds : [];
   const [selectedOptionIds, setSelectedOptionIds] = useState<string[]>(restoredOptionIds);
   const {
-    assessmentMode,
+    testAnswerMode,
     hasSubmitted,
     isProcessing,
     resetRequired,
@@ -77,7 +77,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({
         : [...selectedOptionIds, optionId]
       : [optionId];
     setSelectedOptionIds(nextOptionIds);
-    if (runtimeMode === 'test') onAnswer?.({ type: 'multiple-choice', selectedOptionIds: nextOptionIds });
+    if (testAnswerMode) onAnswer?.({ type: 'multiple-choice', selectedOptionIds: nextOptionIds });
   };
 
   const handleSubmit = () => {
@@ -100,11 +100,11 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({
 
     const option = exercise.data.options.find(opt => opt.id === optionId);
     const isSelected = selectedOptionIds.includes(optionId);
-    const shouldRevealAnswers = !assessmentMode && (isCorrect || level?.showAnswer);
+    const shouldRevealAnswers = !testAnswerMode && (isCorrect || level?.showAnswer);
 
     if (option?.isCorrect && shouldRevealAnswers) {
       return 'bg-green-50 border-green-300 text-green-900';
-    } else if (!assessmentMode && isSelected && !option?.isCorrect) {
+    } else if (!testAnswerMode && isSelected && !option?.isCorrect) {
       return 'bg-red-50 border-red-300 text-red-900';
     }
 
@@ -162,7 +162,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({
         )}
 
         {/* Try Again Button */}
-        {hasSubmitted && isCorrect === false && !assessmentMode && !resetRequired && (
+        {hasSubmitted && isCorrect === false && !testAnswerMode && !resetRequired && (
           <div className="flex justify-center">
             <Button onClick={handleReset} variant="outline" disabled={isProcessing} className="px-8">
               Try Again
@@ -170,7 +170,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({
           </div>
         )}
 
-        {!assessmentMode && (
+        {!testAnswerMode && (
           <FeedbackDisplay
             isCorrect={isCorrect}
             message={message}

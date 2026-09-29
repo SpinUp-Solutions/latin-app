@@ -303,9 +303,7 @@ describe('LessonPlayer accepted completion tracking', () => {
 
   it.each([
     ['passive', { lesson: { pageItems: [[{ id: 'text-1', type: 'text', title: 'Read' }]] }, player: {} }],
-    ['preview', { lesson: {}, player: { runtimeMode: 'preview' as const } }],
     ['untracked', { lesson: {}, player: { trackProgress: false } }],
-    ['test', { lesson: {}, player: { runtimeMode: 'test' as const } }],
   ])('hides the ring for %s lessons', (_label, { lesson: lessonProps, player: playerProps }) => {
     render(<LessonPlayer lesson={createLesson(1, lessonProps)} {...playerProps} />);
     expect(screen.queryByRole('progressbar', { name: /exercise progress/i })).not.toBeInTheDocument();
@@ -849,7 +847,7 @@ describe('LessonPlayer mutation summaries and retries', () => {
     expect(screen.getByText('Page content: page-1')).toBeInTheDocument();
   });
 
-  it.each(['test', 'preview'] as const)('does not auto-advance audio on %s exercise pages', async runtimeMode => {
+  it('does not auto-advance audio on exercise pages', async () => {
     render(
       <LessonPlayer
         lesson={createLesson(2, {
@@ -858,7 +856,6 @@ describe('LessonPlayer mutation summaries and retries', () => {
             [{ id: 'text-2', type: 'text', title: 'Read' }],
           ],
         })}
-        runtimeMode={runtimeMode}
         trackProgress={false}
       />
     );
