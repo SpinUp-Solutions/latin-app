@@ -2,22 +2,19 @@
 
 import React, { useState } from 'react';
 import { ClickOnMultipleWordsExercise } from '@/src/types/exercise';
-import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
-import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
+import { useSingleAnswerExercise } from '@/src/hooks/useSingleAnswerExercise';
 import { FeedbackDisplay } from '../feedback';
 import { validateClickOnMultipleWords } from '@/src/utils/exercises/clickOnMultipleWords';
 import { Button } from '@/src/components/ui/button';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { ExerciseIntro } from './exercise-intro';
 import { MultiClickableRichDisplay } from '../core/multi-clickable-rich-display';
-import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 import type {
   ExerciseAnswer,
   ExerciseAnswerHandler,
   ExerciseCompletionHandler,
   RuntimeMode,
 } from '@/src/types/runtime-mode';
-import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 import { splitHtmlIntoWords } from '@/src/utils/htmlWordSplitter';
 
 interface Props {
@@ -37,46 +34,40 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({
   onAnswer,
   initialAnswer,
 }) => {
-  const mode = runtimeMode ?? 'practice';
-  const assessmentMode = mode !== 'practice';
-  const testAnswerMode = mode === 'test';
   const passageWords = splitHtmlIntoWords(exercise.data.passage);
   const restoredIndices = initialAnswer?.type === 'click-on-multiple-words' ? initialAnswer.selectedWordIndices : [];
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set(restoredIndices));
-  const [hasSubmitted, setHasSubmitted] = useState(restoredIndices.length > 0);
-  const [isProcessing, setIsProcessing] = useState(false);
   const [validationResult, setValidationResult] = useState<ReturnType<typeof validateClickOnMultipleWords> | null>(
     null
   );
-  const { isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance, cancelPendingAdvance } = useExerciseProgression(
-    {
-      totalItems: 1,
-      itemProgressionDelay: exercise.itemProgressionDelay,
-      progressionRules: exercise.feedbackConfig.progressionRules,
-    }
-  );
-
   const {
+    assessmentMode,
+    hasSubmitted,
+    isProcessing,
+    resetRequired,
     isCorrect,
     message,
     level,
     showExplanation,
-    handleCorrect,
-    handleIncorrect,
     clearFeedback,
-    shouldResetExercise,
-    resetExercise,
-  } = useExerciseFeedback(exercise.feedbackConfig);
-
-  const resetRequired = mode === 'practice' && shouldResetExercise;
+    isAwaitingConfirmation,
+    confirmAdvance,
+    submit,
+    tryAgain,
+    startOver,
+  } = useSingleAnswerExercise({
+    exercise,
+    runtimeMode,
+    initiallySubmitted: restoredIndices.length > 0,
+    onAnswer,
+    onComplete,
+    onCompletionAccepted,
+  });
 
   const handleExerciseReset = () => {
-    cancelPendingAdvance();
+    startOver();
     setSelectedIndices(new Set());
-    setHasSubmitted(false);
     setValidationResult(null);
-    setIsProcessing(false);
-    resetExercise();
   };
 
   const handleWordClick = (wordIndex: number) => {
@@ -99,54 +90,18 @@ const ClickOnMultipleWordsComponent: React.FC<Props> = ({
 
   const handleSubmit = () => {
     if (isProcessing || resetRequired) return;
-
-    setIsProcessing(true);
-    setHasSubmitted(true);
-    if (testAnswerMode) {
-      onAnswer?.({
-        type: 'click-on-multiple-words',
-        selectedWordIndices: Array.from(selectedIndices).sort((a, b) => a - b),
-      });
-      setIsProcessing(false);
-      onComplete?.(0);
-      return;
-    }
-
-    const validation = validateClickOnMultipleWords(selectedIndices, exercise);
-    setValidationResult(validation);
-    const score = Math.round(
-      gradeExercisePercentage(
-        { exercise },
-        {
-          type: 'click-on-multiple-words',
-          selectedWordIndices: Array.from(selectedIndices).sort((a, b) => a - b),
-        }
-      )
-    );
-
-    if (validation.isCorrect) {
-      handleCorrect();
-      const hasVisibleExplanation =
-        (exercise.feedbackConfig.successMessage?.showExplanation ?? true) &&
-        hasVisibleFeedbackContent(exercise.data.explanation);
-
-      autoAdvanceIfEnabled(() => {
-        setIsProcessing(false);
-        onComplete?.(score);
-      }, hasVisibleExplanation);
-      if (!assessmentMode) onCompletionAccepted?.(score);
-    } else {
-      handleIncorrect();
-      setIsProcessing(false);
-      if (assessmentMode) onComplete?.(score);
-    }
+    const selectedWordIndices = Array.from(selectedIndices).sort((a, b) => a - b);
+    submit({ type: 'click-on-multiple-words', selectedWordIndices }, () => {
+      const validation = validateClickOnMultipleWords(selectedIndices, exercise);
+      setValidationResult(validation);
+      return validation.isCorrect;
+    });
   };
 
   const handleReset = () => {
     setSelectedIndices(new Set());
-    setHasSubmitted(false);
     setValidationResult(null);
-    clearFeedback();
+    tryAgain();
   };
 
   const getSelectionSummary = () => {
