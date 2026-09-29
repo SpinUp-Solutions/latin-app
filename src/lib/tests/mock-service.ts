@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { fingerprint } from './sections.server';
 import type { DocumentSnapshot, Firestore, QuerySnapshot, Transaction } from 'firebase-admin/firestore';
 import {
   DEFAULT_LEARNING_PATH_ID,
@@ -99,9 +99,7 @@ export class MockTestService {
   }
 
   private legacyMockResultMigrationRef(studentId: string) {
-    const id = createHash('sha256')
-      .update(JSON.stringify(['mock-results', studentId]))
-      .digest('hex');
+    const id = fingerprint(['mock-results', studentId]);
     return this.db.collection(STUDENT_MOCK_RESULT_MIGRATIONS_COLLECTION).doc(id);
   }
 
@@ -212,10 +210,7 @@ export class MockTestService {
   }
 
   static parentMockId(testId: string, versionId: string): string {
-    return `parent-${createHash('sha256')
-      .update(JSON.stringify([testId, versionId]))
-      .digest('hex')
-      .slice(0, 48)}`;
+    return `parent-${fingerprint([testId, versionId]).slice(0, 48)}`;
   }
 
   private async assertRotationAllowed(transaction: Transaction, test: TestUnit, rotationVersionIds: string[]) {
@@ -752,10 +747,7 @@ export class MockTestService {
     actorId: string
   ) {
     const { testId, requestId } = duplicateStandaloneMockVersionIntoTestInputSchema.parse(input);
-    const versionId = `copy-${createHash('sha256')
-      .update(JSON.stringify([mockId, testId, requestId]))
-      .digest('hex')
-      .slice(0, 48)}`;
+    const versionId = `copy-${fingerprint([mockId, testId, requestId]).slice(0, 48)}`;
     const mockRef = this.mocks.doc(mockId);
     const targetVersionRef = this.versions.doc(versionId);
     const targetDraftRef = this.drafts.doc(versionId);

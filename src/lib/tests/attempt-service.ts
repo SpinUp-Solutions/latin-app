@@ -11,7 +11,7 @@ import {
 import { isExerciseAnswerComplete } from './answer-completion';
 import type { Exercise } from '@/src/types/exercises';
 import type { ConfirmSectionResult } from '@/src/types/test';
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import type { DocumentReference, DocumentSnapshot, Firestore, Transaction } from 'firebase-admin/firestore';
 import {
   DEFAULT_LEARNING_PATH_ID,
@@ -125,15 +125,11 @@ const sameOrigin = (left: TestAttemptOrigin, right: TestAttemptOrigin) =>
   left.kind === right.kind && originId(left) === originId(right);
 
 export function getTestAttemptSessionId(studentId: string, origin: TestAttemptOrigin): string {
-  return createHash('sha256')
-    .update(JSON.stringify([studentId, origin.kind, originId(origin)]))
-    .digest('hex');
+  return fingerprint([studentId, origin.kind, originId(origin)]);
 }
 
 export function getStudentMockResultId(studentId: string, mockTestId: string): string {
-  return createHash('sha256')
-    .update(JSON.stringify([studentId, mockTestId]))
-    .digest('hex');
+  return fingerprint([studentId, mockTestId]);
 }
 
 function parseAttemptSnapshot(snapshot: DocumentSnapshot): TestAttempt {

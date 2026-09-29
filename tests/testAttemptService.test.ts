@@ -567,6 +567,18 @@ describe('test attempt persistence service', () => {
     expect(getTestAttemptSessionId('student', normal)).toBe(getTestAttemptSessionId('student', normal));
     expect(getTestAttemptSessionId('student', normal)).not.toBe(getTestAttemptSessionId('student', mock));
   });
+
+  it('keeps persisted document IDs stable', () => {
+    expect(getTestAttemptSessionId('student-1', { kind: 'normal-test', testId: 'test-1' })).toBe(
+      '6c4bd2901cb8767abb1ae97844dcff4fbe0dddddfbadb15f7a6de0ddc0644e9b'
+    );
+    expect(getStudentMockResultId('student-1', 'mock-1')).toBe(
+      'd0e3cc743613e5dda0eaa213342e6c181e812a633aeed963834a57fcb88555ba'
+    );
+    expect(MockTestService.parentMockId('test-1', 'version-1')).toBe(
+      'parent-07424aea037c21a1b16c50faddf6fc574e7b9ff75b0fa565'
+    );
+  });
 });
 
 describe('mock ownership mutations', () => {

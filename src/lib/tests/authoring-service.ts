@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { fingerprint } from './sections.server';
 import type { Firestore } from 'firebase-admin/firestore';
 import {
   DEFAULT_LEARNING_PATH_ID,
@@ -365,10 +365,7 @@ export class TestAuthoringService {
     actorId: string
   ) {
     const parsed = duplicateTestVersionInputSchema.parse(input);
-    const targetVersionId = `duplicate-${createHash('sha256')
-      .update(JSON.stringify([testId, sourceVersionId, parsed.requestId]))
-      .digest('hex')
-      .slice(0, 48)}`;
+    const targetVersionId = `duplicate-${fingerprint([testId, sourceVersionId, parsed.requestId]).slice(0, 48)}`;
     const testRef = this.units.doc(testId);
     const sourceRef = this.versions.doc(sourceVersionId);
     const targetVersionRef = this.versions.doc(targetVersionId);
