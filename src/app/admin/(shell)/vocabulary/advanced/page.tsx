@@ -27,10 +27,6 @@ import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 
 const TARGET_COLLECTION = VOCABULARY_WORDS_COLLECTION;
 
-function csvWhenFiltered<T extends string>(active: boolean, value: readonly T[] | 'all'): string | undefined {
-  return active && value !== 'all' && value.length > 0 ? value.join(',') : undefined;
-}
-
 function AdvancedFiltersPage() {
   const dispatch = useDispatch();
   const filters = useSelector(selectAdvancedFilters);
@@ -39,37 +35,18 @@ function AdvancedFiltersPage() {
   const debouncedSearch = useDebounce(filters.search, 300);
   const formSelection = useFormSelection();
 
-  const numericLimit = typeof filters.limit === 'number' ? filters.limit : undefined;
-  const fetchAll = filters.limit === 'all';
+  const { limit, ...poolFilters } = filters;
+  const fetchAll = limit === 'all';
 
-  const queryArgs = {
+  const { data, isLoading, isFetching, isError } = useGetAdvancedWordsQuery({
     collection: TARGET_COLLECTION,
-    partOfSpeech: filters.partOfSpeech !== 'all' ? filters.partOfSpeech : undefined,
-    search: debouncedSearch || undefined,
+    filters: { ...poolFilters, search: debouncedSearch },
     lastWordId: pagination.lastWordId,
-    verbConjugation: csvWhenFiltered(filters.partOfSpeech === 'verb', filters.verbConjugation),
-    isDeponent: filters.partOfSpeech === 'verb' && filters.isDeponent !== 'both' ? filters.isDeponent : undefined,
-    nounDeclension: csvWhenFiltered(filters.partOfSpeech === 'noun', filters.nounDeclension),
-    adjectiveDeclension: csvWhenFiltered(filters.partOfSpeech === 'adjective', filters.adjectiveDeclension),
-    pronounType: csvWhenFiltered(filters.partOfSpeech === 'pronoun', filters.pronounType),
-    pronounPerson:
-      filters.partOfSpeech === 'pronoun' &&
-      filters.pronounType !== 'all' &&
-      filters.pronounType.length === 1 &&
-      filters.pronounType[0] === 'personal' &&
-      filters.pronounPerson !== 'all' &&
-      filters.pronounPerson.length > 0
-        ? filters.pronounPerson.join(',')
-        : undefined,
-    limit: fetchAll ? undefined : numericLimit,
-    fetchAll: fetchAll ? true : undefined,
-    cellPaths: selection.selectedCellPaths.length > 0 ? selection.selectedCellPaths : undefined,
-    tableType: selection.selectedTableType || undefined,
-  };
-
-  console.log('[AdvancedFiltersPage] Query args:', queryArgs);
-
-  const { data, isLoading, isFetching, isError } = useGetAdvancedWordsQuery(queryArgs);
+    limit: fetchAll ? undefined : limit,
+    fetchAll,
+    cellPaths: selection.selectedCellPaths,
+    tableType: selection.selectedTableType ?? undefined,
+  });
   const words = data?.words ?? [];
   const totalCount = data?.totalCount;
   const hasMore = fetchAll ? false : (data?.hasMore ?? false);
