@@ -222,6 +222,8 @@ const LessonSession: React.FC<LessonPlayerProps> = ({
 
   useEffect(() => {
     if (!trackProgress || !user?.uid || !currentPage?.id) return;
+    // Revisiting a page the server already recorded would rewrite the same progress.
+    if (currentPageIndex <= (lesson.furthestPageIndex ?? -1)) return;
     const isUntouchedLesson =
       lesson.status === 'available' &&
       (lesson.furthestPageIndex === undefined || lesson.furthestPageIndex < 0) &&
