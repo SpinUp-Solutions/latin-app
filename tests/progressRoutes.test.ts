@@ -159,8 +159,10 @@ describe('progress update route', () => {
       success: true,
       lessonCompleted: true,
       progress: 100,
+      furthestPageIndex: 0,
       completedExerciseCount: 1,
       requiredExerciseCount: 1,
+      exerciseProgress: [{ exerciseId: 'exercise-1', score: 20, completedAt: expect.any(String) }],
     });
     expect(mockTransactionSet).toHaveBeenCalledWith(
       expect.anything(),
@@ -246,6 +248,7 @@ describe('progress update route', () => {
       furthestPageIndex: 1,
       completedExerciseCount: 0,
       requiredExerciseCount: 0,
+      exerciseProgress: [],
     });
     expect(mockTransactionSet).toHaveBeenCalledWith(
       expect.anything(),
@@ -359,8 +362,10 @@ describe('finish route', () => {
       lessonCompleted: true,
       alreadyCompleted: true,
       progress: 100,
+      furthestPageIndex: 1,
       completedExerciseCount: 0,
       requiredExerciseCount: 1,
+      exerciseProgress: [],
     });
     expect(mockTransactionSet).toHaveBeenCalledWith(
       expect.anything(),

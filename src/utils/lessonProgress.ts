@@ -278,6 +278,30 @@ export function toPersistedProgressSummary(
   };
 }
 
+/** What every progress write returns: the persisted summary the client caches can adopt as-is. */
+export interface LessonProgressMutationResult {
+  lessonCompleted: boolean;
+  progress: number;
+  furthestPageIndex: number;
+  completedExerciseCount: number;
+  requiredExerciseCount: number;
+  exerciseProgress: ExerciseProgress[];
+}
+
+export function toProgressMutationResult(
+  persisted: ReturnType<typeof toPersistedProgressSummary>,
+  furthestPageIndex: number
+): LessonProgressMutationResult {
+  return {
+    lessonCompleted: persisted.status === 'completed',
+    progress: persisted.progress,
+    furthestPageIndex,
+    completedExerciseCount: persisted.completedExerciseCount,
+    requiredExerciseCount: persisted.requiredExerciseCount,
+    exerciseProgress: persisted.exerciseProgress,
+  };
+}
+
 export function calculateStoredProgress(
   progress: Partial<UserProgress> | undefined,
   options: StoredProgressCalculationOptions

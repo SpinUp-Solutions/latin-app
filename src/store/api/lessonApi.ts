@@ -1,9 +1,12 @@
+import type { TypedMutationOnQueryStarted } from '@reduxjs/toolkit/query';
 import { Lesson, LessonSummary, LessonWithProgress, StudentDashboard } from '@/src/types/lesson';
+import type { LessonProgressMutationResult } from '@/src/utils/lessonProgress';
 import { extractTooltipsFromLesson } from '@/src/utils/tooltipUtils';
 import { TooltipData } from '@/src/types/tooltip';
 import type { AdminLearningPathView, LearningPathDocument, LessonUnitType } from '@/src/types/learning-unit';
 import { buildLessonMutationPayload } from '@/src/utils/practiceCategoryLessons';
 import { appApi } from './appApi';
+import type { createAuthenticatedBaseQuery } from './baseQuery';
 import { getAttemptSummaryTagId, PRACTICE_CATEGORY_ASSIGNMENTS_TAG, STUDENT_DASHBOARD_TAG } from './tags';
 
 interface RecoveryItem {
@@ -15,6 +18,60 @@ interface RecoveryItem {
   errorCode?: string;
   createdAt: string;
 }
+
+interface ProgressMutationArgs {
+  userId: string;
+  lessonId: string;
+}
+
+type ProgressMutationResponse = LessonProgressMutationResult & { success: boolean };
+
+/**
+ * A progress write returns the persisted summary, so the open lesson and the
+ * dashboard adopt it rather than refetching both after every page and exercise.
+ * Completing a lesson can unlock the next unit, which only the server decides,
+ * so that alone refetches the dashboard.
+ */
+const adoptPersistedProgress: TypedMutationOnQueryStarted<
+  LessonProgressMutationResult,
+  ProgressMutationArgs,
+  ReturnType<typeof createAuthenticatedBaseQuery>,
+  'appApi'
+> = async ({ userId, lessonId }, { dispatch, queryFulfilled }) => {
+  let result: LessonProgressMutationResult;
+  try {
+    ({ data: result } = await queryFulfilled);
+  } catch {
+    return;
+  }
+  const status = result.lessonCompleted ? 'completed' : 'in-progress';
+  const pages = { furthestPageIndex: result.furthestPageIndex, currentPageIndex: Math.max(result.furthestPageIndex, 0) };
+
+  dispatch(
+    lessonApi.util.updateQueryData('getStudentLesson', { lessonId, userId }, lesson => {
+      Object.assign(lesson, pages, {
+        status,
+        progress: result.progress,
+        exerciseProgress: result.exerciseProgress,
+        completedExerciseCount: result.completedExerciseCount,
+        requiredExerciseCount: result.requiredExerciseCount,
+      });
+    })
+  );
+
+  let completedNow = false;
+  dispatch(
+    lessonApi.util.updateQueryData('getStudentDashboard', userId, dashboard => {
+      for (const unit of [...dashboard.learningPath, ...dashboard.practiceLessons]) {
+        if (unit.kind !== 'lesson' || unit.id !== lessonId) continue;
+        completedNow ||= status === 'completed' && unit.status !== 'completed';
+        Object.assign(unit, pages, { status, progress: result.progress });
+      }
+    })
+  );
+  // Only the dashboard provides this tag, so the open lesson is not refetched.
+  if (completedNow) dispatch(lessonApi.util.invalidateTags([{ type: 'StudentLesson', id: 'LIST' }]));
+};
 
 export const lessonApi = appApi.injectEndpoints({
   endpoints: builder => ({
@@ -187,14 +244,8 @@ export const lessonApi = appApi.injectEndpoints({
     }),
 
     markExerciseComplete: builder.mutation<
-      {
-        success: boolean;
-        lessonCompleted: boolean;
-        progress: number;
-        completedExerciseCount: number;
-        requiredExerciseCount: number;
-      },
-      { userId: string; lessonId: string; exerciseId: string; score: number }
+      ProgressMutationResponse,
+      ProgressMutationArgs & { exerciseId: string; score: number }
     >({
       query: ({ userId, lessonId, exerciseId, score }) => ({
         url: `/progress/${userId}/${lessonId}`,
@@ -205,26 +256,10 @@ export const lessonApi = appApi.injectEndpoints({
           score,
         },
       }),
-      invalidatesTags: (result, error, { userId, lessonId }) =>
-        error || !result
-          ? []
-          : [
-              { type: 'StudentLesson', id: lessonId },
-              { type: 'StudentLearningPath', id: userId },
-            ],
+      onQueryStarted: adoptPersistedProgress,
     }),
 
-    updatePageProgress: builder.mutation<
-      {
-        success: boolean;
-        furthestPageIndex: number;
-        lessonCompleted: boolean;
-        progress: number;
-        completedExerciseCount: number;
-        requiredExerciseCount: number;
-      },
-      { userId: string; lessonId: string; pageId: string }
-    >({
+    updatePageProgress: builder.mutation<ProgressMutationResponse, ProgressMutationArgs & { pageId: string }>({
       query: ({ userId, lessonId, pageId }) => ({
         url: `/progress/${userId}/${lessonId}`,
         method: 'POST',
@@ -233,38 +268,19 @@ export const lessonApi = appApi.injectEndpoints({
           pageId,
         },
       }),
-      invalidatesTags: (result, error, { userId, lessonId }) =>
-        error || !result
-          ? []
-          : [
-              { type: 'StudentLesson', id: lessonId },
-              { type: 'StudentLearningPath', id: userId },
-            ],
+      onQueryStarted: adoptPersistedProgress,
     }),
 
     finishLesson: builder.mutation<
-      {
-        success: boolean;
-        lessonCompleted: boolean;
-        alreadyCompleted: boolean;
-        progress: number;
-        completedExerciseCount: number;
-        requiredExerciseCount: number;
-      },
-      { userId: string; lessonId: string; finalPageId: string }
+      ProgressMutationResponse & { alreadyCompleted: boolean },
+      ProgressMutationArgs & { finalPageId: string }
     >({
       query: ({ userId, lessonId, finalPageId }) => ({
         url: `/progress/${userId}/${lessonId}/complete`,
         method: 'POST',
         body: { finalPageId },
       }),
-      invalidatesTags: (result, error, { userId, lessonId }) =>
-        error || !result
-          ? []
-          : [
-              { type: 'StudentLesson', id: lessonId },
-              { type: 'StudentLearningPath', id: userId },
-            ],
+      onQueryStarted: adoptPersistedProgress,
     }),
 
     getRecoveryItems: builder.query<RecoveryItem[], void>({

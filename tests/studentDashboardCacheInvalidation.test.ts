@@ -10,6 +10,8 @@ const mockBaseQuery = jest.fn();
 let failPublication = false;
 let failProgress = false;
 let failMockMutation = false;
+let dashboardLearningPath: unknown[] = [];
+let progressResult: Record<string, unknown> = {};
 
 jest.mock('@/src/store/api/baseQuery', () => ({
   createAuthenticatedBaseQuery:
@@ -33,13 +35,22 @@ describe('student dashboard cache invalidation', () => {
     failPublication = false;
     failProgress = false;
     failMockMutation = false;
+    dashboardLearningPath = [];
+    progressResult = {
+      lessonCompleted: false,
+      progress: 50,
+      furthestPageIndex: 1,
+      completedExerciseCount: 1,
+      requiredExerciseCount: 2,
+      exerciseProgress: [{ exerciseId: 'exercise-1', score: 100, completedAt: 'now' }],
+    };
     mockBaseQuery.mockImplementation(async (request: unknown) => {
       switch (requestUrl(request)) {
         case '/student-dashboard':
           return {
             data: {
               dashboard: {
-                learningPath: [],
+                learningPath: dashboardLearningPath,
                 practiceLessons: [],
                 mockTests: [{ id: 'mock-1' }],
               },
@@ -109,7 +120,9 @@ describe('student dashboard cache invalidation', () => {
               },
             };
           }
-          return { data: { success: true, lessonCompleted: false } };
+          return { data: { success: true, ...progressResult } };
+        case '/progress/student-1/lesson-1/complete':
+          return { data: { success: true, alreadyCompleted: false, ...progressResult } };
         case '/admin/test-versions/version-a':
           return {
             data: {
@@ -399,6 +412,108 @@ describe('student dashboard cache invalidation', () => {
     expect(mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/lessons/lesson-1')).toHaveLength(1);
     dashboard.unsubscribe();
     detail.unsubscribe();
+  });
+
+  describe('after an accepted progress write', () => {
+    const pathLesson = (status: string) => ({
+      id: 'lesson-1',
+      kind: 'lesson',
+      status,
+      progress: status === 'completed' ? 100 : 0,
+      furthestPageIndex: -1,
+      currentPageIndex: 0,
+    });
+    const requestCount = (url: string) =>
+      mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === url).length;
+    const subscribe = async (store: ReturnType<typeof createStore>) => {
+      const dashboard = store.dispatch(lessonApi.endpoints.getStudentDashboard.initiate('student-1'));
+      const detail = store.dispatch(
+        lessonApi.endpoints.getStudentLesson.initiate({ userId: 'student-1', lessonId: 'lesson-1' })
+      );
+      await Promise.all([dashboard, detail]);
+      return () => [dashboard, detail].forEach(subscription => subscription.unsubscribe());
+    };
+
+    it.each([
+      [
+        'exercise completion',
+        () =>
+          lessonApi.endpoints.markExerciseComplete.initiate({
+            userId: 'student-1',
+            lessonId: 'lesson-1',
+            exerciseId: 'exercise-1',
+            score: 100,
+          }),
+      ],
+      [
+        'page visit',
+        () =>
+          lessonApi.endpoints.updatePageProgress.initiate({ userId: 'student-1', lessonId: 'lesson-1', pageId: 'page-2' }),
+      ],
+    ])('adopts the persisted summary for %s without refetching the lesson or dashboard', async (_name, mutate) => {
+      dashboardLearningPath = [pathLesson('available')];
+      const store = createStore();
+      const unsubscribe = await subscribe(store);
+
+      await store.dispatch(mutate() as never);
+
+      expect(requestCount('/student-dashboard')).toBe(1);
+      expect(requestCount('/lessons/lesson-1')).toBe(1);
+      expect(lessonApi.endpoints.getStudentDashboard.select('student-1')(store.getState()).data?.learningPath).toEqual([
+        { ...pathLesson('in-progress'), progress: 50, furthestPageIndex: 1, currentPageIndex: 1 },
+      ]);
+      expect(
+        lessonApi.endpoints.getStudentLesson.select({ userId: 'student-1', lessonId: 'lesson-1' })(store.getState())
+          .data
+      ).toMatchObject({
+        status: 'in-progress',
+        progress: 50,
+        furthestPageIndex: 1,
+        completedExerciseCount: 1,
+        requiredExerciseCount: 2,
+        exerciseProgress: [{ exerciseId: 'exercise-1', score: 100, completedAt: 'now' }],
+      });
+      unsubscribe();
+    });
+
+    it('refetches only the dashboard when the write completes the lesson, since that can unlock the next unit', async () => {
+      dashboardLearningPath = [pathLesson('in-progress')];
+      progressResult = { ...progressResult, lessonCompleted: true, progress: 100, completedExerciseCount: 2 };
+      const store = createStore();
+      const unsubscribe = await subscribe(store);
+
+      await store.dispatch(
+        lessonApi.endpoints.finishLesson.initiate({ userId: 'student-1', lessonId: 'lesson-1', finalPageId: 'page-2' })
+      );
+
+      await waitFor(() => expect(requestCount('/student-dashboard')).toBe(2));
+      expect(requestCount('/lessons/lesson-1')).toBe(1);
+      expect(
+        lessonApi.endpoints.getStudentLesson.select({ userId: 'student-1', lessonId: 'lesson-1' })(store.getState())
+          .data
+      ).toMatchObject({ status: 'completed', progress: 100 });
+      unsubscribe();
+    });
+
+    it('does not refetch the dashboard when an already-completed lesson is written again', async () => {
+      dashboardLearningPath = [pathLesson('completed')];
+      progressResult = { ...progressResult, lessonCompleted: true, progress: 100 };
+      const store = createStore();
+      const unsubscribe = await subscribe(store);
+
+      await store.dispatch(
+        lessonApi.endpoints.markExerciseComplete.initiate({
+          userId: 'student-1',
+          lessonId: 'lesson-1',
+          exerciseId: 'exercise-1',
+          score: 100,
+        })
+      );
+
+      expect(requestCount('/student-dashboard')).toBe(1);
+      expect(requestCount('/lessons/lesson-1')).toBe(1);
+      unsubscribe();
+    });
   });
 
   it('refetches active dashboards after placed-test version metadata changes', async () => {

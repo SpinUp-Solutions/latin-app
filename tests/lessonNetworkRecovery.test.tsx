@@ -96,10 +96,22 @@ describe('lesson network recovery with a real RTK Query store', () => {
     );
   };
 
-  it('keeps the player and its local answer mounted after a progress-triggered refresh fails', async () => {
+  it('keeps the open lesson cached instead of refetching it after a progress write', async () => {
     await loadLesson();
     mockBaseQuery.mockImplementation(async (request: unknown) =>
-      typeof request === 'string' ? { error: networkError } : { data: { success: true } }
+      typeof request === 'string'
+        ? lessonResponse()
+        : {
+            data: {
+              success: true,
+              lessonCompleted: false,
+              progress: 50,
+              furthestPageIndex: 1,
+              completedExerciseCount: 0,
+              requiredExerciseCount: 0,
+              exerciseProgress: [],
+            },
+          }
     );
     await act(async () => {
       await store.dispatch(
@@ -110,8 +122,16 @@ describe('lesson network recovery with a real RTK Query store', () => {
         })
       );
     });
-    await screen.findByRole('status');
-    expect(mockBaseQuery).toHaveBeenCalledTimes(3);
+    expect(mockBaseQuery).toHaveBeenCalledTimes(2);
+    expect(
+      lessonApi.endpoints.getStudentLesson.select({ lessonId: 'lesson-1', userId: 'student-1' })(store.getState()).data
+    ).toMatchObject({ furthestPageIndex: 1, status: 'in-progress', progress: 50 });
+    expect(screen.getByRole('textbox', { name: 'Answer' })).toHaveValue('in-progress answer');
+  });
+
+  it('keeps the player and its local answer mounted after a background refresh fails', async () => {
+    await loadLesson();
+    await refresh(networkError);
     expect(screen.getByRole('textbox', { name: 'Answer' })).toHaveValue('in-progress answer');
     expect(screen.queryByText('We couldn’t open this lesson')).not.toBeInTheDocument();
     expect(Sentry.captureException).toHaveBeenCalledWith(

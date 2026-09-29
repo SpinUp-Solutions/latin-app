@@ -12,6 +12,7 @@ import {
   resolveExerciseId,
   summarizeLessonCompletion,
   toPersistedProgressSummary,
+  toProgressMutationResult,
 } from '@/src/utils/lessonProgress';
 import { reportServerUnexpectedError } from '@/src/lib/report-unexpected-error';
 
@@ -150,13 +151,7 @@ export async function POST(
         const furthestPageIndex = getFurthestPageIndex(existing, lesson.pages.length);
 
         writeProgress(transaction, existing, furthestPageIndex, persisted);
-
-        return {
-          lessonCompleted: persisted.status === 'completed',
-          progress: persisted.progress,
-          completedExerciseCount: persisted.completedExerciseCount,
-          requiredExerciseCount: persisted.requiredExerciseCount,
-        };
+        return toProgressMutationResult(persisted, furthestPageIndex);
       });
 
       return NextResponse.json({ success: true, ...result });
@@ -182,14 +177,7 @@ export async function POST(
         const persisted = toPersistedProgressSummary(summary, existing, now, lesson.version);
 
         writeProgress(transaction, existing, furthestPageIndex, persisted);
-
-        return {
-          furthestPageIndex,
-          lessonCompleted: persisted.status === 'completed',
-          progress: persisted.progress,
-          completedExerciseCount: persisted.completedExerciseCount,
-          requiredExerciseCount: persisted.requiredExerciseCount,
-        };
+        return toProgressMutationResult(persisted, furthestPageIndex);
       });
 
       return NextResponse.json({ success: true, ...result });
@@ -216,16 +204,10 @@ export async function POST(
         );
 
         writeProgress(transaction, existing, furthestPageIndex, persisted);
-        return {
-          missingExercises: [],
-          lessonCompleted: true as const,
-          progress: persisted.progress,
-          completedExerciseCount: persisted.completedExerciseCount,
-          requiredExerciseCount: persisted.requiredExerciseCount,
-        };
+        return { completion: toProgressMutationResult(persisted, furthestPageIndex) };
       });
 
-      if (result.missingExercises.length > 0) {
+      if (!result.completion) {
         return NextResponse.json(
           {
             error: 'Complete all required exercises before finishing the lesson.',
@@ -234,13 +216,7 @@ export async function POST(
           { status: 422 }
         );
       }
-      return NextResponse.json({
-        success: true,
-        lessonCompleted: true,
-        progress: result.progress,
-        completedExerciseCount: result.completedExerciseCount,
-        requiredExerciseCount: result.requiredExerciseCount,
-      });
+      return NextResponse.json({ success: true, ...result.completion });
     }
 
     return NextResponse.json({ error: 'Unsupported progress action' }, { status: 400 });
