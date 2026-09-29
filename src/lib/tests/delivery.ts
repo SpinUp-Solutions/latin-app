@@ -16,8 +16,7 @@ import type {
 import type { VocabularyContent, VocabularyPoolContent, VocabularyPoolStudyData } from '@/src/types/vocabulary';
 import type { TableData } from '@/src/components/ui/lesson/conjugation-table';
 import { isExerciseType, isTestEligibleContentType, isTestEligibleExerciseType } from '@/src/lib/content/registry';
-import type { GeneratedWordLoader } from './generated-exercises';
-import { resolveGeneratedExerciseItems } from './generated-exercises';
+import { isGeneratedExercise, resolveGeneratedExercises, type GeneratedWordLoader } from './generated-exercises';
 import type { GeneratedTranslationItem } from '@/src/utils/exercises/generatedTranslationExercise';
 import {
   gradeExercise,
@@ -55,27 +54,20 @@ export async function createFrozenTestDeliveryState(
 ): Promise<FrozenTestDeliveryState> {
   const pages = cloneSerializable(version.pages);
   const usesVocabularyPoolContent = pages.some(page => page.items.some(item => item.type === 'vocabulary-pool'));
-  const generatedExercises = pages.flatMap(page =>
-    page.items.filter(item => item.type === 'generated-translation' || item.type === 'generated-form-identification')
-  );
 
   // Attempt start runs this inside its transaction, so independent word collections run together.
-  const [vocabularyPool, resolvedEntries] = await Promise.all([
+  const [vocabularyPool, resolvedExercises] = await Promise.all([
     version.vocabularyPoolId && usesVocabularyPoolContent
       ? (loadVocabularyPool
           ? loadVocabularyPool(version.vocabularyPoolId)
           : Promise.reject(new Error(`No vocabulary pool loader was provided for ${version.vocabularyPoolId}`))
         ).then(cloneSerializable)
       : undefined,
-    Promise.all(
-      generatedExercises.map(async item => {
-        const items = await resolveGeneratedExerciseItems(item, loadGeneratedWords);
-        if (items.length === 0) throw new Error(`Generated exercise ${item.id} did not resolve any items`);
-        return [item.id, { items: cloneSerializable(items as ResolvedGeneratedItem[]) }] as const;
-      })
-    ),
+    resolveGeneratedExercises(
+      pages.flatMap(page => page.items.filter(isGeneratedExercise)),
+      loadGeneratedWords
+    ).then(cloneSerializable),
   ]);
-  const resolvedExercises: FrozenTestDeliveryState['resolvedExercises'] = Object.fromEntries(resolvedEntries);
 
   return {
     versionId: version.id,

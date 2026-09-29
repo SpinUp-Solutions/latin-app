@@ -9,7 +9,8 @@ import { isExerciseType } from '@/src/lib/content/registry';
 import { isExerciseAnswerComplete } from '@/src/lib/tests/answer-completion';
 import {
   generatedExerciseWordsRequest,
-  resolveGeneratedExerciseItems,
+  isGeneratedExercise,
+  resolveGeneratedExercises,
   type GeneratedExercise,
 } from '@/src/lib/tests/generated-exercises';
 import { advancedVocabularyApi } from '@/src/store/api/advancedVocabularyApi';
@@ -36,9 +37,6 @@ interface PreviewProgress {
 
 const START: PreviewProgress = { sectionIndex: 0, phase: 'answering', answers: {} };
 
-const isGeneratedExercise = (item: Page['items'][number]): item is GeneratedExercise =>
-  item.type === 'generated-translation' || item.type === 'generated-form-identification';
-
 type Resolution =
   | { key: string; resolvedExercises: StudentTestDelivery['resolvedExercises'] }
   | { key: string; failed: true };
@@ -61,15 +59,9 @@ function useResolvedGeneratedExercises(pages: Page[]) {
       )
         .unwrap()
         .then(result => result.words);
-    void Promise.all(
-      exercises.map(async exercise => {
-        const items = await resolveGeneratedExerciseItems(exercise, loadWords);
-        if (items.length === 0) throw new Error(`Generated exercise ${exercise.id} did not resolve any items`);
-        return [exercise.id, { items }] as const;
-      })
-    ).then(
-      entries => {
-        if (!cancelled) setResolution({ key, resolvedExercises: Object.fromEntries(entries) });
+    void resolveGeneratedExercises(exercises, loadWords).then(
+      resolvedExercises => {
+        if (!cancelled) setResolution({ key, resolvedExercises });
       },
       () => {
         if (!cancelled) setResolution({ key, failed: true });

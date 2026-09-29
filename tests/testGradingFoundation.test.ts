@@ -559,12 +559,8 @@ describe('test grading foundation', () => {
       ],
     };
     const pending = new Map<string, (words: ExerciseWordResponse[]) => void>();
-    const loadWords = jest.fn(
-      (exercise: { id: string }) =>
-        new Promise<ExerciseWordResponse[]>(resolve => {
-          pending.set(exercise.id, resolve);
-        })
-    );
+    const loadWords = (exercise: { id: string }) =>
+      new Promise<ExerciseWordResponse[]>(resolve => pending.set(exercise.id, resolve));
     const word = (latin: string, english: string) =>
       ({ id: latin, root_word: latin, selected_form: latin, translation: english }) as ExerciseWordResponse;
 
@@ -574,10 +570,9 @@ describe('test grading foundation', () => {
     pending.get('second')!([word('duo', 'two')]);
     pending.get('first')!([word('unus', 'one')]);
 
-    const { resolvedExercises } = await state;
-    expect(Object.keys(resolvedExercises)).toEqual(['first', 'second']);
-    expect(resolvedExercises.second.items).toEqual([
-      expect.objectContaining({ text: 'duo', acceptedAnswers: ['two'] }),
+    expect(Object.entries((await state).resolvedExercises)).toEqual([
+      ['first', { items: [expect.objectContaining({ text: 'unus', acceptedAnswers: ['one'] })] }],
+      ['second', { items: [expect.objectContaining({ text: 'duo', acceptedAnswers: ['two'] })] }],
     ]);
   });
 
