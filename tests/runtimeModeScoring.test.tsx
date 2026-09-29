@@ -251,7 +251,7 @@ describe('exercise runtime-mode scoring', () => {
     );
   });
 
-  it('allows the authoring preview to opt into generated vocabulary queries in test mode', () => {
+  it('never queries generated vocabulary in test mode, where sections carry frozen questions', () => {
     mockUseGetMultiPosWordsQuery.mockReturnValue({
       data: { words: [] },
       isLoading: false,
@@ -273,16 +273,18 @@ describe('exercise runtime-mode scoring', () => {
       },
     };
 
-    render(<ContentRenderer content={exercise} runtimeMode="test" allowGeneratedExerciseQueries />);
+    render(
+      <ContentRenderer
+        content={exercise}
+        runtimeMode="test"
+        generatedExerciseContext={{ kind: 'admin-preview' }}
+      />
+    );
 
     expect(mockUseGetMultiPosWordsQuery).toHaveBeenCalledWith(
-      expect.objectContaining({
-        exercise: expect.objectContaining({ type: 'generated-translation' }),
-        source: { kind: 'admin-preview' },
-      }),
-      expect.objectContaining({ skip: false })
+      expect.anything(),
+      expect.objectContaining({ skip: true })
     );
-    expect(screen.getByText('No vocabulary found')).toBeInTheDocument();
   });
 
   it('scopes generated lesson queries to the rendered lesson item', () => {

@@ -414,7 +414,6 @@ describe('exercise start over flow', () => {
       <GeneratedFormIdentificationExercise
         exercise={exercise}
         resolvedItems={resolvedItems}
-        allowGeneratedExerciseQueries
       />
     );
 
@@ -442,7 +441,6 @@ describe('exercise start over flow', () => {
         runtimeMode="test"
         onAnswer={onAnswer}
         resolvedItems={resolvedItems}
-        allowGeneratedExerciseQueries
       />
     );
 

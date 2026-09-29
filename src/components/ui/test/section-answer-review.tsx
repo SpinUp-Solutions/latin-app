@@ -413,11 +413,14 @@ function ExerciseAnswers({
 
 export function SectionAnswerReview({
   delivery,
+  vocabularyPoolId,
   answers,
   onAnswer,
   disabled = false,
 }: {
   delivery: StudentTestDelivery;
+  /** Lets the admin preview load the pool that a frozen delivery would carry. */
+  vocabularyPoolId?: string | null;
   answers: Record<string, ExerciseAnswer>;
   onAnswer: (event: ExerciseAnswerEvent) => void;
   disabled?: boolean;
@@ -434,6 +437,7 @@ export function SectionAnswerReview({
               key={item.id}
               content={item}
               runtimeMode="test"
+              vocabularyPoolId={vocabularyPoolId}
               resolvedVocabularyPool={delivery.vocabularyPool}
             />
           );

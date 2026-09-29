@@ -24,7 +24,6 @@ interface PageTemplateProps {
   onAnswer?: (event: ExerciseAnswerEvent) => void;
   answers?: Record<string, ExerciseAnswer>;
   resolvedExerciseState?: Record<string, ResolvedGeneratedExerciseState>;
-  allowGeneratedExerciseQueries?: boolean;
   generatedExerciseContext?: GeneratedExerciseRenderContext;
   vocabularyPoolId?: string | null;
   resolvedVocabularyPool?: VocabularyPoolStudyData;
@@ -43,7 +42,6 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({
   onAnswer,
   answers,
   resolvedExerciseState,
-  allowGeneratedExerciseQueries = false,
   generatedExerciseContext,
   vocabularyPoolId,
   resolvedVocabularyPool,
@@ -136,7 +134,6 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({
                 onAnswer={onAnswer}
                 initialAnswer={answers?.[item.id]}
                 resolvedExerciseState={resolvedExerciseState?.[item.id]}
-                allowGeneratedExerciseQueries={allowGeneratedExerciseQueries}
                 generatedExerciseContext={generatedExerciseContext}
                 vocabularyPoolId={vocabularyPoolId}
                 resolvedVocabularyPool={resolvedVocabularyPool}

@@ -35,7 +35,10 @@ import type {
   RuntimeMode,
 } from '@/src/types/runtime-mode';
 import { getContentTypeLabel } from '@/src/lib/content/registry';
-import { createGeneratedFormIdentificationItems } from '@/src/lib/tests/generated-exercises';
+import {
+  createGeneratedFormIdentificationItems,
+  generatedExerciseWordsRequest,
+} from '@/src/lib/tests/generated-exercises';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
 interface Props {
@@ -46,7 +49,6 @@ interface Props {
   onAnswer?: ExerciseAnswerHandler;
   initialAnswer?: ExerciseAnswer;
   resolvedItems?: Array<FormIdentificationItem | SingleFieldFormIdentificationItem | MultiAnswerFormIdentificationItem>;
-  allowGeneratedExerciseQueries?: boolean;
   generatedExerciseSource?: GeneratedExerciseQuerySource;
 }
 
@@ -67,7 +69,6 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
   onAnswer,
   initialAnswer,
   resolvedItems,
-  allowGeneratedExerciseQueries = false,
   generatedExerciseSource,
 }) => {
   const mode = runtimeMode ?? 'practice';
@@ -81,17 +82,12 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
 
   const { data, isLoading, isError } = usePracticeGeneratedExerciseWords(
     {
-      exercise: {
-        type: 'generated-form-identification',
-        data: exercise.data,
-      },
+      exercise: generatedExerciseWordsRequest(exercise),
       source: generatedExerciseSource ?? { kind: 'admin-preview' },
     },
     {
-      skip:
-        (!generatedExerciseSource && !allowGeneratedExerciseQueries) ||
-        (mode === 'test' && !allowGeneratedExerciseQueries) ||
-        resolvedItems !== undefined,
+      // Test sections receive their questions frozen in the delivery.
+      skip: !generatedExerciseSource || mode === 'test' || resolvedItems !== undefined,
     }
   );
 

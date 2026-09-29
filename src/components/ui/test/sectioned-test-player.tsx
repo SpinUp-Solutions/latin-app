@@ -1,7 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, ClipboardCheck, Loader2, LockKeyhole, LogOut, Save } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import type { StudentInProgressTestAttempt, StudentSubmittedTestAttempt, StudentTestDelivery } from '@/src/types/test';
 import type { ExerciseAnswer } from '@/src/types/runtime-mode';
@@ -18,10 +17,8 @@ import { isExerciseAnswerComplete } from '@/src/lib/tests/answer-completion';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { Button } from '@/src/components/ui/button';
 import { Textarea } from '@/src/components/ui/textarea';
-import { Checkbox } from '@/src/components/ui/checkbox';
-import { PlayerActionBar, PlayerBarButton } from '@/src/components/ui/core/player-action-bar';
-import { RomanPlayerShell } from '@/src/components/ui/core/roman-player-shell';
 import { SectionAnswerReview } from './section-answer-review';
+import { SectionReviewView } from './section-review-view';
 import { TestTakingView } from './test-taking-view';
 
 interface Props {
@@ -52,10 +49,8 @@ export function SectionedTestPlayer({ attempt, onAttempt, buffer, title, uid, or
   const [getAttempt] = useLazyGetTestAttemptQuery();
   const [pendingAction, setPendingAction] = useState<'navigation' | 'confirmation' | null>(null);
   const busy = pendingAction !== null;
-  const omissionsId = useId();
   const busyRef = useRef(false);
   const mountedRef = useRef(true);
-  const [acknowledged, setAcknowledged] = useState(false);
   const [recovery, setRecovery] = useState<{
     delivery: StudentTestDelivery;
     answers: Record<string, ExerciseAnswer>;
@@ -71,7 +66,6 @@ export function SectionedTestPlayer({ attempt, onAttempt, buffer, title, uid, or
       attempt.delivery.resolvedExercises[item.id]?.items.length ?? 0
     )
   ).length;
-  const incomplete = answered < exercises.length;
   const revision = () => buffer.getSectionRevision() ?? attempt.section.revision;
 
   useEffect(() => {
@@ -80,9 +74,6 @@ export function SectionedTestPlayer({ attempt, onAttempt, buffer, title, uid, or
       mountedRef.current = false;
     };
   }, []);
-  useEffect(() => {
-    setAcknowledged(false);
-  }, [page.id]);
 
   const { activateAttempt } = buffer;
   const adopt = useCallback(
@@ -137,7 +128,7 @@ export function SectionedTestPlayer({ attempt, onAttempt, buffer, title, uid, or
     }
   };
 
-  const confirm = async (resuming = false) => {
+  const confirm = async (acknowledgeIncomplete: boolean) => {
     if (busyRef.current || buffer.conflict) return;
     busyRef.current = true;
     setPendingAction('confirmation');
@@ -149,7 +140,7 @@ export function SectionedTestPlayer({ attempt, onAttempt, buffer, title, uid, or
         pageId: page.id,
         expectedRevision: revision(),
         requestId: crypto.randomUUID(),
-        acknowledgeIncomplete: resuming || acknowledged,
+        acknowledgeIncomplete,
       };
       while (mountedRef.current) {
         const result = await confirmSection(request).unwrap();
@@ -255,16 +246,17 @@ export function SectionedTestPlayer({ attempt, onAttempt, buffer, title, uid, or
       </main>
     );
 
+  const sectionKey = `${attempt.id}:${page.id}:${attempt.section.revision}:${attempt.updatedAt}`;
   return (
     <>
       {conflictNotice}
       {attempt.section.phase === 'answering' ? (
         <TestTakingView
-          key={`${attempt.id}:${page.id}:${attempt.section.revision}:${attempt.updatedAt}`}
+          key={sectionKey}
           title={<SimpleRichDisplay content={title} />}
-          pages={attempt.delivery.pages}
-          currentPageIndex={0}
-          sectionNavigation={{ pageIndex: attempt.section.pageIndex, totalPages: attempt.section.totalPages }}
+          page={page}
+          sectionIndex={attempt.section.pageIndex}
+          totalSections={attempt.section.totalPages}
           answeredCount={answered}
           totalExercises={exercises.length}
           status={saveStatus}
@@ -272,111 +264,31 @@ export function SectionedTestPlayer({ attempt, onAttempt, buffer, title, uid, or
           resolvedExerciseState={attempt.delivery.resolvedExercises}
           resolvedVocabularyPool={attempt.delivery.vocabularyPool}
           onAnswer={buffer.recordAnswer}
-          onPrevious={() => undefined}
-          onNext={() => undefined}
           onReview={() => void changePhase('review')}
           onExit={() => void onExit()}
           navigationPending={busy || buffer.conflict}
         />
       ) : (
-        <main className="min-h-screen bg-gradient-to-b from-roman-marble via-white to-roman-parchment/50 p-4 md:py-8">
-          <div className="mx-auto max-w-4xl space-y-7">
-            <RomanPlayerShell
-              icon={ClipboardCheck}
-              label="Answer review"
-              currentPage={attempt.section.pageIndex + 1}
-              totalPages={attempt.section.totalPages}
-              title="Review section"
-              description={<SimpleRichDisplay content={title} />}
-              headingAs="h1"
-              className="overflow-hidden rounded-2xl border-roman-red/15 shadow-md"
-              contentClassName="p-5 sm:p-6"
-              headerFooter={
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-roman-stone">
-                  <div role="status" aria-live="polite" className="flex items-center gap-2">
-                    {busy ? (
-                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                    ) : (
-                      <Save className="h-4 w-4" aria-hidden="true" />
-                    )}
-                    {saveStatus}
-                  </div>
-                  <span className="rounded-full border border-roman-red/10 bg-white/80 px-3 py-1 font-medium text-roman-red">
-                    {answered} of {exercises.length} answered
-                  </span>
-                </div>
-              }>
-              <div className="flex items-start gap-3 text-sm leading-relaxed text-slate-600">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-roman-red/5 text-roman-red">
-                  <LockKeyhole className="h-4 w-4" aria-hidden="true" />
-                </span>
-                <p>
-                  Check spelling and every answer carefully. After you confirm this section, you cannot return to it.
-                </p>
-              </div>
-            </RomanPlayerShell>
-            <SectionAnswerReview
-              key={`${attempt.id}:${page.id}:${attempt.section.revision}:${attempt.updatedAt}`}
-              delivery={attempt.delivery}
-              answers={buffer.answers}
-              onAnswer={event => {
-                setAcknowledged(false);
-                buffer.recordAnswer(event);
-              }}
-              disabled={busy || buffer.conflict || attempt.section.phase === 'confirming'}
-            />
-            {incomplete && (
-              <label
-                htmlFor={omissionsId}
-                className="flex cursor-pointer items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50/80 p-5 text-sm leading-relaxed text-amber-950">
-                <Checkbox
-                  id={omissionsId}
-                  className="mt-1 h-5 w-5 rounded-md border-amber-500 data-[state=checked]:border-roman-red data-[state=checked]:bg-roman-red"
-                  checked={acknowledged}
-                  disabled={busy}
-                  onCheckedChange={checked => setAcknowledged(checked === true)}
-                />
-                <span>I understand this section has unanswered parts and those parts will receive zero credit.</span>
-              </label>
-            )}
-            <PlayerActionBar className="p-4">
-              <PlayerBarButton
-                type="button"
-                tone="outline"
-                className="min-h-11 text-roman-red"
-                disabled={busy || buffer.conflict}
-                onClick={() => void changePhase('answering')}>
-                <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" /> Return to section
-              </PlayerBarButton>
-              <PlayerBarButton
-                type="button"
-                className="h-auto min-h-11 whitespace-normal px-5 py-3 shadow-sm sm:ml-auto"
-                disabled={
-                  busy || buffer.conflict || (incomplete && !acknowledged && attempt.section.phase !== 'confirming')
-                }
-                onClick={() => void confirm(attempt.section.phase === 'confirming')}>
-                {pendingAction === 'confirmation'
-                  ? 'Confirming section…'
-                  : attempt.section.pageIndex === attempt.section.totalPages - 1
-                    ? 'Confirm section and submit'
-                    : 'Confirm section and continue'}
-                {pendingAction === 'confirmation' ? (
-                  <Loader2 className="ml-2 h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />
-                ) : (
-                  <ArrowRight className="ml-2 h-4 w-4 shrink-0" aria-hidden="true" />
-                )}
-              </PlayerBarButton>
-              <PlayerBarButton
-                type="button"
-                tone="ghost"
-                className="min-h-11"
-                disabled={busy}
-                onClick={() => void onExit()}>
-                <LogOut className="mr-2 h-4 w-4" aria-hidden="true" /> Exit test
-              </PlayerBarButton>
-            </PlayerActionBar>
-          </div>
-        </main>
+        <SectionReviewView
+          key={`${attempt.id}:${page.id}`}
+          title={<SimpleRichDisplay content={title} />}
+          sectionIndex={attempt.section.pageIndex}
+          totalSections={attempt.section.totalPages}
+          delivery={attempt.delivery}
+          answers={buffer.answers}
+          answersKey={sectionKey}
+          onAnswer={buffer.recordAnswer}
+          answeredCount={answered}
+          totalExercises={exercises.length}
+          status={saveStatus}
+          busy={busy}
+          locked={buffer.conflict}
+          resumingConfirmation={attempt.section.phase === 'confirming'}
+          confirming={pendingAction === 'confirmation'}
+          onReturn={() => void changePhase('answering')}
+          onConfirm={acknowledgeIncomplete => void confirm(acknowledgeIncomplete)}
+          onExit={() => void onExit()}
+        />
       )}
       {recoveryView}
     </>

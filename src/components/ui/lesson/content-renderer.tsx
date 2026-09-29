@@ -67,7 +67,6 @@ interface ContentRendererProps {
   onAnswer?: (event: ExerciseAnswerEvent) => void;
   initialAnswer?: ExerciseAnswer;
   resolvedExerciseState?: ResolvedGeneratedExerciseState;
-  allowGeneratedExerciseQueries?: boolean;
   generatedExerciseContext?: GeneratedExerciseRenderContext;
   vocabularyPoolId?: string | null;
   resolvedVocabularyPool?: VocabularyPoolStudyData;
@@ -86,7 +85,6 @@ const ContentRenderer: React.FC<ContentRendererProps> = ({
   onAnswer,
   initialAnswer,
   resolvedExerciseState,
-  allowGeneratedExerciseQueries = false,
   generatedExerciseContext,
   vocabularyPoolId,
   resolvedVocabularyPool,
@@ -116,7 +114,7 @@ const ContentRenderer: React.FC<ContentRendererProps> = ({
           itemIndex,
           exerciseId: content.id,
         }
-      : generatedExerciseContext?.kind === 'admin-preview' || allowGeneratedExerciseQueries
+      : generatedExerciseContext?.kind === 'admin-preview'
         ? { kind: 'admin-preview' }
         : undefined;
 
@@ -219,7 +217,6 @@ const ContentRenderer: React.FC<ContentRendererProps> = ({
           exercise={renderedContent as GeneratedTranslationExerciseType}
           onComplete={onComplete}
           {...modeProps}
-          allowGeneratedExerciseQueries={allowGeneratedExerciseQueries}
           generatedExerciseSource={generatedExerciseSource}
           resolvedItems={resolvedExerciseState?.items as GeneratedTranslationItem[] | undefined}
         />
@@ -231,7 +228,6 @@ const ContentRenderer: React.FC<ContentRendererProps> = ({
           exercise={renderedContent as GeneratedFormIdentificationExerciseType}
           onComplete={onComplete}
           {...modeProps}
-          allowGeneratedExerciseQueries={allowGeneratedExerciseQueries}
           generatedExerciseSource={generatedExerciseSource}
           resolvedItems={
             resolvedExerciseState?.items as

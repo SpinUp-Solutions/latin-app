@@ -1,5 +1,6 @@
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
 import type { GeneratedFormIdentificationExercise, GeneratedTranslationExercise } from '@/src/types/exercises';
+import type { GeneratedExercisePreviewRequest } from './generated-preview-schema';
 import type {
   FormIdentificationItem,
   MultiAnswerFormIdentificationItem,
@@ -29,6 +30,17 @@ export type ResolvedFormIdentificationItem =
   | SingleFieldFormIdentificationItem;
 
 export type GeneratedWordLoader = (exercise: GeneratedExercise) => Promise<ExerciseWordResponse[]>;
+
+/** The word request a generated exercise sends, for lesson playback and authoring previews alike. */
+export function generatedExerciseWordsRequest(exercise: GeneratedExercise): GeneratedExercisePreviewRequest {
+  return exercise.type === 'generated-translation'
+    ? {
+        type: exercise.type,
+        translationDirection: exercise.translationDirection || 'latin-to-english',
+        data: exercise.data,
+      }
+    : { type: exercise.type, data: exercise.data };
+}
 
 export function isUsableGeneratedTranslationWord(
   exercise: GeneratedTranslationExercise,

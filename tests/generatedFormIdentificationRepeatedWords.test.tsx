@@ -84,7 +84,7 @@ describe('generated form identification with a repeated pool word', () => {
       render(
         <GeneratedFormIdentificationExercise
           exercise={exercise(requireAllPrimaryAnswers)}
-          allowGeneratedExerciseQueries
+          generatedExerciseSource={{ kind: 'admin-preview' }}
           {...callbacks}
         />
       );
