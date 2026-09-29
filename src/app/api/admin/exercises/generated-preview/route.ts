@@ -46,7 +46,7 @@ export async function handleGeneratedExerciseWordsPOST(request: NextRequest, aud
 
       const requestBody = await request.json().catch(() => null);
       const source = GeneratedExercisePlaybackRequestSchema.parse(requestBody);
-      const lesson = await studentDashboardService.getLesson(student.uid, source.lessonId);
+      const lesson = await studentDashboardService.getAuthorizedLesson(student.uid, source.lessonId);
       const item = lesson.pages[source.pageIndex]?.items[source.itemIndex];
       if (
         !item ||

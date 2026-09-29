@@ -12,6 +12,7 @@ import {
   resolveExerciseId,
   summarizeLessonCompletion,
   toPersistedProgressSummary,
+  toProgressMutationResult,
 } from '@/src/utils/lessonProgress';
 import { reportServerUnexpectedError } from '@/src/lib/report-unexpected-error';
 
@@ -30,26 +31,6 @@ const progressRequestSchema = z.discriminatedUnion('action', [
     .refine(data => data.pageId !== undefined || data.currentPageIndex !== undefined),
   z.object({ action: z.literal('legacy-finish') }),
 ]);
-
-export async function GET(request: NextRequest, { params }: { params: Promise<{ userId: string; lessonId: string }> }) {
-  try {
-    const { userId, lessonId } = await params;
-    const currentUser = await verifyRequestAuth(request);
-
-    if (!currentUser || currentUser.uid !== userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const progressDoc = await adminDb.collection(USER_PROGRESS_COLLECTION).doc(`${userId}_${lessonId}`).get();
-    return NextResponse.json(progressDoc.exists ? progressDoc.data() : null);
-  } catch (error) {
-    console.error('Error fetching user progress:', error);
-    reportServerUnexpectedError(error, {
-      tags: { surface: 'progress_get' },
-    });
-    return NextResponse.json({ error: 'Failed to fetch progress' }, { status: 500 });
-  }
-}
 
 export async function POST(
   request: NextRequest,
@@ -112,12 +93,13 @@ export async function POST(
       return { lesson, existing: (progressSnapshot.data() || {}) as Partial<UserProgress> };
     };
 
+    // Writes the summary and returns it as the response, so the two cannot diverge.
     const writeProgress = (
       transaction: Transaction,
       existing: Partial<UserProgress>,
       furthestPageIndex: number,
       persisted: ReturnType<typeof toPersistedProgressSummary>
-    ) =>
+    ) => {
       transaction.set(
         progressRef,
         {
@@ -132,6 +114,8 @@ export async function POST(
         },
         { merge: true }
       );
+      return toProgressMutationResult(persisted, furthestPageIndex);
+    };
 
     if (progressData.action === 'complete-exercise') {
       const result = await adminDb.runTransaction(async transaction => {
@@ -149,14 +133,7 @@ export async function POST(
         const persisted = toPersistedProgressSummary(summary, existing, now, lesson.version);
         const furthestPageIndex = getFurthestPageIndex(existing, lesson.pages.length);
 
-        writeProgress(transaction, existing, furthestPageIndex, persisted);
-
-        return {
-          lessonCompleted: persisted.status === 'completed',
-          progress: persisted.progress,
-          completedExerciseCount: persisted.completedExerciseCount,
-          requiredExerciseCount: persisted.requiredExerciseCount,
-        };
+        return writeProgress(transaction, existing, furthestPageIndex, persisted);
       });
 
       return NextResponse.json({ success: true, ...result });
@@ -181,15 +158,7 @@ export async function POST(
         });
         const persisted = toPersistedProgressSummary(summary, existing, now, lesson.version);
 
-        writeProgress(transaction, existing, furthestPageIndex, persisted);
-
-        return {
-          furthestPageIndex,
-          lessonCompleted: persisted.status === 'completed',
-          progress: persisted.progress,
-          completedExerciseCount: persisted.completedExerciseCount,
-          requiredExerciseCount: persisted.requiredExerciseCount,
-        };
+        return writeProgress(transaction, existing, furthestPageIndex, persisted);
       });
 
       return NextResponse.json({ success: true, ...result });
@@ -215,17 +184,10 @@ export async function POST(
           lesson.version
         );
 
-        writeProgress(transaction, existing, furthestPageIndex, persisted);
-        return {
-          missingExercises: [],
-          lessonCompleted: true as const,
-          progress: persisted.progress,
-          completedExerciseCount: persisted.completedExerciseCount,
-          requiredExerciseCount: persisted.requiredExerciseCount,
-        };
+        return { completion: writeProgress(transaction, existing, furthestPageIndex, persisted) };
       });
 
-      if (result.missingExercises.length > 0) {
+      if (!result.completion) {
         return NextResponse.json(
           {
             error: 'Complete all required exercises before finishing the lesson.',
@@ -234,13 +196,7 @@ export async function POST(
           { status: 422 }
         );
       }
-      return NextResponse.json({
-        success: true,
-        lessonCompleted: true,
-        progress: result.progress,
-        completedExerciseCount: result.completedExerciseCount,
-        requiredExerciseCount: result.requiredExerciseCount,
-      });
+      return NextResponse.json({ success: true, ...result.completion });
     }
 
     return NextResponse.json({ error: 'Unsupported progress action' }, { status: 400 });

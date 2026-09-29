@@ -33,7 +33,8 @@ class FakeQuery {
   constructor(
     private readonly collectionName: string,
     private readonly collections: Record<string, Record<string, RecordData>>,
-    private readonly selectedFieldLog: string[][]
+    private readonly selectedFieldLog: string[][],
+    private readonly queryLog: Array<{ collection: string; projected: boolean }>
   ) {}
 
   where(field: string, _operator: string, value: unknown) {
@@ -61,6 +62,7 @@ class FakeQuery {
   }
 
   async get() {
+    this.queryLog.push({ collection: this.collectionName, projected: Boolean(this.selectedFields) });
     let entries = Object.entries(this.collections[this.collectionName] ?? {});
     for (const filter of this.filters) {
       entries = entries.filter(([, value]) => value[filter.field] === filter.value);
@@ -90,37 +92,38 @@ class FakeQuery {
 
 const createFakeDb = (collections: Record<string, Record<string, RecordData>>) => {
   const selectedFieldLog: string[][] = [];
-  return {
-    db: {
-      collection: (name: string) => new FakeQuery(name, collections, selectedFieldLog),
-      getAll: async (
-        ...inputs: Array<{ get?: () => Promise<ReturnType<typeof snapshot>> } | { fieldMask: string[] }>
-      ) => {
-        const options = inputs.at(-1);
-        const fieldMask =
-          options && 'fieldMask' in options && Array.isArray(options.fieldMask) ? options.fieldMask : undefined;
-        const refs = (fieldMask ? inputs.slice(0, -1) : inputs) as Array<{
-          get: () => Promise<ReturnType<typeof snapshot>>;
-        }>;
-        if (fieldMask) selectedFieldLog.push(fieldMask);
-        return Promise.all(
-          refs.map(async ref => {
-            const full = await ref.get();
-            const value = full.data();
-            if (!fieldMask || !value) return full;
-            return snapshot(
-              full.id,
-              Object.fromEntries(
-                fieldMask.filter(field => value[field] !== undefined).map(field => [field, value[field]])
-              ),
-              full.ref
-            );
-          })
-        );
-      },
+  const queryLog: Array<{ collection: string; projected: boolean }> = [];
+  const db = {
+    collection: (name: string) => new FakeQuery(name, collections, selectedFieldLog, queryLog),
+    runTransaction: <T>(run: (transaction: unknown) => Promise<T>) =>
+      run({ get: (target: { get: () => Promise<unknown> }) => target.get(), getAll: db.getAll }),
+    getAll: async (
+      ...inputs: Array<{ get?: () => Promise<ReturnType<typeof snapshot>> } | { fieldMask: string[] }>
+    ) => {
+      const options = inputs.at(-1);
+      const fieldMask =
+        options && 'fieldMask' in options && Array.isArray(options.fieldMask) ? options.fieldMask : undefined;
+      const refs = (fieldMask ? inputs.slice(0, -1) : inputs) as Array<{
+        get: () => Promise<ReturnType<typeof snapshot>>;
+      }>;
+      if (fieldMask) selectedFieldLog.push(fieldMask);
+      return Promise.all(
+        refs.map(async ref => {
+          const full = await ref.get();
+          const value = full.data();
+          if (!fieldMask || !value) return full;
+          return snapshot(
+            full.id,
+            Object.fromEntries(
+              fieldMask.filter(field => value[field] !== undefined).map(field => [field, value[field]])
+            ),
+            full.ref
+          );
+        })
+      );
     },
-    selectedFieldLog,
   };
+  return { db, selectedFieldLog, queryLog };
 };
 
 const lesson = (overrides: RecordData): RecordData => ({
@@ -354,7 +357,7 @@ describe('StudentDashboardService summary projection', () => {
         },
       },
     };
-    const { db } = createFakeDb(collections);
+    const { db, queryLog, selectedFieldLog } = createFakeDb(collections);
     const service = new StudentDashboardService(
       db as never,
       {
@@ -369,6 +372,13 @@ describe('StudentDashboardService summary projection', () => {
       ['first', 'in-progress', 50, 0],
       ['second', 'in-progress', 75, 2],
     ]);
+
+    // A lesson with a progress record is authorized from the path alone, without the unlock scan.
+    queryLog.length = selectedFieldLog.length = 0;
+    await expect(service.getLesson('user', 'second')).resolves.toMatchObject({ id: 'second' });
+    expect([...queryLog, ...selectedFieldLog]).toEqual([]);
+    collections.learningPaths.default.unitIds = ['first'];
+    await expect(service.getLesson('user', 'second')).rejects.toMatchObject({ code: 'LESSON_NOT_FOUND' });
   });
 
   it('authorizes one detail through the same projection and rejects locked lessons', async () => {
@@ -1149,7 +1159,7 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
         },
       },
     };
-    const { db } = createFakeDb(collections);
+    const { db, queryLog } = createFakeDb(collections);
     const service = new StudentDashboardService(
       db as never,
       { getAssignmentsForLessonIds: jest.fn(async () => new Map()) } as never
@@ -1164,10 +1174,13 @@ describe('StudentDashboardService Phase 6 mixed Learning Path', () => {
       ['first', 'completed', 100],
       ['second', 'available', 0],
     ]);
+    queryLog.length = 0;
     await expect(service.getLesson('user', 'second')).resolves.toMatchObject({
       id: 'second',
       status: 'available',
     });
+    // An unreached lesson checks the path against progress projections, not full progress documents.
+    expect(queryLog).toEqual([{ collection: 'userProgress', projected: true }]);
   });
 
   it('isolates an invalid lesson during canonical dashboard hydration', async () => {

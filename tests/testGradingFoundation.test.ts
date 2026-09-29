@@ -541,6 +541,41 @@ describe('test grading foundation', () => {
     expect(items.map(item => ('id' in item ? item.id : null))).toEqual(['same-word', 'same-word::2']);
   });
 
+  it('collects generated exercise words concurrently and keeps authored order', async () => {
+    const generated = (id: string) => ({
+      id,
+      type: 'generated-translation' as const,
+      title: id,
+      instructions: '',
+      maxPoints: 1,
+      feedbackConfig,
+      data: { generatorConfig: { wordSource: 'filters' as const, count: 1 }, posConfigs: {} },
+    });
+    const version = {
+      ...makeVersion(),
+      pages: [
+        { id: 'page-one', items: [generated('first')] },
+        { id: 'page-two', items: [fillExercise, generated('second')] },
+      ],
+    };
+    const pending = new Map<string, (words: ExerciseWordResponse[]) => void>();
+    const loadWords = (exercise: { id: string }) =>
+      new Promise<ExerciseWordResponse[]>(resolve => pending.set(exercise.id, resolve));
+    const word = (latin: string, english: string) =>
+      ({ id: latin, root_word: latin, selected_form: latin, translation: english }) as ExerciseWordResponse;
+
+    const state = createFrozenTestDeliveryState(version as never, loadWords as never);
+    await Promise.resolve();
+    expect([...pending.keys()]).toEqual(['first', 'second']);
+    pending.get('second')!([word('duo', 'two')]);
+    pending.get('first')!([word('unus', 'one')]);
+
+    expect(Object.entries((await state).resolvedExercises)).toEqual([
+      ['first', { items: [expect.objectContaining({ text: 'unus', acceptedAnswers: ['one'] })] }],
+      ['second', { items: [expect.objectContaining({ text: 'duo', acceptedAnswers: ['two'] })] }],
+    ]);
+  });
+
   it('removes static and generated grading inputs from the student projection', async () => {
     const state = await createFrozenTestDeliveryState(makeVersion(), async () => []);
     state.resolvedExercises.generated = {

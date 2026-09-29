@@ -189,6 +189,21 @@ export async function resolveGeneratedExerciseItems(exercise: GeneratedExercise,
     : createGeneratedFormIdentificationItems(exercise, words);
 }
 
+export const isGeneratedExercise = (item: { type: string }): item is GeneratedExercise =>
+  item.type === 'generated-translation' || item.type === 'generated-form-identification';
+
+/** Resolves every generated exercise concurrently, keyed by exercise ID in authored order. */
+export async function resolveGeneratedExercises(exercises: GeneratedExercise[], loadWords: GeneratedWordLoader) {
+  const entries = await Promise.all(
+    exercises.map(async exercise => {
+      const items = await resolveGeneratedExerciseItems(exercise, loadWords);
+      if (items.length === 0) throw new Error(`Generated exercise ${exercise.id} did not resolve any items`);
+      return [exercise.id, { items }] as const;
+    })
+  );
+  return Object.fromEntries(entries);
+}
+
 function makeWordIdsUnique(words: ExerciseWordResponse[]): ExerciseWordResponse[] {
   const usedIds = new Set<string>();
   // Resume each base ID's suffix search where its previous repeat stopped.

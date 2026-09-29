@@ -16,8 +16,7 @@ import type {
 import type { VocabularyContent, VocabularyPoolContent, VocabularyPoolStudyData } from '@/src/types/vocabulary';
 import type { TableData } from '@/src/components/ui/lesson/conjugation-table';
 import { isExerciseType, isTestEligibleContentType, isTestEligibleExerciseType } from '@/src/lib/content/registry';
-import type { GeneratedWordLoader } from './generated-exercises';
-import { resolveGeneratedExerciseItems } from './generated-exercises';
+import { isGeneratedExercise, resolveGeneratedExercises, type GeneratedWordLoader } from './generated-exercises';
 import type { GeneratedTranslationItem } from '@/src/utils/exercises/generatedTranslationExercise';
 import {
   gradeExercise,
@@ -54,25 +53,21 @@ export async function createFrozenTestDeliveryState(
   loadVocabularyPool?: VocabularyPoolLoader
 ): Promise<FrozenTestDeliveryState> {
   const pages = cloneSerializable(version.pages);
-  const resolvedExercises: FrozenTestDeliveryState['resolvedExercises'] = {};
   const usesVocabularyPoolContent = pages.some(page => page.items.some(item => item.type === 'vocabulary-pool'));
-  const vocabularyPool =
-    version.vocabularyPoolId && usesVocabularyPoolContent
-      ? cloneSerializable(
-          await (loadVocabularyPool
-            ? loadVocabularyPool(version.vocabularyPoolId)
-            : Promise.reject(new Error(`No vocabulary pool loader was provided for ${version.vocabularyPoolId}`)))
-        )
-      : undefined;
 
-  for (const page of pages) {
-    for (const item of page.items) {
-      if (item.type !== 'generated-translation' && item.type !== 'generated-form-identification') continue;
-      const items = await resolveGeneratedExerciseItems(item, loadGeneratedWords);
-      if (items.length === 0) throw new Error(`Generated exercise ${item.id} did not resolve any items`);
-      resolvedExercises[item.id] = { items: cloneSerializable(items as ResolvedGeneratedItem[]) };
-    }
-  }
+  // Attempt start runs this inside its transaction, so independent word collections run together.
+  const [vocabularyPool, resolvedExercises] = await Promise.all([
+    version.vocabularyPoolId && usesVocabularyPoolContent
+      ? (loadVocabularyPool
+          ? loadVocabularyPool(version.vocabularyPoolId)
+          : Promise.reject(new Error(`No vocabulary pool loader was provided for ${version.vocabularyPoolId}`))
+        ).then(cloneSerializable)
+      : undefined,
+    resolveGeneratedExercises(
+      pages.flatMap(page => page.items.filter(isGeneratedExercise)),
+      loadGeneratedWords
+    ).then(cloneSerializable),
+  ]);
 
   return {
     versionId: version.id,

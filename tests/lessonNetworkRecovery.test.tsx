@@ -96,22 +96,9 @@ describe('lesson network recovery with a real RTK Query store', () => {
     );
   };
 
-  it('keeps the player and its local answer mounted after a progress-triggered refresh fails', async () => {
+  it('keeps the player and its local answer mounted after a background refresh fails', async () => {
     await loadLesson();
-    mockBaseQuery.mockImplementation(async (request: unknown) =>
-      typeof request === 'string' ? { error: networkError } : { data: { success: true } }
-    );
-    await act(async () => {
-      await store.dispatch(
-        lessonApi.endpoints.updatePageProgress.initiate({
-          userId: 'student-1',
-          lessonId: 'lesson-1',
-          pageId: 'page-2',
-        })
-      );
-    });
-    await screen.findByRole('status');
-    expect(mockBaseQuery).toHaveBeenCalledTimes(3);
+    await refresh(networkError);
     expect(screen.getByRole('textbox', { name: 'Answer' })).toHaveValue('in-progress answer');
     expect(screen.queryByText('We couldn’t open this lesson')).not.toBeInTheDocument();
     expect(Sentry.captureException).toHaveBeenCalledWith(

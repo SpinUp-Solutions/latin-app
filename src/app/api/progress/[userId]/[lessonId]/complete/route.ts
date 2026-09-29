@@ -6,7 +6,12 @@ import { verifyRequestAuth } from '@/src/lib/verifyRequestAuth';
 import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
 import { getLessonProgressAccessInTransaction } from '@/src/lib/learning-units/progression-access';
 import { Lesson, UserProgress } from '@/src/types/lesson';
-import { isStoredLessonComplete, summarizeLessonCompletion, toPersistedProgressSummary } from '@/src/utils/lessonProgress';
+import {
+  isStoredLessonComplete,
+  summarizeLessonCompletion,
+  toPersistedProgressSummary,
+  toProgressMutationResult,
+} from '@/src/utils/lessonProgress';
 import { reportServerUnexpectedError } from '@/src/lib/report-unexpected-error';
 
 const finishRequestSchema = z.object({ finalPageId: z.string().min(1) });
@@ -95,9 +100,7 @@ export async function POST(
       return {
         kind: 'completed' as const,
         alreadyCompleted,
-        progress: persisted.progress,
-        completedExerciseCount: persisted.completedExerciseCount,
-        requiredExerciseCount: persisted.requiredExerciseCount,
+        completion: toProgressMutationResult(persisted, furthestPageIndex),
       };
     });
 
@@ -120,14 +123,7 @@ export async function POST(
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      lessonCompleted: true,
-      alreadyCompleted: result.alreadyCompleted,
-      progress: result.progress,
-      completedExerciseCount: result.completedExerciseCount,
-      requiredExerciseCount: result.requiredExerciseCount,
-    });
+    return NextResponse.json({ success: true, alreadyCompleted: result.alreadyCompleted, ...result.completion });
   } catch (error) {
     if (
       error &&
