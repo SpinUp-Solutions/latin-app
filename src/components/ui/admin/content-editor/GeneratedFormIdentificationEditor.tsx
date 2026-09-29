@@ -181,6 +181,23 @@ const GeneratedFormIdentificationEditorView: React.FC<{
         />
       </div>
 
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="retryIncorrectAnswers"
+            checked={editingContent.data.retryIncorrectAnswers ?? true}
+            onCheckedChange={checked =>
+              editor.updateContent({ data: { ...editingContent.data, retryIncorrectAnswers: checked === true } })
+            }
+          />
+          <Label htmlFor="retryIncorrectAnswers">Repeat incorrect words until correct</Label>
+        </div>
+        <p className="text-sm text-gray-500">
+          Practice only. Incorrect words return at the end of the queue, using the existing auto-advance setting and
+          delay. The reset-after-mistakes setting is ignored while this is enabled. Tests are unchanged.
+        </p>
+      </div>
+
       <WordSourceSection
         value={editor.config.wordSource}
         onChange={value => editor.updateConfig({ wordSource: value })}

@@ -1,9 +1,11 @@
 'use client';
 
+import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
 import { usePracticeGeneratedExerciseWords } from '@/src/hooks/usePracticeGeneratedExerciseWords';
 import React, { useState, useMemo } from 'react';
 import { GeneratedFormIdentificationExercise } from '@/src/types/exercises/generated-form-identification';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
+import { useGeneratedExerciseQueue } from '@/src/hooks/useGeneratedExerciseQueue';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { ExerciseInput, FeedbackDisplay } from '../feedback';
 import { ExerciseProgress } from './exercise-progress';
@@ -27,6 +29,12 @@ import {
   validatePartialMultiAnswerPaths,
 } from '@/src/utils/exercises/generatedFormIdentificationExercise';
 import { normalizeAnswer } from '@/src/utils/exercises/helpers';
+import {
+  filterPathsByPreviousAnswers,
+  extractStepValuesFromPaths,
+  getAcceptedAnswersForMultipleValues,
+  formatPrimaryAnswersDisplay,
+} from '@/src/utils/exercises/formIdentificationHelpers';
 import { formatLabel } from '@/src/utils/label-formatter';
 import type {
   ExerciseAnswer,
@@ -61,25 +69,9 @@ const getExpectedAnswerCount = (item: ItemType) => {
   return typeof explicit === 'number' && explicit > 0 ? explicit : 1;
 };
 
-const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
-  exercise,
-  onComplete,
-  onCompletionAccepted,
-  runtimeMode,
-  onAnswer,
-  initialAnswer,
-  resolvedItems,
-  generatedExerciseSource,
-}) => {
+const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = props => {
+  const { exercise, runtimeMode, resolvedItems, generatedExerciseSource } = props;
   const mode = runtimeMode ?? 'practice';
-  const testAnswerMode = mode === 'test';
-  const [wordAnswers, setWordAnswers] = useState<Record<string, Record<string, string>>>({});
-  const [multiAnswerSlots, setMultiAnswerSlots] = useState<Record<string, string[][]>>({});
-
-  const isSingleField = exercise.data.mode === 'single-field';
-  const requireAllPrimaryAnswers = exercise.data.requireAllPrimaryAnswers ?? false;
-  const isMultiAnswerMode = !isSingleField && requireAllPrimaryAnswers;
-
   const { data, isLoading, isError } = usePracticeGeneratedExerciseWords(
     {
       exercise: generatedExerciseWordsRequest(exercise),
@@ -91,11 +83,72 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
     }
   );
 
+  if (!resolvedItems && isLoading) return <ExerciseLoadingCard />;
+  if (!resolvedItems && isError) {
+    return (
+      <ExerciseMessageCard
+        title="Error loading exercise"
+        message="Unable to fetch vocabulary words. Please try again later."
+      />
+    );
+  }
+  // A different exercise or sample starts a fresh session and cancels pending advancement.
+  return (
+    <GeneratedExerciseSession
+      key={JSON.stringify([exercise, mode, resolvedItems ?? data?.words ?? []])}
+      {...props}
+      words={data?.words ?? []}
+    />
+  );
+};
+
+const GeneratedExerciseSession: React.FC<Props & { words: ExerciseWordResponse[] }> = ({
+  exercise,
+  onComplete,
+  onCompletionAccepted,
+  runtimeMode,
+  onAnswer,
+  initialAnswer,
+  resolvedItems,
+  words,
+}) => {
+  const mode = runtimeMode ?? 'practice';
+  const queueEnabled = mode === 'practice' && (exercise.data.retryIncorrectAnswers ?? true);
+  const testAnswerMode = mode === 'test';
+  const [wordAnswers, setWordAnswers] = useState<Record<string, Record<string, string>>>({});
+  const [multiAnswerSlots, setMultiAnswerSlots] = useState<Record<string, string[][]>>({});
+
+  const isSingleField = exercise.data.mode === 'single-field';
+  const requireAllPrimaryAnswers = exercise.data.requireAllPrimaryAnswers ?? false;
+  const isMultiAnswerMode = !isSingleField && requireAllPrimaryAnswers;
+
   const items: ItemType[] = useMemo(() => {
-    if (resolvedItems) return resolvedItems;
-    if (!data?.words) return [];
-    return createGeneratedFormIdentificationItems(exercise, data.words, wordAnswers);
-  }, [data?.words, exercise, wordAnswers, resolvedItems]);
+    if (resolvedItems) {
+      if (!queueEnabled || isSingleField || isMultiAnswerMode) return resolvedItems;
+      return resolvedItems.map(rawItem => {
+        const parsed = FormIdentificationItemSchema.safeParse(rawItem);
+        if (!parsed.success) return rawItem;
+        const item = parsed.data;
+        if (!item.primaryFormPaths.length && !item.optionalFormPaths.length) return item;
+        const answers = wordAnswers[item.wordId] ?? {};
+        const primary = filterPathsByPreviousAnswers(item.primaryFormPaths, answers);
+        const optional = filterPathsByPreviousAnswers(item.optionalFormPaths, answers);
+        const acceptedAnswers = getAcceptedAnswersForMultipleValues([
+          ...extractStepValuesFromPaths(primary, item.step),
+          ...extractStepValuesFromPaths(optional, item.step),
+        ]);
+        return {
+          ...item,
+          primaryFormPaths: primary,
+          optionalFormPaths: optional,
+          acceptedAnswers,
+          correctAnswer:
+            formatPrimaryAnswersDisplay(primary, item.step) || formatPrimaryAnswersDisplay(optional, item.step),
+        };
+      });
+    }
+    return createGeneratedFormIdentificationItems(exercise, words, wordAnswers);
+  }, [words, exercise, wordAnswers, resolvedItems, queueEnabled, isSingleField, isMultiAnswerMode]);
 
   const validatedItems = useMemo(() => {
     if (mode === 'test') return items;
@@ -144,7 +197,8 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
       .filter((result): result is { success: true; data: FormIdentificationItem } => result.success)
       .map(result => result.data);
   }, [items, isSingleField, isMultiAnswerMode, mode]);
-  const restoredAnswers = initialAnswer?.type === 'generated-form-identification' ? initialAnswer.answers : {};
+  const restoredAnswers =
+    !queueEnabled && initialAnswer?.type === 'generated-form-identification' ? initialAnswer.answers : {};
   const firstUnansweredIndex = validatedItems.findIndex(item => !restoredAnswers[item.id]?.trim());
   const restoredIndex = firstUnansweredIndex >= 0 ? firstUnansweredIndex : Math.max(validatedItems.length - 1, 0);
   const restoredItemId = validatedItems[restoredIndex]?.id;
@@ -152,6 +206,8 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [submittedAnswers, setSubmittedAnswers] = useState<Record<string, string>>(restoredAnswers);
 
+  const { order, requeueWord } = useGeneratedExerciseQueue(validatedItems.map(item => item.wordId));
+  const [failures, setFailures] = useState<Record<number, number>>({});
   const {
     currentIndex,
     isLastItem,
@@ -159,6 +215,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
     autoAdvanceIfEnabled,
     confirmAdvance,
     resetIndex,
+    goToItem,
     nextItem,
     cancelPendingAdvance,
   } = useExerciseProgression({
@@ -167,6 +224,8 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
     itemProgressionDelay: exercise.itemProgressionDelay,
     progressionRules: exercise.feedbackConfig.progressionRules,
   });
+
+  const itemIndex = order[currentIndex];
 
   const {
     isCorrect,
@@ -180,7 +239,12 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
     resetExercise,
   } = useExerciseFeedback(exercise.feedbackConfig);
 
-  const resetRequired = mode === 'practice' && shouldResetExercise;
+  const resetRequired = mode === 'practice' && !queueEnabled && shouldResetExercise;
+  const escalationLevels = exercise.feedbackConfig.escalationLevels ?? [];
+  const queueLevel = escalationLevels[Math.min((failures[itemIndex] ?? 0) - 1, escalationLevels.length - 1)];
+  const feedbackLevel = queueEnabled && isCorrect === false ? queueLevel : level;
+  const feedbackMessage =
+    queueEnabled && isCorrect === false ? queueLevel?.message || 'Incorrect. You’ll try this word again.' : message;
 
   const handleExerciseReset = () => {
     cancelPendingAdvance();
@@ -197,7 +261,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
     if (isProcessing || validatedItems.length === 0 || !userAnswer.trim() || resetRequired) return;
     if (currentIndex >= validatedItems.length) return;
 
-    const currentItem = validatedItems[currentIndex];
+    const currentItem = validatedItems[itemIndex];
     const nextAnswers = { ...submittedAnswers, [currentItem.id]: userAnswer };
     setSubmittedAnswers(nextAnswers);
     setIsProcessing(true);
@@ -208,109 +272,77 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
       return;
     }
 
-    if (isMultiAnswerMode) {
-      const multiItem = currentItem as MultiAnswerFormIdentificationItem;
-      const stepValidation = validateMultiAnswerStep(userAnswer, multiItem);
-
-      if (!stepValidation.isCorrect) {
-        handleIncorrect();
-        setIsProcessing(false);
-        return;
+    let correct = false;
+    if (isSingleField) {
+      correct = validateSingleFieldFormIdentificationExercise(
+        userAnswer,
+        currentItem as SingleFieldFormIdentificationItem
+      ).isCorrect;
+    } else if (isMultiAnswerMode) {
+      const item = currentItem as MultiAnswerFormIdentificationItem;
+      const validation = validateMultiAnswerStep(userAnswer, item);
+      if (validation.isCorrect) {
+        const slots = [...(multiAnswerSlots[item.wordId] || [])];
+        slots[item.stepIndex] = validation.answerSlots;
+        correct = validatePartialMultiAnswerPaths(
+          slots,
+          item.steps.slice(0, item.stepIndex + 1),
+          item.primaryFormPaths
+        ).isCorrect;
+        if (correct) setMultiAnswerSlots(previous => ({ ...previous, [item.wordId]: slots }));
       }
-
-      const wordId = multiItem.wordId;
-      const stepIndex = multiItem.stepIndex;
-
-      const updatedSlots = [...(multiAnswerSlots[wordId] || [])];
-      updatedSlots[stepIndex] = stepValidation.answerSlots;
-
-      const stepsCompleted = multiItem.steps.slice(0, stepIndex + 1);
-      const partialValidation = validatePartialMultiAnswerPaths(
-        updatedSlots,
-        stepsCompleted,
-        multiItem.primaryFormPaths
-      );
-
-      if (!partialValidation.isCorrect) {
-        handleIncorrect();
-        setIsProcessing(false);
-        return;
+    } else {
+      const item = currentItem as FormIdentificationItem;
+      correct = validateGeneratedFormIdentificationExercise(userAnswer, item).isCorrect;
+      if (correct) {
+        setWordAnswers(previous => ({
+          ...previous,
+          [item.wordId]: { ...previous[item.wordId], [item.step]: normalizeAnswer(userAnswer) },
+        }));
       }
+    }
 
-      setMultiAnswerSlots(prev => ({
-        ...prev,
-        [wordId]: updatedSlots,
-      }));
+    if (correct) handleCorrect(isLastItem);
+    else handleIncorrect();
 
-      handleCorrect(isLastItem);
-
-      const finalScore = isLastItem
-        ? Math.round(
-            gradeExercisePercentage(
-              { exercise, resolvedItems: validatedItems },
-              { type: 'generated-form-identification', answers: nextAnswers }
-            )
-          )
-        : null;
-
-      autoAdvanceIfEnabled(() => {
-        if (finalScore !== null) {
-          onComplete?.(finalScore);
-          return;
-        }
-        setUserAnswer('');
-        reset();
-        setIsProcessing(false);
-      }, false);
-      if (finalScore !== null) onCompletionAccepted?.(finalScore);
+    if (queueEnabled && !correct) {
+      setFailures(previous => ({ ...previous, [itemIndex]: (previous[itemIndex] ?? 0) + 1 }));
+    }
+    if (!queueEnabled && !correct) {
+      setIsProcessing(false);
       return;
     }
 
-    const validation = isSingleField
-      ? validateSingleFieldFormIdentificationExercise(userAnswer, currentItem as SingleFieldFormIdentificationItem)
-      : validateGeneratedFormIdentificationExercise(userAnswer, currentItem as FormIdentificationItem);
-
-    if (validation.isCorrect) {
-      if (!isSingleField) {
-        const stepItem = currentItem as FormIdentificationItem;
-        setWordAnswers(prev => ({
-          ...prev,
-          [stepItem.wordId]: {
-            ...(prev[stepItem.wordId] || {}),
-            [stepItem.step]: normalizeAnswer(userAnswer),
-          },
-        }));
-      }
-
-      handleCorrect(isLastItem);
-
-      const finalScore = isLastItem
-        ? Math.round(
-            gradeExercisePercentage(
-              { exercise, resolvedItems: validatedItems },
-              { type: 'generated-form-identification', answers: nextAnswers }
-            )
-          )
-        : null;
-
-      autoAdvanceIfEnabled(() => {
-        if (finalScore !== null) {
-          onComplete?.(finalScore);
-          return;
-        }
-        setUserAnswer('');
-        reset();
-        setIsProcessing(false);
-      }, false);
-      if (finalScore !== null) onCompletionAccepted?.(finalScore);
-    } else {
-      handleIncorrect();
-      setIsProcessing(false);
+    let finalScore: number | null = null;
+    if (correct && isLastItem) {
+      finalScore = Math.round(
+        gradeExercisePercentage(
+          { exercise, resolvedItems: validatedItems },
+          { type: 'generated-form-identification', answers: nextAnswers }
+        )
+      );
     }
-  };
-
-  const handleAnswerChange = (value: string) => {
-    setUserAnswer(value);
+    if (finalScore !== null) onCompletionAccepted?.(finalScore);
+    autoAdvanceIfEnabled(() => {
+      if (finalScore !== null) {
+        onComplete?.(finalScore);
+        return;
+      }
+      if (queueEnabled && !correct) {
+        const wordId = currentItem.wordId;
+        setWordAnswers(previous => ({ ...previous, [wordId]: {} }));
+        setMultiAnswerSlots(previous => ({ ...previous, [wordId]: [] }));
+        setSubmittedAnswers(previous => {
+          const next = { ...previous };
+          for (const item of validatedItems) if (item.wordId === wordId) delete next[item.id];
+          return next;
+        });
+        goToItem(requeueWord(currentIndex));
+      }
+      setUserAnswer('');
+      reset();
+      setIsProcessing(false);
+    }, false);
   };
 
   const continueTest = () => {
@@ -325,17 +357,6 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
     nextItem();
   };
 
-  if (!resolvedItems && isLoading) return <ExerciseLoadingCard />;
-
-  if (!resolvedItems && isError) {
-    return (
-      <ExerciseMessageCard
-        title="Error loading exercise"
-        message="Unable to fetch vocabulary words. Please try again later."
-      />
-    );
-  }
-
   if (validatedItems.length === 0) {
     return (
       <ExerciseMessageCard
@@ -346,8 +367,16 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
     );
   }
 
-  const safeIndex = Math.min(currentIndex, Math.max(0, validatedItems.length - 1));
-  const currentItem = validatedItems[safeIndex];
+  const currentItem = validatedItems[itemIndex];
+  const nextWordId = validatedItems[order[currentIndex + 1]]?.wordId;
+  const completedWords =
+    new Set(
+      order
+        .slice(0, currentIndex)
+        .map(index => validatedItems[index].wordId)
+        .filter(id => id !== currentItem.wordId)
+    ).size + (isCorrect === true && nextWordId !== currentItem.wordId ? 1 : 0);
+  const totalWords = new Set(validatedItems.map(item => item.wordId)).size;
 
   return (
     <div className="space-y-4">
@@ -359,13 +388,16 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
       />
 
       <ExerciseProgress
-        currentIndex={safeIndex}
+        currentIndex={queueEnabled ? completedWords : currentIndex}
         completed={
-          mode === 'practice'
-            ? safeIndex + (isCorrect === true ? 1 : 0)
-            : validatedItems.filter(item => Boolean(submittedAnswers[item.id]?.trim())).length
+          queueEnabled
+            ? completedWords
+            : mode === 'practice'
+              ? currentIndex + (isCorrect === true ? 1 : 0)
+              : validatedItems.filter(item => Boolean(submittedAnswers[item.id]?.trim())).length
         }
-        total={validatedItems.length}
+        total={queueEnabled ? totalWords : validatedItems.length}
+        label={queueEnabled ? 'Word' : 'Question'}
         showProgress={exercise.feedbackConfig.progressionRules?.showProgress !== false}
       />
 
@@ -446,7 +478,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
 
           <ExerciseInput
             value={userAnswer}
-            onChange={handleAnswerChange}
+            onChange={setUserAnswer}
             onSubmit={handleSubmit}
             placeholder={
               isSingleField
@@ -461,8 +493,8 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
           {!testAnswerMode && (
             <FeedbackDisplay
               isCorrect={isCorrect}
-              message={message}
-              level={level}
+              message={feedbackMessage}
+              level={feedbackLevel}
               hint={currentItem.hint}
               correctAnswer={
                 isSingleField
@@ -472,7 +504,8 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
                     : (currentItem as FormIdentificationItem).correctAnswer
               }
               showExplanation={showExplanation}
-              onContinue={isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
+              onContinue={(isCorrect || queueEnabled) && isAwaitingConfirmation ? confirmAdvance : undefined}
+              allowContinueOnIncorrect={queueEnabled}
               onStartOver={resetRequired ? handleExerciseReset : undefined}
             />
           )}

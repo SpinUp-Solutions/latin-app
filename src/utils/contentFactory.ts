@@ -310,6 +310,7 @@ export const createNewContent = (
         feedbackConfig: createDefaultFeedbackConfig(),
         translationDirection: 'latin-to-english',
         data: {
+          retryIncorrectAnswers: true,
           generatorConfig: {
             collection: VOCABULARY_WORDS_COLLECTION,
             wordSource: 'filters',
@@ -329,6 +330,7 @@ export const createNewContent = (
         itemProgressionDelay: DEFAULT_ITEM_PROGRESSION_DELAY,
         feedbackConfig: createDefaultFeedbackConfig(),
         data: {
+          retryIncorrectAnswers: true,
           mode: 'step-by-step',
           generatorConfig: {
             collection: VOCABULARY_WORDS_COLLECTION,
