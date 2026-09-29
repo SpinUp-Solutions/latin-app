@@ -119,7 +119,7 @@ export interface UserProgress {
 
 export type { Page } from './page';
 export type { RenderableContentItem } from './page';
-export type { ContentItem, TextContent, EmphasisContent, TableContent, ComponentNarration } from './content';
+export type { ContentItem, TextContent, EmphasisContent, TableContent } from './content';
 export type { VocabularyItem, VocabularyContent, VocabularyPoolContent } from './vocabulary';
 export type {
   BaseExercise,
