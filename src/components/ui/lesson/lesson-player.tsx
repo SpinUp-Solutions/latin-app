@@ -113,7 +113,10 @@ interface LessonPlayerProps {
   headerActions?: (page: { pageId: string; pageNumber: number; pauseAudio: () => void }) => React.ReactNode;
 }
 
-export const LessonPlayer: React.FC<LessonPlayerProps> = ({
+/** One lesson visit. Switching lessons remounts it, so late responses for the previous lesson are dropped. */
+export const LessonPlayer: React.FC<LessonPlayerProps> = props => <LessonSession key={props.lesson.id} {...props} />;
+
+const LessonSession: React.FC<LessonPlayerProps> = ({
   lesson,
   navigationPlacement = 'fixed',
   trackProgress = true,
@@ -125,14 +128,24 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   const [updatePageProgress] = useUpdatePageProgressMutation();
   const [finishLesson, { isLoading: isFinishMutationLoading }] = useFinishLessonMutation();
   const requiredExercises = getRequiredExercises(lesson);
-  const [missingExercises, setMissingExercises] = useState<RequiredExercise[]>(() =>
-    lesson.status === 'completed' ? [] : getMissingExercises(requiredExercises, lesson.exerciseProgress)
-  );
+  const initialMissingExercises =
+    lesson.status === 'completed' ? [] : getMissingExercises(requiredExercises, lesson.exerciseProgress);
+  const [missingExercises, setMissingExercises] = useState<RequiredExercise[]>(initialMissingExercises);
   const savedPageIdsRef = useRef<Set<string>>(new Set());
   const pagePipelinesRef = useRef<Map<string, RetryController>>(new Map());
   const pendingExerciseWritesRef = useRef<Set<Promise<unknown>>>(new Set());
   const exercisePipelinesRef = useRef<Set<RetryController>>(new Set());
-  const exerciseCompletionStateRef = useRef<Map<string, ExerciseCompletionState>>(new Map());
+  const exerciseCompletionStateRef = useRef<Map<string, ExerciseCompletionState>>(
+    new Map(
+      requiredExercises.map(exercise => [
+        exercise.exerciseId,
+        {
+          confirmed: !initialMissingExercises.some(missing => missing.exerciseId === exercise.exerciseId),
+          pending: 0,
+        },
+      ])
+    )
+  );
   const mountedRef = useRef(true);
   const finishInProgressRef = useRef(false);
   const [isFinishPending, setIsFinishPending] = useState(false);
@@ -150,8 +163,6 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   const [requiredExerciseCount, setRequiredExerciseCount] = useState(
     Math.max(safeCount(lesson.requiredExerciseCount), requiredExercises.length)
   );
-  const lessonIdRef = useRef(lesson.id);
-  lessonIdRef.current = lesson.id;
 
   const [currentPageIndex, setCurrentPageIndex] = useState(() => initialPageIndexFor(lesson));
   const [furthestPageIndex, setFurthestPageIndex] = useState(() => initialPageIndexFor(lesson));
@@ -160,51 +171,19 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   const totalPages = lesson.pages.length;
   const resolvedGeneratedExerciseContext = generatedExerciseContext ?? { kind: 'lesson' as const, lessonId: lesson.id };
 
-  const applyProgressMutation = useCallback((result: ProgressMutationSummary, requestLessonId: string) => {
-    if (!mountedRef.current || requestLessonId !== lessonIdRef.current) return;
-    if (typeof result.furthestPageIndex === 'number' && Number.isFinite(result.furthestPageIndex)) {
-      setFurthestPageIndex(current => Math.max(current, Math.trunc(result.furthestPageIndex as number)));
-    }
-    if (typeof result.requiredExerciseCount === 'number' && Number.isFinite(result.requiredExerciseCount)) {
-      setRequiredExerciseCount(current => Math.max(current, Math.trunc(result.requiredExerciseCount as number)));
-    }
-    if (typeof result.completedExerciseCount === 'number' && Number.isFinite(result.completedExerciseCount)) {
-      setCompletedExerciseCount(current => Math.max(current, Math.trunc(result.completedExerciseCount as number)));
-    }
+  const applyProgressMutation = useCallback((result: ProgressMutationSummary) => {
+    if (!mountedRef.current) return;
+    // Server counts only ever raise the local ones.
+    const raiseTo = (value: unknown) => (current: number) =>
+      typeof value === 'number' && Number.isFinite(value) ? Math.max(current, Math.trunc(value)) : current;
+    setFurthestPageIndex(raiseTo(result.furthestPageIndex));
+    setRequiredExerciseCount(raiseTo(result.requiredExerciseCount));
+    setCompletedExerciseCount(raiseTo(result.completedExerciseCount));
     if (result.lessonCompleted) {
       setLessonCompleted(true);
       setMissingExercises([]);
     }
   }, []);
-
-  useEffect(() => {
-    setLessonCompleted(lesson.status === 'completed');
-    const nextMissingExercises =
-      lesson.status === 'completed' ? [] : getMissingExercises(requiredExercises, lesson.exerciseProgress);
-    const missingExerciseIds = new Set(nextMissingExercises.map(exercise => exercise.exerciseId));
-    exerciseCompletionStateRef.current = new Map(
-      requiredExercises.map(exercise => [
-        exercise.exerciseId,
-        { confirmed: !missingExerciseIds.has(exercise.exerciseId), pending: 0 },
-      ])
-    );
-    setMissingExercises(nextMissingExercises);
-    savedPageIdsRef.current = new Set();
-    finishInProgressRef.current = false;
-    setIsFinishPending(false);
-    setCompletedExerciseCount(
-      Math.max(
-        0,
-        Math.min(
-          Math.max(safeCount(lesson.requiredExerciseCount), requiredExercises.length),
-          safeCount(lesson.completedExerciseCount)
-        )
-      )
-    );
-    setRequiredExerciseCount(Math.max(safeCount(lesson.requiredExerciseCount), requiredExercises.length));
-    setCurrentPageIndex(initialPageIndexFor(lesson));
-    setFurthestPageIndex(initialPageIndexFor(lesson));
-  }, [lesson.id]); // eslint-disable-line react-hooks/exhaustive-deps -- reset local completion only when switching lessons
 
   useEffect(() => {
     const pagePipelines = pagePipelinesRef.current;
@@ -215,7 +194,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
       exercisePipelines.forEach(cancelRetryController);
       exercisePipelines.clear();
     };
-  }, [lesson.id]);
+  }, []);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -251,26 +230,24 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
     if (isUntouchedLesson && !shouldAutoCompleteSinglePassivePage) return;
     const pageId = currentPage.id;
     if (savedPageIdsRef.current.has(pageId) || pagePipelinesRef.current.has(pageId)) return;
-
-    const requestLessonId = lesson.id;
     const controller = createRetryController();
     pagePipelinesRef.current.set(pageId, controller);
 
     void runWithBoundedRetries(
-      () => updatePageProgress({ userId: user.uid, lessonId: requestLessonId, pageId }).unwrap(),
+      () => updatePageProgress({ userId: user.uid, lessonId: lesson.id, pageId }).unwrap(),
       controller
     ).then(
       result => {
         if (pagePipelinesRef.current.get(pageId) === controller) pagePipelinesRef.current.delete(pageId);
-        if (!result || !mountedRef.current || requestLessonId !== lessonIdRef.current) return;
+        if (!result || !mountedRef.current) return;
         savedPageIdsRef.current.add(pageId);
-        applyProgressMutation(result, requestLessonId);
+        applyProgressMutation(result);
       },
       error => {
         if (pagePipelinesRef.current.get(pageId) === controller) pagePipelinesRef.current.delete(pageId);
-        if (!mountedRef.current || requestLessonId !== lessonIdRef.current) return;
+        if (!mountedRef.current) return;
         reportUnexpectedError(error, {
-          tags: { surface: 'page_progress', lessonId: requestLessonId, pageId },
+          tags: { surface: 'page_progress', lessonId: lesson.id, pageId },
           includeExpected: true,
           ...(isClientFetchOrParseFailure(error) ? { level: 'warning' as const } : {}),
           extra: { online: navigator.onLine, visibilityState: document.visibilityState },
@@ -299,10 +276,6 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
       setFurthestPageIndex(current => Math.max(current, newPageIndex));
     }
   }, [currentPageIndex, totalPages]);
-
-  const handlePageComplete = useCallback(() => {
-    handleNext();
-  }, [handleNext]);
 
   const handlePrevious = useCallback(() => {
     if (currentPageIndex > 0) {
@@ -361,8 +334,6 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
   const handleCompletionAccepted = useCallback(
     (exerciseId: string, score: number) => {
       if (!trackProgress || !user?.uid) return;
-
-      const requestLessonId = lesson.id;
       const requiredExercise = requiredExercises.find(exercise => exercise.exerciseId === exerciseId);
       const completionState = exerciseCompletionStateRef.current.get(exerciseId) ?? {
         confirmed: false,
@@ -377,7 +348,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
         () =>
           markExerciseComplete({
             userId: user.uid,
-            lessonId: requestLessonId,
+            lessonId: lesson.id,
             exerciseId,
             score,
           }).unwrap(),
@@ -396,11 +367,11 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
               latestState.confirmed = true;
               latestState.pending = Math.max(0, latestState.pending - 1);
             }
-            applyProgressMutation(result, requestLessonId);
+            applyProgressMutation(result);
           }
         },
         error => {
-          if (!mountedRef.current || requestLessonId !== lessonIdRef.current) return;
+          if (!mountedRef.current) return;
           const latestState = exerciseCompletionStateRef.current.get(exerciseId);
           if (latestState) {
             latestState.pending = Math.max(0, latestState.pending - 1);
@@ -413,7 +384,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
             }
           }
           reportUnexpectedError(error, {
-            tags: { surface: 'exercise_progress', lessonId: requestLessonId, exerciseId },
+            tags: { surface: 'exercise_progress', lessonId: lesson.id, exerciseId },
             includeExpected: true,
           });
           toast.error(getApiErrorMessage(error, 'Unable to save your exercise progress. Please try again.'));
@@ -474,38 +445,35 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
     finishInProgressRef.current = true;
     setIsFinishPending(true);
     const finalPageId = currentPage.id;
-    const requestLessonId = lesson.id;
 
     try {
       const timedOut = await drainPendingExerciseWrites();
-      if (!mountedRef.current || requestLessonId !== lessonIdRef.current) return;
-      if (timedOut && requestLessonId === lessonIdRef.current) {
+      if (!mountedRef.current) return;
+      if (timedOut) {
         reportWatchedEvent('Lesson finish proceeded after pending-write timeout', {
-          tags: { surface: 'finish_lesson_timeout', lessonId: requestLessonId },
+          tags: { surface: 'finish_lesson_timeout', lessonId: lesson.id },
           extra: { graceMs: PENDING_WRITE_FINISH_GRACE_MS },
         });
         toast.info('Some exercise progress is still saving. Checking lesson completion now.');
       }
-      const result = await finishLesson({ userId: user.uid, lessonId: requestLessonId, finalPageId }).unwrap();
-      if (!mountedRef.current || requestLessonId !== lessonIdRef.current) return;
-      applyProgressMutation(result, requestLessonId);
+      const result = await finishLesson({ userId: user.uid, lessonId: lesson.id, finalPageId }).unwrap();
+      if (!mountedRef.current) return;
+      applyProgressMutation(result);
       setMissingExercises([]);
       toast.success('Lesson completed!');
     } catch (error) {
-      if (!mountedRef.current || requestLessonId !== lessonIdRef.current) return;
+      if (!mountedRef.current) return;
       const data = (error as { data?: { error?: string; missingExercises?: RequiredExercise[] } }).data;
       setMissingExercises(data?.missingExercises || []);
       reportUnexpectedError(error, {
-        tags: { surface: 'finish_lesson', lessonId: requestLessonId },
+        tags: { surface: 'finish_lesson', lessonId: lesson.id },
         extra: data?.missingExercises ? { missingExerciseCount: data.missingExercises.length } : undefined,
         includeExpected: true,
       });
       toast.error(data?.error || getApiErrorMessage(error, 'Failed to finish the lesson.'));
     } finally {
-      if (requestLessonId === lessonIdRef.current) {
-        finishInProgressRef.current = false;
-        if (mountedRef.current) setIsFinishPending(false);
-      }
+      finishInProgressRef.current = false;
+      if (mountedRef.current) setIsFinishPending(false);
     }
   }, [
     applyProgressMutation,
@@ -571,7 +539,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({
                   lessonId={lesson.id}
                   generatedExerciseContext={resolvedGeneratedExerciseContext}
                   onCompletionAccepted={handleCompletionAccepted}
-                  onPageComplete={pageIndex === currentPageIndex ? handlePageComplete : undefined}
+                  onPageComplete={pageIndex === currentPageIndex ? handleNext : undefined}
                   onDiagrammingAttempt={pageIndex === currentPageIndex ? handleDiagrammingAttempt : undefined}
                 />
               )}

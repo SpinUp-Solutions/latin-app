@@ -53,17 +53,9 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({
   const exerciseItems = page.items.filter(item => isExerciseType(item.type));
   const totalExercises = exerciseItems.length;
 
-  const previousPageId = useRef(page.id);
   const scheduledCompletion = useRef<Set<number> | null>(null);
   const completePage = useEffectEvent(() => onPageComplete?.());
   const canAutoAdvance = Boolean(onPageComplete);
-
-  useEffect(() => {
-    if (previousPageId.current === page.id) return;
-    previousPageId.current = page.id;
-    scheduledCompletion.current = null;
-    setCompletedExercises(new Set());
-  }, [page.id]);
 
   useEffect(() => {
     if (!active || !canAutoAdvance || totalExercises === 0 || completedExercises.size !== totalExercises) return;
