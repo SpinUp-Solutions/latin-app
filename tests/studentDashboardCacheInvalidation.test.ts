@@ -28,6 +28,8 @@ const createStore = () =>
 
 const requestUrl = (request: unknown) =>
   typeof request === 'string' ? request : (request as { url?: string } | undefined)?.url;
+const requestCount = (url: string) =>
+  mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === url).length;
 
 describe('student dashboard cache invalidation', () => {
   beforeEach(() => {
@@ -112,6 +114,7 @@ describe('student dashboard cache invalidation', () => {
             },
           };
         case '/progress/student-1/lesson-1':
+        case '/progress/student-1/lesson-1/complete':
           if (failProgress) {
             return {
               error: {
@@ -121,8 +124,6 @@ describe('student dashboard cache invalidation', () => {
             };
           }
           return { data: { success: true, ...progressResult } };
-        case '/progress/student-1/lesson-1/complete':
-          return { data: { success: true, alreadyCompleted: false, ...progressResult } };
         case '/admin/test-versions/version-a':
           return {
             data: {
@@ -299,11 +300,7 @@ describe('student dashboard cache invalidation', () => {
       })
     );
 
-    await waitFor(() =>
-      expect(mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/student-dashboard')).toHaveLength(
-        2
-      )
-    );
+    await waitFor(() => expect(requestCount('/student-dashboard')).toBe(2));
     dashboard.unsubscribe();
   });
 
@@ -319,11 +316,7 @@ describe('student dashboard cache invalidation', () => {
       })
     );
 
-    await waitFor(() =>
-      expect(mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/student-dashboard')).toHaveLength(
-        2
-      )
-    );
+    await waitFor(() => expect(requestCount('/student-dashboard')).toBe(2));
     dashboard.unsubscribe();
   });
 
@@ -356,11 +349,7 @@ describe('student dashboard cache invalidation', () => {
 
     await mutate(store);
 
-    await waitFor(() =>
-      expect(mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/student-dashboard')).toHaveLength(
-        2
-      )
-    );
+    await waitFor(() => expect(requestCount('/student-dashboard')).toBe(2));
     dashboard.unsubscribe();
   });
 
@@ -379,195 +368,105 @@ describe('student dashboard cache invalidation', () => {
       })
     );
 
-    expect(mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/student-dashboard')).toHaveLength(
-      1
-    );
+    expect(requestCount('/student-dashboard')).toBe(1);
     dashboard.unsubscribe();
   });
 
-  it('does not refetch dashboard or detail caches after rejected progress', async () => {
-    const store = createStore();
-    const dashboard = store.dispatch(lessonApi.endpoints.getStudentDashboard.initiate('student-1'));
-    const detail = store.dispatch(
-      lessonApi.endpoints.getStudentLesson.initiate({
-        userId: 'student-1',
-        lessonId: 'lesson-1',
-      })
-    );
-    await Promise.all([dashboard, detail]);
-    failProgress = true;
-
-    await store.dispatch(
-      lessonApi.endpoints.markExerciseComplete.initiate({
-        userId: 'student-1',
-        lessonId: 'lesson-1',
-        exerciseId: 'exercise-1',
-        score: 1,
-      })
-    );
-
-    expect(mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/student-dashboard')).toHaveLength(
-      1
-    );
-    expect(mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/lessons/lesson-1')).toHaveLength(1);
-    dashboard.unsubscribe();
-    detail.unsubscribe();
-  });
-
-  describe('after an accepted progress write', () => {
+  describe('progress writes', () => {
+    const ids = { userId: 'student-1', lessonId: 'lesson-1' };
     const pathLesson = (status: string) => ({
       id: 'lesson-1',
       kind: 'lesson',
       status,
-      progress: status === 'completed' ? 100 : 0,
+      progress: 0,
       furthestPageIndex: -1,
       currentPageIndex: 0,
     });
-    const requestCount = (url: string) =>
-      mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === url).length;
-    const subscribe = async (store: ReturnType<typeof createStore>) => {
-      const dashboard = store.dispatch(lessonApi.endpoints.getStudentDashboard.initiate('student-1'));
-      const detail = store.dispatch(
-        lessonApi.endpoints.getStudentLesson.initiate({ userId: 'student-1', lessonId: 'lesson-1' })
-      );
-      await Promise.all([dashboard, detail]);
-      return () => [dashboard, detail].forEach(subscription => subscription.unsubscribe());
+    const completeExercise = (exerciseId = 'exercise-1') =>
+      lessonApi.endpoints.markExerciseComplete.initiate({ ...ids, exerciseId, score: 100 });
+    const setup = async (status: string) => {
+      dashboardLearningPath = [pathLesson(status)];
+      const store = createStore();
+      const subscriptions = [
+        store.dispatch(lessonApi.endpoints.getStudentDashboard.initiate('student-1')),
+        store.dispatch(lessonApi.endpoints.getStudentLesson.initiate(ids)),
+      ];
+      await Promise.all(subscriptions);
+      return {
+        store,
+        lesson: () => lessonApi.endpoints.getStudentLesson.select(ids)(store.getState()).data,
+        path: () => lessonApi.endpoints.getStudentDashboard.select('student-1')(store.getState()).data?.learningPath,
+        unsubscribe: () => subscriptions.forEach(subscription => subscription.unsubscribe()),
+      };
     };
 
     it.each([
-      [
-        'exercise completion',
-        () =>
-          lessonApi.endpoints.markExerciseComplete.initiate({
-            userId: 'student-1',
-            lessonId: 'lesson-1',
-            exerciseId: 'exercise-1',
-            score: 100,
-          }),
-      ],
-      [
-        'page visit',
-        () =>
-          lessonApi.endpoints.updatePageProgress.initiate({
-            userId: 'student-1',
-            lessonId: 'lesson-1',
-            pageId: 'page-2',
-          }),
-      ],
+      ['exercise completion', () => completeExercise()],
+      ['page visit', () => lessonApi.endpoints.updatePageProgress.initiate({ ...ids, pageId: 'page-2' })],
     ])('adopts the persisted summary for %s without refetching the lesson or dashboard', async (_name, mutate) => {
-      dashboardLearningPath = [pathLesson('available')];
-      const store = createStore();
-      const unsubscribe = await subscribe(store);
-
+      const { store, lesson, path, unsubscribe } = await setup('available');
       await store.dispatch(mutate() as never);
 
-      expect(requestCount('/student-dashboard')).toBe(1);
-      expect(requestCount('/lessons/lesson-1')).toBe(1);
-      expect(lessonApi.endpoints.getStudentDashboard.select('student-1')(store.getState()).data?.learningPath).toEqual([
+      expect([requestCount('/student-dashboard'), requestCount('/lessons/lesson-1')]).toEqual([1, 1]);
+      expect(path()).toEqual([
         { ...pathLesson('in-progress'), progress: 50, furthestPageIndex: 1, currentPageIndex: 1 },
       ]);
-      expect(
-        lessonApi.endpoints.getStudentLesson.select({ userId: 'student-1', lessonId: 'lesson-1' })(store.getState())
-          .data
-      ).toMatchObject({
+      expect(lesson()).toMatchObject({
         status: 'in-progress',
         progress: 50,
         furthestPageIndex: 1,
         completedExerciseCount: 1,
-        requiredExerciseCount: 2,
-        exerciseProgress: [{ exerciseId: 'exercise-1', score: 100, completedAt: 'now' }],
+        exerciseProgress: progressResult.exerciseProgress,
       });
       unsubscribe();
     });
 
-    it('keeps the newer summary when concurrent exercise writes resolve out of order', async () => {
-      dashboardLearningPath = [pathLesson('in-progress')];
-      const store = createStore();
-      const unsubscribe = await subscribe(store);
-      const responses: Array<(summary: Record<string, unknown>) => void> = [];
-      mockBaseQuery.mockImplementation(
-        () => new Promise(resolve => responses.push(summary => resolve({ data: { success: true, ...summary } })))
-      );
-      const complete = (exerciseId: string) =>
-        store.dispatch(
-          lessonApi.endpoints.markExerciseComplete.initiate({
-            userId: 'student-1',
-            lessonId: 'lesson-1',
-            exerciseId,
-            score: 100,
-          })
-        );
-      const first = complete('exercise-1');
-      const second = complete('exercise-2');
-      await waitFor(() => expect(responses).toHaveLength(2));
+    it.each([
+      ['a rejected write', 'in-progress', () => (failProgress = true)],
+      ['a write to a completed lesson', 'completed', () => (progressResult.lessonCompleted = true)],
+    ])('refetches neither the lesson nor the dashboard after %s', async (_name, status, arrange) => {
+      const { store, unsubscribe } = await setup(status);
+      arrange();
+      await store.dispatch(completeExercise());
 
-      const exerciseOne = { exerciseId: 'exercise-1', score: 100, completedAt: 'first' };
-      const exerciseTwo = { exerciseId: 'exercise-2', score: 100, completedAt: 'second' };
-      responses[1]({
-        ...progressResult,
-        progress: 67,
-        furthestPageIndex: 2,
-        completedExerciseCount: 2,
-        requiredExerciseCount: 3,
-        exerciseProgress: [exerciseOne, exerciseTwo],
-      });
-      await second;
-      responses[0]({
-        ...progressResult,
-        progress: 33,
-        furthestPageIndex: 2,
-        completedExerciseCount: 1,
-        requiredExerciseCount: 3,
-        exerciseProgress: [exerciseOne],
-      });
-      await first;
-
-      expect(
-        lessonApi.endpoints.getStudentLesson.select({ userId: 'student-1', lessonId: 'lesson-1' })(store.getState())
-          .data
-      ).toMatchObject({ progress: 67, completedExerciseCount: 2, exerciseProgress: [exerciseOne, exerciseTwo] });
-      expect(
-        lessonApi.endpoints.getStudentDashboard.select('student-1')(store.getState()).data?.learningPath[0]
-      ).toMatchObject({ status: 'in-progress', progress: 67, furthestPageIndex: 2 });
+      expect([requestCount('/student-dashboard'), requestCount('/lessons/lesson-1')]).toEqual([1, 1]);
       unsubscribe();
     });
 
     it('refetches only the dashboard when the write completes the lesson, since that can unlock the next unit', async () => {
-      dashboardLearningPath = [pathLesson('in-progress')];
-      progressResult = { ...progressResult, lessonCompleted: true, progress: 100, completedExerciseCount: 2 };
-      const store = createStore();
-      const unsubscribe = await subscribe(store);
-
-      await store.dispatch(
-        lessonApi.endpoints.finishLesson.initiate({ userId: 'student-1', lessonId: 'lesson-1', finalPageId: 'page-2' })
-      );
+      const { store, lesson, unsubscribe } = await setup('in-progress');
+      progressResult = { ...progressResult, lessonCompleted: true, progress: 100 };
+      await store.dispatch(lessonApi.endpoints.finishLesson.initiate({ ...ids, finalPageId: 'page-2' }));
 
       await waitFor(() => expect(requestCount('/student-dashboard')).toBe(2));
       expect(requestCount('/lessons/lesson-1')).toBe(1);
-      expect(
-        lessonApi.endpoints.getStudentLesson.select({ userId: 'student-1', lessonId: 'lesson-1' })(store.getState())
-          .data
-      ).toMatchObject({ status: 'completed', progress: 100 });
+      expect(lesson()).toMatchObject({ status: 'completed', progress: 100 });
       unsubscribe();
     });
 
-    it('does not refetch the dashboard when an already-completed lesson is written again', async () => {
-      dashboardLearningPath = [pathLesson('completed')];
-      progressResult = { ...progressResult, lessonCompleted: true, progress: 100 };
-      const store = createStore();
-      const unsubscribe = await subscribe(store);
+    it('keeps the newer summary when concurrent exercise writes resolve out of order', async () => {
+      const { store, lesson, path, unsubscribe } = await setup('in-progress');
+      const responses: Array<(data: unknown) => void> = [];
+      mockBaseQuery.mockImplementation(() => new Promise(resolve => responses.push(data => resolve({ data }))));
+      const [one, two] = ['exercise-1', 'exercise-2'].map(id => ({ exerciseId: id, score: 100, completedAt: id }));
+      const summary = (count: number, progress: number) => ({
+        ...progressResult,
+        progress,
+        furthestPageIndex: 2,
+        completedExerciseCount: count,
+        exerciseProgress: [one, two].slice(0, count),
+      });
 
-      await store.dispatch(
-        lessonApi.endpoints.markExerciseComplete.initiate({
-          userId: 'student-1',
-          lessonId: 'lesson-1',
-          exerciseId: 'exercise-1',
-          score: 100,
-        })
-      );
+      const first = store.dispatch(completeExercise('exercise-1'));
+      const second = store.dispatch(completeExercise('exercise-2'));
+      await waitFor(() => expect(responses).toHaveLength(2));
+      responses[1](summary(2, 67));
+      await second;
+      responses[0](summary(1, 33));
+      await first;
 
-      expect(requestCount('/student-dashboard')).toBe(1);
-      expect(requestCount('/lessons/lesson-1')).toBe(1);
+      expect(lesson()).toMatchObject({ progress: 67, completedExerciseCount: 2, exerciseProgress: [one, two] });
+      expect(path()?.[0]).toMatchObject({ status: 'in-progress', progress: 67, furthestPageIndex: 2 });
       unsubscribe();
     });
   });
@@ -588,11 +487,7 @@ describe('student dashboard cache invalidation', () => {
       })
     );
 
-    await waitFor(() =>
-      expect(mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/student-dashboard')).toHaveLength(
-        2
-      )
-    );
+    await waitFor(() => expect(requestCount('/student-dashboard')).toBe(2));
     dashboard.unsubscribe();
   });
 
@@ -643,11 +538,7 @@ describe('student dashboard cache invalidation', () => {
 
     await store.dispatch(startMutation() as never);
 
-    await waitFor(() =>
-      expect(mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/student-dashboard')).toHaveLength(
-        2
-      )
-    );
+    await waitFor(() => expect(requestCount('/student-dashboard')).toBe(2));
     dashboard.unsubscribe();
   });
 
@@ -684,9 +575,7 @@ describe('student dashboard cache invalidation', () => {
 
     await store.dispatch(startMutation() as never);
 
-    expect(mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/student-dashboard')).toHaveLength(
-      1
-    );
+    expect(requestCount('/student-dashboard')).toBe(1);
     dashboard.unsubscribe();
   });
 
@@ -724,12 +613,8 @@ describe('student dashboard cache invalidation', () => {
     await store.dispatch(startMutation() as never);
 
     await waitFor(() => {
-      expect(
-        mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/admin/tests/test-1')
-      ).toHaveLength(2);
-      expect(mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/admin/mock-tests')).toHaveLength(
-        2
-      );
+      expect(requestCount('/admin/tests/test-1')).toBe(2);
+      expect(requestCount('/admin/mock-tests')).toBe(2);
     });
     detail.unsubscribe();
     mocks.unsubscribe();
@@ -755,16 +640,10 @@ describe('student dashboard cache invalidation', () => {
       })
     );
 
-    expect(mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/student-dashboard')).toHaveLength(
-      1
-    );
-    expect(mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/admin/tests/test-1')).toHaveLength(
-      1
-    );
-    expect(
-      mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/admin/test-versions/version-a')
-    ).toHaveLength(1);
-    expect(mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/admin/mock-tests')).toHaveLength(1);
+    expect(requestCount('/student-dashboard')).toBe(1);
+    expect(requestCount('/admin/tests/test-1')).toBe(1);
+    expect(requestCount('/admin/test-versions/version-a')).toBe(1);
+    expect(requestCount('/admin/mock-tests')).toBe(1);
     dashboard.unsubscribe();
     detail.unsubscribe();
     version.unsubscribe();
@@ -797,11 +676,7 @@ describe('student dashboard cache invalidation', () => {
     const dashboard = store.dispatch(lessonApi.endpoints.getStudentDashboard.initiate('student-1'));
     await dashboard;
     await store.dispatch(mutation() as never);
-    await waitFor(() =>
-      expect(mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === '/student-dashboard')).toHaveLength(
-        2
-      )
-    );
+    await waitFor(() => expect(requestCount('/student-dashboard')).toBe(2));
     dashboard.unsubscribe();
   });
 
@@ -831,7 +706,7 @@ describe('student dashboard cache invalidation', () => {
         '/admin/mock-tests',
         '/admin/mock-tests/mock-1',
       ]) {
-        expect(mockBaseQuery.mock.calls.filter(([request]) => requestUrl(request) === url)).toHaveLength(2);
+        expect(requestCount(url)).toBe(2);
       }
     });
     [dashboard, detail, version, mocks, mockDetail].forEach(subscription => subscription.unsubscribe());

@@ -279,19 +279,12 @@ export function toPersistedProgressSummary(
 }
 
 /** What every progress write returns: the persisted summary, which the client caches adopt instead of refetching. */
-export interface LessonProgressMutationResult {
-  lessonCompleted: boolean;
-  progress: number;
-  furthestPageIndex: number;
-  completedExerciseCount: number;
-  requiredExerciseCount: number;
-  exerciseProgress: ExerciseProgress[];
-}
+export type LessonProgressMutationResult = ReturnType<typeof toProgressMutationResult>;
 
 export function toProgressMutationResult(
   persisted: ReturnType<typeof toPersistedProgressSummary>,
   furthestPageIndex: number
-): LessonProgressMutationResult {
+) {
   return {
     lessonCompleted: persisted.status === 'completed',
     progress: persisted.progress,

@@ -24,8 +24,6 @@ interface ProgressMutationArgs {
   lessonId: string;
 }
 
-type ProgressMutationResponse = LessonProgressMutationResult & { success: boolean };
-
 /**
  * A progress write returns the persisted summary, so the open lesson and the
  * dashboard adopt it rather than refetching both after every page and exercise.
@@ -38,12 +36,8 @@ const adoptPersistedProgress: TypedMutationOnQueryStarted<
   ReturnType<typeof createAuthenticatedBaseQuery>,
   'appApi'
 > = async ({ userId, lessonId }, { dispatch, queryFulfilled }) => {
-  let result: LessonProgressMutationResult;
-  try {
-    ({ data: result } = await queryFulfilled);
-  } catch {
-    return;
-  }
+  const result = await queryFulfilled.then(response => response.data).catch(() => null);
+  if (!result) return;
   // Concurrent writes can resolve out of order, and persisted progress only grows, so keep the furthest state.
   const adoptSummary = (
     cached: Pick<LessonWithProgress, 'status' | 'progress' | 'furthestPageIndex' | 'currentPageIndex'>
@@ -249,7 +243,7 @@ export const lessonApi = appApi.injectEndpoints({
     }),
 
     markExerciseComplete: builder.mutation<
-      ProgressMutationResponse,
+      LessonProgressMutationResult,
       ProgressMutationArgs & { exerciseId: string; score: number }
     >({
       query: ({ userId, lessonId, exerciseId, score }) => ({
@@ -264,7 +258,7 @@ export const lessonApi = appApi.injectEndpoints({
       onQueryStarted: adoptPersistedProgress,
     }),
 
-    updatePageProgress: builder.mutation<ProgressMutationResponse, ProgressMutationArgs & { pageId: string }>({
+    updatePageProgress: builder.mutation<LessonProgressMutationResult, ProgressMutationArgs & { pageId: string }>({
       query: ({ userId, lessonId, pageId }) => ({
         url: `/progress/${userId}/${lessonId}`,
         method: 'POST',
@@ -276,10 +270,7 @@ export const lessonApi = appApi.injectEndpoints({
       onQueryStarted: adoptPersistedProgress,
     }),
 
-    finishLesson: builder.mutation<
-      ProgressMutationResponse & { alreadyCompleted: boolean },
-      ProgressMutationArgs & { finalPageId: string }
-    >({
+    finishLesson: builder.mutation<LessonProgressMutationResult, ProgressMutationArgs & { finalPageId: string }>({
       query: ({ userId, lessonId, finalPageId }) => ({
         url: `/progress/${userId}/${lessonId}/complete`,
         method: 'POST',

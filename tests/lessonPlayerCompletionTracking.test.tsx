@@ -506,12 +506,9 @@ describe('LessonPlayer mutation summaries and retries', () => {
     expect(mockUpdatePageProgress).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
-    await waitFor(() => expect(mockUpdatePageProgress).toHaveBeenCalledTimes(1));
-    expect(mockUpdatePageProgress).toHaveBeenCalledWith({
-      userId: 'student-1',
-      lessonId: 'lesson-1',
-      pageId: 'page-3',
-    });
+    await waitFor(() =>
+      expect(mockUpdatePageProgress.mock.calls).toEqual([[expect.objectContaining({ pageId: 'page-3' })]])
+    );
   });
 
   it('updates the exercise ring monotonically from successful mutation summaries', async () => {

@@ -21,7 +21,12 @@ import { useAuth } from '@/src/hooks/useAuth';
 import { toast } from 'sonner';
 import { auth } from '@/src/services/firebase';
 import { DiagramAuditSubmission } from '@/src/features/sentence-diagramming';
-import { getMissingExercises, getRequiredExercises, RequiredExercise } from '@/src/utils/lessonProgress';
+import {
+  getMissingExercises,
+  getRequiredExercises,
+  type LessonProgressMutationResult,
+  RequiredExercise,
+} from '@/src/utils/lessonProgress';
 import { isExerciseType } from '@/src/lib/content/registry';
 import { stripHtmlTags } from '@/src/utils/exercises/helpers';
 import type { GeneratedExerciseRenderContext } from './content-renderer';
@@ -35,14 +40,6 @@ import ExerciseCompletionRing from './exercise-completion-ring';
 
 const RETRY_DELAYS_MS = [1000, 3000];
 const PENDING_WRITE_FINISH_GRACE_MS = 8_000;
-
-interface ProgressMutationSummary {
-  progress?: number;
-  furthestPageIndex?: number;
-  lessonCompleted?: boolean;
-  completedExerciseCount?: number;
-  requiredExerciseCount?: number;
-}
 
 interface RetryController {
   cancelled: boolean;
@@ -131,7 +128,6 @@ const LessonSession: React.FC<LessonPlayerProps> = ({
   const initialMissingExercises =
     lesson.status === 'completed' ? [] : getMissingExercises(requiredExercises, lesson.exerciseProgress);
   const [missingExercises, setMissingExercises] = useState<RequiredExercise[]>(initialMissingExercises);
-  const savedPageIdsRef = useRef<Set<string>>(new Set());
   const pagePipelinesRef = useRef<Map<string, RetryController>>(new Map());
   const pendingExerciseWritesRef = useRef<Set<Promise<unknown>>>(new Set());
   const exercisePipelinesRef = useRef<Set<RetryController>>(new Set());
@@ -171,7 +167,7 @@ const LessonSession: React.FC<LessonPlayerProps> = ({
   const totalPages = lesson.pages.length;
   const resolvedGeneratedExerciseContext = generatedExerciseContext ?? { kind: 'lesson' as const, lessonId: lesson.id };
 
-  const applyProgressMutation = useCallback((result: ProgressMutationSummary) => {
+  const applyProgressMutation = useCallback((result: LessonProgressMutationResult) => {
     if (!mountedRef.current) return;
     // Server counts only ever raise the local ones.
     const raiseTo = (value: unknown) => (current: number) =>
@@ -224,14 +220,11 @@ const LessonSession: React.FC<LessonPlayerProps> = ({
     if (!trackProgress || !user?.uid || !currentPage?.id) return;
     // Revisiting a page the server already recorded would rewrite the same progress.
     if (currentPageIndex <= (lesson.furthestPageIndex ?? -1)) return;
-    const isUntouchedLesson =
-      lesson.status === 'available' &&
-      (lesson.furthestPageIndex === undefined || lesson.furthestPageIndex < 0) &&
-      currentPageIndex === 0;
+    const isUntouchedLesson = lesson.status === 'available' && currentPageIndex === 0;
     const shouldAutoCompleteSinglePassivePage = requiredExercises.length === 0 && totalPages === 1;
     if (isUntouchedLesson && !shouldAutoCompleteSinglePassivePage) return;
     const pageId = currentPage.id;
-    if (savedPageIdsRef.current.has(pageId) || pagePipelinesRef.current.has(pageId)) return;
+    if (pagePipelinesRef.current.has(pageId)) return;
     const controller = createRetryController();
     pagePipelinesRef.current.set(pageId, controller);
 
@@ -242,7 +235,6 @@ const LessonSession: React.FC<LessonPlayerProps> = ({
       result => {
         if (pagePipelinesRef.current.get(pageId) === controller) pagePipelinesRef.current.delete(pageId);
         if (!result || !mountedRef.current) return;
-        savedPageIdsRef.current.add(pageId);
         applyProgressMutation(result);
       },
       error => {

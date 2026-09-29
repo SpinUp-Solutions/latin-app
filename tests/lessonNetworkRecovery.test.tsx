@@ -96,39 +96,6 @@ describe('lesson network recovery with a real RTK Query store', () => {
     );
   };
 
-  it('keeps the open lesson cached instead of refetching it after a progress write', async () => {
-    await loadLesson();
-    mockBaseQuery.mockImplementation(async (request: unknown) =>
-      typeof request === 'string'
-        ? lessonResponse()
-        : {
-            data: {
-              success: true,
-              lessonCompleted: false,
-              progress: 50,
-              furthestPageIndex: 1,
-              completedExerciseCount: 0,
-              requiredExerciseCount: 0,
-              exerciseProgress: [],
-            },
-          }
-    );
-    await act(async () => {
-      await store.dispatch(
-        lessonApi.endpoints.updatePageProgress.initiate({
-          userId: 'student-1',
-          lessonId: 'lesson-1',
-          pageId: 'page-2',
-        })
-      );
-    });
-    expect(mockBaseQuery).toHaveBeenCalledTimes(2);
-    expect(
-      lessonApi.endpoints.getStudentLesson.select({ lessonId: 'lesson-1', userId: 'student-1' })(store.getState()).data
-    ).toMatchObject({ furthestPageIndex: 1, status: 'in-progress', progress: 50 });
-    expect(screen.getByRole('textbox', { name: 'Answer' })).toHaveValue('in-progress answer');
-  });
-
   it('keeps the player and its local answer mounted after a background refresh fails', async () => {
     await loadLesson();
     await refresh(networkError);

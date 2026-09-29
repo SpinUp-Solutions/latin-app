@@ -93,12 +93,13 @@ export async function POST(
       return { lesson, existing: (progressSnapshot.data() || {}) as Partial<UserProgress> };
     };
 
+    // Writes the summary and returns it as the response, so the two cannot diverge.
     const writeProgress = (
       transaction: Transaction,
       existing: Partial<UserProgress>,
       furthestPageIndex: number,
       persisted: ReturnType<typeof toPersistedProgressSummary>
-    ) =>
+    ) => {
       transaction.set(
         progressRef,
         {
@@ -113,6 +114,8 @@ export async function POST(
         },
         { merge: true }
       );
+      return toProgressMutationResult(persisted, furthestPageIndex);
+    };
 
     if (progressData.action === 'complete-exercise') {
       const result = await adminDb.runTransaction(async transaction => {
@@ -130,8 +133,7 @@ export async function POST(
         const persisted = toPersistedProgressSummary(summary, existing, now, lesson.version);
         const furthestPageIndex = getFurthestPageIndex(existing, lesson.pages.length);
 
-        writeProgress(transaction, existing, furthestPageIndex, persisted);
-        return toProgressMutationResult(persisted, furthestPageIndex);
+        return writeProgress(transaction, existing, furthestPageIndex, persisted);
       });
 
       return NextResponse.json({ success: true, ...result });
@@ -156,8 +158,7 @@ export async function POST(
         });
         const persisted = toPersistedProgressSummary(summary, existing, now, lesson.version);
 
-        writeProgress(transaction, existing, furthestPageIndex, persisted);
-        return toProgressMutationResult(persisted, furthestPageIndex);
+        return writeProgress(transaction, existing, furthestPageIndex, persisted);
       });
 
       return NextResponse.json({ success: true, ...result });
@@ -183,8 +184,7 @@ export async function POST(
           lesson.version
         );
 
-        writeProgress(transaction, existing, furthestPageIndex, persisted);
-        return { completion: toProgressMutationResult(persisted, furthestPageIndex) };
+        return { completion: writeProgress(transaction, existing, furthestPageIndex, persisted) };
       });
 
       if (!result.completion) {
