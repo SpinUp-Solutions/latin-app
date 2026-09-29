@@ -32,26 +32,6 @@ const progressRequestSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('legacy-finish') }),
 ]);
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ userId: string; lessonId: string }> }) {
-  try {
-    const { userId, lessonId } = await params;
-    const currentUser = await verifyRequestAuth(request);
-
-    if (!currentUser || currentUser.uid !== userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const progressDoc = await adminDb.collection(USER_PROGRESS_COLLECTION).doc(`${userId}_${lessonId}`).get();
-    return NextResponse.json(progressDoc.exists ? progressDoc.data() : null);
-  } catch (error) {
-    console.error('Error fetching user progress:', error);
-    reportServerUnexpectedError(error, {
-      tags: { surface: 'progress_get' },
-    });
-    return NextResponse.json({ error: 'Failed to fetch progress' }, { status: 500 });
-  }
-}
-
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ userId: string; lessonId: string }> }
