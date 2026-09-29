@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { TestAttemptService, TRANSLATION_GRADING_RESERVATION_MS } from '@/src/lib/tests/attempt-service';
 import { testAttemptDocumentSchema } from '@/src/lib/tests/schemas';
 import { FakeFirestore } from './helpers/testAttemptFirestore';
-import type { StudentSectionedTestAttempt } from '@/src/types/test';
+import type { StudentInProgressTestAttempt } from '@/src/types/test';
 
 jest.mock('@/src/services/firebase-admin', () => jest.requireActual('./helpers/routeMocks'));
 jest.mock('firebase-admin/firestore', () => ({ FieldPath: { documentId: jest.fn() } }));
@@ -100,7 +100,7 @@ async function fixture(
     : { kind: 'normal-test' as const, testId: 'test-1' };
   const started = await service.startAttempt({ origin }, 'student-1');
   const id = started.attempt.id;
-  const current = async () => (await service.getAttempt(id, 'student-1')) as StudentSectionedTestAttempt;
+  const current = async () => (await service.getAttempt(id, 'student-1')) as StudentInProgressTestAttempt;
   const save = async (answers: Parameters<TestAttemptService['saveAttemptAnswers']>[1]['answers']) => {
     const attempt = await current();
     return service.saveAttemptAnswers(
@@ -292,25 +292,16 @@ describe('sectioned test attempts', () => {
     );
   });
 
-  it('cannot bypass confirmation using legacy routes or omit revision control', async () => {
+  it('rejects answer saves without revision control', async () => {
     const f = await fixture({ translations: true });
     await expect(
       f.service.saveAttemptAnswers(
         f.id,
-        { answers: { 'translation-1': { type: 'translation-grading', translations: ['A girl sings.'] } } },
+        { answers: { 'translation-1': { type: 'translation-grading', translations: ['A girl sings.'] } } } as never,
         'student-1'
       )
-    ).rejects.toMatchObject({ code: 'ATTEMPT_SECTION_REQUIRED' });
-    await expect(
-      f.service.gradeTranslationItem(
-        f.id,
-        { exerciseId: 'translation-1', itemIndex: 0, userTranslation: 'A girl sings.' },
-        'student-1'
-      )
-    ).rejects.toMatchObject({ code: 'ATTEMPT_SECTION_REQUIRED' });
-    await expect(f.service.submitAttempt(f.id, 'student-1')).rejects.toMatchObject({
-      code: 'ATTEMPT_SECTION_REQUIRED',
-    });
+    ).rejects.toThrow();
+    expect(f.db.read('testAttempts', f.id)?.answers).toEqual({});
     expect(f.grader).not.toHaveBeenCalled();
   });
 

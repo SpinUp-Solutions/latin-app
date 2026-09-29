@@ -1,5 +1,42 @@
+// The section workflow itself is covered by the sectioned player tests. This
+// stand-in records answers through the page's buffer and submits the attempt.
 jest.mock('@/src/components/ui/test/sectioned-test-player', () => ({
-  SectionedTestPlayer: () => <div>Sectioned player</div>,
+  SectionedTestPlayer: ({
+    attempt,
+    buffer,
+    uid,
+    onSubmitted,
+    onExit,
+  }: {
+    attempt: { id: string };
+    buffer: {
+      recordAnswer: (event: { exerciseId: string; answer: { type: 'fill'; answers: string[] } }) => void;
+      flushPendingAnswers: () => Promise<void>;
+    };
+    uid: string;
+    onSubmitted: (attempt: unknown) => void;
+    onExit: () => Promise<void>;
+  }) => (
+    <div>
+      <p>Test in progress</p>
+      <button
+        onClick={() => {
+          buffer.recordAnswer({ exerciseId: 'fill-one', answer: { type: 'fill', answers: ['one'] } });
+          buffer.recordAnswer({ exerciseId: 'fill-two', answer: { type: 'fill', answers: ['two'] } });
+        }}>
+        Record two answers
+      </button>
+      <button onClick={() => void onExit()}>Exit test</button>
+      <button
+        onClick={async () => {
+          await buffer.flushPendingAnswers();
+          const response = await mockSubmitAttempt({ uid, attemptId: attempt.id }).unwrap();
+          onSubmitted(response.attempt);
+        }}>
+        Confirm section and submit
+      </button>
+    </div>
+  ),
 }));
 import React, { Suspense } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -11,7 +48,7 @@ const mockReplace = jest.fn();
 const mockBack = jest.fn();
 const mockStartAttempt = jest.fn();
 const mockSaveAnswers = jest.fn();
-const mockGradeTranslation = jest.fn();
+/** Stands in for the final section confirmation, which submits the attempt. */
 const mockSubmitAttempt = jest.fn();
 const mockUseGetStudentDashboardQuery = jest.fn();
 const mockUseGetStudentMockDetailQuery = jest.fn();
@@ -42,30 +79,6 @@ jest.mock('@/src/store/api/mockTestApi', () => ({
 jest.mock('@/src/store/api/testApi', () => ({
   useStartTestAttemptMutation: () => [mockStartAttempt, { isLoading: false }],
   useSaveTestAttemptAnswersMutation: () => [mockSaveAnswers],
-  useGradeTestTranslationMutation: () => [mockGradeTranslation, { isLoading: false }],
-  useSubmitTestAttemptMutation: () => [mockSubmitAttempt, { isLoading: false }],
-}));
-
-jest.mock('@/src/components/ui/lesson/page-template', () => ({
-  PageTemplate: ({
-    onAnswer,
-  }: {
-    onAnswer: (event: { exerciseId: string; answer: { type: 'fill'; answers: string[] } }) => void;
-  }) => (
-    <button
-      onClick={() => {
-        onAnswer({
-          exerciseId: 'fill-one',
-          answer: { type: 'fill', answers: ['one'] },
-        });
-        onAnswer({
-          exerciseId: 'fill-two',
-          answer: { type: 'fill', answers: ['two'] },
-        });
-      }}>
-      Record two answers
-    </button>
-  ),
 }));
 
 const dashboard: StudentDashboard = {
@@ -98,6 +111,16 @@ const startedAttempt = {
   passingPercentage: 70,
   origin: { kind: 'normal-test' as const, testId: 'test-1' },
   status: 'in-progress' as const,
+  flowVersion: 1 as const,
+  section: {
+    pageId: 'page-1',
+    pageIndex: 0,
+    totalPages: 1,
+    totalExercises: 2,
+    answeredCount: 0,
+    revision: 0,
+    phase: 'answering' as const,
+  },
   answers: {},
   delivery: {
     versionId: 'version-a',
@@ -127,6 +150,7 @@ const startedAttempt = {
   startedAt: 'now',
   updatedAt: 'now',
 };
+const savedAttempt = { ...startedAttempt, section: { ...startedAttempt.section, revision: 1 } };
 
 describe('student normal test flow', () => {
   beforeEach(() => {
@@ -135,6 +159,10 @@ describe('student normal test flow', () => {
     Object.defineProperty(window, 'scrollTo', {
       configurable: true,
       value: jest.fn(),
+    });
+    Object.defineProperty(globalThis.crypto, 'randomUUID', {
+      configurable: true,
+      value: () => '9f0c2f5e-4d5b-4a8e-9a55-3c3f2a1b7c10',
     });
     mockUseGetStudentDashboardQuery.mockReturnValue({
       data: dashboard,
@@ -156,7 +184,7 @@ describe('student normal test flow', () => {
       }),
     });
     mockSaveAnswers.mockReturnValue({
-      unwrap: jest.fn().mockResolvedValue(startedAttempt),
+      unwrap: jest.fn().mockResolvedValue(savedAttempt),
     });
     mockSubmitAttempt.mockReturnValue({
       unwrap: jest.fn().mockResolvedValue({
@@ -195,7 +223,7 @@ describe('student normal test flow', () => {
     jest.restoreAllMocks();
   });
 
-  it('shows expectations, coalesces answers before review, and explains a failed result', async () => {
+  it('shows expectations, coalesces answers before submitting, and explains a failed result', async () => {
     const params = Promise.resolve({ testId: 'test-1' }) as Promise<{
       testId: string;
     }> & {
@@ -217,9 +245,7 @@ describe('student normal test flow', () => {
     expect(await screen.findByRole('button', { name: 'Record two answers' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Record two answers' }));
-    expect(screen.getByText('2 of 2 answered')).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent('Answer recorded. Saving…');
-    fireEvent.click(screen.getByRole('button', { name: 'Review answers' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm section and submit' }));
 
     await waitFor(() =>
       expect(mockSaveAnswers).toHaveBeenCalledWith({
@@ -228,11 +254,9 @@ describe('student normal test flow', () => {
           'fill-one': { type: 'fill', answers: ['one'] },
           'fill-two': { type: 'fill', answers: ['two'] },
         },
+        section: { pageId: 'page-1', expectedRevision: 0, mutationId: expect.any(String) },
       })
     );
-    expect(await screen.findByText('Every exercise has a recorded answer.')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Submit Test' }));
 
     expect(await screen.findByText('Keep going')).toBeInTheDocument();
     expect(screen.getByText(/You need 70% — you reached 50%/)).toBeInTheDocument();
@@ -273,8 +297,7 @@ describe('student normal test flow', () => {
     );
 
     fireEvent.click(await screen.findByRole('button', { name: 'Start Test' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Review answers' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Submit Test' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm section and submit' }));
     expect(await screen.findByRole('button', { name: 'Retake Test' })).toBeInTheDocument();
     expect(screen.queryByText('Test in progress')).not.toBeInTheDocument();
 
@@ -282,36 +305,6 @@ describe('student normal test flow', () => {
     expect(await screen.findByText('Test in progress')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Start Retake' })).not.toBeInTheDocument();
     expect(mockStartAttempt).toHaveBeenCalledTimes(2);
-  });
-
-  it('reopens a recorded answer from review and clears its server-side value before editing', async () => {
-    const params = Promise.resolve({ testId: 'test-1' }) as Promise<{ testId: string }> & {
-      status: 'fulfilled';
-      value: { testId: string };
-    };
-    params.status = 'fulfilled';
-    params.value = { testId: 'test-1' };
-    render(
-      <Suspense fallback={<div>Loading route</div>}>
-        <StudentTestPage params={params} />
-      </Suspense>
-    );
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Start Test' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Record two answers' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Review answers' }));
-    expect(await screen.findByText('Every exercise has a recorded answer.')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Edit First' }));
-
-    await waitFor(() =>
-      expect(mockSaveAnswers).toHaveBeenLastCalledWith({
-        attemptId: 'attempt-1',
-        answers: { 'fill-one': null },
-      })
-    );
-    expect(await screen.findByRole('button', { name: 'Record two answers' })).toBeInTheDocument();
-    expect(screen.getByText('1 of 2 answered')).toBeInTheDocument();
   });
 
   it('shows precise percentages and a visible deficit for a near-threshold failure', async () => {
@@ -359,40 +352,14 @@ describe('student normal test flow', () => {
     );
 
     fireEvent.click(await screen.findByRole('button', { name: 'Start Test' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Review answers' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Submit Test' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm section and submit' }));
 
     expect(await screen.findByText('79.99%')).toBeInTheDocument();
     expect(screen.getByText(/You need 80% — you reached 79\.99%/)).toBeInTheDocument();
     expect(screen.getByText(/<0\.01 percentage points away/)).toBeInTheDocument();
   });
 
-  it('keeps partial multi-item answers out of the answered count and protects them before unload', async () => {
-    mockStartAttempt.mockReturnValue({
-      unwrap: jest.fn().mockResolvedValue({
-        attempt: {
-          ...startedAttempt,
-          delivery: {
-            ...startedAttempt.delivery,
-            pages: [
-              {
-                ...startedAttempt.delivery.pages[0],
-                items: [
-                  {
-                    ...startedAttempt.delivery.pages[0].items[0],
-                    data: {
-                      items: [{ text: 'First part' }, { text: 'Second part' }],
-                    },
-                  },
-                  startedAttempt.delivery.pages[0].items[1],
-                ],
-              },
-            ],
-          },
-        },
-        resumed: false,
-      }),
-    });
+  it('protects unsaved answers before unload', async () => {
     const params = Promise.resolve({ testId: 'test-1' }) as Promise<{ testId: string }> & {
       status: 'fulfilled';
       value: { testId: string };
@@ -408,14 +375,9 @@ describe('student normal test flow', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Start Test' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Record two answers' }));
 
-    expect(screen.getByText('1 of 2 answered')).toBeInTheDocument();
     const beforeUnload = new Event('beforeunload', { cancelable: true });
     expect(fireEvent(window, beforeUnload)).toBe(false);
     expect(beforeUnload.defaultPrevented).toBe(true);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Review answers' }));
-    expect(await screen.findByText('1 unanswered exercise')).toBeInTheDocument();
-    expect(screen.queryByText('Every exercise has a recorded answer.')).not.toBeInTheDocument();
   });
 
   it('flushes pending answers before replaying browser history navigation', async () => {
@@ -526,8 +488,8 @@ describe('student normal test flow', () => {
       __PRIVATE_NEXTJS_INTERNALS_TREE: { segment: 'test-1' },
     };
     window.history.replaceState(nextHistoryState, '', '/test/test-1');
-    let resolveSave!: (attempt: typeof startedAttempt) => void;
-    const deferredSave = new Promise<typeof startedAttempt>(resolve => {
+    let resolveSave!: (attempt: typeof savedAttempt) => void;
+    const deferredSave = new Promise<typeof savedAttempt>(resolve => {
       resolveSave = resolve;
     });
     mockSaveAnswers.mockReturnValue({
@@ -554,7 +516,7 @@ describe('student normal test flow', () => {
     expect(go).not.toHaveBeenCalled();
 
     await act(async () => {
-      resolveSave(startedAttempt);
+      resolveSave(savedAttempt);
       await deferredSave;
     });
 
@@ -564,6 +526,8 @@ describe('student normal test flow', () => {
 
   it.each(['hidden', 'archived', 'moved'])('resumes the frozen mock attempt after it is %s', async _state => {
     mockSearchParams.mockReturnValue(new URLSearchParams('origin=mock'));
+    mockRefetchDashboard.mockResolvedValue({ data: undefined });
+    mockRefetchMockDetail.mockResolvedValue({ data: undefined });
     mockUseGetStudentDashboardQuery.mockReturnValue({
       data: {
         ...dashboard,
@@ -587,6 +551,7 @@ describe('student normal test flow', () => {
       },
       isLoading: false,
       isError: false,
+      refetch: mockRefetchDashboard,
     });
     mockUseGetStudentMockDetailQuery.mockReturnValue({
       data: {
@@ -602,6 +567,7 @@ describe('student normal test flow', () => {
       },
       isLoading: false,
       isError: false,
+      refetch: mockRefetchMockDetail,
     });
     const params = Promise.resolve({ testId: 'test-1' }) as Promise<{ testId: string }> & {
       status: 'fulfilled';
@@ -626,9 +592,7 @@ describe('student normal test flow', () => {
     expect(await screen.findByText('Test in progress')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Record two answers' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Record two answers' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Review answers' }));
-    expect(await screen.findByText('Every exercise has a recorded answer.')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Submit Test' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm section and submit' }));
     expect(await screen.findByText('Keep going')).toBeInTheDocument();
     expect(mockSaveAnswers).toHaveBeenCalledWith(expect.objectContaining({ attemptId: 'attempt-1' }));
     expect(mockSubmitAttempt).toHaveBeenCalledWith({ uid: 'student-1', attemptId: 'attempt-1' });
@@ -738,8 +702,7 @@ describe('student normal test flow', () => {
     );
     fireEvent.click(await screen.findByRole('button', { name: 'Start Mock Test' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Record two answers' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Review answers' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Submit Test' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm section and submit' }));
 
     expect(await screen.findByText('Keep going')).toBeInTheDocument();
     expect(screen.getByRole('status', { name: 'Loading retake options' })).toBeInTheDocument();
@@ -828,8 +791,7 @@ describe('student normal test flow', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Start Mock Test' }));
     expect(await screen.findByText('Test in progress')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Begin Mock Test' })).not.toBeInTheDocument();
-    fireEvent.click(await screen.findByRole('button', { name: 'Review answers' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Submit Test' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm section and submit' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Retake Mock Test' }));
 
     expect(await screen.findByText('Test in progress')).toBeInTheDocument();

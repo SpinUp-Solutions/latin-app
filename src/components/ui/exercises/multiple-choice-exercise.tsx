@@ -15,7 +15,6 @@ import type {
   ExerciseCompletionHandler,
   RuntimeMode,
 } from '@/src/types/runtime-mode';
-import { useSectionedTest } from '@/src/components/ui/test/sectioned-test-context';
 
 interface Props {
   exercise: MultipleChoiceExercise;
@@ -24,7 +23,6 @@ interface Props {
   runtimeMode?: RuntimeMode;
   onAnswer?: ExerciseAnswerHandler;
   initialAnswer?: ExerciseAnswer;
-  /** @deprecated Use runtimeMode="test". */
 }
 
 const MultipleChoiceExerciseComponent: React.FC<Props> = ({
@@ -35,7 +33,6 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({
   onAnswer,
   initialAnswer,
 }) => {
-  const sectioned = useSectionedTest() && runtimeMode === 'test';
   const restoredOptionIds = initialAnswer?.type === 'multiple-choice' ? initialAnswer.selectedOptionIds : [];
   const [selectedOptionIds, setSelectedOptionIds] = useState<string[]>(restoredOptionIds);
   const {
@@ -55,9 +52,9 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({
   } = useSingleAnswerExercise({
     exercise,
     runtimeMode,
-    // Sectioned selections are saved drafts. Resuming must still let students
-    // finish selecting options before they mark this exercise complete.
-    initiallySubmitted: !sectioned && restoredOptionIds.length > 0,
+    // Restored test selections are saved drafts. Resuming must still let
+    // students finish selecting options before they mark this exercise complete.
+    initiallySubmitted: false,
     onAnswer,
     onComplete,
     onCompletionAccepted,
@@ -80,7 +77,7 @@ const MultipleChoiceExerciseComponent: React.FC<Props> = ({
         : [...selectedOptionIds, optionId]
       : [optionId];
     setSelectedOptionIds(nextOptionIds);
-    if (sectioned) onAnswer?.({ type: 'multiple-choice', selectedOptionIds: nextOptionIds });
+    if (runtimeMode === 'test') onAnswer?.({ type: 'multiple-choice', selectedOptionIds: nextOptionIds });
   };
 
   const handleSubmit = () => {

@@ -25,8 +25,6 @@ import type {
 } from '@/src/types/runtime-mode';
 import { getContentTypeLabel } from '@/src/lib/content/registry';
 import { createGeneratedTranslationItems } from '@/src/lib/tests/generated-exercises';
-import { useSectionedTest } from '../test/sectioned-test-context';
-import { RecordedAnswerControls } from './recorded-answer-controls';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
 interface Props {
@@ -55,7 +53,6 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
   const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
-  const sectioned = useSectionedTest();
 
   const translationDirection = exercise.translationDirection || 'latin-to-english';
 
@@ -87,7 +84,6 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
   const [userAnswer, setUserAnswer] = useState(restoredAnswers[restoredIndex] ?? '');
   const [submittedAnswers, setSubmittedAnswers] = useState<string[]>(restoredAnswers);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [testSubmitted, setTestSubmitted] = useState(Boolean(restoredAnswers[restoredIndex]?.trim()));
 
   const {
     currentIndex,
@@ -123,7 +119,6 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
     cancelPendingAdvance();
     setUserAnswer('');
     setIsProcessing(false);
-    setTestSubmitted(false);
     setSubmittedAnswers([]);
     resetIndex();
     resetExercise();
@@ -140,11 +135,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
 
     if (testAnswerMode) {
       onAnswer?.({ type: 'generated-translation', answers: nextAnswers });
-      setTestSubmitted(true);
-      if (sectioned) {
-        if (isLastItem) onComplete?.(0);
-        else continueTest();
-      }
+      continueTest();
       return;
     }
 
@@ -187,7 +178,6 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
     }
     const nextAnswer = submittedAnswers[currentIndex + 1] ?? '';
     setUserAnswer(nextAnswer);
-    setTestSubmitted(Boolean(nextAnswer.trim()));
     setIsProcessing(false);
     reset();
     nextItem();
@@ -252,9 +242,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
             disabled={isProcessing || resetRequired}
           />
 
-          {testAnswerMode ? (
-            !sectioned && testSubmitted && <RecordedAnswerControls isLastItem={isLastItem} onContinue={continueTest} />
-          ) : (
+          {!testAnswerMode && (
             <FeedbackDisplay
               isCorrect={isCorrect}
               message={assessmentMode ? '' : message}

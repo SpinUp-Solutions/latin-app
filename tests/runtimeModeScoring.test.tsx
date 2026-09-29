@@ -127,7 +127,7 @@ describe('exercise runtime-mode scoring', () => {
     expect(screen.queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
   });
 
-  it('advances after each committed multi-item answer without grading locally', () => {
+  it('advances directly after each recorded multi-item answer without grading locally', () => {
     const onComplete = jest.fn();
     const exercise: FillExerciseType = {
       id: 'fill-test',
@@ -147,9 +147,9 @@ describe('exercise runtime-mode scoring', () => {
 
     fireEvent.change(screen.getByPlaceholderText(/type your answer/i), { target: { value: 'wrong' } });
     fireEvent.click(screen.getByRole('button', { name: /check/i }));
-    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
 
     expect(screen.getByText('Second')).toBeInTheDocument();
+    expect(onComplete).not.toHaveBeenCalled();
 
     fireEvent.change(screen.getByPlaceholderText(/type your answer/i), { target: { value: 'two' } });
     fireEvent.click(screen.getByRole('button', { name: /check/i }));

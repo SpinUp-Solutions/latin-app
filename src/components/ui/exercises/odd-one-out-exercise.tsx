@@ -1,6 +1,5 @@
 'use client';
 
-import { useSectionedTest } from '../test/sectioned-test-context';
 import React, { useState } from 'react';
 import { OddOneOutExercise } from '@/src/types/exercise';
 import { useSingleAnswerExercise } from '@/src/hooks/useSingleAnswerExercise';
@@ -35,7 +34,6 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({
   onAnswer,
   initialAnswer,
 }) => {
-  const sectioned = useSectionedTest();
   const restoredAnswer = initialAnswer?.type === 'odd-one-out' ? initialAnswer : null;
   const [selectedItemId, setSelectedItemId] = useState<string | null>(restoredAnswer?.selectedItemId ?? null);
   const [userExplanation, setUserExplanation] = useState(restoredAnswer?.explanation ?? '');
@@ -74,8 +72,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({
   const handleItemSelect = (itemId: string) => {
     if (hasSubmitted || resetRequired) return;
     setSelectedItemId(itemId);
-    if (testAnswerMode && sectioned)
-      onAnswer?.({ type: 'odd-one-out', selectedItemId: itemId, explanation: userExplanation });
+    if (testAnswerMode) onAnswer?.({ type: 'odd-one-out', selectedItemId: itemId, explanation: userExplanation });
   };
 
   const handleSubmit = () => {
@@ -169,7 +166,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({
               content={userExplanation}
               onChange={value => {
                 setUserExplanation(value);
-                if (testAnswerMode && sectioned)
+                if (testAnswerMode)
                   onAnswer?.({ type: 'odd-one-out', selectedItemId: selectedItemId ?? '', explanation: value });
               }}
               placeholder="Explain your reasoning..."

@@ -37,8 +37,6 @@ import type {
 } from '@/src/types/runtime-mode';
 import { getContentTypeLabel } from '@/src/lib/content/registry';
 import { createGeneratedFormIdentificationItems } from '@/src/lib/tests/generated-exercises';
-import { useSectionedTest } from '../test/sectioned-test-context';
-import { RecordedAnswerControls } from './recorded-answer-controls';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
 interface Props {
@@ -76,7 +74,6 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
   const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
-  const sectioned = useSectionedTest();
   const [wordAnswers, setWordAnswers] = useState<Record<string, Record<string, string>>>({});
   const [multiAnswerSlots, setMultiAnswerSlots] = useState<Record<string, string[][]>>({});
 
@@ -159,9 +156,6 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
   const restoredItemId = validatedItems[restoredIndex]?.id;
   const [userAnswer, setUserAnswer] = useState(restoredItemId ? (restoredAnswers[restoredItemId] ?? '') : '');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [testSubmitted, setTestSubmitted] = useState(
-    Boolean(restoredItemId && restoredAnswers[restoredItemId]?.trim())
-  );
   const [submittedAnswers, setSubmittedAnswers] = useState<Record<string, string>>(restoredAnswers);
 
   const {
@@ -200,7 +194,6 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
     setWordAnswers({});
     setMultiAnswerSlots({});
     setSubmittedAnswers({});
-    setTestSubmitted(false);
     setIsProcessing(false);
     resetIndex();
     resetExercise();
@@ -217,11 +210,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
 
     if (testAnswerMode) {
       onAnswer?.({ type: 'generated-form-identification', answers: nextAnswers });
-      setTestSubmitted(true);
-      if (sectioned) {
-        if (isLastItem) onComplete?.(0);
-        else continueTest();
-      }
+      continueTest();
       return;
     }
 
@@ -262,7 +251,6 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
         }
       }
 
-      setTestSubmitted(true);
       if (fullyCorrect) handleCorrect(isLastItem);
       else handleIncorrect();
       return;
@@ -375,19 +363,11 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
 
   const continueTest = () => {
     if (isLastItem) {
-      const score = testAnswerMode
-        ? 0
-        : gradeExercisePercentage(
-            { exercise, resolvedItems: validatedItems },
-            { type: 'generated-form-identification', answers: submittedAnswers }
-          );
-      onComplete?.(score);
+      onComplete?.(0);
       return;
     }
     const nextItemId = validatedItems[currentIndex + 1]?.id;
-    const nextAnswer = nextItemId ? (submittedAnswers[nextItemId] ?? '') : '';
-    setUserAnswer(nextAnswer);
-    setTestSubmitted(Boolean(nextAnswer.trim()));
+    setUserAnswer(nextItemId ? (submittedAnswers[nextItemId] ?? '') : '');
     setIsProcessing(false);
     reset();
     nextItem();
@@ -523,7 +503,7 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
                   ? `e.g., answer1;answer2`
                   : 'Type your answer...'
             }
-            disabled={isProcessing || testSubmitted || resetRequired}
+            disabled={isProcessing || resetRequired}
           />
 
           {!assessmentMode && (
@@ -543,9 +523,6 @@ const GeneratedFormIdentificationExerciseComponent: React.FC<Props> = ({
               onContinue={!assessmentMode && isCorrect && isAwaitingConfirmation ? confirmAdvance : undefined}
               onStartOver={resetRequired ? handleExerciseReset : undefined}
             />
-          )}
-          {assessmentMode && testSubmitted && !sectioned && (
-            <RecordedAnswerControls isLastItem={isLastItem} onContinue={continueTest} />
           )}
         </CardContent>
       </Card>

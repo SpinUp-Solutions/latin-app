@@ -365,13 +365,14 @@ const inProgressTestAttemptDocumentSchema = z
   .object({
     ...testAttemptBaseShape,
     status: z.literal('in-progress'),
-    flowVersion: z.literal(1).optional(),
-    sections: z.record(z.string(), sectionStateSchema).optional(),
+    flowVersion: z.literal(1),
+    sections: z.record(z.string(), sectionStateSchema),
     answers: z.record(z.string(), z.unknown()),
     translationGrades: z.record(z.string(), z.record(z.string(), testTranslationItemGradeSchema)).default({}),
+    /** Leases from the retired pre-section flow; older documents may still carry an empty map. */
     translationGradeReservations: z
       .record(z.string(), z.record(z.string(), testTranslationGradeReservationSchema))
-      .default({}),
+      .optional(),
     translationGradeRequestWindows: z
       .record(z.string(), z.record(z.string(), testTranslationGradeRequestWindowSchema))
       .default({}),
@@ -380,45 +381,38 @@ const inProgressTestAttemptDocumentSchema = z
   .strict()
   .superRefine((value, context) => {
     const pages = value.deliveryState.pages;
-    if (value.flowVersion === 1) {
-      const sections = value.sections;
-      let unlocked = false;
-      let invalid =
-        !sections ||
-        Object.keys(sections).length !== pages.length ||
-        new Set(pages.map(p => p.id)).size !== pages.length;
-      for (const page of pages) {
-        const section = sections?.[page.id];
-        if (!section) {
-          invalid = true;
-          continue;
-        }
-        if (section.phase === 'confirmed') {
-          if (unlocked || !section.confirmedAt || section.confirmation) invalid = true;
-        } else {
-          if (section.confirmedAt || (unlocked && section.phase !== 'answering')) invalid = true;
-          if (
-            unlocked &&
-            (section.revision !== 0 ||
-              section.saveMutations ||
-              page.items.some(item => value.answers[item.id] !== undefined))
-          )
-            invalid = true;
-          unlocked = true;
-        }
-        const receipts = Object.values(section.saveMutations ?? {});
+    const sections = value.sections;
+    let unlocked = false;
+    let invalid = Object.keys(sections).length !== pages.length || new Set(pages.map(p => p.id)).size !== pages.length;
+    for (const page of pages) {
+      const section = sections[page.id];
+      if (!section) {
+        invalid = true;
+        continue;
+      }
+      if (section.phase === 'confirmed') {
+        if (unlocked || !section.confirmedAt || section.confirmation) invalid = true;
+      } else {
+        if (section.confirmedAt || (unlocked && section.phase !== 'answering')) invalid = true;
         if (
-          receipts.some(receipt => receipt.expectedRevision >= section.revision) ||
-          new Set(receipts.map(receipt => receipt.expectedRevision)).size !== receipts.length
+          unlocked &&
+          (section.revision !== 0 ||
+            section.saveMutations ||
+            page.items.some(item => value.answers[item.id] !== undefined))
         )
           invalid = true;
-        if ((section.phase === 'confirming') !== Boolean(section.confirmation)) invalid = true;
+        unlocked = true;
       }
-      if (invalid || !unlocked)
-        context.addIssue({ code: 'custom', message: 'Invalid section workflow state', path: ['sections'] });
-    } else if (value.sections) {
-      context.addIssue({ code: 'custom', message: 'Legacy attempts cannot contain section state', path: ['sections'] });
+      const receipts = Object.values(section.saveMutations ?? {});
+      if (
+        receipts.some(receipt => receipt.expectedRevision >= section.revision) ||
+        new Set(receipts.map(receipt => receipt.expectedRevision)).size !== receipts.length
+      )
+        invalid = true;
+      if ((section.phase === 'confirming') !== Boolean(section.confirmation)) invalid = true;
     }
+    if (invalid || !unlocked)
+      context.addIssue({ code: 'custom', message: 'Invalid section workflow state', path: ['sections'] });
     if (value.versionId !== value.deliveryState.versionId) {
       context.addIssue({
         code: 'custom',
@@ -525,7 +519,7 @@ export const startTestAttemptInputSchema = z.object({ origin: testAttemptOriginS
 
 export const saveTestAttemptAnswersInputSchema = z
   .object({
-    section: sectionWriteSchema.optional(),
+    section: sectionWriteSchema,
     answers: z.record(
       z.string().trim().min(1).max(1500),
       z.unknown().refine(value => value !== undefined, 'answer is required; use null to clear it')
@@ -534,14 +528,6 @@ export const saveTestAttemptAnswersInputSchema = z
   .strict()
   .refine(value => Object.keys(value.answers).length > 0, 'At least one answer is required')
   .refine(value => Object.keys(value.answers).length <= 100, 'No more than 100 answers may be saved at once');
-
-export const gradeTestTranslationInputSchema = z
-  .object({
-    exerciseId: firestoreDocumentIdSchema,
-    itemIndex: z.number().int().nonnegative().max(499),
-    userTranslation: z.string().trim().min(1).max(10_000),
-  })
-  .strict();
 
 export const createTestUnitInputSchema = z
   .object({
@@ -596,4 +582,3 @@ export type DuplicateStandaloneMockVersionIntoTestInput = z.infer<
 export type ReorderMockTestsInput = z.infer<typeof reorderMockTestsInputSchema>;
 export type StartTestAttemptInput = z.infer<typeof startTestAttemptInputSchema>;
 export type SaveTestAttemptAnswersInput = z.infer<typeof saveTestAttemptAnswersInputSchema>;
-export type GradeTestTranslationInput = z.infer<typeof gradeTestTranslationInputSchema>;

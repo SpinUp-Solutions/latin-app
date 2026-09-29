@@ -87,7 +87,7 @@ export interface StudentMockTestSummary {
  */
 export interface StudentMockTestDetail {
   mock: Pick<MockTest, 'id' | 'title' | 'description' | 'passingPercentage' | 'status' | 'isLive'>;
-  attempt: Omit<StudentInProgressTestAttempt, 'answers' | 'translationGrades'> | null;
+  attempt: Omit<StudentInProgressTestAttempt, 'answers'> | null;
 }
 
 export type TestAttemptOrigin = { kind: 'normal-test'; testId: string } | { kind: 'mock-test'; mockTestId: string };
@@ -115,13 +115,6 @@ export interface TestTranslationItemGrade extends TestTranslationGradingOutput {
 
 export type TestTranslationGrades = Record<string, Record<string, TestTranslationItemGrade>>;
 
-export interface TestTranslationGradeReservation {
-  token: string;
-  expiresAt: string;
-}
-
-export type TestTranslationGradeReservations = Record<string, Record<string, TestTranslationGradeReservation>>;
-
 export interface TestTranslationGradeRequestWindow {
   windowStartedAt: string;
   count: number;
@@ -131,12 +124,10 @@ export type TestTranslationGradeRequestWindows = Record<string, Record<string, T
 
 export interface InProgressTestAttempt extends TestAttemptBase {
   status: 'in-progress';
-  flowVersion?: 1;
-  sections?: Record<string, SectionState>;
+  flowVersion: 1;
+  sections: Record<string, SectionState>;
   answers: Record<string, ExerciseAnswer>;
   translationGrades: TestTranslationGrades;
-  /** Server-only leases preventing concurrent AI grading of the same item. */
-  translationGradeReservations: TestTranslationGradeReservations;
   /** Server-only fixed-window provider invocation budgets. */
   translationGradeRequestWindows: TestTranslationGradeRequestWindows;
   deliveryState: TestAttemptDeliveryState;
@@ -181,25 +172,11 @@ export interface TestAttemptSession {
 /** The student-safe projection of the frozen delivery has the same shape. */
 export type StudentTestDelivery = TestAttemptDeliveryState;
 
-type StudentAttemptCommon = Omit<
+export type StudentInProgressTestAttempt = Omit<
   InProgressTestAttempt,
-  | 'studentId'
-  | 'deliveryState'
-  | 'translationGradeReservations'
-  | 'translationGradeRequestWindows'
-  | 'translationGrades'
-  | 'flowVersion'
-  | 'sections'
-> & { delivery: StudentTestDelivery };
-
-export type StudentLegacyTestAttempt = StudentAttemptCommon & {
-  flowVersion?: undefined;
-  section?: never;
-  translationGrades: TestTranslationGrades;
-};
-export type StudentSectionedTestAttempt = StudentAttemptCommon & {
-  flowVersion: 1;
-  translationGrades?: never;
+  'studentId' | 'deliveryState' | 'translationGradeRequestWindows' | 'translationGrades' | 'sections'
+> & {
+  delivery: StudentTestDelivery;
   section: {
     pageId: string;
     pageIndex: number;
@@ -210,7 +187,6 @@ export type StudentSectionedTestAttempt = StudentAttemptCommon & {
     phase: 'answering' | 'review' | 'confirming';
   };
 };
-export type StudentInProgressTestAttempt = StudentLegacyTestAttempt | StudentSectionedTestAttempt;
 export type ConfirmSectionResult = {
   attempt: StudentTestAttempt;
   pending: boolean;

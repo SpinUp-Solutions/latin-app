@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { SectionedTestPlayer } from '@/src/components/ui/test/sectioned-test-player';
-import type { StudentInProgressTestAttempt, StudentSectionedTestAttempt } from '@/src/types/test';
+import type { StudentInProgressTestAttempt } from '@/src/types/test';
 
 const refresh = jest.fn();
 jest.mock('@/src/store/api/testApi', () => ({
@@ -22,7 +22,7 @@ const initial = {
   answers: {},
   section: { pageId: 'page-1', pageIndex: 0, totalPages: 2, revision: 1, phase: 'review' },
   delivery: { versionId: 'version', pages: [{ id: 'page-1', items: [] }], resolvedExercises: {} },
-} as unknown as StudentSectionedTestAttempt;
+} as unknown as StudentInProgressTestAttempt;
 const onSubmitted = jest.fn();
 const reset = jest.fn();
 function Harness() {
@@ -37,7 +37,7 @@ function Harness() {
   } as unknown as React.ComponentProps<typeof SectionedTestPlayer>['buffer'];
   return (
     <SectionedTestPlayer
-      attempt={attempt as StudentSectionedTestAttempt}
+      attempt={attempt as StudentInProgressTestAttempt}
       onAttempt={setAttempt}
       buffer={buffer}
       title="Test"

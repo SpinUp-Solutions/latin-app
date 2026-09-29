@@ -3,12 +3,7 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, ClipboardCheck, Loader2, LockKeyhole, LogOut, Save } from 'lucide-react';
 import { toast } from 'sonner';
-import type {
-  StudentInProgressTestAttempt,
-  StudentSectionedTestAttempt,
-  StudentSubmittedTestAttempt,
-  StudentTestDelivery,
-} from '@/src/types/test';
+import type { StudentInProgressTestAttempt, StudentSubmittedTestAttempt, StudentTestDelivery } from '@/src/types/test';
 import type { ExerciseAnswer } from '@/src/types/runtime-mode';
 import type { Exercise } from '@/src/types/exercises';
 import { useBufferedAttemptAnswers } from '@/src/hooks/useBufferedAttemptAnswers';
@@ -27,11 +22,10 @@ import { Checkbox } from '@/src/components/ui/checkbox';
 import { PlayerActionBar, PlayerBarButton } from '@/src/components/ui/core/player-action-bar';
 import { RomanPlayerShell } from '@/src/components/ui/core/roman-player-shell';
 import { SectionAnswerReview } from './section-answer-review';
-import { SectionedTestProvider } from './sectioned-test-context';
 import { TestTakingView } from './test-taking-view';
 
 interface Props {
-  attempt: StudentSectionedTestAttempt;
+  attempt: StudentInProgressTestAttempt;
   onAttempt: (attempt: StudentInProgressTestAttempt) => void;
   buffer: ReturnType<typeof useBufferedAttemptAnswers>;
   title: string;
@@ -262,7 +256,7 @@ export function SectionedTestPlayer({ attempt, onAttempt, buffer, title, uid, or
     );
 
   return (
-    <SectionedTestProvider value>
+    <>
       {conflictNotice}
       {attempt.section.phase === 'answering' ? (
         <TestTakingView
@@ -385,6 +379,6 @@ export function SectionedTestPlayer({ attempt, onAttempt, buffer, title, uid, or
         </main>
       )}
       {recoveryView}
-    </SectionedTestProvider>
+    </>
   );
 }

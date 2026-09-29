@@ -1,9 +1,10 @@
 # Test section workflow
 
-New normal and mock attempts receive the server-owned `flowVersion: 1`. An absent
-version selects the original workflow, including its translation grading and
-submission APIs. Unsupported versions fail closed. No existing attempts need a
-migration; retakes naturally start with the new workflow.
+Every attempt is created with the server-owned `flowVersion: 1`. The original
+page-by-page workflow, with its per-item translation grading and separate submit
+route, has been retired. An in-progress attempt without section state fails closed
+with `STALE_TEST_ATTEMPT_DATA`. Submitted attempts from the original workflow stay
+readable.
 
 ## State and delivery
 
@@ -40,8 +41,9 @@ Review edits preserve other fields. Saving is flushed before phase changes,
 confirmation, and explicit exit. Completing the page never navigates automatically:
 the student presses `Review section` when ready, including after returning to a
 completed page or resuming it. Content-only sections still need explicit
-confirmation. Existing practice, authoring preview, and legacy attempts keep
-their original exercise behavior.
+confirmation. The admin test preview walks the same sections, review, and
+confirmation screens without saving anything. Practice lessons keep their own
+exercise behavior.
 
 Multiple-choice selections save as drafts immediately. `Submit Answer` marks the
 exercise finished after the student has selected all intended options; there is

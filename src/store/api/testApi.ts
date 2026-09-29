@@ -12,7 +12,6 @@ import type { TestUnit } from '@/src/types/learning-unit';
 import type {
   StartTestAttemptResult,
   StudentInProgressTestAttempt,
-  SubmitTestAttemptResult,
   TestUnitDetail,
   TestUnitSummary,
   TestVersion,
@@ -182,49 +181,15 @@ export const testApi = appApi.injectEndpoints({
     }),
     saveTestAttemptAnswers: builder.mutation<
       StudentInProgressTestAttempt,
-      { attemptId: string; answers: Record<string, ExerciseAnswer | null>; section?: SectionWrite }
+      { attemptId: string; answers: Record<string, ExerciseAnswer | null>; section: SectionWrite }
     >({
       query: ({ attemptId, answers, section }) => ({
         url: `/test-attempts/${attemptId}/answers`,
         method: 'PATCH',
-        body: { answers, ...(section ? { section } : {}) },
+        body: { answers, section },
       }),
       transformResponse: (response: { attempt: StudentInProgressTestAttempt }) => response.attempt,
       invalidatesTags: (result, error, { attemptId }) => (result ? [{ type: 'TestAttempt', id: attemptId }] : []),
-    }),
-    gradeTestTranslation: builder.mutation<
-      StudentInProgressTestAttempt,
-      { attemptId: string; exerciseId: string; itemIndex: number; userTranslation: string }
-    >({
-      query: ({ attemptId, ...body }) => ({
-        url: `/test-attempts/${attemptId}/translation-grade`,
-        method: 'POST',
-        body,
-      }),
-      transformResponse: (response: { attempt: StudentInProgressTestAttempt }) => response.attempt,
-      invalidatesTags: (result, error, { attemptId }) => (result ? [{ type: 'TestAttempt', id: attemptId }] : []),
-    }),
-    submitTestAttempt: builder.mutation<SubmitTestAttemptResult, { uid: string; attemptId: string }>({
-      query: ({ attemptId }) => ({ url: `/test-attempts/${attemptId}/submit`, method: 'POST' }),
-      invalidatesTags: (result, error, { uid, attemptId }) =>
-        result
-          ? [
-              { type: 'TestAttempt', id: attemptId },
-              { type: 'AttemptSummary', id: getAttemptSummaryTagId(uid, result.attempt.origin) },
-              ...(result.attempt.origin.kind === 'mock-test'
-                ? [
-                    { type: 'MockTest' as const, id: 'STUDENT' },
-                    // Refresh the frozen-session detail as well as the live
-                    // student-card collection after a mock submission.
-                    { type: 'MockTest' as const, id: result.attempt.origin.mockTestId },
-                  ]
-                : []),
-              // A lost first response makes the idempotent retry report
-              // completionGranted: false, so gate on the outcome instead.
-              { type: 'StudentLearningPath' as const, id: uid },
-              STUDENT_DASHBOARD_TAG,
-            ]
-          : [],
     }),
     getTestAttempt: builder.query<StudentTestAttempt, string>({
       query: attemptId => `/test-attempts/${attemptId}`,
@@ -291,7 +256,5 @@ export const {
   useDeactivateTestVersionMutation,
   useStartTestAttemptMutation,
   useSaveTestAttemptAnswersMutation,
-  useGradeTestTranslationMutation,
-  useSubmitTestAttemptMutation,
   useGetTestResultQuery,
 } = testApi;

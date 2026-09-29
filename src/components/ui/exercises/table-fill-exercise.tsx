@@ -1,6 +1,5 @@
 'use client';
 
-import { useSectionedTest } from '../test/sectioned-test-context';
 import React, { useState } from 'react';
 import { TableFillExercise } from '@/src/types/exercise';
 import { useSingleAnswerExercise } from '@/src/hooks/useSingleAnswerExercise';
@@ -42,7 +41,6 @@ const TableFillExerciseComponent: React.FC<Props> = ({
   onAnswer,
   initialAnswer,
 }) => {
-  const sectioned = useSectionedTest();
   const restoredAnswers = initialAnswer?.type === 'table-fill' ? initialAnswer.answers : {};
   const requiredCellKeys = exercise.data.rows.flatMap(row =>
     exercise.data.columns.flatMap(column => (row.cells[column.id]?.isBlank ? [`${row.id}-${column.id}`] : []))
@@ -85,7 +83,7 @@ const TableFillExerciseComponent: React.FC<Props> = ({
   const handleInputChange = (cellKey: string, value: string) => {
     if (hasSubmitted || isProcessing || resetRequired) return;
     setUserAnswers(prev => ({ ...prev, [cellKey]: value }));
-    if (testAnswerMode && sectioned) onAnswer?.({ type: 'table-fill', answers: { ...userAnswers, [cellKey]: value } });
+    if (testAnswerMode) onAnswer?.({ type: 'table-fill', answers: { ...userAnswers, [cellKey]: value } });
     if (isCorrect !== null) {
       clearFeedback();
     }

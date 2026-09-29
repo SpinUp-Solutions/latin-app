@@ -136,7 +136,7 @@ describe('student dashboard cache invalidation', () => {
           return {
             data: { attempt: { id: 'attempt-1', origin: { kind: 'mock-test', mockTestId: 'mock-1' } }, resumed: false },
           };
-        case '/test-attempts/attempt-1/submit':
+        case '/test-attempts/attempt-1/sections/page-1/confirm':
           return {
             data: {
               attempt: { id: 'attempt-1', origin: { kind: 'mock-test', mockTestId: 'mock-1' }, status: 'submitted' },
@@ -609,7 +609,18 @@ describe('student dashboard cache invalidation', () => {
           origin: { kind: 'mock-test', mockTestId: 'mock-1' },
         }),
     ],
-    ['submit', () => testApi.endpoints.submitTestAttempt.initiate({ uid: 'student-1', attemptId: 'attempt-1' })],
+    [
+      'final section confirmation',
+      () =>
+        testApi.endpoints.confirmTestSection.initiate({
+          uid: 'student-1',
+          attemptId: 'attempt-1',
+          pageId: 'page-1',
+          expectedRevision: 0,
+          requestId: '9f0c2f5e-4d5b-4a8e-9a55-3c3f2a1b7c10',
+          acknowledgeIncomplete: false,
+        }),
+    ],
   ])('refreshes mounted student mock cards after successful mock %s', async (_name, mutation) => {
     const store = createStore();
     const dashboard = store.dispatch(lessonApi.endpoints.getStudentDashboard.initiate('student-1'));

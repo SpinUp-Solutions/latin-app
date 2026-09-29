@@ -17,8 +17,6 @@ import type {
   ExerciseCompletionHandler,
   RuntimeMode,
 } from '@/src/types/runtime-mode';
-import { useSectionedTest } from '../test/sectioned-test-context';
-import { RecordedAnswerControls } from './recorded-answer-controls';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 import { splitHtmlIntoWords } from '@/src/utils/htmlWordSplitter';
 
@@ -42,14 +40,12 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({
   const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
-  const sectioned = useSectionedTest();
   const passageWords = splitHtmlIntoWords(exercise.data.passage);
   const restoredIndices = initialAnswer?.type === 'text-selection' ? initialAnswer.selectedWordIndices : [];
   const restoredIndex = Math.min(restoredIndices.length, Math.max(exercise.data.questions.length - 1, 0));
   const [selectedWordIndex, setSelectedWordIndex] = useState<number | null>(restoredIndices[restoredIndex] ?? null);
   const [submittedIndices, setSubmittedIndices] = useState<number[]>(restoredIndices);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [testSubmitted, setTestSubmitted] = useState(restoredIndices[restoredIndex] !== undefined);
 
   const {
     currentIndex,
@@ -85,7 +81,6 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({
     cancelPendingAdvance();
     setSelectedWordIndex(null);
     setIsProcessing(false);
-    setTestSubmitted(false);
     setSubmittedIndices([]);
     resetIndex();
     resetExercise();
@@ -102,11 +97,7 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({
 
     if (testAnswerMode) {
       onAnswer?.({ type: 'text-selection', selectedWordIndices: nextIndices });
-      setTestSubmitted(true);
-      if (sectioned) {
-        if (isLastItem) onComplete?.(0);
-        else continueTest();
-      }
+      continueTest();
       return;
     }
 
@@ -143,7 +134,6 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({
       return;
     }
     setSelectedWordIndex(null);
-    setTestSubmitted(false);
     setIsProcessing(false);
     reset();
     nextItem();
@@ -185,9 +175,7 @@ const TextSelectionExerciseComponent: React.FC<Props> = ({
           />
         </div>
 
-        {testAnswerMode ? (
-          !sectioned && testSubmitted && <RecordedAnswerControls isLastItem={isLastItem} onContinue={continueTest} />
-        ) : (
+        {!testAnswerMode && (
           <FeedbackDisplay
             isCorrect={isCorrect}
             message={assessmentMode ? '' : message}

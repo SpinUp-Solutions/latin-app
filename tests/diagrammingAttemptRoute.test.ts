@@ -47,6 +47,8 @@ const storedAttempt = (studentId = 'student-1') => ({
   passingPercentage: 70,
   origin: { kind: 'normal-test', testId: 'test-1' },
   status: 'in-progress',
+  flowVersion: 1,
+  sections: { 'page-1': { revision: 0, phase: 'answering' } },
   answers: {},
   deliveryState: {
     versionId: 'version-1',

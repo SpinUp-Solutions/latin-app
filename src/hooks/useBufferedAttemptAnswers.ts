@@ -13,11 +13,11 @@ export type AnswerSaveStatus = 'recorded' | 'saving' | 'saved' | 'error';
 interface ActiveAttempt {
   attemptId: string;
   scope: string;
-  section?: { pageId: string; revision: number };
+  section: { pageId: string; revision: number };
 }
 
 interface PendingAnswers {
-  answers: Record<string, ExerciseAnswer | null>;
+  answers: Record<string, ExerciseAnswer>;
   scope: string;
 }
 
@@ -29,7 +29,7 @@ export function useBufferedAttemptAnswers() {
   const generationRef = useRef(0);
   const retryRef = useRef<{
     scope: string;
-    answers: Record<string, ExerciseAnswer | null>;
+    answers: Record<string, ExerciseAnswer>;
     section: { pageId: string; expectedRevision: number; mutationId: string };
   } | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -70,11 +70,11 @@ export function useBufferedAttemptAnswers() {
       answers: Record<string, ExerciseAnswer>;
       attemptId: string;
       originKey: string;
-      section?: { pageId: string; revision: number };
+      section: { pageId: string; revision: number };
     }) => {
       clearSaveTimer();
-      const scope = `${originKey}:${attemptId}:${section?.pageId ?? 'legacy'}:${++generationRef.current}`;
-      activeAttemptRef.current = { attemptId, scope, section: section ? { ...section } : undefined };
+      const scope = `${originKey}:${attemptId}:${section.pageId}:${++generationRef.current}`;
+      activeAttemptRef.current = { attemptId, scope, section: { ...section } };
       retryRef.current = null;
       conflictRef.current = null;
       setConflict(false);
@@ -116,26 +116,19 @@ export function useBufferedAttemptAnswers() {
             const retry = retryRef.current?.scope === scope ? retryRef.current : null;
             const batch = retry?.answers ?? pendingAnswersRef.current!.answers;
             if (!retry) pendingAnswersRef.current = null;
-            const section =
-              retry?.section ??
-              (activeAttempt.section
-                ? {
-                    pageId: activeAttempt.section.pageId,
-                    expectedRevision: activeAttempt.section.revision,
-                    mutationId: crypto.randomUUID(),
-                  }
-                : undefined);
-            if (section) retryRef.current = { scope, answers: batch, section };
+            const section = retry?.section ?? {
+              pageId: activeAttempt.section.pageId,
+              expectedRevision: activeAttempt.section.revision,
+              mutationId: crypto.randomUUID(),
+            };
+            // The same mutation ID is retried until the server confirms it.
+            retryRef.current = { scope, answers: batch, section };
             try {
-              const saved = await saveAnswers({
-                attemptId,
-                answers: batch,
-                ...(section ? { section } : {}),
-              }).unwrap();
+              const saved = await saveAnswers({ attemptId, answers: batch, section }).unwrap();
               if (activeAttemptRef.current?.scope !== scope) return;
               // A retry can succeed after another tab has saved a later
               // revision. Do not silently confirm those unseen answers.
-              if (section && saved?.flowVersion === 1 && saved.section.revision !== section.expectedRevision + 1) {
+              if (saved.section.revision !== section.expectedRevision + 1) {
                 throw {
                   status: 409,
                   data: {
@@ -145,8 +138,7 @@ export function useBufferedAttemptAnswers() {
                 };
               }
               retryRef.current = null;
-              if (saved?.flowVersion === 1 && activeAttempt.section)
-                activeAttempt.section.revision = saved.section.revision;
+              activeAttempt.section.revision = saved.section.revision;
               if (activeAttemptRef.current?.scope === scope) {
                 setSaveError(null);
                 setSaveStatus('saved');
@@ -165,12 +157,6 @@ export function useBufferedAttemptAnswers() {
                 setConflict(true);
                 clearSaveTimer();
               }
-              const queued = pendingAnswersRef.current as PendingAnswers | null;
-              if (!section)
-                pendingAnswersRef.current =
-                  queued?.scope === scope
-                    ? { scope, answers: { ...batch, ...queued.answers } }
-                    : { scope, answers: batch };
               setSaveError(getApiErrorMessage(error, 'Your answers could not be saved'));
               setSaveStatus('error');
               throw error;
@@ -185,17 +171,12 @@ export function useBufferedAttemptAnswers() {
     await operation;
   }, [clearSaveTimer, saveAnswers]);
 
-  const queueAnswer = useCallback(
-    (exerciseId: string, answer: ExerciseAnswer | null) => {
+  const recordAnswer = useCallback(
+    ({ exerciseId, answer }: ExerciseAnswerEvent) => {
       const activeAttempt = activeAttemptRef.current;
       if (!activeAttempt) return;
 
-      setAnswers(current => {
-        const next = { ...current };
-        if (answer) next[exerciseId] = answer;
-        else delete next[exerciseId];
-        return next;
-      });
+      setAnswers(current => ({ ...current, [exerciseId]: answer }));
       const queued = pendingAnswersRef.current;
       pendingAnswersRef.current = {
         scope: activeAttempt.scope,
@@ -214,29 +195,6 @@ export function useBufferedAttemptAnswers() {
     },
     [clearSaveTimer, flushPendingAnswers]
   );
-  const recordAnswer = useCallback(
-    (event: ExerciseAnswerEvent) => queueAnswer(event.exerciseId, event.answer),
-    [queueAnswer]
-  );
-  const clearAnswer = useCallback((exerciseId: string) => queueAnswer(exerciseId, null), [queueAnswer]);
-
-  const adoptPersistedAnswer = useCallback((event: ExerciseAnswerEvent) => {
-    const activeAttempt = activeAttemptRef.current;
-    if (!activeAttempt) return;
-
-    setAnswers(current => ({ ...current, [event.exerciseId]: event.answer }));
-    const queued = pendingAnswersRef.current;
-    if (queued?.scope === activeAttempt.scope && event.exerciseId in queued.answers) {
-      const remaining = { ...queued.answers };
-      delete remaining[event.exerciseId];
-      pendingAnswersRef.current =
-        Object.keys(remaining).length > 0 ? { scope: activeAttempt.scope, answers: remaining } : null;
-    }
-    if (!pendingAnswersRef.current && !saveInFlightRef.current) {
-      setSaveError(null);
-      setSaveStatus('saved');
-    }
-  }, []);
 
   useEffect(() => {
     const protectUnsavedAnswers = (event: BeforeUnloadEvent) => {
@@ -260,10 +218,8 @@ export function useBufferedAttemptAnswers() {
   return {
     activateAttempt,
     conflict,
-    getSectionRevision: () => activeAttemptRef.current?.section?.revision,
-    adoptPersistedAnswer,
+    getSectionRevision: () => activeAttemptRef.current?.section.revision,
     answers,
-    clearAnswer,
     flushPendingAnswers,
     hasUnsavedAnswers,
     recordAnswer,

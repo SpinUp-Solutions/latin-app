@@ -3,38 +3,28 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { AlertTriangle, ArrowLeft, CheckCircle2, ClipboardCheck, FileCheck2, Loader2, RotateCcw } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, FileCheck2, Loader2, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/src/components/ui/button';
 import { PageLoading } from '@/src/components/ui/page-loading';
 import { Card, CardContent, CardHeader, CardTitle } from '@/src/components/ui/card';
-import { PlayerActionBar, PlayerBarButton } from '@/src/components/ui/core/player-action-bar';
 import { RomanPlayerShell } from '@/src/components/ui/core/roman-player-shell';
-import { TestTakingView } from '@/src/components/ui/test/test-taking-view';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
 import { SectionedTestPlayer } from '@/src/components/ui/test/sectioned-test-player';
-import { TestTranslationGradingProvider } from '@/src/components/ui/test/test-translation-grading-context';
 import { useAuth } from '@/src/hooks/useAuth';
 import { useBufferedAttemptAnswers } from '@/src/hooks/useBufferedAttemptAnswers';
-import { isExerciseType } from '@/src/lib/content/registry';
-import { isExerciseAnswerComplete } from '@/src/lib/tests/answer-completion';
 import { formatScorePercentage, formatScorePoints, formatScoreShortfall } from '@/src/lib/tests/formatting';
 import { getApiErrorCode, getApiErrorMessage } from '@/src/store/api/baseQuery';
 import { useGetStudentDashboardQuery } from '@/src/store/api/lessonApi';
 import { useGetStudentMockDetailQuery } from '@/src/store/api/mockTestApi';
-import {
-  useGradeTestTranslationMutation,
-  useStartTestAttemptMutation,
-  useSubmitTestAttemptMutation,
-} from '@/src/store/api/testApi';
+import { useStartTestAttemptMutation } from '@/src/store/api/testApi';
 import type { StudentTestSummary } from '@/src/types/lesson';
-import type { TestTranslationGradeHandler } from '@/src/types/runtime-mode';
 import type { TestAttemptOrigin } from '@/src/types/test';
 import type { StudentInProgressTestAttempt, StudentSubmittedTestAttempt } from '@/src/types/test';
 
 const TEST_HISTORY_GUARD_KEY = '__latinTestHistoryGuard';
 
-type Screen = 'expectations' | 'taking' | 'review' | 'results' | 'unavailable';
+type Screen = 'expectations' | 'taking' | 'results' | 'unavailable';
 type MockRetakeAvailability = 'unchecked' | 'checking' | 'available' | 'unavailable';
 
 export default function StudentTestPage({ params }: { params: Promise<{ testId: string }> }) {
@@ -56,28 +46,13 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
     refetch: refetchMockDetail,
   } = useGetStudentMockDetailQuery({ uid: user?.uid ?? '', mockId: testId }, { skip: !user?.uid || !isMockTest });
   const [startAttempt, { isLoading: starting }] = useStartTestAttemptMutation();
-  const [gradeTestTranslation, { isLoading: translationGrading }] = useGradeTestTranslationMutation();
-  const [submitAttempt, { isLoading: submitting }] = useSubmitTestAttemptMutation();
   const answerBuffer = useBufferedAttemptAnswers();
-  const {
-    activateAttempt,
-    adoptPersistedAnswer,
-    answers,
-    clearAnswer,
-    flushPendingAnswers,
-    hasUnsavedAnswers,
-    recordAnswer,
-    reset: resetAnswerBuffer,
-    saveError,
-    saveStatus: answerSaveStatus,
-  } = answerBuffer;
+  const { activateAttempt, flushPendingAnswers, hasUnsavedAnswers, reset: resetAnswerBuffer } = answerBuffer;
 
   const [screen, setScreen] = useState<Screen>('expectations');
   const [attempt, setAttempt] = useState<StudentInProgressTestAttempt | null>(null);
   const [result, setResult] = useState<StudentSubmittedTestAttempt | null>(null);
-  const [pageIndex, setPageIndex] = useState(0);
   const [mockRetakeAvailability, setMockRetakeAvailability] = useState<MockRetakeAvailability>('unchecked');
-  const [editingExerciseId, setEditingExerciseId] = useState<string | null>(null);
   const allowNextHistoryPopRef = useRef(false);
   const historyNavigationPendingRef = useRef(false);
   const historyEffectActiveRef = useRef(false);
@@ -108,7 +83,6 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
     mockResumeScopeRef.current = null;
     setAttempt(null);
     setResult(null);
-    setPageIndex(0);
     setMockRetakeAvailability('unchecked');
     setScreen('expectations');
   }, [originKey, resetAnswerBuffer]);
@@ -140,7 +114,6 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
           originKey,
         });
         setAttempt(response.attempt);
-        setPageIndex(0);
       })
       .catch(error => {
         if (activeOriginKeyRef.current !== originKey) return;
@@ -156,30 +129,8 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
     if (!authLoading && !user) router.replace('/login');
   }, [authLoading, router, user]);
 
-  const exerciseItems = useMemo(
-    () =>
-      attempt?.delivery.pages.flatMap((page, deliveryPageIndex) =>
-        page.items
-          .filter(item => isExerciseType(item.type))
-          .map(item => ({
-            id: item.id,
-            title: item.title || 'Untitled exercise',
-            pageIndex: deliveryPageIndex,
-            exercise: item,
-            resolvedItemCount: attempt.delivery.resolvedExercises[item.id]?.items.length ?? 0,
-          }))
-      ) ?? [],
-    [attempt]
-  );
-  const answeredCount = useMemo(
-    () =>
-      exerciseItems.filter(item => isExerciseAnswerComplete(item.exercise, answers[item.id], item.resolvedItemCount))
-        .length,
-    [answers, exerciseItems]
-  );
-
   useEffect(() => {
-    if (screen !== 'taking' && screen !== 'review') return;
+    if (screen !== 'taking') return;
     let effectActive = true;
     historyEffectActiveRef.current = true;
     const guardValue = `test:${originKey}`;
@@ -258,7 +209,6 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
         originKey: requestedOriginKey,
       });
       setAttempt(response.attempt);
-      setPageIndex(0);
       setScreen('taking');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
@@ -285,7 +235,6 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
     setAttempt(null);
     setResult(null);
     resetAnswerBuffer();
-    setPageIndex(0);
     void startFreshAttempt();
   };
 
@@ -295,43 +244,6 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
       router.push('/dashboard');
     } catch {
       toast.error('Save the pending answer before leaving this test.');
-    }
-  };
-
-  const moveToPage = async (nextPageIndex: number) => {
-    try {
-      await flushPendingAnswers();
-      setPageIndex(nextPageIndex);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch {
-      toast.error('Save the pending answer before changing pages.');
-    }
-  };
-
-  const openReview = async () => {
-    try {
-      await flushPendingAnswers();
-      setScreen('review');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch {
-      toast.error('Save the pending answer before reviewing your test.');
-    }
-  };
-
-  const gradeTranslation: TestTranslationGradeHandler = async event => {
-    if (!attempt || !user) throw new Error('This test attempt is not available.');
-    const requestedOriginKey = originKey;
-    try {
-      await flushPendingAnswers();
-      const updatedAttempt = await gradeTestTranslation({ attemptId: attempt.id, ...event }).unwrap();
-      if (activeOriginKeyRef.current !== requestedOriginKey) {
-        throw new Error('The active test changed while the translation was being graded.');
-      }
-      const savedAnswer = updatedAttempt.answers[event.exerciseId];
-      if (savedAnswer) adoptPersistedAnswer({ exerciseId: event.exerciseId, answer: savedAnswer });
-      setAttempt(updatedAttempt);
-    } catch (error) {
-      throw new Error(getApiErrorMessage(error, 'Unable to grade this translation'));
     }
   };
 
@@ -357,58 +269,6 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
       });
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const submit = async () => {
-    if (!attempt || !user) return;
-    const requestedOriginKey = originKey;
-    try {
-      await flushPendingAnswers();
-      const response = await submitAttempt({
-        uid: user.uid,
-        attemptId: attempt.id,
-      }).unwrap();
-      if (activeOriginKeyRef.current !== requestedOriginKey) return;
-      acceptSubmission(response.attempt);
-    } catch (error) {
-      if (getApiErrorCode(error) === 'TEST_CONFIGURATION_ERROR') {
-        setScreen('unavailable');
-        return;
-      }
-      toast.error(getApiErrorMessage(error, 'Unable to submit this test'));
-    }
-  };
-
-  const openExercise = async (exerciseId: string, exercisePageIndex: number, clearExisting: boolean) => {
-    if (!attempt) return;
-    if (!clearExisting) {
-      setPageIndex(exercisePageIndex);
-      setScreen('taking');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
-    }
-    const previousAnswer = answers[exerciseId];
-    setEditingExerciseId(exerciseId);
-    clearAnswer(exerciseId);
-    try {
-      await flushPendingAnswers();
-      setAttempt(current => {
-        if (!current || current.flowVersion === 1) return current;
-        const nextAnswers = { ...current.answers };
-        const nextTranslationGrades = { ...current.translationGrades };
-        delete nextAnswers[exerciseId];
-        delete nextTranslationGrades[exerciseId];
-        return { ...current, answers: nextAnswers, translationGrades: nextTranslationGrades };
-      });
-      setPageIndex(exercisePageIndex);
-      setScreen('taking');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch {
-      if (previousAnswer) recordAnswer({ exerciseId, answer: previousAnswer });
-      toast.error('This answer could not be reopened. Try again.');
-    } finally {
-      setEditingExerciseId(null);
-    }
   };
 
   if (authLoading || dashboardLoading || (isMockTest && mockDetailLoading) || (!user && !dashboardError)) {
@@ -545,9 +405,8 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
             </div>
             <ul className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-sm leading-6 text-slate-700">
               <li className="flex gap-3 before:mt-2.5 before:h-1.5 before:w-1.5 before:shrink-0 before:rounded-full before:bg-roman-red">
-                {attempt?.flowVersion === undefined && attempt
-                  ? 'For translations, you’ll get brief guidance as you go. Feedback on other questions appears after you submit.'
-                  : 'Review each section before confirming it. Once confirmed, you cannot return. All scores and feedback appear after submission.'}
+                Review each section before confirming it. Once confirmed, you cannot return. All scores and feedback
+                appear after submission.
               </li>
               <li className="flex gap-3 before:mt-2.5 before:h-1.5 before:w-1.5 before:shrink-0 before:rounded-full before:bg-roman-red">
                 Your answers save automatically, so you can refresh or return later without losing your work.
@@ -685,175 +544,17 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
 
   if (!attempt) return null;
 
-  if (attempt.flowVersion === 1)
-    return (
-      <SectionedTestPlayer
-        key={attempt.id}
-        attempt={attempt}
-        onAttempt={setAttempt}
-        buffer={answerBuffer}
-        title={test.title}
-        uid={user!.uid}
-        originKey={originKey}
-        onSubmitted={acceptSubmission}
-        onExit={exitTest}
-      />
-    );
-
-  if (screen === 'review') {
-    const unanswered = exerciseItems.filter(
-      item => !isExerciseAnswerComplete(item.exercise, answers[item.id], item.resolvedItemCount)
-    );
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-roman-marble via-white to-roman-parchment/50 p-4 md:p-10">
-        <div className="mx-auto max-w-4xl space-y-5">
-          <RomanPlayerShell
-            icon={ClipboardCheck}
-            label="Answer review"
-            title="Review before submitting"
-            description={`${answeredCount} of ${exerciseItems.length} exercises answered`}
-            headingAs="h1"
-            className="overflow-hidden rounded-2xl border-roman-red/15 shadow-md"
-            contentClassName="space-y-5 px-6 pb-7 sm:px-8">
-            {unanswered.length === 0 ? (
-              <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-900">
-                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" aria-hidden="true" />
-                <div>
-                  <p className="font-medium">Every exercise has a recorded answer.</p>
-                  <p className="mt-1 text-sm text-emerald-800">You can still make changes before submitting.</p>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
-                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" aria-hidden="true" />
-                <div>
-                  <p className="font-medium text-amber-950">
-                    {unanswered.length} unanswered {unanswered.length === 1 ? 'exercise' : 'exercises'}
-                  </p>
-                  <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-amber-900">
-                    {unanswered.map(item => (
-                      <li key={item.id} className="flex items-center gap-1">
-                        <span className="shrink-0">Page {item.pageIndex + 1}:</span>
-                        <SimpleRichDisplay content={item.title} />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            )}
-            <div className="space-y-3">
-              <h2 className="font-semibold text-slate-900">Review each exercise</h2>
-              <ul className="space-y-3">
-                {exerciseItems.map(item => {
-                  const complete = isExerciseAnswerComplete(item.exercise, answers[item.id], item.resolvedItemCount);
-                  const hasRecordedAnswer = Boolean(answers[item.id]);
-                  const translationIsFinal =
-                    item.exercise.type === 'translation-grading' &&
-                    Object.keys(attempt.translationGrades?.[item.id] ?? {}).length > 0;
-                  const clearExisting = complete && !translationIsFinal;
-                  const actionLabel = translationIsFinal
-                    ? complete
-                      ? 'Review answer'
-                      : 'Continue exercise'
-                    : complete
-                      ? 'Edit answer'
-                      : hasRecordedAnswer
-                        ? 'Continue exercise'
-                        : 'Answer exercise';
-                  return (
-                    <li
-                      key={item.id}
-                      className={`flex flex-col gap-4 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between ${
-                        complete ? 'border-emerald-200 bg-emerald-50/70' : 'border-amber-200 bg-amber-50/70'
-                      }`}>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1 font-medium text-slate-900">
-                          <span className="shrink-0">Page {item.pageIndex + 1}:</span>
-                          <SimpleRichDisplay content={item.title} />
-                        </div>
-                        <div
-                          className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-                            complete ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                          }`}>
-                          {complete ? 'Answer recorded' : 'Needs an answer'}
-                        </div>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="shrink-0 rounded-xl border-slate-200 bg-white"
-                        disabled={editingExerciseId !== null}
-                        aria-label={`${actionLabel.replace(' answer', '').replace(' exercise', '')} ${item.title}`}
-                        onClick={() => void openExercise(item.id, item.pageIndex, clearExisting)}>
-                        {editingExerciseId === item.id ? 'Opening…' : actionLabel}
-                      </Button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-            <p className="border-t border-slate-100 pt-4 text-sm leading-6 text-gray-600">
-              Submission is final for this attempt. After you submit, you can review every question with the correct
-              answers and your translation feedback.
-            </p>
-          </RomanPlayerShell>
-          <PlayerActionBar>
-            <PlayerBarButton
-              type="button"
-              tone="outline"
-              disabled={editingExerciseId !== null}
-              onClick={() => setScreen('taking')}>
-              <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
-              Return to test
-            </PlayerBarButton>
-            <PlayerBarButton
-              type="button"
-              className="sm:ml-auto"
-              disabled={submitting || translationGrading || editingExerciseId !== null}
-              onClick={submit}>
-              {submitting ? 'Submitting…' : 'Submit Test'}
-            </PlayerBarButton>
-          </PlayerActionBar>
-        </div>
-      </div>
-    );
-  }
-
-  const saveStatus = translationGrading ? (
-    <span>Grading and saving translation…</span>
-  ) : saveError ? (
-    <span className="font-medium text-red-700">{saveError}</span>
-  ) : answerSaveStatus === 'recorded' ? (
-    <span>Answer recorded. Saving…</span>
-  ) : answerSaveStatus === 'saving' ? (
-    <span>Saving answer…</span>
-  ) : answerSaveStatus === 'saved' ? (
-    <span>Answer saved.</span>
-  ) : (
-    <span>Answer save needs your attention.</span>
-  );
-
   return (
-    <TestTranslationGradingProvider value={{ grades: attempt.translationGrades ?? {}, grade: gradeTranslation }}>
-      <TestTakingView
-        title={<SimpleRichDisplay content={test.title} />}
-        description={test.description ? <SimpleRichDisplay content={test.description} /> : undefined}
-        pages={attempt.delivery.pages}
-        currentPageIndex={pageIndex}
-        answeredCount={answeredCount}
-        totalExercises={exerciseItems.length}
-        status={saveStatus}
-        answers={answers}
-        resolvedExerciseState={attempt.delivery.resolvedExercises}
-        resolvedVocabularyPool={attempt.delivery.vocabularyPool}
-        onAnswer={recordAnswer}
-        onPrevious={() => void moveToPage(pageIndex - 1)}
-        onNext={() => void moveToPage(pageIndex + 1)}
-        onReview={() => void openReview()}
-        onExit={() => void exitTest()}
-        navigationPending={translationGrading}
-      />
-    </TestTranslationGradingProvider>
+    <SectionedTestPlayer
+      key={attempt.id}
+      attempt={attempt}
+      onAttempt={setAttempt}
+      buffer={answerBuffer}
+      title={test.title}
+      uid={user!.uid}
+      originKey={originKey}
+      onSubmitted={acceptSubmission}
+      onExit={exitTest}
+    />
   );
 }

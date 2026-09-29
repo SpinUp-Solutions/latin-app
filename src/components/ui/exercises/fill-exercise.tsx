@@ -16,8 +16,6 @@ import type {
   ExerciseCompletionHandler,
   RuntimeMode,
 } from '@/src/types/runtime-mode';
-import { useSectionedTest } from '../test/sectioned-test-context';
-import { RecordedAnswerControls } from './recorded-answer-controls';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
 interface Props {
@@ -40,14 +38,12 @@ const FillExerciseComponent: React.FC<Props> = ({
   const mode = runtimeMode ?? 'practice';
   const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
-  const sectioned = useSectionedTest();
   const restoredAnswers = initialAnswer?.type === 'fill' ? initialAnswer.answers : [];
   const firstIncompleteIndex = exercise.data.items.findIndex((_, index) => !restoredAnswers[index]?.trim());
   const restoredIndex = firstIncompleteIndex >= 0 ? firstIncompleteIndex : Math.max(exercise.data.items.length - 1, 0);
   const [userAnswer, setUserAnswer] = useState(restoredAnswers[restoredIndex] ?? '');
   const [submittedAnswers, setSubmittedAnswers] = useState<string[]>(restoredAnswers);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [testSubmitted, setTestSubmitted] = useState(Boolean(restoredAnswers[restoredIndex]?.trim()));
 
   const {
     currentIndex,
@@ -83,7 +79,6 @@ const FillExerciseComponent: React.FC<Props> = ({
     cancelPendingAdvance();
     setUserAnswer('');
     setIsProcessing(false);
-    setTestSubmitted(false);
     setSubmittedAnswers([]);
     resetIndex();
     resetExercise();
@@ -99,12 +94,7 @@ const FillExerciseComponent: React.FC<Props> = ({
 
     if (testAnswerMode) {
       onAnswer?.({ type: 'fill', answers: nextAnswers });
-      setTestSubmitted(true);
-
-      if (sectioned) {
-        if (isLastItem) onComplete?.(0);
-        else continueTest();
-      } else if (isLastItem) onComplete?.(0);
+      continueTest();
       return;
     }
 
@@ -142,9 +132,7 @@ const FillExerciseComponent: React.FC<Props> = ({
       onComplete?.(0);
       return;
     }
-    const nextAnswer = submittedAnswers[currentIndex + 1] ?? '';
-    setUserAnswer(nextAnswer);
-    setTestSubmitted(Boolean(nextAnswer.trim()));
+    setUserAnswer(submittedAnswers[currentIndex + 1] ?? '');
     setIsProcessing(false);
     reset();
     nextItem();
@@ -178,10 +166,7 @@ const FillExerciseComponent: React.FC<Props> = ({
           disabled={isProcessing || resetRequired}
         />
 
-        {testAnswerMode ? (
-          !sectioned &&
-          testSubmitted && <RecordedAnswerControls isLastItem={isLastItem} onContinue={continueTest} hideFinishAction />
-        ) : (
+        {!testAnswerMode && (
           <FeedbackDisplay
             isCorrect={isCorrect}
             message={assessmentMode ? '' : message}
