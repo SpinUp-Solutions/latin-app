@@ -2,11 +2,11 @@ import { useState } from 'react';
 
 /** Each group contains the original item indices for one word occurrence. */
 export function useGeneratedExerciseQueue(groups: number[][]) {
-  const [remaining, setRemaining] = useState(() => groups.map((_, index) => index));
+  const [remaining, setRemaining] = useState(groups);
   const [step, setStep] = useState(0);
   const [result, setResult] = useState<boolean | null>(null);
   const [failures, setFailures] = useState<Record<number, number>>({});
-  const group = groups[remaining[0]] ?? [];
+  const group = remaining[0] ?? [];
   const currentIndex = group[step] ?? 0;
   const isLastStep = step === group.length - 1;
   const isLastItem = remaining.length === 1 && isLastStep;

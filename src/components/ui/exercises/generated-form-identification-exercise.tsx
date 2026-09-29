@@ -281,34 +281,6 @@ const GeneratedExerciseSession: React.FC<Props & { words: ExerciseWordResponse[]
     resetExercise();
   };
 
-  const handleQueueResult = (correct: boolean) => {
-    queue.recordResult(correct);
-    if (correct) handleCorrect(isLastItem);
-    else handleIncorrect();
-    const complete = correct && isLastItem;
-    if (complete) onCompletionAccepted?.(100);
-    autoAdvanceIfEnabled(() => {
-      if (complete) {
-        onComplete?.(100);
-        return;
-      }
-      if (!correct) {
-        const wordId = validatedItems[currentIndex].wordId;
-        setWordAnswers(previous => ({ ...previous, [wordId]: {} }));
-        setMultiAnswerSlots(previous => ({ ...previous, [wordId]: [] }));
-        setSubmittedAnswers(previous => {
-          const next = { ...previous };
-          for (const item of validatedItems) if (item.wordId === wordId) delete next[item.id];
-          return next;
-        });
-      }
-      queue.advance(correct);
-      setUserAnswer('');
-      reset();
-      setIsProcessing(false);
-    }, false);
-  };
-
   const handleSubmit = () => {
     if (isProcessing || validatedItems.length === 0 || !userAnswer.trim() || resetRequired) return;
     if (currentIndex >= validatedItems.length) return;
@@ -328,169 +300,86 @@ const GeneratedExerciseSession: React.FC<Props & { words: ExerciseWordResponse[]
       return;
     }
 
-    if (assessmentMode) {
-      let fullyCorrect = false;
-
-      if (isSingleField) {
-        const credit = scoreSingleFieldFormIdentificationAnswer(
-          userAnswer,
-          currentItem as SingleFieldFormIdentificationItem
-        );
-        fullyCorrect = credit.availableUnits > 0 && credit.earnedUnits === credit.availableUnits;
-      } else if (isMultiAnswerMode) {
-        const multiItem = currentItem as MultiAnswerFormIdentificationItem;
-        const validation = validateMultiAnswerStep(userAnswer, multiItem);
-        fullyCorrect = validation.isCorrect;
-        if (fullyCorrect) {
-          const updatedSlots = [...(multiAnswerSlots[multiItem.wordId] || [])];
-          updatedSlots[multiItem.stepIndex] = validation.answerSlots;
-          fullyCorrect = validatePartialMultiAnswerPaths(
-            updatedSlots,
-            multiItem.steps.slice(0, multiItem.stepIndex + 1),
-            multiItem.primaryFormPaths
-          ).isCorrect;
-          if (fullyCorrect) {
-            setMultiAnswerSlots(prev => ({ ...prev, [multiItem.wordId]: updatedSlots }));
-          }
-        }
+    let correct = false;
+    if (isSingleField) {
+      const item = currentItem as SingleFieldFormIdentificationItem;
+      if (assessmentMode) {
+        const credit = scoreSingleFieldFormIdentificationAnswer(userAnswer, item);
+        correct = credit.availableUnits > 0 && credit.earnedUnits === credit.availableUnits;
       } else {
-        const stepItem = currentItem as FormIdentificationItem;
-        const validation = validateGeneratedFormIdentificationExercise(userAnswer, stepItem);
-        fullyCorrect = validation.isCorrect;
-        if (fullyCorrect) {
-          setWordAnswers(prev => ({
-            ...prev,
-            [stepItem.wordId]: { ...(prev[stepItem.wordId] || {}), [stepItem.step]: normalize(userAnswer) },
-          }));
-        }
+        correct = validateSingleFieldFormIdentificationExercise(userAnswer, item).isCorrect;
       }
-
-      setTestSubmitted(true);
-      if (fullyCorrect) handleCorrect(isLastItem);
-      else handleIncorrect();
-      return;
-    }
-
-    if (isMultiAnswerMode) {
-      const multiItem = currentItem as MultiAnswerFormIdentificationItem;
-      const stepValidation = validateMultiAnswerStep(userAnswer, multiItem);
-
-      if (!stepValidation.isCorrect) {
-        if (queueEnabled) handleQueueResult(false);
-        else {
-          handleIncorrect();
-          setIsProcessing(false);
-        }
-        return;
+    } else if (isMultiAnswerMode) {
+      const item = currentItem as MultiAnswerFormIdentificationItem;
+      const validation = validateMultiAnswerStep(userAnswer, item);
+      if (validation.isCorrect) {
+        const slots = [...(multiAnswerSlots[item.wordId] || [])];
+        slots[item.stepIndex] = validation.answerSlots;
+        correct = validatePartialMultiAnswerPaths(
+          slots,
+          item.steps.slice(0, item.stepIndex + 1),
+          item.primaryFormPaths
+        ).isCorrect;
+        if (correct) setMultiAnswerSlots(previous => ({ ...previous, [item.wordId]: slots }));
       }
-
-      const wordId = multiItem.wordId;
-      const stepIndex = multiItem.stepIndex;
-
-      const updatedSlots = [...(multiAnswerSlots[wordId] || [])];
-      updatedSlots[stepIndex] = stepValidation.answerSlots;
-
-      const stepsCompleted = multiItem.steps.slice(0, stepIndex + 1);
-      const partialValidation = validatePartialMultiAnswerPaths(
-        updatedSlots,
-        stepsCompleted,
-        multiItem.primaryFormPaths
-      );
-
-      if (!partialValidation.isCorrect) {
-        if (queueEnabled) handleQueueResult(false);
-        else {
-          handleIncorrect();
-          setIsProcessing(false);
-        }
-        return;
-      }
-
-      setMultiAnswerSlots(prev => ({
-        ...prev,
-        [wordId]: updatedSlots,
-      }));
-
-      if (queueEnabled) {
-        handleQueueResult(true);
-        return;
-      }
-      handleCorrect(isLastItem);
-
-      const finalScore = isLastItem
-        ? Math.round(
-            gradeExercisePercentage(
-              { exercise, resolvedItems: validatedItems },
-              { type: 'generated-form-identification', answers: nextAnswers }
-            )
-          )
-        : null;
-
-      autoAdvanceIfEnabled(() => {
-        if (finalScore !== null) {
-          onComplete?.(finalScore);
-          return;
-        }
-        setUserAnswer('');
-        reset();
-        setIsProcessing(false);
-      }, false);
-      if (!assessmentMode && finalScore !== null) onCompletionAccepted?.(finalScore);
-      return;
-    }
-
-    const validation = isSingleField
-      ? validateSingleFieldFormIdentificationExercise(userAnswer, currentItem as SingleFieldFormIdentificationItem)
-      : validateGeneratedFormIdentificationExercise(userAnswer, currentItem as FormIdentificationItem);
-
-    if (validation.isCorrect) {
-      if (!isSingleField) {
-        const stepItem = currentItem as FormIdentificationItem;
-        setWordAnswers(prev => ({
-          ...prev,
-          [stepItem.wordId]: {
-            ...(prev[stepItem.wordId] || {}),
-            [stepItem.step]: normalize(userAnswer),
-          },
+    } else {
+      const item = currentItem as FormIdentificationItem;
+      correct = validateGeneratedFormIdentificationExercise(userAnswer, item).isCorrect;
+      if (correct) {
+        setWordAnswers(previous => ({
+          ...previous,
+          [item.wordId]: { ...previous[item.wordId], [item.step]: normalize(userAnswer) },
         }));
       }
+    }
 
-      if (queueEnabled) {
-        handleQueueResult(true);
-        return;
-      }
-      handleCorrect(isLastItem);
+    if (correct) handleCorrect(isLastItem);
+    else handleIncorrect();
 
-      const finalScore = isLastItem
-        ? Math.round(
+    if (assessmentMode) {
+      setTestSubmitted(true);
+      return;
+    }
+    if (queueEnabled) queue.recordResult(correct);
+    else if (!correct) {
+      setIsProcessing(false);
+      return;
+    }
+
+    let finalScore: number | null = null;
+    if (correct && isLastItem) {
+      finalScore = queueEnabled
+        ? 100
+        : Math.round(
             gradeExercisePercentage(
               { exercise, resolvedItems: validatedItems },
               { type: 'generated-form-identification', answers: nextAnswers }
             )
-          )
-        : null;
-
-      autoAdvanceIfEnabled(() => {
-        if (finalScore !== null) {
-          onComplete?.(finalScore);
-          return;
-        }
-        setUserAnswer('');
-        reset();
-        setIsProcessing(false);
-      }, false);
-      if (!assessmentMode && finalScore !== null) onCompletionAccepted?.(finalScore);
-    } else {
-      if (queueEnabled) handleQueueResult(false);
-      else {
-        handleIncorrect();
-        setIsProcessing(false);
-      }
+          );
     }
-  };
-
-  const handleAnswerChange = (value: string) => {
-    setUserAnswer(value);
+    if (finalScore !== null) onCompletionAccepted?.(finalScore);
+    autoAdvanceIfEnabled(() => {
+      if (finalScore !== null) {
+        onComplete?.(finalScore);
+        return;
+      }
+      if (queueEnabled) {
+        if (!correct) {
+          const wordId = currentItem.wordId;
+          setWordAnswers(previous => ({ ...previous, [wordId]: {} }));
+          setMultiAnswerSlots(previous => ({ ...previous, [wordId]: [] }));
+          setSubmittedAnswers(previous => {
+            const next = { ...previous };
+            for (const item of validatedItems) if (item.wordId === wordId) delete next[item.id];
+            return next;
+          });
+        }
+        queue.advance(correct);
+      }
+      setUserAnswer('');
+      reset();
+      setIsProcessing(false);
+    }, false);
   };
 
   const continueTest = () => {
@@ -626,7 +515,7 @@ const GeneratedExerciseSession: React.FC<Props & { words: ExerciseWordResponse[]
 
           <ExerciseInput
             value={userAnswer}
-            onChange={handleAnswerChange}
+            onChange={setUserAnswer}
             onSubmit={handleSubmit}
             placeholder={
               isSingleField

@@ -10,7 +10,6 @@ import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { ExerciseInput, FeedbackDisplay } from '../feedback';
 import { ExerciseProgress } from './exercise-progress';
 import { ExerciseIntro } from './exercise-intro';
-import { applySequentialItemResult } from './sequential-item-result';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { type GeneratedExerciseQuerySource } from '@/src/store/api/advancedVocabularyApi';
 import { Card, CardContent } from '../card';
@@ -169,24 +168,6 @@ const GeneratedExerciseSession: React.FC<Props & { words: ExerciseWordResponse[]
     resetExercise();
   };
 
-  const handleQueueResult = (correct: boolean) => {
-    queue.recordResult(correct);
-    if (correct) handleCorrect(isLastItem);
-    else handleIncorrect();
-    const complete = correct && isLastItem;
-    if (complete) onCompletionAccepted?.(100);
-    autoAdvanceIfEnabled(() => {
-      if (complete) {
-        onComplete?.(100);
-        return;
-      }
-      queue.advance(correct);
-      setUserAnswer('');
-      reset();
-      setIsProcessing(false);
-    }, false);
-  };
-
   const handleSubmit = () => {
     if (isProcessing || items.length === 0 || !userAnswer.trim() || resetRequired) return;
 
@@ -206,40 +187,39 @@ const GeneratedExerciseSession: React.FC<Props & { words: ExerciseWordResponse[]
       return;
     }
 
-    const validation = validateGeneratedTranslationExercise(userAnswer, currentItem);
-    if (queueEnabled) {
-      handleQueueResult(validation.isCorrect);
+    const correct = validateGeneratedTranslationExercise(userAnswer, currentItem).isCorrect;
+    if (correct) handleCorrect(isLastItem);
+    else handleIncorrect();
+
+    if (queueEnabled) queue.recordResult(correct);
+    else if (!correct && !assessmentMode) {
+      setIsProcessing(false);
       return;
     }
-    const finalScore = isLastItem
-      ? Math.round(
-          gradeExercisePercentage(
-            { exercise, resolvedItems: items },
-            { type: 'generated-translation', answers: nextAnswers }
-          )
-        )
-      : null;
 
-    applySequentialItemResult({
-      isCorrect: validation.isCorrect,
-      isLastItem,
-      assessmentMode,
-      finalScore,
-      handleCorrect,
-      handleIncorrect,
-      autoAdvanceIfEnabled,
-      onCompletionAccepted,
-      onComplete,
-      clearItem: () => {
-        setUserAnswer('');
-        reset();
-      },
-      stopProcessing: () => setIsProcessing(false),
-    });
-  };
-
-  const handleAnswerChange = (value: string) => {
-    setUserAnswer(value);
+    let finalScore: number | null = null;
+    if (isLastItem && (correct || assessmentMode)) {
+      finalScore = queueEnabled
+        ? 100
+        : Math.round(
+            gradeExercisePercentage(
+              { exercise, resolvedItems: items },
+              { type: 'generated-translation', answers: nextAnswers }
+            )
+          );
+    }
+    if (!assessmentMode && finalScore !== null) onCompletionAccepted?.(finalScore);
+    autoAdvanceIfEnabled(() => {
+      if (correct && finalScore !== null) {
+        onComplete?.(finalScore);
+        return;
+      }
+      if (queueEnabled) queue.advance(correct);
+      setUserAnswer('');
+      reset();
+      setIsProcessing(false);
+      if (finalScore !== null) onComplete?.(finalScore);
+    }, false);
   };
 
   const continueTest = () => {
@@ -300,7 +280,7 @@ const GeneratedExerciseSession: React.FC<Props & { words: ExerciseWordResponse[]
 
           <ExerciseInput
             value={userAnswer}
-            onChange={handleAnswerChange}
+            onChange={setUserAnswer}
             onSubmit={handleSubmit}
             placeholder={inputPlaceholder}
             disabled={isProcessing || resetRequired}
