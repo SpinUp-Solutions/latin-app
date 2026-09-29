@@ -125,10 +125,14 @@ on these two generated exercise types only.
 
 1. Add the optional field, validation, factory default, and editor control.
    Inspect the existing persistence/normalization path so it preserves the field.
-2. Add a small generated-practice queue hook with stable entry keys, active
-   step, pending feedback transition, completed entries, and per-entry attempts.
-   Store each unresolved entry once; do not build an unbounded retry history.
-   Reuse `useExerciseProgression` for timing/Continue without changing that hook.
+2. Line up prepared items with a small queue hook that stores only their original
+   indices. On failure, move every step of that word occurrence to the back and
+   return the position where the next pending word now starts. The exercise's
+   existing cursor separates the completed prefix from the pending queue.
+   Keep validation, feedback attempts, grading, and completion in the exercise.
+   Use `useExerciseProgression` with the actual item count for both flows; only
+   redirect its cursor when a failed word is requeued. No second cursor, queue
+   result state, or special queue score is needed.
    Key each exercise session by its exercise, mode, and sample so replacement
    clears answers and pending timers, including same-length replacements.
 3. Integrate translation first, retaining original item indices for its answer
@@ -143,9 +147,8 @@ on these two generated exercise types only.
    length), reset, retained page navigation, pending timers, unmount, and final
    completion. Full browser-reload persistence is outside this proposal.
 
-Prefer a dedicated queue controller over rewriting the shared index-based
-progression hook, which is used by unrelated exercises. If sharing timing code
-becomes necessary, keep it narrow and preserve existing consumers' behavior.
+The queue changes only the order of prepared items. Word loading and construction
+remain independent of ordering, and the shared progression hook is unchanged.
 
 ### Main files identified
 

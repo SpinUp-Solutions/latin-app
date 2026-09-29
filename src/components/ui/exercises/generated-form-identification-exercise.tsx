@@ -223,32 +223,26 @@ const GeneratedExerciseSession: React.FC<Props & { words: ExerciseWordResponse[]
   );
   const [submittedAnswers, setSubmittedAnswers] = useState<Record<string, string>>(restoredAnswers);
 
-  const wordGroups = new Map<string, number[]>();
-  validatedItems.forEach((item, index) => {
-    const group = wordGroups.get(item.wordId) ?? [];
-    group.push(index);
-    wordGroups.set(item.wordId, group);
-  });
-  const queue = useGeneratedExerciseQueue([...wordGroups.values()]);
+  const { order, requeueWord } = useGeneratedExerciseQueue(validatedItems.map(item => item.wordId));
+  const [failures, setFailures] = useState<Record<number, number>>({});
   const {
-    currentIndex: sequentialIndex,
-    isLastItem: sequentialLastItem,
+    currentIndex,
+    isLastItem,
     isAwaitingConfirmation,
     autoAdvanceIfEnabled,
     confirmAdvance,
     resetIndex,
+    goToItem,
     nextItem,
     cancelPendingAdvance,
   } = useExerciseProgression({
-    // In queue mode this hook only controls the feedback delay / Continue button.
-    totalItems: queueEnabled ? 1 : validatedItems.length,
+    totalItems: validatedItems.length,
     initialIndex: restoredIndex,
     itemProgressionDelay: exercise.itemProgressionDelay,
     progressionRules: exercise.feedbackConfig.progressionRules,
   });
 
-  const currentIndex = queueEnabled ? queue.currentIndex : sequentialIndex;
-  const isLastItem = queueEnabled ? queue.isLastItem : sequentialLastItem;
+  const itemIndex = order[currentIndex];
 
   const {
     isCorrect,
@@ -264,7 +258,7 @@ const GeneratedExerciseSession: React.FC<Props & { words: ExerciseWordResponse[]
 
   const resetRequired = mode === 'practice' && !queueEnabled && shouldResetExercise;
   const escalationLevels = exercise.feedbackConfig.escalationLevels ?? [];
-  const queueLevel = escalationLevels[Math.min(queue.failureCount - 1, escalationLevels.length - 1)];
+  const queueLevel = escalationLevels[Math.min((failures[itemIndex] ?? 0) - 1, escalationLevels.length - 1)];
   const feedbackLevel = queueEnabled && isCorrect === false ? queueLevel : level;
   const feedbackMessage =
     queueEnabled && isCorrect === false ? queueLevel?.message || 'Incorrect. You’ll try this word again.' : message;
@@ -285,7 +279,7 @@ const GeneratedExerciseSession: React.FC<Props & { words: ExerciseWordResponse[]
     if (isProcessing || validatedItems.length === 0 || !userAnswer.trim() || resetRequired) return;
     if (currentIndex >= validatedItems.length) return;
 
-    const currentItem = validatedItems[currentIndex];
+    const currentItem = validatedItems[itemIndex];
     const nextAnswers = { ...submittedAnswers, [currentItem.id]: userAnswer };
     setSubmittedAnswers(nextAnswers);
     setIsProcessing(true);
@@ -340,22 +334,22 @@ const GeneratedExerciseSession: React.FC<Props & { words: ExerciseWordResponse[]
       setTestSubmitted(true);
       return;
     }
-    if (queueEnabled) queue.recordResult(correct);
-    else if (!correct) {
+    if (queueEnabled && !correct) {
+      setFailures(previous => ({ ...previous, [itemIndex]: (previous[itemIndex] ?? 0) + 1 }));
+    }
+    if (!queueEnabled && !correct) {
       setIsProcessing(false);
       return;
     }
 
     let finalScore: number | null = null;
     if (correct && isLastItem) {
-      finalScore = queueEnabled
-        ? 100
-        : Math.round(
-            gradeExercisePercentage(
-              { exercise, resolvedItems: validatedItems },
-              { type: 'generated-form-identification', answers: nextAnswers }
-            )
-          );
+      finalScore = Math.round(
+        gradeExercisePercentage(
+          { exercise, resolvedItems: validatedItems },
+          { type: 'generated-form-identification', answers: nextAnswers }
+        )
+      );
     }
     if (finalScore !== null) onCompletionAccepted?.(finalScore);
     autoAdvanceIfEnabled(() => {
@@ -363,18 +357,16 @@ const GeneratedExerciseSession: React.FC<Props & { words: ExerciseWordResponse[]
         onComplete?.(finalScore);
         return;
       }
-      if (queueEnabled) {
-        if (!correct) {
-          const wordId = currentItem.wordId;
-          setWordAnswers(previous => ({ ...previous, [wordId]: {} }));
-          setMultiAnswerSlots(previous => ({ ...previous, [wordId]: [] }));
-          setSubmittedAnswers(previous => {
-            const next = { ...previous };
-            for (const item of validatedItems) if (item.wordId === wordId) delete next[item.id];
-            return next;
-          });
-        }
-        queue.advance(correct);
+      if (queueEnabled && !correct) {
+        const wordId = currentItem.wordId;
+        setWordAnswers(previous => ({ ...previous, [wordId]: {} }));
+        setMultiAnswerSlots(previous => ({ ...previous, [wordId]: [] }));
+        setSubmittedAnswers(previous => {
+          const next = { ...previous };
+          for (const item of validatedItems) if (item.wordId === wordId) delete next[item.id];
+          return next;
+        });
+        goToItem(requeueWord(currentIndex));
       }
       setUserAnswer('');
       reset();
@@ -412,8 +404,16 @@ const GeneratedExerciseSession: React.FC<Props & { words: ExerciseWordResponse[]
     );
   }
 
-  const safeIndex = Math.min(currentIndex, Math.max(0, validatedItems.length - 1));
-  const currentItem = validatedItems[safeIndex];
+  const currentItem = validatedItems[itemIndex];
+  const nextWordId = validatedItems[order[currentIndex + 1]]?.wordId;
+  const completedWords =
+    new Set(
+      order
+        .slice(0, currentIndex)
+        .map(index => validatedItems[index].wordId)
+        .filter(id => id !== currentItem.wordId)
+    ).size + (isCorrect === true && nextWordId !== currentItem.wordId ? 1 : 0);
+  const totalWords = new Set(validatedItems.map(item => item.wordId)).size;
 
   return (
     <div className="space-y-4">
@@ -425,15 +425,15 @@ const GeneratedExerciseSession: React.FC<Props & { words: ExerciseWordResponse[]
       />
 
       <ExerciseProgress
-        currentIndex={queueEnabled ? queue.completed : safeIndex}
+        currentIndex={queueEnabled ? completedWords : currentIndex}
         completed={
           queueEnabled
-            ? queue.completed
+            ? completedWords
             : mode === 'practice'
-              ? safeIndex + (isCorrect === true ? 1 : 0)
+              ? currentIndex + (isCorrect === true ? 1 : 0)
               : validatedItems.filter(item => Boolean(submittedAnswers[item.id]?.trim())).length
         }
-        total={queueEnabled ? queue.total : validatedItems.length}
+        total={queueEnabled ? totalWords : validatedItems.length}
         label={queueEnabled ? 'Word' : 'Question'}
         showProgress={exercise.feedbackConfig.progressionRules?.showProgress !== false}
       />

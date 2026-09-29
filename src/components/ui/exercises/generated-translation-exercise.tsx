@@ -118,26 +118,26 @@ const GeneratedExerciseSession: React.FC<Props & { words: ExerciseWordResponse[]
   const [isProcessing, setIsProcessing] = useState(false);
   const [testSubmitted, setTestSubmitted] = useState(Boolean(restoredAnswers[restoredIndex]?.trim()));
 
-  const queue = useGeneratedExerciseQueue(items.map((_, index) => [index]));
+  const { order, requeueWord } = useGeneratedExerciseQueue(items.map((_, index) => index));
+  const [failures, setFailures] = useState<Record<number, number>>({});
   const {
-    currentIndex: sequentialIndex,
-    isLastItem: sequentialLastItem,
+    currentIndex,
+    isLastItem,
     isAwaitingConfirmation,
     autoAdvanceIfEnabled,
     confirmAdvance,
     resetIndex,
+    goToItem,
     nextItem,
     cancelPendingAdvance,
   } = useExerciseProgression({
-    // In queue mode this hook only controls the feedback delay / Continue button.
-    totalItems: queueEnabled ? 1 : items.length,
+    totalItems: items.length,
     initialIndex: restoredIndex,
     itemProgressionDelay: exercise.itemProgressionDelay,
     progressionRules: exercise.feedbackConfig.progressionRules,
   });
 
-  const currentIndex = queueEnabled ? queue.currentIndex : sequentialIndex;
-  const isLastItem = queueEnabled ? queue.isLastItem : sequentialLastItem;
+  const itemIndex = order[currentIndex];
 
   const {
     isCorrect,
@@ -153,7 +153,7 @@ const GeneratedExerciseSession: React.FC<Props & { words: ExerciseWordResponse[]
 
   const resetRequired = mode === 'practice' && !queueEnabled && shouldResetExercise;
   const escalationLevels = exercise.feedbackConfig.escalationLevels ?? [];
-  const queueLevel = escalationLevels[Math.min(queue.failureCount - 1, escalationLevels.length - 1)];
+  const queueLevel = escalationLevels[Math.min((failures[itemIndex] ?? 0) - 1, escalationLevels.length - 1)];
   const feedbackLevel = queueEnabled && isCorrect === false ? queueLevel : level;
   const feedbackMessage =
     queueEnabled && isCorrect === false ? queueLevel?.message || 'Incorrect. You’ll try this word again.' : message;
@@ -171,9 +171,9 @@ const GeneratedExerciseSession: React.FC<Props & { words: ExerciseWordResponse[]
   const handleSubmit = () => {
     if (isProcessing || items.length === 0 || !userAnswer.trim() || resetRequired) return;
 
-    const currentItem = items[currentIndex];
+    const currentItem = items[itemIndex];
     const nextAnswers = [...submittedAnswers];
-    nextAnswers[currentIndex] = userAnswer;
+    nextAnswers[itemIndex] = userAnswer;
     setSubmittedAnswers(nextAnswers);
     setIsProcessing(true);
 
@@ -191,22 +191,22 @@ const GeneratedExerciseSession: React.FC<Props & { words: ExerciseWordResponse[]
     if (correct) handleCorrect(isLastItem);
     else handleIncorrect();
 
-    if (queueEnabled) queue.recordResult(correct);
-    else if (!correct && !assessmentMode) {
+    if (queueEnabled && !correct) {
+      setFailures(previous => ({ ...previous, [itemIndex]: (previous[itemIndex] ?? 0) + 1 }));
+    }
+    if (!queueEnabled && !correct && !assessmentMode) {
       setIsProcessing(false);
       return;
     }
 
     let finalScore: number | null = null;
     if (isLastItem && (correct || assessmentMode)) {
-      finalScore = queueEnabled
-        ? 100
-        : Math.round(
-            gradeExercisePercentage(
-              { exercise, resolvedItems: items },
-              { type: 'generated-translation', answers: nextAnswers }
-            )
-          );
+      finalScore = Math.round(
+        gradeExercisePercentage(
+          { exercise, resolvedItems: items },
+          { type: 'generated-translation', answers: nextAnswers }
+        )
+      );
     }
     if (!assessmentMode && finalScore !== null) onCompletionAccepted?.(finalScore);
     autoAdvanceIfEnabled(() => {
@@ -214,7 +214,7 @@ const GeneratedExerciseSession: React.FC<Props & { words: ExerciseWordResponse[]
         onComplete?.(finalScore);
         return;
       }
-      if (queueEnabled) queue.advance(correct);
+      if (queueEnabled && !correct) goToItem(requeueWord(currentIndex));
       setUserAnswer('');
       reset();
       setIsProcessing(false);
@@ -245,7 +245,7 @@ const GeneratedExerciseSession: React.FC<Props & { words: ExerciseWordResponse[]
     );
   }
 
-  const currentItem = items[currentIndex];
+  const currentItem = items[itemIndex];
   const inputPlaceholder =
     translationDirection === 'english-to-latin' ? 'Type the Latin root word...' : 'Type your answer...';
 
@@ -259,15 +259,13 @@ const GeneratedExerciseSession: React.FC<Props & { words: ExerciseWordResponse[]
       />
 
       <ExerciseProgress
-        currentIndex={queueEnabled ? queue.completed : currentIndex}
+        currentIndex={currentIndex}
         completed={
-          queueEnabled
-            ? queue.completed
-            : mode === 'practice'
-              ? currentIndex + (isCorrect === true ? 1 : 0)
-              : submittedAnswers.filter(answer => Boolean(answer?.trim())).length
+          mode === 'practice'
+            ? currentIndex + (isCorrect === true ? 1 : 0)
+            : submittedAnswers.filter(answer => Boolean(answer?.trim())).length
         }
-        total={queueEnabled ? queue.total : items.length}
+        total={items.length}
         label={queueEnabled ? 'Word' : 'Question'}
         showProgress={exercise.feedbackConfig.progressionRules?.showProgress !== false}
       />
