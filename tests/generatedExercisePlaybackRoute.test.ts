@@ -16,11 +16,11 @@ jest.mock('@/src/lib/verifyRequestAuth', () => ({
   verifyRequestAuth: (...args: unknown[]) => mockVerifyRequestAuth(...args),
 }));
 
-const mockGetLesson = jest.fn();
+const mockGetAuthorizedLesson = jest.fn();
 jest.mock('@/src/lib/learning-units/student-dashboard-service', () => ({
   StudentDashboardServiceError: jest.requireActual('@/src/lib/learning-units/student-dashboard-service')
     .StudentDashboardServiceError,
-  studentDashboardService: { getLesson: (...args: unknown[]) => mockGetLesson(...args) },
+  studentDashboardService: { getAuthorizedLesson: (...args: unknown[]) => mockGetAuthorizedLesson(...args) },
 }));
 
 import { POST } from '@/src/app/api/words/generated-exercise/route';
@@ -72,7 +72,7 @@ describe('student generated exercise playback route', () => {
     });
     dbState.collection = db.collection;
     mockVerifyRequestAuth.mockResolvedValue({ uid: 'student-1' });
-    mockGetLesson.mockResolvedValue({ id: 'lesson-1', pages: [{ id: 'page-1', items: [translationExercise] }] });
+    mockGetAuthorizedLesson.mockResolvedValue({ id: 'lesson-1', pages: [{ id: 'page-1', items: [translationExercise] }] });
   });
 
   it('rejects unauthenticated playback requests', async () => {
@@ -84,7 +84,7 @@ describe('student generated exercise playback route', () => {
   it('loads the authorized persisted exercise and returns exactly count usable words', async () => {
     const response = await POST({ json: async () => playbackBody } as never);
     expect(response.status).toBe(200);
-    expect(mockGetLesson).toHaveBeenCalledWith('student-1', 'lesson-1');
+    expect(mockGetAuthorizedLesson).toHaveBeenCalledWith('student-1', 'lesson-1');
     const payload = (response as unknown as { body: { words: unknown[]; collected: number } }).body;
     expect(payload.words).toHaveLength(10);
     expect(payload.collected).toBe(10);
@@ -92,7 +92,7 @@ describe('student generated exercise playback route', () => {
 
   it('preserves lesson access failures from the ownership check', async () => {
     const { StudentDashboardServiceError } = jest.requireActual('@/src/lib/learning-units/student-dashboard-service');
-    mockGetLesson.mockRejectedValue(new StudentDashboardServiceError('LESSON_LOCKED', 'Lesson is locked', 403));
+    mockGetAuthorizedLesson.mockRejectedValue(new StudentDashboardServiceError('LESSON_LOCKED', 'Lesson is locked', 403));
 
     const response = await POST({ json: async () => playbackBody } as never);
 
@@ -109,7 +109,7 @@ describe('student generated exercise playback route', () => {
     const response = await POST({ json: async () => translationExercise } as never);
 
     expect(response.status).toBe(400);
-    expect(mockGetLesson).not.toHaveBeenCalled();
+    expect(mockGetAuthorizedLesson).not.toHaveBeenCalled();
   });
 
   it('serves the persisted unique-word rotation', async () => {
@@ -117,7 +117,7 @@ describe('student generated exercise playback route', () => {
     exercise.data.generatorConfig = { ...exercise.data.generatorConfig, uniqueWordCount: 10 };
     const db = createFakeGeneratedWordDb({ words, pools: [pool] });
     dbState.collection = db.collection;
-    mockGetLesson.mockResolvedValue({ id: 'lesson-1', pages: [{ id: 'page-1', items: [exercise] }] });
+    mockGetAuthorizedLesson.mockResolvedValue({ id: 'lesson-1', pages: [{ id: 'page-1', items: [exercise] }] });
     const response = await POST({ json: async () => playbackBody } as never);
     expect(response.status).toBe(200);
     const payload = (response as unknown as { body: { words: Array<{ id: string }>; uniqueWords: number } }).body;
@@ -131,7 +131,7 @@ describe('student generated exercise playback route', () => {
     exercise.data.generatorConfig = invalidConfig;
     const db = createFakeGeneratedWordDb({ words, pools: [pool] });
     dbState.collection = db.collection;
-    mockGetLesson.mockResolvedValue({ id: 'lesson-1', pages: [{ id: 'page-1', items: [exercise] }] });
+    mockGetAuthorizedLesson.mockResolvedValue({ id: 'lesson-1', pages: [{ id: 'page-1', items: [exercise] }] });
     const response = await POST({ json: async () => playbackBody } as never);
     expect(response.status).toBe(409);
     expect((response as unknown as { body: { code?: string } }).body.code).toBe('INVALID_GENERATED_EXERCISE');
@@ -143,7 +143,7 @@ describe('student generated exercise playback route', () => {
     exercise.data.generatorConfig = legacyConfig;
     const db = createFakeGeneratedWordDb({ words, pools: [pool] });
     dbState.collection = db.collection;
-    mockGetLesson.mockResolvedValue({ id: 'lesson-1', pages: [{ id: 'page-1', items: [exercise] }] });
+    mockGetAuthorizedLesson.mockResolvedValue({ id: 'lesson-1', pages: [{ id: 'page-1', items: [exercise] }] });
     const response = await POST({ json: async () => playbackBody } as never);
     expect(response.status).toBe(200);
     const payload = (

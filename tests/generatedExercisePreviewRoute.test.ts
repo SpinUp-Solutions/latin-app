@@ -18,7 +18,7 @@ jest.mock('@/src/lib/verifyAdminAccess', () => ({
 }));
 jest.mock('@/src/lib/verifyRequestAuth', () => ({ verifyRequestAuth: jest.fn() }));
 jest.mock('@/src/lib/learning-units/student-dashboard-service', () => ({
-  studentDashboardService: { getLesson: jest.fn() },
+  studentDashboardService: { getAuthorizedLesson: jest.fn() },
 }));
 
 import { POST } from '@/src/app/api/admin/exercises/generated-preview/route';

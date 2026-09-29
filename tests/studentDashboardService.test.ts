@@ -33,7 +33,8 @@ class FakeQuery {
   constructor(
     private readonly collectionName: string,
     private readonly collections: Record<string, Record<string, RecordData>>,
-    private readonly selectedFieldLog: string[][]
+    private readonly selectedFieldLog: string[][],
+    private readonly queryLog: Array<{ collection: string; projected: boolean }>
   ) {}
 
   where(field: string, _operator: string, value: unknown) {
@@ -61,6 +62,7 @@ class FakeQuery {
   }
 
   async get() {
+    this.queryLog.push({ collection: this.collectionName, projected: Boolean(this.selectedFields) });
     let entries = Object.entries(this.collections[this.collectionName] ?? {});
     for (const filter of this.filters) {
       entries = entries.filter(([, value]) => value[filter.field] === filter.value);
@@ -90,9 +92,10 @@ class FakeQuery {
 
 const createFakeDb = (collections: Record<string, Record<string, RecordData>>) => {
   const selectedFieldLog: string[][] = [];
+  const queryLog: Array<{ collection: string; projected: boolean }> = [];
   return {
     db: {
-      collection: (name: string) => new FakeQuery(name, collections, selectedFieldLog),
+      collection: (name: string) => new FakeQuery(name, collections, selectedFieldLog, queryLog),
       getAll: async (
         ...inputs: Array<{ get?: () => Promise<ReturnType<typeof snapshot>> } | { fieldMask: string[] }>
       ) => {
@@ -120,6 +123,7 @@ const createFakeDb = (collections: Record<string, Record<string, RecordData>>) =
       },
     },
     selectedFieldLog,
+    queryLog,
   };
 };
 
@@ -478,6 +482,77 @@ describe('StudentDashboardService summary projection', () => {
       status: 'submitted',
     };
     await expect(service.getLesson('user', 'second')).resolves.toMatchObject({ id: 'second', status: 'available' });
+  });
+
+  it('authorizes a lesson the student already reached from its own progress and the path alone', async () => {
+    const collections = {
+      lessons: {
+        first: lesson({
+          title: 'First',
+          pages: [{ id: 'page-1', items: [{ id: 'exercise-a', type: 'fill', title: 'A' }] }],
+          totalExercises: 1,
+        }),
+        second: lesson({
+          title: 'Second',
+          liveOrder: 1,
+          pages: [
+            { id: 'page-1', items: [] },
+            { id: 'page-2', items: [] },
+          ],
+        }),
+      },
+      learningPaths: {
+        default: { id: 'default', revision: 1, unitIds: ['first', 'second'], updatedAt: 'now', updatedBy: 'admin' },
+      },
+      userProgress: {
+        // The first lesson gained an exercise after the student moved on, so it no longer unlocks the second.
+        user_first: { userId: 'user', lessonId: 'first', status: 'in-progress', exerciseProgress: [] },
+        user_second: { userId: 'user', lessonId: 'second', status: 'in-progress', furthestPageIndex: 0 },
+      },
+    };
+    const { db, selectedFieldLog, queryLog } = createFakeDb(collections);
+    const service = new StudentDashboardService(
+      db as never,
+      { getAssignmentsForLessonIds: jest.fn(async () => new Map()) } as never
+    );
+
+    await expect(service.getLesson('user', 'second')).resolves.toMatchObject({ id: 'second', status: 'in-progress' });
+    expect(queryLog).toEqual([]);
+    expect(selectedFieldLog).toEqual([]);
+
+    collections.learningPaths.default.unitIds = ['first'];
+    await expect(service.getLesson('user', 'second')).rejects.toMatchObject<Partial<StudentDashboardServiceError>>({
+      code: 'LESSON_NOT_FOUND',
+      status: 404,
+    });
+  });
+
+  it('checks an unreached lesson against progress projections rather than full progress documents', async () => {
+    const collections = {
+      lessons: {
+        first: lesson({ title: 'First', totalPages: 1 }),
+        second: lesson({ title: 'Second', liveOrder: 1 }),
+      },
+      learningPaths: {
+        default: { id: 'default', revision: 1, unitIds: ['first', 'second'], updatedAt: 'now', updatedBy: 'admin' },
+      },
+      userProgress: {
+        user_first: {
+          userId: 'user',
+          lessonId: 'first',
+          status: 'completed',
+          exerciseProgress: [{ exerciseId: 'large-history', score: 100, completedAt: 'now' }],
+        },
+      },
+    };
+    const { db, queryLog } = createFakeDb(collections);
+    const service = new StudentDashboardService(
+      db as never,
+      { getAssignmentsForLessonIds: jest.fn(async () => new Map()) } as never
+    );
+
+    await expect(service.getLesson('user', 'second')).resolves.toMatchObject({ id: 'second', status: 'available' });
+    expect(queryLog).toEqual([{ collection: 'userProgress', projected: true }]);
   });
 
   it('keeps practice category failure non-fatal', async () => {

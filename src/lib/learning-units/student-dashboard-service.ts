@@ -385,8 +385,7 @@ export class StudentDashboardService {
   private async hydrateCanonicalProgressSummaries(
     userId: string,
     lessons: LessonSummary[],
-    projectedProgress: Map<string, UserProgress>,
-    progressDocumentsAreFull = false
+    projectedProgress: Map<string, UserProgress>
   ): Promise<Map<string, UserProgress>> {
     const staleLessons = lessons.filter(lesson => {
       const progress = projectedProgress.get(lesson.id);
@@ -401,16 +400,12 @@ export class StudentDashboardService {
 
     const [lessonSnapshots, fullProgressSnapshots] = await Promise.all([
       this.db.getAll(...staleLessons.map(lesson => this.units.doc(lesson.id))),
-      progressDocumentsAreFull
-        ? Promise.resolve([])
-        : this.db.getAll(...staleLessons.map(lesson => this.progress.doc(`${userId}_${lesson.id}`))),
+      this.db.getAll(...staleLessons.map(lesson => this.progress.doc(`${userId}_${lesson.id}`))),
     ]);
-    const fullProgressByLessonId = progressDocumentsAreFull ? projectedProgress : new Map<string, UserProgress>();
-    if (!progressDocumentsAreFull) {
-      for (const document of fullProgressSnapshots) {
-        const lessonId = progressLessonId(document);
-        if (lessonId) fullProgressByLessonId.set(lessonId, document.data() as UserProgress);
-      }
+    const fullProgressByLessonId = new Map<string, UserProgress>();
+    for (const document of fullProgressSnapshots) {
+      const lessonId = progressLessonId(document);
+      if (lessonId) fullProgressByLessonId.set(lessonId, document.data() as UserProgress);
     }
 
     const hydrated = new Map(projectedProgress);
@@ -669,49 +664,65 @@ export class StudentDashboardService {
     return attemptSummaries;
   }
 
-  /**
-   * Loads one lesson with only the data required to authorize it: the lesson
-   * document, the student's progress, and — for normal lessons — the normal
-   * sequence plus attempt activity when the sticky frontier needs it. The full
-   * dashboard (practice libraries, mocks, attempt summaries) is never loaded.
-   */
+  /** Loads one authorized lesson with the student's progress on it. The full dashboard is never loaded. */
   async getLesson(userId: string, lessonId: string): Promise<LessonWithProgress> {
-    const [lessonSnapshot, progressByLessonId] = await Promise.all([
+    const { lesson, progress } = await this.loadAuthorizedLesson(userId, lessonId);
+    if (lesson.type === 'normal') return this.toLessonDetail(lesson, progress);
+    const [enriched] = await this.enrichPracticeLessons([toLessonSummary(lesson.id, lesson)]);
+    return this.toLessonDetail(lesson, progress, enriched);
+  }
+
+  /** Authorizes one lesson for playback without projecting progress or practice categories. */
+  async getAuthorizedLesson(userId: string, lessonId: string): Promise<Lesson> {
+    return (await this.loadAuthorizedLesson(userId, lessonId)).lesson;
+  }
+
+  private async loadAuthorizedLesson(
+    userId: string,
+    lessonId: string
+  ): Promise<{ lesson: Lesson; progress: UserProgress | undefined }> {
+    const [lessonSnapshot, progressSnapshot] = await Promise.all([
       this.units.doc(lessonId).get(),
-      this.getProgressByLessonId(userId),
+      this.progress.doc(`${userId}_${lessonId}`).get(),
     ]);
     const data = lessonSnapshot.data();
     if (!lessonSnapshot.exists || !isLessonDocumentData(data)) {
       throw new StudentDashboardServiceError('LESSON_NOT_FOUND', 'Lesson not found', 404);
     }
+    const progress = progressSnapshot.exists ? (progressSnapshot.data() as UserProgress) : undefined;
 
     if ((data.type ?? 'normal') !== 'normal') {
       if (data.isLive !== true) {
         throw new StudentDashboardServiceError('LESSON_NOT_FOUND', 'Lesson not found', 404);
       }
-      const lesson = fullLessonFromSnapshot(lessonSnapshot);
-      const [enriched] = await this.enrichPracticeLessons([toLessonSummary(lesson.id, lesson)]);
-      return this.toLessonDetail(lesson, progressByLessonId.get(lessonId), enriched);
+    } else if (progress) {
+      // Sticky frontier: a server-authored progress record means the student already reached this lesson.
+      await this.assertInLearningPath(lessonId);
+    } else {
+      await this.assertNormalLessonUnlocked(userId, lessonId);
     }
-
-    await this.assertNormalLessonUnlocked(userId, lessonId, progressByLessonId);
-    return this.toLessonDetail(fullLessonFromSnapshot(lessonSnapshot), progressByLessonId.get(lessonId));
+    return { lesson: fullLessonFromSnapshot(lessonSnapshot), progress };
   }
 
-  private async assertNormalLessonUnlocked(
-    userId: string,
-    lessonId: string,
-    progressByLessonId: Map<string, UserProgress>
-  ): Promise<void> {
-    const unitSummaries = await this.getNormalUnitSummaries();
+  private async assertInLearningPath(lessonId: string): Promise<void> {
+    const pathSnapshot = await this.db.collection(LEARNING_PATHS_COLLECTION).doc(DEFAULT_LEARNING_PATH_ID).get();
+    if (!parseLearningPathSnapshot(pathSnapshot)?.unitIds.includes(lessonId)) {
+      throw new StudentDashboardServiceError('LESSON_NOT_FOUND', 'Lesson not found', 404);
+    }
+  }
+
+  private async assertNormalLessonUnlocked(userId: string, lessonId: string): Promise<void> {
+    const [unitSummaries, progressByLessonId] = await Promise.all([
+      this.getNormalUnitSummaries(),
+      this.getProgressByLessonId(userId, PROGRESS_SUMMARY_FIELDS),
+    ]);
     const lessonSummaries = unitSummaries.filter(
       (unit): unit is CanonicalLessonSummary => unit.kind === 'lesson'
     );
     const canonicalProgressByLessonId = await this.hydrateCanonicalProgressSummaries(
       userId,
       lessonSummaries,
-      progressByLessonId,
-      true
+      progressByLessonId
     );
     const units = unitSummaries.map(toProgressionUnit);
     const targetIndex = units.findIndex(unit => unit.id === lessonId);
