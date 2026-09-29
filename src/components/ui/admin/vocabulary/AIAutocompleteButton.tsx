@@ -5,7 +5,7 @@ import { useFirebaseAutocomplete, ErrorInfo } from '@/src/hooks/useFirebaseAutoc
 import { VocabularyWord } from '@/shared/types/vocabulary/schemas';
 import { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 import { Loader2, Sparkles, XCircle, Copy, RotateCcw, Info } from 'lucide-react';
-import { useToast } from '@/src/hooks/use-toast';
+import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from '@/src/components/ui/popover';
 import { useState } from 'react';
 
@@ -30,7 +30,6 @@ export function AIAutocompleteButton({
   onAutocomplete,
   disabled = false,
 }: AIAutocompleteButtonProps) {
-  const { toast } = useToast();
   const [errorDetails, setErrorDetails] = useState<ErrorInfo | null>(null);
   const [notesContent, setNotesContent] = useState<string | null>(null);
   const [notesTimestamp, setNotesTimestamp] = useState<string | null>(null);
@@ -44,28 +43,19 @@ export function AIAutocompleteButton({
       const costMessage = costInfo
         ? `Cost: $${costInfo.totalCost.toFixed(4)} (${costInfo.tokens.totalTokens.toLocaleString()} tokens)`
         : '';
-      toast({
-        title: 'AI Autocomplete Successful',
+      toast.success('AI Autocomplete Successful', {
         description: `Form fields have been populated. Review and apply changes. ${costMessage}`,
       });
     },
     onError: (error, errorInfo) => {
       setErrorDetails(errorInfo || null);
-      toast({
-        title: 'AI Autocomplete Failed',
-        description: error,
-        variant: 'destructive',
-      });
+      toast.error('AI Autocomplete Failed', { description: error });
     },
   });
 
   const handleAutocomplete = async () => {
     if (!word || !partOfSpeech) {
-      toast({
-        title: 'Missing Information',
-        description: 'Word and part of speech are required for AI autocomplete.',
-        variant: 'destructive',
-      });
+      toast.error('Missing Information', { description: 'Word and part of speech are required for AI autocomplete.' });
       return;
     }
 
@@ -103,10 +93,7 @@ ${errorDetails.details.stack ? `\nStack Trace:\n${errorDetails.details.stack}` :
 }`;
 
     navigator.clipboard.writeText(errorText);
-    toast({
-      title: 'Error Copied',
-      description: 'Error details copied to clipboard',
-    });
+    toast.success('Error Copied', { description: 'Error details copied to clipboard' });
   };
 
   const handleRetry = () => {

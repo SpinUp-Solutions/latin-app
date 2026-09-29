@@ -29,7 +29,7 @@ import { useLazySearchWordsQuery, type VocabularySearchResult } from '@/src/stor
 import type { RootWordCandidate } from '@/shared/types/vocabulary/requests';
 import type { CostBreakdown } from '@/shared/openai/types';
 import type { VocabularyWord } from '@/shared/types/vocabulary/schemas';
-import { useToast } from '@/src/hooks/use-toast';
+import { toast } from 'sonner';
 import { stripMacrons } from '@/src/utils/exercises/helpers';
 
 const extractPath = (url: string): string => {
@@ -117,7 +117,6 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
   initialData = null,
   selectedText = '',
 }) => {
-  const { toast } = useToast();
   const [formData, setFormData] = useState<TooltipFormData>(transformToFormData(initialData, selectedText));
   const [visibleFields, setVisibleFields] = useState<string[]>([]);
   const [hasWordData, setHasWordData] = useState(false);
@@ -278,18 +277,13 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
       setHasWordData(true);
       setVisibleFields(DEFAULT_VISIBLE_FIELDS);
       setMode('word-lookup');
-      toast({
-        title: 'Existing word applied',
+      toast.success('Existing word applied', {
         description: `${candidate.existingWord.word} was added to the tooltip fields.`,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not load existing vocabulary entry';
       setAddToDbError(message);
-      toast({
-        title: 'Could not use existing word',
-        description: message,
-        variant: 'destructive',
-      });
+      toast.error('Could not use existing word', { description: message });
     }
   };
 
@@ -335,19 +329,14 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
       setSavedRequestId(request.id);
       mergeDraftIntoTooltip(request.draftWord, request.id);
       setAddToDbStep('saved');
-      toast({
-        title: 'Vocabulary request created',
+      toast.success('Vocabulary request created', {
         description: `${request.draftWord.word} is waiting in pending review.`,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not create vocabulary request';
       setAddToDbError(message);
       setAddToDbStep('error');
-      toast({
-        title: 'Could not add vocabulary request',
-        description: message,
-        variant: 'destructive',
-      });
+      toast.error('Could not add vocabulary request', { description: message });
     }
   };
 
