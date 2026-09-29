@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import type { StudentInProgressTestAttempt, StudentSubmittedTestAttempt, StudentTestDelivery } from '@/src/types/test';
 import type { ExerciseAnswer } from '@/src/types/runtime-mode';
@@ -56,7 +56,6 @@ export function SectionedTestPlayer({ attempt, onAttempt, buffer, title, uid, or
     answers: Record<string, ExerciseAnswer>;
   } | null>(null);
   const [recoveredSubmission, setRecoveredSubmission] = useState<StudentSubmittedTestAttempt | null>(null);
-  const resumedConfirmationRef = useRef<string | null>(null);
   const page = attempt.delivery.pages[0];
   const exercises = page.items.filter(item => isExerciseType(item.type)) as Exercise[];
   const answered = exercises.filter(item =>
@@ -104,79 +103,81 @@ export function SectionedTestPlayer({ attempt, onAttempt, buffer, title, uid, or
     } else adopt(updated);
   };
 
-  const changePhase = async (phase: 'answering' | 'review') => {
+  /** Runs one server step at a time; the ref also blocks a second click before the state re-renders. */
+  const runExclusive = async (action: 'navigation' | 'confirmation', task: () => Promise<void>) => {
     if (busyRef.current || buffer.conflict) return;
     busyRef.current = true;
-    setPendingAction('navigation');
+    setPendingAction(action);
     try {
-      await buffer.flushPendingAnswers();
-      const updated = await setPhase({
-        attemptId: attempt.id,
-        pageId: page.id,
-        expectedRevision: revision(),
-        phase,
-      }).unwrap();
-      if (!mountedRef.current) return;
-      adopt(updated);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (error) {
-      if (!mountedRef.current) return;
-      toast.error(getApiErrorMessage(error, 'Save your answers before continuing.'));
+      await task();
     } finally {
       busyRef.current = false;
       if (mountedRef.current) setPendingAction(null);
     }
   };
 
-  const confirm = async (acknowledgeIncomplete: boolean) => {
-    if (busyRef.current || buffer.conflict) return;
-    busyRef.current = true;
-    setPendingAction('confirmation');
-    try {
-      await buffer.flushPendingAnswers();
-      const request = {
-        uid,
-        attemptId: attempt.id,
-        pageId: page.id,
-        expectedRevision: revision(),
-        requestId: crypto.randomUUID(),
-        acknowledgeIncomplete,
-      };
-      while (mountedRef.current) {
-        const result = await confirmSection(request).unwrap();
+  const changePhase = (phase: 'answering' | 'review') =>
+    runExclusive('navigation', async () => {
+      try {
+        await buffer.flushPendingAnswers();
+        const updated = await setPhase({
+          attemptId: attempt.id,
+          pageId: page.id,
+          expectedRevision: revision(),
+          phase,
+        }).unwrap();
         if (!mountedRef.current) return;
-        if (result.attempt.status === 'submitted') {
-          buffer.reset();
-          onSubmitted(result.attempt);
-          return;
-        }
-        adopt(result.attempt);
-        if (!result.pending) {
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-          return;
-        }
-        await new Promise(resolve => setTimeout(resolve, result.retryAfterMs ?? 1000));
+        adopt(updated);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } catch (error) {
+        if (!mountedRef.current) return;
+        toast.error(getApiErrorMessage(error, 'Save your answers before continuing.'));
       }
-    } catch (error) {
-      if (mountedRef.current) {
-        toast.error(getApiErrorMessage(error, 'Your answers are saved. Please retry section confirmation.'));
-        // A lost final response may already have submitted the attempt. A save
-        // failure, however, must never replace still-unsaved local answers.
-        if (!buffer.hasUnsavedAnswers()) await refresh().catch(() => undefined);
-      }
-    } finally {
-      busyRef.current = false;
-      if (mountedRef.current) setPendingAction(null);
-    }
-  };
+    });
 
+  const confirm = (acknowledgeIncomplete: boolean) =>
+    runExclusive('confirmation', async () => {
+      try {
+        await buffer.flushPendingAnswers();
+        const request = {
+          uid,
+          attemptId: attempt.id,
+          pageId: page.id,
+          expectedRevision: revision(),
+          requestId: crypto.randomUUID(),
+          acknowledgeIncomplete,
+        };
+        while (mountedRef.current) {
+          const result = await confirmSection(request).unwrap();
+          if (!mountedRef.current) return;
+          if (result.attempt.status === 'submitted') {
+            buffer.reset();
+            onSubmitted(result.attempt);
+            return;
+          }
+          adopt(result.attempt);
+          if (!result.pending) {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return;
+          }
+          await new Promise(resolve => setTimeout(resolve, result.retryAfterMs ?? 1000));
+        }
+      } catch (error) {
+        if (mountedRef.current) {
+          toast.error(getApiErrorMessage(error, 'Your answers are saved. Please retry section confirmation.'));
+          // A lost final response may already have submitted the attempt. A save
+          // failure, however, must never replace still-unsaved local answers.
+          if (!buffer.hasUnsavedAnswers()) await refresh().catch(() => undefined);
+        }
+      }
+    });
+
+  // A refresh during confirmation lands in the confirming phase. Resume it once per section.
+  const resumeInterruptedConfirmation = useEffectEvent(() => {
+    if (attempt.section.phase === 'confirming') void confirm(true);
+  });
   useEffect(() => {
-    const key = `${attempt.id}:${page.id}`;
-    if (attempt.section.phase === 'confirming' && resumedConfirmationRef.current !== key) {
-      resumedConfirmationRef.current = key;
-      void confirm(true);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    resumeInterruptedConfirmation();
   }, [attempt.id, page.id]);
 
   const saveStatus = (

@@ -4,8 +4,9 @@ import { SectionedTestPlayer } from '@/src/components/ui/test/sectioned-test-pla
 import type { StudentInProgressTestAttempt } from '@/src/types/test';
 
 const refresh = jest.fn();
+const mockConfirm = jest.fn();
 jest.mock('@/src/store/api/testApi', () => ({
-  useConfirmTestSectionMutation: () => [jest.fn()],
+  useConfirmTestSectionMutation: () => [mockConfirm],
   useSetTestSectionPhaseMutation: () => [jest.fn()],
   useLazyGetTestAttemptQuery: () => [refresh],
 }));
@@ -75,4 +76,54 @@ it('retains a conflicting draft when refresh finds an already-submitted result',
   fireEvent.click(screen.getByRole('button', { name: 'View submitted result' }));
   expect(reset).toHaveBeenCalledTimes(1);
   expect(onSubmitted).toHaveBeenCalledWith(submitted);
+});
+
+it('resumes an interrupted confirmation once, without asking for the acknowledgement again', async () => {
+  Object.defineProperty(globalThis.crypto, 'randomUUID', {
+    configurable: true,
+    value: () => '9f0c2f5e-4d5b-4a8e-9a55-3c3f2a1b7c10',
+  });
+  const confirming = {
+    ...initial,
+    section: { ...initial.section, phase: 'confirming' },
+  } as unknown as StudentInProgressTestAttempt;
+  mockConfirm.mockReturnValue({
+    unwrap: async () => ({
+      attempt: { ...confirming, section: { ...confirming.section, phase: 'review' } },
+      pending: false,
+    }),
+  });
+  const buffer = {
+    answers: {},
+    conflict: false,
+    saveStatus: 'saved',
+    getSectionRevision: () => 1,
+    activateAttempt: jest.fn(),
+    flushPendingAnswers: async () => undefined,
+    hasUnsavedAnswers: () => false,
+    reset,
+  } as unknown as React.ComponentProps<typeof SectionedTestPlayer>['buffer'];
+  function ResumeHarness() {
+    const [attempt, setAttempt] = useState(confirming);
+    return (
+      <SectionedTestPlayer
+        attempt={attempt}
+        onAttempt={setAttempt}
+        buffer={buffer}
+        title="Test"
+        uid="student"
+        originKey="normal-test:test"
+        onSubmitted={onSubmitted}
+        onExit={jest.fn()}
+      />
+    );
+  }
+
+  render(<ResumeHarness />);
+
+  await waitFor(() => expect(buffer.activateAttempt).toHaveBeenCalledTimes(1));
+  expect(mockConfirm).toHaveBeenCalledTimes(1);
+  expect(mockConfirm).toHaveBeenCalledWith(
+    expect.objectContaining({ pageId: 'page-1', expectedRevision: 1, acknowledgeIncomplete: true })
+  );
 });
