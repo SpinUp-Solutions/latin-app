@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { Button } from '@/src/components/ui/button';
-import { TestManager } from '@/src/components/ui/admin';
+import { TestManager } from '@/src/components/ui/admin/TestManager';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 import { AdminPage, AdminPageHeader } from '@/src/components/admin/shell';
 

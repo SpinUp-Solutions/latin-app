@@ -16,12 +16,18 @@ jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: routerPush }),
   useSearchParams: () => new URLSearchParams(),
 }));
-jest.mock('@/src/components/ui/admin', () => ({
-  TestVersionEditor: (props: unknown) => {
-    editorProps(props);
-    return <div data-testid="route-version-editor" />;
-  },
-}));
+// The route test stubs the editor to inspect its props; every other test renders the real editor.
+let mockStubRouteEditor = false;
+jest.mock('@/src/components/ui/admin/TestVersionEditor', () => {
+  const actual = jest.requireActual('@/src/components/ui/admin/TestVersionEditor');
+  return {
+    TestVersionEditor: (props: React.ComponentProps<typeof actual.TestVersionEditor>) => {
+      if (!mockStubRouteEditor) return <actual.TestVersionEditor {...props} />;
+      editorProps(props);
+      return <div data-testid="route-version-editor" />;
+    },
+  };
+});
 jest.mock('@/src/components/ui/admin/lesson-builder/PageSection', () => ({
   PageSection: () => null,
 }));
@@ -113,6 +119,7 @@ jest.mock('@/src/store/api/testApi', () => ({
 
 describe('normal version editor mock-assignment contract', () => {
   beforeEach(() => {
+    mockStubRouteEditor = false;
     jest.clearAllMocks();
     sessionStorage.clear();
     Object.defineProperty(globalThis.crypto, 'randomUUID', {
@@ -351,6 +358,7 @@ describe('normal version editor mock-assignment contract', () => {
   });
 
   it('wires the existing-version route to the editor and navigates after assignment', async () => {
+    mockStubRouteEditor = true;
     await act(async () => {
       render(<VersionEditorPage params={Promise.resolve({ id: test.id, versionId: version.id })} />);
       await Promise.resolve();
