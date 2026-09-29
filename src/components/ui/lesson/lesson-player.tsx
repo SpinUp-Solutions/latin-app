@@ -23,7 +23,7 @@ import { auth } from '@/src/services/firebase';
 import { DiagramAuditSubmission } from '@/src/features/sentence-diagramming';
 import { getMissingExercises, getRequiredExercises, RequiredExercise } from '@/src/utils/lessonProgress';
 import { isExerciseType } from '@/src/lib/content/registry';
-import { stripHtmlTags } from '@/src/utils/exercises';
+import { stripHtmlTags } from '@/src/utils/exercises/helpers';
 import type { ExerciseAnswerEvent, RuntimeMode } from '@/src/types/runtime-mode';
 import type { GeneratedExerciseRenderContext, ResolvedGeneratedExerciseState } from './content-renderer';
 import { getApiErrorMessage, isRetryableApiError } from '@/src/store/api/baseQuery';

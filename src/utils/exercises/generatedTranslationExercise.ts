@@ -1,4 +1,3 @@
-import { ValidationResult } from './types';
 import { normalizeAnswer, stripMacrons } from './helpers';
 
 export interface GeneratedTranslationItem {
@@ -24,21 +23,13 @@ const transformValue = (value: string, shouldStripInfinitive: boolean, shouldStr
   return shouldStripInfinitive ? normalized.replace(/^to\s+/, '') : normalized;
 };
 
-export const validateGeneratedTranslationExercise = (
-  userAnswer: string,
-  currentItem: GeneratedTranslationItem
-): ValidationResult => {
+export const validateGeneratedTranslationExercise = (userAnswer: string, currentItem: GeneratedTranslationItem) => {
   const shouldStripInfinitive = currentItem.stripInfinitive !== false;
   const shouldStripMacrons = currentItem.stripMacrons === true;
   const input = transformValue(userAnswer, shouldStripInfinitive, shouldStripMacrons);
-  const normalizedAnswers = currentItem.acceptedAnswers.map(answer =>
-    transformValue(answer, shouldStripInfinitive, shouldStripMacrons)
-  );
-  const isCorrect = normalizedAnswers.includes(input);
-
   return {
-    isCorrect,
-    correctAnswer: currentItem.acceptedAnswers.join(', '),
-    hint: currentItem.hint,
+    isCorrect: currentItem.acceptedAnswers.some(
+      answer => transformValue(answer, shouldStripInfinitive, shouldStripMacrons) === input
+    ),
   };
 };
