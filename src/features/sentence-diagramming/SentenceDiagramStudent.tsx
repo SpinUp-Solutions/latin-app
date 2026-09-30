@@ -189,7 +189,6 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
   onAttempt,
 }) => {
   const mode = runtimeMode ?? 'practice';
-  const assessmentMode = mode !== 'practice';
   const testAnswerMode = mode === 'test';
   const [annotations, setAnnotations] = useState<DiagramAnnotation[]>(
     initialAnswer?.type === 'sentence-diagramming' ? initialAnswer.annotations : []
@@ -329,14 +328,6 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
     }
 
     const score = Math.round(gradeExercisePercentage({ exercise }, { type: 'sentence-diagramming', annotations }));
-
-    if (assessmentMode) {
-      setTestSubmitted(true);
-      if (comparison.isComplete) handleCorrect(true);
-      else handleIncorrect();
-      onComplete?.(score);
-      return;
-    }
 
     if (comparison.isComplete) {
       handleCorrect(true);
@@ -528,7 +519,7 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
         </div>
       </div>
 
-      {!assessmentMode && (
+      {!testAnswerMode && (
         <SentenceDiagramFeedbackPanel
           isCorrect={isCorrect}
           message={feedbackMessage}
@@ -545,5 +536,3 @@ export const SentenceDiagramStudent: React.FC<SentenceDiagramStudentProps> = ({
     </div>
   );
 };
-
-export default SentenceDiagramStudent;

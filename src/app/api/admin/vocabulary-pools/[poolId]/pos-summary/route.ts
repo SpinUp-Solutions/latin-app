@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { FieldPath } from 'firebase-admin/firestore';
 import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
-import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
+import { VOCABULARY_POOL_COLLECTION, VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 import { AdminAccessError, verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import { isVocabularyPoolCreationPending } from '@/src/lib/vocabulary-pools/pool-state.server';
 
@@ -18,7 +18,7 @@ export async function GET(
   try {
     await verifyAdminAccess(request);
     ({ poolId } = await params);
-    const poolDoc = await adminDb.collection('vocabulary_pools').doc(poolId).get();
+    const poolDoc = await adminDb.collection(VOCABULARY_POOL_COLLECTION).doc(poolId).get();
 
     if (!poolDoc.exists) {
       return NextResponse.json(

@@ -5,7 +5,7 @@ import { Play, Pause, ChevronLeft, ChevronRight, LayoutGrid, Check } from 'lucid
 import { Button } from '@/src/components/ui/button';
 import { Popover, PopoverTrigger, PopoverContent } from '@/src/components/ui/popover';
 import { cn } from '@/src/lib/utils';
-import { stripHtmlTags } from '@/src/utils/exercises';
+import { stripHtmlTags } from '@/src/utils/exercises/helpers';
 
 interface LessonNavigationProps {
   currentPageIndex: number;
@@ -25,7 +25,7 @@ interface LessonNavigationProps {
   isFinishBlocked?: boolean;
 }
 
-export const LessonNavigation: React.FC<LessonNavigationProps> = ({
+const LessonNavigation: React.FC<LessonNavigationProps> = ({
   currentPageIndex,
   furthestPageIndex = currentPageIndex,
   totalPages,

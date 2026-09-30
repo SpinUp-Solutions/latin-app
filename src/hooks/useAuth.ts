@@ -1,11 +1,10 @@
 import { useEffect } from 'react';
-import { useSelector } from 'react-redux';
 import { useRouter } from 'next/navigation';
-import { RootState } from '@/src/store';
+import { useAppSelector } from '@/src/store/hooks';
 import { toast } from 'sonner';
 
 export function useAuth() {
-  const { user, loading, authUid } = useSelector((state: RootState) => state.auth);
+  const { user, loading, authUid } = useAppSelector(state => state.auth);
 
   const getDisplayName = (): string => {
     if (!user) return '';
@@ -21,12 +20,8 @@ export function useAuth() {
     user,
     loading,
     authUid,
-    isAuthenticated: !!user,
     isAdmin: user?.role === 'admin',
-    isTeacher: user?.role === 'teacher',
-    isStudent: user?.role === 'student',
     displayName: getDisplayName(),
-    isProfileComplete: !!(user?.username && user?.firstName && user?.lastName && user?.dateOfBirth),
   };
 }
 

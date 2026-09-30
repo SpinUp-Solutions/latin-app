@@ -6,7 +6,7 @@ import { Page } from '@/src/types/lesson';
 import ContentRenderer from './content-renderer';
 import { ExerciseErrorBoundary } from './exercise-error-boundary';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
-import { isExerciseType } from '@/src/utils/lessonUtils';
+import { isExerciseType } from '@/src/lib/content/registry';
 import { DiagramAuditSubmission } from '@/src/features/sentence-diagramming';
 import type { ExerciseAnswer, ExerciseAnswerEvent, RuntimeMode } from '@/src/types/runtime-mode';
 import type { GeneratedExerciseRenderContext, ResolvedGeneratedExerciseState } from './content-renderer';
@@ -24,7 +24,6 @@ interface PageTemplateProps {
   onAnswer?: (event: ExerciseAnswerEvent) => void;
   answers?: Record<string, ExerciseAnswer>;
   resolvedExerciseState?: Record<string, ResolvedGeneratedExerciseState>;
-  allowGeneratedExerciseQueries?: boolean;
   generatedExerciseContext?: GeneratedExerciseRenderContext;
   vocabularyPoolId?: string | null;
   resolvedVocabularyPool?: VocabularyPoolStudyData;
@@ -43,7 +42,6 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({
   onAnswer,
   answers,
   resolvedExerciseState,
-  allowGeneratedExerciseQueries = false,
   generatedExerciseContext,
   vocabularyPoolId,
   resolvedVocabularyPool,
@@ -55,17 +53,9 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({
   const exerciseItems = page.items.filter(item => isExerciseType(item.type));
   const totalExercises = exerciseItems.length;
 
-  const previousPageId = useRef(page.id);
   const scheduledCompletion = useRef<Set<number> | null>(null);
   const completePage = useEffectEvent(() => onPageComplete?.());
   const canAutoAdvance = Boolean(onPageComplete);
-
-  useEffect(() => {
-    if (previousPageId.current === page.id) return;
-    previousPageId.current = page.id;
-    scheduledCompletion.current = null;
-    setCompletedExercises(new Set());
-  }, [page.id]);
 
   useEffect(() => {
     if (!active || !canAutoAdvance || totalExercises === 0 || completedExercises.size !== totalExercises) return;
@@ -136,7 +126,6 @@ export const PageTemplate: React.FC<PageTemplateProps> = ({
                 onAnswer={onAnswer}
                 initialAnswer={answers?.[item.id]}
                 resolvedExerciseState={resolvedExerciseState?.[item.id]}
-                allowGeneratedExerciseQueries={allowGeneratedExerciseQueries}
                 generatedExerciseContext={generatedExerciseContext}
                 vocabularyPoolId={vocabularyPoolId}
                 resolvedVocabularyPool={resolvedVocabularyPool}

@@ -111,24 +111,19 @@ export const cleanFormData = (formData: TooltipFormData): Partial<TooltipFormDat
   return result as Partial<TooltipFormData>;
 };
 
-const findTooltipMark = (editor: Editor, from: number, to: number): Mark | null => {
+export const findTooltipMark = (editor: Editor, from: number, to: number): TooltipMark | null => {
   let tooltipMark: Mark | null = null;
 
   editor.state.doc.nodesBetween(from, to, (node, pos) => {
     if (node.isText && !tooltipMark) {
-      const foundMark = node.marks.find(mark => isTooltipMark(mark));
+      const foundMark = node.marks.find(isTooltipMark);
       if (foundMark && from >= pos && from < pos + node.nodeSize) {
         tooltipMark = foundMark;
       }
     }
   });
 
-  return tooltipMark;
-};
-
-export const findTooltipMarkWithData = (editor: Editor, from: number, to: number): TooltipMark | null => {
-  const mark = findTooltipMark(editor, from, to);
-  return mark as TooltipMark | null;
+  return tooltipMark as TooltipMark | null;
 };
 
 export const getEmptyFormData = (): TooltipFormData => createDefaultFormData();
@@ -223,7 +218,7 @@ export const extractTooltipDataFromElement = (element: Element): TooltipData | n
   return null;
 };
 
-export const extractTooltipsFromContent = (htmlContent: string): Record<string, TooltipData> => {
+const extractTooltipsFromContent = (htmlContent: string): Record<string, TooltipData> => {
   const tooltips: Record<string, TooltipData> = {};
 
   const tempDiv = document.createElement('div');

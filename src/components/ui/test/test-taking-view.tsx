@@ -1,7 +1,7 @@
 'use client';
 
 import React, { type ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, Eye, FileCheck2, LogOut, Save } from 'lucide-react';
+import { ArrowRight, Eye, FileCheck2, LogOut, Save } from 'lucide-react';
 import { Progress } from '@/src/components/ui/progress';
 import { PlayerActionBar, PlayerBarButton } from '@/src/components/ui/core/player-action-bar';
 import { RomanPlayerShell } from '@/src/components/ui/core/roman-player-shell';
@@ -15,55 +15,47 @@ import type { VocabularyPoolStudyData } from '@/src/types/vocabulary';
 export interface TestTakingViewProps {
   title: ReactNode;
   description?: ReactNode;
-  pages: Page[];
-  currentPageIndex: number;
+  /** The active section. */
+  page: Page | undefined;
+  sectionIndex: number;
+  totalSections: number;
   answeredCount: number;
   totalExercises: number;
   status: React.ReactNode;
   preview?: boolean;
   answers?: Record<string, ExerciseAnswer>;
   resolvedExerciseState?: Record<string, ResolvedGeneratedExerciseState>;
-  allowGeneratedExerciseQueries?: boolean;
   vocabularyPoolId?: string | null;
   resolvedVocabularyPool?: VocabularyPoolStudyData;
   onAnswer?: (event: ExerciseAnswerEvent) => void;
-  onExerciseComplete?: (exerciseId: string, score: number) => void;
-  onPrevious: () => void;
-  onNext: () => void;
   onReview: () => void;
   onExit?: () => void;
   navigationPending?: boolean;
   embedded?: boolean;
-  sectionNavigation?: { pageIndex: number; totalPages: number };
 }
 
+/** The answering phase of one test section, shared by student attempts and the admin preview. */
 export function TestTakingView({
   title,
   description,
-  pages,
-  currentPageIndex,
+  page,
+  sectionIndex,
+  totalSections,
   answeredCount,
   totalExercises,
   status,
   preview = false,
   answers,
   resolvedExerciseState,
-  allowGeneratedExerciseQueries = false,
   vocabularyPoolId,
   resolvedVocabularyPool,
   onAnswer,
-  onExerciseComplete,
-  onPrevious,
-  onNext,
   onReview,
   onExit,
   navigationPending = false,
   embedded = false,
-  sectionNavigation,
 }: TestTakingViewProps) {
-  const currentPage = pages[currentPageIndex];
   const answeredPercentage = totalExercises > 0 ? (answeredCount / totalExercises) * 100 : 0;
-  const isLastPage = currentPageIndex >= pages.length - 1;
   const StatusIcon = preview ? Eye : Save;
 
   return (
@@ -77,8 +69,8 @@ export function TestTakingView({
         <RomanPlayerShell
           icon={FileCheck2}
           label={preview ? 'Test preview' : 'Test in progress'}
-          currentPage={(sectionNavigation?.pageIndex ?? currentPageIndex) + 1}
-          totalPages={sectionNavigation?.totalPages ?? pages.length}
+          currentPage={sectionIndex + 1}
+          totalPages={totalSections}
           title={title}
           description={description}
           headingAs={embedded ? 'div' : 'h1'}
@@ -105,20 +97,18 @@ export function TestTakingView({
               </div>
             </>
           }>
-          {currentPage ? (
-            <div inert={Boolean(sectionNavigation && navigationPending) || undefined}>
+          {page ? (
+            <div inert={navigationPending || undefined}>
               <PageTemplate
-                key={currentPage.id}
-                page={currentPage}
-                pageIndex={currentPageIndex}
+                key={page.id}
+                page={page}
+                pageIndex={sectionIndex}
                 runtimeMode="test"
                 onAnswer={onAnswer}
                 answers={answers}
                 resolvedExerciseState={resolvedExerciseState}
-                allowGeneratedExerciseQueries={allowGeneratedExerciseQueries}
                 vocabularyPoolId={vocabularyPoolId}
                 resolvedVocabularyPool={resolvedVocabularyPool}
-                onExerciseComplete={onExerciseComplete}
               />
             </div>
           ) : (
@@ -126,36 +116,17 @@ export function TestTakingView({
           )}
         </RomanPlayerShell>
 
-        <PlayerActionBar label="Test page navigation" className="mt-4">
+        <PlayerActionBar label="Test section navigation" className="mt-4">
           {onExit ? (
             <PlayerBarButton type="button" tone="outline" disabled={navigationPending} onClick={onExit}>
               <LogOut className="mr-2 h-4 w-4" aria-hidden="true" />
               Exit test
             </PlayerBarButton>
           ) : null}
-          <div className="flex flex-col gap-3 sm:ml-auto sm:flex-row sm:items-center">
-            {!sectionNavigation && (
-              <PlayerBarButton
-                type="button"
-                tone="outline"
-                disabled={navigationPending || currentPageIndex === 0}
-                onClick={onPrevious}>
-                <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
-                Previous page
-              </PlayerBarButton>
-            )}
-            {!sectionNavigation && !isLastPage ? (
-              <PlayerBarButton type="button" disabled={navigationPending} onClick={onNext}>
-                Next page
-                <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
-              </PlayerBarButton>
-            ) : (
-              <PlayerBarButton type="button" disabled={navigationPending} onClick={onReview}>
-                {sectionNavigation ? 'Review section' : 'Review answers'}
-                <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
-              </PlayerBarButton>
-            )}
-          </div>
+          <PlayerBarButton type="button" className="sm:ml-auto" disabled={navigationPending} onClick={onReview}>
+            Review section
+            <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+          </PlayerBarButton>
         </PlayerActionBar>
       </main>
     </div>

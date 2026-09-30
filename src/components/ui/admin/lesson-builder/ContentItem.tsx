@@ -8,7 +8,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useClipboard } from '../../core/clipboard';
 import { toast } from 'sonner';
 import { getContentTypeLabel } from '@/src/lib/content/registry';
-import { stripHtmlTags } from '@/src/utils/exercises';
+import { stripHtmlTags } from '@/src/utils/exercises/helpers';
 
 interface ContentItemProps {
   item: RenderableContentItem;

@@ -1,14 +1,9 @@
 import { PATCH as saveAnswer } from '@/src/app/api/test-attempts/[attemptId]/answers/route';
-import { POST as gradeTranslation } from '@/src/app/api/test-attempts/[attemptId]/translation-grade/route';
-import { POST as submitAttempt } from '@/src/app/api/test-attempts/[attemptId]/submit/route';
 import { POST as startAttempt } from '@/src/app/api/test-attempts/start/route';
-import { TestServiceError } from '@/src/lib/tests/errors';
 
 const mockVerifyRequestAuth = jest.fn();
 const mockStartAttempt = jest.fn();
 const mockSaveAttemptAnswers = jest.fn();
-const mockGradeTranslationItem = jest.fn();
-const mockSubmitAttempt = jest.fn();
 
 jest.mock('next/server', () => jest.requireActual('./helpers/routeMocks'));
 
@@ -22,8 +17,6 @@ jest.mock('@/src/lib/tests/attempt-service', () => ({
   testAttemptService: {
     startAttempt: (...args: unknown[]) => mockStartAttempt(...args),
     saveAttemptAnswers: (...args: unknown[]) => mockSaveAttemptAnswers(...args),
-    gradeTranslationItem: (...args: unknown[]) => mockGradeTranslationItem(...args),
-    submitAttempt: (...args: unknown[]) => mockSubmitAttempt(...args),
   },
 }));
 
@@ -78,6 +71,7 @@ describe('student test-attempt routes', () => {
 
   it('validates and saves a coalesced answer batch', async () => {
     const input = {
+      section: { pageId: 'page-1', expectedRevision: 0, mutationId: '9f0c2f5e-4d5b-4a8e-9a55-3c3f2a1b7c10' },
       answers: {
         'fill.one': { type: 'fill', answers: ['amo'] },
         'fill.two': null,
@@ -89,108 +83,5 @@ describe('student test-attempt routes', () => {
 
     expect(response.status).toBe(200);
     expect(mockSaveAttemptAnswers).toHaveBeenCalledWith('attempt-1', input, 'student-1');
-  });
-
-  it('submits only the authenticated student attempt', async () => {
-    mockSubmitAttempt.mockResolvedValue({ attempt: { id: 'attempt-1', status: 'submitted' }, completionGranted: true });
-
-    const response = (await submitAttempt(request(), params('attempt-1'))) as unknown as {
-      status: number;
-      body: { attempt: { id: string }; completionGranted: boolean };
-    };
-
-    expect(response.status).toBe(200);
-    expect(response.body.attempt.id).toBe('attempt-1');
-    expect(response.body.completionGranted).toBe(true);
-    expect(mockSubmitAttempt).toHaveBeenCalledWith('attempt-1', 'student-1');
-  });
-
-  it('grades and persists a translation item for the authenticated student', async () => {
-    const input = {
-      exerciseId: 'translation.one',
-      itemIndex: 0,
-      userTranslation: 'The girl sings.',
-    };
-    mockGradeTranslationItem.mockResolvedValue({
-      id: 'attempt-1',
-      translationGrades: {
-        'translation.one': {
-          '0': { translation: input.userTranslation, score: 9, feedback: 'Accurate and idiomatic.' },
-        },
-      },
-    });
-
-    const response = (await gradeTranslation(request(input), params('attempt-1'))) as unknown as {
-      status: number;
-      body: { attempt: { id: string; translationGrades: Record<string, unknown> } };
-    };
-
-    expect(response.status).toBe(200);
-    expect(response.body.attempt).toMatchObject({
-      id: 'attempt-1',
-      translationGrades: {
-        'translation.one': {
-          '0': { translation: input.userTranslation, score: 9, feedback: 'Accurate and idiomatic.' },
-        },
-      },
-    });
-    expect(mockGradeTranslationItem).toHaveBeenCalledWith('attempt-1', input, 'student-1');
-  });
-
-  it('returns a clear conflict when a translation item is already graded', async () => {
-    mockGradeTranslationItem.mockRejectedValue(
-      new TestServiceError(
-        'ATTEMPT_TRANSLATION_ALREADY_GRADED',
-        'This translation item has already been graded with a different answer',
-        409
-      )
-    );
-
-    const response = (await gradeTranslation(
-      request({ exerciseId: 'translation.one', itemIndex: 0, userTranslation: 'A different answer.' }),
-      params('attempt-1')
-    )) as unknown as { status: number; body: { code: string; error: string } };
-
-    expect(response.status).toBe(409);
-    expect(response.body).toEqual({
-      code: 'ATTEMPT_TRANSLATION_ALREADY_GRADED',
-      error: 'This translation item has already been graded with a different answer',
-    });
-  });
-
-  it('returns a clear rate limit when the translation grading budget is exhausted', async () => {
-    mockGradeTranslationItem.mockRejectedValue(
-      new TestServiceError(
-        'ATTEMPT_TRANSLATION_GRADING_RATE_LIMITED',
-        'Too many translation grading requests. Please try again after the grading window resets.',
-        429
-      )
-    );
-
-    const response = (await gradeTranslation(
-      request({ exerciseId: 'translation.one', itemIndex: 0, userTranslation: 'The girl sings.' }),
-      params('attempt-1')
-    )) as unknown as { status: number; body: { code: string; error: string } };
-
-    expect(response.status).toBe(429);
-    expect(response.body).toEqual({
-      code: 'ATTEMPT_TRANSLATION_GRADING_RATE_LIMITED',
-      error: 'Too many translation grading requests. Please try again after the grading window resets.',
-    });
-  });
-
-  it('maps submission domain errors and rejects unauthenticated submits', async () => {
-    mockVerifyRequestAuth.mockResolvedValueOnce(null);
-    const unauthenticated = (await submitAttempt(request(), params('attempt-1'))) as unknown as { status: number };
-    expect(unauthenticated.status).toBe(401);
-    expect(mockSubmitAttempt).not.toHaveBeenCalled();
-
-    mockSubmitAttempt.mockRejectedValueOnce(new TestServiceError('ATTEMPT_NOT_FOUND', 'Test attempt not found', 404));
-    const missing = (await submitAttempt(request(), params('attempt-1'))) as unknown as {
-      status: number;
-      body: { code: string };
-    };
-    expect(missing.status).toBe(404);
-    expect(missing.body.code).toBe('ATTEMPT_NOT_FOUND');
   });
 });

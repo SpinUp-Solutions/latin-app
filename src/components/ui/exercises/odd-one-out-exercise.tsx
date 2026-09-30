@@ -1,10 +1,8 @@
 'use client';
 
-import { useSectionedTest } from '../test/sectioned-test-context';
 import React, { useState } from 'react';
 import { OddOneOutExercise } from '@/src/types/exercise';
-import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
-import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
+import { useSingleAnswerExercise } from '@/src/hooks/useSingleAnswerExercise';
 import { FeedbackDisplay } from '../feedback';
 import { validateOddOneOutExercise } from '@/src/utils/exercises/oddOneOutExercise';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
@@ -12,14 +10,12 @@ import { ExerciseIntro } from './exercise-intro';
 import { SimpleRichEditor } from '../core/simple-rich-editor';
 import { Button } from '../button';
 import { CheckCircle2 } from 'lucide-react';
-import { hasVisibleFeedbackContent } from '@/src/utils/feedbackVisibility';
 import type {
   ExerciseAnswer,
   ExerciseAnswerHandler,
   ExerciseCompletionHandler,
   RuntimeMode,
 } from '@/src/types/runtime-mode';
-import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
 interface Props {
   exercise: OddOneOutExercise;
@@ -38,96 +34,58 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({
   onAnswer,
   initialAnswer,
 }) => {
-  const mode = runtimeMode ?? 'practice';
-  const assessmentMode = mode !== 'practice';
-  const testAnswerMode = mode === 'test';
-  const sectioned = useSectionedTest();
   const restoredAnswer = initialAnswer?.type === 'odd-one-out' ? initialAnswer : null;
   const [selectedItemId, setSelectedItemId] = useState<string | null>(restoredAnswer?.selectedItemId ?? null);
   const [userExplanation, setUserExplanation] = useState(restoredAnswer?.explanation ?? '');
-  const [isProcessing, setIsProcessing] = useState(false);
   const hasRequiredExplanation = (value: string) =>
     !exercise.data.requireExplanation || value.replace(/<[^>]*>/g, '').trim().length > 0;
-  const [hasSubmitted, setHasSubmitted] = useState(
-    Boolean(restoredAnswer?.selectedItemId && hasRequiredExplanation(restoredAnswer.explanation))
-  );
-  const { isAwaitingConfirmation, autoAdvanceIfEnabled, confirmAdvance, cancelPendingAdvance } = useExerciseProgression(
-    {
-      totalItems: 1,
-      itemProgressionDelay: exercise.itemProgressionDelay,
-      progressionRules: exercise.feedbackConfig.progressionRules,
-    }
-  );
-
   const {
+    testAnswerMode,
+    hasSubmitted,
+    isProcessing,
+    resetRequired,
     isCorrect,
     message,
     level,
     showExplanation,
-    handleCorrect,
-    handleIncorrect,
-    clearFeedback,
-    shouldResetExercise,
-    resetExercise,
-  } = useExerciseFeedback(exercise.feedbackConfig);
-
-  const resetRequired = mode === 'practice' && shouldResetExercise;
+    isAwaitingConfirmation,
+    confirmAdvance,
+    submit,
+    tryAgain,
+    startOver,
+  } = useSingleAnswerExercise({
+    exercise,
+    runtimeMode,
+    initiallySubmitted: Boolean(restoredAnswer?.selectedItemId && hasRequiredExplanation(restoredAnswer.explanation)),
+    onAnswer,
+    onComplete,
+    onCompletionAccepted,
+  });
 
   const handleExerciseReset = () => {
-    cancelPendingAdvance();
+    startOver();
     setSelectedItemId(null);
     setUserExplanation('');
-    setHasSubmitted(false);
-    setIsProcessing(false);
-    resetExercise();
   };
 
   const handleItemSelect = (itemId: string) => {
     if (hasSubmitted || resetRequired) return;
     setSelectedItemId(itemId);
-    if (testAnswerMode && sectioned)
-      onAnswer?.({ type: 'odd-one-out', selectedItemId: itemId, explanation: userExplanation });
+    if (testAnswerMode) onAnswer?.({ type: 'odd-one-out', selectedItemId: itemId, explanation: userExplanation });
   };
 
   const handleSubmit = () => {
     if (isProcessing || !selectedItemId || !hasRequiredExplanation(userExplanation) || resetRequired) return;
-
-    setIsProcessing(true);
-    setHasSubmitted(true);
-    if (testAnswerMode) {
-      onAnswer?.({ type: 'odd-one-out', selectedItemId, explanation: userExplanation });
-      setIsProcessing(false);
-      onComplete?.(0);
-      return;
-    }
-
-    const answer = { type: 'odd-one-out' as const, selectedItemId, explanation: userExplanation };
-    const score = Math.round(gradeExercisePercentage({ exercise }, answer));
-    const validation = validateOddOneOutExercise(selectedItemId, userExplanation, exercise);
-
-    if (validation.isCorrect) {
-      handleCorrect(true);
-      const hasVisibleExplanation =
-        (exercise.feedbackConfig.successMessage?.showExplanation ?? true) &&
-        hasVisibleFeedbackContent(exercise.data.explanation);
-
-      autoAdvanceIfEnabled(() => {
-        setIsProcessing(false);
-        onComplete?.(score);
-      }, hasVisibleExplanation);
-      if (!assessmentMode) onCompletionAccepted?.(score);
-    } else {
-      handleIncorrect();
-      setIsProcessing(false);
-      if (assessmentMode) onComplete?.(score);
-    }
+    submit(
+      { type: 'odd-one-out', selectedItemId, explanation: userExplanation },
+      () => validateOddOneOutExercise(selectedItemId, userExplanation, exercise).isCorrect
+    );
   };
 
   const handleReset = () => {
     setSelectedItemId(null);
     setUserExplanation('');
-    setHasSubmitted(false);
-    clearFeedback();
+    tryAgain();
   };
 
   return (
@@ -152,9 +110,9 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({
             const isCorrectItem = item.isOddOneOut;
             // Only show correct answer when user got it right OR feedback system says to show answer
             const showCorrectHighlight =
-              !assessmentMode && hasSubmitted && isCorrectItem && (isCorrect === true || level?.showAnswer);
+              !testAnswerMode && hasSubmitted && isCorrectItem && (isCorrect === true || level?.showAnswer);
             const showIncorrectHighlight =
-              !assessmentMode && hasSubmitted && isSelected && !isCorrectItem && level?.showAnswer;
+              !testAnswerMode && hasSubmitted && isSelected && !isCorrectItem && level?.showAnswer;
 
             return (
               <button
@@ -207,7 +165,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({
               content={userExplanation}
               onChange={value => {
                 setUserExplanation(value);
-                if (testAnswerMode && sectioned)
+                if (testAnswerMode)
                   onAnswer?.({ type: 'odd-one-out', selectedItemId: selectedItemId ?? '', explanation: value });
               }}
               placeholder="Explain your reasoning..."
@@ -227,7 +185,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({
               className="bg-roman-terracotta hover:bg-roman-terracotta/90 text-white">
               {isProcessing ? 'Checking...' : 'Submit Answer'}
             </Button>
-          ) : hasSubmitted && !assessmentMode && !resetRequired ? (
+          ) : hasSubmitted && !testAnswerMode && !resetRequired ? (
             <Button
               onClick={handleReset}
               variant="outline"
@@ -238,7 +196,7 @@ const OddOneOutExerciseComponent: React.FC<Props> = ({
         </div>
 
         {/* Feedback Display */}
-        {!assessmentMode && (
+        {!testAnswerMode && (
           <FeedbackDisplay
             isCorrect={isCorrect}
             message={message}

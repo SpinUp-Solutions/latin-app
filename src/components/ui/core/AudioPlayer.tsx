@@ -166,5 +166,3 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioPath, onEnded, cl
     </div>
   );
 };
-
-export default AudioPlayer;

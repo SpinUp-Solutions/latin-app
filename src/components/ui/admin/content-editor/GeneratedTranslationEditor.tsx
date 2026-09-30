@@ -1,4 +1,6 @@
 import React, { useCallback } from 'react';
+import { Checkbox } from '@/src/components/ui/checkbox';
+import { Label } from '@/src/components/ui/label';
 import { Card, CardContent } from '@/src/components/ui/card';
 import { GeneratedTranslationExercise } from '@/src/types/exercises';
 import { useAppSelector } from '@/src/store/hooks';
@@ -33,9 +35,7 @@ export const GeneratedTranslationEditor: React.FC = () => {
 const GeneratedTranslationEditorView: React.FC<{ editingContent: GeneratedTranslationExercise }> = ({
   editingContent,
 }) => {
-  const editor = useGeneratedExerciseEditor(editingContent, {
-    exerciseType: 'generated-translation',
-  });
+  const editor = useGeneratedExerciseEditor(editingContent);
 
   const translationDirection = editingContent.translationDirection || 'latin-to-english';
 
@@ -107,6 +107,23 @@ const GeneratedTranslationEditorView: React.FC<{ editingContent: GeneratedTransl
         />
       </div>
 
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="retryIncorrectAnswers"
+            checked={editingContent.data.retryIncorrectAnswers ?? true}
+            onCheckedChange={checked =>
+              editor.updateContent({ data: { ...editingContent.data, retryIncorrectAnswers: checked === true } })
+            }
+          />
+          <Label htmlFor="retryIncorrectAnswers">Repeat incorrect words until correct</Label>
+        </div>
+        <p className="text-sm text-gray-500">
+          Practice only. Incorrect words return at the end of the queue, using the existing auto-advance setting and
+          delay. The reset-after-mistakes setting is ignored while this is enabled. Tests are unchanged.
+        </p>
+      </div>
+
       <WordSourceSection
         value={editor.config.wordSource}
         onChange={value => editor.updateConfig({ wordSource: value })}
@@ -136,7 +153,6 @@ const GeneratedTranslationEditorView: React.FC<{ editingContent: GeneratedTransl
 
       {editor.isPoolWordSource && editor.posSummary.availablePOS.length > 0 && editor.posSummary.summary && (
         <MultiPosConfigSection
-          exerciseType="translation"
           availablePartOfSpeech={editor.posSummary.availablePOS}
           wordCountsByPOS={editor.posSummary.summary}
           posConfigs={editingContent.data.posConfigs}

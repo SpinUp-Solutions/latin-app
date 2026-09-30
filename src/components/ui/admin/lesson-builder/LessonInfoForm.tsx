@@ -9,11 +9,8 @@ import { SimpleRichEditor } from '../../core/simple-rich-editor';
 import { VocabularyPoolSelector } from '../vocabulary-pools/VocabularyPoolSelector';
 import { PracticeCategorySelector } from '../practice-categories/PracticeCategorySelector';
 import { ConfirmationDialog } from '../../core/ConfirmationDialog';
-import {
-  getLessonPracticeCategoryIds,
-  getLessonPracticeCategorySelections,
-  isPracticeLessonType,
-} from '@/src/utils/practiceCategoryLessons';
+import { isPracticeLessonType } from '@/src/lib/practice-categories/domain';
+import { getLessonPracticeCategoryIds, getLessonPracticeCategorySelections } from '@/src/utils/practiceCategoryLessons';
 
 interface LessonInfoFormProps {
   lesson: Lesson;

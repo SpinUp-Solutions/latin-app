@@ -20,10 +20,10 @@ const SEVERITY_TONES: Record<FeedbackSeverity, AdminStatusTone> = {
   minor: 'neutral',
 };
 
-export function FeedbackTypeIcon({ type, className }: { type: FeedbackType; className?: string }) {
+export function FeedbackTypeIcon({ type }: { type: FeedbackType }) {
   const { icon: Icon, className: tone } = TYPE_STYLES[type];
   return (
-    <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl', tone, className)}>
+    <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-xl', tone)}>
       <Icon className="h-[1.1rem] w-[1.1rem]" aria-hidden="true" />
     </span>
   );

@@ -38,5 +38,3 @@ export const SentenceDiagramFeedbackView: React.FC<SentenceDiagramFeedbackConten
     </div>
   );
 };
-
-export default SentenceDiagramFeedbackView;

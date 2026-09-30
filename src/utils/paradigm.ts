@@ -24,21 +24,6 @@ export function deriveParadigm(
   }
 }
 
-export function getParadigmsForPOS(pos: PartOfSpeech): FormParadigm[] {
-  switch (pos) {
-    case 'verb':
-      return ['verb-conjugation'];
-    case 'noun':
-      return ['noun-declension'];
-    case 'adjective':
-      return ['adjective-declension'];
-    case 'pronoun':
-      return ['pronoun-personal', 'pronoun-gendered'];
-    default:
-      return [];
-  }
-}
-
 export function getParadigmsFromFilters(filters: GeneratorFilters): FormParadigm[] {
   const pos = filters.partOfSpeech;
 
@@ -64,10 +49,6 @@ export function getParadigmsFromFilters(filters: GeneratorFilters): FormParadigm
 
   const paradigm = deriveParadigm(pos as PartOfSpeech, null, null);
   return paradigm ? [paradigm] : [];
-}
-
-export function isPronounParadigm(paradigm: FormParadigm): boolean {
-  return paradigm === 'pronoun-personal' || paradigm === 'pronoun-gendered';
 }
 
 export function getParadigmPOS(paradigm: FormParadigm): PartOfSpeech {

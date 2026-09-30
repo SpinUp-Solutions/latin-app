@@ -1,6 +1,28 @@
 import { Lesson, LessonSummary } from '@/src/types/lesson';
 import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
-import { isExerciseType } from '@/src/utils/lessonUtils';
+import { isExerciseType } from '@/src/lib/content/registry';
+
+/** Fields needed to build a LessonSummary without downloading lesson pages. */
+export const LESSON_SUMMARY_FIELDS = [
+  'kind',
+  'title',
+  'description',
+  'type',
+  'vocabulary_pool',
+  'showWordSearch',
+  'isLive',
+  'liveOrder',
+  'publishedAt',
+  'publishedBy',
+  'createdAt',
+  'createdBy',
+  'updatedAt',
+  'updatedBy',
+  'version',
+  'totalPages',
+  'totalItems',
+  'totalExercises',
+] as const;
 
 export function getLessonContentCounts(lesson: Pick<Lesson, 'pages'>): {
   totalPages: number;

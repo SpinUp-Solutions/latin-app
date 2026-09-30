@@ -6,7 +6,7 @@ import { useSelector } from 'react-redux';
 import { RootState } from '@/src/store';
 import { BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
-import { LessonBuilder } from '@/src/components/ui/admin';
+import { LessonBuilder } from '@/src/components/ui/admin/LessonBuilder';
 import { PageLoading, RomanSpinner } from '@/src/components/ui/page-loading';
 import { ClipboardProvider } from '@/src/components/ui/core/clipboard';
 import { Lesson } from '@/src/types/lesson';

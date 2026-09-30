@@ -1,3 +1,4 @@
+import { VOCABULARY_POOL_COLLECTION } from '@/shared/constants/firestore';
 import { VocabularyPoolStateError } from '@/src/lib/vocabulary-pools/pool-state.server';
 import { resolveVocabularyPool } from '@/src/lib/vocabulary-pools/linked-pools.server';
 import { NextRequest, NextResponse } from 'next/server';
@@ -24,7 +25,7 @@ export async function GET(
     const { poolId } = await params;
 
     const snapshot = await adminDb
-      .collection('vocabulary_pools')
+      .collection(VOCABULARY_POOL_COLLECTION)
       .where(FieldPath.documentId(), '==', poolId)
       .select('name', 'description', 'metadata', '_creationPending', 'sourcePoolIds', 'wordDocIds')
       .get();

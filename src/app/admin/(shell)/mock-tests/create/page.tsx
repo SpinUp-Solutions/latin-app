@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
-import { TestVersionEditor } from '@/src/components/ui/admin';
+import { TestVersionEditor } from '@/src/components/ui/admin/TestVersionEditor';
 import type { TestVersionEditorValue } from '@/src/components/ui/admin/TestVersionEditor';
 import { useCreateStandaloneMockMutation } from '@/src/store/api/mockTestApi';
 import { getApiErrorMessage } from '@/src/store/api/baseQuery';

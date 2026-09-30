@@ -8,13 +8,9 @@ import GeneratedFormIdentificationExercise from '@/src/components/ui/exercises/g
 import type { FeedbackConfig } from '@/src/types/exercises/base';
 import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 
-jest.mock('@/src/store/api/advancedVocabularyApi', () => ({
-  useGetGeneratedExerciseWordsQuery: () => ({ data: undefined, isLoading: false, isError: false }),
-}));
-
 const base = { id: 'terminal', title: 'Terminal exercise', instructions: '', itemProgressionDelay: 100 };
 const generatorConfig = { collection: VOCABULARY_WORDS_COLLECTION, wordSource: 'filters' as const, count: 1 };
-const formItem = {
+const formWord = {
   id: 'form-1',
   wordId: 'word-1',
   word: 'amo',
@@ -22,11 +18,21 @@ const formItem = {
   dictionary_entry: 'amo',
   selected_form: 'amo',
   hasSelectedForm: true,
-  step: 'tense' as const,
-  correctAnswer: 'present',
-  acceptedAnswers: ['present'],
   primaryFormPaths: [{ tense: 'present' }],
   optionalFormPaths: [],
+};
+const formItems = {
+  'step-by-step': { ...formWord, step: 'tense' as const, correctAnswer: 'present', acceptedAnswers: ['present'] },
+  'single-field': { ...formWord, steps: ['tense' as const], correctAnswerDisplay: 'present' },
+  'multi-answer': {
+    ...formWord,
+    step: 'tense' as const,
+    steps: ['tense' as const],
+    stepIndex: 0,
+    totalSteps: 1,
+    expectedAnswerCount: 1,
+    correctAnswerDisplay: 'present',
+  },
 };
 
 type Callbacks = { onComplete: jest.Mock; onCompletionAccepted: jest.Mock };
@@ -88,18 +94,7 @@ const cases = [
             paradigmConfigs: {},
           },
         }}
-        resolvedItems={[
-          mode === 'step-by-step'
-            ? formItem
-            : {
-                ...formItem,
-                steps: ['tense'],
-                correctAnswerDisplay: 'present',
-                stepIndex: 0,
-                totalSteps: 1,
-                expectedAnswerCount: 1,
-              },
-        ]}
+        resolvedItems={[formItems[mode]]}
         {...callbacks}
       />
     ),

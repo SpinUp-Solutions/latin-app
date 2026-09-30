@@ -290,5 +290,3 @@ export const VocabularyPoolImportSelector: React.FC<VocabularyPoolImportSelector
     </div>
   );
 };
-
-export default VocabularyPoolImportSelector;

@@ -236,7 +236,6 @@ export default function DynamicLessonPage() {
         <main className="min-w-0 flex-1 overflow-y-auto px-3 pb-6 pt-4 sm:px-6 sm:pt-6">
           <div className="max-w-3xl mx-auto">
             <LessonPlayer
-              key={currentLesson.id}
               lesson={currentLesson}
               headerActions={({ pageId, pageNumber, pauseAudio }) =>
                 authUid && (

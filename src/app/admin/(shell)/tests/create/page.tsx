@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { TestVersionEditor } from '@/src/components/ui/admin';
+import { TestVersionEditor } from '@/src/components/ui/admin/TestVersionEditor';
 import type { TestVersionEditorSaveResult, TestVersionEditorValue } from '@/src/components/ui/admin/TestVersionEditor';
 import { withAdminAuth } from '@/src/components/auth/withAdminAuth';
 import { useCreateTestMutation } from '@/src/store/api/testApi';

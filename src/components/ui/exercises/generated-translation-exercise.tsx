@@ -1,9 +1,9 @@
 'use client';
 
-import { usePracticeGeneratedExerciseWords } from '@/src/hooks/usePracticeGeneratedExerciseWords';
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { GeneratedTranslationExercise } from '@/src/types/exercises';
 import { useExerciseFeedback } from '@/src/hooks/useExerciseFeedback';
+import { useGeneratedExerciseQueue } from '@/src/hooks/useGeneratedExerciseQueue';
 import { useExerciseProgression } from '@/src/hooks/useExerciseProgression';
 import { ExerciseInput, FeedbackDisplay } from '../feedback';
 import { ExerciseProgress } from './exercise-progress';
@@ -12,7 +12,8 @@ import { applySequentialItemResult } from './sequential-item-result';
 import { SimpleRichDisplay } from '../core/simple-rich-display';
 import { type GeneratedExerciseQuerySource } from '@/src/store/api/advancedVocabularyApi';
 import { Card, CardContent } from '../card';
-import { ExerciseLoadingCard, ExerciseMessageCard } from './exercise-status-card';
+import { ExerciseMessageCard } from './exercise-status-card';
+import { GeneratedExerciseItems } from './generated-exercise-items';
 import {
   validateGeneratedTranslationExercise,
   type GeneratedTranslationItem,
@@ -24,9 +25,6 @@ import type {
   RuntimeMode,
 } from '@/src/types/runtime-mode';
 import { getContentTypeLabel } from '@/src/lib/content/registry';
-import { createGeneratedTranslationItems } from '@/src/lib/tests/generated-exercises';
-import { useSectionedTest } from '../test/sectioned-test-context';
-import { RecordedAnswerControls } from './recorded-answer-controls';
 import { gradeExercisePercentage } from '@/src/lib/tests/grading';
 
 interface Props {
@@ -37,57 +35,42 @@ interface Props {
   onAnswer?: ExerciseAnswerHandler;
   initialAnswer?: ExerciseAnswer;
   resolvedItems?: GeneratedTranslationItem[];
-  allowGeneratedExerciseQueries?: boolean;
   generatedExerciseSource?: GeneratedExerciseQuerySource;
 }
 
-const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
+const GeneratedTranslationExerciseComponent: React.FC<Props> = props => (
+  <GeneratedExerciseItems
+    exercise={props.exercise}
+    runtimeMode={props.runtimeMode}
+    resolvedItems={props.resolvedItems}
+    source={props.generatedExerciseSource}>
+    {items => <GeneratedExerciseSession {...props} items={items} />}
+  </GeneratedExerciseItems>
+);
+
+const GeneratedExerciseSession: React.FC<Props & { items: GeneratedTranslationItem[] }> = ({
   exercise,
   onComplete,
   onCompletionAccepted,
   runtimeMode,
   onAnswer,
   initialAnswer,
-  resolvedItems,
-  allowGeneratedExerciseQueries = false,
-  generatedExerciseSource,
+  items,
 }) => {
   const mode = runtimeMode ?? 'practice';
-  const assessmentMode = mode !== 'practice';
+  const queueEnabled = mode === 'practice' && (exercise.data.retryIncorrectAnswers ?? true);
   const testAnswerMode = mode === 'test';
-  const sectioned = useSectionedTest();
-
   const translationDirection = exercise.translationDirection || 'latin-to-english';
 
-  const { data, isLoading, isError } = usePracticeGeneratedExerciseWords(
-    {
-      exercise: {
-        type: 'generated-translation',
-        translationDirection,
-        data: exercise.data,
-      },
-      source: generatedExerciseSource ?? { kind: 'admin-preview' },
-    },
-    {
-      skip:
-        (!generatedExerciseSource && !allowGeneratedExerciseQueries) ||
-        (mode === 'test' && !allowGeneratedExerciseQueries) ||
-        resolvedItems !== undefined,
-    }
-  );
-
-  const items: GeneratedTranslationItem[] = useMemo(() => {
-    if (resolvedItems) return resolvedItems;
-    if (!data?.words) return [];
-    return createGeneratedTranslationItems(exercise, data.words);
-  }, [data, exercise, resolvedItems]);
-  const restoredAnswers = initialAnswer?.type === 'generated-translation' ? initialAnswer.answers : [];
+  const restoredAnswers = !queueEnabled && initialAnswer?.type === 'generated-translation' ? initialAnswer.answers : [];
   const firstIncompleteIndex = items.findIndex((_, index) => !restoredAnswers[index]?.trim());
   const restoredIndex = firstIncompleteIndex >= 0 ? firstIncompleteIndex : Math.max(items.length - 1, 0);
   const [userAnswer, setUserAnswer] = useState(restoredAnswers[restoredIndex] ?? '');
   const [submittedAnswers, setSubmittedAnswers] = useState<string[]>(restoredAnswers);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [testSubmitted, setTestSubmitted] = useState(Boolean(restoredAnswers[restoredIndex]?.trim()));
+
+  const { order, requeueWord } = useGeneratedExerciseQueue(items.map((_, index) => index));
+  const [failures, setFailures] = useState<Record<number, number>>({});
 
   const {
     currentIndex,
@@ -96,6 +79,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
     autoAdvanceIfEnabled,
     confirmAdvance,
     resetIndex,
+    goToItem,
     nextItem,
     cancelPendingAdvance,
   } = useExerciseProgression({
@@ -104,6 +88,8 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
     itemProgressionDelay: exercise.itemProgressionDelay,
     progressionRules: exercise.feedbackConfig.progressionRules,
   });
+
+  const itemIndex = order[currentIndex];
 
   const {
     isCorrect,
@@ -117,13 +103,17 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
     resetExercise,
   } = useExerciseFeedback(exercise.feedbackConfig);
 
-  const resetRequired = mode === 'practice' && shouldResetExercise;
+  const resetRequired = mode === 'practice' && !queueEnabled && shouldResetExercise;
+  const escalationLevels = exercise.feedbackConfig.escalationLevels ?? [];
+  const queueLevel = escalationLevels[Math.min((failures[itemIndex] ?? 0) - 1, escalationLevels.length - 1)];
+  const feedbackLevel = queueEnabled && isCorrect === false ? queueLevel : level;
+  const feedbackMessage =
+    queueEnabled && isCorrect === false ? queueLevel?.message || 'Incorrect. You’ll try this word again.' : message;
 
   const handleExerciseReset = () => {
     cancelPendingAdvance();
     setUserAnswer('');
     setIsProcessing(false);
-    setTestSubmitted(false);
     setSubmittedAnswers([]);
     resetIndex();
     resetExercise();
@@ -132,19 +122,15 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
   const handleSubmit = () => {
     if (isProcessing || items.length === 0 || !userAnswer.trim() || resetRequired) return;
 
-    const currentItem = items[currentIndex];
+    const currentItem = items[itemIndex];
     const nextAnswers = [...submittedAnswers];
-    nextAnswers[currentIndex] = userAnswer;
+    nextAnswers[itemIndex] = userAnswer;
     setSubmittedAnswers(nextAnswers);
     setIsProcessing(true);
 
     if (testAnswerMode) {
       onAnswer?.({ type: 'generated-translation', answers: nextAnswers });
-      setTestSubmitted(true);
-      if (sectioned) {
-        if (isLastItem) onComplete?.(0);
-        else continueTest();
-      }
+      continueTest();
       return;
     }
 
@@ -158,10 +144,21 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
         )
       : null;
 
+    if (queueEnabled && !validation.isCorrect) {
+      handleIncorrect();
+      setFailures(previous => ({ ...previous, [itemIndex]: (previous[itemIndex] ?? 0) + 1 }));
+      autoAdvanceIfEnabled(() => {
+        goToItem(requeueWord(currentIndex));
+        setUserAnswer('');
+        reset();
+        setIsProcessing(false);
+      }, false);
+      return;
+    }
+
     applySequentialItemResult({
       isCorrect: validation.isCorrect,
       isLastItem,
-      assessmentMode,
       finalScore,
       handleCorrect,
       handleIncorrect,
@@ -187,22 +184,10 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
     }
     const nextAnswer = submittedAnswers[currentIndex + 1] ?? '';
     setUserAnswer(nextAnswer);
-    setTestSubmitted(Boolean(nextAnswer.trim()));
     setIsProcessing(false);
     reset();
     nextItem();
   };
-
-  if (!resolvedItems && isLoading) return <ExerciseLoadingCard />;
-
-  if (!resolvedItems && isError) {
-    return (
-      <ExerciseMessageCard
-        title="Error loading exercise"
-        message="Unable to fetch vocabulary words. Please try again later."
-      />
-    );
-  }
 
   if (items.length === 0) {
     return (
@@ -214,7 +199,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
     );
   }
 
-  const currentItem = items[currentIndex];
+  const currentItem = items[itemIndex];
   const inputPlaceholder =
     translationDirection === 'english-to-latin' ? 'Type the Latin root word...' : 'Type your answer...';
 
@@ -235,6 +220,7 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
             : submittedAnswers.filter(answer => Boolean(answer?.trim())).length
         }
         total={items.length}
+        label={queueEnabled ? 'Word' : 'Question'}
         showProgress={exercise.feedbackConfig.progressionRules?.showProgress !== false}
       />
 
@@ -252,18 +238,16 @@ const GeneratedTranslationExerciseComponent: React.FC<Props> = ({
             disabled={isProcessing || resetRequired}
           />
 
-          {testAnswerMode ? (
-            !sectioned && testSubmitted && <RecordedAnswerControls isLastItem={isLastItem} onContinue={continueTest} />
-          ) : (
+          {!testAnswerMode && (
             <FeedbackDisplay
               isCorrect={isCorrect}
-              message={assessmentMode ? '' : message}
-              level={assessmentMode ? null : level}
-              hint={assessmentMode ? undefined : currentItem.hint}
-              correctAnswer={assessmentMode ? undefined : currentItem.acceptedAnswers.join(' OR ')}
-              showExplanation={!assessmentMode && showExplanation}
-              onContinue={(isCorrect || assessmentMode) && isAwaitingConfirmation ? confirmAdvance : undefined}
-              allowContinueOnIncorrect={assessmentMode}
+              message={feedbackMessage}
+              level={feedbackLevel}
+              hint={currentItem.hint}
+              correctAnswer={currentItem.acceptedAnswers.join(' OR ')}
+              showExplanation={showExplanation}
+              onContinue={(isCorrect || queueEnabled) && isAwaitingConfirmation ? confirmAdvance : undefined}
+              allowContinueOnIncorrect={queueEnabled}
               onStartOver={resetRequired ? handleExerciseReset : undefined}
             />
           )}

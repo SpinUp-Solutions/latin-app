@@ -16,13 +16,6 @@ export const TABLE_TYPE_CONFIG: Record<TableType, string> = {
   'pronoun-adjective-declension': 'declension_table',
 };
 
-export const getTableFieldName = (tableType: TableType): string => {
-  return TABLE_TYPE_CONFIG[tableType];
-};
-
-export const capitalize = (str: string): string => {
-  return str.charAt(0).toUpperCase() + str.slice(1);
-};
 
 export const formatEnumLabel = (value: string): string => {
   if (value === '1-2') return 'First/Second';
@@ -42,5 +35,5 @@ export const formatEnumLabel = (value: string): string => {
     return numberMap[value];
   }
 
-  return capitalize(value);
+  return value.charAt(0).toUpperCase() + value.slice(1);
 };

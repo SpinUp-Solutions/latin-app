@@ -19,6 +19,17 @@ export interface UnsavedNavigationGuard {
   replaceAfterSave: (navigate: () => void) => Promise<void>;
 }
 
+/** The same-origin link a plain left click would follow to another page, if any. */
+export function interceptableLink(event: MouseEvent): HTMLAnchorElement | null {
+  if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+    return null;
+  const anchor = (event.target as HTMLElement | null)?.closest<HTMLAnchorElement>('a[href]');
+  if (!anchor || anchor.target === '_blank' || anchor.hasAttribute('download')) return null;
+  const target = new URL(anchor.href, window.location.href);
+  if (target.origin !== window.location.origin || target.href === window.location.href) return null;
+  return anchor;
+}
+
 /**
  * Protects refreshes, same-origin links, programmatic navigation, and browser
  * Back. In-app navigation is resolved through a React dialog; refresh and tab
@@ -134,19 +145,8 @@ export function useUnsavedNavigationGuard(dirty: boolean, message = DEFAULT_MESS
         bypassNextClick.current = false;
         return;
       }
-      if (
-        event.defaultPrevented ||
-        event.button !== 0 ||
-        event.metaKey ||
-        event.ctrlKey ||
-        event.shiftKey ||
-        event.altKey
-      )
-        return;
-      const anchor = (event.target as HTMLElement | null)?.closest<HTMLAnchorElement>('a[href]');
-      if (!anchor || anchor.target === '_blank' || anchor.hasAttribute('download')) return;
-      const target = new URL(anchor.href, window.location.href);
-      if (target.origin !== window.location.origin || target.href === window.location.href) return;
+      const anchor = interceptableLink(event);
+      if (!anchor) return;
       event.preventDefault();
       event.stopPropagation();
       setPending({

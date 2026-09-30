@@ -9,7 +9,7 @@ interface ExerciseCompletionRingProps {
 }
 
 /** A non-interactive, accessible summary of required exercise completion. */
-export function ExerciseCompletionRing({ completedCount, requiredCount }: ExerciseCompletionRingProps) {
+function ExerciseCompletionRing({ completedCount, requiredCount }: ExerciseCompletionRingProps) {
   const required =
     typeof requiredCount === 'number' && Number.isFinite(requiredCount) ? Math.max(0, Math.trunc(requiredCount)) : 0;
   const total = Math.max(1, required);

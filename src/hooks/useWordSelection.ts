@@ -20,8 +20,6 @@ import {
   selectPaginationCursor,
   selectFiltersExpanded,
 } from '@/src/store/selectors/vocabularyPoolSelectors';
-import { cascadeFilterUpdates } from '@/src/utils/wordFilters';
-import { shouldFetchNextSearchPage } from '@/src/lib/paginated-search';
 import type { Word } from '@/src/types/admin-vocabulary';
 import type { PoolFilters } from '@/src/types/pool-filters';
 
@@ -95,23 +93,14 @@ export const useWordSelection = () => {
   );
 
   const handleLoadMore = useCallback(() => {
-    const nextCursor = data?.lastWordId ?? null;
-    if (
-      !shouldFetchNextSearchPage({
-        hasCursor: Boolean(nextCursor),
-        isFetching,
-        searchPending,
-      })
-    ) {
-      return;
-    }
+    const nextCursor = data?.lastWordId;
+    if (!nextCursor || isFetching || searchPending) return;
     dispatch(setPaginationCursor(nextCursor));
   }, [dispatch, data?.lastWordId, isFetching, searchPending]);
 
   const handleUpdateFilters = useCallback(
     (updates: Partial<PoolFilters>) => {
-      const cleanedFilters = cascadeFilterUpdates(filters, updates);
-      dispatch(updateWordFilters(cleanedFilters));
+      dispatch(updateWordFilters({ ...filters, ...updates }));
     },
     [dispatch, filters]
   );

@@ -1,5 +1,6 @@
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
 import type { GeneratedFormIdentificationExercise, GeneratedTranslationExercise } from '@/src/types/exercises';
+import type { GeneratedExercisePreviewRequest } from './generated-preview-schema';
 import type {
   FormIdentificationItem,
   MultiAnswerFormIdentificationItem,
@@ -28,7 +29,21 @@ export type ResolvedFormIdentificationItem =
   | MultiAnswerFormIdentificationItem
   | SingleFieldFormIdentificationItem;
 
+export type ResolvedGeneratedItem = GeneratedTranslationItem | ResolvedFormIdentificationItem;
+
 export type GeneratedWordLoader = (exercise: GeneratedExercise) => Promise<ExerciseWordResponse[]>;
+export type GeneratedItemLoader = (exercise: GeneratedExercise) => Promise<ResolvedGeneratedItem[]>;
+
+/** The word request a generated exercise sends, for lesson playback and authoring previews alike. */
+export function generatedExerciseWordsRequest(exercise: GeneratedExercise): GeneratedExercisePreviewRequest {
+  return exercise.type === 'generated-translation'
+    ? {
+        type: exercise.type,
+        translationDirection: exercise.translationDirection || 'latin-to-english',
+        data: exercise.data,
+      }
+    : { type: exercise.type, data: exercise.data };
+}
 
 export function isUsableGeneratedTranslationWord(
   exercise: GeneratedTranslationExercise,
@@ -71,8 +86,7 @@ export function createGeneratedTranslationItems(
 
 export function createGeneratedFormIdentificationItems(
   exercise: GeneratedFormIdentificationExercise,
-  words: ExerciseWordResponse[],
-  previousAnswers: Record<string, Record<string, string>> = {}
+  words: ExerciseWordResponse[]
 ): ResolvedFormIdentificationItem[] {
   // A word can appear several times with different forms; each occurrence needs its own item IDs.
   const usableWords = makeWordIdsUnique(words).filter(word => getExerciseDisplayForm(word).trim().length > 0);
@@ -137,19 +151,10 @@ export function createGeneratedFormIdentificationItems(
   return usableWords.flatMap(word => {
     const paths = prepareGeneratedFormIdentificationWord(exercise, word);
     if (!paths) return [];
-    const answered = previousAnswers[word.id] || {};
 
     return paths.steps.map(step => {
-      const primary = filterPathsByPreviousAnswers(paths.primary, answered);
-      const optional = filterPathsByPreviousAnswers(paths.optional, answered);
-      const allValues = Array.from(
-        new Set([...extractStepValuesFromPaths(primary, step), ...extractStepValuesFromPaths(optional, step)])
-      );
-      const correctAnswer =
-        formatPrimaryAnswersDisplay(primary, step) ||
-        formatPrimaryAnswersDisplay(optional, step) ||
-        extractStepValue(word, step);
-      const acceptedAnswers = getAcceptedAnswersForMultipleValues(allValues);
+      const answers = stepAnswers(paths.primary, paths.optional, step);
+      const fallback = extractStepValue(word, step);
 
       return {
         id: `${word.id}-${step}`,
@@ -160,21 +165,76 @@ export function createGeneratedFormIdentificationItems(
         selected_form: word.selected_form,
         hasSelectedForm: hasSelectedForm(word),
         step,
-        correctAnswer,
-        acceptedAnswers: acceptedAnswers.length ? acceptedAnswers : getAcceptedAnswersForStep(correctAnswer),
+        ...(answers.acceptedAnswers.length
+          ? answers
+          : { correctAnswer: fallback, acceptedAnswers: getAcceptedAnswersForStep(fallback) }),
         hint: getHintForStep(word, step),
-        primaryFormPaths: primary,
-        optionalFormPaths: optional,
+        primaryFormPaths: paths.primary,
+        optionalFormPaths: paths.optional,
       };
     });
   });
 }
 
-export async function resolveGeneratedExerciseItems(exercise: GeneratedExercise, loadWords: GeneratedWordLoader) {
-  const words = await loadWords(exercise);
+/** A step's answers, taken from the form paths still consistent with the word's earlier answers. */
+function stepAnswers(
+  primary: FormIdentificationItem['primaryFormPaths'],
+  optional: FormIdentificationItem['optionalFormPaths'],
+  step: FormIdentificationItem['step']
+) {
+  return {
+    correctAnswer: formatPrimaryAnswersDisplay(primary, step) || formatPrimaryAnswersDisplay(optional, step),
+    acceptedAnswers: getAcceptedAnswersForMultipleValues([
+      ...extractStepValuesFromPaths(primary, step),
+      ...extractStepValuesFromPaths(optional, step),
+    ]),
+  };
+}
+
+/**
+ * Narrows a step to the forms consistent with the word's earlier correct answers: once "rosae" is
+ * answered as genitive, only "singular" is accepted for its number. Practice and grading share it.
+ */
+export function narrowFormIdentificationItem(
+  item: FormIdentificationItem,
+  previousAnswers: Record<string, string>
+): FormIdentificationItem {
+  // Nothing to narrow yet; test deliveries also strip the paths from their items.
+  if (Object.keys(previousAnswers).length === 0) return item;
+  const primaryFormPaths = filterPathsByPreviousAnswers(item.primaryFormPaths, previousAnswers);
+  const optionalFormPaths = filterPathsByPreviousAnswers(item.optionalFormPaths, previousAnswers);
+  const answers = stepAnswers(primaryFormPaths, optionalFormPaths, item.step);
+  // A step no remaining path answers keeps the answer it was built with.
+  return answers.acceptedAnswers.length ? { ...item, primaryFormPaths, optionalFormPaths, ...answers } : item;
+}
+
+/** The one words→items step every mode shares: lesson playback, admin previews and frozen test delivery. */
+export function createGeneratedExerciseItems(
+  exercise: GeneratedExercise,
+  words: ExerciseWordResponse[]
+): ResolvedGeneratedItem[] {
   return exercise.type === 'generated-translation'
     ? createGeneratedTranslationItems(exercise, words)
     : createGeneratedFormIdentificationItems(exercise, words);
+}
+
+export async function resolveGeneratedExerciseItems(exercise: GeneratedExercise, loadWords: GeneratedWordLoader) {
+  return createGeneratedExerciseItems(exercise, await loadWords(exercise));
+}
+
+export const isGeneratedExercise = (item: { type: string }): item is GeneratedExercise =>
+  item.type === 'generated-translation' || item.type === 'generated-form-identification';
+
+/** Resolves every generated exercise concurrently, keyed by exercise ID in authored order. */
+export async function resolveGeneratedExercises(exercises: GeneratedExercise[], loadItems: GeneratedItemLoader) {
+  const entries = await Promise.all(
+    exercises.map(async exercise => {
+      const items = await loadItems(exercise);
+      if (items.length === 0) throw new Error(`Generated exercise ${exercise.id} did not resolve any items`);
+      return [exercise.id, { items }] as const;
+    })
+  );
+  return Object.fromEntries(entries);
 }
 
 function makeWordIdsUnique(words: ExerciseWordResponse[]): ExerciseWordResponse[] {

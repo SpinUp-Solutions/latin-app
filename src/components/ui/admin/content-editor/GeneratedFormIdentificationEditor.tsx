@@ -14,6 +14,7 @@ import { MultiParadigmConfigSection } from './MultiParadigmConfigSection';
 import { useFormIdentificationEditor } from '@/src/hooks/useFormIdentificationEditor';
 import {
   extractStepValue,
+  extractStepValuesFromPaths,
   getAcceptedAnswersForStep,
   getDisplayForm,
 } from '@/src/utils/exercises/formIdentificationHelpers';
@@ -24,7 +25,7 @@ import { AlertTriangle, Loader2 } from 'lucide-react';
 import { GeneratedVocabularyFilters } from './GeneratedVocabularyFilters';
 import { GeneratedPoolSourceFields } from './GeneratedPoolSourceFields';
 import { GeneratedUniqueWordCountField } from './GeneratedUniqueWordCountField';
-import { getAppliedUniqueWordCount } from '@/src/utils/exercises/generatorConfigDefaults';
+import { DEFAULT_POS_FILTERS, getAppliedUniqueWordCount } from '@/src/utils/exercises/generatorConfigDefaults';
 import { GeneratedExerciseSummary } from './GeneratedExerciseSummary';
 import { GeneratedPreviewPanel } from './GeneratedPreviewPanel';
 
@@ -55,16 +56,7 @@ const GeneratedFormIdentificationEditorView: React.FC<{
   };
 
   const handleResetFilters = () => {
-    editor.handleGlobalFiltersChange({
-      partOfSpeech: 'all',
-      search: '',
-      verbConjugation: 'all',
-      isDeponent: 'both',
-      nounDeclension: 'all',
-      adjectiveDeclension: 'all',
-      pronounType: 'all',
-      pronounPerson: 'all',
-    });
+    editor.handleGlobalFiltersChange({ partOfSpeech: 'all', ...DEFAULT_POS_FILTERS });
   };
 
   const filtersContent = (
@@ -189,6 +181,23 @@ const GeneratedFormIdentificationEditorView: React.FC<{
         />
       </div>
 
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="retryIncorrectAnswers"
+            checked={editingContent.data.retryIncorrectAnswers ?? true}
+            onCheckedChange={checked =>
+              editor.updateContent({ data: { ...editingContent.data, retryIncorrectAnswers: checked === true } })
+            }
+          />
+          <Label htmlFor="retryIncorrectAnswers">Repeat incorrect words until correct</Label>
+        </div>
+        <p className="text-sm text-gray-500">
+          Practice only. Incorrect words return at the end of the queue, using the existing auto-advance setting and
+          delay. The reset-after-mistakes setting is ignored while this is enabled. Tests are unchanged.
+        </p>
+      </div>
+
       <WordSourceSection
         value={editor.config.wordSource}
         onChange={value => editor.updateConfig({ wordSource: value })}
@@ -287,16 +296,9 @@ const GeneratedFormIdentificationEditorView: React.FC<{
                       </>
                     ) : (
                       wordSteps.map(step => {
-                        const primaryValues = (prepared?.primary ?? [])
-                          .map(path => path[step])
-                          .filter((value): value is string => Boolean(value));
-                        const optionalValues = (prepared?.optional ?? [])
-                          .map(path => path[step])
-                          .filter((value): value is string => Boolean(value));
-
-                        const uniquePrimaryValues = Array.from(new Set(primaryValues));
-                        const uniqueOptionalValues = Array.from(
-                          new Set(optionalValues.filter(value => !uniquePrimaryValues.includes(value)))
+                        const uniquePrimaryValues = extractStepValuesFromPaths(prepared?.primary ?? [], step);
+                        const uniqueOptionalValues = extractStepValuesFromPaths(prepared?.optional ?? [], step).filter(
+                          value => !uniquePrimaryValues.includes(value)
                         );
 
                         const displayValue =

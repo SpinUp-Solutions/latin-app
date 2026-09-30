@@ -1,10 +1,10 @@
 import { Mark, mergeAttributes } from '@tiptap/core';
 
-export interface HyperlinkOptions {
+interface HyperlinkOptions {
   HTMLAttributes: Record<string, unknown>;
 }
 
-export interface HyperlinkAttrs {
+interface HyperlinkAttrs {
   href: string;
   target?: string;
 }
@@ -13,7 +13,6 @@ declare module '@tiptap/core' {
   interface Commands<ReturnType> {
     hyperlink: {
       setHyperlink: (attributes: HyperlinkAttrs) => ReturnType;
-      toggleHyperlink: (attributes: HyperlinkAttrs) => ReturnType;
       unsetHyperlink: () => ReturnType;
     };
   }
@@ -64,11 +63,6 @@ export const Hyperlink = Mark.create<HyperlinkOptions>({
         (attributes: HyperlinkAttrs) =>
         ({ commands }) => {
           return commands.setMark(this.name, attributes);
-        },
-      toggleHyperlink:
-        (attributes: HyperlinkAttrs) =>
-        ({ commands }) => {
-          return commands.toggleMark(this.name, attributes);
         },
       unsetHyperlink:
         () =>

@@ -19,7 +19,7 @@ let mockVersionEditorProps:
   | undefined;
 
 jest.mock('@/src/components/auth/withAdminAuth', () => ({ withAdminAuth: (Component: unknown) => Component }));
-jest.mock('@/src/components/ui/admin', () => ({
+jest.mock('@/src/components/ui/admin/TestVersionEditor', () => ({
   TestVersionEditor: (props: {
     creationScope?: string;
     defaultVersionName?: string;

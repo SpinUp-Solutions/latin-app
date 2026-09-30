@@ -236,11 +236,6 @@ const TRANSLATION_GRADING_TASKS = {
 export const getTranslationGradingTask = <M extends TranslationGradingMode>(mode: M): TranslationGradingTask<M> =>
   TRANSLATION_GRADING_TASKS[mode] as TranslationGradingTask<M>;
 
-export const parseTranslationGradingOutput = <M extends TranslationGradingMode>(
-  mode: M,
-  value: unknown
-): TranslationGradingOutputByMode[M] => getTranslationGradingTask(mode).parse(value);
-
 /** One Zod source of truth for both provider validation and JSON Schema. */
 const taskSchemaCache = new WeakMap<object, Record<string, unknown>>();
 

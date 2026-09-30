@@ -18,8 +18,6 @@ import type { GeneratedExercisePreviewDiagnostics } from './generated-preview-sc
 import { isUsableGeneratedTranslationWord, type GeneratedExercise } from './generated-exercises';
 import { GeneratedVocabularySourceError } from './errors';
 
-export { GeneratedVocabularySourceError } from './errors';
-
 export const PER_SPEC_SCAN_FLOOR = 400;
 const BASE_GLOBAL_SCAN = 2000;
 const SCAN_MULTIPLIER = 2;
@@ -202,7 +200,7 @@ function selectForm(word: Record<string, unknown>, spec: WordQuerySpec, formRng:
   if (!candidates.length) return null;
 
   const selected = candidates[Math.floor(formRng() * candidates.length)];
-  const matchingPaths = scanTableForMatchingForms(available.table, selected.form, available.tableType);
+  const matchingPaths = scanTableForMatchingForms(available.table, selected.form);
   const paths = categorizeMatchingPaths(matchingPaths, available.compatiblePaths);
   if (!paths.primaryPaths.includes(selected.path)) paths.primaryPaths.unshift(selected.path);
   return { selected, ...paths };
@@ -642,44 +640,30 @@ export async function collectGeneratedExerciseWords(options: {
   const initialBudget = budget.remaining;
 
   const streams: CandidateStream[] = specs.map((spec, index) => {
-    const share = unbounded ? 0 : shares[index];
-    const ceiling = unbounded ? Number.POSITIVE_INFINITY : perSpecScanCeiling(share);
     if (poolIds && loadPoolDocs) {
       return new PoolCandidateStream(spec, poolIds, loadPoolDocs);
     }
+    const ceiling = unbounded ? Number.POSITIVE_INFINITY : perSpecScanCeiling(shares[index]);
     return new QueryCandidateStream(spec, ceiling, options.db, options.collection, queryRng, unbounded);
   });
 
-  const collected: AcceptedWord[][] = streams.map(() => []);
+  // Unbounded shares are infinite and never use the deficit or the unique-word set.
+  const collected: AcceptedWord[][] = [];
+  for (let index = 0; index < streams.length; index += 1) {
+    collected[index] = await takeEligible(
+      streams[index],
+      shares[index],
+      options.exercise,
+      formRng,
+      paradigmConfigs,
+      budget,
+      shares[index],
+      unbounded,
+      acceptedIds
+    );
+  }
 
-  if (unbounded) {
-    for (let index = 0; index < streams.length; index += 1) {
-      collected[index] = await takeEligible(
-        streams[index],
-        Number.POSITIVE_INFINITY,
-        options.exercise,
-        formRng,
-        paradigmConfigs,
-        budget,
-        1,
-        true
-      );
-    }
-  } else {
-    for (let index = 0; index < streams.length; index += 1) {
-      collected[index] = await takeEligible(
-        streams[index],
-        shares[index],
-        options.exercise,
-        formRng,
-        paradigmConfigs,
-        budget,
-        shares[index],
-        false,
-        acceptedIds
-      );
-    }
-
+  if (!unbounded) {
     let total = collected.reduce((sum, words) => sum + words.length, 0);
     const hasCapacity = (stream: CandidateStream) =>
       stream.unread.length > 0 || canStreamContinue(stream, budget.remaining);

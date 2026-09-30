@@ -33,7 +33,7 @@ export interface FeedbackFields {
   comments: string;
 }
 
-export type FeedbackFieldErrors = Partial<Record<keyof FeedbackFields, string>>;
+type FeedbackFieldErrors = Partial<Record<keyof FeedbackFields, string>>;
 
 const EMPTY_FIELDS: FeedbackFields = {
   type: null,

@@ -10,17 +10,12 @@ import { compareDiagramAnnotationSets } from '@/src/features/sentence-diagrammin
 import { validateGeneratedTranslationExercise } from '@/src/utils/exercises/generatedTranslationExercise';
 import {
   scoreSingleFieldFormIdentificationAnswer,
-  normalize,
   validateGeneratedFormIdentificationExercise,
   validateMultiAnswerStep,
   validatePartialMultiAnswerPaths,
 } from '@/src/utils/exercises/generatedFormIdentificationExercise';
-import { getAcceptedAnswersForStep } from '@/src/utils/exercises/formIdentificationHelpers';
 import { validateMultipleChoiceExercise } from '@/src/utils/exercises/multipleChoiceExercise';
-import {
-  getSelectableMatchingAnswers,
-  validateMatchingExercise,
-} from '@/src/utils/exercises/matchingExercise';
+import { getSelectableMatchingAnswers, validateMatchingExercise } from '@/src/utils/exercises/matchingExercise';
 import { validateFillExercise } from '@/src/utils/exercises/fillExercise';
 import { validateOddOneOutExercise } from '@/src/utils/exercises/oddOneOutExercise';
 import { validateTextSelectionExercise } from '@/src/utils/exercises/textSelectionExercise';
@@ -28,13 +23,12 @@ import { validateFillEmboldedTextExercise } from '@/src/utils/exercises/fillEmbo
 import { validateTableFillExercise } from '@/src/utils/exercises/tableFillExercise';
 import { validateClickOnMultipleWords } from '@/src/utils/exercises/clickOnMultipleWords';
 import type { TestEligibleExerciseType } from '@/src/lib/content/registry';
-import { isAnswerForExercise, parseExerciseAnswer } from './answer-schemas';
-
-export type ResolvedGeneratedItem =
-  | GeneratedTranslationItem
-  | FormIdentificationItem
-  | MultiAnswerFormIdentificationItem
-  | SingleFieldFormIdentificationItem;
+import { parseExerciseAnswer } from './answer-schemas';
+import {
+  narrowFormIdentificationItem,
+  type ResolvedFormIdentificationItem,
+  type ResolvedGeneratedItem,
+} from './generated-exercises';
 
 export interface ExerciseGradingInput {
   exercise: Exercise;
@@ -46,7 +40,7 @@ export interface ExerciseScore {
   maxPoints: number;
 }
 
-type ExerciseOfType<T extends TestEligibleExerciseType> = Extract<Exercise, { type: T }>;
+export type ExerciseOfType<T extends TestEligibleExerciseType> = Extract<Exercise, { type: T }>;
 type AnswerOfType<T extends ExerciseAnswer['type']> = Extract<ExerciseAnswer, { type: T }>;
 
 const scoreFraction = (correct: number, total: number, maxPoints: number): ExerciseScore => ({
@@ -202,29 +196,28 @@ export function gradeTranslationAssessment(
 const isSingleFieldItem = (item: ResolvedGeneratedItem): item is SingleFieldFormIdentificationItem =>
   'steps' in item && !('step' in item) && 'correctAnswerDisplay' in item;
 
-const isMultiAnswerItem = (item: ResolvedGeneratedItem): item is MultiAnswerFormIdentificationItem =>
+export const isMultiAnswerItem = (item: ResolvedGeneratedItem): item is MultiAnswerFormIdentificationItem =>
   'stepIndex' in item && 'expectedAnswerCount' in item;
 
-const isStepItem = (item: ResolvedGeneratedItem): item is FormIdentificationItem =>
+export const isStepItem = (item: ResolvedGeneratedItem): item is FormIdentificationItem =>
   'step' in item && 'acceptedAnswers' in item;
 
-export function gradeGeneratedFormIdentification(
+type FormItemUnits = [itemId: string, units: { earnedUnits: number; availableUnits: number }];
+
+/** Per-item scoring units, shared by grading and the submitted review so they cannot disagree. */
+export function scoreGeneratedFormIdentificationItems(
   exercise: ExerciseOfType<'generated-form-identification'>,
-  answer: AnswerOfType<'generated-form-identification'>,
-  resolvedItems: Array<FormIdentificationItem | MultiAnswerFormIdentificationItem | SingleFieldFormIdentificationItem>,
-  maxPoints = maxPointsFor(exercise)
-): ExerciseScore {
-  let correctUnits = 0;
-  let totalUnits = 0;
+  answers: Record<string, string>,
+  resolvedItems: ResolvedFormIdentificationItem[]
+): FormItemUnits[] {
+  const scores: FormItemUnits[] = [];
 
   if (exercise.data.mode === 'single-field') {
     for (const item of resolvedItems) {
       if (!isSingleFieldItem(item)) continue;
-      const result = scoreSingleFieldFormIdentificationAnswer(answer.answers[item.id] ?? '', item);
-      correctUnits += result.earnedUnits;
-      totalUnits += result.availableUnits;
+      scores.push([item.id, scoreSingleFieldFormIdentificationAnswer(answers[item.id] ?? '', item)]);
     }
-    return scoreFraction(correctUnits, totalUnits, maxPoints);
+    return scores;
   }
 
   if (exercise.data.requireAllPrimaryAnswers) {
@@ -238,20 +231,23 @@ export function gradeGeneratedFormIdentification(
       const ordered = [...items].sort((a, b) => a.stepIndex - b.stepIndex);
       const slots: string[][] = [];
       for (const item of ordered) {
-        totalUnits += 1;
-        const step = validateMultiAnswerStep(answer.answers[item.id] ?? '', item);
-        if (!step.isCorrect) continue;
-        slots[item.stepIndex] = step.answerSlots;
-        const completedItems = ordered.slice(0, item.stepIndex + 1);
-        if (completedItems.some(entry => !slots[entry.stepIndex])) continue;
-        const completedSlots = completedItems.map(entry => slots[entry.stepIndex]!);
-        const completedSteps = completedItems.map(entry => entry.step);
-        if (validatePartialMultiAnswerPaths(completedSlots, completedSteps, item.primaryFormPaths).isCorrect) {
-          correctUnits += 1;
+        let earnedUnits = 0;
+        const step = validateMultiAnswerStep(answers[item.id] ?? '', item);
+        if (step.isCorrect) {
+          slots[item.stepIndex] = step.answerSlots;
+          const completedItems = ordered.slice(0, item.stepIndex + 1);
+          if (completedItems.every(entry => slots[entry.stepIndex])) {
+            const completedSlots = completedItems.map(entry => slots[entry.stepIndex]!);
+            const completedSteps = completedItems.map(entry => entry.step);
+            if (validatePartialMultiAnswerPaths(completedSlots, completedSteps, item.primaryFormPaths).isCorrect) {
+              earnedUnits = 1;
+            }
+          }
         }
+        scores.push([item.id, { earnedUnits, availableUnits: 1 }]);
       }
     }
-    return scoreFraction(correctUnits, totalUnits, maxPoints);
+    return scores;
   }
 
   const groups = new Map<string, FormIdentificationItem[]>();
@@ -261,37 +257,37 @@ export function gradeGeneratedFormIdentification(
   }
 
   for (const items of groups.values()) {
-    const firstItem = items[0];
-    let compatiblePaths = [...firstItem.primaryFormPaths, ...firstItem.optionalFormPaths];
-
+    const previousAnswers: Record<string, string> = {};
     for (const item of items) {
-      totalUnits += 1;
-      const submitted = normalize(answer.answers[item.id] ?? '');
-      const pathsForStep = compatiblePaths.filter(path => Boolean(path[item.step]));
-      if (pathsForStep.length === 0) {
-        if (validateGeneratedFormIdentificationExercise(answer.answers[item.id] ?? '', item).isCorrect) {
-          correctUnits += 1;
-        }
-        continue;
-      }
-
-      const matchingPaths = pathsForStep.filter(path => {
-        const expected = path[item.step];
-        return expected ? getAcceptedAnswersForStep(expected).map(normalize).includes(submitted) : false;
-      });
-
-      if (matchingPaths.length > 0) {
-        correctUnits += 1;
-        compatiblePaths = matchingPaths;
-      }
+      const answer = answers[item.id] ?? '';
+      const isCorrect = validateGeneratedFormIdentificationExercise(
+        answer,
+        narrowFormIdentificationItem(item, previousAnswers)
+      ).isCorrect;
+      if (isCorrect) previousAnswers[item.step] = answer;
+      scores.push([item.id, { earnedUnits: isCorrect ? 1 : 0, availableUnits: 1 }]);
     }
   }
-  return scoreFraction(correctUnits, totalUnits, maxPoints);
+  return scores;
 }
 
-function gradeExerciseAtPoints(input: ExerciseGradingInput, rawAnswer: unknown, maxPoints?: number): ExerciseScore {
+export function gradeGeneratedFormIdentification(
+  exercise: ExerciseOfType<'generated-form-identification'>,
+  answer: AnswerOfType<'generated-form-identification'>,
+  resolvedItems: ResolvedFormIdentificationItem[],
+  maxPoints = maxPointsFor(exercise)
+): ExerciseScore {
+  const scores = scoreGeneratedFormIdentificationItems(exercise, answer.answers, resolvedItems);
+  return scoreFraction(
+    scores.reduce((total, [, units]) => total + units.earnedUnits, 0),
+    scores.reduce((total, [, units]) => total + units.availableUnits, 0),
+    maxPoints
+  );
+}
+
+export function gradeExercise(input: ExerciseGradingInput, rawAnswer: unknown, maxPoints?: number): ExerciseScore {
   const answer = parseExerciseAnswer(rawAnswer);
-  if (!isAnswerForExercise(answer, input.exercise.type)) {
+  if (answer.type !== input.exercise.type) {
     throw new Error(`Answer type ${answer.type} does not match exercise type ${input.exercise.type}`);
   }
 
@@ -326,9 +322,7 @@ function gradeExerciseAtPoints(input: ExerciseGradingInput, rawAnswer: unknown, 
       return gradeGeneratedFormIdentification(
         exercise,
         answer as AnswerOfType<'generated-form-identification'>,
-        (input.resolvedItems ?? []) as Array<
-          FormIdentificationItem | MultiAnswerFormIdentificationItem | SingleFieldFormIdentificationItem
-        >,
+        (input.resolvedItems ?? []) as ResolvedFormIdentificationItem[],
         maxPoints
       );
     case 'translation-grading':
@@ -338,11 +332,7 @@ function gradeExerciseAtPoints(input: ExerciseGradingInput, rawAnswer: unknown, 
   }
 }
 
-export function gradeExercise(input: ExerciseGradingInput, rawAnswer: unknown): ExerciseScore {
-  return gradeExerciseAtPoints(input, rawAnswer);
-}
-
 /** Uses the same grading path as server scoring without requiring lesson content to define maxPoints. */
 export function gradeExercisePercentage(input: ExerciseGradingInput, rawAnswer: unknown): number {
-  return gradeExerciseAtPoints(input, rawAnswer, 100).awardedPoints;
+  return gradeExercise(input, rawAnswer, 100).awardedPoints;
 }

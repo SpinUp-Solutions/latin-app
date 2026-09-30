@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { LEARNING_UNITS_COLLECTION } from '@/shared/constants/firestore';
 import { adminDb } from '@/src/services/firebase-admin';
 import { Lesson } from '@/src/types/lesson';
 import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
-import { verifyAdminAccess } from '../../../../lib/verifyAdminAccess';
-import { getLessonContentCounts, toLessonSummary } from '@/src/utils/lessonSummary';
+import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { getLessonContentCounts, LESSON_SUMMARY_FIELDS, toLessonSummary } from '@/src/utils/lessonSummary';
 import { validateLessonProgression } from '@/src/utils/lessonProgress';
 import {
   optionalPracticeCategoryIdsSchema,
@@ -19,36 +20,11 @@ import { lessonAuthoringInputSchema, lessonUnitDocumentSchema } from '@/src/lib/
 import { assertVocabularyPoolAssignmentsAllowedInTransaction } from '@/src/lib/vocabulary-pools/assignment.server';
 import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
 
-const LESSON_SUMMARY_FIELDS = [
-  'title',
-  'kind',
-  'description',
-  'type',
-  'vocabulary_pool',
-  'showWordSearch',
-  'isLive',
-  'liveOrder',
-  'publishedAt',
-  'publishedBy',
-  'createdAt',
-  'createdBy',
-  'updatedAt',
-  'updatedBy',
-  'version',
-  'totalPages',
-  'totalItems',
-  'totalExercises',
-];
-
 export async function GET(request: NextRequest) {
   try {
-    const user = await verifyAdminAccess(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
+    await verifyAdminAccess(request);
     const snapshot = await adminDb
-      .collection('lessons')
+      .collection(LEARNING_UNITS_COLLECTION)
       .orderBy('updatedAt', 'desc')
       .select(...LESSON_SUMMARY_FIELDS)
       .get();
@@ -97,9 +73,6 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const user = await verifyAdminAccess(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
 
     const rawLesson = await request.json();
     if (!isLessonDocumentData(rawLesson)) {
@@ -134,7 +107,7 @@ export async function POST(request: NextRequest) {
       publishedBy: null,
     });
 
-    const lessonRef = adminDb.collection('lessons').doc(lesson.id);
+    const lessonRef = adminDb.collection(LEARNING_UNITS_COLLECTION).doc(lesson.id);
     const assignments = await runVocabularyContentMutation(adminDb, async transaction => {
       const existingLesson = await transaction.get(lessonRef);
       if (existingLesson.exists) {
@@ -172,7 +145,6 @@ export async function POST(request: NextRequest) {
       message: 'Lesson created successfully',
     });
   } catch (error) {
-    console.error('Error creating lesson:', error);
     return practiceCategoryRouteErrorResponse(error, 'create lesson');
   }
 }
@@ -180,9 +152,6 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const user = await verifyAdminAccess(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
 
     const rawLesson = await request.json();
     if (!isLessonDocumentData(rawLesson)) {
@@ -198,7 +167,7 @@ export async function PUT(request: NextRequest) {
     const lesson = lessonAuthoringInputSchema.parse(rawLesson);
 
     const { totalPages, totalItems, totalExercises } = getLessonContentCounts(lesson);
-    const lessonRef = adminDb.collection('lessons').doc(lesson.id);
+    const lessonRef = adminDb.collection(LEARNING_UNITS_COLLECTION).doc(lesson.id);
     const result = await runVocabularyContentMutation(adminDb, async transaction => {
       const existingLessonDoc = await transaction.get(lessonRef);
       if (!existingLessonDoc.exists) {
@@ -218,10 +187,10 @@ export async function PUT(request: NextRequest) {
       });
       await assertPlacedLessonReplacementAllowedInTransaction(transaction, adminDb, lesson.id, {
         type: lesson.type,
-        pages: lesson.pages || [],
+        pages: lesson.pages,
       });
       if (existingLesson?.isLive) {
-        const progressionErrors = validateLessonProgression({ pages: lesson.pages || [] });
+        const progressionErrors = validateLessonProgression(lesson);
         if (progressionErrors.length > 0) {
           return { progressionErrors } as const;
         }
@@ -285,7 +254,6 @@ export async function PUT(request: NextRequest) {
       message: 'Lesson updated successfully',
     });
   } catch (error) {
-    console.error('Error updating lesson:', error);
     return practiceCategoryRouteErrorResponse(error, 'update lesson');
   }
 }

@@ -61,9 +61,9 @@ Always provide a notes field explaining your analysis:
 - Mention any uncertainties or variations in classical usage
 - Keep notes concise but informative (2-4 sentences maximum)`;
 
-export const NOUN_PROMPT = `Analyze the Latin noun "{word}". Provide complete information including nominative_singular and genitive_singular with both full and shortened forms.`;
+const NOUN_PROMPT = `Analyze the Latin noun "{word}". Provide complete information including nominative_singular and genitive_singular with both full and shortened forms.`;
 
-export const VERB_PROMPT = `Analyze the Latin verb "{word}". Provide COMPLETE conjugation information:
+const VERB_PROMPT = `Analyze the Latin verb "{word}". Provide COMPLETE conjugation information:
 
 PRINCIPAL PARTS - CRITICAL RULES:
 1. MUST provide exactly 4 parts
@@ -100,11 +100,11 @@ ALSO INCLUDE:
 - Both supine forms (accusative and ablative)
 - Complete conjugation tables for all moods, tenses, voices, persons, and numbers`;
 
-export const ADJECTIVE_PROMPT = `Analyze the Latin adjective "{word}". Provide complete information.`;
+const ADJECTIVE_PROMPT = `Analyze the Latin adjective "{word}". Provide complete information.`;
 
-export const PRONOUN_PROMPT = `Analyze the Latin pronoun "{word}". Provide complete information.`;
+const PRONOUN_PROMPT = `Analyze the Latin pronoun "{word}". Provide complete information.`;
 
-export const INDECLINABLE_PROMPT = `Analyze the Latin {partOfSpeech} "{word}". Provide complete information.`;
+const INDECLINABLE_PROMPT = `Analyze the Latin {partOfSpeech} "{word}". Provide complete information.`;
 
 export function getPromptForPartOfSpeech(partOfSpeech: PartOfSpeech, word: string): string {
   switch (partOfSpeech) {

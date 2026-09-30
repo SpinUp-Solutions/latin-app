@@ -13,7 +13,9 @@ const versionEditor = jest.fn((_props: unknown) => <div>Version editor</div>);
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
 jest.mock('sonner', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
 jest.mock('@/src/components/auth/withAdminAuth', () => ({ withAdminAuth: (Component: unknown) => Component }));
-jest.mock('@/src/components/ui/admin', () => ({ TestVersionEditor: (props: unknown) => versionEditor(props) }));
+jest.mock('@/src/components/ui/admin/TestVersionEditor', () => ({
+  TestVersionEditor: (props: unknown) => versionEditor(props),
+}));
 jest.mock('@/src/components/ui/admin/test-version/TestVersionPreview', () => ({
   TestVersionPreview: () => <div>Version preview</div>,
 }));

@@ -81,5 +81,3 @@ export const RichTextSelect: React.FC<RichTextSelectProps> = ({
     </div>
   );
 };
-
-export default RichTextSelect;

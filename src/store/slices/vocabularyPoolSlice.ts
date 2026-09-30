@@ -17,7 +17,6 @@ interface VocabularyPoolState {
     sortBy: 'name' | 'createdAt' | 'wordCount';
     sortOrder: 'asc' | 'desc';
   };
-  wordSearchQuery: string;
   wordFilters: PoolFilters;
   wordSelection: WordSelectionState;
   ui: {
@@ -34,7 +33,6 @@ const initialState: VocabularyPoolState = {
     sortBy: 'createdAt',
     sortOrder: 'desc',
   },
-  wordSearchQuery: '',
   wordFilters: {
     partOfSpeech: 'all',
     search: '',
@@ -61,14 +59,6 @@ const vocabularyPoolSlice = createSlice({
   reducers: {
     updateFilters: (state, action: PayloadAction<Partial<VocabularyPoolState['filters']>>) => {
       state.filters = { ...state.filters, ...action.payload };
-    },
-    setWordSearchQuery: (state, action: PayloadAction<string>) => {
-      state.wordSearchQuery = action.payload;
-    },
-    resetFilters: state => {
-      state.filters = initialState.filters;
-      state.wordSearchQuery = initialState.wordSearchQuery;
-      state.wordFilters = initialState.wordFilters;
     },
 
     addWord: (state, action: PayloadAction<Word>) => {
@@ -129,8 +119,6 @@ const vocabularyPoolSlice = createSlice({
 
 export const {
   updateFilters,
-  setWordSearchQuery,
-  resetFilters,
   addWord,
   addWords,
   removeWord,

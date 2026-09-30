@@ -89,7 +89,6 @@ export function parseMockSnapshot(snapshot: DocumentSnapshot): MockTest {
 
   const parsed = mockTestDocumentSchema.safeParse({ ...snapshot.data(), id: snapshot.id });
   if (!parsed.success) {
-    console.error(`Mock test ${snapshot.id} contains invalid persisted data`, parsed.error.flatten());
     throw configurationError(`Mock test ${snapshot.id} contains invalid persisted data`, parsed.error.flatten());
   }
   return parsed.data as MockTest;
@@ -137,18 +136,21 @@ export function assertVersionReadyForStudentVisibility(version: TestVersion): Te
   return version;
 }
 
-export async function getVersionSummaries(db: Firestore, versionIds: readonly string[]): Promise<TestVersionSummary[]> {
-  if (versionIds.length === 0) return [];
-
+async function getVersionSummarySnapshots(db: Firestore, versionIds: readonly string[]) {
   const versions = db.collection(TEST_VERSIONS_COLLECTION);
   const snapshots = await Promise.all(
     chunk([...new Set(versionIds)], 100).map(ids =>
       db.getAll(...ids.map(id => versions.doc(id)), { fieldMask: [...TEST_VERSION_SUMMARY_FIELDS] })
     )
   );
-  const byId = new Map(
-    snapshots.flatMap(documents => documents.map(document => [document.id, parseVersionSummarySnapshot(document)]))
-  );
+  return snapshots.flat();
+}
+
+export async function getVersionSummaries(db: Firestore, versionIds: readonly string[]): Promise<TestVersionSummary[]> {
+  if (versionIds.length === 0) return [];
+
+  const snapshots = await getVersionSummarySnapshots(db, versionIds);
+  const byId = new Map(snapshots.map(document => [document.id, parseVersionSummarySnapshot(document)]));
 
   return versionIds.map(versionId => {
     const version = byId.get(versionId);
@@ -173,13 +175,7 @@ export async function getVersionSummariesById(
   const summariesById = new Map<string, TestVersionSummary>();
   if (versionIds.length === 0) return summariesById;
 
-  const versions = db.collection(TEST_VERSIONS_COLLECTION);
-  const snapshots = await Promise.all(
-    chunk([...new Set(versionIds)], 100).map(ids =>
-      db.getAll(...ids.map(id => versions.doc(id)), { fieldMask: [...TEST_VERSION_SUMMARY_FIELDS] })
-    )
-  );
-  for (const document of snapshots.flat()) {
+  for (const document of await getVersionSummarySnapshots(db, versionIds)) {
     try {
       summariesById.set(document.id, parseVersionSummarySnapshot(document));
     } catch (error) {

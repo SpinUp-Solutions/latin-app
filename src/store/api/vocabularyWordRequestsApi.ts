@@ -16,7 +16,7 @@ interface ApiResponse<T> {
 export const vocabularyWordRequestsApi = createApi({
   reducerPath: 'vocabularyWordRequestsApi',
   baseQuery: createAuthenticatedBaseQuery(),
-  tagTypes: ['VocabularyWordRequest', 'VocabularyWordRequestList', 'WordList'],
+  tagTypes: ['VocabularyWordRequest', 'VocabularyWordRequestList'],
   endpoints: builder => ({
     getVocabularyWordRequests: builder.query<VocabularyWordRequest[], { status?: VocabularyWordRequestStatus }>({
       query: ({ status = 'pending' } = {}) => `/admin/vocabulary-word-requests?status=${status}`,
@@ -75,7 +75,6 @@ export const vocabularyWordRequestsApi = createApi({
       invalidatesTags: (result, error, id) => [
         { type: 'VocabularyWordRequest', id },
         { type: 'VocabularyWordRequestList', id: 'LIST' },
-        { type: 'WordList', id: 'LIST' },
       ],
     }),
 

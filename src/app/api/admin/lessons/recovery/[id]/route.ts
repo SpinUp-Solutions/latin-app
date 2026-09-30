@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { LEARNING_UNITS_COLLECTION } from '@/shared/constants/firestore';
 import { adminDb } from '@/src/services/firebase-admin';
 import { Lesson } from '@/src/types/lesson';
 import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
-import { verifyAdminAccess } from '../../../../../../lib/verifyAdminAccess';
+import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import { getLessonContentCounts } from '@/src/utils/lessonSummary';
 import {
   optionalPracticeCategoryIdsSchema,
@@ -27,8 +28,7 @@ interface RouteParams {
 class RecoveryRouteError extends Error {
   constructor(
     message: string,
-    public readonly status: 400 | 403 | 404 | 409,
-    public readonly details?: Record<string, unknown>
+    public readonly status: 400 | 403 | 404 | 409
   ) {
     super(message);
     this.name = 'RecoveryRouteError';
@@ -39,12 +39,8 @@ class RecoveryRouteError extends Error {
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const user = await verifyAdminAccess(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
 
-    const { id } = await params;
-    const recoveryId = id;
+    const { id: recoveryId } = await params;
     const recoveryRef = adminDb.collection('lesson_recovery').doc(recoveryId);
     const result = await runVocabularyContentMutation(adminDb, async transaction => {
       const recoveryDoc = await transaction.get(recoveryRef);
@@ -77,7 +73,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         rawLesson.practiceCategoryIds ?? fallbackCategoryIds
       );
       const lesson = lessonAuthoringInputSchema.parse(rawLesson);
-      const lessonRef = adminDb.collection('lessons').doc(lesson.id);
+      const lessonRef = adminDb.collection(LEARNING_UNITS_COLLECTION).doc(lesson.id);
       const existingLessonDoc = await transaction.get(lessonRef);
       const lessonExists = existingLessonDoc.exists;
       const existingLesson = existingLessonDoc.data();
@@ -86,18 +82,18 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
       const { totalPages, totalItems, totalExercises } = getLessonContentCounts(lesson);
       const now = new Date().toISOString();
-      const lessonData = lessonUnitDocumentSchema.parse(
-        lessonExists
+      const lessonData = lessonUnitDocumentSchema.parse({
+        ...lesson,
+        kind: 'lesson' as const,
+        totalPages,
+        totalItems,
+        totalExercises,
+        updatedAt: now,
+        updatedBy: user.uid,
+        ...(lessonExists
           ? {
-              ...lesson,
-              kind: 'lesson' as const,
-              totalPages,
-              totalItems,
-              totalExercises,
               createdAt: existingLesson?.createdAt || now,
               createdBy: existingLesson?.createdBy || user.uid,
-              updatedAt: now,
-              updatedBy: user.uid,
               version: (existingLesson?.version || 0) + 1,
               showWordSearch:
                 rawLesson.showWordSearch ??
@@ -108,23 +104,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
               publishedBy: existingLesson?.publishedBy || null,
             }
           : {
-              ...lesson,
-              kind: 'lesson' as const,
-              totalPages,
-              totalItems,
-              totalExercises,
               createdAt: now,
               createdBy: user.uid,
-              updatedAt: now,
-              updatedBy: user.uid,
               version: 1,
               showWordSearch: rawLesson.showWordSearch ?? false,
               isLive: false,
               liveOrder: null,
               publishedAt: null,
               publishedBy: null,
-            }
-      );
+            }),
+      });
 
       await assertLegacyNormalPlacementChangeAllowedInTransaction(
         transaction,
@@ -134,7 +123,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
       await assertPlacedLessonReplacementAllowedInTransaction(transaction, adminDb, lesson.id, {
         type: lessonData.type,
-        pages: lessonData.pages || [],
+        pages: lessonData.pages,
       });
       const applyVocabularyPoolAssignmentRevisions = await assertVocabularyPoolAssignmentsAllowedInTransaction(
         transaction,
@@ -158,10 +147,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const lesson = result.lessonData;
     console.log(
-      `[RECOVERY] ${result.lessonExists ? 'Updated' : 'Created'} lesson "${lesson.title}" (${lesson.id}) from recovery`
+      `[RECOVERY] ${result.lessonExists ? 'Updated' : 'Created'} lesson "${lesson.title}" (${lesson.id}) from recovery by user ${user.uid}`
     );
-
-    console.log(`[RECOVERY] Successfully recovered lesson "${lesson.title}" (${lesson.id}) by user ${user.uid}`);
 
     return NextResponse.json({
       success: true,
@@ -177,7 +164,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     });
   } catch (error) {
     if (error instanceof RecoveryRouteError) {
-      return NextResponse.json({ error: error.message, ...error.details }, { status: error.status });
+      return NextResponse.json({ error: error.message }, { status: error.status });
     }
     return practiceCategoryRouteErrorResponse(error, 'retry lesson from recovery');
   }
@@ -187,14 +174,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const user = await verifyAdminAccess(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
 
-    const { id } = await params;
-    const recoveryId = id;
+    const { id: recoveryId } = await params;
 
-    // Get recovery item to verify ownership
     const recoveryDoc = await adminDb.collection('lesson_recovery').doc(recoveryId).get();
     if (!recoveryDoc.exists) {
       return NextResponse.json({ error: 'Recovery item not found' }, { status: 404 });
@@ -205,7 +187,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Mark as discarded instead of deleting (for audit trail)
+    // Discarded rather than deleted to keep an audit trail.
     await adminDb.collection('lesson_recovery').doc(recoveryId).update({
       status: 'discarded',
       discardedAt: new Date().toISOString(),

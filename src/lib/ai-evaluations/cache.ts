@@ -1,13 +1,13 @@
 import type { Firestore } from 'firebase-admin/firestore';
 import { Timestamp } from 'firebase-admin/firestore';
-import { isValidTokenUsage, parseOpenAIUsage } from '../../../shared/openai/model-registry';
+import { isValidTokenUsage } from '../../../shared/openai/model-registry';
 import type { CostBreakdown, TokenUsage } from '../../../shared/openai/types';
 import {
-  parseTranslationGradingOutput,
+  getTranslationGradingTask,
   type TestTranslationGradingOutput,
-  type TranslationGradingMode,
   type TranslationGradingOutput,
-} from '../../../shared/openai/translation-grading';
+} from '../../../shared/openai/translation-grading-tasks';
+import type { TranslationGradingMode } from '../../../shared/openai/types';
 import { AI_EVALUATION_RESULT_CACHE_COLLECTION } from '../../../shared/constants/firestore';
 
 const AI_EVALUATION_CACHE_RETENTION_MS = 30 * 24 * 60 * 60 * 1_000;
@@ -22,7 +22,6 @@ export interface CachedEvaluationResult {
   cost: CostBreakdown;
   latencyMs: number;
   generatedAt: string;
-  expiresAt?: Timestamp;
 }
 
 const cacheCollection = (db: Firestore) => db.collection(AI_EVALUATION_RESULT_CACHE_COLLECTION);
@@ -51,9 +50,6 @@ const expiresAtMillis = (value: unknown): number | undefined => {
   return typeof millis === 'number' && Number.isFinite(millis) ? millis : undefined;
 };
 
-export const getEvaluationCacheExpiry = (now = Date.now()): Timestamp =>
-  Timestamp.fromMillis(now + AI_EVALUATION_CACHE_RETENTION_MS);
-
 export async function getCachedEvaluationResult(
   cacheKey: string,
   gradingMode: TranslationGradingMode,
@@ -61,40 +57,27 @@ export async function getCachedEvaluationResult(
 ): Promise<CachedEvaluationResult | null> {
   const snapshot = await cacheCollection(db).doc(cacheKey).get();
   if (!snapshot.exists) return null;
-  const data = snapshot.data() as Partial<CachedEvaluationResult> | undefined;
+  const data = snapshot.data() as (Partial<CachedEvaluationResult> & { expiresAt?: unknown }) | undefined;
   const expiry = expiresAtMillis(data?.expiresAt);
   if (!expiry || expiry <= Date.now()) {
     // Old records without a TTL and expired records are never reused. Cleanup
     // is best effort so a transient delete failure does not block a fresh run.
-    if (snapshot.ref && typeof snapshot.ref.delete === 'function') {
-      await snapshot.ref.delete().catch(error => console.warn('[ai-evaluations] stale cache cleanup failed', error));
-    }
+    await snapshot.ref.delete().catch(error => console.warn('[ai-evaluations] stale cache cleanup failed', error));
     return null;
   }
 
-  const usage = data?.usage;
-  const parsedUsage = parseOpenAIUsage({
-    input_tokens: usage?.promptTokens,
-    output_tokens: usage?.completionTokens,
-    total_tokens: usage?.totalTokens,
-    input_tokens_details: {
-      cached_tokens: usage?.cachedInputTokens ?? 0,
-      cache_write_tokens: usage?.cacheWriteTokens ?? 0,
-    },
-    output_tokens_details: { reasoning_tokens: usage?.reasoningTokens ?? 0 },
-  });
+  if (data?.gradingMode !== gradingMode) return null;
   let output: TranslationGradingOutput | TestTranslationGradingOutput;
   try {
-    if (data?.gradingMode !== gradingMode) return null;
-    output = parseTranslationGradingOutput(gradingMode, data?.output);
+    output = getTranslationGradingTask(gradingMode).parse(data.output);
   } catch {
     return null;
   }
 
+  const usage = data.usage;
   if (
-    !data?.model ||
+    !data.model ||
     !data.actualModel ||
-    !parsedUsage ||
     !isValidTokenUsage(usage) ||
     !isValidCost(data.cost, usage) ||
     !isFiniteNonNegative(data.latencyMs) ||
@@ -114,7 +97,6 @@ export async function getCachedEvaluationResult(
     cost: data.cost,
     latencyMs: data.latencyMs,
     generatedAt: data.generatedAt,
-    expiresAt: data.expiresAt!,
   };
 }
 
@@ -122,11 +104,8 @@ export async function setCachedEvaluationResult(result: CachedEvaluationResult, 
   if (!isValidTokenUsage(result.usage) || !isValidCost(result.cost, result.usage)) {
     throw new Error('Cannot cache an evaluation without measured, consistent usage and cost');
   }
-  parseTranslationGradingOutput(result.gradingMode, result.output);
+  getTranslationGradingTask(result.gradingMode).parse(result.output);
   await cacheCollection(db)
     .doc(result.cacheKey)
-    .set({
-      ...result,
-      expiresAt: result.expiresAt ?? getEvaluationCacheExpiry(),
-    });
+    .set({ ...result, expiresAt: Timestamp.fromMillis(Date.now() + AI_EVALUATION_CACHE_RETENTION_MS) });
 }

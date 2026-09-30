@@ -41,5 +41,3 @@ export const ExerciseProgress: React.FC<ExerciseProgressProps> = ({
     </div>
   );
 };
-
-export default ExerciseProgress;

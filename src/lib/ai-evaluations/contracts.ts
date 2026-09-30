@@ -17,7 +17,7 @@ const CASE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 const ANSWER_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/;
 export const AI_EVALUATION_MAX_ANSWERS = 20;
 
-export const evaluationCaseIdSchema = z.string().regex(CASE_ID_PATTERN, 'Invalid evaluation case id');
+const evaluationCaseIdSchema = z.string().regex(CASE_ID_PATTERN, 'Invalid evaluation case id');
 const evaluationAnswerIdSchema = z.string().regex(ANSWER_ID_PATTERN, 'Invalid answer id');
 
 const titleSchema = z.string().trim().min(1, 'Title is required').max(120, 'Title must be 120 characters or fewer');
@@ -51,7 +51,7 @@ const evaluationModesSchema = z
   })
   .transform(canonicalEvaluationModes);
 
-export const evaluationAnswerInputSchema = z
+const evaluationAnswerInputSchema = z
   .object({
     id: evaluationAnswerIdSchema,
     label: answerLabelSchema,
@@ -97,11 +97,6 @@ export interface EvaluationCase extends z.infer<typeof evaluationCaseInputSchema
   updatedBy: string;
 }
 
-interface EvaluationUsage extends TokenUsage {
-  /** Original OpenAI response usage, before any app-cache reuse. */
-}
-
-type EvaluationCellCostStatus = CostMeasurementStatus;
 type EvaluationAggregateCostStatus = 'measured' | 'lower-bound' | 'unavailable';
 
 interface EvaluationCellResultBase<M extends TranslationGradingMode> {
@@ -125,18 +120,16 @@ interface EvaluationCellResultBase<M extends TranslationGradingMode> {
   coalescedDuplicate: boolean;
   /** Excludes repeated labels for the same exact request from run aggregates. */
   duplicateWithinRun: boolean;
-  usage?: EvaluationUsage;
+  usage?: TokenUsage;
   originalCost?: CostBreakdown;
-  originalCostStatus: EvaluationCellCostStatus;
+  originalCostStatus: CostMeasurementStatus;
   costIncurredThisRun?: CostBreakdown;
-  costIncurredThisRunStatus: EvaluationCellCostStatus;
+  costIncurredThisRunStatus: CostMeasurementStatus;
   costIncurredThisRunReason?: string;
 }
 
-type EvaluationLessonCellResult = EvaluationCellResultBase<'lesson'>;
-type EvaluationTestCellResult = EvaluationCellResultBase<'test'>;
-export type EvaluationCellResult = EvaluationLessonCellResult | EvaluationTestCellResult;
-export type EvaluationCellResultCommon = Omit<EvaluationLessonCellResult, 'gradingMode' | 'output'>;
+export type EvaluationCellResult = EvaluationCellResultBase<'lesson'> | EvaluationCellResultBase<'test'>;
+export type EvaluationCellResultCommon = Omit<EvaluationCellResultBase<'lesson'>, 'gradingMode' | 'output'>;
 
 export interface EvaluationAggregate {
   cellCount: number;
@@ -152,10 +145,10 @@ export interface EvaluationAggregate {
   originalCostStatus: EvaluationAggregateCostStatus;
   costIncurredThisRun?: CostBreakdown;
   costIncurredThisRunStatus: EvaluationAggregateCostStatus;
-  usage: EvaluationUsage;
+  usage: TokenUsage;
   usageStatus: 'measured' | 'lower-bound';
   /** Provider usage incurred by this run; excludes app-cache and coalesced reuse. */
-  usageIncurredThisRun: EvaluationUsage;
+  usageIncurredThisRun: TokenUsage;
   usageIncurredThisRunStatus: 'measured' | 'lower-bound';
   unknownOriginalCostCells: number;
   unknownIncurredCostCells: number;
@@ -175,7 +168,7 @@ export type EvaluationCaseInput = z.infer<typeof evaluationCaseInputSchema>;
 export type EvaluationFunctionRunRequest = z.infer<typeof evaluationFunctionRunRequestSchema>;
 export type EvaluationFunctionSaveRequest = z.infer<typeof evaluationFunctionSaveRequestSchema>;
 export type EvaluationFunctionDeleteRequest = z.infer<typeof evaluationFunctionDeleteRequestSchema>;
-export const emptyTokenUsage = (): EvaluationUsage => ({
+export const emptyTokenUsage = (): TokenUsage => ({
   promptTokens: 0,
   completionTokens: 0,
   totalTokens: 0,

@@ -4,7 +4,12 @@ import { parseFragment, type DefaultTreeAdapterMap } from 'parse5';
 import { formatScorePercentage, formatScorePoints } from '@/src/lib/tests/formatting';
 import type { ResultPdfSource, ResultPdfStudentIdentity } from '@/src/lib/tests/result-pdf-identity';
 import type { StudentSubmittedTestAttempt } from '@/src/types/test';
-import type { StudentTestResult, TestResultReviewExerciseItem, TestResultReviewItem } from '@/src/types/test-results';
+import type {
+  ReviewPartPoints,
+  StudentTestResult,
+  TestResultReviewExerciseItem,
+  TestResultReviewItem,
+} from '@/src/types/test-results';
 import { richTextToPlainText } from '@/src/utils/exercises/helpers';
 
 export type TestResultPdfTone = 'neutral' | 'score' | 'correct' | 'partial' | 'incorrect' | 'answer' | 'student';
@@ -109,10 +114,8 @@ const statusTone = (awardedPoints: number, maxPoints: number, correct?: boolean)
 };
 
 const studentTone = (awardedPoints: number, maxPoints: number, correct?: boolean): TestResultPdfTone => {
-  const mark = markLabel(awardedPoints, maxPoints, correct);
-  if (mark === 'Correct') return 'student';
-  if (mark === 'Partly correct') return 'partial';
-  return 'incorrect';
+  const tone = statusTone(awardedPoints, maxPoints, correct);
+  return tone === 'correct' ? 'student' : tone;
 };
 
 const pairValues = (left: string, right: string): string => `${left}${RESULT_PDF_PAIR_SEPARATOR}${right}`;
@@ -145,6 +148,25 @@ const group = (heading: string | undefined, lines: string[], tone?: TestResultPd
   ...(tone ? { tone } : {}),
   lines: lines.length > 0 ? lines : [EMPTY_ANSWER],
 });
+
+type PartResult = { points: ReviewPartPoints; correct?: boolean };
+
+const partScoreGroup = (heading: string, result: PartResult | undefined, lines: string[] = []) =>
+  group(
+    heading,
+    [
+      ...lines,
+      result ? pointsLine(result.points.awardedPoints, result.points.maxPoints, result.correct) : 'Not scored',
+    ],
+    result ? statusTone(result.points.awardedPoints, result.points.maxPoints, result.correct) : 'score'
+  );
+
+const studentAnswerGroup = (lines: string[], result: PartResult | undefined) =>
+  group(
+    'Student answer',
+    lines,
+    result ? studentTone(result.points.awardedPoints, result.points.maxPoints, result.correct) : 'incorrect'
+  );
 
 function buildReviewEntries(result: StudentTestResult): ReviewEntry[] {
   const entries: ReviewEntry[] = [];
@@ -258,28 +280,14 @@ function flattenFill(item: ExerciseOfType<'fill'>): TestResultPdfLineGroup[] {
   return item.answerKey.items.flatMap((keyItem, index) => {
     const result = item.itemResults.answers[index];
     const studentValue = result?.value ?? saved[index];
-    const awarded = result?.points.awardedPoints ?? 0;
-    const max = result?.points.maxPoints ?? 1;
     const prompt = plain(keyItem.text) || `Blank ${index + 1}`;
     const accepted = keyItem.acceptedAnswers.join(' or ');
     const groups: TestResultPdfLineGroup[] = [];
-    if (item.answerKey.items.length > 1) {
-      groups.push(
-        group(
-          `Blank ${index + 1}`,
-          [result ? pointsLine(awarded, max, result.correct) : 'Not scored'],
-          result ? statusTone(awarded, max, result.correct) : 'score'
-        )
-      );
-    }
+    if (item.answerKey.items.length > 1) groups.push(partScoreGroup(`Blank ${index + 1}`, result));
     groups.push(
       group('Question', [prompt]),
       group('Expected answer', [accepted], 'answer'),
-      group(
-        'Student answer',
-        [recorded(studentValue)],
-        result ? studentTone(awarded, max, result.correct) : 'incorrect'
-      )
+      studentAnswerGroup([recorded(studentValue)], result)
     );
     return groups;
   });
@@ -341,21 +349,11 @@ function flattenTextSelection(item: ExerciseOfType<'text-selection'>): TestResul
     const wordIndex = result && result.wordIndex >= 0 ? result.wordIndex : (savedIndices[index] ?? -1);
     const selectedWord = wordIndex >= 0 ? (words[wordIndex] ?? `word ${wordIndex + 1}`) : '';
     const correctWord = words[question.correctWordIndex] ?? `word ${question.correctWordIndex + 1}`;
-    const awarded = result?.points.awardedPoints ?? 0;
-    const max = result?.points.maxPoints ?? 1;
     groups.push(
-      group(
-        `Question ${index + 1}`,
-        [result ? pointsLine(awarded, max, result.correct) : 'Not scored'],
-        result ? statusTone(awarded, max, result.correct) : 'score'
-      ),
+      partScoreGroup(`Question ${index + 1}`, result),
       group('Question', [plain(question.text)]),
       group('Expected answer', [correctWord], 'answer'),
-      group(
-        'Student answer',
-        [recorded(selectedWord)],
-        result ? studentTone(awarded, max, result.correct) : 'incorrect'
-      )
+      studentAnswerGroup([recorded(selectedWord)], result)
     );
   });
   return groups;
@@ -367,24 +365,11 @@ function flattenFillEmbolded(item: ExerciseOfType<'fill-embolded-text'>): TestRe
   item.answerKey.words.forEach((word, index) => {
     const result = item.itemResults.answers[index];
     const studentValue = result?.value ?? saved[index];
-    const awarded = result?.points.awardedPoints ?? 0;
-    const max = result?.points.maxPoints ?? 1;
-    const heading = word.question ? `Question ${index + 1}` : `Word ${index + 1}`;
-    groups.push(
-      group(
-        heading,
-        [result ? pointsLine(awarded, max, result.correct) : 'Not scored'],
-        result ? statusTone(awarded, max, result.correct) : 'score'
-      )
-    );
+    groups.push(partScoreGroup(word.question ? `Question ${index + 1}` : `Word ${index + 1}`, result));
     if (plain(word.question)) groups.push(group('Question', [plain(word.question)]));
     groups.push(
       group('Expected answer', [word.correctAnswer], 'answer'),
-      group(
-        'Student answer',
-        [recorded(studentValue)],
-        result ? studentTone(awarded, max, result.correct) : 'incorrect'
-      )
+      studentAnswerGroup([recorded(studentValue)], result)
     );
   });
   return groups;
@@ -502,22 +487,12 @@ function flattenGeneratedTranslation(item: ExerciseOfType<'generated-translation
   return item.answerKey.items.flatMap((keyItem, index) => {
     const result = item.itemResults.answers[index];
     const studentValue = result?.value ?? saved[index];
-    const awarded = result?.points.awardedPoints ?? 0;
-    const max = result?.points.maxPoints ?? 1;
     const accepted = keyItem.acceptedAnswers.join(' or ');
     return [
-      group(
-        `Item ${index + 1}`,
-        [result ? pointsLine(awarded, max, result.correct) : 'Not scored'],
-        result ? statusTone(awarded, max, result.correct) : 'score'
-      ),
+      partScoreGroup(`Item ${index + 1}`, result),
       group('Question', [plain(keyItem.text)]),
       group('Expected answer', [accepted], 'answer'),
-      group(
-        'Student answer',
-        [recorded(studentValue)],
-        result ? studentTone(awarded, max, result.correct) : 'incorrect'
-      ),
+      studentAnswerGroup([recorded(studentValue)], result),
     ];
   });
 }
@@ -533,27 +508,18 @@ function flattenGeneratedFormIdentification(
     const accepted = 'acceptedAnswers' in keyItem ? keyItem.acceptedAnswers : null;
     const correctDisplay = 'correctAnswerDisplay' in keyItem ? keyItem.correctAnswerDisplay : '';
     const correctAnswer = 'correctAnswer' in keyItem ? keyItem.correctAnswer : '';
-    const awarded = result?.points.awardedPoints ?? 0;
-    const max = result?.points.maxPoints ?? 1;
     const expected: string[] = [];
     if (accepted?.length) expected.push(accepted.join(' or '));
     if (correctAnswer && !accepted?.includes(correctAnswer)) expected.push(correctAnswer);
     if (correctDisplay && !accepted?.length) expected.push(correctDisplay);
     return [
-      group(
+      partScoreGroup(
         `${keyItem.word} — ${stepLabel}`,
-        [
-          ...(keyItem.selected_form ? [`Selected form: ${keyItem.selected_form}`] : []),
-          result ? pointsLine(awarded, max, result.correct) : 'Not scored',
-        ],
-        result ? statusTone(awarded, max, result.correct) : 'score'
+        result,
+        keyItem.selected_form ? [`Selected form: ${keyItem.selected_form}`] : []
       ),
       group('Expected answer', expected.length > 0 ? expected : ['No accepted answer was recorded.'], 'answer'),
-      group(
-        'Student answer',
-        [recorded(studentValue)],
-        result ? studentTone(awarded, max, result.correct) : 'incorrect'
-      ),
+      studentAnswerGroup([recorded(studentValue)], result),
     ];
   });
 }
@@ -566,29 +532,13 @@ function flattenTranslationGrading(item: ExerciseOfType<'translation-grading'>):
     const result = item.itemResults.items[index];
     const latin = plain(item.answerKey.items[index]?.latinText ?? item.question.items[index]?.latinText);
     const instructions = plain(item.answerKey.items[index]?.instructions ?? item.question.items[index]?.instructions);
-    const awarded = result?.points.awardedPoints ?? 0;
-    const max = result?.points.maxPoints ?? 1;
     const aiScore = result == null || result.score === null ? 'Not graded' : `${result.score} / 10`;
-    if (count > 1) {
-      groups.push(
-        group(
-          `Score ${index + 1}`,
-          [`AI score: ${aiScore}`, result ? pointsLine(awarded, max) : 'Not scored'],
-          result ? statusTone(awarded, max) : 'score'
-        )
-      );
-    } else {
-      groups.push(group('AI score', [aiScore]));
-    }
+    groups.push(
+      count > 1 ? partScoreGroup(`Score ${index + 1}`, result, [`AI score: ${aiScore}`]) : group('AI score', [aiScore])
+    );
     const questionLines = [latin, instructions].filter(Boolean);
     if (questionLines.length) groups.push(group(count > 1 ? `Question ${index + 1}` : 'Question', questionLines));
-    groups.push(
-      group(
-        'Student answer',
-        multiline(result?.translation ?? saved[index]),
-        result ? studentTone(awarded, max) : 'incorrect'
-      )
-    );
+    groups.push(studentAnswerGroup(multiline(result?.translation ?? saved[index]), result));
   }
   return groups;
 }
@@ -621,13 +571,7 @@ export function buildTestResultPdfModel(input: {
 
   const exerciseSummaries =
     exercises.length > 0
-      ? exercises.map(exercise => ({
-          number: exercise.number,
-          title: exercise.title,
-          awardedPoints: exercise.awardedPoints,
-          maxPoints: exercise.maxPoints,
-          statusLabel: exercise.statusLabel,
-        }))
+      ? exercises.map(({ groups: _groups, ...summary }) => summary)
       : summariesFromAttempt(result.attempt);
 
   return {

@@ -8,8 +8,6 @@ interface UseAudioReturn {
   togglePlay: () => void;
   play: () => void;
   pause: () => void;
-  onEnded: () => void;
-  setAudioSource: (src: string | null | undefined) => void;
 }
 
 export function useAudio(
@@ -158,12 +156,7 @@ export function useAudio(
     else play();
   };
 
-  const setAudioSource = (src: string | null | undefined) => {
-    pause();
-    setAudioPath(src);
-  };
-
-  return { audioRef, isPlaying, isLoading, togglePlay, play, pause, onEnded, setAudioSource };
+  return { audioRef, isPlaying, isLoading, togglePlay, play, pause };
 }
 
 export default useAudio;

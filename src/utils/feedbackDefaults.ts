@@ -1,6 +1,6 @@
 import type { FeedbackConfig, SuccessMessageConfig, ProgressionRules, FeedbackLevel } from '@/src/types/exercises/base';
 
-export const FEEDBACK_DEFAULTS = {
+const FEEDBACK_DEFAULTS = {
   showExplanation: true,
   autoAdvanceOnCorrect: true,
   pauseForExplanation: true,
@@ -8,7 +8,6 @@ export const FEEDBACK_DEFAULTS = {
 } as const;
 
 export const DEFAULT_ITEM_PROGRESSION_DELAY = 2000;
-export const DEFAULT_PAGE_AUTO_ADVANCE = { enabled: true, delay: 2000 };
 
 export function getSuccessMessageWithDefaults(successMessage?: SuccessMessageConfig): SuccessMessageConfig {
   return {
@@ -43,12 +42,7 @@ export function createDefaultFeedbackConfig(): FeedbackConfig {
   };
 }
 
-export function getEffectiveFeedbackConfig(config: FeedbackConfig): {
-  escalationLevels: FeedbackLevel[];
-  successMessage: SuccessMessageConfig;
-  progressionRules: ProgressionRules;
-  maxLevelFailures?: number;
-} {
+export function getEffectiveFeedbackConfig(config: FeedbackConfig) {
   return {
     escalationLevels: (config.escalationLevels ?? []).map(normalizeEscalationLevel),
     successMessage: getSuccessMessageWithDefaults(config.successMessage),

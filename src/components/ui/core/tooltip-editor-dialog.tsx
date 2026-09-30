@@ -29,7 +29,8 @@ import { useLazySearchWordsQuery, type VocabularySearchResult } from '@/src/stor
 import type { RootWordCandidate } from '@/shared/types/vocabulary/requests';
 import type { CostBreakdown } from '@/shared/openai/types';
 import type { VocabularyWord } from '@/shared/types/vocabulary/schemas';
-import { useToast } from '@/src/hooks/use-toast';
+import { toast } from 'sonner';
+import { stripMacrons } from '@/src/utils/exercises/helpers';
 
 const extractPath = (url: string): string => {
   if (!url.trim()) return '';
@@ -90,13 +91,6 @@ type EnrichedRootWordCandidate = RootWordCandidate & {
   existingWord?: VocabularySearchResult | null;
 };
 
-const stripMacrons = (value: string): string =>
-  value
-    .normalize('NFD')
-    .replace(/[\u0304]/g, '')
-    .normalize('NFC')
-    .toLowerCase();
-
 const toRootWordCandidate = (candidate: EnrichedRootWordCandidate): RootWordCandidate => ({
   word: candidate.word,
   part_of_speech: candidate.part_of_speech,
@@ -123,7 +117,6 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
   initialData = null,
   selectedText = '',
 }) => {
-  const { toast } = useToast();
   const [formData, setFormData] = useState<TooltipFormData>(transformToFormData(initialData, selectedText));
   const [visibleFields, setVisibleFields] = useState<string[]>([]);
   const [hasWordData, setHasWordData] = useState(false);
@@ -238,16 +231,16 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
 
   const enrichCandidatesWithExistingWords = async (
     candidates: RootWordCandidate[]
-  ): Promise<EnrichedRootWordCandidate[]> => {
-    const enriched = await Promise.all(
+  ): Promise<EnrichedRootWordCandidate[]> =>
+    Promise.all(
       candidates.map(async candidate => {
         try {
           const words = await searchWords({ search: candidate.word, limit: 8 }).unwrap();
-          const candidateKey = stripMacrons(candidate.word);
+          const candidateKey = stripMacrons(candidate.word).toLowerCase();
           const existingWord =
             words.find(
               word =>
-                stripMacrons(word.word) === candidateKey &&
+                stripMacrons(word.word).toLowerCase() === candidateKey &&
                 (!candidate.part_of_speech || word.part_of_speech === candidate.part_of_speech)
             ) || null;
 
@@ -258,9 +251,6 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
         }
       })
     );
-
-    return enriched;
-  };
 
   const handleUseExistingCandidate = async (candidate: EnrichedRootWordCandidate) => {
     if (!candidate.existingWord) return;
@@ -287,18 +277,13 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
       setHasWordData(true);
       setVisibleFields(DEFAULT_VISIBLE_FIELDS);
       setMode('word-lookup');
-      toast({
-        title: 'Existing word applied',
+      toast.success('Existing word applied', {
         description: `${candidate.existingWord.word} was added to the tooltip fields.`,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not load existing vocabulary entry';
       setAddToDbError(message);
-      toast({
-        title: 'Could not use existing word',
-        description: message,
-        variant: 'destructive',
-      });
+      toast.error('Could not use existing word', { description: message });
     }
   };
 
@@ -344,19 +329,14 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
       setSavedRequestId(request.id);
       mergeDraftIntoTooltip(request.draftWord, request.id);
       setAddToDbStep('saved');
-      toast({
-        title: 'Vocabulary request created',
+      toast.success('Vocabulary request created', {
         description: `${request.draftWord.word} is waiting in pending review.`,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not create vocabulary request';
       setAddToDbError(message);
       setAddToDbStep('error');
-      toast({
-        title: 'Could not add vocabulary request',
-        description: message,
-        variant: 'destructive',
-      });
+      toast.error('Could not add vocabulary request', { description: message });
     }
   };
 
@@ -481,32 +461,8 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
   };
 
   const handleSave = () => {
-    const dataWithVisibility: TooltipFormData = {
-      ...formData,
-      visibleFields: hasWordData ? visibleFields : undefined,
-    };
-    const cleanedData = cleanFormData(dataWithVisibility);
-    const completeData: TooltipFormData = {
-      word: cleanedData.word || formData.word,
-      translation: cleanedData.translation,
-      pronunciation: cleanedData.pronunciation,
-      partOfSpeech: cleanedData.partOfSpeech,
-      wordType: cleanedData.wordType,
-      definition: cleanedData.definition,
-      examples: cleanedData.examples,
-      etymology: cleanedData.etymology,
-      gender: cleanedData.gender,
-      declensionClass: cleanedData.declensionClass,
-      conjugationClass: cleanedData.conjugationClass,
-      grammaticalInfo: cleanedData.grammaticalInfo,
-      principalParts: cleanedData.principalParts,
-      link: cleanedData.link,
-      title: cleanedData.title,
-      chips: cleanedData.chips,
-      customSections: cleanedData.customSections,
-      visibleFields: cleanedData.visibleFields,
-    };
-    onSave(completeData);
+    const cleanedData = cleanFormData({ ...formData, visibleFields: hasWordData ? visibleFields : undefined });
+    onSave({ ...cleanedData, word: cleanedData.word || formData.word });
     onClose();
   };
 
@@ -517,6 +473,40 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
     setSearchState({ isSearching: false, searchResult: null, hasSearched: false });
     onClose();
   };
+
+  const chipsField = (
+    <div className="space-y-2">
+      <Label>Chips</Label>
+      <div className="flex gap-2">
+        <Input
+          value={newChip}
+          onChange={e => setNewChip(e.target.value)}
+          placeholder="Add a chip"
+          onKeyPress={e => e.key === 'Enter' && addChip()}
+        />
+        <Button type="button" onClick={addChip} size="sm">
+          <Plus className="w-4 h-4" />
+        </Button>
+      </div>
+      {formData.chips && formData.chips.length > 0 && (
+        <div className="flex gap-1 flex-wrap">
+          {formData.chips.map((chip, index) => (
+            <Badge key={index} variant="secondary" className="flex items-center gap-1">
+              {chip}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => removeChip(index)}
+                className="h-4 w-4 p-0 hover:bg-transparent">
+                <X className="w-3 h-3" />
+              </Button>
+            </Badge>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
@@ -529,7 +519,6 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
         </DialogHeader>
 
         <div className="space-y-6 py-4">
-          {/* Title — always visible */}
           <div>
             <Label htmlFor="tooltip-title">Title</Label>
             <Input
@@ -541,7 +530,6 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
             />
           </div>
 
-          {/* Mode Tabs */}
           <Tabs
             value={mode}
             onValueChange={v => setMode(v as 'custom' | 'word-lookup' | 'add-to-db')}
@@ -552,7 +540,6 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
               <TabsTrigger value="add-to-db">Add to DB</TabsTrigger>
             </TabsList>
 
-            {/* Custom Tab */}
             <TabsContent value="custom" className="space-y-6 mt-4">
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -589,40 +576,9 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
                 ))}
               </div>
 
-              <div className="space-y-2">
-                <Label>Chips</Label>
-                <div className="flex gap-2">
-                  <Input
-                    value={newChip}
-                    onChange={e => setNewChip(e.target.value)}
-                    placeholder="Add a chip"
-                    onKeyPress={e => e.key === 'Enter' && addChip()}
-                  />
-                  <Button type="button" onClick={addChip} size="sm">
-                    <Plus className="w-4 h-4" />
-                  </Button>
-                </div>
-                {formData.chips && formData.chips.length > 0 && (
-                  <div className="flex gap-1 flex-wrap">
-                    {formData.chips.map((chip, index) => (
-                      <Badge key={index} variant="secondary" className="flex items-center gap-1">
-                        {chip}
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeChip(index)}
-                          className="h-4 w-4 p-0 hover:bg-transparent">
-                          <X className="w-3 h-3" />
-                        </Button>
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-              </div>
+              {chipsField}
             </TabsContent>
 
-            {/* Word Lookup Tab */}
             <TabsContent value="word-lookup" className="space-y-6 mt-4">
               <div className="space-y-3">
                 <div className="flex gap-2 items-end">
@@ -896,37 +852,7 @@ export const TooltipEditorDialog: React.FC<TooltipEditorDialogProps> = ({
                 </div>
               )}
 
-              <div className="space-y-2">
-                <Label>Chips</Label>
-                <div className="flex gap-2">
-                  <Input
-                    value={newChip}
-                    onChange={e => setNewChip(e.target.value)}
-                    placeholder="Add a chip"
-                    onKeyPress={e => e.key === 'Enter' && addChip()}
-                  />
-                  <Button type="button" onClick={addChip} size="sm">
-                    <Plus className="w-4 h-4" />
-                  </Button>
-                </div>
-                {formData.chips && formData.chips.length > 0 && (
-                  <div className="flex gap-1 flex-wrap">
-                    {formData.chips.map((chip, index) => (
-                      <Badge key={index} variant="secondary" className="flex items-center gap-1">
-                        {chip}
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeChip(index)}
-                          className="h-4 w-4 p-0 hover:bg-transparent">
-                          <X className="w-3 h-3" />
-                        </Button>
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-              </div>
+              {chipsField}
             </TabsContent>
 
             <TabsContent value="add-to-db" className="space-y-4 mt-4">

@@ -50,25 +50,11 @@ const poolsResponse = (pools: VocabularyPoolSummary[], lastPoolId: string | null
   data: { success: true, data: { pools, hasMore: Boolean(lastPoolId), lastPoolId } },
 });
 
-describe.each(['create', 'update', 'add', 'remove'] as const)('vocabulary pool %s cache refresh', mutationKind => {
+describe.each(['create', 'update'] as const)('vocabulary pool %s cache refresh', mutationKind => {
   const mutate = (store: ReturnType<typeof createStore>) => {
     if (mutationKind === 'update')
       return store.dispatch(
         vocabularyPoolApi.endpoints.updatePool.initiate({ id: 'source-a', data: { wordDocIds: [] } }, { track: false })
-      );
-    if (mutationKind === 'add')
-      return store.dispatch(
-        vocabularyPoolApi.endpoints.addWordsToPool.initiate(
-          { poolId: 'source-a', wordDocIds: ['word-1'] },
-          { track: false }
-        )
-      );
-    if (mutationKind === 'remove')
-      return store.dispatch(
-        vocabularyPoolApi.endpoints.removeWordsFromPool.initiate(
-          { poolId: 'source-a', wordDocIds: ['word-1'] },
-          { track: false }
-        )
       );
     return store.dispatch(
       vocabularyPoolApi.endpoints.createPoolFromPools.initiate(

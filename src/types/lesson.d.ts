@@ -1,4 +1,3 @@
-import type { VocabularyPoolWithWords } from './vocabulary-pool';
 import type {
   PracticeCategoryPlacement,
   PracticeCategorySelection,
@@ -73,10 +72,6 @@ export interface StudentDashboard {
   pastMockResults?: StudentPastMockResult[];
 }
 
-export type LessonWithVocabularyPool = Lesson & {
-  vocabularyPoolData?: VocabularyPoolWithWords;
-};
-
 export type LessonStatus = 'available' | 'in-progress' | 'completed' | 'locked';
 
 export type LessonWithProgress = Lesson & {
@@ -124,7 +119,7 @@ export interface UserProgress {
 
 export type { Page } from './page';
 export type { RenderableContentItem } from './page';
-export type { ContentItem, TextContent, EmphasisContent, TableContent, ComponentNarration } from './content';
+export type { ContentItem, TextContent, EmphasisContent, TableContent } from './content';
 export type { VocabularyItem, VocabularyContent, VocabularyPoolContent } from './vocabulary';
 export type {
   BaseExercise,

@@ -1,10 +1,14 @@
 import type { ExerciseWordResponse, VerbFormPath } from '@/src/types/api/exercise-word-responses';
 import type { GeneratedFormIdentificationExercise } from '@/src/types/exercises';
 import type {
+  FormIdentificationItem,
   FormIdentificationStep,
   MultiAnswerFormIdentificationItem,
 } from '@/src/types/exercises/schemas/form-identification';
-import { createGeneratedFormIdentificationItems } from '@/src/lib/tests/generated-exercises';
+import {
+  createGeneratedFormIdentificationItems,
+  narrowFormIdentificationItem,
+} from '@/src/lib/tests/generated-exercises';
 import {
   validateMultiAnswerStep,
   validatePartialMultiAnswerPaths,
@@ -366,12 +370,14 @@ describe('generated form-identification failure boundaries', () => {
       gender: 'feminine',
     };
 
-    const items = createGeneratedFormIdentificationItems(exercise, [word], {
-      [word.id]: { case: 'accusative' },
-    });
-    const numberItem = items.find(item => 'step' in item && item.step === 'number');
+    const numberItem = createGeneratedFormIdentificationItems(exercise, [word]).find(
+      item => 'step' in item && item.step === 'number'
+    ) as FormIdentificationItem;
 
-    expect(numberItem).toMatchObject({ correctAnswer: 'plural' });
+    expect(narrowFormIdentificationItem(numberItem, { case: 'accusative' })).toMatchObject({
+      correctAnswer: 'plural',
+      acceptedAnswers: expect.not.arrayContaining(['singular']),
+    });
   });
 
   it('allows repeated step values when distinct primary paths require them', () => {

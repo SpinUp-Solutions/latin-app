@@ -29,7 +29,6 @@ interface LessonEditorState {
   isModalOpen: boolean;
   tooltips: Record<string, TooltipData>;
   dirty: boolean;
-  error: string | null;
 }
 
 const initialState: LessonEditorState = {
@@ -40,7 +39,6 @@ const initialState: LessonEditorState = {
   isModalOpen: false,
   tooltips: {},
   dirty: false,
-  error: null,
 };
 
 const DRAFTS_KEY = 'page_document_drafts';
@@ -72,52 +70,18 @@ export const loadDrafts = createAsyncThunk('lessonEditor/loadDrafts', (_, { reje
   }
 });
 
-export const saveDraft = createAsyncThunk(
-  'lessonEditor/saveDraft',
-  async (lesson: Lesson, { getState, rejectWithValue }) => {
-    try {
-      const state = getState() as { lessonEditor: LessonEditorState };
-      const drafts = { ...state.lessonEditor.drafts };
-      const timestamp = new Date().toISOString();
-
-      const document = lessonToPageDocumentDraft(lesson, state.lessonEditor.tooltips);
-      const draftKey = getPageDocumentDraftKey('lesson', lesson.id);
-      drafts[draftKey] = { document, lastModified: timestamp };
-      sessionStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts));
-      return { draftKey, draft: { document, lastModified: timestamp } };
-    } catch {
-      return rejectWithValue('Failed to save draft');
-    }
-  }
-);
-
-export const clearDraft = createAsyncThunk(
-  'lessonEditor/clearDraft',
-  async (lessonId: string, { getState, rejectWithValue }) => {
-    try {
-      const state = getState() as { lessonEditor: LessonEditorState };
-      const drafts = { ...state.lessonEditor.drafts };
-      const draftKey = getPageDocumentDraftKey('lesson', lessonId);
-      delete drafts[draftKey];
-      sessionStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts));
-      return draftKey;
-    } catch {
-      return rejectWithValue('Failed to clear draft');
-    }
-  }
-);
+function writeDrafts(drafts: Record<string, PageDocumentDraftRecord>) {
+  sessionStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts));
+}
 
 export const savePageDocumentDraft = createAsyncThunk(
   'lessonEditor/savePageDocumentDraft',
   async (document: PageDocumentDraft, { getState, rejectWithValue }) => {
     try {
       const state = getState() as { lessonEditor: LessonEditorState };
-      const drafts = { ...state.lessonEditor.drafts };
-      const lastModified = new Date().toISOString();
       const draftKey = getPageDocumentDraftKey(document.editorKind, document.ownerId);
-      const draft = { document, lastModified };
-      drafts[draftKey] = draft;
-      sessionStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts));
+      const draft = { document, lastModified: new Date().toISOString() };
+      writeDrafts({ ...state.lessonEditor.drafts, [draftKey]: draft });
       return { draftKey, draft };
     } catch {
       return rejectWithValue('Failed to save draft');
@@ -130,16 +94,26 @@ export const clearPageDocumentDraft = createAsyncThunk(
   async ({ editorKind, ownerId }: Pick<PageDocumentDraft, 'editorKind' | 'ownerId'>, { getState, rejectWithValue }) => {
     try {
       const state = getState() as { lessonEditor: LessonEditorState };
-      const drafts = { ...state.lessonEditor.drafts };
       const draftKey = getPageDocumentDraftKey(editorKind, ownerId);
-      delete drafts[draftKey];
-      sessionStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts));
+      const { [draftKey]: _removed, ...drafts } = state.lessonEditor.drafts;
+      writeDrafts(drafts);
       return draftKey;
     } catch {
       return rejectWithValue('Failed to clear draft');
     }
   }
 );
+
+/** Lesson drafts carry the editor's current tooltips alongside the lesson pages. */
+export const saveDraft = createAsyncThunk(
+  'lessonEditor/saveDraft',
+  async (lesson: Lesson, { dispatch, getState }) => {
+    const state = getState() as { lessonEditor: LessonEditorState };
+    return dispatch(savePageDocumentDraft(lessonToPageDocumentDraft(lesson, state.lessonEditor.tooltips))).unwrap();
+  }
+);
+
+export const clearDraft = (lessonId: string) => clearPageDocumentDraft({ editorKind: 'lesson', ownerId: lessonId });
 
 const lessonEditorSlice = createSlice({
   name: 'lessonEditor',
@@ -173,7 +147,6 @@ const lessonEditorSlice = createSlice({
             practiceCategoryIds: [],
             practiceCategories: [],
           };
-      state.error = null;
       state.dirty = false;
     },
 
@@ -181,7 +154,6 @@ const lessonEditorSlice = createSlice({
       state.currentLesson = null;
       state.currentPageDocument = testVersionToPageDocumentDraft(action.payload);
       state.tooltips = {};
-      state.error = null;
       state.dirty = false;
     },
 
@@ -387,15 +359,10 @@ const lessonEditorSlice = createSlice({
       state.isModalOpen = false;
     },
 
-    clearError: state => {
-      state.error = null;
-    },
-
     resetLessonState: state => {
       state.currentLesson = null;
       state.currentPageDocument = null;
       state.editingContent = null;
-      state.error = null;
       state.dirty = false;
     },
 
@@ -408,10 +375,6 @@ const lessonEditorSlice = createSlice({
     removeTooltip: (state, action: PayloadAction<string>) => {
       delete state.tooltips[action.payload];
       state.dirty = true;
-    },
-
-    clearTooltips: state => {
-      state.tooltips = {};
     },
 
     loadTooltips: (state, action: PayloadAction<Record<string, TooltipData>>) => {
@@ -461,12 +424,6 @@ const lessonEditorSlice = createSlice({
       .addCase(loadDrafts.fulfilled, (state, action) => {
         state.drafts = action.payload;
       })
-      .addCase(saveDraft.fulfilled, (state, action) => {
-        state.drafts[action.payload.draftKey] = action.payload.draft;
-      })
-      .addCase(clearDraft.fulfilled, (state, action) => {
-        delete state.drafts[action.payload];
-      })
       .addCase(savePageDocumentDraft.fulfilled, (state, action) => {
         state.drafts[action.payload.draftKey] = action.payload.draft;
       })
@@ -493,11 +450,9 @@ export const {
   updateEditingContent,
   saveEditingContent,
   cancelEditing,
-  clearError,
   resetLessonState,
   addTooltip,
   removeTooltip,
-  clearTooltips,
   loadTooltips,
   reorderPages,
   reorderContentItems,
@@ -506,11 +461,5 @@ export const {
 
 export const selectHasDraft = (state: { lessonEditor: LessonEditorState }, lessonId: string) =>
   Boolean(state.lessonEditor.drafts[getPageDocumentDraftKey('lesson', lessonId)]);
-
-export const selectPageDocumentDraft = (
-  state: { lessonEditor: LessonEditorState },
-  editorKind: PageDocumentDraft['editorKind'],
-  ownerId: string
-) => state.lessonEditor.drafts[getPageDocumentDraftKey(editorKind, ownerId)];
 
 export default lessonEditorSlice.reducer;

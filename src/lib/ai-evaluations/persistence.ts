@@ -1,11 +1,6 @@
 import type { DocumentSnapshot, Firestore } from 'firebase-admin/firestore';
 import { AI_EVALUATION_CASES_COLLECTION } from '../../../shared/constants/firestore';
-import {
-  evaluationCaseIdSchema,
-  evaluationCaseInputSchema,
-  type EvaluationCase,
-  type EvaluationCaseInput,
-} from './contracts';
+import { evaluationCaseInputSchema, type EvaluationCase, type EvaluationCaseInput } from './contracts';
 
 export class AIEvaluationServiceError extends Error {
   constructor(
@@ -20,7 +15,7 @@ export class AIEvaluationServiceError extends Error {
 
 const casesCollection = (db: Firestore) => db.collection(AI_EVALUATION_CASES_COLLECTION);
 
-const parseCaseSnapshot = (snapshot: DocumentSnapshot): EvaluationCase => {
+export const parseEvaluationCaseSnapshot = (snapshot: DocumentSnapshot): EvaluationCase => {
   if (!snapshot.exists) {
     throw new AIEvaluationServiceError('AI_EVALUATION_CASE_NOT_FOUND', 'Evaluation case not found', 404);
   }
@@ -54,12 +49,11 @@ const parseCaseSnapshot = (snapshot: DocumentSnapshot): EvaluationCase => {
 
 export async function listEvaluationCases(db: Firestore): Promise<EvaluationCase[]> {
   const snapshot = await casesCollection(db).orderBy('updatedAt', 'desc').limit(100).get();
-  return snapshot.docs.map(parseCaseSnapshot);
+  return snapshot.docs.map(parseEvaluationCaseSnapshot);
 }
 
 export async function getEvaluationCase(id: string, db: Firestore): Promise<EvaluationCase> {
-  const validId = evaluationCaseIdSchema.parse(id);
-  return parseCaseSnapshot(await casesCollection(db).doc(validId).get());
+  return parseEvaluationCaseSnapshot(await casesCollection(db).doc(id).get());
 }
 
 export async function createEvaluationCase(
@@ -68,11 +62,10 @@ export async function createEvaluationCase(
   db: Firestore,
   now: () => string = () => new Date().toISOString()
 ): Promise<EvaluationCase> {
-  const parsed = evaluationCaseInputSchema.parse(input);
   const timestamp = now();
   const reference = casesCollection(db).doc();
   const value = {
-    ...parsed,
+    ...input,
     createdAt: timestamp,
     createdBy: actorId,
     updatedAt: timestamp,
@@ -90,9 +83,8 @@ export async function updateEvaluationCase(
   now: () => string = () => new Date().toISOString()
 ): Promise<EvaluationCase> {
   const existing = await getEvaluationCase(id, db);
-  const parsed = evaluationCaseInputSchema.parse(input);
   const persisted = {
-    ...parsed,
+    ...input,
     createdAt: existing.createdAt,
     createdBy: existing.createdBy,
     updatedAt: now(),
@@ -106,5 +98,3 @@ export async function deleteEvaluationCase(id: string, db: Firestore): Promise<v
   const existing = await getEvaluationCase(id, db);
   await casesCollection(db).doc(existing.id).delete();
 }
-
-export const parseEvaluationCaseSnapshot = parseCaseSnapshot;

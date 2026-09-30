@@ -18,7 +18,6 @@ export const PasteZone: React.FC<PasteZoneProps> = ({ pageIndex, className = '' 
   const hasSelection = selectedItems.length > 0;
   const selectedCount = selectedItems.length;
 
-  // Show selection info or fallback to latest item
   const displayText = hasSelection
     ? `${selectedCount} selected item${selectedCount > 1 ? 's' : ''}`
     : `${clipboardItems.length} item${clipboardItems.length > 1 ? 's' : ''} in clipboard`;
@@ -40,8 +39,7 @@ export const PasteZone: React.FC<PasteZoneProps> = ({ pageIndex, className = '' 
           variant="outline"
           size="sm"
           onClick={handlePaste}
-          className="border-blue-300 text-blue-700 hover:bg-blue-100 h-6 text-xs px-2"
-          disabled={!hasSelection && clipboardItems.length === 0}>
+          className="border-blue-300 text-blue-700 hover:bg-blue-100 h-6 text-xs px-2">
           <Plus className="h-3 w-3 mr-1" />
           {hasSelection ? `Paste (${selectedCount})` : 'Paste'}
         </Button>

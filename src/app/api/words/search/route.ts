@@ -2,16 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { auth } from 'firebase-admin';
 import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
+import { stripMacrons } from '@/src/utils/exercises/helpers';
 
 export const dynamic = 'force-dynamic';
 
 const MAX_LIMIT = 20;
-
-const stripMacrons = (value: string): string =>
-  value
-    .normalize('NFD')
-    .replace(/[\u0304]/g, '')
-    .normalize('NFC');
 
 const verifyAuth = async (request: NextRequest) => {
   const authHeader = request.headers.get('Authorization');

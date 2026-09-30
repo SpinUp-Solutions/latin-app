@@ -22,9 +22,6 @@ jest.mock('@/src/store/api/lessonApi', () => ({
   useUpdatePageProgressMutation: () => [jest.fn(() => ({ unwrap: async () => ({ success: true }) }))],
   useFinishLessonMutation: () => [jest.fn(), { isLoading: false }],
 }));
-jest.mock('@/src/store/api/advancedVocabularyApi', () => ({
-  useGetGeneratedExerciseWordsQuery: () => ({ data: undefined, isLoading: false, isError: false }),
-}));
 jest.mock('@/src/components/ui/core/simple-rich-editor', () => ({ SimpleRichEditor: () => null }));
 jest.mock('@/src/hooks/useTranslationGrading', () => ({
   useTranslationGrading: () => ({ grade: jest.fn(), reset: jest.fn(), isLoading: false, data: null, error: null }),

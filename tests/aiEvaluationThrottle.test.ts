@@ -4,9 +4,10 @@ import {
   AI_EVALUATION_MAX_CELLS_PER_RUN,
   AI_EVALUATION_RUN_LIMIT,
   AI_EVALUATION_RUN_WINDOW_MS,
+  AIEvaluationThrottleError,
+  consumeEvaluationRunQuota,
   decideEvaluationThrottle,
-} from '@/src/lib/ai-evaluations/throttle-policy';
-import { AIEvaluationThrottleError, consumeEvaluationRunQuota } from '@/src/lib/ai-evaluations/throttle';
+} from '@/src/lib/ai-evaluations/throttle';
 
 jest.mock('firebase-admin/firestore', () => ({
   Timestamp: { fromMillis: (millis: number) => ({ millis }) },

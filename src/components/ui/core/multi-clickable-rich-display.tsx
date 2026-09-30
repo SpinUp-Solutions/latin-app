@@ -79,5 +79,3 @@ export const MultiClickableRichDisplay: React.FC<MultiClickableRichDisplayProps>
     </div>
   );
 };
-
-export default MultiClickableRichDisplay;

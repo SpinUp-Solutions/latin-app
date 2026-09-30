@@ -8,7 +8,7 @@ import {
   TEST_VERSIONS_COLLECTION,
 } from '@/shared/constants/firestore';
 import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
-import type { VocabularyPoolUsage, VocabularyPoolUsageKind } from '@/src/types/vocabulary-pool';
+import type { VocabularyPoolUsage } from '@/src/types/vocabulary-pool';
 
 const MAX_AUTHORING_DOCUMENTS = 500;
 
@@ -107,27 +107,6 @@ function exerciseLabel(reference: VocabularyPoolReference): string {
   return `${page} → ${exercise}`;
 }
 
-function usage(
-  poolId: string,
-  kind: VocabularyPoolUsageKind,
-  sourceId: string,
-  reference: VocabularyPoolReference,
-  label: string,
-  editorUrl?: string
-): VocabularyPoolUsage {
-  const location =
-    reference.kind === 'direct'
-      ? 'direct'
-      : `${reference.pageId ?? reference.pageIndex}-${reference.itemId ?? reference.itemIndex}`;
-  return {
-    id: `${kind}:${sourceId}:${location}:${poolId}`,
-    poolId,
-    kind,
-    label,
-    ...(editorUrl ? { editorUrl } : {}),
-  };
-}
-
 type AuthoringDocument = { id: string; data: RecordData };
 
 type ActiveVersionOwner =
@@ -199,24 +178,23 @@ function activeVersionOwner(
 function appendReferences(
   usages: VocabularyPoolUsage[],
   source: AuthoringDocument,
-  references: VocabularyPoolReference[],
-  directKind: VocabularyPoolUsageKind,
-  exerciseKind: VocabularyPoolUsageKind,
-  directLabel: string,
-  exerciseLabelPrefix: string,
+  kind: 'lesson' | 'test-version' | 'test-version-draft',
+  label: string,
   editorUrl?: string
 ) {
-  references.forEach(reference => {
-    usages.push(
-      usage(
-        reference.poolId,
-        reference.kind === 'direct' ? directKind : exerciseKind,
-        source.id,
-        reference,
-        reference.kind === 'direct' ? directLabel : `${exerciseLabelPrefix} → ${exerciseLabel(reference)}`,
-        editorUrl
-      )
-    );
+  extractVocabularyPoolReferences(source.data).forEach(reference => {
+    const location =
+      reference.kind === 'direct'
+        ? 'direct'
+        : `${reference.pageId ?? reference.pageIndex}-${reference.itemId ?? reference.itemIndex}`;
+    const usageKind = reference.kind === 'direct' ? kind : (`${kind}-exercise` as const);
+    usages.push({
+      id: `${usageKind}:${source.id}:${location}:${reference.poolId}`,
+      poolId: reference.poolId,
+      kind: usageKind,
+      label: reference.kind === 'direct' ? label : `${label} → ${exerciseLabel(reference)}`,
+      ...(editorUrl ? { editorUrl } : {}),
+    });
   });
 }
 
@@ -245,16 +223,7 @@ export function projectVocabularyPoolUsages(input: {
 
   lessons.forEach(lesson => {
     const title = displayName(lesson.data.title, `Lesson ${lesson.id}`);
-    appendReferences(
-      usages,
-      lesson,
-      extractVocabularyPoolReferences(lesson.data),
-      'lesson',
-      'lesson-exercise',
-      `Lesson: ${title}`,
-      `Lesson: ${title}`,
-      `/admin/lessons/edit/${lesson.id}`
-    );
+    appendReferences(usages, lesson, 'lesson', `Lesson: ${title}`, `/admin/lessons/edit/${lesson.id}`);
   });
 
   input.versions.forEach(version => {
@@ -262,16 +231,7 @@ export function projectVocabularyPoolUsages(input: {
     const versionName = displayName(version.data.name, `Version ${version.id}`);
     const ownerLabel = owner.kind === 'test' ? `Test: ${owner.title}` : `Mock test: ${owner.title}`;
     const prefix = owner.kind === 'orphan' ? `${owner.title}: ${versionName}` : `${ownerLabel} → ${versionName}`;
-    appendReferences(
-      usages,
-      version,
-      extractVocabularyPoolReferences(version.data),
-      'test-version',
-      'test-version-exercise',
-      prefix,
-      prefix,
-      owner.kind === 'orphan' ? undefined : owner.editorUrl
-    );
+    appendReferences(usages, version, 'test-version', prefix, owner.kind === 'orphan' ? undefined : owner.editorUrl);
   });
 
   const testById = new Map(tests.map(test => [test.id, test]));
@@ -284,10 +244,7 @@ export function projectVocabularyPoolUsages(input: {
     appendReferences(
       usages,
       draft,
-      extractVocabularyPoolReferences(draft.data),
       'test-version-draft',
-      'test-version-draft-exercise',
-      prefix,
       prefix,
       parent && testId ? `/admin/tests/edit/${testId}/versions/${draft.id}/edit` : undefined
     );
@@ -302,17 +259,14 @@ function countFromSnapshot(snapshot: { data: () => { count?: unknown } }): numbe
   return count as number;
 }
 
-async function loadUsageDocuments(
-  db: Firestore
-): Promise<
-  { documents: AuthoringDocument[][]; documentCount: number } | { unavailable: string; documentCount?: number }
-> {
+async function loadUsageScan(db: Firestore): Promise<VocabularyPoolUsageScan> {
   const queries = SCAN_COLLECTIONS.map(collection => db.collection(collection.name));
   const countSnapshots = await Promise.all(queries.map(query => query.count().get()));
   const documentCount = countSnapshots.reduce((total, snapshot) => total + countFromSnapshot(snapshot), 0);
   if (documentCount > MAX_AUTHORING_DOCUMENTS) {
     return {
-      unavailable: `Assignment checks are unavailable because there are more than ${MAX_AUTHORING_DOCUMENTS} authoring documents.`,
+      status: 'unavailable',
+      message: `Assignment checks are unavailable because there are more than ${MAX_AUTHORING_DOCUMENTS} authoring documents.`,
       documentCount,
     };
   }
@@ -325,49 +279,34 @@ async function loadUsageDocuments(
   const loadedDocumentCount = documents.reduce((total, collection) => total + collection.length, 0);
   if (loadedDocumentCount > MAX_AUTHORING_DOCUMENTS) {
     return {
-      unavailable: `Assignment checks are unavailable because more than ${MAX_AUTHORING_DOCUMENTS} authoring documents were loaded.`,
+      status: 'unavailable',
+      message: `Assignment checks are unavailable because more than ${MAX_AUTHORING_DOCUMENTS} authoring documents were loaded.`,
       documentCount: loadedDocumentCount,
     };
   }
+  const [learningUnits, versions, drafts, mocks, pools] = documents;
   return {
+    status: 'available',
     documentCount: loadedDocumentCount,
-    documents,
+    usages: projectVocabularyPoolUsages({ learningUnits, versions, drafts, mocks, pools }),
   };
-}
-
-function logScan(status: VocabularyPoolUsageScan['status'], durationMs: number, documentCount?: number) {
-  console.info('[vocabulary-pool-usage-scan]', { context: 'management', status, documentCount, durationMs });
 }
 
 /** Scans the four canonical authoring collections with an explicit size guard. */
 export async function scanVocabularyPoolUsages(db: Firestore): Promise<VocabularyPoolUsageScan> {
   const startedAt = Date.now();
+  let result: VocabularyPoolUsageScan;
   try {
-    const loaded = await loadUsageDocuments(db);
-    if ('unavailable' in loaded) {
-      const result: VocabularyPoolUsageScan = {
-        status: 'unavailable',
-        message: loaded.unavailable,
-        ...(loaded.documentCount === undefined ? {} : { documentCount: loaded.documentCount }),
-      };
-      logScan(result.status, Date.now() - startedAt, result.documentCount);
-      return result;
-    }
-    const [learningUnits, versions, drafts, mocks, pools] = loaded.documents;
-    const result: VocabularyPoolUsageScan = {
-      status: 'available',
-      documentCount: loaded.documentCount,
-      usages: projectVocabularyPoolUsages({ learningUnits, versions, drafts, mocks, pools }),
-    };
-    logScan(result.status, Date.now() - startedAt, result.documentCount);
-    return result;
+    result = await loadUsageScan(db);
   } catch (error) {
     console.error('[vocabulary-pool-usage-scan] failed', error);
-    const result: VocabularyPoolUsageScan = {
-      status: 'unavailable',
-      message: 'Assignment checks are temporarily unavailable. Try again shortly.',
-    };
-    logScan(result.status, Date.now() - startedAt);
-    return result;
+    result = { status: 'unavailable', message: 'Assignment checks are temporarily unavailable. Try again shortly.' };
   }
+  console.info('[vocabulary-pool-usage-scan]', {
+    context: 'management',
+    status: result.status,
+    documentCount: result.documentCount,
+    durationMs: Date.now() - startedAt,
+  });
+  return result;
 }

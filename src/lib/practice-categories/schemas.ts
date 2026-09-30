@@ -142,30 +142,21 @@ export const practiceCategorySelectionsSchema = z
 
 export const optionalPracticeCategorySelectionsSchema = practiceCategorySelectionsSchema.optional();
 
+export const optionalPracticeCategoryIdsSchema = z
+  .array(nonEmptyIdSchema)
+  .refine(uniqueIds, 'practiceCategoryIds must not contain duplicates')
+  .optional();
+
 export const reconcilePracticeCategoryAssignmentsSchema = z
   .object({
-    practiceCategorySelections: practiceCategorySelectionsSchema.optional(),
-    practiceCategoryIds: z
-      .array(nonEmptyIdSchema)
-      .refine(uniqueIds, 'practiceCategoryIds must not contain duplicates')
-      .optional(),
+    practiceCategorySelections: optionalPracticeCategorySelectionsSchema,
+    practiceCategoryIds: optionalPracticeCategoryIdsSchema,
   })
   .strict()
   .refine(
     value => value.practiceCategorySelections !== undefined || value.practiceCategoryIds !== undefined,
     'practiceCategorySelections or practiceCategoryIds is required'
   );
-
-export const reconcilePracticeCategoriesSchema = z
-  .object({
-    practiceCategoryIds: z.array(nonEmptyIdSchema).refine(uniqueIds, 'practiceCategoryIds must not contain duplicates'),
-  })
-  .strict();
-
-export const optionalPracticeCategoryIdsSchema = z
-  .array(nonEmptyIdSchema)
-  .refine(uniqueIds, 'practiceCategoryIds must not contain duplicates')
-  .optional();
 
 export type CreatePracticeCategoryInput = z.infer<typeof createPracticeCategorySchema>;
 export type UpdatePracticeCategoryInput = z.infer<typeof updatePracticeCategorySchema>;

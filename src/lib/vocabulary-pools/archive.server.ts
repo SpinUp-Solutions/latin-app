@@ -10,11 +10,6 @@ import { isVocabularyPoolCreationPending } from '@/src/lib/vocabulary-pools/pool
 
 export { DELETED_VOCABULARY_POOL_COLLECTION, VOCABULARY_POOL_COLLECTION } from '@/shared/constants/firestore';
 
-export {
-  isVocabularyPoolCreationPending,
-  VocabularyPoolStateError,
-} from '@/src/lib/vocabulary-pools/pool-state.server';
-
 export const VOCABULARY_POOL_ARCHIVE_COLLECTION = 'vocabulary_pool_archives';
 export const VOCABULARY_POOL_DELETION_CHALLENGE_COLLECTION = 'vocabulary_pool_deletion_challenges';
 

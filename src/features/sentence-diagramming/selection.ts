@@ -147,20 +147,6 @@ export const getSelectionSpanForKind = (
   return snapSpanToSelectionMode(selection.span, tokens, ANNOTATION_SPECS[kind].selectionMode);
 };
 
-export const describeSelectionForKind = (
-  selection: DiagramSelection | null,
-  kind: AnnotationKind,
-  tokens: DiagramToken[]
-) => {
-  const span = getSelectionSpanForKind(selection, kind, tokens);
-
-  if (!span) {
-    return null;
-  }
-
-  return getSpanText(tokens, span);
-};
-
 export const getAnnotationsForSelection = (
   selection: DiagramSelection | null,
   annotations: DiagramAnnotation[],

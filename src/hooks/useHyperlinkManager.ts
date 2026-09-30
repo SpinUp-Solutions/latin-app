@@ -1,11 +1,6 @@
 import { useState, useCallback } from 'react';
 import { Editor } from '@tiptap/react';
 
-export interface HyperlinkManagerOptions {
-  editor: Editor | null;
-  disabled?: boolean;
-}
-
 interface HyperlinkMarkData {
   href: string;
   target?: string;
@@ -29,13 +24,13 @@ const findHyperlinkMark = (editor: Editor, from: number, to: number): HyperlinkM
   return hyperlinkMark;
 };
 
-export const useHyperlinkManager = ({ editor, disabled = false }: HyperlinkManagerOptions) => {
+export const useHyperlinkManager = ({ editor }: { editor: Editor | null }) => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [existingHref, setExistingHref] = useState('');
   const [selectedText, setSelectedText] = useState('');
 
   const handleAddHyperlink = useCallback(() => {
-    if (!editor || disabled) return;
+    if (!editor) return;
 
     const { from, to } = editor.state.selection;
     const text = editor.state.doc.textBetween(from, to);
@@ -46,15 +41,16 @@ export const useHyperlinkManager = ({ editor, disabled = false }: HyperlinkManag
     }
 
     const existingLink = findHyperlinkMark(editor, from, to);
-    if (existingLink) {
-      setExistingHref(existingLink.href);
-    } else {
-      setExistingHref('');
-    }
-
+    setExistingHref(existingLink ? existingLink.href : '');
     setSelectedText(text);
     setIsDialogOpen(true);
-  }, [editor, disabled]);
+  }, [editor]);
+
+  const handleCloseDialog = useCallback(() => {
+    setIsDialogOpen(false);
+    setExistingHref('');
+    setSelectedText('');
+  }, []);
 
   const handleSaveHyperlink = useCallback(
     (href: string, openInNewTab: boolean) => {
@@ -71,8 +67,7 @@ export const useHyperlinkManager = ({ editor, disabled = false }: HyperlinkManag
 
       handleCloseDialog();
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [editor]
+    [editor, handleCloseDialog]
   );
 
   const handleRemoveHyperlink = useCallback(() => {
@@ -80,14 +75,7 @@ export const useHyperlinkManager = ({ editor, disabled = false }: HyperlinkManag
 
     editor.chain().focus().unsetHyperlink().run();
     handleCloseDialog();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editor]);
-
-  const handleCloseDialog = useCallback(() => {
-    setIsDialogOpen(false);
-    setExistingHref('');
-    setSelectedText('');
-  }, []);
+  }, [editor, handleCloseDialog]);
 
   return {
     isDialogOpen,

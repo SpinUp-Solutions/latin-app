@@ -43,14 +43,10 @@ it('retains the generated sample and progress after the real query cache expires
   jest.useFakeTimers();
   mockQuery.mockResolvedValue({
     data: {
-      words: [
-        { id: 'a', root_word: 'unus', selected_form: 'unus', translation: 'one', part_of_speech: 'noun' },
-        { id: 'b', root_word: 'duo', selected_form: 'duo', translation: 'two', part_of_speech: 'noun' },
+      items: [
+        { text: 'unus', acceptedAnswers: ['one'] },
+        { text: 'duo', acceptedAnswers: ['two'] },
       ],
-      diagnostics: [],
-      requestedCount: 2,
-      collected: 2,
-      globalScanLimitReached: false,
     },
   });
   const store = configureStore({
@@ -82,9 +78,7 @@ it('retains the generated sample and progress after the real query cache expires
     jest.advanceTimersByTime(65000);
   });
   expect(Object.keys(store.getState()[advancedVocabularyApi.reducerPath].queries)).toHaveLength(0);
-  mockQuery.mockResolvedValue({
-    data: { words: [], diagnostics: [], requestedCount: 2, collected: 0, globalScanLimitReached: false },
-  });
+  mockQuery.mockResolvedValue({ data: { items: [] } });
   view.rerender(viewAt(0));
   await act(async () => {});
   expect(mockQuery).toHaveBeenCalledTimes(1);

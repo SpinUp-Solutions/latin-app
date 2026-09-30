@@ -35,14 +35,14 @@ import {
 import { clearDraft, loadDrafts } from '@/src/store/slices/lessonEditorSlice';
 import { ConfirmationDialog } from '@/src/components/ui/core/ConfirmationDialog';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
-import { isExerciseType } from '@/src/utils/lessonUtils';
+import { isExerciseType } from '@/src/lib/content/registry';
 import { RomanCard, RomanCardContent } from '@/src/components/ui/core/roman-card';
 import { useDebounce } from '@/src/hooks/useDebounce';
 import { PracticeCategoryChips } from './practice-categories/PracticeCategoryChips';
 import { useGetPracticeCategoriesQuery } from '@/src/store/api/practiceCategoryApi';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/src/components/ui/select';
+import { isPracticeLessonType } from '@/src/lib/practice-categories/domain';
 import {
-  isPracticeLessonType,
   lessonMatchesPracticeCategory,
   lessonMatchesTextSearch,
   type PracticeCategoryFilter,

@@ -1,4 +1,8 @@
-import { VocabularyPoolStateError } from '@/src/lib/vocabulary-pools/pool-state.server';
+import { VOCABULARY_POOL_COLLECTION } from '@/shared/constants/firestore';
+import {
+  isVocabularyPoolCreationPending,
+  VocabularyPoolStateError,
+} from '@/src/lib/vocabulary-pools/pool-state.server';
 import { resolveVocabularyPool } from '@/src/lib/vocabulary-pools/linked-pools.server';
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
@@ -10,13 +14,13 @@ import type { FormIdentificationStep } from '@/src/types/exercises/schemas/form-
 import { scanTableForMatchingForms, categorizeMatchingPaths } from '@/src/utils/tableScanner';
 import { getApplicableStepsForFormPath } from '@/src/utils/exercises/formIdentificationCompatibility';
 import { isSelectableMorphologyForm } from '@/src/utils/morphologyForms';
+import { stripMacrons } from '@/src/utils/exercises/helpers';
 import { AdminAccessError, verifyAdminAccess, verifyAuthenticatedAccess } from '@/src/lib/verifyAdminAccess';
 import {
   requireVocabularyWordsCollection,
   VocabularyWordCollectionError,
 } from '@/src/lib/vocabulary/word-collection.server';
 import { getReadableVocabularyPool } from '@/src/lib/vocabulary-pools/archive.server';
-import { isVocabularyPoolCreationPending } from '@/src/lib/vocabulary-pools/pool-state.server';
 import { prepareVocabularyContentRevisionBump } from '@/src/lib/vocabulary-pools/content-revision.server';
 import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
 
@@ -42,6 +46,16 @@ const GENERATED_WORD_FIELDS = new Set([
 const GENERATED_MAX_RESULTS = 200;
 const GENERATED_MAX_LIST_VALUES = 30;
 const GENERATED_MAX_CELL_PATHS = 100;
+const COUNTED_PARTS_OF_SPEECH = [
+  'noun',
+  'verb',
+  'adjective',
+  'adverb',
+  'preposition',
+  'pronoun',
+  'conjunction',
+  'interjection',
+] as const;
 
 const generatedRequestError = (error: string) => NextResponse.json({ success: false, error }, { status: 400 });
 
@@ -67,54 +81,24 @@ const serializeWord = (data: Record<string, unknown>): Record<string, unknown> =
   return serialized;
 };
 
-const stripMacrons = (str: string): string => {
-  return str
-    .normalize('NFD')
-    .replace(/[\u0304]/g, '')
-    .normalize('NFC');
-};
-
-const parseCellPaths = (cellPaths: string | null): string[] => {
-  if (!cellPaths) return [];
-  return cellPaths
-    .split(',')
-    .map(p => p.trim())
-    .filter(p => p.length > 0);
-};
-
-const parseSteps = (steps: string | null): FormIdentificationStep[] => {
-  if (!steps) return [];
-  return steps
-    .split(',')
-    .map(step => step.trim())
-    .filter(Boolean) as FormIdentificationStep[];
-};
-
-const parseSelectFields = (selectFields: string | null): string[] => {
-  if (!selectFields) return [];
-  return selectFields
-    .split(',')
-    .map(f => f.trim())
-    .filter(f => f.length > 0);
-};
+const parseCsv = (value: string | null): string[] =>
+  value
+    ? value
+        .split(',')
+        .map(entry => entry.trim())
+        .filter(Boolean)
+    : [];
 
 const applyMultiValueFilter = (query: Query, field: string, paramValue: string | null): Query => {
-  if (!paramValue) return query;
-  const values = paramValue
-    .split(',')
-    .map(v => v.trim())
-    .filter(v => v.length > 0);
+  const values = parseCsv(paramValue);
   if (values.length === 0) return query;
-  if (values.length === 1) {
-    return query.where(field, '==', values[0]);
-  }
-  return query.where(field, 'in', values);
+  return values.length === 1 ? query.where(field, '==', values[0]) : query.where(field, 'in', values);
 };
 
-const shuffleArray = <T>(items: T[]): T[] => {
+const shuffle = <T>(items: T[], random: () => number = Math.random): T[] => {
   const copy = [...items];
   for (let i = copy.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(random() * (i + 1));
     [copy[i], copy[j]] = [copy[j], copy[i]];
   }
   return copy;
@@ -137,18 +121,6 @@ const createSeededRandom = (seed: string): (() => number) => {
   };
 };
 
-const shuffleArrayWithSeed = <T>(items: T[], seed: string): T[] => {
-  const copy = [...items];
-  const random = createSeededRandom(seed);
-
-  for (let i = copy.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-
-  return copy;
-};
-
 const pickPoolWordIds = (
   wordDocIds: string[],
   limitCount: number,
@@ -159,9 +131,23 @@ const pickPoolWordIds = (
   if (fetchAllWords) {
     return [...wordDocIds];
   }
-  const ordered = sampleSeed ? shuffleArrayWithSeed(wordDocIds, sampleSeed) : shuffleArray(wordDocIds);
+  const ordered = sampleSeed ? shuffle(wordDocIds, createSeededRandom(sampleSeed)) : shuffle(wordDocIds);
   return ordered.slice(offset, offset + Math.max(1, limitCount));
 };
+
+function errorResponse(error: unknown, action: string): NextResponse {
+  if (error instanceof VocabularyPoolStateError || error instanceof VocabularyWordCollectionError) {
+    return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
+  }
+  if (error instanceof AdminAccessError) {
+    return NextResponse.json({ success: false, error: error.message }, { status: error.status });
+  }
+  console.error(`Error ${action}:`, error);
+  return NextResponse.json(
+    { success: false, error: error instanceof Error ? error.message : 'Unknown error occurred' },
+    { status: 500 }
+  );
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -186,10 +172,11 @@ export async function handleVocabularyWordsGET(
     const pronounType = searchParams.get('pronounType');
     const pronounPerson = searchParams.get('pronounPerson');
     const cellPaths = searchParams.get('cellPaths');
+    const pathValues = parseCsv(cellPaths);
     const steps = searchParams.get('steps');
-    const stepValues = parseSteps(steps);
-    const tableType = searchParams.get('tableType');
-    const selectFields = searchParams.get('select');
+    const stepValues = parseCsv(steps) as FormIdentificationStep[];
+    const tableType = searchParams.get('tableType') as TableType | null;
+    const selectValues = parseCsv(searchParams.get('select'));
     const fetchAll = searchParams.get('fetchAll') === 'true';
     const randomize = !fetchAll && searchParams.get('randomize') === 'true';
     const randomStart = searchParams.get('randomStart');
@@ -207,8 +194,6 @@ export async function handleVocabularyWordsGET(
     if (audience === 'generated') {
       const rawLimit = searchParams.get('limit') ?? '20';
       const listParams = [verbConjugation, nounDeclension, adjectiveDeclension, pronounType, pronounPerson];
-      const selectValues = parseSelectFields(selectFields);
-      const pathValues = parseCellPaths(cellPaths);
       if (fetchAll) return generatedRequestError('Generated word requests cannot use fetchAll');
       if (!/^\d+$/.test(rawLimit) || limit < 1 || limit > GENERATED_MAX_RESULTS)
         return generatedRequestError(`Generated word limit must be between 1 and ${GENERATED_MAX_RESULTS}`);
@@ -251,6 +236,9 @@ export async function handleVocabularyWordsGET(
       });
     }
 
+    // Random ordering serves exercise generation; it never applies to search or cursor pagination.
+    const useRandomOrder = randomStart !== null && !search && !lastWordId;
+    const randomThreshold = useRandomOrder ? parseFloat(randomStart) : null;
     let snapshot;
     let fetchLimit = limit;
     let poolSourceMeta: { totalIds: number; requestedCount: number; offset: number } | null = null;
@@ -260,7 +248,7 @@ export async function handleVocabularyWordsGET(
         audience === 'generated'
           ? await getReadableVocabularyPool(adminDb, poolId)
           : await adminDb
-              .collection('vocabulary_pools')
+              .collection(VOCABULARY_POOL_COLLECTION)
               .doc(poolId)
               .get()
               .then(async poolDoc =>
@@ -294,13 +282,12 @@ export async function handleVocabularyWordsGET(
         if (idsToFetch.length === 0) {
           snapshot = { docs: [], size: 0, empty: true };
         } else {
-          const fields = parseSelectFields(selectFields);
           const batches = [];
           for (let i = 0; i < idsToFetch.length; i += 10) {
             const chunk = idsToFetch.slice(i, i + 10);
             let batchQuery: Query = readablePool.words.where(FieldPath.documentId(), 'in', chunk);
-            if (fields.length > 0) {
-              batchQuery = batchQuery.select(...fields);
+            if (selectValues.length > 0) {
+              batchQuery = batchQuery.select(...selectValues);
             }
             batches.push(batchQuery.get());
           }
@@ -309,10 +296,7 @@ export async function handleVocabularyWordsGET(
           let docsFromPool = batchResults.flatMap(result => result.docs);
 
           if (wordType && wordType !== 'all') {
-            docsFromPool = docsFromPool.filter(doc => {
-              const data = doc.data();
-              return data.part_of_speech === wordType;
-            });
+            docsFromPool = docsFromPool.filter(doc => doc.data().part_of_speech === wordType);
           }
 
           snapshot = {
@@ -323,52 +307,34 @@ export async function handleVocabularyWordsGET(
         }
       }
     } else {
-      console.log('[VOCAB API] Querying collection:', collection);
-      let query: Query = adminDb.collection(collection);
-
-      const fields = parseSelectFields(selectFields);
-      if (fields.length > 0) {
-        query = query.select(...fields);
-      }
-
-      // Determine if using random ordering (for exercise generation)
-      const useRandomOrder = randomStart !== null && !search && !lastWordId;
-      const randomThreshold = useRandomOrder ? parseFloat(randomStart) : null;
-
-      if (useRandomOrder && randomThreshold !== null) {
-        console.log('[VOCAB API] Using random ordering with threshold:', randomThreshold);
-        query = query.orderBy('random_index');
-        query = query.where('random_index', '>=', randomThreshold);
-      } else {
-        console.log('[VOCAB API] Ordering by: sort_key');
-        query = query.orderBy('sort_key');
-      }
-
-      if (wordType) {
-        console.log('[VOCAB API] Filtering by part_of_speech:', wordType);
-        query = query.where('part_of_speech', '==', wordType);
-      }
-
-      if (search) {
-        const searchKey = stripMacrons(search);
-        query = query.where('sort_key', '>=', searchKey).where('sort_key', '<=', searchKey + '\uf8ff');
-      }
-
-      if (wordType === 'verb') {
-        query = applyMultiValueFilter(query, 'conjugation', verbConjugation);
-        if (isDeponent === 'true') {
-          query = query.where('is_deponent', '==', true);
-        } else if (isDeponent === 'false') {
-          query = query.where('is_deponent', '==', false);
+      const applyWordFilters = (query: Query, searchKey?: string): Query => {
+        if (wordType) query = query.where('part_of_speech', '==', wordType);
+        if (searchKey !== undefined) {
+          query = query.where('sort_key', '>=', searchKey).where('sort_key', '<=', searchKey + '\uf8ff');
         }
-      } else if (wordType === 'noun') {
-        query = applyMultiValueFilter(query, 'declension', nounDeclension);
-      } else if (wordType === 'adjective') {
-        query = applyMultiValueFilter(query, 'declension', adjectiveDeclension);
-      } else if (wordType === 'pronoun') {
-        query = applyMultiValueFilter(query, 'pronoun_type', pronounType);
-        query = applyMultiValueFilter(query, 'person', pronounPerson);
-      }
+        if (wordType === 'verb') {
+          query = applyMultiValueFilter(query, 'conjugation', verbConjugation);
+          if (isDeponent === 'true' || isDeponent === 'false') {
+            query = query.where('is_deponent', '==', isDeponent === 'true');
+          }
+        } else if (wordType === 'noun') {
+          query = applyMultiValueFilter(query, 'declension', nounDeclension);
+        } else if (wordType === 'adjective') {
+          query = applyMultiValueFilter(query, 'declension', adjectiveDeclension);
+        } else if (wordType === 'pronoun') {
+          query = applyMultiValueFilter(query, 'pronoun_type', pronounType);
+          query = applyMultiValueFilter(query, 'person', pronounPerson);
+        }
+        return query;
+      };
+      const selectFields = (query: Query) => (selectValues.length > 0 ? query.select(...selectValues) : query);
+
+      let query = selectFields(adminDb.collection(collection));
+      query =
+        randomThreshold !== null
+          ? query.orderBy('random_index').where('random_index', '>=', randomThreshold)
+          : query.orderBy('sort_key');
+      query = applyWordFilters(query, search ? stripMacrons(search) : undefined);
 
       if (lastWordId && !fetchAll) {
         const lastDocSnapshot = await adminDb.collection(collection).doc(lastWordId).get();
@@ -382,46 +348,16 @@ export async function handleVocabularyWordsGET(
         query = query.limit(fetchLimit);
       }
 
-      console.log('[VOCAB API] Executing query...');
       snapshot = await query.get();
-      console.log('[VOCAB API] Query returned', snapshot.size, 'documents');
 
-      // Wrap-around: if using random order and didn't get enough results, fetch from beginning
-      if (useRandomOrder && randomThreshold !== null && !fetchAll && snapshot.docs.length < limit) {
-        const remaining = limit - snapshot.docs.length;
-        console.log('[VOCAB API] Wrap-around: need', remaining, 'more words from beginning');
-
-        let wrapQuery: Query = adminDb.collection(collection);
-        if (fields.length > 0) {
-          wrapQuery = wrapQuery.select(...fields);
-        }
-        wrapQuery = wrapQuery.orderBy('random_index');
-        wrapQuery = wrapQuery.where('random_index', '<', randomThreshold);
-
-        if (wordType) {
-          wrapQuery = wrapQuery.where('part_of_speech', '==', wordType);
-        }
-        if (wordType === 'verb') {
-          wrapQuery = applyMultiValueFilter(wrapQuery, 'conjugation', verbConjugation);
-          if (isDeponent === 'true') {
-            wrapQuery = wrapQuery.where('is_deponent', '==', true);
-          } else if (isDeponent === 'false') {
-            wrapQuery = wrapQuery.where('is_deponent', '==', false);
-          }
-        } else if (wordType === 'noun') {
-          wrapQuery = applyMultiValueFilter(wrapQuery, 'declension', nounDeclension);
-        } else if (wordType === 'adjective') {
-          wrapQuery = applyMultiValueFilter(wrapQuery, 'declension', adjectiveDeclension);
-        } else if (wordType === 'pronoun') {
-          wrapQuery = applyMultiValueFilter(wrapQuery, 'pronoun_type', pronounType);
-          wrapQuery = applyMultiValueFilter(wrapQuery, 'person', pronounPerson);
-        }
-
-        wrapQuery = wrapQuery.limit(remaining);
-        const wrapSnapshot = await wrapQuery.get();
-        console.log('[VOCAB API] Wrap-around query returned', wrapSnapshot.size, 'documents');
-
-        // Combine results
+      // Wrap around to the start of the random_index range when the tail holds too few words.
+      if (randomThreshold !== null && !fetchAll && snapshot.docs.length < limit) {
+        const wrapQuery = applyWordFilters(
+          selectFields(adminDb.collection(collection))
+            .orderBy('random_index')
+            .where('random_index', '<', randomThreshold)
+        );
+        const wrapSnapshot = await wrapQuery.limit(limit - snapshot.docs.length).get();
         snapshot = {
           docs: [...snapshot.docs, ...wrapSnapshot.docs],
           size: snapshot.size + wrapSnapshot.size,
@@ -436,91 +372,53 @@ export async function handleVocabularyWordsGET(
       docs = shuffled.slice(0, limit);
     }
 
-    console.log('[VOCAB API] Processing', docs.length, 'documents');
-
+    const isExerciseMode = !!tableType || exerciseMode;
     const words = docs
       .map(doc => {
-        const data = doc.data();
-        const serialized = serializeWord(data as Record<string, unknown>);
-        const isExerciseMode = !!tableType || exerciseMode;
+        const serialized = serializeWord(doc.data());
+        if (!isExerciseMode) {
+          return { id: doc.id, ...serialized };
+        }
 
-        if (isExerciseMode) {
-          const paths = parseCellPaths(cellPaths);
-
-          if (paths.length > 0 && tableType) {
-            const formResult = pickRandomFormServer(serialized, tableType as TableType, paths, stepValues);
-
-            if (!formResult) {
-              return null;
-            }
-
-            const formPath = parseFormPathFromString(
-              formResult.selectedPath,
-              tableType as 'conjugation' | 'declension' | 'adjective-declension'
-            );
-
-            const primaryFormPaths = formResult.primaryPaths
-              .map(p => parseFormPathFromString(p, tableType as 'conjugation' | 'declension' | 'adjective-declension'))
-              .filter((fp): fp is NonNullable<typeof fp> => fp !== null);
-
-            const optionalFormPaths = formResult.optionalPaths
-              .map(p => parseFormPathFromString(p, tableType as 'conjugation' | 'declension' | 'adjective-declension'))
-              .filter((fp): fp is NonNullable<typeof fp> => fp !== null);
-
-            const result = {
-              ...serialized,
-              id: doc.id,
-              root_word: serialized.word,
-              dictionary_entry: (serialized.dictionary_entry as string) ?? null,
-              selected_form: formResult.selectedForm,
-              form_path: formPath,
-              primary_form_paths: primaryFormPaths.length > 0 ? primaryFormPaths : undefined,
-              optional_form_paths: optionalFormPaths.length > 0 ? optionalFormPaths : undefined,
-            } as Record<string, unknown>;
-
-            for (const field of TABLE_FIELDS) {
-              delete result[field];
-            }
-
-            return result;
+        let formFields: Record<string, unknown> = {
+          selected_form: serialized.word as string,
+          form_path: null,
+          primary_form_paths: undefined,
+          optional_form_paths: undefined,
+        };
+        if (pathValues.length > 0 && tableType) {
+          const formResult = pickRandomFormServer(serialized, tableType, pathValues, stepValues);
+          if (!formResult) {
+            return null;
           }
-
-          const result = {
-            ...serialized,
-            id: doc.id,
-            root_word: serialized.word,
-            dictionary_entry: (serialized.dictionary_entry as string) ?? null,
-            selected_form: serialized.word as string,
-            form_path: null,
-            primary_form_paths: undefined,
-            optional_form_paths: undefined,
-          } as Record<string, unknown>;
-
-          for (const field of TABLE_FIELDS) {
-            delete result[field];
-          }
-
-          return result;
-        } else {
-          return {
-            id: doc.id,
-            ...serialized,
+          const toFormPaths = (paths: string[]) =>
+            paths
+              .map(path => parseFormPathFromString(path, tableType))
+              .filter((formPath): formPath is NonNullable<typeof formPath> => formPath !== null);
+          const primaryFormPaths = toFormPaths(formResult.primaryPaths);
+          const optionalFormPaths = toFormPaths(formResult.optionalPaths);
+          formFields = {
+            selected_form: formResult.selectedForm,
+            form_path: parseFormPathFromString(formResult.selectedPath, tableType),
+            primary_form_paths: primaryFormPaths.length > 0 ? primaryFormPaths : undefined,
+            optional_form_paths: optionalFormPaths.length > 0 ? optionalFormPaths : undefined,
           };
         }
+
+        const result: Record<string, unknown> = {
+          ...serialized,
+          id: doc.id,
+          root_word: serialized.word,
+          dictionary_entry: serialized.dictionary_entry ?? null,
+          ...formFields,
+        };
+        for (const field of TABLE_FIELDS) {
+          delete result[field];
+        }
+        return result;
       })
       .filter((word): word is NonNullable<typeof word> => word !== null);
 
-    console.log('[VOCAB API] Mapped to', words.length, 'words');
-    if (words.length > 0) {
-      console.log('[VOCAB API] First word:', {
-        id: words[0].id,
-        word: words[0].word,
-        sort_key: words[0].sort_key,
-        part_of_speech: words[0].part_of_speech,
-      });
-    }
-
-    const useRandomOrder = randomStart !== null && !search && !lastWordId;
     const hasMore = fetchAll
       ? false
       : poolId
@@ -530,15 +428,10 @@ export async function handleVocabularyWordsGET(
           : snapshot.docs.length === fetchLimit;
     const lastDoc = fetchAll || poolId || randomize || useRandomOrder ? null : docs[docs.length - 1];
 
-    console.log('[VOCAB API] Returning response with', words.length, 'words, hasMore:', hasMore);
-
-    const responseWords =
-      audience === 'generated' ? words.map(word => sanitizeGeneratedWord(word as Record<string, unknown>)) : words;
-
     return NextResponse.json({
       success: true,
       data: {
-        words: responseWords,
+        words: audience === 'generated' ? words.map(sanitizeGeneratedWord) : words,
         hasMore,
         lastWordId: lastDoc?.id || null,
         limit: fetchAll ? null : limit,
@@ -549,22 +442,7 @@ export async function handleVocabularyWordsGET(
       },
     });
   } catch (error) {
-    if (error instanceof VocabularyPoolStateError)
-      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
-    if (error instanceof AdminAccessError) {
-      return NextResponse.json({ success: false, error: error.message }, { status: error.status });
-    }
-    if (error instanceof VocabularyWordCollectionError) {
-      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
-    }
-    console.error('Error fetching words:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
-      },
-      { status: 500 }
-    );
+    return errorResponse(error, 'fetching words');
   }
 }
 
@@ -586,26 +464,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const { collection: providedCollection, ...wordPayload } = body as Record<string, unknown> & {
-      collection?: string;
-      id?: string;
-    };
-
+    const { collection: providedCollection, ...wordPayload } = body as Record<string, unknown>;
     const collection = requireVocabularyWordsCollection(providedCollection);
 
     const now = new Date();
-    const isoTimestamp = now.toISOString();
-
-    const wordValue = typeof wordPayload.word === 'string' ? wordPayload.word : '';
-    const sortKey = stripMacrons(wordValue);
-    const randomIndex = Math.random();
-
     const validationResult = VocabularyWordSchema.safeParse({
       ...wordPayload,
-      sort_key: sortKey,
-      random_index: randomIndex,
-      createdAt: isoTimestamp,
-      updatedAt: isoTimestamp,
+      sort_key: stripMacrons(typeof wordPayload.word === 'string' ? wordPayload.word : ''),
+      random_index: Math.random(),
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
     });
 
     if (!validationResult.success) {
@@ -621,15 +489,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const { createdAt, updatedAt, ...validatedWord } = validationResult.data;
-    void createdAt;
-    void updatedAt;
-
-    const firestorePayload = {
-      ...validatedWord,
-      createdAt: now,
-      updatedAt: now,
-    };
+    const firestorePayload = { ...validationResult.data, createdAt: now, updatedAt: now };
 
     const docRef = adminDb.collection(collection).doc();
     await runVocabularyContentMutation(adminDb, async transaction => {
@@ -650,22 +510,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
     });
   } catch (error) {
-    if (error instanceof VocabularyPoolStateError)
-      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
-    if (error instanceof AdminAccessError) {
-      return NextResponse.json({ success: false, error: error.message }, { status: error.status });
-    }
-    if (error instanceof VocabularyWordCollectionError) {
-      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
-    }
-    console.error('Error creating word:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
-      },
-      { status: 500 }
-    );
+    return errorResponse(error, 'creating word');
   }
 }
 
@@ -735,38 +580,20 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
       const errorMessage = updateResult.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).join('; ');
       return NextResponse.json({ success: false, error: `Invalid word data: ${errorMessage}` }, { status: 400 });
     }
-    const updatedData = updateResult.data;
 
     return NextResponse.json({
       success: true,
       message: 'Word updated successfully',
-      updatedData,
+      updatedData: updateResult.data,
     });
   } catch (error) {
-    if (error instanceof VocabularyPoolStateError)
-      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
-    if (error instanceof AdminAccessError) {
-      return NextResponse.json({ success: false, error: error.message }, { status: error.status });
-    }
-    if (error instanceof VocabularyWordCollectionError) {
-      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
-    }
-    console.error('Error updating word:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
-      },
-      { status: 500 }
-    );
+    return errorResponse(error, 'updating word');
   }
 }
 
-function getCellValueAtPathServer(obj: Record<string, unknown>, path: string): string[] {
-  const keys = path.split('.');
+function getCellValuesAtPath(obj: Record<string, unknown>, path: string): string[] {
   let value: unknown = obj;
-
-  for (const key of keys) {
+  for (const key of path.split('.')) {
     if (value && typeof value === 'object' && key in value) {
       value = (value as Record<string, unknown>)[key];
     } else {
@@ -774,33 +601,18 @@ function getCellValueAtPathServer(obj: Record<string, unknown>, path: string): s
     }
   }
 
-  if (value === null || value === undefined) {
-    return [];
-  }
-
   if (typeof value === 'string') {
     return isSelectableMorphologyForm(value) ? [value] : [];
   }
-
-  if (Array.isArray(value)) {
-    return value.filter(isSelectableMorphologyForm);
-  }
-  return [];
-}
-
-interface FormSelectionResult {
-  selectedForm: string;
-  selectedPath: string;
-  primaryPaths: string[];
-  optionalPaths: string[];
+  return Array.isArray(value) ? value.filter(isSelectableMorphologyForm) : [];
 }
 
 function pickRandomFormServer(
   word: Record<string, unknown>,
   tableType: TableType,
   selectedPaths: string[],
-  selectedSteps: readonly FormIdentificationStep[] = []
-): FormSelectionResult | null {
+  selectedSteps: readonly FormIdentificationStep[]
+) {
   const rootField = TABLE_TYPE_CONFIG[tableType];
   if (!rootField) {
     return null;
@@ -811,33 +623,24 @@ function pickRandomFormServer(
     return null;
   }
 
-  const formsWithPaths: Array<{ form: string; path: string }> = [];
-
   const compatiblePaths = selectedSteps.length
     ? selectedPaths.filter(
         path => (getApplicableStepsForFormPath(path, tableType, selectedSteps)?.applicableSteps.length ?? 0) > 0
       )
     : selectedPaths;
 
-  for (const path of compatiblePaths) {
-    const fullPath = `${rootField}.${path}`;
-    const forms = getCellValueAtPathServer(word, fullPath);
-
-    for (const form of forms) {
-      formsWithPaths.push({ form, path });
-    }
-  }
-
+  const formsWithPaths = compatiblePaths.flatMap(path =>
+    getCellValuesAtPath(word, `${rootField}.${path}`).map(form => ({ form, path }))
+  );
   if (formsWithPaths.length === 0) {
     return null;
   }
 
   const selected = formsWithPaths[Math.floor(Math.random() * formsWithPaths.length)];
-
-  const allMatchingPaths = scanTableForMatchingForms(table, selected.form, tableType);
-
-  const { primaryPaths, optionalPaths } = categorizeMatchingPaths(allMatchingPaths, compatiblePaths);
-
+  const { primaryPaths, optionalPaths } = categorizeMatchingPaths(
+    scanTableForMatchingForms(table, selected.form),
+    compatiblePaths
+  );
   if (!primaryPaths.includes(selected.path)) {
     primaryPaths.unshift(selected.path);
   }
@@ -851,45 +654,22 @@ function pickRandomFormServer(
 }
 
 async function getWordTypeCounts(collection: string) {
-  const posTypes = [
-    'noun',
-    'verb',
-    'adjective',
-    'adverb',
-    'preposition',
-    'pronoun',
-    'conjunction',
-    'interjection',
-  ] as const;
-
-  const counts: Record<string, number> = {
-    noun: 0,
-    verb: 0,
-    adjective: 0,
-    adverb: 0,
-    preposition: 0,
-    pronoun: 0,
-    conjunction: 0,
-    interjection: 0,
-    other: 0,
-  };
+  const counts: Record<string, number> = Object.fromEntries(
+    [...COUNTED_PARTS_OF_SPEECH, 'other'].map(partOfSpeech => [partOfSpeech, 0])
+  );
 
   try {
-    const countPromises = posTypes.map(async pos => {
-      const snapshot = await adminDb.collection(collection).where('part_of_speech', '==', pos).count().get();
-      return { pos, count: snapshot.data().count };
-    });
-
-    const results = await Promise.all(countPromises);
-    for (const { pos, count } of results) {
-      counts[pos] = count;
+    const results = await Promise.all(
+      COUNTED_PARTS_OF_SPEECH.map(async partOfSpeech => {
+        const snapshot = await adminDb.collection(collection).where('part_of_speech', '==', partOfSpeech).count().get();
+        return [partOfSpeech, snapshot.data().count] as const;
+      })
+    );
+    for (const [partOfSpeech, count] of results) {
+      counts[partOfSpeech] = count;
     }
-
-    return counts;
   } catch (error) {
-    if (error instanceof VocabularyPoolStateError)
-      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
     console.error('Error getting word type counts:', error);
-    return counts;
   }
+  return counts;
 }

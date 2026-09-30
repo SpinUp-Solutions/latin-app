@@ -1,5 +1,4 @@
-import { ReactNode } from 'react';
-import { TableData } from '../components/ui/page/ConjugationTable';
+import type { TableData } from '@/src/components/ui/lesson/conjugation-table';
 
 export interface ContentItem {
   id: string;
@@ -21,9 +20,4 @@ export interface EmphasisContent extends ContentItem {
 export interface TableContent extends ContentItem {
   type: 'table';
   tableData: TableData;
-}
-
-export interface ComponentNarration {
-  audioPath?: string | null;
-  component: ReactNode;
 }

@@ -26,9 +26,7 @@ export const fingerprint = (value: unknown): string => {
 };
 
 export function activeSection(attempt: InProgressTestAttempt) {
-  if (attempt.flowVersion !== 1 || !attempt.sections)
-    throw new TestServiceError('ATTEMPT_SECTION_REQUIRED', 'This attempt does not use sections', 409);
-  const pageIndex = attempt.deliveryState.pages.findIndex(page => attempt.sections![page.id].phase !== 'confirmed');
+  const pageIndex = attempt.deliveryState.pages.findIndex(page => attempt.sections[page.id].phase !== 'confirmed');
   const page = attempt.deliveryState.pages[pageIndex];
   if (!page) throw new TestServiceError('STALE_TEST_ATTEMPT_DATA', 'The active section is unavailable', 409);
   return { page, pageIndex, state: attempt.sections[page.id] };

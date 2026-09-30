@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { fingerprint } from './sections.server';
 import type { DocumentSnapshot, Firestore, QuerySnapshot, Transaction } from 'firebase-admin/firestore';
 import {
   DEFAULT_LEARNING_PATH_ID,
@@ -23,7 +23,6 @@ import type {
   StudentMockTestSummary,
   TestAttemptResultSummary,
   TestVersion,
-  TestVersionSummary,
 } from '@/src/types/test';
 import type { StudentPastMockResult } from '@/src/types/test-results';
 import { regeneratePageIds } from '@/src/utils/idUtils';
@@ -61,7 +60,6 @@ import {
   type MoveStandaloneMockToTestInput,
   type ReactivateStandaloneMockInput,
   type ReorderMockTestsInput,
-  type TestVersionInput,
   type UpdateMockTestInput,
   type UpdateTestVersionInput,
 } from './schemas';
@@ -101,9 +99,7 @@ export class MockTestService {
   }
 
   private legacyMockResultMigrationRef(studentId: string) {
-    const id = createHash('sha256')
-      .update(JSON.stringify(['mock-results', studentId]))
-      .digest('hex');
+    const id = fingerprint(['mock-results', studentId]);
     return this.db.collection(STUDENT_MOCK_RESULT_MIGRATIONS_COLLECTION).doc(id);
   }
 
@@ -173,23 +169,6 @@ export class MockTestService {
     });
   }
 
-  private getVersionSummaries(versionIds: readonly string[]): Promise<TestVersionSummary[]> {
-    return getVersionSummaries(this.db, versionIds);
-  }
-
-  /** One batched getAll replaces the per-mock version round trips. */
-  private getVersionSummariesById(versionIds: readonly string[]): Promise<Map<string, TestVersionSummary>> {
-    return getVersionSummariesById(this.db, versionIds);
-  }
-
-  private buildVersion(
-    input: TestVersionInput,
-    actorId: string,
-    created?: Pick<TestVersion, 'createdAt' | 'createdBy'>
-  ): TestVersion {
-    return buildVersion(this.now, input, actorId, created);
-  }
-
   async updateActiveMockVersion(mockId: string, input: UpdateTestVersionInput, actorId: string): Promise<TestVersion> {
     const changes = updateTestVersionInputSchema.parse(input);
     const mockRef = this.mocks.doc(mockId);
@@ -203,7 +182,8 @@ export class MockTestService {
         );
       const versionRef = this.versions.doc(mock.versionId);
       const current = parseVersionSnapshot(await transaction.get(versionRef));
-      const version = this.buildVersion(
+      const version = buildVersion(
+        this.now,
         {
           id: current.id,
           ...changes,
@@ -230,10 +210,7 @@ export class MockTestService {
   }
 
   static parentMockId(testId: string, versionId: string): string {
-    return `parent-${createHash('sha256')
-      .update(JSON.stringify([testId, versionId]))
-      .digest('hex')
-      .slice(0, 48)}`;
+    return `parent-${fingerprint([testId, versionId]).slice(0, 48)}`;
   }
 
   private async assertRotationAllowed(transaction: Transaction, test: TestUnit, rotationVersionIds: string[]) {
@@ -264,7 +241,7 @@ export class MockTestService {
   }
 
   private async nextMockOrder(transaction: Transaction): Promise<number> {
-    const snapshot = await transaction.get(this.mocks.where('status', '==', 'active').where('isLive', '==', true));
+    const snapshot = await this.readLiveMockOrderScope(transaction);
     return (
       snapshot.docs.reduce(
         (maximum, doc) => Math.max(maximum, typeof doc.data().mockOrder === 'number' ? doc.data().mockOrder : -1),
@@ -322,7 +299,7 @@ export class MockTestService {
   ) {
     const [versionSnapshot, testSnapshots, mockSnapshots] = await Promise.all([
       transaction.get(this.versions.doc(versionId)),
-      transaction.get(this.db.collection('lessons').where('kind', '==', 'test')),
+      transaction.get(this.units.where('kind', '==', 'test')),
       transaction.get(this.mocks.where('status', '==', 'active')),
     ]);
     const version = parseVersionSnapshot(versionSnapshot);
@@ -371,7 +348,10 @@ export class MockTestService {
   async listMocks(includeArchived = true): Promise<MockTestSummary[]> {
     const snapshot = await this.mocks.orderBy('updatedAt', 'desc').get();
     const mocks = snapshot.docs.map(parseMockSnapshot).filter(mock => includeArchived || mock.status === 'active');
-    const versions = await this.getVersionSummaries(mocks.map(mock => mock.versionId));
+    const versions = await getVersionSummaries(
+      this.db,
+      mocks.map(mock => mock.versionId)
+    );
     const totals = new Map(versions.map(version => [version.id, version.totalPoints]));
     return mocks.map(mock => ({ ...mock, totalPoints: totals.get(mock.versionId)! }));
   }
@@ -394,7 +374,10 @@ export class MockTestService {
 
     // A single batched lookup validates every live card's version and reads
     // its total points, instead of one Firestore round trip per mock.
-    const versionsById = await this.getVersionSummariesById(mocks.map(mock => mock.versionId));
+    const versionsById = await getVersionSummariesById(
+      this.db,
+      mocks.map(mock => mock.versionId)
+    );
 
     const cards = await Promise.all(
       mocks.map(async mock => {
@@ -493,9 +476,7 @@ export class MockTestService {
         transaction
       );
       const attempt = activeAttempt
-        ? (({ answers: _answers, translationGrades: _translationGrades, ...sanitizedAttempt }) => sanitizedAttempt)(
-            activeAttempt
-          )
+        ? (({ answers: _answers, ...sanitizedAttempt }) => sanitizedAttempt)(activeAttempt)
         : null;
       if ((!mock.isLive || mock.status !== 'active') && !attempt) {
         throw new TestServiceError('MOCK_TEST_NOT_AVAILABLE', 'Mock test is not available', 404);
@@ -533,7 +514,10 @@ export class MockTestService {
 
     // The versions are fetched only to keep unavailable mocks out of the
     // nudge; one batched getAll validates them all without a round trip per mock.
-    const versionsById = await this.getVersionSummariesById(mocks.map(mock => mock.versionId));
+    const versionsById = await getVersionSummariesById(
+      this.db,
+      mocks.map(mock => mock.versionId)
+    );
 
     return mocks
       .filter(mock => versionsById.has(mock.versionId))
@@ -560,7 +544,7 @@ export class MockTestService {
         throw new TestServiceError('MOCK_TEST_ALREADY_EXISTS', 'A mock with this ID already exists', 409);
       if (existingVersion.exists || existingDraft.exists)
         throw new TestServiceError('TEST_VERSION_ALREADY_EXISTS', 'A test version with this ID already exists', 409);
-      const version = this.buildVersion(parsed.version, actorId);
+      const version = buildVersion(this.now, parsed.version, actorId);
       const mock = this.buildMock(
         {
           ...parsed.mock,
@@ -761,10 +745,7 @@ export class MockTestService {
     actorId: string
   ) {
     const { testId, requestId } = duplicateStandaloneMockVersionIntoTestInputSchema.parse(input);
-    const versionId = `copy-${createHash('sha256')
-      .update(JSON.stringify([mockId, testId, requestId]))
-      .digest('hex')
-      .slice(0, 48)}`;
+    const versionId = `copy-${fingerprint([mockId, testId, requestId]).slice(0, 48)}`;
     const mockRef = this.mocks.doc(mockId);
     const targetVersionRef = this.versions.doc(versionId);
     const targetDraftRef = this.drafts.doc(versionId);
@@ -801,7 +782,8 @@ export class MockTestService {
         const regenerated = regeneratePageIds(page, {}).page;
         return { ...regenerated, title: page.title };
       });
-      const version = this.buildVersion(
+      const version = buildVersion(
+        this.now,
         {
           id: versionId,
           name: `${source.name} (Copy)`,
@@ -870,7 +852,7 @@ export class MockTestService {
     const { mockIds } = reorderMockTestsInputSchema.parse(input);
     return runVocabularyContentMutation(this.db, async transaction => {
       const ordering = await transaction.get(this.mockOrdering);
-      const scope = await transaction.get(this.mocks.where('status', '==', 'active').where('isLive', '==', true));
+      const scope = await this.readLiveMockOrderScope(transaction);
       const mocks = scope.docs.map(parseMockSnapshot);
       if (mocks.length !== mockIds.length || !mockIds.every(id => mocks.some(mock => mock.id === id)))
         throw new TestServiceError(

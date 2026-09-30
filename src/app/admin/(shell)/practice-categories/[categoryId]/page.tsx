@@ -30,14 +30,15 @@ import {
   CategoryFormDialog,
   CategoryFormSubmission,
   ConfirmActionDialog,
-  getCategoryCounts,
   InlineLoadError,
-  isPracticeLessonType,
   LoadingRows,
   parsePracticeCategoryContext,
   practiceLessonTypeLabel,
-  useBrowserNavigationProtection,
+  useDialogFocusReturn,
 } from '@/src/components/admin/practice-categories/category-admin-shared';
+import { useUnsavedNavigationGuard } from '@/src/hooks/useUnsavedNavigationGuard';
+import { UnsavedNavigationDialog } from '@/src/components/ui/core/UnsavedNavigationDialog';
+import { isPracticeLessonType } from '@/src/lib/practice-categories/domain';
 import { Badge } from '@/src/components/ui/badge';
 import { Button } from '@/src/components/ui/button';
 import { Checkbox } from '@/src/components/ui/checkbox';
@@ -279,7 +280,7 @@ function AddLessonsDialog({ open, onOpenChange, category, assignedCount, lessons
   const [selected, setSelected] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const returnFocusRef = useRef<HTMLElement | null>(null);
+  const focusReturn = useDialogFocusReturn();
 
   useEffect(() => {
     if (!open) return;
@@ -322,18 +323,7 @@ function AddLessonsDialog({ open, onOpenChange, category, assignedCount, lessons
     <Dialog open={open} onOpenChange={nextOpen => !submitting && onOpenChange(nextOpen)}>
       <DialogContent
         className="flex max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-2xl flex-col overflow-hidden p-0"
-        onOpenAutoFocus={() => {
-          returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        }}
-        onCloseAutoFocus={event => {
-          const target = returnFocusRef.current?.isConnected
-            ? returnFocusRef.current
-            : document.querySelector<HTMLElement>('[data-dialog-focus-fallback]');
-          returnFocusRef.current = null;
-          if (!target) return;
-          event.preventDefault();
-          target.focus();
-        }}
+        {...focusReturn}
         onEscapeKeyDown={event => submitting && event.preventDefault()}
         onPointerDownOutside={event => submitting && event.preventDefault()}>
         <DialogHeader className="px-6 pt-6">
@@ -471,8 +461,6 @@ function PracticeCategoryDetailPage() {
   const [removePendingId, setRemovePendingId] = useState<string | null>(null);
   const [tagUpdatePendingId, setTagUpdatePendingId] = useState<string | null>(null);
   const [categoryAction, setCategoryAction] = useState<CategoryAction | null>(null);
-  const [discardNavigationOpen, setDiscardNavigationOpen] = useState(false);
-  const [pendingHref, setPendingHref] = useState<string | null>(null);
   const focusAfterLoad = useRef<string | null>(null);
   const hasOriginContext = useRef(false);
   const {
@@ -533,7 +521,10 @@ function PracticeCategoryDetailPage() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  useBrowserNavigationProtection(dirty, tagOrderDirty ? 'tag order changes' : 'lesson order changes');
+  const navigationGuard = useUnsavedNavigationGuard(
+    dirty,
+    `Your reordered ${tagOrderDirty ? 'tags' : 'lessons'} have not been saved. Leaving this page will restore the last server-confirmed order.`
+  );
 
   useEffect(() => {
     if (!cachedDetail || hasOriginContext.current) return;
@@ -565,12 +556,7 @@ function PracticeCategoryDetailPage() {
 
   const guardHref = (href: string) => {
     if (orderPending) return;
-    if (dirty) {
-      setPendingHref(href);
-      setDiscardNavigationOpen(true);
-      return;
-    }
-    router.push(href);
+    navigationGuard.requestNavigation(() => router.push(href));
   };
 
   const focusCategoryHeading = () => {
@@ -593,15 +579,6 @@ function PracticeCategoryDetailPage() {
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Unable to load available lessons'));
     }
-  };
-
-  const continuePendingNavigation = () => {
-    const href = pendingHref;
-    setLessonOrder(null);
-    setTagOrder(null);
-    setDiscardNavigationOpen(false);
-    setPendingHref(null);
-    if (href) router.push(href);
   };
 
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
@@ -702,6 +679,11 @@ function PracticeCategoryDetailPage() {
     }
   };
 
+  const clearLessonFilters = () => {
+    setLessonSearch('');
+    setLessonTagFilters([]);
+  };
+
   const filterLessonsByTag = (tagId: string) => {
     setLessonTagFilters([tagId]);
     setLessonSearch('');
@@ -735,7 +717,7 @@ function PracticeCategoryDetailPage() {
     }
   };
 
-  const assignedCount = category ? Math.max(getCategoryCounts(category).assigned, lessons.length) : lessons.length;
+  const assignedCount = category ? Math.max(category.assignedLessonCount, lessons.length) : lessons.length;
 
   const categoryActionDescription = (() => {
     if (!category || !categoryAction) return '';
@@ -893,14 +875,7 @@ function PracticeCategoryDetailPage() {
                     className="sm:min-w-52"
                   />
                   {lessonFiltersActive && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setLessonSearch('');
-                        setLessonTagFilters([]);
-                      }}>
+                    <Button type="button" variant="ghost" size="sm" onClick={clearLessonFilters}>
                       Clear filters
                     </Button>
                   )}
@@ -960,14 +935,7 @@ function PracticeCategoryDetailPage() {
                     <p className="mt-2 text-sm text-roman-stone">
                       Search and selected tags combine to narrow this category.
                     </p>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="mt-4"
-                      onClick={() => {
-                        setLessonSearch('');
-                        setLessonTagFilters([]);
-                      }}>
+                    <Button type="button" variant="outline" className="mt-4" onClick={clearLessonFilters}>
                       Clear filters
                     </Button>
                   </div>
@@ -1116,20 +1084,7 @@ function PracticeCategoryDetailPage() {
         onConfirm={confirmCategoryAction}
       />
 
-      <ConfirmActionDialog
-        open={discardNavigationOpen}
-        onOpenChange={open => {
-          setDiscardNavigationOpen(open);
-          if (!open) setPendingHref(null);
-        }}
-        title={`Discard unsaved ${tagOrderDirty ? 'tag' : 'lesson'} order?`}
-        description={`Your reordered ${
-          tagOrderDirty ? 'tags' : 'lessons'
-        } have not been saved. Leaving this page will restore the last server-confirmed order.`}
-        confirmLabel="Discard and continue"
-        destructive
-        onConfirm={continuePendingNavigation}
-      />
+      <UnsavedNavigationDialog guard={navigationGuard} />
     </>
   );
 }
