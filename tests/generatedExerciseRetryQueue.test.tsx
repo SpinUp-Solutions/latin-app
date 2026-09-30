@@ -299,6 +299,22 @@ it('clears multi-answer slots so a retry can use a different valid ordering', ()
   expect(done.onCompletionAccepted).toHaveBeenCalledWith(100);
 });
 
+it.each([true, false])('counts morphology practice progress by word, not step (retry %s)', enabled => {
+  const exercise = morphology();
+  exercise.data.retryIncorrectAnswers = enabled;
+  const words = [word('amo', 'first', 'singular'), word('amant', 'third', 'plural')];
+  render(<Morphology exercise={exercise} resolvedItems={createGeneratedFormIdentificationItems(exercise, words)} />);
+  // Two words of two steps each: the authored count is 2, not the 4 step items.
+  expect(screen.getByText('Word 1 of 2')).toBeInTheDocument();
+  answer('first');
+  next();
+  expect(screen.getByText('Word 1 of 2')).toBeInTheDocument();
+  answer('singular');
+  expect(screen.getByText('1 of 2 complete (50%)')).toBeInTheDocument();
+  next();
+  expect(screen.getByText('Word 2 of 2')).toBeInTheDocument();
+});
+
 it.each([undefined, true, false])(
   'leaves morphology test mode sequential and restores recorded answers (setting %s)',
   setting => {
