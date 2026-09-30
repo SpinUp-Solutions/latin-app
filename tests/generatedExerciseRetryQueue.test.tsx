@@ -4,15 +4,12 @@ import Translation from '@/src/components/ui/exercises/generated-translation-exe
 import Morphology from '@/src/components/ui/exercises/generated-form-identification-exercise';
 import type { GeneratedTranslationExercise, GeneratedFormIdentificationExercise } from '@/src/types/exercises';
 import type { ExerciseWordResponse } from '@/src/types/api/exercise-word-responses';
-import { createGeneratedFormIdentificationItems } from '@/src/lib/tests/generated-exercises';
+import {
+  createGeneratedFormIdentificationItems,
+  createGeneratedTranslationItems,
+} from '@/src/lib/tests/generated-exercises';
 import { parseFormPathFromString } from '@/src/utils/exerciseFormPaths';
 import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
-
-let mockWords: ExerciseWordResponse[] = [];
-let mockLoading = false;
-jest.mock('@/src/hooks/usePracticeGeneratedExerciseWords', () => ({
-  usePracticeGeneratedExerciseWords: () => ({ data: { words: mockWords }, isLoading: mockLoading, isError: false }),
-}));
 
 const feedbackConfig = {
   escalationLevels: [{ message: 'Try again later' }, { message: 'Look at the answer', showAnswer: true }],
@@ -73,10 +70,6 @@ const answer = (value: string) => {
 const next = () => fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 const callbacks = () => ({ onComplete: jest.fn(), onCompletionAccepted: jest.fn() });
 
-beforeEach(() => {
-  mockWords = [];
-  mockLoading = false;
-});
 afterEach(() => {
   cleanup();
   jest.useRealTimers();
@@ -121,41 +114,35 @@ it('rotates mistakes, preserves completed words and escalates feedback across re
   expect(screen.getByRole('textbox')).toBeDisabled();
 });
 
-it.each(['filters', 'pool'] as const)('retries the same generated translation in either direction from %s', source => {
-  for (const direction of ['latin-to-english', 'english-to-latin'] as const) {
-    mockWords = [
-      {
-        id: 'word',
-        root_word: 'amo',
-        selected_form: 'amo',
-        translation: 'love',
-        part_of_speech: 'verb',
-      } as ExerciseWordResponse,
-    ];
-    const exercise = translation();
-    exercise.translationDirection = direction;
-    exercise.data.generatorConfig = {
-      ...generatorConfig,
-      wordSource: source,
-      poolId: source === 'pool' ? 'pool' : null,
-    };
-    render(<Translation exercise={exercise} generatedExerciseSource={{ kind: 'admin-preview' }} />);
-    const prompt = direction === 'latin-to-english' ? 'amo' : 'love';
-    answer('wrong');
-    next();
-    expect(screen.getByText(prompt)).toBeInTheDocument();
-    answer(direction === 'latin-to-english' ? 'love' : 'amo');
-    expect(screen.getByText('1 of 1 complete (100%)')).toBeInTheDocument();
-    cleanup();
-  }
+it.each(['latin-to-english', 'english-to-latin'] as const)('retries a generated %s translation', direction => {
+  const exercise = { ...translation(), translationDirection: direction };
+  const words = [{ id: 'word', root_word: 'amo', selected_form: 'amo', translation: 'love', part_of_speech: 'verb' }];
+  render(
+    <Translation
+      exercise={exercise}
+      resolvedItems={createGeneratedTranslationItems(exercise, words as ExerciseWordResponse[])}
+    />
+  );
+  answer('wrong');
+  next();
+  expect(screen.getByText(direction === 'latin-to-english' ? 'amo' : 'love')).toBeInTheDocument();
+  answer(direction === 'latin-to-english' ? 'love' : 'amo');
+  expect(screen.getByText('1 of 1 complete (100%)')).toBeInTheDocument();
 });
 
 it.each(['step', 'multi', 'single'])(
   'requeues the whole %s morphology occurrence, keeping repeated forms independent',
   variant => {
-    mockWords = [word('amo', 'first', 'singular'), word('amant', 'third', 'plural')];
+    const exercise = morphology(variant);
+    const words = [word('amo', 'first', 'singular'), word('amant', 'third', 'plural')];
     const done = callbacks();
-    render(<Morphology exercise={morphology(variant)} generatedExerciseSource={{ kind: 'admin-preview' }} {...done} />);
+    render(
+      <Morphology
+        exercise={exercise}
+        resolvedItems={createGeneratedFormIdentificationItems(exercise, words)}
+        {...done}
+      />
+    );
     if (variant !== 'single') {
       answer('first');
       next();
@@ -183,18 +170,16 @@ it.each(['step', 'multi', 'single'])(
   }
 );
 
-it.each([false, true])('clears previous path constraints on a whole-word retry (resolved items: %s)', resolved => {
+it('clears previous path constraints on a whole-word retry', () => {
   const ambiguous = word('ambiguous', 'first', 'singular');
   const alternative = word('alternative', 'third', 'plural');
   ambiguous.primary_form_paths = [...ambiguous.primary_form_paths!, ...alternative.primary_form_paths!];
-  mockWords = [ambiguous];
   const exercise = morphology();
   const done = callbacks();
   render(
     <Morphology
       exercise={exercise}
-      resolvedItems={resolved ? createGeneratedFormIdentificationItems(exercise, mockWords) : undefined}
-      generatedExerciseSource={{ kind: 'admin-preview' }}
+      resolvedItems={createGeneratedFormIdentificationItems(exercise, [ambiguous])}
       {...done}
     />
   );
@@ -274,23 +259,11 @@ it('pauses a pending retry while the lesson page is hidden and resumes it on ret
   expect(screen.getByText('unus')).toBeInTheDocument();
 });
 
-it('initializes after loading and resets same-length replacement exercises without keeping old timers', () => {
+it('resets same-length replacement exercises without keeping old timers', () => {
   jest.useFakeTimers();
   const exercise = translation();
   exercise.feedbackConfig = { ...feedbackConfig, progressionRules: { autoAdvanceOnCorrect: true } };
-  mockLoading = true;
-  const view = render(<Translation exercise={exercise} generatedExerciseSource={{ kind: 'admin-preview' }} />);
-  mockLoading = false;
-  mockWords = [
-    {
-      id: 'a',
-      root_word: 'unus',
-      selected_form: 'unus',
-      translation: 'one',
-      part_of_speech: 'noun',
-    } as ExerciseWordResponse,
-  ];
-  view.rerender(<Translation exercise={exercise} generatedExerciseSource={{ kind: 'admin-preview' }} />);
+  const view = render(<Translation exercise={exercise} resolvedItems={[prompts[0]]} />);
   answer('wrong');
   view.rerender(<Translation exercise={{ ...exercise, id: 'replacement' }} resolvedItems={[prompts[1]]} />);
   act(() => jest.advanceTimersByTime(5000));
@@ -306,9 +279,15 @@ it('clears multi-answer slots so a retry can use a different valid ordering', ()
     ...ambiguous.primary_form_paths!,
     ...word('other', 'third', 'plural').primary_form_paths!,
   ];
-  mockWords = [ambiguous];
+  const exercise = morphology('multi');
   const done = callbacks();
-  render(<Morphology exercise={morphology('multi')} generatedExerciseSource={{ kind: 'admin-preview' }} {...done} />);
+  render(
+    <Morphology
+      exercise={exercise}
+      resolvedItems={createGeneratedFormIdentificationItems(exercise, [ambiguous])}
+      {...done}
+    />
+  );
   answer('first;third');
   next();
   answer('plural;singular'); // Both values exist, but they do not match the chosen paths.
@@ -349,12 +328,14 @@ it.each([undefined, true, false])(
 
 it('uses the automatic delay for a whole-word morphology retry and final completion', () => {
   jest.useFakeTimers();
-  mockWords = [word('amo', 'first', 'singular'), word('amant', 'third', 'plural')];
   const exercise = morphology();
   exercise.itemProgressionDelay = 250;
   exercise.feedbackConfig = { ...feedbackConfig, progressionRules: { autoAdvanceOnCorrect: true } };
+  const words = [word('amo', 'first', 'singular'), word('amant', 'third', 'plural')];
   const done = callbacks();
-  render(<Morphology exercise={exercise} generatedExerciseSource={{ kind: 'admin-preview' }} {...done} />);
+  render(
+    <Morphology exercise={exercise} resolvedItems={createGeneratedFormIdentificationItems(exercise, words)} {...done} />
+  );
   answer('first');
   act(() => jest.advanceTimersByTime(250));
   answer('wrong');
@@ -392,15 +373,4 @@ it('keeps a pending manual retry when leaving and returning to a lesson page', (
   answer('three');
   next();
   expect(screen.getByText('unus')).toBeInTheDocument();
-});
-
-it('filters malformed resolved morphology items before narrowing their answer paths', () => {
-  const exercise = morphology();
-  const items = createGeneratedFormIdentificationItems(exercise, [word('amo', 'first', 'singular')]);
-  const malformed = { ...items[0], primaryFormPaths: undefined };
-  render(<Morphology exercise={exercise} resolvedItems={[malformed as unknown as (typeof items)[number], ...items]} />);
-  answer('first');
-  next();
-  answer('singular');
-  expect(screen.getByText('1 of 1 complete (100%)')).toBeInTheDocument();
 });

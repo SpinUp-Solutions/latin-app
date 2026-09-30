@@ -14,11 +14,6 @@ import type {
 } from '@/src/types/exercises';
 import { createAnnotationId, createEmptySentenceDiagramDocument } from '@/src/features/sentence-diagramming';
 
-jest.mock('@/src/store/api/advancedVocabularyApi', () => ({
-  useGetGeneratedExerciseWordsQuery: () => ({ data: undefined, isLoading: false, isError: false }),
-  useGetMultiPosWordsQuery: () => ({ data: undefined, isLoading: false, isError: false }),
-  useGetMultiParadigmWordsQuery: () => ({ data: undefined, isLoading: false, isError: false }),
-}));
 jest.mock('@/src/services/wordLookupService', () => ({}));
 jest.mock('@/src/components/ui/core/simple-rich-editor', () => ({ SimpleRichEditor: () => null }));
 jest.mock('@/src/hooks/useTranslationGrading', () => ({ useTranslationGrading: () => ({}) }));

@@ -255,6 +255,24 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
+          "fieldPath": "isLive",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "liveOrder",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "lessons",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
           "fieldPath": "parentLessonId",
           "order": "ASCENDING"
         },

@@ -14,8 +14,6 @@ import {
   validateMultiAnswerStep,
   validatePartialMultiAnswerPaths,
 } from '@/src/utils/exercises/generatedFormIdentificationExercise';
-import { getAcceptedAnswersForStep } from '@/src/utils/exercises/formIdentificationHelpers';
-import { normalizeAnswer } from '@/src/utils/exercises/helpers';
 import { validateMultipleChoiceExercise } from '@/src/utils/exercises/multipleChoiceExercise';
 import { getSelectableMatchingAnswers, validateMatchingExercise } from '@/src/utils/exercises/matchingExercise';
 import { validateFillExercise } from '@/src/utils/exercises/fillExercise';
@@ -26,9 +24,11 @@ import { validateTableFillExercise } from '@/src/utils/exercises/tableFillExerci
 import { validateClickOnMultipleWords } from '@/src/utils/exercises/clickOnMultipleWords';
 import type { TestEligibleExerciseType } from '@/src/lib/content/registry';
 import { parseExerciseAnswer } from './answer-schemas';
-import type { ResolvedFormIdentificationItem } from './generated-exercises';
-
-export type ResolvedGeneratedItem = GeneratedTranslationItem | ResolvedFormIdentificationItem;
+import {
+  narrowFormIdentificationItem,
+  type ResolvedFormIdentificationItem,
+  type ResolvedGeneratedItem,
+} from './generated-exercises';
 
 export interface ExerciseGradingInput {
   exercise: Exercise;
@@ -257,26 +257,15 @@ export function scoreGeneratedFormIdentificationItems(
   }
 
   for (const items of groups.values()) {
-    const firstItem = items[0];
-    let compatiblePaths = [...firstItem.primaryFormPaths, ...firstItem.optionalFormPaths];
-
+    const previousAnswers: Record<string, string> = {};
     for (const item of items) {
-      let earnedUnits = 0;
-      const submitted = normalizeAnswer(answers[item.id] ?? '');
-      const pathsForStep = compatiblePaths.filter(path => Boolean(path[item.step]));
-      if (pathsForStep.length === 0) {
-        earnedUnits = validateGeneratedFormIdentificationExercise(answers[item.id] ?? '', item).isCorrect ? 1 : 0;
-      } else {
-        const matchingPaths = pathsForStep.filter(path => {
-          const expected = path[item.step];
-          return expected ? getAcceptedAnswersForStep(expected).map(normalizeAnswer).includes(submitted) : false;
-        });
-        if (matchingPaths.length > 0) {
-          earnedUnits = 1;
-          compatiblePaths = matchingPaths;
-        }
-      }
-      scores.push([item.id, { earnedUnits, availableUnits: 1 }]);
+      const answer = answers[item.id] ?? '';
+      const isCorrect = validateGeneratedFormIdentificationExercise(
+        answer,
+        narrowFormIdentificationItem(item, previousAnswers)
+      ).isCorrect;
+      if (isCorrect) previousAnswers[item.step] = answer;
+      scores.push([item.id, { earnedUnits: isCorrect ? 1 : 0, availableUnits: 1 }]);
     }
   }
   return scores;

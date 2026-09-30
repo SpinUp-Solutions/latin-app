@@ -16,10 +16,6 @@ import type { TranslationGradingOutput } from '@/shared/openai/translation-gradi
 
 jest.mock('@/src/components/ui/core/simple-rich-editor', () => ({ SimpleRichEditor: () => null }));
 
-jest.mock('@/src/store/api/advancedVocabularyApi', () => ({
-  useGetGeneratedExerciseWordsQuery: () => ({ data: undefined, isLoading: false, isError: false }),
-}));
-
 jest.mock('@/src/hooks/useTranslationGrading', () => ({
   useTranslationGrading: () => {
     const [data, setData] = React.useState<TranslationGradingOutput | null>(null);

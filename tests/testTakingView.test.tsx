@@ -215,21 +215,7 @@ describe('admin test preview', () => {
   ] as unknown as Page[];
 
   it('freezes generated questions before the preview starts, as a student delivery does', async () => {
-    mockBaseQuery.mockResolvedValue({
-      data: {
-        words: [
-          {
-            id: 'word-1',
-            root_word: 'amo',
-            word: 'amo',
-            selected_form: 'amo',
-            dictionary_entry: 'amo, amare',
-            translation: 'love',
-            part_of_speech: 'verb',
-          },
-        ],
-      },
-    });
+    mockBaseQuery.mockResolvedValue({ data: { items: [{ text: 'amo', acceptedAnswers: ['love'] }] } });
 
     renderPreview(generatedPages);
 
@@ -244,7 +230,7 @@ describe('admin test preview', () => {
   });
 
   it('explains when a generated exercise cannot produce questions', async () => {
-    mockBaseQuery.mockResolvedValue({ data: { words: [] } });
+    mockBaseQuery.mockResolvedValue({ data: { items: [] } });
 
     renderPreview(generatedPages);
 

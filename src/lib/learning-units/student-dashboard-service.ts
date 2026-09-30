@@ -203,9 +203,11 @@ export class StudentDashboardService {
     return this.db.collection(TEST_VERSIONS_COLLECTION);
   }
 
-  private async getLiveLessonSummaries(): Promise<LessonSummary[]> {
+  /** Practice lessons only: normal lessons come from the learning path, so reading them here would be wasted. */
+  private async getLivePracticeLessonSummaries(): Promise<LessonSummary[]> {
     const snapshot = await this.units
       .where('isLive', '==', true)
+      .where('type', 'in', PRACTICE_TYPE_ORDER)
       .orderBy('liveOrder', 'asc')
       .select(...LESSON_SUMMARY_FIELDS)
       .get();
@@ -589,11 +591,13 @@ export class StudentDashboardService {
     normalUnits: LearningPathUnitSummary[];
     rawPracticeLessons: LessonSummary[];
   }> {
-    const [allLessons, normalUnits] = await Promise.all([
-      this.getLiveLessonSummaries(),
+    const [practiceLessons, normalUnits] = await Promise.all([
+      this.getLivePracticeLessonSummaries(),
       this.getNormalUnitSummaries(),
     ]);
-    const rawPracticeLessons = PRACTICE_TYPE_ORDER.flatMap(type => allLessons.filter(lesson => lesson.type === type));
+    const rawPracticeLessons = PRACTICE_TYPE_ORDER.flatMap(type =>
+      practiceLessons.filter(lesson => lesson.type === type)
+    );
 
     return { normalUnits, rawPracticeLessons };
   }

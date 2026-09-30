@@ -6,7 +6,7 @@ import {
   GeneratedExercisePlaybackRequestSchema,
   GeneratedExercisePreviewRequestSchema,
 } from '@/src/lib/tests/generated-preview-schema';
-import type { GeneratedExercise } from '@/src/lib/tests/generated-exercises';
+import { createGeneratedExerciseItems, type GeneratedExercise } from '@/src/lib/tests/generated-exercises';
 import { collectWordsForGeneratedExerciseRequest } from '@/src/lib/tests/generated-word-loader.server';
 import { GeneratedVocabularySourceError } from '@/src/lib/tests/errors';
 import {
@@ -72,8 +72,12 @@ export async function handleGeneratedExerciseWordsPOST(request: NextRequest, aud
     }
 
     const result = await collectWordsForGeneratedExerciseRequest(adminDb, exercise);
+    const items = createGeneratedExerciseItems(exercise, result.words);
+    // Students get only the questions; admins also see the words and diagnostics behind them.
+    if (audience === 'generated') return NextResponse.json({ items });
 
     return NextResponse.json({
+      items,
       words: result.words,
       diagnostics: result.diagnostics,
       requestedCount: result.requestedCount,

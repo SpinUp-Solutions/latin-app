@@ -50,16 +50,16 @@ function useResolvedGeneratedExercises(pages: Page[]) {
   useEffect(() => {
     let cancelled = false;
     const exercises = JSON.parse(key) as GeneratedExercise[];
-    const loadWords = (exercise: GeneratedExercise) =>
+    const loadItems = (exercise: GeneratedExercise) =>
       dispatch(
-        advancedVocabularyApi.endpoints.getGeneratedExerciseWords.initiate(
+        advancedVocabularyApi.endpoints.getGeneratedExerciseItems.initiate(
           { exercise: generatedExerciseWordsRequest(exercise), source: { kind: 'admin-preview' } },
           { subscribe: false }
         )
       )
         .unwrap()
-        .then(result => result.words);
-    void resolveGeneratedExercises(exercises, loadWords).then(
+        .then(result => result.items);
+    void resolveGeneratedExercises(exercises, loadItems).then(
       resolvedExercises => {
         if (!cancelled) setResolution({ key, resolvedExercises });
       },

@@ -11,11 +11,9 @@ import type { GeneratedTranslationExercise } from '@/src/types/exercises/generat
 jest.mock('@/src/services/wordLookupService', () => ({}));
 jest.mock('@/src/components/ui/core/simple-rich-editor', () => ({ SimpleRichEditor: () => null }));
 jest.mock('@/src/hooks/useTranslationGrading', () => ({ useTranslationGrading: () => ({}) }));
-const mockUseGetMultiPosWordsQuery = jest.fn();
+const mockGeneratedItemsQuery = jest.fn();
 jest.mock('@/src/store/api/advancedVocabularyApi', () => ({
-  useGetGeneratedExerciseWordsQuery: (...args: unknown[]) => mockUseGetMultiPosWordsQuery(...args),
-  useGetMultiPosWordsQuery: (...args: unknown[]) => mockUseGetMultiPosWordsQuery(...args),
-  useGetMultiParadigmWordsQuery: () => ({ data: undefined, isLoading: false, isError: false }),
+  useGetGeneratedExerciseItemsQuery: (...args: unknown[]) => mockGeneratedItemsQuery(...args),
 }));
 
 const manualProgression = {
@@ -30,7 +28,7 @@ const manualProgression = {
 
 describe('exercise runtime-mode scoring', () => {
   beforeEach(() => {
-    mockUseGetMultiPosWordsQuery.mockReturnValue({ data: undefined, isLoading: false, isError: false });
+    mockGeneratedItemsQuery.mockReset();
   });
 
   it('does not emit accepted completion in test runtime mode', () => {
@@ -251,66 +249,51 @@ describe('exercise runtime-mode scoring', () => {
     );
   });
 
-  it('never queries generated vocabulary in test mode, where sections carry frozen questions', () => {
-    mockUseGetMultiPosWordsQuery.mockReturnValue({
-      data: { words: [] },
-      isLoading: false,
-      isError: false,
-    });
-    const exercise: GeneratedTranslationExercise = {
-      id: 'generated-admin-preview',
-      type: 'generated-translation',
-      title: 'Generated translation',
-      instructions: '',
-      feedbackConfig: manualProgression,
-      data: {
-        generatorConfig: {
-          collection: 'words',
-          wordSource: 'filters',
-          count: 1,
-        },
-        posConfigs: {},
-      },
-    };
+  const generatedTranslation: GeneratedTranslationExercise = {
+    id: 'generated-lesson-exercise',
+    type: 'generated-translation',
+    title: 'Generated translation',
+    instructions: '',
+    feedbackConfig: manualProgression,
+    data: { generatorConfig: { collection: 'words', wordSource: 'filters', count: 1 }, posConfigs: {} },
+  };
 
+  it('never queries generated questions in test mode, where sections carry frozen ones', () => {
     render(
       <ContentRenderer
-        content={exercise}
+        content={generatedTranslation}
         runtimeMode="test"
         generatedExerciseContext={{ kind: 'admin-preview' }}
       />
     );
 
-    expect(mockUseGetMultiPosWordsQuery).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ skip: true })
-    );
+    expect(mockGeneratedItemsQuery).not.toHaveBeenCalled();
   });
 
-  it('scopes generated lesson queries to the rendered lesson item', () => {
-    mockUseGetMultiPosWordsQuery.mockReturnValue({ data: { words: [] }, isLoading: false, isError: false });
-    const exercise: GeneratedTranslationExercise = {
-      id: 'generated-lesson-exercise',
-      type: 'generated-translation',
-      title: 'Generated translation',
-      instructions: '',
-      feedbackConfig: manualProgression,
-      data: {
-        generatorConfig: { collection: 'words', wordSource: 'filters', count: 1 },
-        posConfigs: {},
-      },
-    };
-
-    render(
+  it('plays the questions the server resolves for the rendered lesson item', () => {
+    mockGeneratedItemsQuery.mockReturnValue({ isLoading: true });
+    const view = render(
       <ContentRenderer
-        content={exercise}
+        content={generatedTranslation}
+        pageIndex={2}
+        itemIndex={3}
+        generatedExerciseContext={{ kind: 'lesson', lessonId: 'lesson-1' }}
+      />
+    );
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+
+    mockGeneratedItemsQuery.mockReturnValue({ data: { items: [{ text: 'amo', acceptedAnswers: ['love'] }] } });
+    view.rerender(
+      <ContentRenderer
+        content={generatedTranslation}
         pageIndex={2}
         itemIndex={3}
         generatedExerciseContext={{ kind: 'lesson', lessonId: 'lesson-1' }}
       />
     );
 
-    expect(mockUseGetMultiPosWordsQuery).toHaveBeenCalledWith(
+    expect(screen.getByText('amo')).toBeInTheDocument();
+    expect(mockGeneratedItemsQuery).toHaveBeenLastCalledWith(
       expect.objectContaining({
         source: {
           kind: 'lesson',
@@ -320,7 +303,7 @@ describe('exercise runtime-mode scoring', () => {
           exerciseId: 'generated-lesson-exercise',
         },
       }),
-      expect.objectContaining({ skip: false })
+      { skip: false }
     );
   });
 });

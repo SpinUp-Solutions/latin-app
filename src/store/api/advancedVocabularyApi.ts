@@ -6,6 +6,7 @@ import { createAuthenticatedBaseQuery } from './baseQuery';
 import type { PoolFilters } from '@/src/types/pool-filters';
 import { buildAdvancedFilterParams } from '@/src/utils/wordFilters';
 import type {
+  GeneratedExerciseItemsResult,
   GeneratedExercisePlaybackRequest,
   GeneratedExercisePreviewRequest,
   GeneratedExercisePreviewResult,
@@ -21,7 +22,7 @@ export type GeneratedExerciseQuerySource =
   | { kind: 'admin-preview' }
   | ({ kind: 'lesson' } & GeneratedExercisePlaybackRequest);
 
-export interface GeneratedExerciseWordsQueryArgs {
+export interface GeneratedExerciseItemsQueryArgs {
   exercise: GeneratedExercisePreviewRequest;
   source: GeneratedExerciseQuerySource;
 }
@@ -111,7 +112,7 @@ export const advancedVocabularyApi = createApi({
         body,
       }),
     }),
-    getGeneratedExerciseWords: builder.query<GeneratedExercisePreviewResult, GeneratedExerciseWordsQueryArgs>({
+    getGeneratedExerciseItems: builder.query<GeneratedExerciseItemsResult, GeneratedExerciseItemsQueryArgs>({
       query: ({ exercise, source }) =>
         source.kind === 'admin-preview'
           ? {
@@ -135,5 +136,5 @@ export const advancedVocabularyApi = createApi({
   }),
 });
 
-export const { useGetAdvancedWordsQuery, usePreviewGeneratedExerciseMutation, useGetGeneratedExerciseWordsQuery } =
+export const { useGetAdvancedWordsQuery, usePreviewGeneratedExerciseMutation, useGetGeneratedExerciseItemsQuery } =
   advancedVocabularyApi;
