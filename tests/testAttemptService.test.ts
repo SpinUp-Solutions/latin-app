@@ -545,6 +545,56 @@ describe('test attempt persistence service', () => {
     expect(second.attempt.delivery.resolvedExercises.translation.items[0]).not.toHaveProperty('acceptedAnswers');
   });
 
+  it('marks a generated translation correct when the student lists several accepted meanings', async () => {
+    const db = new FakeFirestore();
+    const generatedExercise = {
+      id: 'translation',
+      type: 'generated-translation',
+      title: 'Definitions',
+      instructions: '',
+      maxPoints: 3,
+      feedbackConfig: { escalationLevels: [] },
+      data: {
+        generatorConfig: { collection: 'words', wordSource: 'filters', count: 1 },
+        posConfigs: { pronoun: { enabled: true, filters: {} } },
+      },
+    };
+    db.seed('lessons', 'test-1', testDocument(['generated-version']));
+    db.seed('testVersions', 'generated-version', versionDocument('generated-version', generatedExercise));
+    const service = new TestAttemptService(db as never, () => timestamp, {
+      loadGeneratedWords: (async () => [
+        {
+          id: 'word-is',
+          root_word: 'is',
+          word: 'is',
+          selected_form: null,
+          dictionary_entry: 'is, ea, id',
+          translation: 'he, she, it; this, that (weak demonstrative)',
+          part_of_speech: 'pronoun',
+        },
+      ]) as never,
+    });
+    const started = await service.startAttempt({ origin: { kind: 'normal-test', testId: 'test-1' } }, 'student-1');
+    await service.saveAttemptAnswers(
+      started.attempt.id,
+      {
+        section: await writeSection(service, started.attempt.id),
+        answers: { translation: { type: 'generated-translation', answers: ['he, she, it'] } },
+      },
+      'student-1'
+    );
+
+    const result = await submitAttempt(service, started.attempt.id, 'student-1');
+
+    expect(result.attempt).toMatchObject({ score: 3, maxScore: 3, percentage: 100 });
+    const review = db.read('testResultReviews', started.attempt.id) as {
+      content: { pages: Array<{ items: Array<{ itemResults: { answers: unknown[] } }> }> };
+    };
+    expect(review.content.pages[0].items[0].itemResults.answers).toEqual([
+      { value: 'he, she, it', correct: true, points: { awardedPoints: 3, maxPoints: 3 } },
+    ]);
+  });
+
   it('rejects an oversized frozen attempt before either document is written', async () => {
     const db = new FakeFirestore();
     seedNormalTest(db, ['version-a']);
