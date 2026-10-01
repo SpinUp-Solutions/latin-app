@@ -15,7 +15,7 @@ import { useAuth } from '@/src/hooks/useAuth';
 import { useBufferedAttemptAnswers } from '@/src/hooks/useBufferedAttemptAnswers';
 import { formatScorePercentage, formatScorePoints, formatScoreShortfall } from '@/src/lib/tests/formatting';
 import { getApiErrorCode, getApiErrorMessage } from '@/src/store/api/baseQuery';
-import { useGetStudentDashboardQuery } from '@/src/store/api/lessonApi';
+import { REUSE_CACHED_STUDENT_DASHBOARD, useGetStudentDashboardQuery } from '@/src/store/api/lessonApi';
 import { useGetStudentMockDetailQuery } from '@/src/store/api/mockTestApi';
 import { useStartTestAttemptMutation } from '@/src/store/api/testApi';
 import type { StudentTestSummary } from '@/src/types/lesson';
@@ -70,7 +70,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
     isLoading: dashboardLoading,
     isError: dashboardError,
     refetch: refetchDashboard,
-  } = useGetStudentDashboardQuery(user?.uid ?? '', { skip: !user?.uid });
+  } = useGetStudentDashboardQuery(user?.uid ?? '', { skip: !user?.uid, ...REUSE_CACHED_STUDENT_DASHBOARD });
   const {
     data: mockDetail,
     isLoading: mockDetailLoading,

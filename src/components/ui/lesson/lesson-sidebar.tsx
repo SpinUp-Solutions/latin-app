@@ -2,7 +2,7 @@
 
 import React, { useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useGetStudentDashboardQuery } from '@/src/store/api/lessonApi';
+import { REUSE_CACHED_STUDENT_DASHBOARD, useGetStudentDashboardQuery } from '@/src/store/api/lessonApi';
 import { LessonStatus, type StudentLearningUnitSummary } from '@/src/types/lesson';
 import { BookOpen, CheckCircle, Lock, Play, FileCheck2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -68,6 +68,7 @@ export default function LessonSidebar({ currentLessonId, isCollapsed = false, on
     refetch,
   } = useGetStudentDashboardQuery(user?.uid ?? '', {
     skip: !user?.uid,
+    ...REUSE_CACHED_STUDENT_DASHBOARD,
   });
 
   const learningUnits = useMemo(() => {
