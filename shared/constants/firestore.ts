@@ -14,6 +14,7 @@ export const MOCK_TEST_ORDERING_COLLECTION = 'mockTestOrdering';
 export const MOCK_TEST_ORDERING_DOCUMENT_ID = 'default';
 export const TEST_ATTEMPTS_COLLECTION = 'testAttempts';
 export const TEST_ATTEMPT_SESSIONS_COLLECTION = 'testAttemptSessions';
+export const TEST_ATTEMPT_SUMMARIES_COLLECTION = 'testAttemptSummaries';
 export const TEST_RESULT_REVIEWS_COLLECTION = 'testResultReviews';
 export const STUDENT_MOCK_RESULTS_COLLECTION = 'studentMockResults';
 export const STUDENT_MOCK_RESULT_MIGRATIONS_COLLECTION = 'studentMockResultMigrations';

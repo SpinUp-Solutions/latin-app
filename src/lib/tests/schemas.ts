@@ -499,6 +499,45 @@ export const studentMockResultMigrationDocumentSchema = z
   })
   .strict();
 
+/** Trend points a stored summary keeps per origin, matching the mock card's score trend. */
+export const ATTEMPT_SUMMARY_TREND_LIMIT = 12;
+
+const attemptResultSummarySchema = submittedAttemptResultProjectionSchema
+  .extend({ attemptId: firestoreDocumentIdSchema })
+  .strict();
+
+/**
+ * One student's submitted results for one origin, maintained when an attempt
+ * is submitted. A summary exists only for an origin with a submitted attempt.
+ */
+export const testAttemptSummaryDocumentSchema = z
+  .object({
+    id: firestoreDocumentIdSchema,
+    kind: z.literal('summary'),
+    studentId: z.string().min(1),
+    origin: testAttemptOriginSchema,
+    attemptCount: z.number().int().positive(),
+    best: attemptResultSummarySchema,
+    latest: attemptResultSummarySchema,
+    /** Oldest first. */
+    recentResults: z.array(submittedAttemptTrendProjectionSchema).min(1).max(ATTEMPT_SUMMARY_TREND_LIMIT),
+    updatedAt: isoTimestampSchema,
+  })
+  .strict();
+
+/**
+ * Marks a student's summaries as complete: every origin without a summary has
+ * no submitted attempt. It shares the collection so one query returns both.
+ */
+export const testAttemptSummaryMarkerDocumentSchema = z
+  .object({
+    id: firestoreDocumentIdSchema,
+    kind: z.literal('marker'),
+    studentId: z.string().min(1),
+    completedAt: isoTimestampSchema,
+  })
+  .strict();
+
 export const testAttemptDocumentSchema = z.union([
   inProgressTestAttemptDocumentSchema,
   submittedTestAttemptDocumentSchema,

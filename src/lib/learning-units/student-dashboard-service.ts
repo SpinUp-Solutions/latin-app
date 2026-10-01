@@ -30,7 +30,11 @@ import {
 import { LESSON_SUMMARY_FIELDS, toLessonSummary } from '@/src/utils/lessonSummary';
 import type { PracticeCategoryService } from '@/src/lib/practice-categories/service';
 import { practiceCategoryService } from '@/src/lib/practice-categories/service';
-import { testAttemptService, type TestAttemptService } from '@/src/lib/tests/attempt-service';
+import {
+  testAttemptService,
+  type StudentAttemptSummaries,
+  type TestAttemptService,
+} from '@/src/lib/tests/attempt-service';
 import { mockTestService, type MockTestService } from '@/src/lib/tests/mock-service';
 import { TEST_VERSION_SUMMARY_FIELDS, toTestUnitSummary } from '@/src/lib/tests/domain';
 import { testVersionSummaryDocumentSchema } from '@/src/lib/tests/schemas';
@@ -184,7 +188,7 @@ export class StudentDashboardService {
   constructor(
     private readonly db: Firestore = adminDb,
     private readonly categories: Pick<PracticeCategoryService, 'getAssignmentsForLessonIds'> = practiceCategoryService,
-    private readonly attempts: Pick<TestAttemptService, 'getAttemptSummary'> = testAttemptService,
+    private readonly attempts: Pick<TestAttemptService, 'loadAttemptSummaries'> = testAttemptService,
     private readonly mocks: Pick<
       MockTestService,
       'listStudentLiveMocks' | 'getRelatedLiveMocks' | 'listPastStudentMockResults'
@@ -609,9 +613,11 @@ export class StudentDashboardService {
   }
 
   async getDashboard(userId: string): Promise<StudentDashboard> {
-    const [{ normalUnits, rawPracticeLessons }, progressByLessonId] = await Promise.all([
+    // One load covers every test and mock on the dashboard, so it is shared with the mock listing below.
+    const [{ normalUnits, rawPracticeLessons }, progressByLessonId, storedAttemptSummaries] = await Promise.all([
       this.getProjectedLessonSummaries(),
       this.getProgressByLessonId(userId),
+      this.attempts.loadAttemptSummaries(userId),
     ]);
     const testUnits = normalUnits.filter((unit): unit is TestUnitSummary => unit.kind === 'test');
     const lessonSummaries = [
@@ -623,13 +629,14 @@ export class StudentDashboardService {
     // of each other, so they all run concurrently instead of one-after-another.
     // The past-result projection runs unfiltered here and is reconciled against
     // the live cards below, which keeps it off the mock listing's critical path.
-    const [attemptSummaries, practiceLessons, mockTests, pastMockResults, canonicalProgressByLessonId] = await Promise.all([
-      this.getAttemptSummaries(testUnits, userId),
-      this.enrichPracticeLessons(rawPracticeLessons),
-      this.mocks.listStudentLiveMocks(userId),
-      this.mocks.listPastStudentMockResults(userId),
-      this.hydrateCanonicalProgressSummaries(userId, lessonSummaries, progressByLessonId),
-    ]);
+    const [attemptSummaries, practiceLessons, mockTests, pastMockResults, canonicalProgressByLessonId] =
+      await Promise.all([
+        this.getAttemptSummaries(testUnits, storedAttemptSummaries),
+        this.enrichPracticeLessons(rawPracticeLessons),
+        this.mocks.listStudentLiveMocks(userId, storedAttemptSummaries),
+        this.mocks.listPastStudentMockResults(userId),
+        this.hydrateCanonicalProgressSummaries(userId, lessonSummaries, progressByLessonId),
+      ]);
 
     const liveMockTests = mockTests ?? [];
     const liveMockIds = new Set(liveMockTests.map(mock => mock.id));
@@ -655,13 +662,12 @@ export class StudentDashboardService {
 
   private async getAttemptSummaries(
     testUnits: TestUnitSummary[],
-    userId: string
+    stored: StudentAttemptSummaries
   ): Promise<Map<string, TestAttemptOriginSummary>> {
     const attemptSummaries = new Map<string, TestAttemptOriginSummary>();
     await Promise.all(
       testUnits.map(async test => {
-        const origin = { kind: 'normal-test' as const, testId: test.id };
-        attemptSummaries.set(test.id, await this.attempts.getAttemptSummary(origin, userId));
+        attemptSummaries.set(test.id, await stored.summary({ kind: 'normal-test', testId: test.id }));
       })
     );
     return attemptSummaries;
