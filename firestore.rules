@@ -170,6 +170,7 @@ service cloud.firestore {
         && collection != 'testVersionDrafts'
         && collection != 'testAttempts'
         && collection != 'testAttemptSessions'
+        && collection != 'testAttemptSummaries'
         && collection != 'testResultReviews'
         && collection != 'studentMockResults'
         && collection != 'studentMockResultMigrations'
