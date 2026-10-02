@@ -52,7 +52,7 @@ export default function DynamicLessonPage() {
   const params = useParams();
   const router = useRouter();
   const lessonId = params.lessonId as string;
-  const { user, authUid, loading: authLoading } = useAuth();
+  const { user, authUid } = useAuth();
 
   const {
     currentData: currentLesson,
@@ -103,7 +103,7 @@ export default function DynamicLessonPage() {
   const isRequestedLessonLoading =
     lessonsLoading || (!hasCurrentLesson && isFetching) || Boolean(currentLesson && !hasCurrentLesson && !error);
 
-  if (authLoading || !user || isRequestedLessonLoading) {
+  if (isRequestedLessonLoading) {
     return <PageLoading label="Loading lesson" className="min-h-0 flex-1" />;
   }
 

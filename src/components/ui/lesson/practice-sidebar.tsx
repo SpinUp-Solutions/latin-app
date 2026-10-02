@@ -18,6 +18,8 @@ interface PracticeSidebarProps {
   showWordSearch?: boolean;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  /** Called when the student picks a lesson to open. */
+  onNavigate?: () => void;
 }
 
 const sectionConfig: Record<
@@ -88,6 +90,7 @@ export default function PracticeSidebar({
   showWordSearch = true,
   isCollapsed = false,
   onToggleCollapse,
+  onNavigate,
 }: PracticeSidebarProps) {
   const [expandedSections, setExpandedSections] = useState<Record<PracticeView, boolean>>(() => {
     if (typeof window === 'undefined') return defaultExpanded;
@@ -117,9 +120,10 @@ export default function PracticeSidebar({
 
   const handleLessonClick = useCallback(
     (lessonId: string) => {
+      onNavigate?.();
       router.push(`/lesson/${lessonId}`);
     },
-    [router]
+    [router, onNavigate]
   );
 
   const toggleSection = (section: PracticeView) => {

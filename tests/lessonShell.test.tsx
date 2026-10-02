@@ -35,13 +35,24 @@ jest.mock('@/src/components/ui/lesson/lesson-player', () => ({
 
 jest.mock('@/src/components/ui/lesson/lesson-sidebar', () => ({
   __esModule: true,
-  default: function Sidebar({ currentLessonId, isCollapsed }: { currentLessonId: string; isCollapsed: boolean }) {
+  default: function Sidebar({
+    currentLessonId,
+    isCollapsed,
+    onNavigate,
+  }: {
+    currentLessonId: string;
+    isCollapsed: boolean;
+    onNavigate: () => void;
+  }) {
     useEffect(() => {
       mockSidebarMounts();
     }, []);
     return (
       <aside>
         Lesson sidebar for {currentLessonId} {isCollapsed ? 'collapsed' : 'open'}
+        <button type="button" onClick={onNavigate}>
+          Pick a lesson
+        </button>
       </aside>
     );
   },
@@ -121,7 +132,7 @@ describe('lesson shell', () => {
 
     expect(screen.getByRole('status')).toHaveTextContent('Loading lesson');
     expect(screen.queryByText('Player lesson-1')).not.toBeInTheDocument();
-    expect(screen.getByText('Lesson sidebar for lesson-2 open')).toBeInTheDocument();
+    expect(screen.getByText(/Lesson sidebar for lesson-2 open/)).toBeInTheDocument();
     expect(screen.getByText('Practice sidebar')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Back to dashboard' })).toBeInTheDocument();
 
@@ -144,7 +155,7 @@ describe('lesson shell', () => {
     render(route());
 
     expect(screen.getByRole('heading', { name: 'Lesson Locked' })).toBeInTheDocument();
-    expect(screen.getByText('Lesson sidebar for lesson-1 open')).toBeInTheDocument();
+    expect(screen.getByText(/Lesson sidebar for lesson-1 open/)).toBeInTheDocument();
   });
 
   it('holds the previous word search setting until the next lesson has loaded', () => {
@@ -161,31 +172,25 @@ describe('lesson shell', () => {
     expect(mockPracticeSidebarProps).toHaveBeenLastCalledWith(expect.objectContaining({ showWordSearch: true }));
   });
 
-  it('closes an open sidebar overlay on a narrow screen once another lesson is chosen', () => {
+  it('closes an open sidebar overlay on a narrow screen once a lesson is picked', () => {
     setNarrowViewport(true);
     mockUseGetStudentLessonQuery.mockReturnValue(loaded('lesson-1'));
-    const view = render(route());
-    expect(screen.getByText('Lesson sidebar for lesson-1 collapsed')).toBeInTheDocument();
+    render(route());
+    expect(screen.getByText(/Lesson sidebar for lesson-1 collapsed/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open lessons sidebar' }));
-    expect(screen.getByText('Lesson sidebar for lesson-1 open')).toBeInTheDocument();
+    expect(screen.getByText(/Lesson sidebar for lesson-1 open/)).toBeInTheDocument();
 
-    mockLessonId = 'lesson-2';
-    mockUseGetStudentLessonQuery.mockReturnValue(loadingAfter('lesson-1'));
-    view.rerender(route());
-
-    expect(screen.getByText('Lesson sidebar for lesson-2 collapsed')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Pick a lesson' }));
+    expect(screen.getByText(/Lesson sidebar for lesson-1 collapsed/)).toBeInTheDocument();
   });
 
-  it('leaves a desktop sidebar as the student set it when the lesson changes', () => {
+  it('leaves a desktop sidebar open when a lesson is picked', () => {
     mockUseGetStudentLessonQuery.mockReturnValue(loaded('lesson-1'));
-    const view = render(route());
+    render(route());
 
-    mockLessonId = 'lesson-2';
-    mockUseGetStudentLessonQuery.mockReturnValue(loaded('lesson-2'));
-    view.rerender(route());
-
-    expect(screen.getByText('Lesson sidebar for lesson-2 open')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Pick a lesson' }));
+    expect(screen.getByText(/Lesson sidebar for lesson-1 open/)).toBeInTheDocument();
   });
 
   it('sends a signed-out visitor to login without rendering the lesson', () => {

@@ -38,12 +38,11 @@ export default function LessonShell({ children }: { children: React.ReactNode })
   // while the next lesson loads, so the word search does not flicker.
   const { data: lastLoadedLesson } = useGetStudentLessonQuery(
     { lessonId, userId: user?.uid ?? '' },
-    { skip: !user?.uid || !lessonId }
+    { skip: !user?.uid }
   );
 
   const [collapsed, setCollapsed] = useState<{ left: boolean; right: boolean }>(() => {
-    if (typeof window === 'undefined') return defaultCollapseState;
-    if (isNarrowViewport()) return defaultCollapseState;
+    if (typeof window === 'undefined' || isNarrowViewport()) return defaultCollapseState;
     try {
       const stored = sessionStorage.getItem(SIDEBAR_COLLAPSE_KEY);
       if (stored) return { ...desktopCollapseState, ...JSON.parse(stored) };
@@ -52,14 +51,6 @@ export default function LessonShell({ children }: { children: React.ReactNode })
     }
     return desktopCollapseState;
   });
-
-  // On narrow screens the sidebars are overlays; close them once the student
-  // has picked another lesson.
-  const [shownLessonId, setShownLessonId] = useState(lessonId);
-  if (shownLessonId !== lessonId) {
-    setShownLessonId(lessonId);
-    if (isNarrowViewport()) setCollapsed(defaultCollapseState);
-  }
 
   useEffect(() => {
     try {
@@ -71,6 +62,10 @@ export default function LessonShell({ children }: { children: React.ReactNode })
 
   const toggleLeft = () => setCollapsed(prev => ({ ...prev, left: !prev.left }));
   const toggleRight = () => setCollapsed(prev => ({ ...prev, right: !prev.right }));
+  // On narrow screens the sidebars are overlays that would cover the lesson just picked.
+  const closeOverlays = () => {
+    if (isNarrowViewport()) setCollapsed(defaultCollapseState);
+  };
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -118,13 +113,19 @@ export default function LessonShell({ children }: { children: React.ReactNode })
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        <LessonSidebar currentLessonId={lessonId} isCollapsed={collapsed.left} onToggleCollapse={toggleLeft} />
+        <LessonSidebar
+          currentLessonId={lessonId}
+          isCollapsed={collapsed.left}
+          onToggleCollapse={toggleLeft}
+          onNavigate={closeOverlays}
+        />
         <div className="flex min-w-0 flex-1 flex-col">{children}</div>
         <PracticeSidebar
           currentLessonId={lessonId}
           showWordSearch={lastLoadedLesson?.showWordSearch ?? true}
           isCollapsed={collapsed.right}
           onToggleCollapse={toggleRight}
+          onNavigate={closeOverlays}
         />
       </div>
     </div>
