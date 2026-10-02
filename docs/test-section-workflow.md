@@ -3,7 +3,9 @@
 Every attempt is created with the server-owned `flowVersion: 1`. The original
 page-by-page workflow, with its per-item translation grading and separate submit
 route, has been retired. An in-progress attempt without section state fails closed
-with `STALE_TEST_ATTEMPT_DATA`. Submitted attempts from the original workflow stay
+with `STALE_TEST_ATTEMPT_DATA` when read or written. Starting the same test again
+creates a fresh attempt and moves the session to it; the retired document is left
+stored and is never resumed. Submitted attempts from the original workflow stay
 readable.
 
 ## State and delivery
