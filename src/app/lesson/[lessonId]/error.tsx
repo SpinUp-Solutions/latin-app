@@ -22,7 +22,7 @@ export default function LessonError({ error, reset }: { error: Error & { digest?
   }, [error, lessonId]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-roman-marble p-6">
+    <div className="flex min-w-0 flex-1 items-center justify-center overflow-y-auto bg-roman-marble p-6">
       <RomanCard className="w-full max-w-lg">
         <RomanCardContent className="space-y-4 p-8 text-center">
           <h1 className="font-serif text-2xl text-gray-900">Lesson failed to load</h1>

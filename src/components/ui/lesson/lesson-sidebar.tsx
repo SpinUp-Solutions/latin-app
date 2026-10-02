@@ -15,6 +15,8 @@ interface LessonSidebarProps {
   currentLessonId: string;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  /** Called when the student picks a unit they can open. */
+  onNavigate?: () => void;
 }
 
 const sidebarStatusConfig: Record<
@@ -57,7 +59,12 @@ const sidebarStatusConfig: Record<
   },
 };
 
-export default function LessonSidebar({ currentLessonId, isCollapsed = false, onToggleCollapse }: LessonSidebarProps) {
+export default function LessonSidebar({
+  currentLessonId,
+  isCollapsed = false,
+  onToggleCollapse,
+  onNavigate,
+}: LessonSidebarProps) {
   const router = useRouter();
   const { user } = useAuth();
 
@@ -81,9 +88,10 @@ export default function LessonSidebar({ currentLessonId, isCollapsed = false, on
         toast.error(unit.lockedReason || 'Complete the previous learning unit to unlock this one');
         return;
       }
+      onNavigate?.();
       router.push(unit.kind === 'test' ? `/test/${unit.id}` : `/lesson/${unit.id}`);
     },
-    [router]
+    [router, onNavigate]
   );
 
   return (
