@@ -162,7 +162,8 @@ export async function handleVocabularyWordsGET(
     const wordType = searchParams.get('wordType');
     const limit = parseInt(searchParams.get('limit') || '20');
     const lastWordId = searchParams.get('lastWordId');
-    const search = searchParams.get('search');
+    // A prefix match on "amo " would find nothing, and every caller means "amo".
+    const search = searchParams.get('search')?.trim() || null;
     const countsOnly = searchParams.get('countsOnly') === 'true';
     const collection = requireVocabularyWordsCollection(searchParams.get('collection'));
     const verbConjugation = searchParams.get('verbConjugation');

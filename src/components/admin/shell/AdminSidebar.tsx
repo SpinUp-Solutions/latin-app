@@ -22,9 +22,12 @@ import type { ComponentType } from 'react';
 import { cn } from '@/src/lib/utils';
 import { getActiveAdminNavigationHref, type AdminNavigationItem } from './navigation-utils';
 import { useGetAdminFeedbackCountQuery } from '@/src/store/api/studentFeedbackApi';
+import { useAuth } from '@/src/hooks/useAuth';
 
 function FeedbackCount() {
-  const { data } = useGetAdminFeedbackCountQuery();
+  // The shell renders before Firebase restores the session, and a request sent then has no token.
+  const { isAdmin } = useAuth();
+  const { data } = useGetAdminFeedbackCountQuery(undefined, { skip: !isAdmin });
   return data?.count ? (
     <span
       className="rounded-full bg-roman-red px-1.5 py-0.5 text-xs font-semibold text-white"
