@@ -2,10 +2,17 @@
 
 import { useState } from 'react';
 import { BookOpen, Check, ChevronsUpDown } from 'lucide-react';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/src/components/ui/command';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/src/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/src/components/ui/popover';
 import { SimpleRichDisplay } from '@/src/components/ui/core/simple-rich-display';
-import { useGetStudentDashboardQuery } from '@/src/store/api/lessonApi';
+import { REUSE_CACHED_STUDENT_DASHBOARD, useGetStudentDashboardQuery } from '@/src/store/api/lessonApi';
 import { useAuth } from '@/src/hooks/useAuth';
 import type { FeedbackLessonContext } from '@/src/hooks/useFeedbackDraft';
 import { cn } from '@/src/lib/utils';
@@ -30,10 +37,10 @@ export function FeedbackLessonPicker({
   // The list is only needed once the picker opens or a lesson other than the current one is chosen.
   const needsList = open || (lessonId !== null && lessonId !== lessonContext?.lessonId);
   // The dashboard already applies the student's progression and live-practice policy, and lesson pages have it cached.
-  // Reuse that copy: the app-wide 30-second refetch would otherwise rebuild the dashboard every time the picker opens.
+  // Reuse that copy: the app-wide refetch would otherwise rebuild the dashboard every time the picker opens.
   const { data, isLoading, isError, refetch } = useGetStudentDashboardQuery(authUid ?? '', {
     skip: !needsList || !authUid,
-    refetchOnMountOrArgChange: false,
+    ...REUSE_CACHED_STUDENT_DASHBOARD,
   });
   const fetched = data
     ? [...data.learningPath, ...data.practiceLessons]
@@ -90,12 +97,21 @@ export function FeedbackLessonPicker({
               <CommandEmpty>{isLoading ? 'Loading lessons…' : 'No lessons found.'}</CommandEmpty>
               <CommandGroup>
                 <CommandItem value="Not about a specific lesson" onSelect={() => choose(null)}>
-                  <Check className={cn('mr-2 h-4 w-4', lessonId === null ? 'opacity-100' : 'opacity-0')} aria-hidden="true" />
+                  <Check
+                    className={cn('mr-2 h-4 w-4', lessonId === null ? 'opacity-100' : 'opacity-0')}
+                    aria-hidden="true"
+                  />
                   Not about a specific lesson
                 </CommandItem>
                 {lessons.map(lesson => (
-                  <CommandItem key={lesson.id} value={`${richTextToPlainText(lesson.title)} ${lesson.id}`} onSelect={() => choose(lesson.id)}>
-                    <Check className={cn('mr-2 h-4 w-4 shrink-0', lessonId === lesson.id ? 'opacity-100' : 'opacity-0')} aria-hidden="true" />
+                  <CommandItem
+                    key={lesson.id}
+                    value={`${richTextToPlainText(lesson.title)} ${lesson.id}`}
+                    onSelect={() => choose(lesson.id)}>
+                    <Check
+                      className={cn('mr-2 h-4 w-4 shrink-0', lessonId === lesson.id ? 'opacity-100' : 'opacity-0')}
+                      aria-hidden="true"
+                    />
                     <SimpleRichDisplay content={lesson.title} />
                   </CommandItem>
                 ))}

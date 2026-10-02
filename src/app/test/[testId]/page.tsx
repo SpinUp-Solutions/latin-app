@@ -15,7 +15,7 @@ import { useAuth } from '@/src/hooks/useAuth';
 import { useBufferedAttemptAnswers } from '@/src/hooks/useBufferedAttemptAnswers';
 import { formatScorePercentage, formatScorePoints, formatScoreShortfall } from '@/src/lib/tests/formatting';
 import { getApiErrorCode, getApiErrorMessage } from '@/src/store/api/baseQuery';
-import { useGetStudentDashboardQuery } from '@/src/store/api/lessonApi';
+import { REUSE_CACHED_STUDENT_DASHBOARD, useGetStudentDashboardQuery } from '@/src/store/api/lessonApi';
 import { useGetStudentMockDetailQuery } from '@/src/store/api/mockTestApi';
 import { useStartTestAttemptMutation } from '@/src/store/api/testApi';
 import type { StudentTestSummary } from '@/src/types/lesson';
@@ -70,7 +70,7 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
     isLoading: dashboardLoading,
     isError: dashboardError,
     refetch: refetchDashboard,
-  } = useGetStudentDashboardQuery(user?.uid ?? '', { skip: !user?.uid });
+  } = useGetStudentDashboardQuery(user?.uid ?? '', { skip: !user?.uid, ...REUSE_CACHED_STUDENT_DASHBOARD });
   const {
     data: mockDetail,
     isLoading: mockDetailLoading,
@@ -408,6 +408,17 @@ export default function StudentTestPage({ params }: { params: Promise<{ testId: 
                 Review your answers before submitting.
               </li>
             </ul>
+            {attemptSummary?.latest && (
+              <p className="text-center text-sm text-roman-stone">
+                <Link
+                  data-testid="test-expectations-review-latest-link"
+                  className="font-semibold text-indigo-700 underline underline-offset-2"
+                  href={`/test-results/${attemptSummary.latest.attemptId}`}>
+                  Review your latest result
+                </Link>{' '}
+                to see your previous answers or export them as a PDF.
+              </p>
+            )}
             <div className="flex flex-col gap-3 sm:flex-row">
               <Button asChild variant="outline" className="h-11 rounded-xl sm:flex-1">
                 <Link href="/dashboard">Not now</Link>

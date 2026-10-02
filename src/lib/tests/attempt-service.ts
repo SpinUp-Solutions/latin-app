@@ -21,6 +21,7 @@ import {
   STUDENT_MOCK_RESULTS_COLLECTION,
   TEST_ATTEMPTS_COLLECTION,
   TEST_ATTEMPT_SESSIONS_COLLECTION,
+  TEST_ATTEMPT_SUMMARIES_COLLECTION,
   TEST_RESULT_REVIEWS_COLLECTION,
   TEST_VERSIONS_COLLECTION,
   USER_PROGRESS_COLLECTION,
@@ -75,6 +76,7 @@ import {
   parseVersionSummarySnapshot,
 } from './persistence';
 import {
+  ATTEMPT_SUMMARY_TREND_LIMIT,
   saveTestAttemptAnswersInputSchema,
   startTestAttemptInputSchema,
   submittedAttemptResultProjectionSchema,
@@ -82,7 +84,10 @@ import {
   studentMockResultDocumentSchema,
   submittedTestAttemptDocumentSchema,
   testAttemptDocumentSchema,
+  testAttemptOriginSchema,
   testAttemptSessionDocumentSchema,
+  testAttemptSummaryDocumentSchema,
+  testAttemptSummaryMarkerDocumentSchema,
   type SaveTestAttemptAnswersInput,
   type StartTestAttemptInput,
 } from './schemas';
@@ -124,6 +129,47 @@ export function getTestAttemptSessionId(studentId: string, origin: TestAttemptOr
 
 export function getStudentMockResultId(studentId: string, mockTestId: string): string {
   return fingerprint([studentId, mockTestId]);
+}
+
+export function getTestAttemptSummaryMarkerId(studentId: string): string {
+  return fingerprint([studentId, 'attempt-summaries']);
+}
+
+/** A student's attempt summaries and score trends, loaded once for every origin on a page. */
+export interface StudentAttemptSummaries {
+  summary(origin: TestAttemptOrigin): Promise<TestAttemptOriginSummary>;
+  scoreTrend(origin: TestAttemptOrigin): Promise<Array<{ percentage: number; submittedAt: string }>>;
+}
+
+type StoredAttemptSummary = ReturnType<typeof testAttemptSummaryDocumentSchema.parse>;
+type StoredAttemptResults = Pick<StoredAttemptSummary, 'attemptCount' | 'best' | 'latest' | 'recentResults'>;
+type StoredAttemptSummaries = { complete: boolean; byId: Map<string, StoredAttemptSummary> };
+
+/** Building summaries from history writes one document per origin, so it stays far below the transaction limit. */
+const MAX_MATERIALIZED_SUMMARY_ORIGINS = 150;
+
+/** Matches the history queries: the best result is the highest percentage, and the newer one wins a tie. */
+function withSubmittedResult(
+  previous: StoredAttemptResults | null,
+  result: TestAttemptResultSummary
+): StoredAttemptResults {
+  const isBest =
+    !previous ||
+    result.percentage > previous.best.percentage ||
+    (result.percentage === previous.best.percentage && result.submittedAt >= previous.best.submittedAt);
+  const isLatest = !previous || result.submittedAt >= previous.latest.submittedAt;
+  const recentResults = [
+    ...(previous?.recentResults ?? []),
+    { percentage: result.percentage, submittedAt: result.submittedAt },
+  ]
+    .sort((left, right) => left.submittedAt.localeCompare(right.submittedAt))
+    .slice(-ATTEMPT_SUMMARY_TREND_LIMIT);
+  return {
+    attemptCount: (previous?.attemptCount ?? 0) + 1,
+    best: isBest ? result : previous.best,
+    latest: isLatest ? result : previous.latest,
+    recentResults,
+  };
 }
 
 function parseAttemptSnapshot(snapshot: DocumentSnapshot): TestAttempt {
@@ -303,6 +349,10 @@ export class TestAttemptService {
 
   private get attemptSessions() {
     return this.db.collection(TEST_ATTEMPT_SESSIONS_COLLECTION);
+  }
+
+  private get attemptSummaries() {
+    return this.db.collection(TEST_ATTEMPT_SUMMARIES_COLLECTION);
   }
 
   private get reviews() {
@@ -1018,11 +1068,16 @@ export class TestAttemptService {
       origin.kind === 'mock-test'
         ? this.studentMockResults.doc(getStudentMockResultId(studentId, origin.mockTestId))
         : null;
-    const [sessionSnapshot, completionSnapshot, mockResultSnapshot] = await Promise.all([
-      transaction.get(sessionRef),
-      completionRef ? transaction.get(completionRef) : Promise.resolve(null),
-      mockResultRef ? transaction.get(mockResultRef) : Promise.resolve(null),
-    ]);
+    const summaryRef = this.attemptSummaries.doc(getTestAttemptSessionId(studentId, origin));
+    const summaryMarkerRef = this.attemptSummaries.doc(getTestAttemptSummaryMarkerId(studentId));
+    const [sessionSnapshot, completionSnapshot, mockResultSnapshot, summarySnapshot, summaryMarkerSnapshot] =
+      await Promise.all([
+        transaction.get(sessionRef),
+        completionRef ? transaction.get(completionRef) : Promise.resolve(null),
+        mockResultRef ? transaction.get(mockResultRef) : Promise.resolve(null),
+        transaction.get(summaryRef),
+        transaction.get(summaryMarkerRef),
+      ]);
 
     let shouldClearSession = false;
     if (sessionSnapshot.exists) {
@@ -1038,6 +1093,39 @@ export class TestAttemptService {
     transaction.set(attemptRef, submitted);
     transaction.set(this.reviews.doc(attempt.id), review);
     if (shouldClearSession) transaction.delete(sessionRef);
+
+    // Summaries are trusted only once the student's marker exists. Before that,
+    // the first summary read builds them from attempt history, which will
+    // include this attempt.
+    if (summaryMarkerSnapshot.exists) {
+      const previous = summarySnapshot.exists
+        ? testAttemptSummaryDocumentSchema.safeParse({ ...summarySnapshot.data(), id: summarySnapshot.id })
+        : null;
+      if (previous && !previous.success) {
+        console.error(`Attempt summary ${summarySnapshot.id} contains invalid data; rebuilding it from history`);
+        transaction.delete(summaryRef);
+        transaction.delete(summaryMarkerRef);
+      } else {
+        transaction.set(
+          summaryRef,
+          testAttemptSummaryDocumentSchema.parse({
+            id: summaryRef.id,
+            kind: 'summary',
+            studentId,
+            origin,
+            ...withSubmittedResult(previous?.data ?? null, {
+              attemptId: attempt.id,
+              score: submitted.score,
+              maxScore: submitted.maxScore,
+              percentage: submitted.percentage,
+              outcome: submitted.outcome,
+              submittedAt: submitted.submittedAt,
+            }),
+            updatedAt: timestamp,
+          })
+        );
+      }
+    }
 
     if (mockResultRef && origin.kind === 'mock-test') {
       const existing = mockResultSnapshot?.exists
@@ -1085,6 +1173,146 @@ export class TestAttemptService {
     return { attempt: toStudentAttempt(submitted) as StudentSubmittedTestAttempt, completionGranted };
   }
 
+  private parseStoredAttemptSummaries(studentId: string, documents: DocumentSnapshot[]): StoredAttemptSummaries | null {
+    const stored: StoredAttemptSummaries = { complete: false, byId: new Map() };
+    for (const document of documents) {
+      const data: Record<string, unknown> = { ...document.data(), id: document.id };
+      if (data.kind === 'marker') {
+        const marker = testAttemptSummaryMarkerDocumentSchema.safeParse(data);
+        if (marker.success && marker.data.studentId === studentId) {
+          stored.complete = true;
+          continue;
+        }
+      } else {
+        const summary = testAttemptSummaryDocumentSchema.safeParse(data);
+        if (
+          summary.success &&
+          summary.data.studentId === studentId &&
+          summary.data.id === getTestAttemptSessionId(studentId, summary.data.origin)
+        ) {
+          stored.byId.set(summary.data.id, summary.data);
+          continue;
+        }
+      }
+      console.error(`Attempt summary ${document.id} contains invalid data; reading attempt history instead`);
+      return null;
+    }
+    return stored;
+  }
+
+  /**
+   * Builds a student's summaries from their submitted attempts the first time
+   * they are read. Returns null, writing nothing, when the history cannot be
+   * summarised safely; callers then keep reading the history directly.
+   */
+  private materializeAttemptSummaries(studentId: string): Promise<StoredAttemptSummaries | null> {
+    const markerRef = this.attemptSummaries.doc(getTestAttemptSummaryMarkerId(studentId));
+    return this.db.runTransaction(async transaction => {
+      if ((await transaction.get(markerRef)).exists) {
+        const current = await transaction.get(this.attemptSummaries.where('studentId', '==', studentId));
+        return this.parseStoredAttemptSummaries(studentId, current.docs);
+      }
+
+      const history = await transaction.get(
+        this.attempts
+          .where('studentId', '==', studentId)
+          .where('status', '==', 'submitted')
+          .select('origin', 'score', 'maxScore', 'percentage', 'outcome', 'submittedAt')
+      );
+      const results: Array<{ origin: TestAttemptOrigin; result: TestAttemptResultSummary }> = [];
+      for (const document of history.docs) {
+        const { origin: rawOrigin, ...rawResult } = document.data();
+        const origin = testAttemptOriginSchema.safeParse(rawOrigin);
+        const result = submittedAttemptResultProjectionSchema.safeParse(rawResult);
+        if (!origin.success || !result.success) {
+          console.error(`Submitted attempt ${document.id} contains invalid summary fields; summaries were not stored`);
+          return null;
+        }
+        results.push({ origin: origin.data, result: { attemptId: document.id, ...result.data } });
+      }
+
+      const timestamp = this.now();
+      const byId = new Map<string, StoredAttemptSummary>();
+      for (const { origin, result } of results) {
+        const id = getTestAttemptSessionId(studentId, origin);
+        byId.set(
+          id,
+          testAttemptSummaryDocumentSchema.parse({
+            id,
+            kind: 'summary',
+            studentId,
+            origin,
+            ...withSubmittedResult(byId.get(id) ?? null, result),
+            updatedAt: timestamp,
+          })
+        );
+      }
+      if (byId.size > MAX_MATERIALIZED_SUMMARY_ORIGINS) return null;
+
+      for (const summary of byId.values()) transaction.set(this.attemptSummaries.doc(summary.id), summary);
+      transaction.set(
+        markerRef,
+        testAttemptSummaryMarkerDocumentSchema.parse({
+          id: markerRef.id,
+          kind: 'marker',
+          studentId,
+          completedAt: timestamp,
+        })
+      );
+      return { complete: true, byId };
+    });
+  }
+
+  /**
+   * Loads every summary a student has in two queries, instead of four reads
+   * per test and mock. Students without stored summaries get them built once
+   * from their attempt history.
+   */
+  async loadAttemptSummaries(studentId: string): Promise<StudentAttemptSummaries> {
+    const history: StudentAttemptSummaries = {
+      summary: origin => this.getAttemptSummary(origin, studentId),
+      scoreTrend: origin => this.getSubmittedScoreTrend(origin, studentId),
+    };
+
+    let stored: StoredAttemptSummaries | null;
+    let sessions: Map<string, DocumentSnapshot>;
+    try {
+      const [summarySnapshot, sessionSnapshot] = await Promise.all([
+        this.attemptSummaries.where('studentId', '==', studentId).get(),
+        this.attemptSessions.where('studentId', '==', studentId).get(),
+      ]);
+      stored = this.parseStoredAttemptSummaries(studentId, summarySnapshot.docs);
+      if (stored && !stored.complete) stored = await this.materializeAttemptSummaries(studentId);
+      sessions = new Map(sessionSnapshot.docs.map(document => [document.id, document]));
+    } catch (error) {
+      console.error(
+        `Unable to load attempt summaries for student ${studentId}; reading attempt history instead`,
+        error
+      );
+      return history;
+    }
+    if (!stored) return history;
+
+    const summaries = stored.byId;
+    return {
+      summary: async origin => {
+        const id = getTestAttemptSessionId(studentId, origin);
+        const session = sessions.get(id);
+        const activeAttempt = session ? await this.activeAttemptForSession(session, studentId, origin) : null;
+        const summary = summaries.get(id);
+        return {
+          origin,
+          inProgressAttemptId: activeAttempt?.id ?? null,
+          attemptCount: summary?.attemptCount ?? 0,
+          best: summary?.best ?? null,
+          latest: summary?.latest ?? null,
+        };
+      },
+      scoreTrend: async origin => summaries.get(getTestAttemptSessionId(studentId, origin))?.recentResults ?? [],
+    };
+  }
+
+  /** Reads one origin's summary from the attempt history itself. */
   async getAttemptSummary(origin: TestAttemptOrigin, studentId: string): Promise<TestAttemptOriginSummary> {
     const submittedQuery = this.submittedAttemptsQuery(studentId, origin);
     const resultFields = ['score', 'maxScore', 'percentage', 'outcome', 'submittedAt'] as const;

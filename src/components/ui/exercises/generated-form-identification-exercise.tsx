@@ -280,17 +280,14 @@ const GeneratedExerciseSession: React.FC<Props & { items: ResolvedFormIdentifica
         instructions={exercise.instructions}
       />
 
+      {/* Practice counts words, matching the authored question count; tests grade and count each step. */}
       <ExerciseProgress
-        currentIndex={queueEnabled ? completedWords : currentIndex}
+        currentIndex={testAnswerMode ? currentIndex : completedWords}
         completed={
-          queueEnabled
-            ? completedWords
-            : mode === 'practice'
-              ? currentIndex + (isCorrect === true ? 1 : 0)
-              : items.filter(item => Boolean(submittedAnswers[item.id]?.trim())).length
+          testAnswerMode ? items.filter(item => Boolean(submittedAnswers[item.id]?.trim())).length : completedWords
         }
-        total={queueEnabled ? totalWords : items.length}
-        label={queueEnabled ? 'Word' : 'Question'}
+        total={testAnswerMode ? items.length : totalWords}
+        label={testAnswerMode ? 'Question' : 'Word'}
         showProgress={exercise.feedbackConfig.progressionRules?.showProgress !== false}
       />
 

@@ -28,7 +28,7 @@ import type { StudentPastMockResult } from '@/src/types/test-results';
 import { regeneratePageIds } from '@/src/utils/idUtils';
 import { assertVocabularyPoolAssignmentsAllowedInTransaction } from '@/src/lib/vocabulary-pools/assignment.server';
 import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
-import { getStudentMockResultId, TestAttemptService } from './attempt-service';
+import { getStudentMockResultId, TestAttemptService, type StudentAttemptSummaries } from './attempt-service';
 import { TestServiceError } from './errors';
 import {
   assertVersionReadyForStudentVisibility,
@@ -65,15 +65,12 @@ import {
 } from './schemas';
 
 export class MockTestService {
-  private readonly attempts: Pick<
-    TestAttemptService,
-    'getAttemptSummary' | 'getSubmittedScoreTrend' | 'getActiveAttempt'
-  >;
+  private readonly attempts: Pick<TestAttemptService, 'loadAttemptSummaries' | 'getActiveAttempt'>;
 
   constructor(
     private readonly db: Firestore = adminDb,
     private readonly now: () => string = () => new Date().toISOString(),
-    attempts?: Pick<TestAttemptService, 'getAttemptSummary' | 'getSubmittedScoreTrend' | 'getActiveAttempt'>
+    attempts?: Pick<TestAttemptService, 'loadAttemptSummaries' | 'getActiveAttempt'>
   ) {
     this.attempts = attempts ?? new TestAttemptService(db, now);
   }
@@ -356,12 +353,15 @@ export class MockTestService {
     return mocks.map(mock => ({ ...mock, totalPoints: totals.get(mock.versionId)! }));
   }
 
-  async listStudentLiveMocks(studentId: string): Promise<StudentMockTestSummary[]> {
-    const snapshot = await this.mocks
-      .where('status', '==', 'active')
-      .where('isLive', '==', true)
-      .orderBy('mockOrder', 'asc')
-      .get();
+  /** Pass `attemptSummaries` when the caller has already loaded them, so they are not read twice. */
+  async listStudentLiveMocks(
+    studentId: string,
+    attemptSummaries?: StudentAttemptSummaries
+  ): Promise<StudentMockTestSummary[]> {
+    const [snapshot, summaries] = await Promise.all([
+      this.mocks.where('status', '==', 'active').where('isLive', '==', true).orderBy('mockOrder', 'asc').get(),
+      attemptSummaries ?? this.attempts.loadAttemptSummaries(studentId),
+    ]);
 
     const mocks = snapshot.docs.flatMap(document => {
       try {
@@ -386,8 +386,8 @@ export class MockTestService {
         try {
           const origin = { kind: 'mock-test' as const, mockTestId: mock.id };
           const [attemptSummary, scoreTrend] = await Promise.all([
-            this.attempts.getAttemptSummary(origin, studentId),
-            this.attempts.getSubmittedScoreTrend(origin, studentId),
+            summaries.summary(origin),
+            summaries.scoreTrend(origin),
           ]);
           return {
             id: mock.id,

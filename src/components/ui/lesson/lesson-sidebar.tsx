@@ -2,7 +2,7 @@
 
 import React, { useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useGetStudentDashboardQuery } from '@/src/store/api/lessonApi';
+import { REUSE_CACHED_STUDENT_DASHBOARD, useGetStudentDashboardQuery } from '@/src/store/api/lessonApi';
 import { LessonStatus, type StudentLearningUnitSummary } from '@/src/types/lesson';
 import { BookOpen, CheckCircle, Lock, Play, FileCheck2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -15,6 +15,8 @@ interface LessonSidebarProps {
   currentLessonId: string;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  /** Called when the student picks a unit they can open. */
+  onNavigate?: () => void;
 }
 
 const sidebarStatusConfig: Record<
@@ -57,7 +59,12 @@ const sidebarStatusConfig: Record<
   },
 };
 
-export default function LessonSidebar({ currentLessonId, isCollapsed = false, onToggleCollapse }: LessonSidebarProps) {
+export default function LessonSidebar({
+  currentLessonId,
+  isCollapsed = false,
+  onToggleCollapse,
+  onNavigate,
+}: LessonSidebarProps) {
   const router = useRouter();
   const { user } = useAuth();
 
@@ -68,6 +75,7 @@ export default function LessonSidebar({ currentLessonId, isCollapsed = false, on
     refetch,
   } = useGetStudentDashboardQuery(user?.uid ?? '', {
     skip: !user?.uid,
+    ...REUSE_CACHED_STUDENT_DASHBOARD,
   });
 
   const learningUnits = useMemo(() => {
@@ -80,9 +88,10 @@ export default function LessonSidebar({ currentLessonId, isCollapsed = false, on
         toast.error(unit.lockedReason || 'Complete the previous learning unit to unlock this one');
         return;
       }
+      onNavigate?.();
       router.push(unit.kind === 'test' ? `/test/${unit.id}` : `/lesson/${unit.id}`);
     },
-    [router]
+    [router, onNavigate]
   );
 
   return (

@@ -283,6 +283,46 @@ describe('student normal test flow', () => {
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/dashboard'));
   });
 
+  it('links to the latest submitted result from the retake expectations screen', async () => {
+    const [unit] = dashboard.learningPath;
+    const withLatest = {
+      ...dashboard,
+      learningPath: [
+        {
+          ...unit,
+          attemptSummary: {
+            ...(unit as { attemptSummary: object }).attemptSummary,
+            attemptCount: 1,
+            latest: { attemptId: 'attempt-prev', outcome: 'passed' },
+          },
+        },
+      ],
+    };
+    mockUseGetStudentDashboardQuery.mockReturnValue({
+      data: withLatest,
+      isLoading: false,
+      isError: false,
+      refetch: mockRefetchDashboard,
+    });
+    const params = Promise.resolve({ testId: 'test-1' }) as Promise<{ testId: string }> & {
+      status: 'fulfilled';
+      value: { testId: string };
+    };
+    params.status = 'fulfilled';
+    params.value = { testId: 'test-1' };
+    render(
+      <Suspense fallback={<div>Loading route</div>}>
+        <StudentTestPage params={params} />
+      </Suspense>
+    );
+
+    expect(await screen.findByRole('button', { name: 'Start Retake' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Review your latest result' })).toHaveAttribute(
+      'href',
+      '/test-results/attempt-prev'
+    );
+  });
+
   it('starts a retake from results in one click', async () => {
     const params = Promise.resolve({ testId: 'test-1' }) as Promise<{ testId: string }> & {
       status: 'fulfilled';
