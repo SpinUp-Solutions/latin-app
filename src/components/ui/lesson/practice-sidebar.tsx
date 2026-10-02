@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useGetStudentDashboardQuery } from '@/src/store/api/lessonApi';
+import { REUSE_CACHED_STUDENT_DASHBOARD, useGetStudentDashboardQuery } from '@/src/store/api/lessonApi';
 import { BookOpen, Pencil, Headphones, CheckCircle, Play, ChevronDown } from 'lucide-react';
 import { CollapsibleSidebarShell } from './collapsible-sidebar-shell';
 import { useAuth } from '@/src/hooks/useAuth';
@@ -113,6 +113,7 @@ export default function PracticeSidebar({
 
   const { data: studentDashboard, isLoading } = useGetStudentDashboardQuery(user?.uid ?? '', {
     skip: !user?.uid,
+    ...REUSE_CACHED_STUDENT_DASHBOARD,
   });
 
   const handleLessonClick = useCallback(

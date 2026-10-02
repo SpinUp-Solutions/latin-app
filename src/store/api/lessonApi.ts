@@ -72,6 +72,17 @@ const adoptPersistedProgress: TypedMutationOnQueryStarted<
   if (completedNow) dispatch(lessonApi.util.invalidateTags([{ type: 'StudentLesson', id: 'LIST' }]));
 };
 
+/**
+ * The dashboard is the costliest student read, and progress writes and tag
+ * invalidation already keep its cached copy current. Views that only display
+ * it pass these options so that mounting them, or refocusing the tab, does not
+ * rebuild it. The dashboard page itself still refreshes it.
+ */
+export const REUSE_CACHED_STUDENT_DASHBOARD = { refetchOnMountOrArgChange: false, refetchOnFocus: false } as const;
+
+/** How old the dashboard page lets its data get before a tab refocus refreshes it. */
+export const STUDENT_DASHBOARD_FOCUS_REFRESH_MS = 5 * 60 * 1000;
+
 export const lessonApi = appApi.injectEndpoints({
   endpoints: builder => ({
     getLessons: builder.query<LessonSummary[], void>({

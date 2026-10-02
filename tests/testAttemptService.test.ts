@@ -1,5 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { getTestAttemptSessionId, getStudentMockResultId, TestAttemptService } from '@/src/lib/tests/attempt-service';
+import {
+  getTestAttemptSessionId,
+  getTestAttemptSummaryMarkerId,
+  getStudentMockResultId,
+  TestAttemptService,
+} from '@/src/lib/tests/attempt-service';
 import { MockTestService } from '@/src/lib/tests/mock-service';
 import type { TestAttemptOrigin } from '@/src/types/test';
 
@@ -1307,6 +1312,178 @@ describe('test attempt summaries', () => {
     expect(summary.attemptCount).toBe(2);
     expect(summary.best).toMatchObject({ attemptId: 'm2', percentage: 80 });
     expect(summary.latest).toMatchObject({ attemptId: 'm2' });
+  });
+});
+
+describe('stored attempt summaries', () => {
+  const normalOrigin: TestAttemptOrigin = { kind: 'normal-test', testId: 'test-1' };
+  const mockOrigin: TestAttemptOrigin = { kind: 'mock-test', mockTestId: 'mock-1' };
+  const markerId = getTestAttemptSummaryMarkerId('student-1');
+
+  const seedLiveMock = (db: FakeFirestore) => {
+    db.seed('testVersions', 'mock-version', versionDocument('mock-version'));
+    db.seed('mockTests', 'mock-1', {
+      id: 'mock-1',
+      versionId: 'mock-version',
+      parent: { kind: 'standalone' },
+      title: 'Mock test',
+      description: '',
+      passingPercentage: 70,
+      status: 'active',
+      isLive: true,
+      mockOrder: 0,
+    });
+  };
+
+  const takeMock = async (service: TestAttemptService, answer: string) => {
+    const started = await service.startAttempt({ origin: mockOrigin }, 'student-1');
+    await service.saveAttemptAnswers(
+      started.attempt.id,
+      {
+        section: await writeSection(service, started.attempt.id),
+        answers: { 'fill.with.punctuation': { type: 'fill', answers: [answer] } },
+      },
+      'student-1'
+    );
+    return submitAttempt(service, started.attempt.id, 'student-1');
+  };
+
+  const historyReads = (db: FakeFirestore) => db.queryLog.filter(entry => entry.collection === 'testAttempts').length;
+
+  it('builds summaries from attempt history once and then serves them without reading it', async () => {
+    const db = new FakeFirestore();
+    const history: Array<[string, StoredDocument]> = [
+      ['s1', { percentage: 100, score: 5, outcome: 'passed', submittedAt: '2026-01-01T00:00:00.000Z' }],
+      ['s2', { percentage: 50, score: 2.5, submittedAt: '2026-03-01T00:00:00.000Z' }],
+      ['s3', { percentage: 100, score: 5, outcome: 'passed', submittedAt: '2026-02-01T00:00:00.000Z' }],
+      ['m1', { origin: mockOrigin, percentage: 60, submittedAt: '2026-01-15T00:00:00.000Z' }],
+      ['other-student', { studentId: 'student-2' }],
+    ];
+    history.forEach(([id, overrides]) => db.seed('testAttempts', id, submittedAttemptDocument(id, overrides)));
+    db.seed('testAttempts', 'active-attempt', inProgressAttemptDocument('active-attempt'));
+    const sessionId = getTestAttemptSessionId('student-1', normalOrigin);
+    db.seed('testAttemptSessions', sessionId, sessionDocument(sessionId, 'student-1', normalOrigin, 'active-attempt'));
+    const service = new TestAttemptService(db as never, () => timestamp);
+
+    const first = await service.loadAttemptSummaries('student-1');
+
+    // The stored summary must agree with the history queries it replaces.
+    const fromHistory = await service.getAttemptSummary(normalOrigin, 'student-1');
+    await expect(first.summary(normalOrigin)).resolves.toEqual(fromHistory);
+    expect(fromHistory).toMatchObject({
+      attemptCount: 3,
+      best: { attemptId: 's3' },
+      latest: { attemptId: 's2' },
+      inProgressAttemptId: 'active-attempt',
+    });
+    await expect(first.summary(mockOrigin)).resolves.toMatchObject({ attemptCount: 1, inProgressAttemptId: null });
+    await expect(first.scoreTrend(normalOrigin)).resolves.toEqual(
+      await service.getSubmittedScoreTrend(normalOrigin, 'student-1')
+    );
+    expect(db.readAll('testAttemptSummaries')).toHaveLength(3);
+    expect(db.read('testAttemptSummaries', markerId)).toMatchObject({ kind: 'marker', studentId: 'student-1' });
+
+    const readsBefore = historyReads(db);
+    const transactionsBefore = db.transactionCallbackCount;
+    const second = await service.loadAttemptSummaries('student-1');
+
+    await expect(second.summary(normalOrigin)).resolves.toEqual(fromHistory);
+    expect(historyReads(db)).toBe(readsBefore);
+    expect(db.transactionCallbackCount).toBe(transactionsBefore);
+  });
+
+  it('records a student without attempts so later reads treat a missing summary as zero', async () => {
+    const db = new FakeFirestore();
+    const service = new TestAttemptService(db as never, () => timestamp);
+
+    const summaries = await service.loadAttemptSummaries('student-1');
+
+    await expect(summaries.summary(normalOrigin)).resolves.toEqual({
+      origin: normalOrigin,
+      inProgressAttemptId: null,
+      attemptCount: 0,
+      best: null,
+      latest: null,
+    });
+    await expect(summaries.scoreTrend(normalOrigin)).resolves.toEqual([]);
+    expect(db.readAll('testAttemptSummaries')).toEqual([expect.objectContaining({ id: markerId, kind: 'marker' })]);
+  });
+
+  it('keeps a stored summary current as later attempts are submitted', async () => {
+    const db = new FakeFirestore();
+    seedLiveMock(db);
+    let tick = 0;
+    const service = new TestAttemptService(db as never, () => `2026-07-2${(tick += 1)}T12:00:00.000Z`);
+    await service.loadAttemptSummaries('student-1');
+
+    const passed = await takeMock(service, 'love');
+    const failed = await takeMock(service, 'wrong');
+
+    const readsBefore = historyReads(db);
+    const summary = await (await service.loadAttemptSummaries('student-1')).summary(mockOrigin);
+    expect(summary).toMatchObject({
+      attemptCount: 2,
+      best: { attemptId: passed.attempt.id, percentage: 100 },
+      latest: { attemptId: failed.attempt.id, percentage: 0 },
+    });
+    expect(historyReads(db)).toBe(readsBefore);
+    expect(summary).toEqual(await service.getAttemptSummary(mockOrigin, 'student-1'));
+    const stored = db.read('testAttemptSummaries', getTestAttemptSessionId('student-1', mockOrigin));
+    expect(stored?.recentResults).toEqual([
+      { percentage: 100, submittedAt: passed.attempt.submittedAt },
+      { percentage: 0, submittedAt: failed.attempt.submittedAt },
+    ]);
+  });
+
+  it('leaves an attempt submitted before the first summary read to be counted from history', async () => {
+    const db = new FakeFirestore();
+    seedLiveMock(db);
+    const service = new TestAttemptService(db as never, () => timestamp);
+
+    const submitted = await takeMock(service, 'love');
+    expect(db.readAll('testAttemptSummaries')).toHaveLength(0);
+
+    const summaries = await service.loadAttemptSummaries('student-1');
+    await expect(summaries.summary(mockOrigin)).resolves.toMatchObject({
+      attemptCount: 1,
+      latest: { attemptId: submitted.attempt.id },
+    });
+  });
+
+  it('stores nothing and reads history when a submitted attempt cannot be summarised', async () => {
+    const db = new FakeFirestore();
+    db.seed('testAttempts', 'valid', submittedAttemptDocument('valid'));
+    db.seed('testAttempts', 'legacy', { ...submittedAttemptDocument('legacy'), percentage: 'unknown' });
+    const service = new TestAttemptService(db as never, () => timestamp);
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const summaries = await service.loadAttemptSummaries('student-1');
+
+    expect(db.readAll('testAttemptSummaries')).toHaveLength(0);
+    const readsBefore = historyReads(db);
+    await summaries.scoreTrend(normalOrigin);
+    expect(historyReads(db)).toBeGreaterThan(readsBefore);
+    consoleError.mockRestore();
+  });
+
+  it('discards an invalid stored summary on submit so it is rebuilt from history', async () => {
+    const db = new FakeFirestore();
+    seedLiveMock(db);
+    const service = new TestAttemptService(db as never, () => timestamp);
+    await service.loadAttemptSummaries('student-1');
+    const summaryId = getTestAttemptSessionId('student-1', mockOrigin);
+    db.seed('testAttemptSummaries', summaryId, { id: summaryId, kind: 'summary', studentId: 'student-1' });
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const submitted = await takeMock(service, 'love');
+
+    expect(db.readAll('testAttemptSummaries')).toHaveLength(0);
+    const summaries = await service.loadAttemptSummaries('student-1');
+    await expect(summaries.summary(mockOrigin)).resolves.toMatchObject({
+      attemptCount: 1,
+      best: { attemptId: submitted.attempt.id },
+    });
+    consoleError.mockRestore();
   });
 });
 
