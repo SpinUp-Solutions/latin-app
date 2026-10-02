@@ -212,6 +212,16 @@ function parseAttemptSnapshot(snapshot: DocumentSnapshot): TestAttempt {
   }
 }
 
+/**
+ * In-progress attempts from the retired page-by-page workflow predate
+ * `flowVersion`. They cannot be resumed, so starting the test again replaces
+ * them instead of failing closed.
+ */
+function isRetiredWorkflowAttempt(snapshot: DocumentSnapshot): boolean {
+  const data = snapshot.data();
+  return data?.status === 'in-progress' && data.flowVersion === undefined;
+}
+
 function parseSessionSnapshot(snapshot: DocumentSnapshot): TestAttemptSession {
   const parsed = testAttemptSessionDocumentSchema.safeParse({ ...snapshot.data(), id: snapshot.id });
   if (!parsed.success) {
@@ -631,7 +641,9 @@ export class TestAttemptService {
         }
 
         const activeAttemptSnapshot = await transaction.get(this.attempts.doc(session.attemptId));
-        if (activeAttemptSnapshot.exists) {
+        // A retired attempt is left stored as a record that the student reached
+        // this test; only the session moves to the new attempt.
+        if (activeAttemptSnapshot.exists && !isRetiredWorkflowAttempt(activeAttemptSnapshot)) {
           const activeAttempt = parseAttemptSnapshot(activeAttemptSnapshot);
           if (activeAttempt.studentId !== studentId || !sameOrigin(activeAttempt.origin, origin)) {
             throw configurationError(`Attempt session ${sessionId} points outside its student/origin scope`);

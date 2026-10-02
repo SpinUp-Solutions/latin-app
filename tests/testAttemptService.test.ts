@@ -770,7 +770,7 @@ describe('test attempt submission and sticky completion', () => {
   const normalOrigin: TestAttemptOrigin = { kind: 'normal-test', testId: 'test-1' };
   const startInput = { origin: normalOrigin };
 
-  it('fails closed on an in-progress attempt from the retired pre-section flow', async () => {
+  it('starts a fresh attempt in place of one from the retired pre-section flow', async () => {
     const db = new FakeFirestore();
     seedNormalTest(db, ['version-a']);
     const attemptId = 'legacy-in-progress';
@@ -780,13 +780,39 @@ describe('test attempt submission and sticky completion', () => {
     db.seed('testAttemptSessions', sessionId, sessionDocument(sessionId, 'student-1', normalOrigin, attemptId));
     const service = new TestAttemptService(db as never, () => timestamp);
 
+    const started = await service.startAttempt(startInput, 'student-1');
+
+    expect(started.resumed).toBe(false);
+    expect(started.attempt.id).not.toBe(attemptId);
+    expect(started.attempt.section).toMatchObject({ pageIndex: 0, phase: 'answering' });
+    expect(db.read('testAttemptSessions', sessionId)).toMatchObject({ attemptId: started.attempt.id });
+    expect(await service.startAttempt(startInput, 'student-1')).toMatchObject({
+      resumed: true,
+      attempt: { id: started.attempt.id },
+    });
+    // The retired attempt is left as it was stored, and stays unreadable.
+    expect(db.read('testAttempts', attemptId)).toEqual(legacyAttempt);
+    await expect(service.getAttempt(attemptId, 'student-1')).rejects.toMatchObject({
+      code: 'STALE_TEST_ATTEMPT_DATA',
+      status: 409,
+    });
+  });
+
+  it('fails closed on a section-flow attempt with invalid persisted state rather than replacing it', async () => {
+    const db = new FakeFirestore();
+    seedNormalTest(db, ['version-a']);
+    const attemptId = 'corrupt-in-progress';
+    const sessionId = getTestAttemptSessionId('student-1', normalOrigin);
+    db.seed('testAttempts', attemptId, inProgressAttemptDocument(attemptId, { sections: {} }));
+    db.seed('testAttemptSessions', sessionId, sessionDocument(sessionId, 'student-1', normalOrigin, attemptId));
+    const service = new TestAttemptService(db as never, () => timestamp);
+
     await expect(service.startAttempt(startInput, 'student-1')).rejects.toMatchObject({
       code: 'STALE_TEST_ATTEMPT_DATA',
       status: 409,
     });
-    await expect(service.getAttempt(attemptId, 'student-1')).rejects.toMatchObject({
-      code: 'STALE_TEST_ATTEMPT_DATA',
-    });
+    expect(db.readAll('testAttempts')).toHaveLength(1);
+    expect(db.read('testAttemptSessions', sessionId)).toMatchObject({ attemptId });
   });
 
   const startAnswerSubmit = async (
