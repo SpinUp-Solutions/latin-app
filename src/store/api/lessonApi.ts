@@ -58,9 +58,13 @@ const adoptPersistedProgress: TypedMutationOnQueryStarted<
     })
   );
 
+  // The recipe runs only against a loaded dashboard. A first dashboard request
+  // still in flight predates this write, so a completion must refresh it too.
+  let dashboardLoaded = false;
   let completedNow = false;
   dispatch(
     lessonApi.util.updateQueryData('getStudentDashboard', userId, dashboard => {
+      dashboardLoaded = true;
       for (const unit of [...dashboard.learningPath, ...dashboard.practiceLessons]) {
         if (unit.kind !== 'lesson' || unit.id !== lessonId) continue;
         completedNow ||= result.lessonCompleted && unit.status !== 'completed';
@@ -69,7 +73,8 @@ const adoptPersistedProgress: TypedMutationOnQueryStarted<
     })
   );
   // Only the dashboard provides this tag, so the open lesson is not refetched.
-  if (completedNow) dispatch(lessonApi.util.invalidateTags([{ type: 'StudentLesson', id: 'LIST' }]));
+  if (completedNow || (result.lessonCompleted && !dashboardLoaded))
+    dispatch(lessonApi.util.invalidateTags([{ type: 'StudentLesson', id: 'LIST' }]));
 };
 
 /**

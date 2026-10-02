@@ -444,6 +444,36 @@ describe('student dashboard cache invalidation', () => {
       unsubscribe();
     });
 
+    it('refetches the dashboard when the lesson completes before its first response arrives', async () => {
+      const nextLesson = (status: string) => ({ ...pathLesson(status), id: 'lesson-2' });
+      const path = (learningPath: unknown[]) => ({ learningPath, practiceLessons: [], mockTests: [] });
+      // The first dashboard read started before the completion write, so it still reports the next lesson locked.
+      let releaseStaleDashboard = () => {};
+      mockBaseQuery.mockImplementationOnce(
+        () =>
+          new Promise(resolve => {
+            releaseStaleDashboard = () =>
+              resolve({ data: { dashboard: path([pathLesson('in-progress'), nextLesson('locked')]) } });
+          })
+      );
+      dashboardLearningPath = [pathLesson('completed'), nextLesson('available')];
+      progressResult = { ...progressResult, lessonCompleted: true, progress: 100 };
+      const store = createStore();
+      const subscription = store.dispatch(lessonApi.endpoints.getStudentDashboard.initiate('student-1'));
+      await waitFor(() => expect(requestCount('/student-dashboard')).toBe(1));
+
+      await store.dispatch(lessonApi.endpoints.finishLesson.initiate({ ...ids, finalPageId: 'page-2' }));
+      releaseStaleDashboard();
+
+      await waitFor(() => expect(requestCount('/student-dashboard')).toBe(2));
+      await waitFor(() =>
+        expect(
+          lessonApi.endpoints.getStudentDashboard.select('student-1')(store.getState()).data?.learningPath
+        ).toEqual(dashboardLearningPath)
+      );
+      subscription.unsubscribe();
+    });
+
     it('keeps the newer summary when concurrent exercise writes resolve out of order', async () => {
       const { store, lesson, path, unsubscribe } = await setup('in-progress');
       const responses: Array<(data: unknown) => void> = [];
