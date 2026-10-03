@@ -11,7 +11,7 @@ function EditorPage({ dirty, onNavigateAway }: { dirty: boolean; onNavigateAway?
   }, []);
   // Like the lesson edit page, pass a new callback on every render.
   useBeforeUnload(dirty, destination => onNavigateAway?.(destination));
-  return <a href="/admin/lessons/manage">Manage lessons</a>;
+  return <a href="/admin/lessons/manage?status=active#results">Manage lessons</a>;
 }
 
 describe('useBeforeUnload', () => {
@@ -64,7 +64,7 @@ describe('useBeforeUnload', () => {
 
     expect(first).not.toHaveBeenCalled();
     expect(latest).toHaveBeenNthCalledWith(1, undefined);
-    expect(latest).toHaveBeenNthCalledWith(2, '/admin/lessons/manage');
+    expect(latest).toHaveBeenNthCalledWith(2, '/admin/lessons/manage?status=active#results');
   });
 
   it('does not guard history when there are no unsaved changes', () => {

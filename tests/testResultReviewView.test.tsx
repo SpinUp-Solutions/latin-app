@@ -285,7 +285,7 @@ describe('submitted test result review view', () => {
     expect(screen.getByText('I love and I walk')).toBeInTheDocument();
   });
 
-  it('stacks diagrams on small screens and places them side by side on large screens', () => {
+  it('compares the student diagram with the correct diagram', () => {
     render(
       <TestResultReviewView
         result={buildResult([
@@ -296,8 +296,6 @@ describe('submitted test result review view', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Exercise 1: Diagram the sentence/ }));
     const comparison = screen.getByTestId('diagram-review-comparison');
-    expect(comparison.className).toContain('grid-cols-1');
-    expect(comparison.className).toContain('lg:grid-cols-2');
     expect(within(comparison).getByText('Your diagram')).toBeInTheDocument();
     expect(within(comparison).getByText('Correct diagram')).toBeInTheDocument();
     expect(screen.getByText('100% of annotations matched.')).toBeInTheDocument();

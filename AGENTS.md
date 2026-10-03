@@ -121,6 +121,8 @@ Authoritative examples:
 ## Testing and Verification
 
 - Add regression tests for the actual failure mode, not only isolated helper functions.
+- Test behaviour through the route handler, service, rendered component, or a real store. Do not assert on source text (`readFileSync` plus `toContain`) or on Tailwind class strings: such tests pass while the behaviour is broken and fail on harmless refactors. Source scans are reserved for invariants no behaviour test can reach: `tests/adminRouteAuth.test.ts` holds the `verifyAdminAccess` rule for every admin route, including future ones, and the production-sync tests pin the apply order of a script that cannot be run against fakes end to end.
+- Browser specs in `tests/e2e` share one seeded emulator project, so they run with a single worker. `npm run test:e2e` runs all of them from one emulator and dev-server start.
 - Backend mutation tests should cover:
   - unauthorized access;
   - missing and deletion-pending references;

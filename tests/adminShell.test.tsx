@@ -104,7 +104,6 @@ describe('admin shell routing and accessibility', () => {
     render(<AdminSidebar />);
     const active = screen.getByRole('link', { name: 'All Words' });
     expect(active).toHaveAttribute('aria-current', 'page');
-    expect(active).toHaveClass('focus-visible:ring-2');
     expect(screen.queryByRole('link', { name: 'Advanced Filters' })).not.toBeInTheDocument();
   });
 
@@ -154,7 +153,6 @@ describe('admin shell routing and accessibility', () => {
     );
 
     expect(screen.getByLabelText('App version 1.0.0')).toHaveTextContent('v1.0.0');
-    expect(screen.getByLabelText('App version 1.0.0')).toHaveClass('font-mono');
   });
 
   it('forwards focus attributes to a page heading', () => {

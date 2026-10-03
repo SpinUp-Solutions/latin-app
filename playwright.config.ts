@@ -21,10 +21,11 @@ const config: PlaywrightTestConfig = {
   expect: {
     timeout: 10000,
   },
-  fullyParallel: true,
+  // Every spec reseeds the same emulator project, so files cannot run side by side.
+  fullyParallel: false,
+  workers: 1,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI ? [['line'], ['html', { open: 'never' }]] : [['html', { open: 'never' }]],
   use: {
     actionTimeout: 10000,

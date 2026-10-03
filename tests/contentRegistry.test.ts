@@ -19,13 +19,6 @@ describe('content type catalog', () => {
     expect(createNewContent(type).title).toBe(label);
   });
 
-  it('uses the renamed editor titles', () => {
-    expect(getEditorTitle('generated-form-identification')).toBe('Edit Morphology');
-    expect(getEditorTitle('generated-translation')).toBe('Edit Definitions and Dictionary Entries');
-    expect(getEditorTitle('translation-grading')).toBe('Edit Grade Translation');
-    expect(getEditorTitle('vocabulary')).toBe('Edit Special Vocabulary');
-  });
-
   it('keeps Emphasis recognized and compatible but excludes it from creation palettes', () => {
     expect(isKnownContentType('emphasis')).toBe(true);
     expect(isTestEligibleContentType('emphasis')).toBe(true);

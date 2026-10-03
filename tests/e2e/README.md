@@ -1,7 +1,7 @@
 # Browser acceptance tests
 
-The assessment journeys run entirely against the local Firebase Auth and Firestore
-emulators. They seed deterministic users, Learning Path units, versions, and
+The browser journeys run entirely against the local Firebase Auth, Firestore, and
+Storage emulators. They seed deterministic users, Learning Path units, versions, and
 vocabulary data before Playwright starts. They do not need service-account
 credentials and never write to a deployed Firebase project.
 
@@ -10,16 +10,17 @@ credentials and never write to a deployed Firebase project.
 - Node.js 22 and `npm ci`
 - Java 21 for the Firebase emulators
 - Playwright Chromium: `npx playwright install chromium`
-- Ports 3000, 8080, and 9099 available
+- Ports 3000, 8080, 9099, and 9199 available
 
-Run the assessment suite with:
+Run every browser test with:
 
 ```sh
-npm run test:e2e:assessment
+npm run test:e2e
 ```
 
-Playwright starts both emulators and the local Next.js development server. To
-run all browser tests, use `npm run test:e2e`.
+Playwright starts the emulators and the local Next.js development server once
+for the whole run. Pass a file name to run one suite, for example
+`npm run test:e2e -- assessment-acceptance` or `npm run test:e2e -- feedback-acceptance`.
 
 Each stateful assessment case reseeds its own deterministic fixture, including on
 Playwright retries. `npm run test:e2e:assessment:repeat-score` runs the score-only

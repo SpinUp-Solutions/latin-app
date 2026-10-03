@@ -28,8 +28,10 @@ describe('createRouteErrorResponse Sentry reporting', () => {
   it('does not report expected admin access errors', () => {
     const response = routeErrorResponse(new AdminAccessError('Forbidden', 403), 'fetch') as unknown as {
       status: number;
+      body: unknown;
     };
     expect(response.status).toBe(403);
+    expect(response.body).toEqual({ error: 'Forbidden' });
     expect(captureException).not.toHaveBeenCalled();
   });
 

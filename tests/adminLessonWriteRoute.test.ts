@@ -11,6 +11,7 @@ let existingLessonData: Record<string, unknown> | undefined;
 jest.mock('next/server', () => jest.requireActual('./helpers/routeMocks'));
 
 jest.mock('@/src/lib/verifyAdminAccess', () => ({
+  AdminAccessError: jest.requireActual('@/src/lib/admin-access-error').AdminAccessError,
   verifyAdminAccess: jest.fn(async () => ({ uid: 'admin-1' })),
 }));
 
@@ -77,7 +78,7 @@ const lessonInput = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-describe('lesson word-search configuration routes', () => {
+describe('admin lesson write route', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     existingLessonData = undefined;
@@ -128,50 +129,106 @@ describe('lesson word-search configuration routes', () => {
     expect(mockCreate).not.toHaveBeenCalled();
   });
 
-  it('cleans retired top-level fields on update while preserving nested authored content', async () => {
-    existingLessonData = {
-      kind: 'lesson',
-      isLive: false,
-      createdAt: '2026-01-01',
-      createdBy: 'admin-1',
-      version: 1,
-    };
-    await PUT({
-      json: async () =>
-        lessonInput({
-          pages: [
-            {
-              id: 'page-1',
-              items: [{ id: 'item-1', type: 'text', content: 'Keep me', rendererOwnedField: true }],
-              rendererOwnedPageField: true,
-            },
-          ],
-          published: true,
-          introduction: [{ legacy: true }],
-          introduction_backup: [{ legacy: true }],
-          exercises: [{ legacy: true }],
-          exercises_backup: [{ legacy: true }],
-          arbitraryClientField: 'must not persist',
+  it.each([
+    ['create', POST, mockCreate],
+    ['update', PUT, mockSet],
+  ] as const)(
+    'drops retired and unknown top-level fields on %s while preserving nested authored content',
+    async (action, handler, write) => {
+      if (action === 'update') {
+        existingLessonData = {
+          kind: 'lesson',
+          isLive: false,
+          createdAt: '2026-01-01',
+          createdBy: 'admin-1',
+          version: 1,
+        };
+      }
+      await handler({
+        json: async () =>
+          lessonInput({
+            pages: [
+              {
+                id: 'page-1',
+                items: [{ id: 'item-1', type: 'text', content: 'Keep me', rendererOwnedField: true }],
+                rendererOwnedPageField: true,
+              },
+            ],
+            published: true,
+            introduction: [{ legacy: true }],
+            introduction_backup: [{ legacy: true }],
+            exercises: [{ legacy: true }],
+            exercises_backup: [{ legacy: true }],
+            arbitraryClientField: 'must not persist',
+          }),
+      } as never);
+
+      const persistedLesson = write.mock.calls[0][1] as Record<string, unknown>;
+      for (const field of [
+        'published',
+        'introduction',
+        'introduction_backup',
+        'exercises',
+        'exercises_backup',
+        'arbitraryClientField',
+      ]) {
+        expect(persistedLesson).not.toHaveProperty(field);
+      }
+      expect(persistedLesson.pages).toEqual([
+        expect.objectContaining({
+          id: 'page-1',
+          rendererOwnedPageField: true,
+          items: [expect.objectContaining({ id: 'item-1', content: 'Keep me', rendererOwnedField: true })],
         }),
+      ]);
+    }
+  );
+
+  it('does not queue the lesson write when membership validation fails', async () => {
+    const { PracticeCategoryError } = jest.requireMock('@/src/lib/practice-categories/service') as {
+      PracticeCategoryError: new (code: string, message: string, status: number) => Error;
+    };
+    mockReconcile.mockRejectedValueOnce(
+      new PracticeCategoryError('CATEGORY_TYPE_MISMATCH', 'Category does not match this lesson type', 400)
+    );
+
+    const response = (await POST({
+      json: async () => lessonInput({ type: 'vocab', practiceCategoryIds: ['listening-category'] }),
+    } as never)) as unknown as { status: number; body: { code?: string } };
+
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe('CATEGORY_TYPE_MISMATCH');
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('reconciles canonical category-owned tag selections without persisting local assignment fields', async () => {
+    const selections = [{ categoryId: 'authors', tagIds: ['cicero'] }];
+    mockReconcile.mockResolvedValueOnce({
+      practiceCategorySelections: selections,
+      practiceCategoryIds: ['authors'],
+      practiceCategories: [],
+      memberships: [],
     } as never);
 
-    const persistedLesson = mockSet.mock.calls[0][1] as Record<string, unknown>;
-    for (const field of [
-      'published',
-      'introduction',
-      'introduction_backup',
-      'exercises',
-      'exercises_backup',
-      'arbitraryClientField',
-    ]) {
-      expect(persistedLesson).not.toHaveProperty(field);
-    }
-    expect(persistedLesson.pages).toEqual([
-      expect.objectContaining({
-        id: 'page-1',
-        rendererOwnedPageField: true,
-        items: [expect.objectContaining({ id: 'item-1', content: 'Keep me', rendererOwnedField: true })],
-      }),
-    ]);
+    const response = (await POST({
+      json: async () =>
+        lessonInput({
+          type: 'vocab',
+          practiceCategorySelections: selections,
+          practiceCategoryIds: ['legacy-ignored'],
+          practiceCategories: [{ id: 'authors', name: 'Authors' }],
+        }),
+    } as never)) as unknown as { status: number; body: { lesson: Record<string, unknown> } };
+
+    expect(response.status).toBe(200);
+    expect(mockReconcile).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ lessonId: 'lesson-1', desiredCategorySelections: selections })
+    );
+    const persistedLesson = mockCreate.mock.calls[0][1] as Record<string, unknown>;
+    expect(persistedLesson).not.toHaveProperty('practiceCategorySelections');
+    expect(persistedLesson).not.toHaveProperty('practiceCategoryIds');
+    expect(persistedLesson).not.toHaveProperty('practiceCategories');
+    expect(response.body.lesson.practiceCategorySelections).toEqual(selections);
   });
 });

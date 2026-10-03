@@ -1,3 +1,6 @@
+jest.mock('firebase-admin/firestore', () => ({}));
+
+import { prepareVocabularyPoolWordMembership } from '@/src/lib/vocabulary-pools/word-membership.server';
 import {
   countVocabularyPoolWordAdditions,
   limitVocabularyPoolWordCandidates,
@@ -23,5 +26,16 @@ describe('vocabulary pool word addition limits', () => {
     expect(accepted).toHaveLength(401);
     expect(accepted[0]).toBe('legacy-499');
     expect(accepted.at(-1)).toBe('new-399');
+  });
+
+  it('rejects more than 400 newly assigned words before reading or writing Firestore', async () => {
+    const transaction = { getAll: jest.fn(), update: jest.fn() };
+    const db = { collection: jest.fn() };
+    const wordIds = Array.from({ length: 401 }, (_, index) => `word-${index}`);
+
+    await expect(
+      prepareVocabularyPoolWordMembership(transaction as never, db as never, [], wordIds)
+    ).rejects.toMatchObject({ code: 'VOCABULARY_POOL_WORDS_MISSING', status: 409 });
+    expect(transaction.getAll).not.toHaveBeenCalled();
   });
 });

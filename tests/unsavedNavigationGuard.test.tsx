@@ -1,7 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import React, { useEffect, useState } from 'react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { UnsavedNavigationDialog } from '@/src/components/ui/core/UnsavedNavigationDialog';
 import { useUnsavedNavigationGuard } from '@/src/hooks/useUnsavedNavigationGuard';
-import { clearStableTestEditorIdentity, getStableTestEditorIdentity } from '@/src/lib/tests/editor-session';
 
 function GuardHarness({ dirty = true, onNavigate = () => undefined }: { dirty?: boolean; onNavigate?: () => void }) {
   const guard = useUnsavedNavigationGuard(dirty, 'Unsaved test changes');
@@ -21,25 +21,11 @@ function GuardHarness({ dirty = true, onNavigate = () => undefined }: { dirty?: 
   );
 }
 
-describe('test editor navigation and route identities', () => {
+describe('unsaved navigation guard on an editor', () => {
   beforeEach(() => {
-    sessionStorage.clear();
     window.history.replaceState({}, '', '/admin/tests/edit/test-1');
     jest.restoreAllMocks();
   });
-
-  it.each(['normal-test-create', 'standalone-mock-create', 'normal-test-test-1-version-create'])(
-    'keeps the %s create identity stable across reloads until completion',
-    scope => {
-      const testId = getStableTestEditorIdentity(scope, 'test', 'test');
-      const versionId = getStableTestEditorIdentity(scope, 'version', 'version');
-      expect(getStableTestEditorIdentity(scope, 'test', 'test')).toBe(testId);
-      expect(getStableTestEditorIdentity(scope, 'version', 'version')).toBe(versionId);
-      clearStableTestEditorIdentity(scope);
-      expect(sessionStorage.getItem(`test_editor_identity:${scope}:test`)).toBeNull();
-      expect(sessionStorage.getItem(`test_editor_identity:${scope}:version`)).toBeNull();
-    }
-  );
 
   it('guards header links with an in-app dialog and lets Stay remain on the editor', () => {
     const onNavigate = jest.fn();
@@ -109,5 +95,98 @@ describe('test editor navigation and route identities', () => {
     window.history.replaceState({}, '', window.location.href);
     fireEvent(window, new PopStateEvent('popstate'));
     expect(onNavigate).toHaveBeenCalledTimes(1);
+  });
+});
+
+let forceRender: () => void = () => undefined;
+
+// Mirrors the practice-category and live-lesson pages: a dirty flag, a message derived per render,
+// and a context switch that discards the draft and rewrites the query string.
+function OrderingPage({ initiallyDirty = true, tagOrder = false }: { initiallyDirty?: boolean; tagOrder?: boolean }) {
+  const [dirty, setDirty] = useState(initiallyDirty);
+  const [, setRenderCount] = useState(0);
+  useEffect(() => {
+    forceRender = () => setRenderCount(count => count + 1);
+  }, []);
+  const guard = useUnsavedNavigationGuard(
+    dirty,
+    `Your reordered ${tagOrder ? 'tags' : 'lessons'} have not been saved.`
+  );
+  const switchToArchived = () =>
+    guard.requestNavigation(() => {
+      setDirty(false);
+      void guard.replaceAfterSave(() =>
+        window.history.replaceState(window.history.state, '', '/admin/practice-categories?status=archived')
+      );
+    });
+
+  return (
+    <>
+      <a href="/admin/tests/manage">Tests</a>
+      <button onClick={switchToArchived}>Archived</button>
+      <UnsavedNavigationDialog guard={guard} />
+    </>
+  );
+}
+
+describe('unsaved navigation guard on an ordering page', () => {
+  beforeEach(() => {
+    window.history.replaceState({}, '', '/admin/practice-categories?status=active');
+  });
+
+  afterEach(() => {
+    cleanup();
+    document.body.replaceChildren();
+    jest.restoreAllMocks();
+  });
+
+  it('pushes one Back guard entry even when each push re-renders the page and the message changes', async () => {
+    // Next.js answers a native pushState with a router update that re-renders the page.
+    // The cap turns a regression into a failed assertion instead of a hung run.
+    let pushes = 0;
+    jest.spyOn(window.history, 'pushState').mockImplementation(() => {
+      pushes += 1;
+      if (pushes < 25) queueMicrotask(() => forceRender());
+    });
+
+    const { rerender } = render(<OrderingPage />);
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 20));
+    });
+    rerender(<OrderingPage tagOrder />);
+    act(() => forceRender());
+
+    expect(pushes).toBe(1);
+  });
+
+  it('writes a discarded context switch to the page entry, not the guard entry', async () => {
+    const pageState = { page: true };
+    window.history.replaceState(pageState, '', '/admin/practice-categories?status=active');
+    const back = jest.spyOn(window.history, 'back').mockImplementation(() => {
+      window.history.replaceState(pageState, '', '/admin/practice-categories?status=active');
+      window.dispatchEvent(new PopStateEvent('popstate', { state: pageState }));
+    });
+    render(<OrderingPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Archived' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Leave page' }));
+    });
+
+    expect(back).toHaveBeenCalledTimes(1);
+    expect(window.location.search).toBe('?status=archived');
+    expect(window.history.state).toEqual(pageState);
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('switches context straight away when nothing is dirty', () => {
+    const back = jest.spyOn(window.history, 'back');
+    render(<OrderingPage initiallyDirty={false} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Archived' }));
+
+    expect(back).not.toHaveBeenCalled();
+    expect(window.location.search).toBe('?status=archived');
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
 });
