@@ -599,6 +599,25 @@ describe('production content sync adapter safety', () => {
     ).rejects.toMatchObject({ code: 'SYNC_ALREADY_RUNNING' });
   });
 
+  it('keeps applied-state publication and recovery guards in the apply workflow', () => {
+    // The helper tests do not reach applyPlan's state transition or recovery guard.
+    const source = readFileSync(join(process.cwd(), 'scripts/sync-prod-content-to-dev.mjs'), 'utf8');
+    const applyBody = source.slice(
+      source.indexOf('export async function applyPlan'),
+      source.indexOf('function targetManifestCheck')
+    );
+    const appliedStatus = applyBody.indexOf("runManifest.status = 'applied'");
+    const durableManifest = applyBody.indexOf('await updateRunManifest(backupBucket, runManifest)', appliedStatus);
+    const revision = applyBody.indexOf('await advanceVocabularyContentRevision', durableManifest);
+    const unlock = applyBody.indexOf('await releaseContentSyncLock', revision);
+
+    expect(appliedStatus).toBeGreaterThan(-1);
+    expect(durableManifest).toBeGreaterThan(appliedStatus);
+    expect(revision).toBeGreaterThan(durableManifest);
+    expect(unlock).toBeGreaterThan(revision);
+    expect(applyBody).toContain("runManifest?.status === 'applied' && !appliedManifestPersisted");
+  });
+
   it('orders durable applied recovery metadata before revision publication and unlock', async () => {
     const calls: string[] = [];
 
