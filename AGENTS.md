@@ -26,7 +26,7 @@ Authoritative examples:
 ## Firestore and Persisted Data
 
 - Import collection names from `shared/constants/firestore.ts` or an existing domain constant. Do not duplicate collection-name strings.
-- The active vocabulary collection is `VOCABULARY_WORDS_COLLECTION` (`vocabulary_words_v5`). Legacy collections are migration inputs only.
+- The active vocabulary collection is `VOCABULARY_WORDS_COLLECTION` (`vocabulary_words_v5`). Routes never take a collection name from the request.
 - Firestore transactions must perform all reads before any writes.
 - Validate foreign document references inside the transaction that writes the relationship.
 - Reject missing documents and documents marked `_deletionPending`.

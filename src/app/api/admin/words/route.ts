@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import type { Query } from 'firebase-admin/firestore';
 import { VocabularyWordSchema } from '@/shared/types/vocabulary/schemas';
+import { serializeVocabularyWord } from '@/src/lib/vocabulary/word-serialization.server';
 import { stripMacrons } from '@/src/utils/exercises/helpers';
 import { AdminAccessError, verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import { prepareVocabularyContentRevisionBump } from '@/src/lib/vocabulary-pools/content-revision.server';
@@ -18,25 +19,6 @@ const COUNTED_PARTS_OF_SPEECH = [
   'conjunction',
   'interjection',
 ] as const;
-
-const serializeTimestamp = (value: unknown): string | undefined => {
-  if (value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function') {
-    return value.toDate().toISOString();
-  }
-  if (value instanceof Date) {
-    return value.toISOString();
-  }
-  return undefined;
-};
-
-const serializeWord = (data: Record<string, unknown>): Record<string, unknown> => {
-  const serialized = { ...data };
-  const createdAt = serializeTimestamp(serialized.createdAt);
-  const updatedAt = serializeTimestamp(serialized.updatedAt);
-  if (createdAt) serialized.createdAt = createdAt;
-  if (updatedAt) serialized.updatedAt = updatedAt;
-  return serialized;
-};
 
 const parseCsv = (value: string | null): string[] =>
   value
@@ -116,7 +98,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({
       success: true,
       data: {
-        words: docs.map(doc => ({ id: doc.id, ...serializeWord(doc.data()) })),
+        words: docs.map(doc => ({ id: doc.id, ...serializeVocabularyWord(doc.data()) })),
         hasMore: docs.length === limit,
         lastWordId: docs[docs.length - 1]?.id ?? null,
         limit,
@@ -178,7 +160,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const createdSnapshot = await docRef.get();
     const createdWord = {
       id: createdSnapshot.id,
-      ...serializeWord(createdSnapshot.data() as Record<string, unknown>),
+      ...serializeVocabularyWord(createdSnapshot.data() as Record<string, unknown>),
     };
 
     return NextResponse.json({
@@ -223,7 +205,7 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
       if (!existingSnapshot.exists) return { status: 'not-found' as const };
       if (existingSnapshot.data()?._deletionPending) return { status: 'deleting' as const };
 
-      const existingSerialized = serializeWord(existingSnapshot.data() as Record<string, unknown>);
+      const existingSerialized = serializeVocabularyWord(existingSnapshot.data() as Record<string, unknown>);
       const validationCandidate: Record<string, unknown> = {
         ...existingSerialized,
         ...updates,
@@ -240,7 +222,7 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
       applyContentRevision();
       return {
         status: 'updated' as const,
-        data: { id: existingSnapshot.id, ...serializeWord({ ...existingSnapshot.data(), ...updateData }) },
+        data: { id: existingSnapshot.id, ...serializeVocabularyWord({ ...existingSnapshot.data(), ...updateData }) },
       };
     });
 
