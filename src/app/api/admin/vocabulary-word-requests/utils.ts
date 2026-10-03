@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { VocabularyWordSchema, type VocabularyWord } from '@/shared/types/vocabulary/schemas';
 import { VOCABULARY_WORD_REQUESTS_COLLECTION, VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
@@ -113,16 +112,4 @@ export const buildValidatedWordForApproval = (draftWord: VocabularyWord) => {
       }) as Record<string, unknown>,
     },
   };
-};
-
-export const routeError = (error: unknown) => {
-  const message = error instanceof Error ? error.message : 'Unknown error';
-  if (error && typeof error === 'object' && 'status' in error && typeof error.status === 'number') {
-    return NextResponse.json(
-      { success: false, error: message, ...('code' in error ? { code: error.code } : {}) },
-      { status: error.status }
-    );
-  }
-  const status = message === 'Unauthorized' ? 401 : message === 'Forbidden' ? 403 : 500;
-  return NextResponse.json({ success: false, error: message }, { status });
 };

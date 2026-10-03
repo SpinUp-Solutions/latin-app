@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { studentDashboardService } from '@/src/lib/learning-units/student-dashboard-service';
 import { verifyRequestAuth } from '@/src/lib/verifyRequestAuth';
-import { reportServerUnexpectedError } from '@/src/lib/report-unexpected-error';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,10 +12,6 @@ export async function GET(request: NextRequest) {
   try {
     return NextResponse.json({ dashboard: await studentDashboardService.getDashboard(student.uid) });
   } catch (error) {
-    console.error('Unable to load student dashboard:', error);
-    reportServerUnexpectedError(error, {
-      tags: { surface: 'student_dashboard', userId: student.uid },
-    });
-    return NextResponse.json({ error: 'Failed to fetch student dashboard' }, { status: 500 });
+    return routeErrorResponse(error, 'fetch student dashboard', { surface: 'student_dashboard', userId: student.uid });
   }
 }

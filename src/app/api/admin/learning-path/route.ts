@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { learningPathRouteErrorResponse } from '@/src/lib/learning-units/learning-path-api';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { learningPathService } from '@/src/lib/learning-units/learning-path-service';
 import { saveLearningPathInputSchema } from '@/src/lib/learning-units/schemas';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
     await verifyAdminAccess(request);
     return NextResponse.json(await learningPathService.getAdminView());
   } catch (error) {
-    return learningPathRouteErrorResponse(error, 'fetch Learning Path');
+    return routeErrorResponse(error, 'fetch Learning Path');
   }
 }
 
@@ -22,6 +22,6 @@ export async function PUT(request: NextRequest) {
     const path = await learningPathService.save(input, actor.uid);
     return NextResponse.json({ path });
   } catch (error) {
-    return learningPathRouteErrorResponse(error, 'save Learning Path');
+    return routeErrorResponse(error, 'save Learning Path');
   }
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
-import { AdminAccessError, verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 import { serializeVocabularyWord } from '@/src/lib/vocabulary/word-serialization.server';
 
@@ -24,16 +25,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       },
     });
   } catch (error) {
-    if (error instanceof AdminAccessError) {
-      return NextResponse.json({ success: false, error: error.message }, { status: error.status });
-    }
-    console.error('Error creating backup:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
-      },
-      { status: 500 }
-    );
+    return routeErrorResponse(error, 'create vocabulary backup');
   }
 }

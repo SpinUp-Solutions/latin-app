@@ -5,9 +5,10 @@ import type { Query } from 'firebase-admin/firestore';
 import { VocabularyWordSchema } from '@/shared/types/vocabulary/schemas';
 import { serializeVocabularyWord } from '@/src/lib/vocabulary/word-serialization.server';
 import { stripMacrons } from '@/src/utils/exercises/helpers';
-import { AdminAccessError, verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import { prepareVocabularyContentRevisionBump } from '@/src/lib/vocabulary-pools/content-revision.server';
 import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 
 const COUNTED_PARTS_OF_SPEECH = [
   'noun',
@@ -33,17 +34,6 @@ const applyMultiValueFilter = (query: Query, field: string, paramValue: string |
   if (values.length === 0) return query;
   return values.length === 1 ? query.where(field, '==', values[0]) : query.where(field, 'in', values);
 };
-
-function errorResponse(error: unknown, action: string): NextResponse {
-  if (error instanceof AdminAccessError) {
-    return NextResponse.json({ success: false, error: error.message }, { status: error.status });
-  }
-  console.error(`Error ${action}:`, error);
-  return NextResponse.json(
-    { success: false, error: error instanceof Error ? error.message : 'Unknown error occurred' },
-    { status: 500 }
-  );
-}
 
 export const dynamic = 'force-dynamic';
 
@@ -106,7 +96,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       },
     });
   } catch (error) {
-    return errorResponse(error, 'fetching words');
+    return routeErrorResponse(error, 'fetch words');
   }
 }
 
@@ -170,7 +160,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
     });
   } catch (error) {
-    return errorResponse(error, 'creating word');
+    return routeErrorResponse(error, 'create word');
   }
 }
 
@@ -246,7 +236,7 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
       updatedData: updateResult.data,
     });
   } catch (error) {
-    return errorResponse(error, 'updating word');
+    return routeErrorResponse(error, 'update word');
   }
 }
 

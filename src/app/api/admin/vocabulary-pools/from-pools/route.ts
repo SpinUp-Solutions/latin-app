@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createVocabularyPoolFromPoolsRequestSchema } from '@/shared/types/vocabulary/pool-requests';
 import { createLinkedVocabularyPool } from '@/src/lib/vocabulary-pools/linked-pools.server';
-import { VocabularyPoolStateError } from '@/src/lib/vocabulary-pools/pool-state.server';
-import { createRouteErrorResponse } from '@/src/lib/route-error-response';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import { adminDb } from '@/src/services/firebase-admin';
 
 export const dynamic = 'force-dynamic';
-
-const routeErrorResponse = createRouteErrorResponse(VocabularyPoolStateError);
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {

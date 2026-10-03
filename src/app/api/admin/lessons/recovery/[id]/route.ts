@@ -10,7 +10,7 @@ import {
   optionalPracticeCategorySelectionsSchema,
 } from '@/src/lib/practice-categories/schemas';
 import { practiceCategoryService } from '@/src/lib/practice-categories/service';
-import { practiceCategoryRouteErrorResponse } from '@/src/lib/practice-categories/api';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import {
   assertLegacyNormalPlacementChangeAllowedInTransaction,
   assertPlacedLessonReplacementAllowedInTransaction,
@@ -166,7 +166,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (error instanceof RecoveryRouteError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
-    return practiceCategoryRouteErrorResponse(error, 'retry lesson from recovery');
+    return routeErrorResponse(error, 'retry lesson from recovery');
   }
 }
 

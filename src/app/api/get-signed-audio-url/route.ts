@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminStorage } from '@/src/services/firebase-admin';
 import { verifyRequestAuth } from '@/src/lib/verifyRequestAuth';
 import { parseLessonAudioPath } from '@/src/lib/lesson-audio-path.server';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 
 export async function POST(req: NextRequest) {
   if (!(await verifyRequestAuth(req))) {
@@ -35,8 +36,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ signedUrl });
   } catch (error) {
-    console.error('Error generating signed URL:', error);
-    const message = error instanceof Error ? error.message : 'Failed to generate signed URL.';
-    return new NextResponse(JSON.stringify({ error: message }), { status: 500 });
+    return routeErrorResponse(error, 'generate signed audio URL');
   }
 }

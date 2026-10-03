@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { testRouteErrorResponse } from '@/src/lib/tests/api';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { assignVersionToMockInputSchema } from '@/src/lib/tests/schemas';
 import { mockTestService } from '@/src/lib/tests/mock-service';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
@@ -13,6 +13,6 @@ export async function POST(request: NextRequest) {
       ),
     });
   } catch (error) {
-    return testRouteErrorResponse(error, 'assign mock test');
+    return routeErrorResponse(error, 'assign mock test');
   }
 }

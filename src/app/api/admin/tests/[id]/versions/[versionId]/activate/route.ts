@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { firestoreDocumentIdSchema } from '@/src/lib/learning-units/schemas';
-import { testRouteErrorResponse } from '@/src/lib/tests/api';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { testAuthoringService } from '@/src/lib/tests/authoring-service';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 
@@ -15,6 +15,6 @@ export async function POST(request: NextRequest, { params }: Context) {
     const result = await testAuthoringService.activateTestVersion(testId, versionId, actor.uid);
     return NextResponse.json({ success: true, ...result });
   } catch (error) {
-    return testRouteErrorResponse(error, 'activate test version');
+    return routeErrorResponse(error, 'activate test version');
   }
 }

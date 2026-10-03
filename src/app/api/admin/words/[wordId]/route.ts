@@ -1,7 +1,7 @@
 import { VOCABULARY_POOL_COLLECTION, VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
-import { AdminAccessError, verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import {
   prepareVocabularyContentRevisionBump,
   VOCABULARY_CONTENT_STATE_COLLECTION,
@@ -21,15 +21,24 @@ import {
   cleanupVocabularyWordPoolReferences,
   scanVocabularyWordPoolReferences,
   WORD_DELETION_POOL_WARNING_SAMPLE_SIZE,
+  wordNotFound,
 } from '@/src/lib/vocabulary/word-deletion-cleanup.server';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
+import { DomainError } from '@/src/lib/domain-error';
 
-class WordDeletionConfirmationError extends Error {
+class WordDeletionConfirmationError extends DomainError {
   readonly status = 409;
   readonly code = 'WORD_DELETE_CONFIRMATION_STALE';
+  readonly details: Record<string, unknown>;
 
-  constructor(public readonly referencedPools: Array<{ id: string; name: string }>) {
+  constructor(referencedPools: Array<{ id: string; name: string }>) {
     super("The word's pool assignments changed. Review the latest warning and try again.");
     this.name = 'WordDeletionConfirmationError';
+    this.details = {
+      warning: true,
+      referencedPools: referencedPools.slice(0, WORD_DELETION_POOL_WARNING_SAMPLE_SIZE),
+      referencedPoolCount: referencedPools.length,
+    };
   }
 }
 
@@ -60,7 +69,7 @@ export async function DELETE(
       .doc(wordDeletionChallengeDocumentId(wordId, actor.uid));
     const contentStateRef = adminDb.collection(VOCABULARY_CONTENT_STATE_COLLECTION).doc(VOCABULARY_CONTENT_STATE_ID);
     const [scannedWord, scannedContentState] = await Promise.all([wordRef.get(), contentStateRef.get()]);
-    if (!scannedWord.exists) throw new Error('Word not found');
+    if (!scannedWord.exists) throw wordNotFound();
     const scannedWordFingerprint = firestoreVersionFingerprint(scannedWord.updateTime);
     const scannedContentRevision = vocabularyContentRevision(scannedContentState.data());
     const currentReferences = await scanVocabularyWordPoolReferences(adminDb, wordId);
@@ -71,7 +80,7 @@ export async function DELETE(
         transaction.get(challengeRef),
         transaction.get(contentStateRef),
       ]);
-      if (!wordDoc.exists) throw new Error('Word not found');
+      if (!wordDoc.exists) throw wordNotFound();
       const wordFingerprint = firestoreVersionFingerprint(wordDoc.updateTime);
       if (
         wordFingerprint !== scannedWordFingerprint ||
@@ -185,35 +194,6 @@ export async function DELETE(
       ...(cleanup.cleanedPoolNames.length > 0 ? { cleanedPools: cleanup.cleanedPoolNames } : {}),
     });
   } catch (error) {
-    if (error instanceof AdminAccessError) {
-      return NextResponse.json(
-        { success: false, error: error.message, ...(error.code ? { code: error.code } : {}) },
-        { status: error.status }
-      );
-    }
-    if (error instanceof Error && error.message === 'Word not found') {
-      return NextResponse.json({ success: false, error: error.message }, { status: 404 });
-    }
-    if (error instanceof WordDeletionConfirmationError) {
-      return NextResponse.json(
-        {
-          success: false,
-          warning: true,
-          error: error.message,
-          code: error.code,
-          referencedPools: error.referencedPools.slice(0, WORD_DELETION_POOL_WARNING_SAMPLE_SIZE),
-          referencedPoolCount: error.referencedPools.length,
-        },
-        { status: error.status }
-      );
-    }
-    console.error('Error deleting word:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
-      },
-      { status: 500 }
-    );
+    return routeErrorResponse(error, 'delete word');
   }
 }

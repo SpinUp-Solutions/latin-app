@@ -1,3 +1,5 @@
+import { DomainError } from '@/src/lib/domain-error';
+
 export type TestServiceErrorCode =
   | 'TEST_NOT_FOUND'
   | 'STALE_TEST_DATA'
@@ -28,7 +30,7 @@ export type TestServiceErrorCode =
   | 'PLACED_TEST_REQUIRES_ROTATION_VERSION'
   | 'MOCK_TEST_INVALID_OPERATION';
 
-export class TestServiceError extends Error {
+export class TestServiceError extends DomainError {
   constructor(
     public readonly code: TestServiceErrorCode,
     message: string,
@@ -39,7 +41,7 @@ export class TestServiceError extends Error {
   }
 }
 
-export class GeneratedVocabularySourceError extends Error {
+export class GeneratedVocabularySourceError extends DomainError {
   readonly code: string;
   readonly status: number;
 

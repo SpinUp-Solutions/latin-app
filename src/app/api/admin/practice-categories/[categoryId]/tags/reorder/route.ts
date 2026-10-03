@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
-import { practiceCategoryRouteErrorResponse } from '@/src/lib/practice-categories/api';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { reorderPracticeTagsSchema } from '@/src/lib/practice-categories/schemas';
 import { practiceCategoryService } from '@/src/lib/practice-categories/service';
 
@@ -14,6 +14,6 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     const tags = await practiceCategoryService.reorderTags(categoryId, input.orderedTagIds, actor.uid);
     return NextResponse.json({ success: true, tags });
   } catch (error) {
-    return practiceCategoryRouteErrorResponse(error, 'reorder practice tags');
+    return routeErrorResponse(error, 'reorder practice tags');
   }
 }

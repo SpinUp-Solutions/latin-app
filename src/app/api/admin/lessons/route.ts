@@ -11,7 +11,7 @@ import {
   optionalPracticeCategorySelectionsSchema,
 } from '@/src/lib/practice-categories/schemas';
 import { PracticeCategoryError, practiceCategoryService } from '@/src/lib/practice-categories/service';
-import { practiceCategoryRouteErrorResponse } from '@/src/lib/practice-categories/api';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import {
   assertLegacyNormalPlacementChangeAllowedInTransaction,
   assertPlacedLessonReplacementAllowedInTransaction,
@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
       availableLessons,
     });
   } catch (error) {
-    return practiceCategoryRouteErrorResponse(error, 'fetch lessons');
+    return routeErrorResponse(error, 'fetch lessons');
   }
 }
 
@@ -145,7 +145,7 @@ export async function POST(request: NextRequest) {
       message: 'Lesson created successfully',
     });
   } catch (error) {
-    return practiceCategoryRouteErrorResponse(error, 'create lesson');
+    return routeErrorResponse(error, 'create lesson');
   }
 }
 
@@ -254,6 +254,6 @@ export async function PUT(request: NextRequest) {
       message: 'Lesson updated successfully',
     });
   } catch (error) {
-    return practiceCategoryRouteErrorResponse(error, 'update lesson');
+    return routeErrorResponse(error, 'update lesson');
   }
 }

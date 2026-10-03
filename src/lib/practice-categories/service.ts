@@ -40,6 +40,7 @@ import {
   type UpdatePracticeCategoryInput,
   type UpdatePracticeTagInput,
 } from './schemas';
+import { DomainError } from '@/src/lib/domain-error';
 
 export type PracticeCategoryErrorCode =
   | 'CATEGORY_NAME_CONFLICT'
@@ -62,7 +63,7 @@ export type PracticeCategoryErrorCode =
   | 'STALE_TAG_ORDER'
   | 'STALE_CATEGORY_DATA';
 
-export class PracticeCategoryError extends Error {
+export class PracticeCategoryError extends DomainError {
   constructor(
     public readonly code: PracticeCategoryErrorCode,
     message: string,

@@ -34,7 +34,8 @@ import { GET as adminDetail } from '@/src/app/api/admin/feedback/[feedbackId]/ro
 import { PATCH as adminState } from '@/src/app/api/admin/feedback/[feedbackId]/state/route';
 import { POST as adminNote } from '@/src/app/api/admin/feedback/[feedbackId]/notes/route';
 import { GET as adminAttachments } from '@/src/app/api/admin/feedback/[feedbackId]/attachments/route';
-import { FeedbackError, feedbackRouteErrorResponse } from '@/src/lib/student-feedback/http.server';
+import { FeedbackError } from '@/src/lib/student-feedback/http.server';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { captureException } from '@sentry/nextjs';
 
 const feedbackId = '08814ab5-2712-49e9-9c54-7c7317fdd812';
@@ -125,7 +126,7 @@ describe('student feedback API authorization and validation', () => {
     const log = jest.spyOn(console, 'error').mockImplementation(() => {});
     (captureException as jest.Mock).mockClear();
     try {
-      const response = feedbackRouteErrorResponse(sdkError, 'load feedback') as unknown as {
+      const response = routeErrorResponse(sdkError, 'load feedback') as unknown as {
         status: number;
         body: { error: string };
       };

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { firestoreDocumentIdSchema } from '@/src/lib/learning-units/schemas';
-import { testRouteErrorResponse } from '@/src/lib/tests/api';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { moveStandaloneMockToTestInputSchema } from '@/src/lib/tests/schemas';
 import { mockTestService } from '@/src/lib/tests/mock-service';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
@@ -16,6 +16,6 @@ export async function POST(request: NextRequest, { params }: Context) {
       )
     );
   } catch (error) {
-    return testRouteErrorResponse(error, 'move mock test');
+    return routeErrorResponse(error, 'move mock test');
   }
 }

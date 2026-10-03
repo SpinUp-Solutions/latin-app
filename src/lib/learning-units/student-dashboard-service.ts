@@ -48,6 +48,7 @@ import {
   type ProgressionActivity,
   type ProgressionUnit,
 } from './progression';
+import { DomainError } from '@/src/lib/domain-error';
 
 const LEARNING_UNIT_SUMMARY_FIELDS = [...LESSON_SUMMARY_FIELDS, 'rotationVersions', 'passingPercentage'] as const;
 
@@ -91,7 +92,7 @@ const toProgressionUnit = (unit: LearningPathUnitSummary): ProgressionUnit =>
 
 export type StudentDashboardServiceErrorCode = 'LESSON_NOT_FOUND' | 'LESSON_LOCKED' | 'STALE_LESSON_DATA';
 
-export class StudentDashboardServiceError extends Error {
+export class StudentDashboardServiceError extends DomainError {
   constructor(
     public readonly code: StudentDashboardServiceErrorCode,
     message: string,

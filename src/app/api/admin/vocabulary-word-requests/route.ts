@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { VocabularyWordSchema } from '@/shared/types/vocabulary/schemas';
 import {
   RootWordCandidate,
@@ -8,7 +9,7 @@ import {
   VocabularyWordRequestStatus,
 } from '@/shared/types/vocabulary/requests';
 import { buildDraftVocabularyWord } from '@/src/utils/vocabulary-request-drafts';
-import { requestCollection, routeError, serializeRequestSnapshot, cleanForFirestore } from './utils';
+import { requestCollection, serializeRequestSnapshot, cleanForFirestore } from './utils';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -57,7 +58,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json({ success: true, data: { requests } });
   } catch (error) {
-    return routeError(error);
+    return routeErrorResponse(error, 'fetch vocabulary word requests');
   }
 }
 
@@ -108,6 +109,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json({ success: true, data: { request: serializeRequestSnapshot(created) } }, { status: 201 });
   } catch (error) {
-    return routeError(error);
+    return routeErrorResponse(error, 'create vocabulary word request');
   }
 }

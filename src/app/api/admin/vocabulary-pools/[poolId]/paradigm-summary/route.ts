@@ -1,4 +1,3 @@
-import { VocabularyPoolStateError } from '@/src/lib/vocabulary-pools/pool-state.server';
 import { resolveVocabularyPool } from '@/src/lib/vocabulary-pools/linked-pools.server';
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
@@ -7,8 +6,9 @@ import type { PartOfSpeech } from '@/shared/types/vocabulary/schemas/enums';
 import type { FormParadigm } from '@/src/types/exercises/paradigm';
 import { deriveParadigm } from '@/src/utils/paradigm';
 import { VOCABULARY_POOL_COLLECTION, VOCABULARY_WORDS_COLLECTION } from '@/shared/constants/firestore';
-import { AdminAccessError, verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import { isVocabularyPoolCreationPending } from '@/src/lib/vocabulary-pools/pool-state.server';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 
 export const dynamic = 'force-dynamic';
 
@@ -98,23 +98,6 @@ export async function GET(
       },
     });
   } catch (error) {
-    if (error instanceof VocabularyPoolStateError)
-      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
-    if (error instanceof AdminAccessError) {
-      return NextResponse.json({ success: false, error: error.message }, { status: error.status });
-    }
-    console.error('Error fetching paradigm summary:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        data: {
-          paradigmSummary: {},
-          posSummary: {},
-          totalWords: 0,
-          poolId,
-        },
-      },
-      { status: 500 }
-    );
+    return routeErrorResponse(error, 'fetch vocabulary pool paradigm summary');
   }
 }

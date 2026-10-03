@@ -3,19 +3,16 @@ import {
   POOL_SUMMARY_FIELDS,
   summarizeVocabularyPool,
 } from '@/src/lib/vocabulary-pools/list.server';
-import { VocabularyPoolStateError } from '@/src/lib/vocabulary-pools/pool-state.server';
 import { VOCABULARY_POOL_COLLECTION } from '@/shared/constants/firestore';
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/src/services/firebase-admin';
 import { Query } from 'firebase-admin/firestore';
 import type { VocabularyPoolSummary, CreatePoolRequest } from '@/src/types/vocabulary-pool';
 import { buildPoolSearchTokens, normalizePoolSearchText } from '@/src/utils/vocabularyPoolSummary';
-import { AdminAccessError, verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
-import {
-  prepareVocabularyPoolWordMembership,
-  VocabularyPoolWordMembershipError,
-} from '@/src/lib/vocabulary-pools/word-membership.server';
+import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
+import { prepareVocabularyPoolWordMembership } from '@/src/lib/vocabulary-pools/word-membership.server';
 import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 
 export const dynamic = 'force-dynamic';
 
@@ -153,16 +150,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       },
     });
   } catch (error) {
-    if (error instanceof VocabularyPoolStateError)
-      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
-    if (error instanceof AdminAccessError) {
-      return NextResponse.json({ success: false, error: error.message }, { status: error.status });
-    }
-    console.error('Error fetching vocabulary pools:', error);
-    return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    );
+    return routeErrorResponse(error, 'fetch vocabulary pools');
   }
 }
 
@@ -249,23 +237,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
     });
   } catch (error) {
-    if (error instanceof VocabularyPoolStateError)
-      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
-    if (error instanceof AdminAccessError) {
-      return NextResponse.json({ success: false, error: error.message }, { status: error.status });
-    }
-    if (error instanceof VocabularyPoolWordMembershipError) {
-      return NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.status });
-    }
-    console.error('[CREATE POOL] ✗ Error creating vocabulary pool:', {
-      error,
-      message: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
-      type: error?.constructor?.name,
-    });
-    return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    );
+    return routeErrorResponse(error, 'create vocabulary pool');
   }
 }

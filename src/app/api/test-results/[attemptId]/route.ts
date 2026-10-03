@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { firestoreDocumentIdSchema } from '@/src/lib/learning-units/schemas';
-import { testRouteErrorResponse } from '@/src/lib/tests/api';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { testAttemptService } from '@/src/lib/tests/attempt-service';
 import { verifyRequestAuth } from '@/src/lib/verifyRequestAuth';
 
@@ -15,6 +15,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const result = await testAttemptService.getSubmittedResult(attemptId, student.uid);
     return NextResponse.json({ result });
   } catch (error) {
-    return testRouteErrorResponse(error, 'load test result');
+    return routeErrorResponse(error, 'load test result');
   }
 }

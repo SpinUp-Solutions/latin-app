@@ -1,3 +1,5 @@
+import { DomainError } from '@/src/lib/domain-error';
+
 /** Internal state helpers shared by pool readers and mutation boundaries. */
 
 export function isVocabularyPoolCreationPending(data: unknown): boolean {
@@ -5,7 +7,7 @@ export function isVocabularyPoolCreationPending(data: unknown): boolean {
   return Boolean((data as Record<string, unknown>)._creationPending);
 }
 
-export class VocabularyPoolStateError extends Error {
+export class VocabularyPoolStateError extends DomainError {
   readonly status: number;
   readonly code: string;
 

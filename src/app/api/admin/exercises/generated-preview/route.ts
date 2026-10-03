@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createRouteErrorResponse } from '@/src/lib/route-error-response';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
 import { verifyRequestAuth } from '@/src/lib/verifyRequestAuth';
 import {
@@ -9,28 +9,10 @@ import {
 import { createGeneratedExerciseItems, type GeneratedExercise } from '@/src/lib/tests/generated-exercises';
 import { collectWordsForGeneratedExerciseRequest } from '@/src/lib/tests/generated-word-loader.server';
 import { GeneratedVocabularySourceError } from '@/src/lib/tests/errors';
-import {
-  studentDashboardService,
-  StudentDashboardServiceError,
-} from '@/src/lib/learning-units/student-dashboard-service';
-import { LearningPathServiceError } from '@/src/lib/learning-units/learning-path-errors';
-import { PracticeCategoryError } from '@/src/lib/practice-categories/service';
-import { TestServiceError } from '@/src/lib/tests/errors';
-import { VocabularyPoolAssignmentError } from '@/src/lib/vocabulary-pools/assignment.server';
-import { VocabularyPoolStateError } from '@/src/lib/vocabulary-pools/pool-state.server';
+import { studentDashboardService } from '@/src/lib/learning-units/student-dashboard-service';
 import { adminDb } from '@/src/services/firebase-admin';
 
 export const dynamic = 'force-dynamic';
-
-const routeErrorResponse = createRouteErrorResponse(
-  GeneratedVocabularySourceError,
-  StudentDashboardServiceError,
-  VocabularyPoolStateError,
-  VocabularyPoolAssignmentError,
-  TestServiceError,
-  LearningPathServiceError,
-  PracticeCategoryError
-);
 
 export async function handleGeneratedExerciseWordsPOST(request: NextRequest, audience: 'admin' | 'generated') {
   try {

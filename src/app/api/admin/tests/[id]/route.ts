@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { firestoreDocumentIdSchema } from '@/src/lib/learning-units/schemas';
-import { testRouteErrorResponse } from '@/src/lib/tests/api';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { updateTestWithVersionInputSchema } from '@/src/lib/tests/schemas';
 import { testAuthoringService } from '@/src/lib/tests/authoring-service';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     const id = firestoreDocumentIdSchema.parse((await params).id);
     return NextResponse.json(await testAuthoringService.getTest(id));
   } catch (error) {
-    return testRouteErrorResponse(error, 'fetch test');
+    return routeErrorResponse(error, 'fetch test');
   }
 }
 
@@ -25,6 +25,6 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     const result = await testAuthoringService.updateTestWithVersion(id, input, actor.uid);
     return NextResponse.json({ success: true, ...result });
   } catch (error) {
-    return testRouteErrorResponse(error, 'update test');
+    return routeErrorResponse(error, 'update test');
   }
 }

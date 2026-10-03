@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { firestoreDocumentIdSchema } from '@/src/lib/learning-units/schemas';
-import { testRouteErrorResponse } from '@/src/lib/tests/api';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { updateMockTestInputSchema } from '@/src/lib/tests/schemas';
 import { mockTestService } from '@/src/lib/tests/mock-service';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
@@ -12,7 +12,7 @@ export async function GET(request: NextRequest, { params }: Context) {
       mock: await mockTestService.getMock(firestoreDocumentIdSchema.parse((await params).mockId)),
     });
   } catch (error) {
-    return testRouteErrorResponse(error, 'fetch mock test');
+    return routeErrorResponse(error, 'fetch mock test');
   }
 }
 export async function PATCH(request: NextRequest, { params }: Context) {
@@ -27,6 +27,6 @@ export async function PATCH(request: NextRequest, { params }: Context) {
       ),
     });
   } catch (error) {
-    return testRouteErrorResponse(error, 'update mock test');
+    return routeErrorResponse(error, 'update mock test');
   }
 }

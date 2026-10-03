@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { testRouteErrorResponse } from '@/src/lib/tests/api';
+import { routeErrorResponse } from '@/src/lib/route-error-response';
 import { createTestWithVersionSchema } from '@/src/lib/tests/schemas';
 import { testAuthoringService } from '@/src/lib/tests/authoring-service';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
     await verifyAdminAccess(request);
     return NextResponse.json({ tests: await testAuthoringService.listTests() });
   } catch (error) {
-    return testRouteErrorResponse(error, 'fetch tests');
+    return routeErrorResponse(error, 'fetch tests');
   }
 }
 
@@ -20,6 +20,6 @@ export async function POST(request: NextRequest) {
     const result = await testAuthoringService.createTestWithVersion(input, actor.uid);
     return NextResponse.json({ success: true, ...result }, { status: result.recovered ? 200 : 201 });
   } catch (error) {
-    return testRouteErrorResponse(error, 'create test');
+    return routeErrorResponse(error, 'create test');
   }
 }
