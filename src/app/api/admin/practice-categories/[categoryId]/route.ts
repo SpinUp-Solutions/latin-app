@@ -6,17 +6,6 @@ import { practiceCategoryService } from '@/src/lib/practice-categories/service';
 
 type RouteContext = { params: Promise<{ categoryId: string }> };
 
-export async function GET(request: NextRequest, { params }: RouteContext) {
-  try {
-    await verifyAdminAccess(request);
-    const { categoryId } = await params;
-    const category = await practiceCategoryService.getCategory(categoryId);
-    return NextResponse.json({ category });
-  } catch (error) {
-    return practiceCategoryRouteErrorResponse(error, 'fetch practice category');
-  }
-}
-
 export async function PATCH(request: NextRequest, { params }: RouteContext) {
   try {
     const actor = await verifyAdminAccess(request);

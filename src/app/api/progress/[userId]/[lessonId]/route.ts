@@ -29,7 +29,6 @@ const progressRequestSchema = z.discriminatedUnion('action', [
       currentPageIndex: z.number().int().optional(),
     })
     .refine(data => data.pageId !== undefined || data.currentPageIndex !== undefined),
-  z.object({ action: z.literal('legacy-finish') }),
 ]);
 
 export async function POST(
@@ -44,22 +43,7 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const rawProgressData: unknown = await request.json().catch(() => null);
-    if (!rawProgressData || typeof rawProgressData !== 'object' || Array.isArray(rawProgressData)) {
-      return NextResponse.json({ error: 'Invalid progress request' }, { status: 400 });
-    }
-
-    const rawRecord = rawProgressData as Record<string, unknown>;
-    const action =
-      rawRecord.action ??
-      (typeof rawRecord.exerciseId === 'string' && typeof rawRecord.score === 'number'
-        ? 'complete-exercise'
-        : rawRecord.currentPageIndex !== undefined
-          ? 'visit-page'
-          : rawRecord.status === 'completed'
-            ? 'legacy-finish'
-            : null);
-    const parsedProgressData = progressRequestSchema.safeParse({ ...rawRecord, action });
+    const parsedProgressData = progressRequestSchema.safeParse(await request.json().catch(() => null));
     if (!parsedProgressData.success) {
       return NextResponse.json({ error: 'Invalid progress request' }, { status: 400 });
     }
@@ -162,41 +146,6 @@ export async function POST(
       });
 
       return NextResponse.json({ success: true, ...result });
-    }
-
-    if (progressData.action === 'legacy-finish') {
-      const result = await adminDb.runTransaction(async transaction => {
-        const { lesson, existing } = await readAuthorizedProgress(transaction);
-        const furthestPageIndex = Math.max(lesson.pages.length - 1, 0);
-        const summary = summarizeLessonCompletion(lesson, {
-          ...existing,
-          furthestPageIndex,
-          currentPageIndex: furthestPageIndex,
-        });
-        if (!summary.isCompleted && summary.missingExercises.length > 0) {
-          return { missingExercises: summary.missingExercises };
-        }
-
-        const persisted = toPersistedProgressSummary(
-          { ...summary, isCompleted: true, progress: 100 },
-          existing,
-          now,
-          lesson.version
-        );
-
-        return { completion: writeProgress(transaction, existing, furthestPageIndex, persisted) };
-      });
-
-      if (!result.completion) {
-        return NextResponse.json(
-          {
-            error: 'Complete all required exercises before finishing the lesson.',
-            missingExercises: result.missingExercises,
-          },
-          { status: 422 }
-        );
-      }
-      return NextResponse.json({ success: true, ...result.completion });
     }
 
     return NextResponse.json({ error: 'Unsupported progress action' }, { status: 400 });

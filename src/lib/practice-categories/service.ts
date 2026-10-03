@@ -92,7 +92,6 @@ type ReconcileInTransactionInput = {
   desiredCategorySelections?: PracticeCategorySelection[];
   desiredCategoryIds?: string[];
   actorId: string;
-  requireCategorisable?: boolean;
 };
 
 const categoryTypeLabels: Record<PracticeLessonType, string> = {
@@ -230,12 +229,6 @@ export class PracticeCategoryService {
     const snapshot = await query.get();
     const categories = snapshot.docs.map(categoryFromSnapshot).sort(byCategoryOrder);
     return options.includeCounts ? this.withCategoryCounts(categories) : categories;
-  }
-
-  async getCategory(categoryId: string): Promise<PracticeCategoryWithCounts> {
-    const snapshot = await this.categories.doc(categoryId).get();
-    const [category] = await this.withCategoryCounts([categoryFromSnapshot(snapshot)]);
-    return category;
   }
 
   private async withCategoryCounts(categories: PracticeCategory[]): Promise<PracticeCategoryWithCounts[]> {
@@ -975,27 +968,6 @@ export class PracticeCategoryService {
     return (await this.getAssignmentsForLessonIds([lessonId])).get(lessonId)!;
   }
 
-  async reconcileLessonCategories(
-    lessonId: string,
-    desired: { practiceCategorySelections?: PracticeCategorySelection[]; practiceCategoryIds?: string[] },
-    actorId: string
-  ): Promise<LessonCategoryAssignments> {
-    return runVocabularyContentMutation(this.db, async transaction => {
-      const lessonSnapshot = await transaction.get(this.lessons.doc(lessonId));
-      if (!lessonSnapshot.exists || !isLessonDocumentData(lessonSnapshot.data())) {
-        throw new PracticeCategoryError('LESSON_NOT_FOUND', 'Lesson not found', 404);
-      }
-      return this.reconcileLessonCategoriesInTransaction(transaction, {
-        lessonId,
-        lesson: lessonSnapshot.data()!,
-        desiredCategorySelections: desired.practiceCategorySelections,
-        desiredCategoryIds: desired.practiceCategoryIds,
-        actorId,
-        requireCategorisable: true,
-      });
-    });
-  }
-
   async reconcileLessonCategoriesInTransaction(
     transaction: Transaction,
     input: ReconcileInTransactionInput
@@ -1026,10 +998,7 @@ export class PracticeCategoryService {
         400
       );
     }
-    if (
-      (input.requireCategorisable || desiredIds.length > 0 || existingDocs.length > 0) &&
-      !isCategorisableLesson(input.lesson)
-    ) {
+    if ((desiredIds.length > 0 || existingDocs.length > 0) && !isCategorisableLesson(input.lesson)) {
       throw new PracticeCategoryError(
         'INELIGIBLE_LESSON',
         'Only vocabulary, sentence-diagramming, and listening lessons can use practice categories',
