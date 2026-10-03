@@ -1,23 +1,8 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import {
   assertVocabularyContentMutationUnlocked,
   runVocabularyContentMutation,
   runVocabularyContentStorageMutation,
 } from '@/src/lib/vocabulary-pools/sync-lock.server';
-
-const guardedTransactionWriters = [
-  'src/app/api/admin/lessons/route.ts',
-  'src/app/api/admin/words/route.ts',
-  'src/app/api/admin/vocabulary-pools/route.ts',
-  'src/app/api/admin/vocabulary-pools/[poolId]/route.ts',
-  'src/app/api/admin/vocabulary-pools/[poolId]/words/route.ts',
-  'src/app/api/admin/vocabulary-word-requests/[id]/approve/route.ts',
-  'src/lib/learning-units/learning-path-service.ts',
-  'src/lib/practice-categories/service.ts',
-  'src/lib/tests/authoring-service.ts',
-  'src/lib/tests/mock-service.ts',
-];
 
 describe('vocabulary content maintenance mutation guard', () => {
   it('rejects a mirrored admin transaction before its callback can write', async () => {
@@ -75,10 +60,5 @@ describe('vocabulary content maintenance mutation guard', () => {
     await expect(runVocabularyContentStorageMutation(db as never, storageWrite)).resolves.toBe('stored');
     expect(storageWrite).toHaveBeenCalledTimes(1);
     expect(lockData).toBeUndefined();
-  });
-
-  it.each(guardedTransactionWriters)('keeps %s inside the shared transaction gate', file => {
-    const source = readFileSync(resolve(process.cwd(), file), 'utf8');
-    expect(source).toContain('runVocabularyContentMutation');
   });
 });

@@ -599,22 +599,16 @@ describe('production content sync adapter safety', () => {
     ).rejects.toMatchObject({ code: 'SYNC_ALREADY_RUNNING' });
   });
 
-  it('orders durable applied recovery metadata before revision publication and unlock', () => {
-    const source = readFileSync(join(process.cwd(), 'scripts/sync-prod-content-to-dev.mjs'), 'utf8');
-    const applyBody = source.slice(
-      source.indexOf('export async function applyPlan'),
-      source.indexOf('function targetManifestCheck')
-    );
-    const appliedStatus = applyBody.indexOf("runManifest.status = 'applied'");
-    const durableManifest = applyBody.indexOf('await updateRunManifest(backupBucket, runManifest)', appliedStatus);
-    const revision = applyBody.indexOf('await advanceVocabularyContentRevision', durableManifest);
-    const unlock = applyBody.indexOf('await releaseContentSyncLock', revision);
+  it('orders durable applied recovery metadata before revision publication and unlock', async () => {
+    const calls: string[] = [];
 
-    expect(appliedStatus).toBeGreaterThan(-1);
-    expect(durableManifest).toBeGreaterThan(appliedStatus);
-    expect(revision).toBeGreaterThan(durableManifest);
-    expect(unlock).toBeGreaterThan(revision);
-    expect(applyBody).toContain("runManifest?.status === 'applied' && !appliedManifestPersisted");
+    await publishAppliedRun({
+      persistAppliedManifest: async () => void calls.push('manifest'),
+      publishRevision: async () => void calls.push('revision'),
+      releaseLock: async () => void calls.push('unlock'),
+    });
+
+    expect(calls).toEqual(['manifest', 'revision', 'unlock']);
   });
 
   it('does not publish a revision or unlock when the applied manifest write fails', async () => {

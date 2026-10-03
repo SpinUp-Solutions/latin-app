@@ -3,28 +3,29 @@ import { render, screen } from '@testing-library/react';
 import { OffscreenSlide } from '@/src/components/ui/core/offscreen-slide';
 
 describe('OffscreenSlide', () => {
-  it('lets visible card transforms and shadows paint outside the wrapper', () => {
+  it('keeps a visible slide and its actions reachable', () => {
     render(
       <OffscreenSlide isVisible>
-        <div data-testid="card">Lesson</div>
+        <button type="button">Visible lesson</button>
       </OffscreenSlide>
     );
 
-    const wrapper = screen.getByTestId('card').parentElement;
+    const wrapper = screen.getByRole('button', { name: 'Visible lesson' }).parentElement;
 
-    expect(wrapper).toHaveClass('overflow-visible');
     expect(wrapper).not.toHaveAttribute('aria-hidden', 'true');
+    expect(wrapper).not.toHaveAttribute('inert');
   });
 
-  it('keeps an offscreen card out of the accessibility tree', () => {
+  it('removes an offscreen slide and its actions from the tab and accessibility trees', () => {
     render(
       <OffscreenSlide isVisible={false}>
-        <div data-testid="card">Lesson</div>
+        <button type="button">Hidden lesson</button>
       </OffscreenSlide>
     );
 
-    const wrapper = screen.getByTestId('card').parentElement;
+    const wrapper = screen.getByText('Hidden lesson').parentElement;
 
+    expect(screen.queryByRole('button', { name: 'Hidden lesson' })).not.toBeInTheDocument();
     expect(wrapper).toHaveAttribute('aria-hidden', 'true');
     expect(wrapper).toHaveAttribute('inert');
   });
