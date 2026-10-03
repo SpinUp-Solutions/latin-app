@@ -3,22 +3,11 @@ import { LEARNING_UNITS_COLLECTION } from '@/shared/constants/firestore';
 import { adminDb } from '@/src/services/firebase-admin';
 import { Lesson } from '@/src/types/lesson';
 import { isLessonDocumentData } from '@/src/lib/learning-units/domain';
+import { saveLesson } from '@/src/lib/learning-units/lesson-save.server';
 import { verifyAdminAccess } from '@/src/lib/verifyAdminAccess';
-import { getLessonContentCounts, LESSON_SUMMARY_FIELDS, toLessonSummary } from '@/src/utils/lessonSummary';
-import { validateLessonProgression } from '@/src/utils/lessonProgress';
-import {
-  optionalPracticeCategoryIdsSchema,
-  optionalPracticeCategorySelectionsSchema,
-} from '@/src/lib/practice-categories/schemas';
-import { PracticeCategoryError, practiceCategoryService } from '@/src/lib/practice-categories/service';
+import { LESSON_SUMMARY_FIELDS, toLessonSummary } from '@/src/utils/lessonSummary';
+import { practiceCategoryService } from '@/src/lib/practice-categories/service';
 import { routeErrorResponse } from '@/src/lib/route-error-response';
-import {
-  assertLegacyNormalPlacementChangeAllowedInTransaction,
-  assertPlacedLessonReplacementAllowedInTransaction,
-} from '@/src/lib/learning-units/learning-path-service';
-import { lessonAuthoringInputSchema, lessonUnitDocumentSchema } from '@/src/lib/learning-units/schemas';
-import { assertVocabularyPoolAssignmentsAllowedInTransaction } from '@/src/lib/vocabulary-pools/assignment.server';
-import { runVocabularyContentMutation } from '@/src/lib/vocabulary-pools/sync-lock.server';
 
 export async function GET(request: NextRequest) {
   try {
@@ -73,77 +62,11 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const user = await verifyAdminAccess(request);
-
-    const rawLesson = await request.json();
-    if (!isLessonDocumentData(rawLesson)) {
-      return NextResponse.json({ error: 'Only lesson documents can use the lesson endpoint' }, { status: 400 });
-    }
-    if (rawLesson.showWordSearch !== undefined && typeof rawLesson.showWordSearch !== 'boolean') {
-      return NextResponse.json({ error: 'showWordSearch must be a boolean' }, { status: 400 });
-    }
-    const practiceCategorySelections = optionalPracticeCategorySelectionsSchema.parse(
-      rawLesson.practiceCategorySelections
-    );
-    const practiceCategoryIds = optionalPracticeCategoryIdsSchema.parse(rawLesson.practiceCategoryIds);
-    const lesson = lessonAuthoringInputSchema.parse(rawLesson);
-
-    const { totalPages, totalItems, totalExercises } = getLessonContentCounts(lesson);
-    const now = new Date().toISOString();
-    const lessonData = lessonUnitDocumentSchema.parse({
-      ...lesson,
-      kind: 'lesson' as const,
-      totalPages,
-      totalItems,
-      totalExercises,
-      createdAt: now,
-      createdBy: user.uid,
-      updatedAt: now,
-      updatedBy: user.uid,
-      version: 1,
-      showWordSearch: rawLesson.showWordSearch ?? false,
-      isLive: false,
-      liveOrder: null,
-      publishedAt: null,
-      publishedBy: null,
-    });
-
-    const lessonRef = adminDb.collection(LEARNING_UNITS_COLLECTION).doc(lesson.id);
-    const assignments = await runVocabularyContentMutation(adminDb, async transaction => {
-      const existingLesson = await transaction.get(lessonRef);
-      if (existingLesson.exists) {
-        throw new PracticeCategoryError('LESSON_ALREADY_EXISTS', 'A lesson with this ID already exists', 409);
-      }
-      const applyVocabularyPoolAssignmentRevisions = await assertVocabularyPoolAssignmentsAllowedInTransaction(
-        transaction,
-        adminDb,
-        undefined,
-        lessonData
-      );
-      const reconciled = await practiceCategoryService.reconcileLessonCategoriesInTransaction(transaction, {
-        lessonId: lesson.id,
-        lesson: lessonData,
-        ...(practiceCategorySelections !== undefined
-          ? { desiredCategorySelections: practiceCategorySelections }
-          : { desiredCategoryIds: practiceCategoryIds ?? [] }),
-        actorId: user.uid,
-      });
-      applyVocabularyPoolAssignmentRevisions();
-      transaction.create(lessonRef, lessonData);
-      return reconciled;
-    });
+    const { lesson } = await saveLesson(await request.json(), user.uid, 'create');
 
     console.log(`Lesson "${lesson.title}" (${lesson.id}) created successfully by user ${user.uid}`);
 
-    return NextResponse.json({
-      success: true,
-      lesson: {
-        ...lessonData,
-        practiceCategorySelections: assignments.practiceCategorySelections,
-        practiceCategoryIds: assignments.practiceCategoryIds,
-        practiceCategories: assignments.practiceCategories,
-      },
-      message: 'Lesson created successfully',
-    });
+    return NextResponse.json({ success: true, lesson, message: 'Lesson created successfully' });
   } catch (error) {
     return routeErrorResponse(error, 'create lesson');
   }
@@ -152,107 +75,11 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const user = await verifyAdminAccess(request);
-
-    const rawLesson = await request.json();
-    if (!isLessonDocumentData(rawLesson)) {
-      return NextResponse.json({ error: 'Only lesson documents can use the lesson endpoint' }, { status: 400 });
-    }
-    if (rawLesson.showWordSearch !== undefined && typeof rawLesson.showWordSearch !== 'boolean') {
-      return NextResponse.json({ error: 'showWordSearch must be a boolean' }, { status: 400 });
-    }
-    const practiceCategorySelections = optionalPracticeCategorySelectionsSchema.parse(
-      rawLesson.practiceCategorySelections
-    );
-    const practiceCategoryIds = optionalPracticeCategoryIdsSchema.parse(rawLesson.practiceCategoryIds);
-    const lesson = lessonAuthoringInputSchema.parse(rawLesson);
-
-    const { totalPages, totalItems, totalExercises } = getLessonContentCounts(lesson);
-    const lessonRef = adminDb.collection(LEARNING_UNITS_COLLECTION).doc(lesson.id);
-    const result = await runVocabularyContentMutation(adminDb, async transaction => {
-      const existingLessonDoc = await transaction.get(lessonRef);
-      if (!existingLessonDoc.exists) {
-        throw new PracticeCategoryError('LESSON_NOT_FOUND', 'Lesson not found', 404);
-      }
-      const existingLessonData = existingLessonDoc.data();
-      if (!isLessonDocumentData(existingLessonData)) {
-        throw new PracticeCategoryError('LESSON_NOT_FOUND', 'Lesson not found', 404);
-      }
-      const existingLesson = existingLessonData as Partial<Lesson>;
-      await assertLegacyNormalPlacementChangeAllowedInTransaction(transaction, adminDb, existingLesson, {
-        ...lesson,
-        isLive: existingLesson.isLive ?? false,
-        liveOrder: existingLesson.liveOrder ?? null,
-        publishedAt: existingLesson.publishedAt ?? null,
-        publishedBy: existingLesson.publishedBy ?? null,
-      });
-      await assertPlacedLessonReplacementAllowedInTransaction(transaction, adminDb, lesson.id, {
-        type: lesson.type,
-        pages: lesson.pages,
-      });
-      if (existingLesson?.isLive) {
-        const progressionErrors = validateLessonProgression(lesson);
-        if (progressionErrors.length > 0) {
-          return { progressionErrors } as const;
-        }
-      }
-
-      const updatedLessonData = lessonUnitDocumentSchema.parse({
-        ...lesson,
-        kind: 'lesson' as const,
-        totalPages,
-        totalItems,
-        totalExercises,
-        createdAt: existingLesson?.createdAt || new Date().toISOString(),
-        createdBy: existingLesson?.createdBy || user.uid,
-        updatedAt: new Date().toISOString(),
-        updatedBy: user.uid,
-        version: (existingLesson?.version || 0) + 1,
-        showWordSearch:
-          rawLesson.showWordSearch ??
-          (typeof existingLesson?.showWordSearch === 'boolean' ? existingLesson.showWordSearch : true),
-        isLive: existingLesson?.isLive ?? false,
-        liveOrder: existingLesson?.liveOrder ?? null,
-        publishedAt: existingLesson?.publishedAt || null,
-        publishedBy: existingLesson?.publishedBy || null,
-      });
-      const applyVocabularyPoolAssignmentRevisions = await assertVocabularyPoolAssignmentsAllowedInTransaction(
-        transaction,
-        adminDb,
-        existingLessonData,
-        updatedLessonData
-      );
-      const assignments = await practiceCategoryService.reconcileLessonCategoriesInTransaction(transaction, {
-        lessonId: lesson.id,
-        lesson: updatedLessonData,
-        ...(practiceCategorySelections !== undefined
-          ? { desiredCategorySelections: practiceCategorySelections }
-          : { desiredCategoryIds: practiceCategoryIds }),
-        actorId: user.uid,
-      });
-      applyVocabularyPoolAssignmentRevisions();
-      transaction.set(lessonRef, updatedLessonData);
-      return { updatedLessonData, assignments } as const;
-    });
-
-    if ('progressionErrors' in result) {
-      return NextResponse.json(
-        { error: `Cannot update live lesson ${lesson.id}`, progressionErrors: result.progressionErrors },
-        { status: 400 }
-      );
-    }
+    const { lesson } = await saveLesson(await request.json(), user.uid, 'update');
 
     console.log(`Lesson "${lesson.title}" (${lesson.id}) updated successfully by user ${user.uid}`);
 
-    return NextResponse.json({
-      success: true,
-      lesson: {
-        ...result.updatedLessonData,
-        practiceCategorySelections: result.assignments.practiceCategorySelections,
-        practiceCategoryIds: result.assignments.practiceCategoryIds,
-        practiceCategories: result.assignments.practiceCategories,
-      },
-      message: 'Lesson updated successfully',
-    });
+    return NextResponse.json({ success: true, lesson, message: 'Lesson updated successfully' });
   } catch (error) {
     return routeErrorResponse(error, 'update lesson');
   }

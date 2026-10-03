@@ -90,7 +90,10 @@ describe('update lesson publish status', () => {
     )) as unknown as { status: number; body: unknown };
 
     expect(response.status).toBe(409);
-    expect(response.body).toEqual({ error: 'At least one lesson of this type must remain live' });
+    expect(response.body).toEqual({
+      error: 'At least one lesson of this type must remain live',
+      code: 'LAST_LIVE_LESSON',
+    });
     expect(transaction.update).not.toHaveBeenCalled();
   });
 
@@ -135,6 +138,7 @@ describe('update lesson publish status', () => {
     expect(response.status).toBe(409);
     expect(response.body).toEqual({
       error: 'Lesson vocab1 does not belong to the active lesson type',
+      code: 'LESSON_TYPE_MISMATCH',
     });
     expect(transaction.update).not.toHaveBeenCalled();
   });
@@ -157,6 +161,7 @@ describe('update lesson publish status', () => {
     expect(response.status).toBe(409);
     expect(response.body).toEqual({
       error: 'Live lessons changed since the page loaded. Refresh and try again.',
+      code: 'STALE_LIVE_LESSONS',
     });
     expect(transaction.update).not.toHaveBeenCalled();
   });

@@ -6,7 +6,8 @@ import {
 } from '@/src/lib/vocabulary-pools/sync-lock.server';
 
 const guardedTransactionWriters = [
-  'src/app/api/admin/lessons/route.ts',
+  'src/lib/learning-units/lesson-save.server.ts',
+  'src/app/api/admin/lessons/recovery/[id]/route.ts',
   'src/app/api/admin/words/route.ts',
   'src/app/api/admin/vocabulary-pools/route.ts',
   'src/app/api/admin/vocabulary-pools/[poolId]/route.ts',
